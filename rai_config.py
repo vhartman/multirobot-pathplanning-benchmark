@@ -1,5 +1,7 @@
 import robotic as ry
 import numpy as np
+import argparse
+import sys
 
 
 def make_2d_rai_env(view: bool = False):
@@ -919,11 +921,24 @@ def make_triple_panda_env(view: bool = False):
 
     return C, np.concatenate([keyframes_a0, keyframes_a1, keyframes_a2])
 
-
+    
 if __name__ == "__main__":
-    # make_piano_mover_env(view=True)
-    # make_2d_rai_env(True)
-    # make_2d_rai_env_3_agents(True)
-    # make_box_sorting_env(True)
-    make_egg_carton_env(True)
-    # make_triple_panda_env(True)
+    parser = argparse.ArgumentParser(description="Env shower")
+    parser.add_argument("env", nargs="?", default="default", help="env to show")
+    
+    args = parser.parse_args()
+
+    if args.env == "piano":
+        make_piano_mover_env(view=True)
+    elif args.env == "simple_2d":
+        make_2d_rai_env(True)
+    elif args.env == "three_agents":
+        make_2d_rai_env_3_agents(True)
+    elif args.env == "box_sorting":
+        make_box_sorting_env(True)
+    elif args.env == "eggs":
+        make_egg_carton_env(True)
+    elif args.env == "triple_waypoints":
+        make_triple_panda_env(True)
+    else:
+        make_triple_panda_env(True)

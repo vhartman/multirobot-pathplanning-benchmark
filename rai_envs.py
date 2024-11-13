@@ -982,4 +982,24 @@ class rai_mobile_manip_wall:
 
 
 if __name__ == "__main__":
-    pass
+    parser = argparse.ArgumentParser(description="Env shower")
+    parser.add_argument("env", nargs="?", default="default", help="env to show")
+    
+    args = parser.parse_args()
+
+    env = rai_triple_panda_arm_waypoint_env()
+
+    if args.env == "piano":
+        env = rai_two_dim_simple_manip()
+    elif args.env == "simple_2d":
+        env = rai_two_dim_env()
+    elif args.env == "three_agents":
+        env = rai_two_dim_three_agent_env()
+    elif args.env == "box_sorting":
+        env = rai_ur10_arm_pick_and_place_env
+    elif args.env == "eggs":
+        env = rai_ur10_arm_egg_carton_env()
+    elif args.env == "triple_waypoints":
+        env = rai_triple_panda_arm_waypoint_env()
+
+    env.show()
