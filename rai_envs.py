@@ -1,10 +1,7 @@
 import robotic as ry
 import numpy as np
-
-import time
-from abc import ABC, abstractmethod
-from matplotlib import pyplot as plt
 import random
+import argparse
 
 from typing import List
 from numpy.typing import NDArray
@@ -560,8 +557,10 @@ class rai_dual_ur10_arm_handover_env:
 
 
 class rai_triple_panda_arm_waypoint_env(rai_env):
-    def __init__(self):
-        self.C, keyframes = make_triple_panda_env()
+    def __init__(self, num_robots: int = 3, num_waypoints: int = 6):
+        self.C, keyframes = make_panda_waypoint_env(
+            num_robots=num_robots, num_waypoints=num_waypoints
+        )
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -582,6 +581,7 @@ class rai_triple_panda_arm_waypoint_env(rai_env):
         # self.C.addConfigurationCopy(self.C_coll)
 
         self.robots = ["a0", "a1", "a2"]
+        self.robots = self.robots[:num_robots]
         self.robot_idx = {}
         self.robot_dims = {}
 
@@ -589,48 +589,36 @@ class rai_triple_panda_arm_waypoint_env(rai_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = [
-            get_robot_state(self.C, "a1"),
-            get_robot_state(self.C, "a1"),
-            get_robot_state(self.C, "a2"),
-        ]
+        # self.start_pos = [
+        #     get_robot_state(self.C, "a1"),
+        #     get_robot_state(self.C, "a1"),
+        #     get_robot_state(self.C, "a2"),
+        # ]
 
-        self.goals = {
-            "a0": [
-                SingleGoal(keyframes[1][self.robot_idx["a0"]]),
-                SingleGoal(keyframes[2][self.robot_idx["a0"]]),
-                SingleGoal(keyframes[3][self.robot_idx["a0"]]),
-                SingleGoal(keyframes[0][self.robot_idx["a0"]]),
-                SingleGoal(keyframes[4][self.robot_idx["a0"]]),
-                SingleGoal(keyframes[5][self.robot_idx["a0"]]),
-                SingleGoal(keyframes[6][self.robot_idx["a0"]]),
-            ],
-            "a1": [
-                SingleGoal(keyframes[7][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[8][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[9][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[10][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[11][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[12][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[13][self.robot_idx["a1"]]),
-            ],
-            "a2": [
-                SingleGoal(keyframes[14][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[15][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[16][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[17][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[18][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[19][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[20][self.robot_idx["a2"]]),
-            ],
-        }
+        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
-        # permute goals
+        self.goals = {}
+        for r in self.robots:
+            self.goals[r] = []
+
+        cnt = 0
+        for r in self.robots:
+            for i in range(num_waypoints + 1):
+                self.goals[r].append(SingleGoal(keyframes[cnt][self.robot_idx[r]]))
+                cnt += 1
+
+        # permute goals, but only the ones that ware waypoints, not the final configuration
+        shuffle_goals = True
+        if shuffle_goals:
+            for r in self.robots:
+                sublist = self.goals[r][:num_waypoints]
+                random.shuffle(sublist)
+                self.goals[r][:num_waypoints] = sublist
 
         # self.sequence = [("a1", 0), ("a2", 0), ("a3", 0)]
         self.sequence = []
-        for i in range(6):
-            for r in ["a0", "a1", "a2"]:
+        for i in range(num_waypoints):
+            for r in self.robots:
                 self.sequence.append((r, i))
 
         self.mode_sequence = make_mode_sequence_from_sequence(
@@ -790,15 +778,14 @@ class rai_ur10_arm_egg_carton_env(rai_env):
 
         self.tolerance = 0.1
 
-        q = self.C_base.getJointState()
-        print(self.is_collision_free(q, [0, 0]))
+        # q = self.C_base.getJointState()
+        # print(self.is_collision_free(q, [0, 0]))
 
-        q = self.C_base.getJointState()
-        for m in self.mode_sequence:
-            print(self.is_collision_free(q, m))
-            self.show()
+        # for m in self.mode_sequence:
+        #     print(self.is_collision_free(q, m))
+        #     self.show()
 
-        self.C_base.view(True)
+        # self.C_base.view(True)
 
     # this is still relatively slow since we copy the configuration around
     # a lot. this could be avoided by making the configurations once initially
@@ -981,10 +968,25 @@ class rai_mobile_manip_wall:
     pass
 
 
+def visualize_modes(env):
+    q = env.C.getJointState()
+
+    for m in env.mode_sequence:
+        # TODO: set to more interesting position than home position
+        q = []
+        for i, r in enumerate(env.robots):
+            q.append(env.goals[r][m[i]].goal)
+
+        print("is collision free: ", env.is_collision_free(q, m))
+        env.show()
+
+    env.C.view(True)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument("env", nargs="?", default="default", help="env to show")
-    
+
     args = parser.parse_args()
 
     env = rai_triple_panda_arm_waypoint_env()
@@ -1000,6 +1002,10 @@ if __name__ == "__main__":
     elif args.env == "eggs":
         env = rai_ur10_arm_egg_carton_env()
     elif args.env == "triple_waypoints":
-        env = rai_triple_panda_arm_waypoint_env()
+        env = rai_triple_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
 
+    print("Environment starting position")
     env.show()
+
+    print("Environment modes/goals")
+    visualize_modes(env)

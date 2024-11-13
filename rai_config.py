@@ -1,7 +1,6 @@
 import robotic as ry
 import numpy as np
 import argparse
-import sys
 
 
 def make_2d_rai_env(view: bool = False):
@@ -840,8 +839,14 @@ def make_egg_carton_env(view: bool = False):
     # keyframes = np.concatenate([keyframes_a1, keyframes_a2])
     return C, keyframes
 
-
-def make_triple_panda_env(view: bool = False):
+# TODO: the parameters are implemented horribly
+def make_panda_waypoint_env(num_robots:int=3, num_waypoints:int=6, view: bool = False):
+    if num_robots > 3:
+        raise NotImplementedError("More than three robot arms are not supported.")
+    
+    if num_waypoints > 6:
+        raise NotImplementedError("More than six waypoints are not supported.")
+    
     C = ry.Config()
     # C.addFile(ry.raiPath('scenarios/pandaSingle.g'))
 
@@ -852,12 +857,17 @@ def make_triple_panda_env(view: bool = False):
     C.addFile(ry.raiPath("panda/panda.g"), namePrefix="a0_").setParent(
         C.getFrame("table")
     ).setRelativePosition([0.0, -0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, 0.7071])
-    C.addFile(ry.raiPath("panda/panda.g"), namePrefix="a1_").setParent(
-        C.getFrame("table")
-    ).setRelativePosition([-0.3, 0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, -0.7071])
-    C.addFile(ry.raiPath("panda/panda.g"), namePrefix="a2_").setParent(
-        C.getFrame("table")
-    ).setRelativePosition([+0.3, 0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, -0.7071])
+
+    # this could likely be done nicer
+    if num_robots > 1:
+        C.addFile(ry.raiPath("panda/panda.g"), namePrefix="a1_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([-0.3, 0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, -0.7071])
+    if num_robots > 2:
+        C.addFile(ry.raiPath("panda/panda.g"), namePrefix="a2_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.3, 0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, -0.7071])
+
     C.addFrame("way1").setShape(ry.ST.marker, [0.1]).setPosition([0.3, 0.0, 1.0])
     C.addFrame("way2").setShape(ry.ST.marker, [0.1]).setPosition([0.3, 0.0, 1.4])
     C.addFrame("way3").setShape(ry.ST.marker, [0.1]).setPosition([-0.3, 0.0, 1.0])
@@ -867,8 +877,12 @@ def make_triple_panda_env(view: bool = False):
 
     q_init = C.getJointState()
     q_init[1] -= 0.5
-    q_init[8] -= 0.5
-    q_init[15] -= 0.5
+
+    if num_robots > 1:
+        q_init[8] -= 0.5
+    if num_robots > 2:
+        q_init[15] -= 0.5
+    
     C.setJointState(q_init)
 
     if view:
@@ -877,14 +891,14 @@ def make_triple_panda_env(view: bool = False):
     qHome = C.getJointState()
 
     def compute_pose_for_robot(robot_ee):
-        komo = ry.KOMO(C, phases=7, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo = ry.KOMO(C, phases=num_waypoints+1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
         komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1])
 
         komo.addControlObjective([], 0, 1e-1)
         komo.addControlObjective([], 1, 1e-1)
         # komo.addControlObjective([], 2, 1e-1)
 
-        for i in range(6):
+        for i in range(num_waypoints):
             komo.addObjective(
                 [i + 1],
                 ry.FS.positionDiff,
@@ -897,7 +911,7 @@ def make_triple_panda_env(view: bool = False):
         #     komo.addObjective([i], ry.FS.jointState, [], ry.OT.eq, [1e1], [], order=1)
 
         komo.addObjective(
-            times=[7],
+            times=[num_waypoints+1],
             feature=ry.FS.jointState,
             frames=[],
             type=ry.OT.eq,
@@ -915,11 +929,16 @@ def make_triple_panda_env(view: bool = False):
 
         return q
 
-    keyframes_a0 = compute_pose_for_robot("a0_gripper")
-    keyframes_a1 = compute_pose_for_robot("a1_gripper")
-    keyframes_a2 = compute_pose_for_robot("a2_gripper")
+    keyframes = compute_pose_for_robot("a0_gripper")
 
-    return C, np.concatenate([keyframes_a0, keyframes_a1, keyframes_a2])
+    if num_robots > 1:
+        keyframes_a1 = compute_pose_for_robot("a1_gripper")
+        keyframes = np.concatenate([keyframes, keyframes_a1])
+    if num_robots > 2:
+        keyframes_a2 = compute_pose_for_robot("a2_gripper")
+        keyframes = np.concatenate([keyframes, keyframes_a2])
+
+    return C, keyframes
 
     
 if __name__ == "__main__":
@@ -939,6 +958,6 @@ if __name__ == "__main__":
     elif args.env == "eggs":
         make_egg_carton_env(True)
     elif args.env == "triple_waypoints":
-        make_triple_panda_env(True)
+        make_panda_waypoint_env(view=True)
     else:
-        make_triple_panda_env(True)
+        make_panda_waypoint_env(2, view=True)
