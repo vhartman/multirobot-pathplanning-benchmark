@@ -62,19 +62,18 @@ class rai_env(base_env):
     tolerance: float
 
     def __init__(self):
-        self.C = None
-        self.goals = None
+        self.robot_idx = {}
+        self.robot_dims = {}
 
-        self.robots = None
-        self.robot_dims = None
+        for r in self.robots:
+            self.robot_idx[r] = get_joint_indices(self.C, r)
+            self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = None
+        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
-        self.sequence = None
-        self.mode_sequence = None
-
-        self.start_mode = None
-        self.terminal_mode = None
+        # the only way in the bindings to get the bounds is via the nlp()
+        komo = ry.KOMO(self.C, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        self.bounds = komo.nlp().getBounds()
 
         self.tolerance = 0.1
 
@@ -241,14 +240,8 @@ class rai_two_dim_env(rai_env):
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
-        self.robot_idx = {}
-        self.robot_dims = {}
 
-        for r in self.robots:
-            self.robot_idx[r] = get_joint_indices(self.C, r)
-            self.robot_dims[r] = len(get_joint_indices(self.C, r))
-
-        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
+        super().__init__()
 
         self.goals = {
             "a1": [SingleGoal(keyframes[0][self.robot_idx["a1"]])],
@@ -290,15 +283,9 @@ class rai_two_dim_simple_manip(rai_env):
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
-        self.robot_idx = {}
-        self.robot_dims = {}
 
-        for r in self.robots:
-            self.robot_idx[r] = get_joint_indices(self.C, r)
-            self.robot_dims[r] = len(get_joint_indices(self.C, r))
-
-        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
-
+        super().__init__()
+       
         self.goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
@@ -421,15 +408,9 @@ class rai_two_dim_three_agent_env(rai_env):
         # self.C.view(True)
 
         self.robots = ["a1", "a2", "a3"]
-        self.robot_idx = {}
-        self.robot_dims = {}
 
-        for r in self.robots:
-            self.robot_idx[r] = get_joint_indices(self.C, r)
-            self.robot_dims[r] = len(get_joint_indices(self.C, r))
-
-        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
-
+        super().__init__()
+        
         self.goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
@@ -511,15 +492,9 @@ class rai_dual_ur10_arm_env(rai_env):
         self.C.addConfigurationCopy(self.C_coll)
 
         self.robots = ["a1", "a2"]
-        self.robot_idx = {}
-        self.robot_dims = {}
 
-        for r in self.robots:
-            self.robot_idx[r] = get_joint_indices(self.C, r)
-            self.robot_dims[r] = len(get_joint_indices(self.C, r))
-
-        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
-
+        super().__init__()
+        
         self.goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
@@ -574,20 +549,14 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
         # self.C_coll.view(True)
         # self.C.view(True)
 
-        # self.C.clear()
-        # self.C.addConfigurationCopy(self.C_coll)
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
 
         self.robots = ["a0", "a1", "a2"]
         self.robots = self.robots[:num_robots]
-        self.robot_idx = {}
-        self.robot_dims = {}
 
-        for r in self.robots:
-            self.robot_idx[r] = get_joint_indices(self.C, r)
-            self.robot_dims[r] = len(get_joint_indices(self.C, r))
-
-        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
-
+        super().__init__()
+        
         self.goals = {}
         for r in self.robots:
             self.goals[r] = []
@@ -656,14 +625,8 @@ class rai_ur10_arm_egg_carton_env(rai_env):
         self.C.addConfigurationCopy(self.C_coll)
 
         self.robots = ["a1", "a2"]
-        self.robot_idx = {}
-        self.robot_dims = {}
-
-        for r in self.robots:
-            self.robot_idx[r] = get_joint_indices(self.C, r)
-            self.robot_dims[r] = len(get_joint_indices(self.C, r))
-
-        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
+      
+        super().__init__()
 
         self.goals = {
             "a1": [
@@ -970,7 +933,7 @@ def visualize_modes(env):
 
 
 def display_path(
-    env, path: List[State], stop: bool = True, export: bool = False
+    env, path: List[State], stop: bool = True, export: bool = False, pause_time: float=0.01
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
@@ -983,7 +946,7 @@ def display_path(
         if export:
             env.C.view_savePng("./z.vid/")
 
-        time.sleep(0.05)
+        time.sleep(pause_time)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")

@@ -116,13 +116,9 @@ class State:
         self.q = q
         self.mode = m
 
-# TODO: switch everything to te State from above?
+# TODO: switch everything to the State from above?
 class base_env(ABC):
     def __init__(self):
-        pass
-
-    @abstractmethod
-    def done(self, q, m):
         pass
 
     def get_robot_dim(self, r):
@@ -141,6 +137,16 @@ class base_env(ABC):
         pass
 
     def set_to_mode(self, m):
+        pass
+
+    def get_all_bounds(self):
+        self.bounds
+    
+    # def get_robot_bounds(self):
+    #     self.bounds
+
+    @abstractmethod
+    def done(self, q, m):
         pass
 
     @abstractmethod
