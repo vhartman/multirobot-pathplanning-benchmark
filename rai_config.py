@@ -94,6 +94,11 @@ def make_2d_rai_env(view: bool = False):
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
+    # pairs = C.getCollidablePairs()
+
+    # for i in range(0, len(pairs), 2):
+    #     print(pairs[i], pairs[i + 1])
+
     if view:
         C.view(True)
 

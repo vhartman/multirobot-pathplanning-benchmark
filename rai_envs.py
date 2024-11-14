@@ -116,7 +116,7 @@ class rai_env(base_env):
 
         raise ValueError("No next mode found, this might be the terminal mode.")
 
-    def is_collision_free(self, q, m):
+    def is_collision_free(self, q, m, collision_tolerance=0.01):
         self.set_to_mode(m)
         self.C.setJointState(q)
 
@@ -126,7 +126,7 @@ class rai_env(base_env):
         # print(col)
         # self.C.view(False)
         # if col > 0:
-        if col > 0.01:
+        if col > collision_tolerance:
             # self.C.view(False)
             return False
 
