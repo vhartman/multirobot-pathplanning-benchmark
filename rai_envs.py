@@ -246,7 +246,7 @@ class rai_two_dim_env(rai_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = [get_robot_state(self.C, "a1"), get_robot_state(self.C, "a2")]
+        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
         self.goals = {
             "a1": [SingleGoal(keyframes[0][self.robot_idx["a1"]])],
@@ -295,7 +295,7 @@ class rai_two_dim_simple_manip(rai_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = [get_robot_state(self.C, "a1"), get_robot_state(self.C, "a2")]
+        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
         self.goals = {
             "a1": [
@@ -426,11 +426,7 @@ class rai_two_dim_three_agent_env(rai_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = [
-            get_robot_state(self.C, "a1"),
-            get_robot_state(self.C, "a2"),
-            get_robot_state(self.C, "a3"),
-        ]
+        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
         self.goals = {
             "a1": [
@@ -520,10 +516,7 @@ class rai_dual_ur10_arm_env(rai_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = [
-            get_robot_state(self.C, "a1"),
-            get_robot_state(self.C, "a2"),
-        ]
+        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
         self.goals = {
             "a1": [
@@ -556,8 +549,10 @@ class rai_dual_ur10_arm_handover_env:
     pass
 
 
-class rai_triple_panda_arm_waypoint_env(rai_env):
-    def __init__(self, num_robots: int = 3, num_waypoints: int = 6):
+class rai_multi_panda_arm_waypoint_env(rai_env):
+    def __init__(
+        self, num_robots: int = 3, num_waypoints: int = 6, shuffle_goals: bool = False
+    ):
         self.C, keyframes = make_panda_waypoint_env(
             num_robots=num_robots, num_waypoints=num_waypoints
         )
@@ -589,12 +584,6 @@ class rai_triple_panda_arm_waypoint_env(rai_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        # self.start_pos = [
-        #     get_robot_state(self.C, "a1"),
-        #     get_robot_state(self.C, "a1"),
-        #     get_robot_state(self.C, "a2"),
-        # ]
-
         self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
         self.goals = {}
@@ -603,19 +592,19 @@ class rai_triple_panda_arm_waypoint_env(rai_env):
 
         cnt = 0
         for r in self.robots:
-            for i in range(num_waypoints + 1):
-                self.goals[r].append(SingleGoal(keyframes[cnt][self.robot_idx[r]]))
-                cnt += 1
+            self.goals[r] = [
+                SingleGoal(keyframes[cnt + i][self.robot_idx[r]])
+                for i in range(num_waypoints + 1)
+            ]
+            cnt += num_waypoints + 1
 
         # permute goals, but only the ones that ware waypoints, not the final configuration
-        shuffle_goals = True
         if shuffle_goals:
             for r in self.robots:
                 sublist = self.goals[r][:num_waypoints]
                 random.shuffle(sublist)
                 self.goals[r][:num_waypoints] = sublist
 
-        # self.sequence = [("a1", 0), ("a2", 0), ("a3", 0)]
         self.sequence = []
         for i in range(num_waypoints):
             for r in self.robots:
@@ -624,8 +613,6 @@ class rai_triple_panda_arm_waypoint_env(rai_env):
         self.mode_sequence = make_mode_sequence_from_sequence(
             self.robots, self.sequence
         )
-
-        # self.mode_sequence = [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]]
 
         self.start_mode = np.array(self.mode_sequence[0])
         self.terminal_mode = np.array(self.mode_sequence[-1])
@@ -674,10 +661,7 @@ class rai_ur10_arm_egg_carton_env(rai_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = [
-            get_robot_state(self.C, "a1"),
-            get_robot_state(self.C, "a2"),
-        ]
+        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
         self.goals = {
             "a1": [
@@ -989,7 +973,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    env = rai_triple_panda_arm_waypoint_env()
+    env = rai_multi_panda_arm_waypoint_env()
 
     if args.env == "piano":
         env = rai_two_dim_simple_manip()
@@ -1002,7 +986,7 @@ if __name__ == "__main__":
     elif args.env == "eggs":
         env = rai_ur10_arm_egg_carton_env()
     elif args.env == "triple_waypoints":
-        env = rai_triple_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
+        env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
 
     print("Environment starting position")
     env.show()

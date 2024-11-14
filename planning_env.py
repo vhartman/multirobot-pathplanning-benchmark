@@ -108,6 +108,15 @@ def make_mode_sequence_from_sequence(robots: List, sequence: List) -> List:
     return mode_sequence
 
 
+class State:
+    q: List[NDArray]
+    m: List[int]
+
+    def __init__(self, q, m):
+        self.q = q
+        self.mode = m
+
+# TODO: switch everything to te State from above?
 class base_env(ABC):
     def __init__(self):
         pass
@@ -153,3 +162,7 @@ class base_env(ABC):
     @abstractmethod
     def is_valid_plan(self, path):
         pass
+
+    # @abstractmethod
+    # def cost(self, path):
+    #     pass

@@ -9,9 +9,10 @@ Edit ur_wrist_1_joint: { q: -1.0 }
 Edit ur_wrist_2_joint: { q: -1.571 }
 Edit ur_wrist_3_joint: { q: 1.0 }
 
-gripper_fill (ur_ee_link){ shape:cylinder, color:[.1, .1, .1 , 1], Q:"d(90 0 1 0) t(-.0 -.0 .025)",
-	size:[.05 .021], 
-	contact:-2
+gripper_fill (ur_wrist_3_joint){ shape:cylinder, color:[.1, .1, .1 , 1], Q:"d(90 1 0 0) t(-.0 -.0 -.12)",
+	size:[.055 .007], 
+	contact:-8,
+  joint: rigid
 }
 
 # pen

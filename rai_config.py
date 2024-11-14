@@ -689,7 +689,7 @@ def make_egg_carton_env(view: bool = False):
     pairs = C.getCollidablePairs()
 
     for i in range(0, len(pairs), 2):
-        print(pairs[i], pairs[i+1])
+        print(pairs[i], pairs[i + 1])
 
     w = 3
     d = 3
@@ -839,14 +839,17 @@ def make_egg_carton_env(view: bool = False):
     # keyframes = np.concatenate([keyframes_a1, keyframes_a2])
     return C, keyframes
 
+
 # TODO: the parameters are implemented horribly
-def make_panda_waypoint_env(num_robots:int=3, num_waypoints:int=6, view: bool = False):
+def make_panda_waypoint_env(
+    num_robots: int = 3, num_waypoints: int = 6, view: bool = False
+):
     if num_robots > 3:
         raise NotImplementedError("More than three robot arms are not supported.")
-    
+
     if num_waypoints > 6:
         raise NotImplementedError("More than six waypoints are not supported.")
-    
+
     C = ry.Config()
     # C.addFile(ry.raiPath('scenarios/pandaSingle.g'))
 
@@ -862,11 +865,15 @@ def make_panda_waypoint_env(num_robots:int=3, num_waypoints:int=6, view: bool = 
     if num_robots > 1:
         C.addFile(ry.raiPath("panda/panda.g"), namePrefix="a1_").setParent(
             C.getFrame("table")
-        ).setRelativePosition([-0.3, 0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, -0.7071])
+        ).setRelativePosition([-0.3, 0.5, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, -0.7071]
+        )
     if num_robots > 2:
         C.addFile(ry.raiPath("panda/panda.g"), namePrefix="a2_").setParent(
             C.getFrame("table")
-        ).setRelativePosition([+0.3, 0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, -0.7071])
+        ).setRelativePosition([+0.3, 0.5, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, -0.7071]
+        )
 
     C.addFrame("way1").setShape(ry.ST.marker, [0.1]).setPosition([0.3, 0.0, 1.0])
     C.addFrame("way2").setShape(ry.ST.marker, [0.1]).setPosition([0.3, 0.0, 1.4])
@@ -882,7 +889,7 @@ def make_panda_waypoint_env(num_robots:int=3, num_waypoints:int=6, view: bool = 
         q_init[8] -= 0.5
     if num_robots > 2:
         q_init[15] -= 0.5
-    
+
     C.setJointState(q_init)
 
     if view:
@@ -891,7 +898,13 @@ def make_panda_waypoint_env(num_robots:int=3, num_waypoints:int=6, view: bool = 
     qHome = C.getJointState()
 
     def compute_pose_for_robot(robot_ee):
-        komo = ry.KOMO(C, phases=num_waypoints+1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo = ry.KOMO(
+            C,
+            phases=num_waypoints + 1,
+            slicesPerPhase=1,
+            kOrder=1,
+            enableCollisions=True,
+        )
         komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1])
 
         komo.addControlObjective([], 0, 1e-1)
@@ -911,7 +924,7 @@ def make_panda_waypoint_env(num_robots:int=3, num_waypoints:int=6, view: bool = 
         #     komo.addObjective([i], ry.FS.jointState, [], ry.OT.eq, [1e1], [], order=1)
 
         komo.addObjective(
-            times=[num_waypoints+1],
+            times=[num_waypoints + 1],
             feature=ry.FS.jointState,
             frames=[],
             type=ry.OT.eq,
@@ -940,11 +953,171 @@ def make_panda_waypoint_env(num_robots:int=3, num_waypoints:int=6, view: bool = 
 
     return C, keyframes
 
+
+def quaternion_from_z_rotation(angle):
+    half_angle = angle / 2
+    w = np.cos(half_angle)
+    x = 0
+    y = 0
+    z = np.sin(half_angle)
+    return np.array([w, x, y, z])
+
+
+def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
+    C = ry.Config()
+
+    C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
+        ry.ST.ssBox, size=[2, 2, 0.06, 0.005]
+    ).setColor([0.3, 0.3, 0.3]).setContact(1)
+
+    C.addFile("ur10/ur_welding.g", namePrefix="a1_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([-0.7, 0.7, 0]).setJoint(ry.JT.rigid).setRelativeQuaternion(
+        quaternion_from_z_rotation(-45 / 180 * np.pi)
+    )
+    if num_robots > 1:
+        C.addFile("ur10/ur_welding.g", namePrefix="a2_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.7, 0.7, 0]).setJoint(ry.JT.rigid).setRelativeQuaternion(
+            quaternion_from_z_rotation(225 / 180 * np.pi)
+        )
+
+    if num_robots > 2:
+        C.addFile("ur10/ur_welding.g", namePrefix="a3_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([-0.7, -0.7, 0]).setJoint(ry.JT.rigid).setRelativeQuaternion(
+            quaternion_from_z_rotation(45 / 180 * np.pi)
+        )
+
+    if num_robots > 3:
+        C.addFile("ur10/ur_welding.g", namePrefix="a4_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.7, -0.7, 0]).setJoint(ry.JT.rigid).setRelativeQuaternion(
+            quaternion_from_z_rotation(135 / 180 * np.pi)
+        )
+
+    C.addFrame("obs1").setParent(C.getFrame("table")).setRelativePosition(
+        [-0.2, -0.2, 0.3]
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.4, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+    C.addFrame("obs2").setParent(C.getFrame("table")).setRelativePosition(
+        [-0.2, 0.2, 0.3]
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.4, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+    C.addFrame("obs3").setParent(C.getFrame("table")).setRelativePosition(
+        [0.2, 0.2, 0.3]
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.4, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+    C.addFrame("obs4").setParent(C.getFrame("table")).setRelativePosition(
+        [0.2, -0.2, 0.3]
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.4, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+    C.addFrame("obs5").setParent(C.getFrame("table")).setRelativePosition(
+        [0., -0.2, 0.4]
+    ).setShape(ry.ST.ssBox, size=[0.3, 0.1, 0.1, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+
+    C.addFrame("obs6").setParent(C.getFrame("table")).setRelativePosition(
+        [0., 0.2, 0.4]
+    ).setShape(ry.ST.ssBox, size=[0.3, 0.1, 0.1, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+
+    C.addFrame("obs7").setParent(C.getFrame("table")).setRelativePosition(
+        [-0.2, 0, 0.4]
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.3, 0.1, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+
+    C.addFrame("obs8").setParent(C.getFrame("table")).setRelativePosition(
+        [0.2, 0, 0.4]
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.3, 0.1, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+    if view:
+        C.view(True)
+
+    qHome = C.getJointState()
+
+    def compute_pose_for_robot(robot_ee):
+        komo = ry.KOMO(
+            C,
+            phases=num_pts + 1,
+            slicesPerPhase=1,
+            kOrder=1,
+            enableCollisions=True,
+        )
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.1])
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        for i in range(num_pts):
+            komo.addObjective(
+                [i + 1],
+                ry.FS.positionDiff,
+                [robot_ee, "obs" + str(i + 1)],
+                ry.OT.eq,
+                [1e1],
+            )
+
+        # for i in range(7):
+        #     komo.addObjective([i], ry.FS.jointState, [], ry.OT.eq, [1e1], [], order=1)
+
+        komo.addObjective(
+            times=[num_pts + 1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=qHome,
+        )
+
+        ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
+        print(ret)
+        q = komo.getPath()
+        print(q)
+
+        if view:
+            komo.view(True, "IK solution")
+
+        return q
     
+    robots = ["a1", "a2", "a3", "a4"]
+
+    keyframes = np.zeros((0, len(C.getJointState())))
+    for r in robots[:num_robots]:
+        k = compute_pose_for_robot(r + "_ur_ee_marker")
+        keyframes = np.concatenate([keyframes, k])
+
+    return C, keyframes
+
+def make_mobile_manip_env(view:bool=False):
+    C = ry.Config()
+
+    C.addFile('mobile-manipulator-restricted.g', namePrefix="a1_").setPosition([1, 0, 0.2])
+    C.addFile('mobile-manipulator-restricted.g', namePrefix="a1_").setPosition([-1, 0, 0.2])
+
+    C.view(True)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument("env", nargs="?", default="default", help="env to show")
-    
+
     args = parser.parse_args()
 
     if args.env == "piano":
@@ -959,5 +1132,9 @@ if __name__ == "__main__":
         make_egg_carton_env(True)
     elif args.env == "triple_waypoints":
         make_panda_waypoint_env(view=True)
+    elif args.env == "welding":
+        make_welding_env(num_robots=4, num_pts=8, view=True)
+    elif args.env == "mobile":
+        make_mobile_manip_env(True)
     else:
         make_panda_waypoint_env(2, view=True)
