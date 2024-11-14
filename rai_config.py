@@ -1092,6 +1092,8 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
             target=qHome,
         )
 
+        # print(komo.nlp().getBounds())
+
         ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
         print(ret)
         q = komo.getPath()
