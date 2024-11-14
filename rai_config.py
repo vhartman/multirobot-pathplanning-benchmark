@@ -72,25 +72,25 @@ def make_2d_rai_env(view: bool = False):
 
     C.addFrame("wall1").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0, 1.1, 0.07]
-    ).setShape(ry.ST.ssBox, size=[2, 0.1, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall2").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0, -1.1, 0.07]
-    ).setShape(ry.ST.ssBox, size=[2, 0.1, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall3").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [1.1, 0, 0.07]
-    ).setShape(ry.ST.ssBox, size=[0.1, 2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.2, 2.4, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall4").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [-1.1, 0, 0.07]
-    ).setShape(ry.ST.ssBox, size=[0.1, 2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.2, 2.4, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 

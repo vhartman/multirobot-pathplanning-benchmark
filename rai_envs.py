@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 
 from rai_config import *
 from planning_env import *
+from util import *
 
 
 def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
@@ -132,13 +133,14 @@ class rai_env(base_env):
 
         return True
 
-    def is_edge_collision_free(self, q1, q2, m, resolution=5):
+    def is_edge_collision_free(self, q1, q2, m, resolution=0.1):
         # print('q1', q1)
         # print('q2', q2)
         q1_concat = np.concatenate(q1)
         q2_concat = np.concatenate(q2)
-        N = resolution
-        for i in range(N):
+        N = config_dist(q1, q2) / resolution
+        N = max(5, N)
+        for i in range(int(N)):
             q = q1_concat + (q2_concat - q1_concat) * (i + 1) / N
             if not self.is_collision_free(q, m):
                 return False
@@ -966,6 +968,22 @@ def visualize_modes(env):
 
     env.C.view(True)
 
+
+def display_path(
+    env, path: List[State], stop: bool = True, export: bool = False
+) -> None:
+    for i in range(len(path)):
+        env.set_to_mode(path[i].mode)
+        for k in range(len(env.robots)):
+            q = path[i].q[k]
+            env.C.setJointState(q, get_robot_joints(env.C, env.robots[k]))
+
+        env.C.view(stop)
+
+        if export:
+            env.C.view_savePng("./z.vid/")
+
+        time.sleep(0.05)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
