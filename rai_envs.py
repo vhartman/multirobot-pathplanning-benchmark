@@ -144,7 +144,7 @@ class rai_env(base_env):
         N = config_dist(q1, q2) / resolution
         N = max(5, N)
         for i in range(int(N)):
-            q = q1_concat + (q2_concat - q1_concat) * (i + 1) / N
+            q = q1_concat + (q2_concat - q1_concat) * (i) / (N-1)
             if not self.is_collision_free(q, m):
                 return False
 
@@ -172,16 +172,22 @@ class rai_env(base_env):
         for i in range(len(path)):
             # check if the state is collision free
             if not self.is_collision_free(path[i].q, mode):
+                print(f'There is a collision at index {i}')
+                col = self.C.getCollisionsTotalPenetration()
+                print(col)
+                self.C.view(True)
                 return False
 
-            if self.is_transition(path.q, mode):
-                # TODO: thi sdoes not work if multiple switches are possible at the same time
-                next_mode = self.get_next_mode(path.q, mode)
+            # if the next mode is a transition, check where to go
+            if self.is_transition(path[i].q, mode):
+                # TODO: this does not work if multiple switches are possible at the same time
+                next_mode = self.get_next_mode(path[i].q, mode)
 
                 if np.array_equal(path[i + 1].mode, next_mode):
                     mode = next_mode
 
-        if not self.done(path[-1], path[-1].mode):
+        if not self.done(path[-1].q, path[-1].mode):
+            print('Final mode not reached')
             return False
 
         return True
