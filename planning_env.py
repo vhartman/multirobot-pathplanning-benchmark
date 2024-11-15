@@ -71,7 +71,11 @@ class SingleGoal(Goal):
         return self.goal
 
 
-def make_mode_sequence_from_sequence(robots: List, sequence: List) -> List:
+class Mode:
+    pass
+
+
+def make_mode_sequence_from_sequence(robots: List[str], sequence: List) -> List[int]:
     # compute initial mode
     initial_mode = {}
 
@@ -116,12 +120,13 @@ class State:
         self.q = q
         self.mode = m
 
+
 # TODO: switch everything to the State from above?
 class base_env(ABC):
     def __init__(self):
         pass
 
-    def get_robot_dim(self, r):
+    def get_robot_dim(self, r: str):
         return self.robot_dims[r]
 
     def get_start_pos(self):
@@ -133,40 +138,46 @@ class base_env(ABC):
     def get_sequence(self):
         return self.sequence
 
-    def get_robot_sequence(self, r):
+    def get_robot_sequence(self, r: str):
         pass
 
-    def set_to_mode(self, m):
+    def set_to_mode(self, m: List[int]):
         pass
 
     def get_all_bounds(self):
         self.bounds
-    
+
     # def get_robot_bounds(self):
     #     self.bounds
 
     @abstractmethod
-    def done(self, q, m):
+    def done(self, q: List[NDArray], m: List[int]):
         pass
 
     @abstractmethod
-    def get_next_mode(self, q, m):
+    def get_next_mode(self, q: List[NDArray], m: List[int]):
         pass
 
     @abstractmethod
-    def is_collision_free(self, q, m):
+    def is_collision_free(self, q: List[NDArray], m: List[int]):
         pass
 
     @abstractmethod
-    def is_edge_collision_free(self, q1, q2, m, resolution=5):
+    def is_edge_collision_free(
+        self,
+        q1: List[NDArray],
+        q2: List[NDArray],
+        m: List[int],
+        resolution: float = 0.1,
+    ):
         pass
 
     @abstractmethod
-    def is_path_collision_free(self, path):
+    def is_path_collision_free(self, path: List[State]):
         pass
 
     @abstractmethod
-    def is_valid_plan(self, path):
+    def is_valid_plan(self, path: List[State]):
         pass
 
     # @abstractmethod

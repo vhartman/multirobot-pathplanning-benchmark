@@ -55,6 +55,7 @@ class rai_env(base_env):
     robots: List[str]
     robot_dims: dict[str]
     start_pos: List[NDArray]
+    bounds: NDArray
     sequence: List
     mode_sequence: List
     start_mode: NDArray
@@ -72,12 +73,14 @@ class rai_env(base_env):
         self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
         # the only way in the bindings to get the bounds is via the nlp()
-        komo = ry.KOMO(self.C, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo = ry.KOMO(
+            self.C, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
         self.bounds = komo.nlp().getBounds()
 
         self.tolerance = 0.1
 
-    def done(self, q, m):
+    def done(self, q: List[NDArray], m):
         if not np.array_equal(m, self.terminal_mode):
             return False
 
@@ -90,7 +93,7 @@ class rai_env(base_env):
     def show(self):
         self.C.view(True)
 
-    def is_transition(self, q, m):
+    def is_transition(self, q: NDArray, m):
         if np.array_equal(m, self.terminal_mode):
             return False
 
@@ -109,30 +112,31 @@ class rai_env(base_env):
 
         return False
 
-    def get_next_mode(self, q, m):
+    def get_next_mode(self, q: List[NDArray], m):
         for i, mode in enumerate(self.mode_sequence):
             if np.array_equal(m, mode):
                 return np.array(self.mode_sequence[i + 1])
 
         raise ValueError("No next mode found, this might be the terminal mode.")
 
-    def is_collision_free(self, q, m, collision_tolerance=0.01):
+    def is_collision_free(
+        self, q: List[NDArray], m, collision_tolerance: float = 0.001
+    ):
         self.set_to_mode(m)
         self.C.setJointState(q)
-
-        # self.C.view(False)
 
         col = self.C.getCollisionsTotalPenetration()
         # print(col)
         # self.C.view(False)
-        # if col > 0:
         if col > collision_tolerance:
             # self.C.view(False)
             return False
 
         return True
 
-    def is_edge_collision_free(self, q1, q2, m, resolution=0.1):
+    def is_edge_collision_free(
+        self, q1: List[NDArray], q2: List[NDArray], m, resolution=0.1
+    ):
         # print('q1', q1)
         # print('q2', q2)
         q1_concat = np.concatenate(q1)
@@ -146,7 +150,7 @@ class rai_env(base_env):
 
         return True
 
-    def is_path_collision_free(self, path):
+    def is_path_collision_free(self, path: List[State]):
         for i in range(len(path) - 1):
             # skip transition nodes
             if not np.array_equal(path[i].mode, path[i + 1].mode):
@@ -161,7 +165,7 @@ class rai_env(base_env):
 
         return True
 
-    def is_valid_plan(self, path):
+    def is_valid_plan(self, path: List[State]):
         # check if it is collision free and if all modes are passed in order
         # only take the configuration into account for that
         mode = self.start_mode
@@ -285,7 +289,7 @@ class rai_two_dim_simple_manip(rai_env):
         self.robots = ["a1", "a2"]
 
         super().__init__()
-       
+
         self.goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
@@ -410,7 +414,7 @@ class rai_two_dim_three_agent_env(rai_env):
         self.robots = ["a1", "a2", "a3"]
 
         super().__init__()
-        
+
         self.goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
@@ -494,7 +498,7 @@ class rai_dual_ur10_arm_env(rai_env):
         self.robots = ["a1", "a2"]
 
         super().__init__()
-        
+
         self.goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
@@ -556,7 +560,7 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
         self.robots = self.robots[:num_robots]
 
         super().__init__()
-        
+
         self.goals = {}
         for r in self.robots:
             self.goals[r] = []
@@ -625,7 +629,7 @@ class rai_ur10_arm_egg_carton_env(rai_env):
         self.C.addConfigurationCopy(self.C_coll)
 
         self.robots = ["a1", "a2"]
-      
+
         super().__init__()
 
         self.goals = {
@@ -790,7 +794,6 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                 )
 
             # postcondition
-            # TODO: I am not sure if this does not lead to issues later on
             if self.modes[robot][mode_index - 1][3] is not None:
                 box = self.modes[robot][mode_index - 1][2]
                 self.C.delFrame(box)
@@ -933,7 +936,11 @@ def visualize_modes(env):
 
 
 def display_path(
-    env, path: List[State], stop: bool = True, export: bool = False, pause_time: float=0.01
+    env,
+    path: List[State],
+    stop: bool = True,
+    export: bool = False,
+    pause_time: float = 0.01,
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
@@ -947,6 +954,7 @@ def display_path(
             env.C.view_savePng("./z.vid/")
 
         time.sleep(pause_time)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
