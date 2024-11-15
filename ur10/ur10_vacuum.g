@@ -11,7 +11,7 @@ Edit ur_wrist_3_joint: { q: 1.0 }
 
 gripper_fill (ur_ee_link){ shape:cylinder, color:[.1, .1, .1 , 1], Q:"d(90 0 1 0) t(-.0 -.0 .025)",
 	size:[.05 .021], 
-	contact:-2
+	contact:-1
 }
 
 # pen

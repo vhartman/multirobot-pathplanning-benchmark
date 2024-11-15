@@ -120,7 +120,7 @@ class rai_env(base_env):
         raise ValueError("No next mode found, this might be the terminal mode.")
 
     def is_collision_free(
-        self, q: List[NDArray], m, collision_tolerance: float = 0.001
+        self, q: List[NDArray], m, collision_tolerance: float = 0.01
     ):
         # print(q)
         self.set_to_mode(m)

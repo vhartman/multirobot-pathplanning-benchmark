@@ -3,7 +3,11 @@ import numpy as np
 import argparse
 
 import os.path
+import random
 
+# make everything predictable
+np.random.seed(2)
+random.seed(2)
 
 def make_2d_rai_env(view: bool = False):
     C = ry.Config()
@@ -1139,13 +1143,13 @@ def make_bottle_insertion(remove_non_moved_bottles:bool=False, view: bool = Fals
 
     def compute_insertion_poses(ee, bottle):
         komo = ry.KOMO(C, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
-        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.0])
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.01])
         komo.addControlObjective([], 0, 1e-1)
         # komo.addControlObjective([], 1, 1e0)
         # komo.addControlObjective([], 2, 1e0)
 
         komo.addModeSwitch([1, 2], ry.SY.stable, [ee, bottle])
-        komo.addObjective([1, 2], ry.FS.distance, [ee, bottle], ry.OT.eq, [1e1])
+        komo.addObjective([1, 2], ry.FS.distance, [ee, bottle], ry.OT.eq, [1e1], [-0.01])
 
         komo.addObjective([1, 2], ry.FS.vectorYDiff, [ee, bottle], ry.OT.sos, [1e1])
 
@@ -1185,17 +1189,33 @@ def make_bottle_insertion(remove_non_moved_bottles:bool=False, view: bool = Fals
         #     [3, -1], ry.FS.poseDiff, ["a2", "pre_agent_2_frame"], ry.OT.eq, [1e1]
         # )
 
-        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-        # options.nonStrictSteps = 50;
+        for _ in range(10):
+            komo.initRandom()
 
-        solver.setOptions(damping=0.01, wolfe=0.001)
-        solver.solve()
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
 
-        if view:
-            komo.view(True, "IK solution")
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
 
-        keyframes = komo.getPath()
-        return keyframes
+            print(bottle, retval)
+
+            if view:
+                komo.view(True, "IK solution")
+
+            keyframes = komo.getPath()
+
+            # print(retval)
+
+            if retval['ineq'] < 1 and retval['eq'] < 1 and retval['feasible']:
+                return keyframes
+            
+            # else:
+            #     print(retval)
+        
+        return 0
 
     a0_b1_keyframes = compute_insertion_poses("a0_ur_vacuum", "bottle_1")
     a0_b2_keyframes = compute_insertion_poses("a0_ur_vacuum", "bottle_12")
@@ -1244,6 +1264,6 @@ if __name__ == "__main__":
     elif args.env == "mobile":
         make_mobile_manip_env(True)
     elif args.env == "bottle":
-        make_bottle_insertion(True)
+        make_bottle_insertion(view=True)
     else:
         make_panda_waypoint_env(2, view=True)

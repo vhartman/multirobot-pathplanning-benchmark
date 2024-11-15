@@ -5,7 +5,7 @@ table_base (World) {
     shape:marker, size:[.03],
 }
 table (table_base){
-    shape:ssBox, Q:[0 0 -.05], size:[2.3 1.24 .05 .02], color:[.3 .3 .3]
+    shape:ssBox, Q:[0 0 -.05], size:[2.3 1.24 .05 .002], color:[.3 .3 .3]
     contact:1, logical:{ }
 }
 
@@ -32,8 +32,8 @@ goalPose (table_base){ type:ssBox, size:[0.1 0.1 0.3 .005], contact:0 Q:"[  -0.1
 #bottle_1_neck (bottle_1_base){ type:cylinder, size:[0.1 0.06 0.25 .015], contact:0 Q:"[  -0.0, .0, 0.1, 1, 0, .0, 0]" color:[0.9, 0.1, 0.1, 1]}
 
 bottle_1 (table_base){ joint:rigid, type:cylinder, size:[0.1 0.06 0.25 .04], contact:1 Q:"[  -0.7, .175, 0.12, 1, 0, .0, 0]" color:[1, 0, 0.9, .7]}
-bottle_3 (table_base){ joint:rigid, type:cylinder, size:[0.1 0.06 0.25 .04], contact:1 Q:"[  0.8, .125, 0.028, 0.6533, 0.7071, 0, 0.3827]" color:[0, 0.9, 0.9, .7]}
-bottle_5 (table_base){ joint:rigid, type:cylinder, size:[0.1 0.06 0.25 .04], contact:1 Q:"[  0.4, .25, 0.016, -1, 1, .0, 0]" color:[0.9, 0.9, 0, .7]}
+bottle_3 (table_base){ joint:rigid, type:cylinder, size:[0.1 0.06 0.25 .04], contact:1 Q:"[  0.7, .24, 0.028, 0.6533, 0.7071, 0, 0.3827]" color:[0, 0.9, 0.9, .7]}
+bottle_5 (table_base){ joint:rigid, type:cylinder, size:[0.1 0.06 0.25 .04], contact:1 Q:"[  0.4, .25, 0.026, -1, 1, .0, 0]" color:[0.9, 0.9, 0, .7]}
 bottle_12 (table_base){ joint:rigid, type:cylinder, size:[0.1 0.06 0.25 .04], contact:1 Q:"[  -0.9, -.0, 0.12, 1, 0, .0, 0]" color:[0.1, 0.5, 0.9, .7]}
 
 bottle_1_goal (table_base){ type:cylinder, size:[0.1 0.06 0.25 .04], contact:0 Q:"[  -0.2, .0, 0.12, 1, 0, .0, .0]" color:[1, 0, 0.9, .2]}
