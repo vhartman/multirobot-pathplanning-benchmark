@@ -122,6 +122,7 @@ class rai_env(base_env):
     def is_collision_free(
         self, q: List[NDArray], m, collision_tolerance: float = 0.001
     ):
+        # print(q)
         self.set_to_mode(m)
         self.C.setJointState(q)
 
@@ -162,33 +163,6 @@ class rai_env(base_env):
 
             if not self.is_edge_collision_free(q1, q2, mode):
                 return False
-
-        return True
-
-    def is_valid_plan(self, path: List[State]):
-        # check if it is collision free and if all modes are passed in order
-        # only take the configuration into account for that
-        mode = self.start_mode
-        for i in range(len(path)):
-            # check if the state is collision free
-            if not self.is_collision_free(path[i].q, mode):
-                print(f'There is a collision at index {i}')
-                col = self.C.getCollisionsTotalPenetration()
-                print(col)
-                self.C.view(True)
-                return False
-
-            # if the next mode is a transition, check where to go
-            if self.is_transition(path[i].q, mode):
-                # TODO: this does not work if multiple switches are possible at the same time
-                next_mode = self.get_next_mode(path[i].q, mode)
-
-                if np.array_equal(path[i + 1].mode, next_mode):
-                    mode = next_mode
-
-        if not self.done(path[-1].q, path[-1].mode):
-            print('Final mode not reached')
-            return False
 
         return True
 
@@ -920,6 +894,180 @@ class rai_ur10_arm_shelf_env:
 class rai_ur10_arm_conveyor_env:
     pass
 
+class rai_ur10_arm_bottle_env(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_bottle_insertion()
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        self.robots = ["a0", "a1"]
+
+        super().__init__()
+
+        self.goals = {
+            "a0": [
+                SingleGoal(keyframes[0][self.robot_idx["a0"]]),
+                SingleGoal(keyframes[1][self.robot_idx["a0"]]),
+                # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[3][self.robot_idx["a0"]]),
+                SingleGoal(keyframes[4][self.robot_idx["a0"]]),
+                SingleGoal(keyframes[5][self.robot_idx["a0"]]),
+            ],
+            "a1": [
+                SingleGoal(keyframes[6][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[7][self.robot_idx["a1"]]),
+                # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[9][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[10][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[11][self.robot_idx["a1"]]),
+            ],
+        }
+
+        for k, v in self.goals.items():
+            for g in v:
+                print(g.goal)
+
+        self.sequence = [
+            ("a0", 0),
+            ("a1", 0),
+            ("a0", 1),
+            ("a1", 1),
+            ("a0", 2),
+            ("a1", 2),
+            ("a0", 3),
+            ("a1", 3),
+        ]
+        # self.sequence = self.sequence[:5]
+        self.mode_sequence = make_mode_sequence_from_sequence(
+            self.robots, self.sequence
+        )
+
+        # a1_boxes = ["box000", "box001", "box011", "box002"]
+        # a2_boxes = ["box021", "box010", "box012", "box022", "box020"]
+
+        self.modes = {
+            "a0": [
+                ("pick", "a0_ur_vacuum", "bottle_1", None),
+                ("place", "table", "bottle_1", None),
+                ("pick", "a0_ur_vacuum", "bottle_12", None),
+                ("place", "table", "bottle_12", None),
+                ("goto", None, None),
+            ],
+            "a1": [
+                ("pick", "a1_ur_vacuum", "bottle_3", None),
+                ("place", "table", "bottle_3", None),
+                ("pick", "a1_ur_vacuum", "bottle_5", None),
+                ("place", "table", "bottle_5", None),
+                ("goto", 0, 0, None),
+            ],
+        }
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        # buffer for faster collision checking
+        self.prev_mode = np.array([0, 0])
+        self.start_mode = np.array(self.mode_sequence[0])
+        self.terminal_mode = np.array(self.mode_sequence[-1])
+
+        self.tolerance = 0.1
+
+        # q = self.C_base.getJointState()
+        # print(self.is_collision_free(q, [0, 0]))
+
+        # for m in self.mode_sequence:
+        #     print(self.is_collision_free(q, m))
+        #     self.show()
+
+        # self.C_base.view(True)
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        # buffer for faster collision checking
+        self.prev_mode = np.array([0, 0])
+
+    # this is still relatively slow since we copy the configuration around
+    # a lot. this could be avoided by making the configurations once initially
+    # and then not copy them.
+    def set_to_mode(self, m):
+        # do not remake the config if we are in the same mode as we have been before
+        if np.array_equal(m, self.prev_mode):
+            return
+
+        self.prev_mode = m
+
+        # self.C.view(True)
+        self.C.clear()
+
+        self.C.addConfigurationCopy(self.C_base)
+
+        # find current mode
+        current_mode = 0
+        for i, mode in enumerate(self.mode_sequence):
+            if np.array_equal(m, mode):
+                current_mode = i
+                break
+
+        if current_mode == 0:
+            return
+
+        for i, mode in enumerate(self.mode_sequence):
+            if i == 0:
+                continue
+
+            # figure out which robot switched from the previous mode to this mode
+            # TODO: this does currently not work for multiple robots switching at the same time
+            mode_switching_robot = 0
+            for r in range(len(self.robots)):
+                if mode[r] != self.mode_sequence[i - 1][r]:
+                    # this mode switched
+                    mode_switching_robot = r
+                    break
+
+            # set robot to config
+            mode_index = mode[mode_switching_robot]
+            robot = self.robots[mode_switching_robot]
+            q = self.goals[robot][mode_index - 1].goal
+            self.C.setJointState(q, get_robot_joints(self.C, robot))
+
+            # print(self.modes[robot][i-1])
+            if self.modes[robot][mode_index - 1][0] == "goto":
+                pass
+            else:
+                self.C.attach(
+                    self.modes[robot][mode_index - 1][1],
+                    self.modes[robot][mode_index - 1][2],
+                )
+
+            # postcondition
+            # TODO: I am not sure if this does not lead to issues later on
+            if self.modes[robot][mode_index - 1][3] is not None:
+                box = self.modes[robot][mode_index - 1][2]
+                self.C.delFrame(box)
+
+            # print(mode_switching_robot, current_mode)
+            # self.C.view(False)
+
+            if i == current_mode:
+                break
+
 
 # mobile manip
 class rai_mobile_manip_wall:
@@ -982,6 +1130,8 @@ if __name__ == "__main__":
         env = rai_ur10_arm_egg_carton_env()
     elif args.env == "triple_waypoints":
         env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
+    elif args.env == "bottles":
+        env = rai_ur10_arm_bottle_env()
 
     print("Environment starting position")
     env.show()

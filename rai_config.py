@@ -2,6 +2,8 @@ import robotic as ry
 import numpy as np
 import argparse
 
+import os.path
+
 
 def make_2d_rai_env(view: bool = False):
     C = ry.Config()
@@ -983,23 +985,23 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
     if num_robots > 1:
         C.addFile("ur10/ur_welding.g", namePrefix="a2_").setParent(
             C.getFrame("table")
-        ).setRelativePosition([+0.7, 0.7, 0]).setJoint(ry.JT.rigid).setRelativeQuaternion(
-            quaternion_from_z_rotation(225 / 180 * np.pi)
-        )
+        ).setRelativePosition([+0.7, 0.7, 0]).setJoint(
+            ry.JT.rigid
+        ).setRelativeQuaternion(quaternion_from_z_rotation(225 / 180 * np.pi))
 
     if num_robots > 2:
         C.addFile("ur10/ur_welding.g", namePrefix="a3_").setParent(
             C.getFrame("table")
-        ).setRelativePosition([-0.7, -0.7, 0]).setJoint(ry.JT.rigid).setRelativeQuaternion(
-            quaternion_from_z_rotation(45 / 180 * np.pi)
-        )
+        ).setRelativePosition([-0.7, -0.7, 0]).setJoint(
+            ry.JT.rigid
+        ).setRelativeQuaternion(quaternion_from_z_rotation(45 / 180 * np.pi))
 
     if num_robots > 3:
         C.addFile("ur10/ur_welding.g", namePrefix="a4_").setParent(
             C.getFrame("table")
-        ).setRelativePosition([+0.7, -0.7, 0]).setJoint(ry.JT.rigid).setRelativeQuaternion(
-            quaternion_from_z_rotation(135 / 180 * np.pi)
-        )
+        ).setRelativePosition([+0.7, -0.7, 0]).setJoint(
+            ry.JT.rigid
+        ).setRelativeQuaternion(quaternion_from_z_rotation(135 / 180 * np.pi))
 
     C.addFrame("obs1").setParent(C.getFrame("table")).setRelativePosition(
         [-0.2, -0.2, 0.3]
@@ -1026,25 +1028,22 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
     ).setContact(1)
 
     C.addFrame("obs5").setParent(C.getFrame("table")).setRelativePosition(
-        [0., -0.2, 0.4]
+        [0.0, -0.2, 0.4]
     ).setShape(ry.ST.ssBox, size=[0.3, 0.1, 0.1, 0.005]).setColor(
         [0.3, 0.3, 0.3]
     ).setContact(1)
-
 
     C.addFrame("obs6").setParent(C.getFrame("table")).setRelativePosition(
-        [0., 0.2, 0.4]
+        [0.0, 0.2, 0.4]
     ).setShape(ry.ST.ssBox, size=[0.3, 0.1, 0.1, 0.005]).setColor(
         [0.3, 0.3, 0.3]
     ).setContact(1)
-
 
     C.addFrame("obs7").setParent(C.getFrame("table")).setRelativePosition(
         [-0.2, 0, 0.4]
     ).setShape(ry.ST.ssBox, size=[0.1, 0.3, 0.1, 0.005]).setColor(
         [0.3, 0.3, 0.3]
     ).setContact(1)
-
 
     C.addFrame("obs8").setParent(C.getFrame("table")).setRelativePosition(
         [0.2, 0, 0.4]
@@ -1065,7 +1064,9 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
             kOrder=1,
             enableCollisions=True,
         )
-        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.1])
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.1]
+        )
 
         komo.addControlObjective([], 0, 1e-1)
         komo.addControlObjective([], 1, 1e-1)
@@ -1103,7 +1104,7 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
             komo.view(True, "IK solution")
 
         return q
-    
+
     robots = ["a1", "a2", "a3", "a4"]
 
     keyframes = np.zeros((0, len(C.getJointState())))
@@ -1113,13 +1114,112 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
 
     return C, keyframes
 
-def make_mobile_manip_env(view:bool=False):
+
+def make_shelf_env(view: bool = False):
+    pass
+
+
+def make_bottle_insertion(remove_non_moved_bottles:bool=False, view: bool = False):
     C = ry.Config()
 
-    C.addFile('mobile-manipulator-restricted.g', namePrefix="a1_").setPosition([1, 0, 0.2])
-    C.addFile('mobile-manipulator-restricted.g', namePrefix="a1_").setPosition([-1, 0, 0.2])
+    path = os.path.join(os.path.dirname(__file__), "bottle.g")
+    C.addFile(path).setPosition([1, 0, 0.2])
+
+    if remove_non_moved_bottles:
+        moved_bottle_indices = [1, 12, 3, 5]
+        for i in range(1, 15):
+            if i not in moved_bottle_indices:
+                print(f"removing bottle {i}")
+                C.delFrame("bottle_" + str(i) + "_goal")
+
+    if view:
+        C.view(True)
+
+    qHome = C.getJointState()
+
+    def compute_insertion_poses(ee, bottle):
+        komo = ry.KOMO(C, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.0])
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e0)
+        # komo.addControlObjective([], 2, 1e0)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [ee, bottle])
+        komo.addObjective([1, 2], ry.FS.distance, [ee, bottle], ry.OT.eq, [1e1])
+
+        komo.addObjective([1, 2], ry.FS.vectorYDiff, [ee, bottle], ry.OT.sos, [1e1])
+
+        komo.addObjective(
+            [2, -1], ry.FS.poseDiff, [bottle, bottle + "_goal"], ry.OT.eq, [1e1]
+        )
+
+        # komo.addModeSwitch([1, 2], ry.SY.stable, ["a2", "obj2"])
+        # komo.addObjective([1, 2], ry.FS.distance, ["a2", "obj2"], ry.OT.eq, [1e1])
+        # komo.addModeSwitch([2, -1], ry.SY.stable, ["table", "obj2"])
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", bottle])
+
+        # komo.addObjective([2, -1], ry.FS.poseDiff, ["obj2", "goal2"], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e-1],
+            target=qHome,
+        )
+
+        komo.addObjective(
+            times=[3],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=qHome,
+        )
+
+        # komo.addObjective([2], ry.FS.poseDiff, ["a2", "goal2"], ry.OT.eq, [1e1])
+
+        # komo.addObjective([3, -1], ry.FS.poseDiff, ['a1', 'goal2'], ry.OT.eq, [1e1])
+        # komo.addObjective(
+        #     [3, -1], ry.FS.poseDiff, ["a2", "pre_agent_2_frame"], ry.OT.eq, [1e1]
+        # )
+
+        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+        # options.nonStrictSteps = 50;
+
+        solver.setOptions(damping=0.01, wolfe=0.001)
+        solver.solve()
+
+        if view:
+            komo.view(True, "IK solution")
+
+        keyframes = komo.getPath()
+        return keyframes
+
+    a0_b1_keyframes = compute_insertion_poses("a0_ur_vacuum", "bottle_1")
+    a0_b2_keyframes = compute_insertion_poses("a0_ur_vacuum", "bottle_12")
+
+    a1_b3_keyframes = compute_insertion_poses("a1_ur_vacuum", "bottle_3")
+    a1_b5_keyframes = compute_insertion_poses("a1_ur_vacuum", "bottle_5")
+
+    return C, np.concatenate(
+        [a0_b1_keyframes, a0_b2_keyframes, a1_b3_keyframes, a1_b5_keyframes]
+    )
+
+
+def make_mobile_manip_env(view: bool = False):
+    C = ry.Config()
+
+    C.addFile("mobile-manipulator-restricted.g", namePrefix="a1_").setPosition(
+        [1, 0, 0.2]
+    )
+    C.addFile("mobile-manipulator-restricted.g", namePrefix="a1_").setPosition(
+        [-1, 0, 0.2]
+    )
 
     C.view(True)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
@@ -1143,5 +1243,7 @@ if __name__ == "__main__":
         make_welding_env(num_robots=4, num_pts=8, view=True)
     elif args.env == "mobile":
         make_mobile_manip_env(True)
+    elif args.env == "bottle":
+        make_bottle_insertion(True)
     else:
         make_panda_waypoint_env(2, view=True)
