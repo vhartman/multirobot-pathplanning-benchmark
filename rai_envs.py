@@ -72,11 +72,9 @@ class rai_env(base_env):
 
         self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
 
-        # the only way in the bindings to get the bounds is via the nlp()
-        komo = ry.KOMO(
-            self.C, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True
-        )
-        self.bounds = komo.nlp().getBounds()
+        self.modes = None
+
+        self.limits = self.C.getJointLimits()
 
         self.tolerance = 0.1
 
@@ -119,9 +117,7 @@ class rai_env(base_env):
 
         raise ValueError("No next mode found, this might be the terminal mode.")
 
-    def is_collision_free(
-        self, q: List[NDArray], m, collision_tolerance: float = 0.01
-    ):
+    def is_collision_free(self, q: List[NDArray], m, collision_tolerance: float = 0.01):
         # print(q)
         self.set_to_mode(m)
         self.C.setJointState(q)
@@ -136,7 +132,7 @@ class rai_env(base_env):
         return True
 
     def is_edge_collision_free(
-        self, q1: List[NDArray], q2: List[NDArray], m, resolution=0.1
+        self, q1: List[NDArray], q2: List[NDArray], m, resolution=0.1, randomize_order=True
     ):
         # print('q1', q1)
         # print('q2', q2)
@@ -144,15 +140,26 @@ class rai_env(base_env):
         q2_concat = np.concatenate(q2)
         N = config_dist(q1, q2) / resolution
         N = max(5, N)
-        for i in range(int(N)):
-            q = q1_concat + (q2_concat - q1_concat) * (i) / (N-1)
+
+        idx = list(range(int(N)))
+        if randomize_order:
+            random.shuffle(idx)
+
+        for i in idx:
+            # print(i / (N-1))
+            q = q1_concat + (q2_concat - q1_concat) * (i) / (N - 1)
             if not self.is_collision_free(q, m):
+                # print('coll')
                 return False
 
         return True
 
-    def is_path_collision_free(self, path: List[State]):
-        for i in range(len(path) - 1):
+    def is_path_collision_free(self, path: List[State], randomize_order=True):
+        idx = list(range(len(path) - 1))
+        if randomize_order:
+            random.shuffle(idx)
+            
+        for i in idx:
             # skip transition nodes
             if not np.array_equal(path[i].mode, path[i + 1].mode):
                 continue
@@ -165,6 +172,71 @@ class rai_env(base_env):
                 return False
 
         return True
+
+    def set_to_mode(self, m):
+        if self.modes is None:
+            return
+
+        # do not remake the config if we are in the same mode as we have been before
+        if np.array_equal(m, self.prev_mode):
+            return
+
+        self.prev_mode = m
+
+        # self.C.view(True)
+        self.C.clear()
+
+        self.C.addConfigurationCopy(self.C_base)
+
+        # find current mode
+        current_mode = 0
+        for i, mode in enumerate(self.mode_sequence):
+            if np.array_equal(m, mode):
+                current_mode = i
+                break
+
+        if current_mode == 0:
+            return
+
+        for i, mode in enumerate(self.mode_sequence):
+            if i == 0:
+                continue
+
+            # figure out which robot switched from the previous mode to this mode
+            # TODO: this does currently not work for multiple robots switching at the same time
+            mode_switching_robot = 0
+            for r in range(len(self.robots)):
+                if mode[r] != self.mode_sequence[i - 1][r]:
+                    # this mode switched
+                    mode_switching_robot = r
+                    break
+
+            # set robot to config
+            mode_index = mode[mode_switching_robot]
+            robot = self.robots[mode_switching_robot]
+            q = self.goals[robot][mode_index - 1].goal
+            self.C.setJointState(q, get_robot_joints(self.C, robot))
+
+            # print(self.modes[robot][i-1])
+            if self.modes[robot][mode_index - 1][0] == "goto":
+                pass
+            else:
+                self.C.attach(
+                    self.modes[robot][mode_index - 1][1],
+                    self.modes[robot][mode_index - 1][2],
+                )
+
+            # postcondition
+            # TODO: I am not sure if this does not lead to issues later on
+            if self.modes[robot][mode_index - 1][3] is not None:
+                box = self.modes[robot][mode_index - 1][2]
+                self.C.delFrame(box)
+
+            # print(mode_switching_robot, current_mode)
+            # self.C.view(False)
+
+            if i == current_mode:
+                break
 
 
 # In the follwoing, we want to test planners on a variety of tings
@@ -318,68 +390,6 @@ class rai_two_dim_simple_manip(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         self.prev_mode = np.array([0, 0])
-
-    def set_to_mode(self, m):
-        # do not remake the config if we are in the same mode as we have been before
-        if np.array_equal(m, self.prev_mode):
-            return
-
-        self.prev_mode = m
-
-        # self.C.view(True)
-        self.C.clear()
-
-        self.C.addConfigurationCopy(self.C_base)
-
-        # find current mode
-        current_mode = 0
-        for i, mode in enumerate(self.mode_sequence):
-            if np.array_equal(m, mode):
-                current_mode = i
-                break
-
-        if current_mode == 0:
-            return
-
-        for i, mode in enumerate(self.mode_sequence):
-            if i == 0:
-                continue
-
-            # figure out which robot switched from the previous mode to this mode
-            # TODO: this does currently not work for multiple robots switching at the same time
-            mode_switching_robot = 0
-            for r in range(len(self.robots)):
-                if mode[r] != self.mode_sequence[i - 1][r]:
-                    # this mode switched
-                    mode_switching_robot = r
-                    break
-
-            # set robot to config
-            mode_index = mode[mode_switching_robot]
-            robot = self.robots[mode_switching_robot]
-            q = self.goals[robot][mode_index - 1].goal
-            self.C.setJointState(q, get_robot_joints(self.C, robot))
-
-            # print(self.modes[robot][i-1])
-            if self.modes[robot][mode_index - 1][0] == "goto":
-                pass
-            else:
-                self.C.attach(
-                    self.modes[robot][mode_index - 1][1],
-                    self.modes[robot][mode_index - 1][2],
-                )
-
-            # postcondition
-            # TODO: I am not sure if this does not lead to issues later on
-            if self.modes[robot][mode_index - 1][3] is not None:
-                box = self.modes[robot][mode_index - 1][2]
-                self.C.delFrame(box)
-
-            # print(mode_switching_robot, current_mode)
-            self.C.view(False)
-
-            if i == current_mode:
-                break
 
 
 class rai_two_dim_piano_mover(rai_env):
@@ -581,8 +591,75 @@ class rai_triple_ur10_arm_spot_welding_env:
 
 
 # goals are poses
-class rai_quadruple_ur10_arm_spot_welding_env:
-    pass
+class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_welding_env()
+
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        self. robots = ["a1", "a2", "a3", "a4"]
+
+        super().__init__()
+
+        self.goals = {
+            "a1": [
+                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[1][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[2][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[3][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[4][self.robot_idx["a1"]]),
+            ],
+            "a2": [
+                SingleGoal(keyframes[5][self.robot_idx["a2"]]),
+                SingleGoal(keyframes[6][self.robot_idx["a2"]]),
+                SingleGoal(keyframes[7][self.robot_idx["a2"]]),
+                SingleGoal(keyframes[8][self.robot_idx["a2"]]),
+                SingleGoal(keyframes[9][self.robot_idx["a2"]]),
+            ],
+            "a3": [
+                SingleGoal(keyframes[10][self.robot_idx["a3"]]),
+                SingleGoal(keyframes[11][self.robot_idx["a3"]]),
+                SingleGoal(keyframes[12][self.robot_idx["a3"]]),
+                SingleGoal(keyframes[13][self.robot_idx["a3"]]),
+                SingleGoal(keyframes[14][self.robot_idx["a3"]]),
+            ],
+            "a4": [
+                SingleGoal(keyframes[15][self.robot_idx["a4"]]),
+                SingleGoal(keyframes[16][self.robot_idx["a4"]]),
+                SingleGoal(keyframes[17][self.robot_idx["a4"]]),
+                SingleGoal(keyframes[18][self.robot_idx["a4"]]),
+                SingleGoal(keyframes[19][self.robot_idx["a4"]]),
+            ],
+        }
+
+        self.sequence = []
+        for i in range(5):
+            for r in self.robots:
+                self.sequence.append((r, i))
+
+        self.mode_sequence = make_mode_sequence_from_sequence(
+            self.robots, self.sequence
+        )
+
+        self.start_mode = np.array(self.mode_sequence[0])
+        self.terminal_mode = np.array(self.mode_sequence[-1])
+
+        self.tolerance = 0.1
 
 
 # TODO: enable making this a simpler environment where one can set the number of boxes
@@ -720,70 +797,6 @@ class rai_ur10_arm_egg_carton_env(rai_env):
 
         # self.C_base.view(True)
 
-    # this is still relatively slow since we copy the configuration around
-    # a lot. this could be avoided by making the configurations once initially
-    # and then not copy them.
-    def set_to_mode(self, m):
-        # do not remake the config if we are in the same mode as we have been before
-        if np.array_equal(m, self.prev_mode):
-            return
-
-        self.prev_mode = m
-
-        # self.C.view(True)
-        self.C.clear()
-
-        self.C.addConfigurationCopy(self.C_base)
-
-        # find current mode
-        current_mode = 0
-        for i, mode in enumerate(self.mode_sequence):
-            if np.array_equal(m, mode):
-                current_mode = i
-                break
-
-        if current_mode == 0:
-            return
-
-        for i, mode in enumerate(self.mode_sequence):
-            if i == 0:
-                continue
-
-            # figure out which robot switched from the previous mode to this mode
-            # TODO: this does currently not work for multiple robots switching at the same time
-            mode_switching_robot = 0
-            for r in range(len(self.robots)):
-                if mode[r] != self.mode_sequence[i - 1][r]:
-                    # this mode switched
-                    mode_switching_robot = r
-                    break
-
-            # set robot to config
-            mode_index = mode[mode_switching_robot]
-            robot = self.robots[mode_switching_robot]
-            q = self.goals[robot][mode_index - 1].goal
-            self.C.setJointState(q, get_robot_joints(self.C, robot))
-
-            # print(self.modes[robot][i-1])
-            if self.modes[robot][mode_index - 1][0] == "goto":
-                pass
-            else:
-                self.C.attach(
-                    self.modes[robot][mode_index - 1][1],
-                    self.modes[robot][mode_index - 1][2],
-                )
-
-            # postcondition
-            if self.modes[robot][mode_index - 1][3] is not None:
-                box = self.modes[robot][mode_index - 1][2]
-                self.C.delFrame(box)
-
-            # print(mode_switching_robot, current_mode)
-            # self.C.view(False)
-
-            if i == current_mode:
-                break
-
 
 class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
     def __init__(self):
@@ -813,71 +826,6 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
         # buffer for faster collision checking
         self.prev_mode = np.array([0, 0])
 
-    # this is still relatively slow since we copy the configuration around
-    # a lot. this could be avoided by making the configurations once initially
-    # and then not copy them.
-    def set_to_mode(self, m):
-        # do not remake the config if we are in the same mode as we have been before
-        if np.array_equal(m, self.prev_mode):
-            return
-
-        self.prev_mode = m
-
-        # self.C.view(True)
-        self.C.clear()
-
-        self.C.addConfigurationCopy(self.C_base)
-
-        # find current mode
-        current_mode = 0
-        for i, mode in enumerate(self.mode_sequence):
-            if np.array_equal(m, mode):
-                current_mode = i
-                break
-
-        if current_mode == 0:
-            return
-
-        for i, mode in enumerate(self.mode_sequence):
-            if i == 0:
-                continue
-
-            # figure out which robot switched from the previous mode to this mode
-            # TODO: this does currently not work for multiple robots switching at the same time
-            mode_switching_robot = 0
-            for r in range(len(self.robots)):
-                if mode[r] != self.mode_sequence[i - 1][r]:
-                    # this mode switched
-                    mode_switching_robot = r
-                    break
-
-            # set robot to config
-            mode_index = mode[mode_switching_robot]
-            robot = self.robots[mode_switching_robot]
-            q = self.goals[robot][mode_index - 1].goal
-            self.C.setJointState(q, get_robot_joints(self.C, robot))
-
-            # print(self.modes[robot][i-1])
-            if self.modes[robot][mode_index - 1][0] == "goto":
-                pass
-            else:
-                self.C.attach(
-                    self.modes[robot][mode_index - 1][1],
-                    self.modes[robot][mode_index - 1][2],
-                )
-
-            # postcondition
-            # TODO: I am not sure if this does not lead to issues later on
-            if self.modes[robot][mode_index - 1][3] is not None:
-                box = self.modes[robot][mode_index - 1][2]
-                self.C.delFrame(box)
-
-            # print(mode_switching_robot, current_mode)
-            # self.C.view(False)
-
-            if i == current_mode:
-                break
-
 
 class rai_ur10_box_sort_env:
     pass
@@ -893,6 +841,7 @@ class rai_ur10_arm_shelf_env:
 
 class rai_ur10_arm_conveyor_env:
     pass
+
 
 class rai_ur10_arm_bottle_env(rai_env):
     def __init__(self):
@@ -1003,71 +952,6 @@ class rai_ur10_arm_bottle_env(rai_env):
         # buffer for faster collision checking
         self.prev_mode = np.array([0, 0])
 
-    # this is still relatively slow since we copy the configuration around
-    # a lot. this could be avoided by making the configurations once initially
-    # and then not copy them.
-    def set_to_mode(self, m):
-        # do not remake the config if we are in the same mode as we have been before
-        if np.array_equal(m, self.prev_mode):
-            return
-
-        self.prev_mode = m
-
-        # self.C.view(True)
-        self.C.clear()
-
-        self.C.addConfigurationCopy(self.C_base)
-
-        # find current mode
-        current_mode = 0
-        for i, mode in enumerate(self.mode_sequence):
-            if np.array_equal(m, mode):
-                current_mode = i
-                break
-
-        if current_mode == 0:
-            return
-
-        for i, mode in enumerate(self.mode_sequence):
-            if i == 0:
-                continue
-
-            # figure out which robot switched from the previous mode to this mode
-            # TODO: this does currently not work for multiple robots switching at the same time
-            mode_switching_robot = 0
-            for r in range(len(self.robots)):
-                if mode[r] != self.mode_sequence[i - 1][r]:
-                    # this mode switched
-                    mode_switching_robot = r
-                    break
-
-            # set robot to config
-            mode_index = mode[mode_switching_robot]
-            robot = self.robots[mode_switching_robot]
-            q = self.goals[robot][mode_index - 1].goal
-            self.C.setJointState(q, get_robot_joints(self.C, robot))
-
-            # print(self.modes[robot][i-1])
-            if self.modes[robot][mode_index - 1][0] == "goto":
-                pass
-            else:
-                self.C.attach(
-                    self.modes[robot][mode_index - 1][1],
-                    self.modes[robot][mode_index - 1][2],
-                )
-
-            # postcondition
-            # TODO: I am not sure if this does not lead to issues later on
-            if self.modes[robot][mode_index - 1][3] is not None:
-                box = self.modes[robot][mode_index - 1][2]
-                self.C.delFrame(box)
-
-            # print(mode_switching_robot, current_mode)
-            # self.C.view(False)
-
-            if i == current_mode:
-                break
-
 
 # mobile manip
 class rai_mobile_manip_wall:
@@ -1130,6 +1014,8 @@ if __name__ == "__main__":
         env = rai_ur10_arm_egg_carton_env()
     elif args.env == "triple_waypoints":
         env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
+    elif args.env == "welding":
+        env = rai_quadruple_ur10_arm_spot_welding_env()
     elif args.env == "bottles":
         env = rai_ur10_arm_bottle_env()
 

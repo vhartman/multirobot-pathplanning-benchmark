@@ -72,7 +72,18 @@ class SingleGoal(Goal):
 
 
 class Mode:
-    pass
+    type: str
+
+    frames: List[str]
+    goal: Goal
+    sideeffect: str
+
+    def __init__(self, type, frames, goal, sideeffect=None):
+        self.type = type
+        self.frames = frames
+        self.goal = goal
+
+        self.sideeffect = sideeffect
 
 
 def make_mode_sequence_from_sequence(robots: List[str], sequence: List) -> List[int]:
@@ -184,9 +195,9 @@ class base_env(ABC):
             # check if the state is collision free
             if not self.is_collision_free(path[i].q, mode):
                 print(f'There is a collision at index {i}')
-                # col = self.C.getCollisionsTotalPenetration()
-                # print(col)
-                # self.C.view(True)
+                col = self.C.getCollisionsTotalPenetration()
+                print(col)
+                self.C.view(True)
                 return False
 
             # if the next mode is a transition, check where to go

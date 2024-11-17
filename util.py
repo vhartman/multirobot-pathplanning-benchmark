@@ -5,6 +5,8 @@ from rai_envs import *
 
 from typing import List
 
+from jax import jit
+
 
 def config_dist(
     q_start: List[NDArray], q_end: List[NDArray], metric: str = "euclidean"
@@ -37,7 +39,6 @@ def state_dist(start: State, end: State) -> float:
 
     return config_dist(start.q, end.q)
 
-
 def config_cost(
     q_start: List[NDArray], q_end: List[NDArray], metric: str = "euclidean"
 ) -> float:
@@ -59,7 +60,7 @@ def config_cost(
             dists[robot_index] = np.max(np.abs(diff))
 
     # dists = np.linalg.norm(np.array(q_start) - np.array(q_end), axis=1)
-    return np.max(dists) + 0.01 * np.sum(dists)
+    return max(dists) + 0.01 * sum(dists)
     # return np.sum(dists)
 
 

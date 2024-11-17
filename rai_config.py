@@ -32,7 +32,7 @@ def make_2d_rai_env(view: bool = False):
 
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
         ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
-    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi)
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
@@ -48,7 +48,7 @@ def make_2d_rai_env(view: bool = False):
         ry.ST.ssBox,
         size=[0.1, 0.2, 0.06, 0.005],
         # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
-    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi)
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.ssBox, size=[0.2, 0.2, 0.06, 0.005]
@@ -160,7 +160,7 @@ def make_piano_mover_env(view: bool = False):
 
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
         ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.075]
-    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi)
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
@@ -174,7 +174,7 @@ def make_piano_mover_env(view: bool = False):
 
     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
         ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
-    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi)
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
 
     C.addFrame("obj1").setParent(table).setShape(
         ry.ST.ssBox, size=[0.4, 0.4, 0.06, 0.005]
@@ -198,7 +198,7 @@ def make_piano_mover_env(view: bool = False):
 
     C.addFrame("obs1").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0.7, 0, 0.07]
-    ).setShape(ry.ST.ssBox, size=[0.7, 0.2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.6, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
@@ -210,25 +210,25 @@ def make_piano_mover_env(view: bool = False):
 
     C.addFrame("wall1").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0, 1.1, 0.07]
-    ).setShape(ry.ST.ssBox, size=[2, 0.1, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall2").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0, -1.1, 0.07]
-    ).setShape(ry.ST.ssBox, size=[2, 0.1, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall3").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [1.1, 0, 0.07]
-    ).setShape(ry.ST.ssBox, size=[0.1, 2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.2, 2.4, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall4").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [-1.1, 0, 0.07]
-    ).setShape(ry.ST.ssBox, size=[0.1, 2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.2, 2.4, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
@@ -309,7 +309,7 @@ def make_2d_rai_env_3_agents(view: bool = False):
 
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
         ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
-    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi)
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi,limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
@@ -325,7 +325,7 @@ def make_2d_rai_env_3_agents(view: bool = False):
         ry.ST.ssBox,
         size=[0.1, 0.2, 0.06, 0.005],
         # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
-    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi)
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
 
     pre_agent_3_frame = (
         C.addFrame("pre_agent_3_frame")
@@ -341,7 +341,7 @@ def make_2d_rai_env_3_agents(view: bool = False):
         ry.ST.ssBox,
         size=[0.3, 0.2, 0.06, 0.005],
         # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
-    ).setColor([0.5, 0.5, 1]).setContact(1).setJoint(ry.JT.transXYPhi)
+    ).setColor([0.5, 0.5, 1]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.ssBox, size=[0.2, 0.2, 0.06, 0.005]
@@ -375,25 +375,25 @@ def make_2d_rai_env_3_agents(view: bool = False):
 
     C.addFrame("wall1").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0, 1.1, 0.07]
-    ).setShape(ry.ST.ssBox, size=[2, 0.1, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall2").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0, -1.1, 0.07]
-    ).setShape(ry.ST.ssBox, size=[2, 0.1, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall3").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [1.1, 0, 0.07]
-    ).setShape(ry.ST.ssBox, size=[0.1, 2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.2, 2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall4").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [-1.1, 0, 0.07]
-    ).setShape(ry.ST.ssBox, size=[0.1, 2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.2, 2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
@@ -974,34 +974,36 @@ def quaternion_from_z_rotation(angle):
     return np.array([w, x, y, z])
 
 
-def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
+def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
     C = ry.Config()
+
+    robot_path = os.path.join(os.path.dirname(__file__), "ur10/ur_welding.g")
 
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
         ry.ST.ssBox, size=[2, 2, 0.06, 0.005]
     ).setColor([0.3, 0.3, 0.3]).setContact(1)
 
-    C.addFile("ur10/ur_welding.g", namePrefix="a1_").setParent(
+    C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
     ).setRelativePosition([-0.7, 0.7, 0]).setJoint(ry.JT.rigid).setRelativeQuaternion(
         quaternion_from_z_rotation(-45 / 180 * np.pi)
     )
     if num_robots > 1:
-        C.addFile("ur10/ur_welding.g", namePrefix="a2_").setParent(
+        C.addFile(robot_path, namePrefix="a2_").setParent(
             C.getFrame("table")
         ).setRelativePosition([+0.7, 0.7, 0]).setJoint(
             ry.JT.rigid
         ).setRelativeQuaternion(quaternion_from_z_rotation(225 / 180 * np.pi))
 
     if num_robots > 2:
-        C.addFile("ur10/ur_welding.g", namePrefix="a3_").setParent(
+        C.addFile(robot_path, namePrefix="a3_").setParent(
             C.getFrame("table")
         ).setRelativePosition([-0.7, -0.7, 0]).setJoint(
             ry.JT.rigid
         ).setRelativeQuaternion(quaternion_from_z_rotation(45 / 180 * np.pi))
 
     if num_robots > 3:
-        C.addFile("ur10/ur_welding.g", namePrefix="a4_").setParent(
+        C.addFile(robot_path, namePrefix="a4_").setParent(
             C.getFrame("table")
         ).setRelativePosition([+0.7, -0.7, 0]).setJoint(
             ry.JT.rigid
@@ -1069,20 +1071,21 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
             enableCollisions=True,
         )
         komo.addObjective(
-            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.1]
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.01]
         )
 
         komo.addControlObjective([], 0, 1e-1)
-        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
         # komo.addControlObjective([], 2, 1e-1)
 
         for i in range(num_pts):
             komo.addObjective(
                 [i + 1],
-                ry.FS.positionDiff,
+                ry.FS.distance,
                 [robot_ee, "obs" + str(i + 1)],
-                ry.OT.eq,
+                ry.OT.sos,
                 [1e1],
+                [-0.01]
             )
 
         # for i in range(7):
@@ -1100,9 +1103,9 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
         # print(komo.nlp().getBounds())
 
         ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
-        print(ret)
+        print(ret.dict())
         q = komo.getPath()
-        print(q)
+        # print(q)
 
         if view:
             komo.view(True, "IK solution")
@@ -1113,7 +1116,7 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = True):
 
     keyframes = np.zeros((0, len(C.getJointState())))
     for r in robots[:num_robots]:
-        k = compute_pose_for_robot(r + "_ur_ee_marker")
+        k = compute_pose_for_robot(r + "_ur_vacuum")
         keyframes = np.concatenate([keyframes, k])
 
     return C, keyframes
