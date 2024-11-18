@@ -584,16 +584,10 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
         self.tolerance = 0.1
 
-
-# goals are poses
-class rai_triple_ur10_arm_spot_welding_env:
-    pass
-
-
 # goals are poses
 class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
-    def __init__(self):
-        self.C, keyframes = make_welding_env()
+    def __init__(self, num_pts:int=4):
+        self.C, keyframes = make_welding_env(view=False, num_pts=num_pts)
 
         self.C_coll = ry.Config()
         self.C_coll.addConfigurationCopy(self.C)
@@ -612,43 +606,53 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
         self.C.clear()
         self.C.addConfigurationCopy(self.C_coll)
 
-        self. robots = ["a1", "a2", "a3", "a4"]
+        self.robots = ["a1", "a2", "a3", "a4"]
 
         super().__init__()
 
-        self.goals = {
-            "a1": [
-                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[1][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[2][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[3][self.robot_idx["a1"]]),
-                SingleGoal(keyframes[4][self.robot_idx["a1"]]),
-            ],
-            "a2": [
-                SingleGoal(keyframes[5][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[6][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[7][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[8][self.robot_idx["a2"]]),
-                SingleGoal(keyframes[9][self.robot_idx["a2"]]),
-            ],
-            "a3": [
-                SingleGoal(keyframes[10][self.robot_idx["a3"]]),
-                SingleGoal(keyframes[11][self.robot_idx["a3"]]),
-                SingleGoal(keyframes[12][self.robot_idx["a3"]]),
-                SingleGoal(keyframes[13][self.robot_idx["a3"]]),
-                SingleGoal(keyframes[14][self.robot_idx["a3"]]),
-            ],
-            "a4": [
-                SingleGoal(keyframes[15][self.robot_idx["a4"]]),
-                SingleGoal(keyframes[16][self.robot_idx["a4"]]),
-                SingleGoal(keyframes[17][self.robot_idx["a4"]]),
-                SingleGoal(keyframes[18][self.robot_idx["a4"]]),
-                SingleGoal(keyframes[19][self.robot_idx["a4"]]),
-            ],
-        }
+        self.goals = {}
+        for r in self.robots:
+            self.goals[r] = []
+
+        cnt = 0
+        for r in self.robots:
+            for _ in range(num_pts+1):
+                self.goals[r].append(SingleGoal(keyframes[cnt][self.robot_idx[r]]))
+                cnt += 1
+
+        # self.goals = {
+        #     "a1": [
+        #         SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+        #         SingleGoal(keyframes[1][self.robot_idx["a1"]]),
+        #         SingleGoal(keyframes[2][self.robot_idx["a1"]]),
+        #         SingleGoal(keyframes[3][self.robot_idx["a1"]]),
+        #         SingleGoal(keyframes[4][self.robot_idx["a1"]]),
+        #     ],
+        #     "a2": [
+        #         SingleGoal(keyframes[5][self.robot_idx["a2"]]),
+        #         SingleGoal(keyframes[6][self.robot_idx["a2"]]),
+        #         SingleGoal(keyframes[7][self.robot_idx["a2"]]),
+        #         SingleGoal(keyframes[8][self.robot_idx["a2"]]),
+        #         SingleGoal(keyframes[9][self.robot_idx["a2"]]),
+        #     ],
+        #     "a3": [
+        #         SingleGoal(keyframes[10][self.robot_idx["a3"]]),
+        #         SingleGoal(keyframes[11][self.robot_idx["a3"]]),
+        #         SingleGoal(keyframes[12][self.robot_idx["a3"]]),
+        #         SingleGoal(keyframes[13][self.robot_idx["a3"]]),
+        #         SingleGoal(keyframes[14][self.robot_idx["a3"]]),
+        #     ],
+        #     "a4": [
+        #         SingleGoal(keyframes[15][self.robot_idx["a4"]]),
+        #         SingleGoal(keyframes[16][self.robot_idx["a4"]]),
+        #         SingleGoal(keyframes[17][self.robot_idx["a4"]]),
+        #         SingleGoal(keyframes[18][self.robot_idx["a4"]]),
+        #         SingleGoal(keyframes[19][self.robot_idx["a4"]]),
+        #     ],
+        # }
 
         self.sequence = []
-        for i in range(5):
+        for i in range(num_pts):
             for r in self.robots:
                 self.sequence.append((r, i))
 
@@ -957,15 +961,28 @@ class rai_ur10_arm_bottle_env(rai_env):
 class rai_mobile_manip_wall:
     pass
 
-
+# TODO: make rai-independent
 def visualize_modes(env):
-    q = env.C.getJointState()
+    q_home = env.start_pos
 
-    for m in env.mode_sequence:
-        # TODO: set to more interesting position than home position
+    for i, m in enumerate(env.mode_sequence):
+        # figure out which are the robots that change their mode
+        if i < len(env.mode_sequence)-1:
+            m_next = env.mode_sequence[i+1]
+            
+            switching_robots = []
+            for j, r in enumerate(env.robots):
+                if m[j] != m_next[j]:
+                    switching_robots.append(r)
+        else:
+            switching_robots = env.robots
+
         q = []
-        for i, r in enumerate(env.robots):
-            q.append(env.goals[r][m[i]].goal)
+        for j, r in enumerate(env.robots):
+            if r in switching_robots:
+                q.append(env.goals[r][m[j]].goal)
+            else:
+                q.append(q_home[j])
 
         print("is collision free: ", env.is_collision_free(q, m))
         env.show()

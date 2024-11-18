@@ -1011,25 +1011,25 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
 
     C.addFrame("obs1").setParent(C.getFrame("table")).setRelativePosition(
         [-0.2, -0.2, 0.3]
-    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.4, 0.005]).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.3, 0.005]).setColor(
         [0.3, 0.3, 0.3]
     ).setContact(1)
 
     C.addFrame("obs2").setParent(C.getFrame("table")).setRelativePosition(
         [-0.2, 0.2, 0.3]
-    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.4, 0.005]).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.3, 0.005]).setColor(
         [0.3, 0.3, 0.3]
     ).setContact(1)
 
     C.addFrame("obs3").setParent(C.getFrame("table")).setRelativePosition(
         [0.2, 0.2, 0.3]
-    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.4, 0.005]).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.3, 0.005]).setColor(
         [0.3, 0.3, 0.3]
     ).setContact(1)
 
     C.addFrame("obs4").setParent(C.getFrame("table")).setRelativePosition(
         [0.2, -0.2, 0.3]
-    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.4, 0.005]).setColor(
+    ).setShape(ry.ST.ssBox, size=[0.1, 0.1, 0.3, 0.005]).setColor(
         [0.3, 0.3, 0.3]
     ).setContact(1)
 
@@ -1071,7 +1071,7 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
             enableCollisions=True,
         )
         komo.addObjective(
-            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.01]
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [5e1], [0.01]
         )
 
         komo.addControlObjective([], 0, 1e-1)
@@ -1085,11 +1085,31 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
                 [robot_ee, "obs" + str(i + 1)],
                 ry.OT.sos,
                 [1e1],
-                [-0.01]
+                [-0.05]
             )
+
+            komo.addObjective(
+                [i + 1],
+                ry.FS.positionDiff,
+                [robot_ee, "obs" + str(i + 1)],
+                ry.OT.sos,
+                [1e-1],
+            )
+
+            komo.addObjective([i+1], ry.FS.scalarProductYZ, [robot_ee, "obs"+str(i+1)], ry.OT.sos, [1e-1])
+
 
         # for i in range(7):
         #     komo.addObjective([i], ry.FS.jointState, [], ry.OT.eq, [1e1], [], order=1)
+
+        komo.addObjective(
+            times=[],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e-1],
+            target=qHome,
+        )
 
         komo.addObjective(
             times=[num_pts + 1],
@@ -1101,6 +1121,7 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
         )
 
         # print(komo.nlp().getBounds())
+        komo.initRandom()
 
         ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
         print(ret.dict())
