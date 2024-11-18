@@ -9,6 +9,8 @@ import random
 from typing import List
 from numpy.typing import NDArray
 
+from configuration import *
+
 # from dependency_graph import DependencyGraph
 
 # questions:
@@ -122,9 +124,8 @@ def make_mode_sequence_from_sequence(robots: List[str], sequence: List) -> List[
 
     return mode_sequence
 
-
 class State:
-    q: List[NDArray]
+    q: Configuration
     m: List[int]
 
     def __init__(self, q, m):
@@ -162,22 +163,22 @@ class base_env(ABC):
     #     self.bounds
 
     @abstractmethod
-    def done(self, q: List[NDArray], m: List[int]):
+    def done(self, q: Configuration, m: List[int]):
         pass
 
     @abstractmethod
-    def get_next_mode(self, q: List[NDArray], m: List[int]):
+    def get_next_mode(self, q: Configuration, m: List[int]):
         pass
 
     @abstractmethod
-    def is_collision_free(self, q: List[NDArray], m: List[int]):
+    def is_collision_free(self, q: Configuration, m: List[int]):
         pass
 
     @abstractmethod
     def is_edge_collision_free(
         self,
-        q1: List[NDArray],
-        q2: List[NDArray],
+        q1: Configuration,
+        q2: Configuration,
         m: List[int],
         resolution: float = 0.1,
     ):
@@ -193,10 +194,10 @@ class base_env(ABC):
         mode = self.start_mode
         for i in range(len(path)):
             # check if the state is collision free
-            if not self.is_collision_free(path[i].q, mode):
+            if not self.is_collision_free(path[i].q.state(), mode):
                 print(f'There is a collision at index {i}')
-                col = self.C.getCollisionsTotalPenetration()
-                print(col)
+                # col = self.C.getCollisionsTotalPenetration()
+                # print(col)
                 self.C.view(True)
                 return False
 

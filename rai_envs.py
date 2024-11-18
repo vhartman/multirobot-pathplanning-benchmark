@@ -54,7 +54,7 @@ class rai_env(base_env):
     goals: dict[str]
     robots: List[str]
     robot_dims: dict[str]
-    start_pos: List[NDArray]
+    start_pos: Configuration
     bounds: NDArray
     sequence: List
     mode_sequence: List
@@ -70,7 +70,7 @@ class rai_env(base_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = [get_robot_state(self.C, r) for r in self.robots]
+        self.start_pos = NpConfiguration.from_list([get_robot_state(self.C, r) for r in self.robots])
 
         self.modes = None
 
@@ -78,20 +78,24 @@ class rai_env(base_env):
 
         self.tolerance = 0.1
 
-    def done(self, q: List[NDArray], m):
+    def done(self, q: Configuration, m):
         if not np.array_equal(m, self.terminal_mode):
             return False
 
         for i, r in enumerate(self.robots):
-            if not self.goals[r][-1].satisfies_constraints(q[i], self.tolerance):
+            if not self.goals[r][-1].satisfies_constraints(q.robot_state(i), self.tolerance):
                 return False
 
         return True
 
+    def show_config(self, q):
+        self.C.setJointState(q)
+        self.C.view(True)
+
     def show(self):
         self.C.view(True)
 
-    def is_transition(self, q: NDArray, m):
+    def is_transition(self, q: Configuration, m):
         if np.array_equal(m, self.terminal_mode):
             return False
 
@@ -104,20 +108,20 @@ class rai_env(base_env):
                     if next_mode[i] != m[i]:
                         # robot 1 needs to do smth
                         if self.goals[self.robots[i]][m[i]].satisfies_constraints(
-                            q[i], self.tolerance
+                            q.robot_state(i), self.tolerance
                         ):
                             return True
 
         return False
 
-    def get_next_mode(self, q: List[NDArray], m):
+    def get_next_mode(self, q: Configuration, m):
         for i, mode in enumerate(self.mode_sequence):
             if np.array_equal(m, mode):
                 return np.array(self.mode_sequence[i + 1])
 
         raise ValueError("No next mode found, this might be the terminal mode.")
 
-    def is_collision_free(self, q: List[NDArray], m, collision_tolerance: float = 0.01):
+    def is_collision_free(self, q: Configuration, m, collision_tolerance: float = 0.01):
         # print(q)
         self.set_to_mode(m)
         self.C.setJointState(q)
@@ -132,12 +136,10 @@ class rai_env(base_env):
         return True
 
     def is_edge_collision_free(
-        self, q1: List[NDArray], q2: List[NDArray], m, resolution=0.1, randomize_order=True
+        self, q1: Configuration, q2: Configuration, m, resolution=0.1, randomize_order=True
     ):
         # print('q1', q1)
         # print('q2', q2)
-        q1_concat = np.concatenate(q1)
-        q2_concat = np.concatenate(q2)
         N = config_dist(q1, q2) / resolution
         N = max(5, N)
 
@@ -147,7 +149,7 @@ class rai_env(base_env):
 
         for i in idx:
             # print(i / (N-1))
-            q = q1_concat + (q2_concat - q1_concat) * (i) / (N - 1)
+            q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
             if not self.is_collision_free(q, m):
                 # print('coll')
                 return False
@@ -982,7 +984,7 @@ def visualize_modes(env):
             if r in switching_robots:
                 q.append(env.goals[r][m[j]].goal)
             else:
-                q.append(q_home[j])
+                q.append(q_home.robot_state(j))
 
         print("is collision free: ", env.is_collision_free(q, m))
         env.show()
