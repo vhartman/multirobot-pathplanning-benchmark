@@ -70,7 +70,9 @@ class rai_env(base_env):
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
-        self.start_pos = NpConfiguration.from_list([get_robot_state(self.C, r) for r in self.robots])
+        self.start_pos = NpConfiguration.from_list(
+            [get_robot_state(self.C, r) for r in self.robots]
+        )
 
         self.modes = None
 
@@ -83,7 +85,9 @@ class rai_env(base_env):
             return False
 
         for i, r in enumerate(self.robots):
-            if not self.goals[r][-1].satisfies_constraints(q.robot_state(i), self.tolerance):
+            if not self.goals[r][-1].satisfies_constraints(
+                q.robot_state(i), self.tolerance
+            ):
                 return False
 
         return True
@@ -123,8 +127,14 @@ class rai_env(base_env):
 
     def is_collision_free(self, q: Configuration, m, collision_tolerance: float = 0.01):
         # print(q)
+        # self.C.setJointState(q)
+
         self.set_to_mode(m)
         self.C.setJointState(q)
+
+        binary_collision_free = self.C.getCollisionFree()
+        if binary_collision_free:
+            return True
 
         col = self.C.getCollisionsTotalPenetration()
         # print(col)
@@ -136,7 +146,12 @@ class rai_env(base_env):
         return True
 
     def is_edge_collision_free(
-        self, q1: Configuration, q2: Configuration, m, resolution=0.1, randomize_order=True
+        self,
+        q1: Configuration,
+        q2: Configuration,
+        m,
+        resolution=0.1,
+        randomize_order=True,
     ):
         # print('q1', q1)
         # print('q2', q2)
@@ -160,7 +175,7 @@ class rai_env(base_env):
         idx = list(range(len(path) - 1))
         if randomize_order:
             random.shuffle(idx)
-            
+
         for i in idx:
             # skip transition nodes
             if not np.array_equal(path[i].mode, path[i + 1].mode):
@@ -187,7 +202,6 @@ class rai_env(base_env):
 
         # self.C.view(True)
         self.C.clear()
-
         self.C.addConfigurationCopy(self.C_base)
 
         # find current mode
@@ -216,8 +230,13 @@ class rai_env(base_env):
             # set robot to config
             mode_index = mode[mode_switching_robot]
             robot = self.robots[mode_switching_robot]
-            q = self.goals[robot][mode_index - 1].goal
+            q = self.goals[robot][mode_index - 1].goal * 1.0
+
+            # self.C.view(True)
+
             self.C.setJointState(q, get_robot_joints(self.C, robot))
+
+            # self.C.view(True)
 
             # print(self.modes[robot][i-1])
             if self.modes[robot][mode_index - 1][0] == "goto":
@@ -235,7 +254,7 @@ class rai_env(base_env):
                 self.C.delFrame(box)
 
             # print(mode_switching_robot, current_mode)
-            # self.C.view(False)
+            # self.C.view(True)
 
             if i == current_mode:
                 break
@@ -302,7 +321,8 @@ class rai_two_dim_env(rai_env):
         super().__init__()
 
         self.goals = {
-            "a1": [SingleGoal(keyframes[0][self.robot_idx["a1"]])],
+            "a1": [SingleGoal(keyframes[0][self.robot_idx["a1"]]), 
+                   SingleGoal(keyframes[0][self.robot_idx["a1"]])],
             "a2": [
                 SingleGoal(keyframes[1][self.robot_idx["a2"]]),
                 SingleGoal(keyframes[2][self.robot_idx["a2"]]),
@@ -312,7 +332,7 @@ class rai_two_dim_env(rai_env):
         # corresponds to
         # a1  0
         # a2 0 1
-        self.sequence = [("a2", 0), ("a1", 0), ("a2", 1)]
+        self.sequence = [("a2", 0), ("a1", 0)]
         self.mode_sequence = make_mode_sequence_from_sequence(
             self.robots, self.sequence
         )
@@ -484,8 +504,8 @@ class rai_dual_ur10_arm_env(rai_env):
         # self.C_coll.view(True)
         # self.C.view(True)
 
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
+        # self.C.clear()
+        # self.C.addConfigurationCopy(self.C_coll)
 
         self.robots = ["a1", "a2"]
 
@@ -515,6 +535,10 @@ class rai_dual_ur10_arm_env(rai_env):
         self.terminal_mode = np.array(self.mode_sequence[-1])
 
         self.tolerance = 0.1
+
+        # print(self.goals["a1"][0].goal)
+        # self.C.setJointState(self.goals["a1"][0].goal, get_robot_joints(self.C, "a1"))
+        # self.C.view(True)
 
 
 # goals are poses, more complex sequencing
@@ -586,9 +610,10 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
         self.tolerance = 0.1
 
+
 # goals are poses
 class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
-    def __init__(self, num_pts:int=4):
+    def __init__(self, num_pts: int = 4):
         self.C, keyframes = make_welding_env(view=False, num_pts=num_pts)
 
         self.C_coll = ry.Config()
@@ -618,7 +643,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
 
         cnt = 0
         for r in self.robots:
-            for _ in range(num_pts+1):
+            for _ in range(num_pts + 1):
                 self.goals[r].append(SingleGoal(keyframes[cnt][self.robot_idx[r]]))
                 cnt += 1
 
@@ -963,15 +988,16 @@ class rai_ur10_arm_bottle_env(rai_env):
 class rai_mobile_manip_wall:
     pass
 
+
 # TODO: make rai-independent
 def visualize_modes(env):
     q_home = env.start_pos
 
     for i, m in enumerate(env.mode_sequence):
         # figure out which are the robots that change their mode
-        if i < len(env.mode_sequence)-1:
-            m_next = env.mode_sequence[i+1]
-            
+        if i < len(env.mode_sequence) - 1:
+            m_next = env.mode_sequence[i + 1]
+
             switching_robots = []
             for j, r in enumerate(env.robots):
                 if m[j] != m_next[j]:
@@ -986,7 +1012,13 @@ def visualize_modes(env):
             else:
                 q.append(q_home.robot_state(j))
 
-        print("is collision free: ", env.is_collision_free(q, m))
+        print("is collision free: ", env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m))
+
+        # colls = env.C.getCollisions()
+        # for c in colls:
+        #     if c[2] < 0:
+        #         print(c)
+
         env.show()
 
     env.C.view(True)
@@ -1013,33 +1045,114 @@ def display_path(
         time.sleep(pause_time)
 
 
+def benchmark_collision_checking(env: rai_env, N=5000):
+    start = time.time()
+    for _ in range(N):
+        q = []
+        for i in range(len(env.robots)):
+            lims = env.limits[:, env.robot_idx[env.robots[i]]]
+            if lims[0, 0] < lims[1, 0]:
+                qr = (
+                    np.random.rand(env.robot_dims[env.robots[i]])
+                    * (lims[1, :] - lims[0, :])
+                    + lims[0, :]
+                )
+            else:
+                qr = np.random.rand(env.robot_dims[env.robots[i]]) * 6 - 3
+            q.append(qr)
+
+        m = random.choice(env.mode_sequence)
+
+        env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m)
+
+    end = time.time()
+
+    print(f"Took on avg. {(end-start)/N * 1000} ms for a collision check.")
+
+
+def get_env_by_name(name):
+    if name == "piano":
+        env = rai_two_dim_simple_manip()
+    elif name == "simple_2d":
+        env = rai_two_dim_env()
+    elif name == "three_agents":
+        env = rai_two_dim_three_agent_env()
+    elif name == "box_sorting":
+        env = rai_ur10_arm_pick_and_place_env()
+    elif name == "eggs":
+        env = rai_ur10_arm_egg_carton_env()
+    elif name == "triple_waypoints":
+        env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
+    elif name == "welding":
+        env = rai_quadruple_ur10_arm_spot_welding_env()
+    elif name == "bottles":
+        env = rai_ur10_arm_bottle_env()
+    else:
+        raise NotImplementedError("Name does not exist")
+
+    return env
+
+
+def check_all_modes():
+    all_envs = ["piano", "simple_2d", "three_agents", "box_sorting", "eggs", "triple_waypoints", "welding", "bottles"]
+
+    for env_name in all_envs:
+        print(env_name)
+        env = get_env_by_name(env_name)
+        q_home = env.start_pos
+        for i, m in enumerate(env.mode_sequence):
+            # figure out which are the robots that change their mode
+            if i < len(env.mode_sequence) - 1:
+                m_next = env.mode_sequence[i + 1]
+
+                switching_robots = []
+                for j, r in enumerate(env.robots):
+
+                    if m[j] != m_next[j]:
+                        switching_robots.append(r)
+            else:
+                switching_robots = env.robots
+
+            q = []
+            for j, r in enumerate(env.robots):
+                if r in switching_robots:
+                    q.append(env.goals[r][m[j]].goal)
+                else:
+                    q.append(q_home.robot_state(j))
+
+            is_collision_free = env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m)
+            if not is_collision_free:
+                raise ValueError()
+            
+            print(f"mode {m} is collision free: ", is_collision_free)
+    
+            env.show()
+
+            # colls = env.C.getCollisions()
+            # for c in colls:
+            #     if c[2] < 0:
+            #         print(c)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
-    parser.add_argument("env", nargs="?", default="default", help="env to show")
-
+    parser.add_argument("env_name", nargs="?", default="default", help="env to show")
+    parser.add_argument(
+        '--mode', 
+        choices=['benchmark', 'show', 'modes'], 
+        required=True, 
+        help="Select the mode of operation"
+    )
     args = parser.parse_args()
 
-    env = rai_multi_panda_arm_waypoint_env()
+    # check_all_modes()
 
-    if args.env == "piano":
-        env = rai_two_dim_simple_manip()
-    elif args.env == "simple_2d":
-        env = rai_two_dim_env()
-    elif args.env == "three_agents":
-        env = rai_two_dim_three_agent_env()
-    elif args.env == "box_sorting":
-        env = rai_ur10_arm_pick_and_place_env
-    elif args.env == "eggs":
-        env = rai_ur10_arm_egg_carton_env()
-    elif args.env == "triple_waypoints":
-        env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
-    elif args.env == "welding":
-        env = rai_quadruple_ur10_arm_spot_welding_env()
-    elif args.env == "bottles":
-        env = rai_ur10_arm_bottle_env()
+    env = get_env_by_name(args.env_name)
 
-    print("Environment starting position")
-    env.show()
-
-    print("Environment modes/goals")
-    visualize_modes(env)
+    if args.mode == "show":
+        print("Environment starting position")
+        env.show()
+    elif args.mode == "benchmark":
+        benchmark_collision_checking(env)
+    elif args.mode == "modes":
+        print("Environment modes/goals")
+        visualize_modes(env)

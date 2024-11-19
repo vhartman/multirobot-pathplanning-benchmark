@@ -121,24 +121,59 @@ class NpConfiguration(Configuration):
         else:
             return np.max(np.abs(diff))
 
+    # _preallocated_q = None
+    # @classmethod
+    # def _initialize_memory(cls, max_size, q_dim):
+    #     if cls._preallocated_q is None or cls._preallocated_q.shape != (max_size, q_dim):
+    #         cls._preallocated_q = np.empty((max_size, q_dim))  # Preallocate
+
     @classmethod
     def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> float:
+        # batch_q = np.empty((len(batch_other), pt.q.size))  # Preallocate memory
+        # for i, other in enumerate(batch_other):
+        #     batch_q[i, :] = other.q  # Fill in directly without overhead
+        # diff = pt.q - batch_q
+        
+        # num_items = len(batch_other)
+        # q_dim = pt.q.size
+
+        # # if num_items > cls._batch_size:
+        # #   cls._batch_size += 5000
+        
+        # # Ensure memory is initialized
+        # cls._initialize_memory(max_size=10000, q_dim=q_dim)
+
+        # # Populate preallocated memory (only up to num_items)
+        # for i, other in enumerate(batch_other):
+        #     cls._preallocated_q[i, :] = other.state.q.q
+        # # cls._preallocated_q[:num_items, :] = np.array([other.state.q.q for other in batch_other])
+
+
+        # # Use only the relevant part of the array
+        # batch_q = cls._preallocated_q[:num_items, :]
+        # diff = pt.q - batch_q
+
         diff = pt.q - np.array([other.q for other in batch_other])
-        dists = np.zeros((pt._num_agents, diff.shape[0]))
 
         if metric == "euclidean":
+            dists = np.zeros((pt._num_agents, diff.shape[0]))
             for i, (s, e) in enumerate(pt.slice):
                 dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
+            # dists = np.array([np.linalg.norm(diff[:, s:e], axis=1) for s, e in pt.slice])
             return np.max(dists, axis=0)
         else:
             return np.max(np.abs(diff), axis=1)
 
 
-def config_dist(q_start: Configuration, q_end: Configuration, metric: str = "euclidean") -> float:
+def config_dist(
+    q_start: Configuration, q_end: Configuration, metric: str = "."
+) -> float:
     return type(q_start)._dist(q_start, q_end, metric)
 
 
-def batch_config_dist(pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean") -> NDArray:
+def batch_config_dist(
+    pt: Configuration, batch_pts: List[Configuration], metric: str = "."
+) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
 
@@ -168,9 +203,13 @@ def config_cost(
 
 
 def batch_config_cost(
-    starts: List[Configuration], batch_other: List[Configuration], metric: str = "euclidean"
+    starts: List[Configuration],
+    batch_other: List[Configuration],
+    metric: str = "euclidean",
 ) -> float:
-    diff = np.array([start.q.state() for start in starts]) - np.array([other.q.state() for other in batch_other])
+    diff = np.array([start.q.state() for start in starts]) - np.array(
+        [other.q.state() for other in batch_other]
+    )
     all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
 
     for i, (s, e) in enumerate(starts[0].q.slice):
