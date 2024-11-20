@@ -787,7 +787,8 @@ def make_egg_carton_env(view: bool = False):
 
         komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
         komo.addObjective(
-            [1, 2], ry.FS.distance, [robot_prefix + "ur_vacuum", box], ry.OT.sos, [1e0]
+            [1, 2], ry.FS.distance, [robot_prefix + "ur_vacuum", box], ry.OT.sos, [1e0], [0.05]
+
         )
         komo.addObjective(
             [1, 2],
@@ -850,7 +851,7 @@ def make_egg_carton_env(view: bool = False):
     for b in a2_boxes:
         keyframes = np.concatenate([keyframes, compute_keyframes_for_obj("a2_", b)])
 
-    print(keyframes)
+    # print(keyframes)
 
     # keyframes = np.concatenate([keyframes_a1, keyframes_a2])
     return C, keyframes

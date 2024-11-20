@@ -51,7 +51,6 @@ def set_robot_active(C: ry.Config, robot_prefix: str) -> None:
 
 class rai_env(base_env):
     C: ry.Config
-    goals: dict[str]
     robots: List[str]
     robot_dims: dict[str]
     start_pos: Configuration
@@ -74,18 +73,18 @@ class rai_env(base_env):
             [get_robot_state(self.C, r) for r in self.robots]
         )
 
-        self.modes = None
+        self.manipulation_modes = None
 
         self.limits = self.C.getJointLimits()
 
         self.tolerance = 0.1
 
-    def done(self, q: Configuration, m):
+    def done(self, q: Configuration, m: List[int]):
         if not np.array_equal(m, self.terminal_mode):
             return False
 
         for i, r in enumerate(self.robots):
-            if not self.goals[r][-1].satisfies_constraints(
+            if not self.robot_goals[r][-1].satisfies_constraints(
                 q.robot_state(i), self.tolerance
             ):
                 return False
@@ -111,7 +110,7 @@ class rai_env(base_env):
                 for i in range(len(self.robots)):
                     if next_mode[i] != m[i]:
                         # robot 1 needs to do smth
-                        if self.goals[self.robots[i]][m[i]].satisfies_constraints(
+                        if self.robot_goals[self.robots[i]][m[i]].satisfies_constraints(
                             q.robot_state(i), self.tolerance
                         ):
                             return True
@@ -191,7 +190,7 @@ class rai_env(base_env):
         return True
 
     def set_to_mode(self, m):
-        if self.modes is None:
+        if self.manipulation_modes is None:
             return
 
         # do not remake the config if we are in the same mode as we have been before
@@ -230,7 +229,9 @@ class rai_env(base_env):
             # set robot to config
             mode_index = mode[mode_switching_robot]
             robot = self.robots[mode_switching_robot]
-            q = self.goals[robot][mode_index - 1].goal * 1.0
+
+            # TODO: ensure that se are choosing the correct goal here
+            q = self.robot_goals[robot][mode_index - 1].goal
 
             # self.C.view(True)
 
@@ -239,18 +240,17 @@ class rai_env(base_env):
             # self.C.view(True)
 
             # print(self.modes[robot][i-1])
-            if self.modes[robot][mode_index - 1][0] == "goto":
+            if self.manipulation_modes[robot][mode_index - 1][0] == "goto":
                 pass
             else:
                 self.C.attach(
-                    self.modes[robot][mode_index - 1][1],
-                    self.modes[robot][mode_index - 1][2],
+                    self.manipulation_modes[robot][mode_index - 1][1],
+                    self.manipulation_modes[robot][mode_index - 1][2],
                 )
 
             # postcondition
-            # TODO: I am not sure if this does not lead to issues later on
-            if self.modes[robot][mode_index - 1][3] is not None:
-                box = self.modes[robot][mode_index - 1][2]
+            if self.manipulation_modes[robot][mode_index - 1][3] is not None:
+                box = self.manipulation_modes[robot][mode_index - 1][2]
                 self.C.delFrame(box)
 
             # print(mode_switching_robot, current_mode)
@@ -320,14 +320,28 @@ class rai_two_dim_env(rai_env):
 
         super().__init__()
 
-        self.goals = {
-            "a1": [SingleGoal(keyframes[0][self.robot_idx["a1"]]), 
-                   SingleGoal(keyframes[0][self.robot_idx["a1"]])],
+        self.robot_goals = {
+            "a1": [
+                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+            ],
             "a2": [
                 SingleGoal(keyframes[1][self.robot_idx["a2"]]),
                 SingleGoal(keyframes[2][self.robot_idx["a2"]]),
             ],
         }
+
+        self.modes = [
+            # r1
+            Mode(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
+            # r2
+            Mode(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
+            # Mode(["a2"], SingleGoal(keyframes[2][self.robot_idx["a2"]])),
+            # terminal mode
+            Mode(["a1", "a2"], SingleGoal(np.concatenate([keyframes[0][self.robot_idx["a1"]], keyframes[2][self.robot_idx["a2"]]])))
+        ]
+
+        # self.sequence = [1, 0, 2]
 
         # corresponds to
         # a1  0
@@ -364,7 +378,7 @@ class rai_two_dim_simple_manip(rai_env):
 
         super().__init__()
 
-        self.goals = {
+        self.robot_goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 SingleGoal(keyframes[1][self.robot_idx["a1"]]),
@@ -377,7 +391,7 @@ class rai_two_dim_simple_manip(rai_env):
             ],
         }
 
-        self.modes = {
+        self.manipulation_modes = {
             "a1": [
                 ("pick", "a1", "obj1", None),
                 ("place", "table", "obj1", None),
@@ -406,7 +420,7 @@ class rai_two_dim_simple_manip(rai_env):
         self.start_mode = np.array(self.mode_sequence[0])
         self.terminal_mode = np.array(self.mode_sequence[-1])
 
-        self.tolerance = 0.1
+        self.tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -427,7 +441,7 @@ class rai_two_dim_three_agent_env(rai_env):
 
         super().__init__()
 
-        self.goals = {
+        self.robot_goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 SingleGoal(keyframes[4][self.robot_idx["a1"]]),
@@ -511,7 +525,7 @@ class rai_dual_ur10_arm_env(rai_env):
 
         super().__init__()
 
-        self.goals = {
+        self.robot_goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 SingleGoal(keyframes[1][self.robot_idx["a1"]]),
@@ -536,8 +550,8 @@ class rai_dual_ur10_arm_env(rai_env):
 
         self.tolerance = 0.1
 
-        # print(self.goals["a1"][0].goal)
-        # self.C.setJointState(self.goals["a1"][0].goal, get_robot_joints(self.C, "a1"))
+        # print(self.robot_goals["a1"][0].goal)
+        # self.C.setJointState(self.robot_goals["a1"][0].goal, get_robot_joints(self.C, "a1"))
         # self.C.view(True)
 
 
@@ -577,13 +591,13 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
         super().__init__()
 
-        self.goals = {}
+        self.robot_goals = {}
         for r in self.robots:
-            self.goals[r] = []
+            self.robot_goals[r] = []
 
         cnt = 0
         for r in self.robots:
-            self.goals[r] = [
+            self.robot_goals[r] = [
                 SingleGoal(keyframes[cnt + i][self.robot_idx[r]])
                 for i in range(num_waypoints + 1)
             ]
@@ -592,9 +606,9 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
         # permute goals, but only the ones that ware waypoints, not the final configuration
         if shuffle_goals:
             for r in self.robots:
-                sublist = self.goals[r][:num_waypoints]
+                sublist = self.robot_goals[r][:num_waypoints]
                 random.shuffle(sublist)
-                self.goals[r][:num_waypoints] = sublist
+                self.robot_goals[r][:num_waypoints] = sublist
 
         self.sequence = []
         for i in range(num_waypoints):
@@ -637,17 +651,19 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
 
         super().__init__()
 
-        self.goals = {}
+        self.robot_goals = {}
         for r in self.robots:
-            self.goals[r] = []
+            self.robot_goals[r] = []
 
         cnt = 0
         for r in self.robots:
             for _ in range(num_pts + 1):
-                self.goals[r].append(SingleGoal(keyframes[cnt][self.robot_idx[r]]))
+                self.robot_goals[r].append(
+                    SingleGoal(keyframes[cnt][self.robot_idx[r]])
+                )
                 cnt += 1
 
-        # self.goals = {
+        # self.robot_goals = {
         #     "a1": [
         #         SingleGoal(keyframes[0][self.robot_idx["a1"]]),
         #         SingleGoal(keyframes[1][self.robot_idx["a1"]]),
@@ -720,7 +736,7 @@ class rai_ur10_arm_egg_carton_env(rai_env):
 
         super().__init__()
 
-        self.goals = {
+        self.robot_goals = {
             "a1": [
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 SingleGoal(keyframes[1][self.robot_idx["a1"]]),
@@ -782,7 +798,7 @@ class rai_ur10_arm_egg_carton_env(rai_env):
         # a1_boxes = ["box000", "box001", "box011", "box002"]
         # a2_boxes = ["box021", "box010", "box012", "box022", "box020"]
 
-        self.modes = {
+        self.manipulation_modes = {
             "a1": [
                 ("pick", "a1_ur_vacuum", "box000", None),
                 ("place", "table", "box000", "remove"),
@@ -833,7 +849,7 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
     def __init__(self):
         super().__init__()
 
-        self.modes = {
+        self.manipulation_modes = {
             "a1": [
                 ("pick", "a1_ur_vacuum", "box100", None),
                 ("place", "table", "box100", "remove"),
@@ -900,7 +916,7 @@ class rai_ur10_arm_bottle_env(rai_env):
 
         super().__init__()
 
-        self.goals = {
+        self.robot_goals = {
             "a0": [
                 SingleGoal(keyframes[0][self.robot_idx["a0"]]),
                 SingleGoal(keyframes[1][self.robot_idx["a0"]]),
@@ -919,7 +935,7 @@ class rai_ur10_arm_bottle_env(rai_env):
             ],
         }
 
-        for k, v in self.goals.items():
+        for k, v in self.robot_goals.items():
             for g in v:
                 print(g.goal)
 
@@ -941,7 +957,7 @@ class rai_ur10_arm_bottle_env(rai_env):
         # a1_boxes = ["box000", "box001", "box011", "box002"]
         # a2_boxes = ["box021", "box010", "box012", "box022", "box020"]
 
-        self.modes = {
+        self.manipulation_modes = {
             "a0": [
                 ("pick", "a0_ur_vacuum", "bottle_1", None),
                 ("place", "table", "bottle_1", None),
@@ -1008,11 +1024,15 @@ def visualize_modes(env):
         q = []
         for j, r in enumerate(env.robots):
             if r in switching_robots:
-                q.append(env.goals[r][m[j]].goal)
+                # TODO: need to check all goals here
+                q.append(env.robot_goals[r][m[j]].goal)
             else:
                 q.append(q_home.robot_state(j))
 
-        print("is collision free: ", env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m))
+        print(
+            "is collision free: ",
+            env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m),
+        )
 
         # colls = env.C.getCollisions()
         # for c in colls:
@@ -1094,7 +1114,16 @@ def get_env_by_name(name):
 
 
 def check_all_modes():
-    all_envs = ["piano", "simple_2d", "three_agents", "box_sorting", "eggs", "triple_waypoints", "welding", "bottles"]
+    all_envs = [
+        "piano",
+        "simple_2d",
+        "three_agents",
+        "box_sorting",
+        "eggs",
+        "triple_waypoints",
+        "welding",
+        "bottles",
+    ]
 
     for env_name in all_envs:
         print(env_name)
@@ -1107,7 +1136,6 @@ def check_all_modes():
 
                 switching_robots = []
                 for j, r in enumerate(env.robots):
-
                     if m[j] != m_next[j]:
                         switching_robots.append(r)
             else:
@@ -1116,16 +1144,19 @@ def check_all_modes():
             q = []
             for j, r in enumerate(env.robots):
                 if r in switching_robots:
+                    # TODO: need to check all goals here
                     q.append(env.goals[r][m[j]].goal)
                 else:
                     q.append(q_home.robot_state(j))
 
-            is_collision_free = env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m)
+            is_collision_free = env.is_collision_free(
+                type(env.get_start_pos()).from_list(q).state(), m
+            )
             if not is_collision_free:
                 raise ValueError()
-            
+
             print(f"mode {m} is collision free: ", is_collision_free)
-    
+
             env.show()
 
             # colls = env.C.getCollisions()
@@ -1133,14 +1164,15 @@ def check_all_modes():
             #     if c[2] < 0:
             #         print(c)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument("env_name", nargs="?", default="default", help="env to show")
     parser.add_argument(
-        '--mode', 
-        choices=['benchmark', 'show', 'modes'], 
-        required=True, 
-        help="Select the mode of operation"
+        "--mode",
+        choices=["benchmark", "show", "modes"],
+        required=True,
+        help="Select the mode of operation",
     )
     args = parser.parse_args()
 

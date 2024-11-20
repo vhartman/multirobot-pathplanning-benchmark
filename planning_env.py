@@ -74,18 +74,22 @@ class SingleGoal(Goal):
 
 
 class Mode:
-    type: str
-
-    frames: List[str]
+    robots: List[str]
     goal: Goal
-    sideeffect: str
 
-    def __init__(self, type, frames, goal, sideeffect=None):
-        self.type = type
-        self.frames = frames
+    # things for manipulation
+    type: str
+    frames: List[str]
+    side_effect: str
+
+    def __init__(self, robots, goal, type=None, frames=None, side_effect=None):
+        self.robots = robots
         self.goal = goal
 
-        self.sideeffect = sideeffect
+        # constraints
+        self.type = type
+        self.frames = frames
+        self.side_effect = side_effect
 
 
 def make_mode_sequence_from_sequence(robots: List[str], sequence: List) -> List[int]:
