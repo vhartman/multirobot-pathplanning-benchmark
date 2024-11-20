@@ -42,6 +42,9 @@ class GoalRegion(Goal):
     def sample(self):
         pass
 
+# TODO: implement sampler to sample a goal
+class ConstrainedGoal(Goal):
+    pass
 
 class GoalSet(Goal):
     def __init__(self, goals):
@@ -74,6 +77,7 @@ class SingleGoal(Goal):
 
 
 class Mode:
+    name: str
     robots: List[str]
     goal: Goal
 
@@ -91,42 +95,6 @@ class Mode:
         self.frames = frames
         self.side_effect = side_effect
 
-
-def make_mode_sequence_from_sequence(robots: List[str], sequence: List) -> List[int]:
-    # compute initial mode
-    initial_mode = {}
-
-    for s in sequence:
-        r_str = s[0]
-        robot_mode = s[1]
-
-        if r_str not in initial_mode:
-            initial_mode[r_str] = robot_mode
-
-    initial_mode_list = [0 for _ in range(len(robots))]
-    for k, v in initial_mode.items():
-        r_idx = robots.index(k)
-        mode = v
-
-        initial_mode_list[r_idx] = mode
-
-    mode_sequence = [initial_mode_list]
-
-    for i, s in enumerate(sequence):
-        r_str = s[0]
-        r_idx = robots.index(r_str)
-        robot_mode = s[1]
-
-        # find next mode for robot
-        next_robot_mode = robot_mode + 1
-
-        if next_robot_mode is not None:
-            new_mode = mode_sequence[-1].copy()
-            new_mode[r_idx] = next_robot_mode
-
-        mode_sequence.append(new_mode)
-
-    return mode_sequence
 
 class State:
     q: Configuration
