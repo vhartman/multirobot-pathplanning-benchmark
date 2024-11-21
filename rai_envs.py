@@ -117,7 +117,7 @@ class rai_env(base_env):
         return involved_robots
 
     def done(self, q: Configuration, m: List[int]) -> bool:
-        if not np.array_equal(m, self.terminal_mode):
+        if m != self.terminal_mode:
             return False
 
         for i, r in enumerate(self.robots):
@@ -136,7 +136,7 @@ class rai_env(base_env):
         self.C.view(True)
 
     def is_transition(self, q: Configuration, m: List[int]) -> bool:
-        if np.array_equal(m, self.terminal_mode):
+        if m == self.terminal_mode:
             return False
 
         robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
@@ -248,7 +248,7 @@ class rai_env(base_env):
 
         for i in idx:
             # skip transition nodes
-            if not np.array_equal(path[i].mode, path[i + 1].mode):
+            if path[i].mode != path[i + 1].mode:
                 continue
 
             q1 = path[i].q
@@ -1167,7 +1167,7 @@ def visualize_modes(env: rai_env):
 
     m = env.start_mode
     for i in range(len(env.sequence)):
-        if np.array_equal(m, env.terminal_mode):
+        if m == env.terminal_mode:
             switching_robots = [r for r in env.robots]
         else:
             # find the robot(s) that needs to switch the mode
@@ -1285,7 +1285,7 @@ def check_all_modes():
         q_home = env.start_pos
         m = env.start_mode
         for i in range(len(env.sequence)):
-            if np.array_equal(m, env.terminal_mode):
+            if m == env.terminal_mode:
                 switching_robots = [r for r in env.robots]
             else:
                 # find the robot(s) that needs to switch the mode

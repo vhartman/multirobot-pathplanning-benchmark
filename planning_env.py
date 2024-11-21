@@ -178,7 +178,7 @@ class base_env(ABC):
                 # TODO: this does not work if multiple switches are possible at the same time
                 next_mode = self.get_next_mode(path[i].q, mode)
 
-                if np.array_equal(path[i + 1].mode, next_mode):
+                if path[i + 1].mode == next_mode:
                     mode = next_mode
 
         if not self.done(path[-1].q, path[-1].mode):
