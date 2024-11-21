@@ -76,7 +76,7 @@ class SingleGoal(Goal):
         return self.goal
 
 
-class Mode:
+class Task:
     name: str
     robots: List[str]
     goal: Goal

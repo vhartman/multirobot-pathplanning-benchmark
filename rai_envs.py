@@ -110,6 +110,7 @@ class rai_env(base_env):
 
     def get_goal_constrained_robots(self, mode: List[int]) -> List[str]:
         min_sequence_pos = self.get_current_seq_index(mode)
+        # print(min_sequence_pos)
         involved_robots = [self.sequence[min_sequence_pos][0]]
 
         # print(mode, involved_robots)
@@ -157,7 +158,7 @@ class rai_env(base_env):
 
         next_robot_mode_ind = None
         # find next occurrence of the robot in the sequence/dep graph
-        for task in self.sequence[seq_pos+1:]:
+        for task in self.sequence[seq_pos + 1 :]:
             if task[0] == r:
                 # this is the next robot mode
                 next_robot_mode_ind = task[1]
@@ -165,17 +166,32 @@ class rai_env(base_env):
 
         # currently, the terminal mode is not part of the sequence and has to be treated differently
         if next_robot_mode_ind is None:
-            next_robot_mode_ind = len(self.robot_goals[r])-1
-            
+            next_robot_mode_ind = len(self.robot_goals[r]) - 1
+
         # if next_robot_mode_ind is None:
         #     raise ValueError("No next mode found, this might be the terminal mode.")
-                        
+
         m_next = mode.copy()
         m_next[r_idx] = next_robot_mode_ind
 
         # print(mode, next_robot_mode_ind, m_next[r_idx])
 
         return m_next
+
+    def get_active_task(self, mode: List[int]) -> Task:
+        seq_pos = self.get_current_seq_index(mode)
+        involved_robots = [self.sequence[seq_pos][0]]
+
+        return self.robot_goals[involved_robots][self.sequence[seq_pos][1]]
+
+    def get_tasks_for_mode(self, mode: List[int]) -> List[Task]:
+        tasks = []
+
+        for i, j in enumerate(mode):
+            r = self.robots[i]
+            tasks.append(self.robot_goals[r][j])
+
+        return tasks
 
     def is_collision_free(
         self, q: Configuration, m: List[int], collision_tolerance: float = 0.01
@@ -385,12 +401,13 @@ class rai_two_dim_env(rai_env):
 
         self.robot_goals = {
             "a1": [
-                Mode(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
-                Mode(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
-                Mode(["a2"], SingleGoal(keyframes[2][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(keyframes[2][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
             ],
         }
 
@@ -411,10 +428,10 @@ class rai_two_dim_env(rai_env):
         # corresponds to
         # a1  0
         # a2 0 1
-        self.sequence = [("a2", 0), ("a1", 0)]
+        self.sequence = [("a2", 1), ("a1", 0), ("a2", 0)]
 
-        self.start_mode = [0, 0]
-        self.terminal_mode = [0, 1]
+        self.start_mode = [0, 1]
+        self.terminal_mode = [0, 0]
 
         self.tolerance = 0.1
 
@@ -444,38 +461,38 @@ class rai_two_dim_simple_manip(rai_env):
 
         self.robot_goals = {
             "a1": [
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1", "obj1"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[1][self.robot_idx["a1"]]),
                     type="place",
                     frames=["table", "obj1"],
                     side_effect=None,
                 ),
-                Mode(["a1"], SingleGoal(keyframes[2][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(keyframes[2][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[0][self.robot_idx["a2"]]),
                     type="pick",
                     frames=["a2", "obj2"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[1][self.robot_idx["a2"]]),
                     type="place",
                     frames=["table", "obj2"],
                     side_effect=None,
                 ),
-                Mode(["a2"], SingleGoal(keyframes[2][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(keyframes[2][self.robot_idx["a2"]])),
             ],
         }
 
@@ -513,18 +530,18 @@ class rai_two_dim_three_agent_env(rai_env):
 
         self.robot_goals = {
             "a1": [
-                Mode(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
-                Mode(["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]])),
-                Mode(["a1"], SingleGoal(keyframes[5][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(keyframes[5][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
-                Mode(["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
-                Mode(["a2"], SingleGoal(keyframes[5][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(keyframes[5][self.robot_idx["a2"]])),
             ],
             "a3": [
-                Mode(["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
-                Mode(["a3"], SingleGoal(keyframes[5][self.robot_idx["a3"]])),
+                Task(["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
+                Task(["a3"], SingleGoal(keyframes[5][self.robot_idx["a3"]])),
             ],
         }
 
@@ -585,14 +602,14 @@ class rai_dual_ur10_arm_env(rai_env):
 
         self.robot_goals = {
             "a1": [
-                Mode(["a1"], SingleGoal(self.keyframes[0][self.robot_idx["a1"]])),
-                Mode(["a1"], SingleGoal(self.keyframes[1][self.robot_idx["a1"]])),
-                Mode(["a1"], SingleGoal(self.keyframes[2][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(self.keyframes[0][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(self.keyframes[1][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(self.keyframes[2][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(["a2"], SingleGoal(self.keyframes[3][self.robot_idx["a2"]])),
-                Mode(["a2"], SingleGoal(self.keyframes[4][self.robot_idx["a2"]])),
-                Mode(["a2"], SingleGoal(self.keyframes[5][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(self.keyframes[3][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(self.keyframes[4][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(self.keyframes[5][self.robot_idx["a2"]])),
             ],
         }
 
@@ -651,7 +668,7 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
         cnt = 0
         for r in self.robots:
             self.robot_goals[r] = [
-                Mode([r], SingleGoal(keyframes[cnt + i][self.robot_idx[r]]))
+                Task([r], SingleGoal(keyframes[cnt + i][self.robot_idx[r]]))
                 for i in range(num_waypoints + 1)
             ]
             cnt += num_waypoints + 1
@@ -708,7 +725,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
         for r in self.robots:
             for _ in range(num_pts + 1):
                 self.robot_goals[r].append(
-                    Mode([r], SingleGoal(keyframes[cnt][self.robot_idx[r]]))
+                    Task([r], SingleGoal(keyframes[cnt][self.robot_idx[r]]))
                 )
                 cnt += 1
 
@@ -754,14 +771,14 @@ class rai_ur10_arm_egg_carton_env(rai_env):
 
         self.robot_goals = {
             "a1": [
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1_ur_vacuum", "box000"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[1][self.robot_idx["a1"]]),
                     type="place",
@@ -769,14 +786,14 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                     side_effect="remove",
                 ),
                 # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[3][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1_ur_vacuum", "box001"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[4][self.robot_idx["a1"]]),
                     type="place",
@@ -784,14 +801,14 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                     side_effect="remove",
                 ),
                 # SingleGoal(keyframes[5][self.robot_idx["a1"]]),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[6][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1_ur_vacuum", "box011"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[7][self.robot_idx["a1"]]),
                     type="place",
@@ -799,31 +816,31 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                     side_effect="remove",
                 ),
                 # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[9][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1_ur_vacuum", "box002"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[10][self.robot_idx["a1"]]),
                     type="place",
                     frames=["table", "box002"],
                     side_effect="remove",
                 ),
-                Mode(["a1"], SingleGoal(keyframes[11][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(keyframes[11][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[12][self.robot_idx["a2"]]),
                     type="pick",
                     frames=["a2_ur_vacuum", "box021"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[13][self.robot_idx["a2"]]),
                     type="place",
@@ -831,14 +848,14 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                     side_effect="remove",
                 ),
                 # SingleGoal(keyframes[14][self.robot_idx["a2"]]),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[15][self.robot_idx["a2"]]),
                     type="pick",
                     frames=["a2_ur_vacuum", "box010"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[16][self.robot_idx["a2"]]),
                     type="place",
@@ -846,14 +863,14 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                     side_effect="remove",
                 ),
                 # SingleGoal(keyframes[17][self.robot_idx["a2"]]),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[18][self.robot_idx["a2"]]),
                     type="pick",
                     frames=["a2_ur_vacuum", "box012"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[19][self.robot_idx["a2"]]),
                     type="place",
@@ -861,14 +878,14 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                     side_effect="remove",
                 ),
                 # SingleGoal(keyframes[20][self.robot_idx["a2"]]),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[21][self.robot_idx["a2"]]),
                     type="pick",
                     frames=["a2_ur_vacuum", "box022"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[22][self.robot_idx["a2"]]),
                     type="place",
@@ -876,21 +893,21 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                     side_effect="remove",
                 ),
                 # SingleGoal(keyframes[23][self.robot_idx["a2"]]),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[24][self.robot_idx["a2"]]),
                     type="pick",
                     frames=["a2_ur_vacuum", "box020"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(keyframes[25][self.robot_idx["a2"]]),
                     type="place",
                     frames=["table", "box020"],
                     side_effect="remove",
                 ),
-                Mode(["a2"], SingleGoal(keyframes[26][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(keyframes[26][self.robot_idx["a2"]])),
             ],
         }
 
@@ -943,38 +960,38 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
 
         self.robot_goals = {
             "a1": [
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(self.keyframes[0][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1_ur_vacuum", "box100"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(self.keyframes[1][self.robot_idx["a1"]]),
                     type="place",
                     frames=["table", "box100"],
                     side_effect="remove",
                 ),
-                Mode(["a1"], SingleGoal(self.keyframes[2][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(self.keyframes[2][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(self.keyframes[3][self.robot_idx["a2"]]),
                     type="pick",
                     frames=["a2_ur_vacuum", "box101"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a2"],
                     SingleGoal(self.keyframes[4][self.robot_idx["a2"]]),
                     type="place",
                     frames=["table", "box101"],
                     side_effect="remove",
                 ),
-                Mode(["a2"], SingleGoal(self.keyframes[5][self.robot_idx["a2"]])),
+                Task(["a2"], SingleGoal(self.keyframes[5][self.robot_idx["a2"]])),
             ],
         }
 
@@ -1033,14 +1050,14 @@ class rai_ur10_arm_bottle_env(rai_env):
 
         self.robot_goals = {
             "a0": [
-                Mode(
+                Task(
                     ["a0"],
                     SingleGoal(keyframes[0][self.robot_idx["a0"]]),
                     type="pick",
                     frames=["a0_ur_vacuum", "bottle_1"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a0"],
                     SingleGoal(keyframes[1][self.robot_idx["a0"]]),
                     type="place",
@@ -1048,31 +1065,31 @@ class rai_ur10_arm_bottle_env(rai_env):
                     side_effect=None,
                 ),
                 # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
-                Mode(
+                Task(
                     ["a0"],
                     SingleGoal(keyframes[3][self.robot_idx["a0"]]),
                     type="pick",
                     frames=["a0_ur_vacuum", "bottle_12"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a0"],
                     SingleGoal(keyframes[4][self.robot_idx["a0"]]),
                     type="place",
                     frames=["table", "bottle_12"],
                     side_effect=None,
                 ),
-                Mode(["a0"], SingleGoal(keyframes[5][self.robot_idx["a0"]])),
+                Task(["a0"], SingleGoal(keyframes[5][self.robot_idx["a0"]])),
             ],
             "a1": [
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[6][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1_ur_vacuum", "bottle_3"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[7][self.robot_idx["a1"]]),
                     type="place",
@@ -1080,21 +1097,21 @@ class rai_ur10_arm_bottle_env(rai_env):
                     side_effect=None,
                 ),
                 # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[9][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1_ur_vacuum", "bottle_5"],
                     side_effect=None,
                 ),
-                Mode(
+                Task(
                     ["a1"],
                     SingleGoal(keyframes[10][self.robot_idx["a1"]]),
                     type="place",
                     frames=["table", "bottle_5"],
                     side_effect=None,
                 ),
-                Mode(["a1"], SingleGoal(keyframes[11][self.robot_idx["a1"]])),
+                Task(["a1"], SingleGoal(keyframes[11][self.robot_idx["a1"]])),
             ],
         }
 
