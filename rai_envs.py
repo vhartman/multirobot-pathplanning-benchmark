@@ -155,11 +155,27 @@ class rai_env(base_env):
         r = self.sequence[seq_pos][0]
         r_idx = self.robots.index(r)
 
+        next_robot_mode_ind = None
+        # find next occurrence of the robot in the sequence/dep graph
+        for task in self.sequence[seq_pos+1:]:
+            if task[0] == r:
+                # this is the next robot mode
+                next_robot_mode_ind = task[1]
+                break
+
+        # currently, the terminal mode is not part of the sequence and has to be treated differently
+        if next_robot_mode_ind is None:
+            next_robot_mode_ind = len(self.robot_goals[r])-1
+            
+        # if next_robot_mode_ind is None:
+        #     raise ValueError("No next mode found, this might be the terminal mode.")
+                        
         m_next = mode.copy()
-        m_next[r_idx] += 1
+        m_next[r_idx] = next_robot_mode_ind
+
+        # print(mode, next_robot_mode_ind, m_next[r_idx])
 
         return m_next
-        # raise ValueError("No next mode found, this might be the terminal mode.")
 
     def is_collision_free(
         self, q: Configuration, m: List[int], collision_tolerance: float = 0.01
