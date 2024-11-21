@@ -56,8 +56,8 @@ class rai_env(base_env):
     start_pos: Configuration
     bounds: NDArray
     sequence: List
-    start_mode: NDArray
-    terminal_mode: NDArray
+    start_mode: List[int]
+    terminal_mode: List[int]
     tolerance: float
 
     def __init__(self):
@@ -72,7 +72,7 @@ class rai_env(base_env):
             [get_robot_state(self.C, r) for r in self.robots]
         )
 
-        self.manipulation_modes = None
+        self.manipulating_env = False
 
         self.limits = self.C.getJointLimits()
 
@@ -88,15 +88,20 @@ class rai_env(base_env):
         return m
 
     def get_current_seq_index(self, mode):
+        # min_sequence_pos = 0
+        # for i, m in enumerate(mode):
+        #     min_sequence_pos = min(self.sequence.index(m), min_sequence_pos))
+
+        # involved_robots = self.modes[min_sequence_pos].robots
+        # return involved_robots
+
         translated_mode = [(self.robots[i], int(ind)) for i, ind in enumerate(mode)]
-        # print(self.sequence)
-        # print(translated_mode)
         min_sequence_pos = len(self.sequence)
         for i, m in enumerate(translated_mode):
             if m in self.sequence:
                 ind = self.sequence.index(m)
                 # print(m, ind)
-                min_sequence_pos = min(ind, min_sequence_pos)          
+                min_sequence_pos = min(ind, min_sequence_pos)
 
             # else:
             #     print('element not in list')
@@ -104,13 +109,6 @@ class rai_env(base_env):
         return min_sequence_pos
 
     def get_goal_constrained_robots(self, mode):
-        # min_sequence_pos = 0
-        # for i, m in enumerate(mode):
-        #     min_sequence_pos = min(self.sequence.index(m), min_sequence_pos))            
-
-        # involved_robots = self.modes[min_sequence_pos].robots
-        # return involved_robots
-
         min_sequence_pos = self.get_current_seq_index(mode)
         involved_robots = [self.sequence[min_sequence_pos][0]]
 
@@ -144,7 +142,9 @@ class rai_env(base_env):
 
         for r in robots_with_constraints_in_current_mode:
             robot_idx = self.robots.index(r)
-            if not self.robot_goals[r][m[robot_idx]].goal.satisfies_constraints(q.robot_state(robot_idx), self.tolerance):
+            if not self.robot_goals[r][m[robot_idx]].goal.satisfies_constraints(
+                q.robot_state(robot_idx), self.tolerance
+            ):
                 return False
         return True
 
@@ -226,12 +226,12 @@ class rai_env(base_env):
 
         return True
 
-    def set_to_mode(self, m):
-        # if self.manipulation_modes is None:
-        #     return
+    def set_to_mode(self, m: List[int]):
+        if not self.manipulating_env:
+            return
 
         # do not remake the config if we are in the same mode as we have been before
-        if np.array_equal(m, self.prev_mode):
+        if m == self.prev_mode:
             return
 
         self.prev_mode = m
@@ -242,7 +242,7 @@ class rai_env(base_env):
 
         # find current mode
         current_mode = self.get_current_seq_index(m)
-        
+
         if current_mode != self.get_current_seq_index(m):
             print(current_mode, self.get_current_seq_index(m))
             raise ValueError
@@ -251,7 +251,7 @@ class rai_env(base_env):
             return
 
         mode = self.start_mode
-        for i in range(len(self.sequence)+1):
+        for i in range(len(self.sequence) + 1):
             if i == 0:
                 continue
 
@@ -262,7 +262,7 @@ class rai_env(base_env):
             # TODO: this does currently not work for multiple robots switching at the same time
             # robot_new = self.get_goal_constrained_robots(mode)[0]
             # robot_idx = self.robots.index(robot_new)
-            
+
             mode_switching_robot = 0
             for r in range(len(self.robots)):
                 if mode[r] != m_prev[r]:
@@ -395,10 +395,11 @@ class rai_two_dim_env(rai_env):
         # a2 0 1
         self.sequence = [("a2", 0), ("a1", 0)]
 
-        self.start_mode = np.array([0, 0])
-        self.terminal_mode = np.array([0, 1])
+        self.start_mode = [0, 0]
+        self.terminal_mode = [0, 1]
 
         self.tolerance = 0.1
+
 
 class rai_two_dim_single_agent_neighbourhood(rai_env):
     pass
@@ -421,31 +422,44 @@ class rai_two_dim_simple_manip(rai_env):
 
         super().__init__()
 
+        self.manipulating_env = True
+
         self.robot_goals = {
             "a1": [
-                Mode(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]]), type="pick", frames=["a1", "obj1"], side_effect=None),
-                Mode(["a1"], SingleGoal(keyframes[1][self.robot_idx["a1"]]), type="place", frames=["table", "obj1"], side_effect=None),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                    type="pick",
+                    frames=["a1", "obj1"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[1][self.robot_idx["a1"]]),
+                    type="place",
+                    frames=["table", "obj1"],
+                    side_effect=None,
+                ),
                 Mode(["a1"], SingleGoal(keyframes[2][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(["a2"], SingleGoal(keyframes[0][self.robot_idx["a2"]]), type="pick", frames=["a2", "obj2"], side_effect=None),
-                Mode(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]]), type="place", frames=["table", "obj2"], side_effect=None),
-                Mode(["a2"],  SingleGoal(keyframes[2][self.robot_idx["a2"]])),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[0][self.robot_idx["a2"]]),
+                    type="pick",
+                    frames=["a2", "obj2"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[1][self.robot_idx["a2"]]),
+                    type="place",
+                    frames=["table", "obj2"],
+                    side_effect=None,
+                ),
+                Mode(["a2"], SingleGoal(keyframes[2][self.robot_idx["a2"]])),
             ],
         }
-
-        # self.manipulation_modes = {
-        #     "a1": [
-        #         ("pick", "a1", "obj1", None),
-        #         ("place", "table", "obj1", None),
-        #         ("goto", None, None),
-        #     ],
-        #     "a2": [
-        #         ("pick", "a2", "obj2", None),
-        #         ("place", "table", "obj2", None),
-        #         ("goto", 0, 0, None),
-        #     ],
-        # }
 
         # corresponds to
         # a1  0
@@ -455,15 +469,17 @@ class rai_two_dim_simple_manip(rai_env):
         # self.sequence = [("a1", 0), ("a2", 0), ("a2", 1), ("a2", 1)]
         # self.C.view(True)
 
-        self.start_mode = np.array([0 for _ in self.robots])
-        self.terminal_mode = np.array([len(self.robot_goals[r])-1 for r in self.robots])
+        self.start_mode = [0 for _ in self.robots]
+        self.terminal_mode = \
+            [len(self.robot_goals[r]) - 1 for r in self.robots]
+        
 
         self.tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.prev_mode = np.array([0, 0])
+        self.prev_mode = [0, 0]
 
 
 class rai_two_dim_piano_mover(rai_env):
@@ -498,8 +514,9 @@ class rai_two_dim_three_agent_env(rai_env):
 
         self.sequence = [("a1", 0), ("a2", 0), ("a3", 0), ("a2", 1), ("a1", 1)]
 
-        self.start_mode = np.array([0 for _ in self.robots])
-        self.terminal_mode = np.array([len(self.robot_goals[r])-1 for r in self.robots])
+        self.start_mode = [0 for _ in self.robots]
+        self.terminal_mode = \
+            [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -566,8 +583,9 @@ class rai_dual_ur10_arm_env(rai_env):
 
         self.sequence = [("a1", 0), ("a2", 0), ("a1", 1), ("a2", 1)]
 
-        self.start_mode = np.array([0 for _ in self.robots])
-        self.terminal_mode = np.array([len(self.robot_goals[r])-1 for r in self.robots])
+        self.start_mode = [0 for _ in self.robots]
+        self.terminal_mode = \
+            [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -636,8 +654,9 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
             for r in self.robots:
                 self.sequence.append((r, i))
 
-        self.start_mode = np.array([0 for _ in self.robots])
-        self.terminal_mode = np.array([len(self.robot_goals[r])-1 for r in self.robots])
+        self.start_mode = [0 for _ in self.robots]
+        self.terminal_mode = \
+            [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -679,14 +698,15 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
                     Mode([r], SingleGoal(keyframes[cnt][self.robot_idx[r]]))
                 )
                 cnt += 1
-                
+
         self.sequence = []
         for i in range(num_pts):
             for r in self.robots:
                 self.sequence.append((r, i))
 
-        self.start_mode = np.array([0 for _ in self.robots])
-        self.terminal_mode = np.array([len(self.robot_goals[r])-1 for r in self.robots])
+        self.start_mode = [0 for _ in self.robots]
+        self.terminal_mode = \
+            [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -718,36 +738,146 @@ class rai_ur10_arm_egg_carton_env(rai_env):
 
         super().__init__()
 
+        self.manipulating_env = True
+
         self.robot_goals = {
             "a1": [
-                Mode(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]]), type="pick", frames=["a1_ur_vacuum", "box000"], side_effect=None),
-                Mode(["a1"], SingleGoal(keyframes[1][self.robot_idx["a1"]]), type="place", frames=["table", "box000"], side_effect="remove"),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                    type="pick",
+                    frames=["a1_ur_vacuum", "box000"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[1][self.robot_idx["a1"]]),
+                    type="place",
+                    frames=["table", "box000"],
+                    side_effect="remove",
+                ),
                 # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
-                Mode(["a1"], SingleGoal(keyframes[3][self.robot_idx["a1"]]), type="pick", frames=["a1_ur_vacuum", "box001"], side_effect=None),
-                Mode(["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]]), type="place", frames=["table", "box001"], side_effect="remove"),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[3][self.robot_idx["a1"]]),
+                    type="pick",
+                    frames=["a1_ur_vacuum", "box001"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[4][self.robot_idx["a1"]]),
+                    type="place",
+                    frames=["table", "box001"],
+                    side_effect="remove",
+                ),
                 # SingleGoal(keyframes[5][self.robot_idx["a1"]]),
-                Mode(["a1"], SingleGoal(keyframes[6][self.robot_idx["a1"]]), type="pick", frames=["a1_ur_vacuum", "box011"], side_effect=None),
-                Mode(["a1"], SingleGoal(keyframes[7][self.robot_idx["a1"]]), type="place", frames=["table", "box011"], side_effect="remove"),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[6][self.robot_idx["a1"]]),
+                    type="pick",
+                    frames=["a1_ur_vacuum", "box011"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[7][self.robot_idx["a1"]]),
+                    type="place",
+                    frames=["table", "box011"],
+                    side_effect="remove",
+                ),
                 # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
-                Mode(["a1"], SingleGoal(keyframes[9][self.robot_idx["a1"]]), type="pick", frames=["a1_ur_vacuum", "box002"], side_effect=None),
-                Mode(["a1"], SingleGoal(keyframes[10][self.robot_idx["a1"]]), type="place", frames=["table", "box002"], side_effect="remove"),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[9][self.robot_idx["a1"]]),
+                    type="pick",
+                    frames=["a1_ur_vacuum", "box002"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[10][self.robot_idx["a1"]]),
+                    type="place",
+                    frames=["table", "box002"],
+                    side_effect="remove",
+                ),
                 Mode(["a1"], SingleGoal(keyframes[11][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(["a2"], SingleGoal(keyframes[12][self.robot_idx["a2"]]), type="pick", frames=["a2_ur_vacuum", "box021"], side_effect=None),
-                Mode(["a2"], SingleGoal(keyframes[13][self.robot_idx["a2"]]), type="place", frames=["table", "box021"], side_effect="remove"),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[12][self.robot_idx["a2"]]),
+                    type="pick",
+                    frames=["a2_ur_vacuum", "box021"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[13][self.robot_idx["a2"]]),
+                    type="place",
+                    frames=["table", "box021"],
+                    side_effect="remove",
+                ),
                 # SingleGoal(keyframes[14][self.robot_idx["a2"]]),
-                Mode(["a2"], SingleGoal(keyframes[15][self.robot_idx["a2"]]), type="pick", frames=["a2_ur_vacuum", "box010"], side_effect=None),
-                Mode(["a2"], SingleGoal(keyframes[16][self.robot_idx["a2"]]), type="place", frames=["table", "box010"], side_effect="remove"),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[15][self.robot_idx["a2"]]),
+                    type="pick",
+                    frames=["a2_ur_vacuum", "box010"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[16][self.robot_idx["a2"]]),
+                    type="place",
+                    frames=["table", "box010"],
+                    side_effect="remove",
+                ),
                 # SingleGoal(keyframes[17][self.robot_idx["a2"]]),
-                Mode(["a2"], SingleGoal(keyframes[18][self.robot_idx["a2"]]), type="pick", frames=["a2_ur_vacuum", "box012"], side_effect=None),
-                Mode(["a2"], SingleGoal(keyframes[19][self.robot_idx["a2"]]), type="place", frames=["table", "box012"], side_effect="remove"),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[18][self.robot_idx["a2"]]),
+                    type="pick",
+                    frames=["a2_ur_vacuum", "box012"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[19][self.robot_idx["a2"]]),
+                    type="place",
+                    frames=["table", "box012"],
+                    side_effect="remove",
+                ),
                 # SingleGoal(keyframes[20][self.robot_idx["a2"]]),
-                Mode(["a2"], SingleGoal(keyframes[21][self.robot_idx["a2"]]), type="pick", frames=["a2_ur_vacuum", "box022"], side_effect=None),
-                Mode(["a2"], SingleGoal(keyframes[22][self.robot_idx["a2"]]), type="place", frames=["table", "box022"], side_effect="remove"),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[21][self.robot_idx["a2"]]),
+                    type="pick",
+                    frames=["a2_ur_vacuum", "box022"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[22][self.robot_idx["a2"]]),
+                    type="place",
+                    frames=["table", "box022"],
+                    side_effect="remove",
+                ),
                 # SingleGoal(keyframes[23][self.robot_idx["a2"]]),
-                Mode(["a2"], SingleGoal(keyframes[24][self.robot_idx["a2"]]), type="pick", frames=["a2_ur_vacuum", "box020"], side_effect=None),
-                Mode(["a2"], SingleGoal(keyframes[25][self.robot_idx["a2"]]), type="place", frames=["table", "box020"], side_effect="remove"),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[24][self.robot_idx["a2"]]),
+                    type="pick",
+                    frames=["a2_ur_vacuum", "box020"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[25][self.robot_idx["a2"]]),
+                    type="place",
+                    frames=["table", "box020"],
+                    side_effect="remove",
+                ),
                 Mode(["a2"], SingleGoal(keyframes[26][self.robot_idx["a2"]])),
             ],
         }
@@ -772,45 +902,19 @@ class rai_ur10_arm_egg_carton_env(rai_env):
             ("a2", 8),
             ("a2", 9),
         ]
-      
+
         # a1_boxes = ["box000", "box001", "box011", "box002"]
         # a2_boxes = ["box021", "box010", "box012", "box022", "box020"]
-
-        # self.manipulation_modes = {
-        #     "a1": [
-        #         ("pick", "a1_ur_vacuum", "box000", None),
-        #         ("place", "table", "box000", "remove"),
-        #         ("pick", "a1_ur_vacuum", "box001", None),
-        #         ("place", "table", "box001", "remove"),
-        #         ("pick", "a1_ur_vacuum", "box011", None),
-        #         ("place", "table", "box011", "remove"),
-        #         ("pick", "a1_ur_vacuum", "box002", None),
-        #         ("place", "table", "box002", "remove"),
-        #         ("goto", None, None),
-        #     ],
-        #     "a2": [
-        #         ("pick", "a2_ur_vacuum", "box021", None),
-        #         ("place", "table", "box021", "remove"),
-        #         ("pick", "a2_ur_vacuum", "box010", None),
-        #         ("place", "table", "box010", "remove"),
-        #         ("pick", "a2_ur_vacuum", "box012", None),
-        #         ("place", "table", "box012", "remove"),
-        #         ("pick", "a2_ur_vacuum", "box022", None),
-        #         ("place", "table", "box022", "remove"),
-        #         ("pick", "a2_ur_vacuum", "box020", None),
-        #         ("place", "table", "box020", "remove"),
-        #         ("goto", 0, 0, None),
-        #     ],
-        # }
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
         # buffer for faster collision checking
-        self.prev_mode = np.array([0, 0])
-      
-        self.start_mode = np.array([0 for _ in self.robots])
-        self.terminal_mode = np.array([len(self.robot_goals[r])-1 for r in self.robots])
+        self.prev_mode = [0, 0]
+
+        self.start_mode = [0 for _ in self.robots]
+        self.terminal_mode = \
+            [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -824,39 +928,52 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
     def __init__(self):
         super().__init__()
 
+        self.manipulating_env = True
+
         self.robot_goals = {
             "a1": [
-                Mode(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]]), type="pick", frames=["a1_ur_vacuum", "box100"], side_effect=None),
-                Mode(["a1"], SingleGoal(keyframes[1][self.robot_idx["a1"]]), type="place", frames=["table", "box100"], side_effect="remove"),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                    type="pick",
+                    frames=["a1_ur_vacuum", "box100"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[1][self.robot_idx["a1"]]),
+                    type="place",
+                    frames=["table", "box100"],
+                    side_effect="remove",
+                ),
                 Mode(["a1"], SingleGoal(keyframes[2][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]]), type="pick", frames=["a2_ur_vacuum", "box101"], side_effect=None),
-                Mode(["a2"], SingleGoal(keyframes[4][self.robot_idx["a2"]]), type="place", frames=["table", "box101"], side_effect="remove"),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[3][self.robot_idx["a2"]]),
+                    type="pick",
+                    frames=["a2_ur_vacuum", "box101"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a2"],
+                    SingleGoal(keyframes[4][self.robot_idx["a2"]]),
+                    type="place",
+                    frames=["table", "box101"],
+                    side_effect="remove",
+                ),
                 Mode(["a2"], SingleGoal(keyframes[5][self.robot_idx["a2"]])),
             ],
         }
-
-        # self.manipulation_modes = {
-        #     "a1": [
-        #         ("pick", "a1_ur_vacuum", "box100", None),
-        #         ("place", "table", "box100", "remove"),
-        #         ("goto", None, None),
-        #     ],
-        #     "a2": [
-        #         ("pick", "a2_ur_vacuum", "box101", None),
-        #         ("place", "table", "box101", "remove"),
-        #         ("goto", 0, 0, None),
-        #     ],
-        # }
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
         self.sequence = [("a1", 0), ("a2", 0), ("a1", 1), ("a2", 1)]
-       
+
         # buffer for faster collision checking
-        self.prev_mode = np.array([0, 0])
+        self.prev_mode = [0, 0]
 
 
 class rai_ur10_box_sort_env:
@@ -901,21 +1018,71 @@ class rai_ur10_arm_bottle_env(rai_env):
 
         super().__init__()
 
+        self.manipulating_env = True
+
         self.robot_goals = {
             "a0": [
-                Mode(["a0"], SingleGoal(keyframes[0][self.robot_idx["a0"]]), type="pick", frames=["a0_ur_vacuum", "bottle_1"], side_effect=None),
-                Mode(["a0"], SingleGoal(keyframes[1][self.robot_idx["a0"]]), type="place", frames=["table", "bottle_1"], side_effect=None),
+                Mode(
+                    ["a0"],
+                    SingleGoal(keyframes[0][self.robot_idx["a0"]]),
+                    type="pick",
+                    frames=["a0_ur_vacuum", "bottle_1"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a0"],
+                    SingleGoal(keyframes[1][self.robot_idx["a0"]]),
+                    type="place",
+                    frames=["table", "bottle_1"],
+                    side_effect=None,
+                ),
                 # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
-                Mode(["a0"], SingleGoal(keyframes[3][self.robot_idx["a0"]]), type="pick", frames=["a0_ur_vacuum", "bottle_12"], side_effect=None),
-                Mode(["a0"], SingleGoal(keyframes[4][self.robot_idx["a0"]]), type="place", frames=["table", "bottle_12"], side_effect=None),
+                Mode(
+                    ["a0"],
+                    SingleGoal(keyframes[3][self.robot_idx["a0"]]),
+                    type="pick",
+                    frames=["a0_ur_vacuum", "bottle_12"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a0"],
+                    SingleGoal(keyframes[4][self.robot_idx["a0"]]),
+                    type="place",
+                    frames=["table", "bottle_12"],
+                    side_effect=None,
+                ),
                 Mode(["a0"], SingleGoal(keyframes[5][self.robot_idx["a0"]])),
             ],
             "a1": [
-                Mode(["a1"], SingleGoal(keyframes[6][self.robot_idx["a1"]]), type="pick", frames=["a1_ur_vacuum", "bottle_3"], side_effect=None),
-                Mode(["a1"], SingleGoal(keyframes[7][self.robot_idx["a1"]]), type="place", frames=["table", "bottle_3"], side_effect=None),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[6][self.robot_idx["a1"]]),
+                    type="pick",
+                    frames=["a1_ur_vacuum", "bottle_3"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[7][self.robot_idx["a1"]]),
+                    type="place",
+                    frames=["table", "bottle_3"],
+                    side_effect=None,
+                ),
                 # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
-                Mode(["a1"], SingleGoal(keyframes[9][self.robot_idx["a1"]]), type="pick", frames=["a1_ur_vacuum", "bottle_5"], side_effect=None),
-                Mode(["a1"], SingleGoal(keyframes[10][self.robot_idx["a1"]]), type="place", frames=["table", "bottle_5"], side_effect=None),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[9][self.robot_idx["a1"]]),
+                    type="pick",
+                    frames=["a1_ur_vacuum", "bottle_5"],
+                    side_effect=None,
+                ),
+                Mode(
+                    ["a1"],
+                    SingleGoal(keyframes[10][self.robot_idx["a1"]]),
+                    type="place",
+                    frames=["table", "bottle_5"],
+                    side_effect=None,
+                ),
                 Mode(["a1"], SingleGoal(keyframes[11][self.robot_idx["a1"]])),
             ],
         }
@@ -934,35 +1101,19 @@ class rai_ur10_arm_bottle_env(rai_env):
             ("a0", 3),
             ("a1", 3),
         ]
-     
+
         # a1_boxes = ["box000", "box001", "box011", "box002"]
         # a2_boxes = ["box021", "box010", "box012", "box022", "box020"]
-
-        # self.manipulation_modes = {
-        #     "a0": [
-        #         ("pick", "a0_ur_vacuum", "bottle_1", None),
-        #         ("place", "table", "bottle_1", None),
-        #         ("pick", "a0_ur_vacuum", "bottle_12", None),
-        #         ("place", "table", "bottle_12", None),
-        #         ("goto", None, None),
-        #     ],
-        #     "a1": [
-        #         ("pick", "a1_ur_vacuum", "bottle_3", None),
-        #         ("place", "table", "bottle_3", None),
-        #         ("pick", "a1_ur_vacuum", "bottle_5", None),
-        #         ("place", "table", "bottle_5", None),
-        #         ("goto", 0, 0, None),
-        #     ],
-        # }
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
         # buffer for faster collision checking
-        self.prev_mode = np.array([0, 0])
-        
-        self.start_mode = np.array([0 for _ in self.robots])
-        self.terminal_mode = np.array([len(self.robot_goals[r])-1 for r in self.robots])
+        self.prev_mode = [0, 0]
+
+        self.start_mode = [0 for _ in self.robots]
+        self.terminal_mode = \
+            [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -975,7 +1126,7 @@ class rai_ur10_arm_bottle_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         # buffer for faster collision checking
-        self.prev_mode = np.array([0, 0])
+        self.prev_mode = [0, 0]
 
 
 # mobile manip
@@ -1137,6 +1288,13 @@ def check_all_modes():
             #         print(c)
             m = env.get_next_mode(None, m)
 
+
+def export_env(env):
+    pass
+
+
+def load_env_from_file(filepath):
+    pass
 
 
 if __name__ == "__main__":
