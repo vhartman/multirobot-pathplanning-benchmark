@@ -543,7 +543,7 @@ class rai_dual_ur10_arm_inspection_env:
 # TODO: this is messy (currrently pick/place without actual manip)
 class rai_dual_ur10_arm_env(rai_env):
     def __init__(self):
-        self.C, keyframes = make_box_sorting_env()
+        self.C, self.keyframes = make_box_sorting_env()
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -569,14 +569,14 @@ class rai_dual_ur10_arm_env(rai_env):
 
         self.robot_goals = {
             "a1": [
-                Mode(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
-                Mode(["a1"], SingleGoal(keyframes[1][self.robot_idx["a1"]])),
-                Mode(["a1"], SingleGoal(keyframes[2][self.robot_idx["a1"]])),
+                Mode(["a1"], SingleGoal(self.keyframes[0][self.robot_idx["a1"]])),
+                Mode(["a1"], SingleGoal(self.keyframes[1][self.robot_idx["a1"]])),
+                Mode(["a1"], SingleGoal(self.keyframes[2][self.robot_idx["a1"]])),
             ],
             "a2": [
-                Mode(["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
-                Mode(["a2"], SingleGoal(keyframes[4][self.robot_idx["a2"]])),
-                Mode(["a2"], SingleGoal(keyframes[5][self.robot_idx["a2"]])),
+                Mode(["a2"], SingleGoal(self.keyframes[3][self.robot_idx["a2"]])),
+                Mode(["a2"], SingleGoal(self.keyframes[4][self.robot_idx["a2"]])),
+                Mode(["a2"], SingleGoal(self.keyframes[5][self.robot_idx["a2"]])),
             ],
         }
 
@@ -929,36 +929,36 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
             "a1": [
                 Mode(
                     ["a1"],
-                    SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                    SingleGoal(self.keyframes[0][self.robot_idx["a1"]]),
                     type="pick",
                     frames=["a1_ur_vacuum", "box100"],
                     side_effect=None,
                 ),
                 Mode(
                     ["a1"],
-                    SingleGoal(keyframes[1][self.robot_idx["a1"]]),
+                    SingleGoal(self.keyframes[1][self.robot_idx["a1"]]),
                     type="place",
                     frames=["table", "box100"],
                     side_effect="remove",
                 ),
-                Mode(["a1"], SingleGoal(keyframes[2][self.robot_idx["a1"]])),
+                Mode(["a1"], SingleGoal(self.keyframes[2][self.robot_idx["a1"]])),
             ],
             "a2": [
                 Mode(
                     ["a2"],
-                    SingleGoal(keyframes[3][self.robot_idx["a2"]]),
+                    SingleGoal(self.keyframes[3][self.robot_idx["a2"]]),
                     type="pick",
                     frames=["a2_ur_vacuum", "box101"],
                     side_effect=None,
                 ),
                 Mode(
                     ["a2"],
-                    SingleGoal(keyframes[4][self.robot_idx["a2"]]),
+                    SingleGoal(self.keyframes[4][self.robot_idx["a2"]]),
                     type="place",
                     frames=["table", "box101"],
                     side_effect="remove",
                 ),
-                Mode(["a2"], SingleGoal(keyframes[5][self.robot_idx["a2"]])),
+                Mode(["a2"], SingleGoal(self.keyframes[5][self.robot_idx["a2"]])),
             ],
         }
 

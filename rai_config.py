@@ -669,7 +669,7 @@ def make_box_sorting_env(view: bool = False):
     keyframes_a2 = komo.getPath()
 
     keyframes = np.concatenate([keyframes_a1, keyframes_a2])
-    print(keyframes)
+    # print(keyframes)
     return C, keyframes
 
 
@@ -740,10 +740,10 @@ def make_egg_carton_env(view: bool = False):
         ry.ST.marker, [0.3, 0.2, 0.1, 0.005]
     ).setPosition([0, 1, 0.3]).setColor([0.1, 0.1, 0.1, 0.2]).setContact(0)
 
-    pairs = C.getCollidablePairs()
+    # pairs = C.getCollidablePairs()
 
-    for i in range(0, len(pairs), 2):
-        print(pairs[i], pairs[i + 1])
+    # for i in range(0, len(pairs), 2):
+    #     print(pairs[i], pairs[i + 1])
 
     # sim = ry.Simulation(C, ry.SimulationEngine.physx, verbose=0)  # try verbose=2
 
@@ -953,9 +953,9 @@ def make_panda_waypoint_env(
         )
 
         ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
-        print(ret)
+        # print(ret)
         q = komo.getPath()
-        print(q)
+        # print(q)
 
         if view:
             komo.view(True, "IK solution")
@@ -1133,7 +1133,7 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
         komo.initRandom()
 
         ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
-        print(ret.dict())
+        # print(ret.dict())
         q = komo.getPath()
         # print(q)
 
@@ -1233,7 +1233,7 @@ def make_bottle_insertion(remove_non_moved_bottles:bool=False, view: bool = Fals
             retval = solver.solve()
             retval = retval.dict()
 
-            print(bottle, retval)
+            # print(bottle, retval)
 
             if view:
                 komo.view(True, "IK solution")
