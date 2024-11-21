@@ -78,7 +78,7 @@ class rai_env(base_env):
 
         self.tolerance = 0.1
 
-    def sample_random_mode(self):
+    def sample_random_mode(self) -> List[int]:
         m = self.start_mode
         rnd = random.randint(0, len(self.sequence))
 
@@ -87,7 +87,7 @@ class rai_env(base_env):
 
         return m
 
-    def get_current_seq_index(self, mode):
+    def get_current_seq_index(self, mode: List[int]) -> int:
         # min_sequence_pos = 0
         # for i, m in enumerate(mode):
         #     min_sequence_pos = min(self.sequence.index(m), min_sequence_pos))
@@ -108,14 +108,14 @@ class rai_env(base_env):
 
         return min_sequence_pos
 
-    def get_goal_constrained_robots(self, mode):
+    def get_goal_constrained_robots(self, mode: List[int]) -> List[str]:
         min_sequence_pos = self.get_current_seq_index(mode)
         involved_robots = [self.sequence[min_sequence_pos][0]]
 
         # print(mode, involved_robots)
         return involved_robots
 
-    def done(self, q: Configuration, m: List[int]):
+    def done(self, q: Configuration, m: List[int]) -> bool:
         if not np.array_equal(m, self.terminal_mode):
             return False
 
@@ -134,7 +134,7 @@ class rai_env(base_env):
     def show(self):
         self.C.view(True)
 
-    def is_transition(self, q: Configuration, m):
+    def is_transition(self, q: Configuration, m: List[int]) -> bool:
         if np.array_equal(m, self.terminal_mode):
             return False
 
@@ -148,7 +148,7 @@ class rai_env(base_env):
                 return False
         return True
 
-    def get_next_mode(self, q: Configuration, mode):
+    def get_next_mode(self, q: Configuration, mode: List[int]) -> List[int]:
         seq_pos = self.get_current_seq_index(mode)
 
         # find the next mode for the currently constrained one(s)
@@ -161,7 +161,9 @@ class rai_env(base_env):
         return m_next
         # raise ValueError("No next mode found, this might be the terminal mode.")
 
-    def is_collision_free(self, q: Configuration, m, collision_tolerance: float = 0.01):
+    def is_collision_free(
+        self, q: Configuration, m: List[int], collision_tolerance: float = 0.01
+    ) -> bool:
         # print(q)
         # self.C.setJointState(q)
 
@@ -185,10 +187,10 @@ class rai_env(base_env):
         self,
         q1: Configuration,
         q2: Configuration,
-        m,
+        m: List[int],
         resolution=0.1,
         randomize_order=True,
-    ):
+    ) -> bool:
         # print('q1', q1)
         # print('q2', q2)
         N = config_dist(q1, q2) / resolution
@@ -207,7 +209,7 @@ class rai_env(base_env):
 
         return True
 
-    def is_path_collision_free(self, path: List[State], randomize_order=True):
+    def is_path_collision_free(self, path: List[State], randomize_order=True) -> bool:
         idx = list(range(len(path) - 1))
         if randomize_order:
             random.shuffle(idx)
@@ -470,9 +472,7 @@ class rai_two_dim_simple_manip(rai_env):
         # self.C.view(True)
 
         self.start_mode = [0 for _ in self.robots]
-        self.terminal_mode = \
-            [len(self.robot_goals[r]) - 1 for r in self.robots]
-        
+        self.terminal_mode = [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.05
 
@@ -515,8 +515,7 @@ class rai_two_dim_three_agent_env(rai_env):
         self.sequence = [("a1", 0), ("a2", 0), ("a3", 0), ("a2", 1), ("a1", 1)]
 
         self.start_mode = [0 for _ in self.robots]
-        self.terminal_mode = \
-            [len(self.robot_goals[r]) - 1 for r in self.robots]
+        self.terminal_mode = [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -584,8 +583,7 @@ class rai_dual_ur10_arm_env(rai_env):
         self.sequence = [("a1", 0), ("a2", 0), ("a1", 1), ("a2", 1)]
 
         self.start_mode = [0 for _ in self.robots]
-        self.terminal_mode = \
-            [len(self.robot_goals[r]) - 1 for r in self.robots]
+        self.terminal_mode = [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -655,8 +653,7 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
                 self.sequence.append((r, i))
 
         self.start_mode = [0 for _ in self.robots]
-        self.terminal_mode = \
-            [len(self.robot_goals[r]) - 1 for r in self.robots]
+        self.terminal_mode = [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -705,8 +702,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
                 self.sequence.append((r, i))
 
         self.start_mode = [0 for _ in self.robots]
-        self.terminal_mode = \
-            [len(self.robot_goals[r]) - 1 for r in self.robots]
+        self.terminal_mode = [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -913,8 +909,7 @@ class rai_ur10_arm_egg_carton_env(rai_env):
         self.prev_mode = [0, 0]
 
         self.start_mode = [0 for _ in self.robots]
-        self.terminal_mode = \
-            [len(self.robot_goals[r]) - 1 for r in self.robots]
+        self.terminal_mode = [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
@@ -1112,8 +1107,7 @@ class rai_ur10_arm_bottle_env(rai_env):
         self.prev_mode = [0, 0]
 
         self.start_mode = [0 for _ in self.robots]
-        self.terminal_mode = \
-            [len(self.robot_goals[r]) - 1 for r in self.robots]
+        self.terminal_mode = [len(self.robot_goals[r]) - 1 for r in self.robots]
 
         self.tolerance = 0.1
 
