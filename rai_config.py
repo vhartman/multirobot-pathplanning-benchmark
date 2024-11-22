@@ -879,6 +879,170 @@ def make_egg_carton_env(view: bool = False):
     # keyframes = np.concatenate([keyframes_a1, keyframes_a2])
     return C, keyframes
 
+def make_handover_env(view:bool=False):
+    C = ry.Config()
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.3, 0.3, 0.3])
+        .setContact(1)
+    )
+
+    # C.addFile(ry.raiPath('panda/panda.g'), namePrefix='a1_') \
+    #         .setParent(C.getFrame('table')) \
+    #         .setRelativePosition([-0.3, 0.5, 0]) \
+    #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
+    robot_path = os.path.join(os.path.dirname(__file__), "ur10/ur10_vacuum.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        table
+    ).setRelativePosition([-0.5, -0.5, 0.0]).setRelativeQuaternion(
+        [0.7071, 0, 0, 0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-2)
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        table
+    ).setRelativePosition([+0.5, 0.5, 0.0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj1").setParent(table).setShape(
+        ry.ST.box, size=[0.4, 0.4, 0.2, 0.005]
+    ).setColor([1, 0.5, 0, 1]).setContact(1).setRelativePosition(
+        [+0.5, -1., 0.15]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.box, size=[0.4, 0.4, 0.2, 0.005]
+    ).setColor([1, 0.5, 0, 0.2]).setContact(0).setRelativePosition(
+        [-0.5, 1., 0.15]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs1").setParent(table).setRelativePosition(
+        [-0.5, 1, 0.7]
+    ).setShape(ry.ST.box, size=[1, 1, 0.1, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+    C.addFrame("obs2").setParent(table).setRelativePosition(
+        [0.5, -1, 0.7]
+    ).setShape(ry.ST.box, size=[1, 1, 0.1, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)
+
+    if view:
+        C.view(True)
+
+    qHome = C.getJointState()
+    box = "obj1"
+
+    komo = ry.KOMO(C, phases=4, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    komo.addObjective(
+        [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.01]
+    )
+
+    komo.addControlObjective([], 0, 1e-1)
+    komo.addControlObjective([], 1, 1e-1)
+    # komo.addControlObjective([], 2, 1e-1)
+
+    komo.addModeSwitch([1, 2], ry.SY.stable, ["a1_" + "ur_vacuum", box])
+    komo.addObjective(
+        [1, 2], ry.FS.distance, ["a1_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.0]
+    )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.positionDiff,
+        ["a1_" + "ur_vacuum", box],
+        ry.OT.sos,
+        [1e1, 1e1, 1e1],
+    )
+    # komo.addObjective(
+    #     [1, 2],
+    #     ry.FS.positionDiff,
+    #     ["a1_" + "ur_ee_marker", box],
+    #     ry.OT.sos,
+    #     [1e0],
+    # )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.scalarProductYZ,
+        ["a1_" + "ur_ee_marker", box],
+        ry.OT.sos,
+        [1e0],
+    )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.scalarProductZZ,
+        ["a1_" + "ur_ee_marker", box],
+        ry.OT.sos,
+        [1e0],
+    )
+
+    komo.addModeSwitch([2, 3], ry.SY.stable, ["a2_" + "ur_vacuum", box])
+    komo.addObjective(
+        [2, 3], ry.FS.distance, ["a2_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.0]
+
+    )
+    komo.addObjective(
+        [2, 3],
+        ry.FS.positionDiff,
+        ["a2_" + "ur_vacuum", box],
+        ry.OT.sos,
+        [1e1, 1e1, 1e1],
+    )
+    # komo.addObjective(
+    #     [2, 3],
+    #     ry.FS.positionDiff,
+    #     ["a2_" + "ur_ee_marker", box],
+    #     ry.OT.sos,
+    #     [1e0],
+    # )
+    komo.addObjective(
+        [2, 3],
+        ry.FS.scalarProductYZ,
+        ["a2_" + "ur_ee_marker", box],
+        ry.OT.sos,
+        [1e0],
+    )
+    komo.addObjective(
+        [2, 3],
+        ry.FS.scalarProductZZ,
+        ["a2_" + "ur_ee_marker", box],
+        ry.OT.sos,
+        [1e0],
+    )
+
+
+    komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
+    komo.addObjective([3, -1], ry.FS.poseDiff, ["goal1", box], ry.OT.eq, [1e1])
+
+    komo.addObjective(
+        times=[4],
+        feature=ry.FS.jointState,
+        frames=[],
+        type=ry.OT.eq,
+        scale=[1e0],
+        target=qHome,
+    )
+
+    komo.initRandom()
+
+    solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+    solver.setOptions(damping=0.1, wolfe=0.001)
+    retval = solver.solve()
+
+    if view:
+        print(retval.dict())
+        komo.view(True, "IK solution")
+
+    keyframes = komo.getPath()
+
+    return C, keyframes
+
 
 # TODO: the parameters are implemented horribly
 def make_panda_waypoint_env(
@@ -1207,7 +1371,7 @@ def make_bottle_insertion(remove_non_moved_bottles:bool=False, view: bool = Fals
         komo.addModeSwitch([1, 2], ry.SY.stable, [ee, bottle])
         komo.addObjective([1, 2], ry.FS.distance, [ee, bottle], ry.OT.eq, [1e1], [-0.01])
 
-        komo.addObjective([1, 2], ry.FS.vectorYDiff, [ee, bottle], ry.OT.sos, [1e1])
+        komo.addObjective([1, 2], ry.FS.vectorYDiff, [ee, bottle], ry.OT.sos, [1e2])
 
         komo.addObjective(
             [2, -1], ry.FS.poseDiff, [bottle, bottle + "_goal"], ry.OT.eq, [1e1]
@@ -1321,5 +1485,7 @@ if __name__ == "__main__":
         make_mobile_manip_env(True)
     elif args.env == "bottle":
         make_bottle_insertion(view=True)
+    elif args.env == "handover":
+        make_handover_env(view=True)
     else:
         make_panda_waypoint_env(2, view=True)

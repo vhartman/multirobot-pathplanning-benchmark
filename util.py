@@ -10,18 +10,14 @@ import pickle
 import os
 
 def state_dist(start: State, end: State) -> float:
-    # if not np.array_equal(n_start.mode, n_end.mode):
-    # if np.linalg.norm(n_start.mode - n_end.mode) > 0:
-    if start.mode.tolist() != end.mode.tolist():
+    if start.mode != end.mode:
         return np.inf
 
     return config_dist(start.q, end.q)
 
 
 def state_cost(start: State, end: State) -> float:
-    # if not np.array_equal(n_start.mode, n_end.mode):
-    # if np.linalg.norm(n_start.mode - n_end.mode) > 0:
-    if start.mode.tolist() != end.mode.tolist():
+    if start.mode != end.mode:
         return np.inf
 
     return config_cost(start.q, end.q)
