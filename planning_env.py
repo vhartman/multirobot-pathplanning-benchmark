@@ -190,3 +190,20 @@ class base_env(ABC):
     # @abstractmethod
     # def cost(self, path):
     #     pass
+
+class RRTstar_env(base_env):
+
+    def sampling(self, m: List[int], sampling_type:int) -> Configuration:
+        while True:
+            q = []
+            for i in range(len(env.robots)):
+                lims = self.limits[:, self.robot_idx[self.robots[i]]]
+                if sampling_type == 2:  #goal sampling
+                    pass
+                elif sampling_type == 1: #informed sampling
+                    pass
+                elif sampling_type == 0: #uniformed sampling
+                    qr = np.random.uniform(lims[0], lims[1])
+                q.append(qr)
+            if env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m):
+                return q

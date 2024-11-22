@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "rai_envs.py -simple_2d --mode modes",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/rai_envs.py",
+            "args": [
+                "simple_2d",
+                "--mode",
+                "modes"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "rai_envs.py -simple_2d --mode benchmark",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/rai_envs.py",
+            "args": [
+                "simple_2d",
+                "--mode",
+                "benchmark"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "rai_envs.py -simple_2d --mode sampling",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/rai_envs.py",
+            "args": [
+                "simple_2d",
+                "--mode",
+                "sampling"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}

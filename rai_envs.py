@@ -201,18 +201,18 @@ class rai_env(base_env):
 
         self.set_to_mode(m)
         self.C.setJointState(q)
-
+        self.C.computeCollisions()
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
             return True
-
+        
         col = self.C.getCollisionsTotalPenetration()
         # print(col)
-        # self.C.view(False)
+        # self.C.view(True)
         if col > collision_tolerance:
             # self.C.view(False)
             return False
-
+ 
         return True
 
     def is_edge_collision_free(
@@ -1187,7 +1187,6 @@ def visualize_modes(env: rai_env):
         )
 
         m = env.get_next_mode(None, m)
-
         # colls = env.C.getCollisions()
         # for c in colls:
         #     if c[2] < 0:
@@ -1324,12 +1323,23 @@ def load_env_from_file(filepath):
     pass
 
 
+def visualize_sampling(env: rai_env, N=20):
+    for _ in range(N):
+        # m = env.start_mode
+        m = env.sample_random_mode()
+        q = env.sampling(m, 0)
+        env.show()
+        
+        
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument("env_name", nargs="?", default="default", help="env to show")
     parser.add_argument(
         "--mode",
-        choices=["benchmark", "show", "modes"],
+        choices=["benchmark", "show", "modes", "sampling"],
         required=True,
         help="Select the mode of operation",
     )
@@ -1347,3 +1357,6 @@ if __name__ == "__main__":
     elif args.mode == "modes":
         print("Environment modes/goals")
         visualize_modes(env)
+    elif args.mode == "sampling":
+        print("Environment sampling")
+        visualize_sampling(env)

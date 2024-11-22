@@ -29,10 +29,19 @@ def make_2d_rai_env(view: bool = False):
         .setContact(0)
         .setJoint(ry.JT.rigid)
     )
+    table_size = table.getSize()
+    a1_parent_pos = pre_agent_1_frame.getPosition()
+    a1_limits = np.array([
+        [-(table_size[0]/2), table_size[0]/2] - a1_parent_pos[0],  
+        [-(table_size[1]/2), table_size[1]/2] - a1_parent_pos[1],  
+        [-3.14, 3.14]                
+    ]).flatten() #limits wrt pre_agent_1_frame
 
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
         ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
-    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=a1_limits)
+
+    
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
@@ -43,12 +52,18 @@ def make_2d_rai_env(view: bool = False):
         .setContact(0)
         .setJoint(ry.JT.rigid)
     )
+    a2_parent_pos = pre_agent_2_frame.getPosition()
+    a2_limits = np.array([
+        [-(table_size[0]/2), table_size[0]/2] - a2_parent_pos[0],  
+        [-(table_size[1]/2), table_size[1]/2] - a2_parent_pos[1],  
+        [-3.14, 3.14]                
+    ]).flatten() #limits wrt pre_agent_1_frame
 
     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
         ry.ST.box,
         size=[0.1, 0.2, 0.06, 0.005],
         # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
-    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=a2_limits)
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
@@ -162,6 +177,10 @@ def make_piano_mover_env(view: bool = False):
         ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.075]
     ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
 
+    C.addFrame("a1_marker").setParent(C.getFrame("a1")).setShape(
+    ry.ST.marker, size=[0.1]
+    )
+
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
         .setParent(table)
@@ -175,6 +194,10 @@ def make_piano_mover_env(view: bool = False):
     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
         ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14]))
+
+    C.addFrame("a2_marker").setParent(C.getFrame("a2")).setShape(
+    ry.ST.marker, size=[0.1]
+)
 
     C.addFrame("obj1").setParent(table).setShape(
         ry.ST.box, size=[0.4, 0.4, 0.06, 0.005]

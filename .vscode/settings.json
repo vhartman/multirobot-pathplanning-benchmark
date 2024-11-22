@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./optimal-multiagent-planning/src/kdtree"
+    ]
+}
