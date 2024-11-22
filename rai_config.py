@@ -1184,7 +1184,7 @@ def make_bottle_insertion(remove_non_moved_bottles:bool=False, view: bool = Fals
         komo.addModeSwitch([1, 2], ry.SY.stable, [ee, bottle])
         komo.addObjective([1, 2], ry.FS.distance, [ee, bottle], ry.OT.eq, [1e1], [-0.01])
 
-        komo.addObjective([1, 2], ry.FS.vectorYDiff, [ee, bottle], ry.OT.sos, [1e1])
+        komo.addObjective([1, 2], ry.FS.vectorYDiff, [ee, bottle], ry.OT.sos, [1e2])
 
         komo.addObjective(
             [2, -1], ry.FS.poseDiff, [bottle, bottle + "_goal"], ry.OT.eq, [1e1]
