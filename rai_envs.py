@@ -340,22 +340,29 @@ class rai_env(base_env):
             # TODO: this does currently not work for multiple robots switching at the same time
 
             # print("we assume a single switch at a time")
-            mode_switching_robot = 0
-            for r in range(len(self.robots)):
-                if mode[r] != m_prev[r]:
-                    # this mode switched
-                    mode_switching_robot = r
-                    break
+            # mode_switching_robots = 0
+            # for r in range(len(self.robots)):
+            #     if mode[r] != m_prev[r]:
+            #         # this mode switched
+            #         mode_switching_robot = r
+            #         break
+
+            mode_switching_robots = self.get_goal_constrained_robots(m_prev)
+            # print('switching robots:', mode_switching_robots)
 
             # print(robot_idx, mode_switching_robot)
 
             # set robot to config
-            prev_mode_index = m_prev[mode_switching_robot]
-            robot = self.robots[mode_switching_robot]
+            prev_mode_index = m_prev[self.robots.index(mode_switching_robots[0])]
+            # robot = self.robots[mode_switching_robots]
 
             # TODO: ensure that se are choosing the correct goal here
             q = self.tasks[prev_mode_index].goal.sample()
-            self.C.setJointState(q, get_robot_joints(self.C, robot))
+            joint_names = []
+            for r in mode_switching_robots:
+                joint_names.extend(get_robot_joints(self.C, r))
+
+            self.C.setJointState(q, joint_names)
 
             if self.tasks[prev_mode_index].type == "goto":
                 pass
@@ -1025,6 +1032,81 @@ class rai_ur10_arm_conveyor_env:
     pass
 
 
+
+class rai_ur10_handover_env(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_handover_env()
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        print(self.start_pos.state())
+
+        self.manipulating_env = True
+
+        self.tasks = [
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1_ur_vacuum", "obj1"],
+            ),
+            Task(
+                ["a1", "a2"],
+                SingleGoal(keyframes[1]),
+                type="handover",
+                frames=["a2_ur_vacuum", "obj1"],
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(keyframes[2][self.robot_idx["a2"]]),
+                type="place",
+                frames=["table", "obj1"],
+            ),
+            Task(["a1", "a2"], SingleGoal(keyframes[3])),
+        ]
+
+        self.tasks[0].name = "a1_pick"
+        self.tasks[1].name = "handover"
+        self.tasks[2].name = "a2_place"
+        self.tasks[3].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(["a1_pick", "handover", "a2_place", "terminal"])
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode.copy()
+
+        self.tolerance = 0.1
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+
 class rai_ur10_arm_bottle_env(rai_env):
     def __init__(self):
         self.C, keyframes = make_bottle_insertion()
@@ -1160,6 +1242,9 @@ def visualize_modes(env: rai_env):
         task = env.get_active_task(m)
         goal_sample = task.goal.sample()
 
+        print(task.name)
+        print(goal_sample)
+
         print("switching robots: ", switching_robots)
 
         # env.show()
@@ -1177,6 +1262,8 @@ def visualize_modes(env: rai_env):
                 # q.append(goal_sample)
             else:
                 q.append(q_home.robot_state(j))
+        
+        print(q)
 
         print(
             "is collision free: ",
@@ -1255,6 +1342,8 @@ def get_env_by_name(name):
         env = rai_quadruple_ur10_arm_spot_welding_env()
     elif name == "bottles":
         env = rai_ur10_arm_bottle_env()
+    elif name == "handover":
+        env = rai_ur10_handover_env()
     else:
         raise NotImplementedError("Name does not exist")
 
