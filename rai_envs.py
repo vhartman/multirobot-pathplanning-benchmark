@@ -553,7 +553,7 @@ class rai_two_dim_handover(rai_env):
         self.manipulating_env = True
 
         translated_handover_poses = []
-        for _ in range(9):
+        for _ in range(100):
             new_pose = keyframes[1] *1.
             translation = np.random.rand(2) * 1 - .5
             new_pose[0:2] += translation
@@ -562,6 +562,17 @@ class rai_two_dim_handover(rai_env):
             translated_handover_poses.append(new_pose)
 
         translated_handover_poses.append(keyframes[1])
+
+        rotated_terminal_poses = []
+        for _ in range(100):
+            new_pose = keyframes[3] *1.
+            rot = np.random.rand(2) * 6 - 3
+            new_pose[2] =rot[0]
+            new_pose[5] = rot[1]
+
+            rotated_terminal_poses.append(new_pose)
+
+        translated_handover_poses.append(keyframes[3])
 
         self.tasks = [
             # a1
@@ -598,7 +609,8 @@ class rai_two_dim_handover(rai_env):
                 frames=["table", "obj2"],
             ),
             # terminal
-            Task(["a1", "a2"], SingleGoal(keyframes[3])),
+            # Task(["a1", "a2"], SingleGoal(keyframes[3])),
+            Task(["a1", "a2"], GoalSet(rotated_terminal_poses)),
         ]
 
         self.tasks[0].name = "a1_pick_obj1"
@@ -609,7 +621,6 @@ class rai_two_dim_handover(rai_env):
         self.tasks[5].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(["a1_pick_obj1", "handover", "a1_pick_obj2", "a1_place_obj2", "a2_place", "terminal"])
-        # self.sequence = [2, 0, 3, 1, 4]
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
