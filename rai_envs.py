@@ -14,19 +14,6 @@ from planning_env import *
 from util import *
 
 
-def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
-    links = []
-
-    for name in C.getJointNames():
-        if prefix in name:
-            name = name.split(":")[0]
-
-            if name not in links:
-                links.append(name)
-
-    return links
-
-
 def get_joint_indices(C: ry.Config, prefix: str) -> List[int]:
     all_joints_weird = C.getJointNames()
 
@@ -572,7 +559,7 @@ class rai_two_dim_handover(rai_env):
 
             rotated_terminal_poses.append(new_pose)
 
-        translated_handover_poses.append(keyframes[3])
+        rotated_terminal_poses.append(keyframes[3])
 
         self.tasks = [
             # a1
@@ -621,6 +608,51 @@ class rai_two_dim_handover(rai_env):
         self.tasks[5].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(["a1_pick_obj1", "handover", "a1_pick_obj2", "a1_place_obj2", "a2_place", "terminal"])
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = [0, 0]
+
+class rai_random_two_dim(rai_env):
+    def __init__(self):
+        num_robots = 3
+        num_goals = 4
+        self.C, keyframes = make_random_two_dim(num_agents=num_robots, num_goals=num_goals, num_obstacles=10)
+        # self.C.view(True)
+
+        self.robots = [f'a{i}' for i in range(num_robots)]
+
+        super().__init__()
+
+        self.tasks = []
+        self.sequence = []
+
+        print(keyframes)
+
+        cnt = 0
+        for r in self.robots:
+            for i in range(num_goals):
+                self.tasks.append(
+                    Task([r], SingleGoal(keyframes[cnt]))
+                )
+                self.tasks[-1].name = f"goal_{r}_{i}"
+                self.sequence.append(cnt)
+
+                cnt += 1
+        
+        # TODO: there seems to be a bug somewhere if we do not have a terminal mode!
+        q_home = self.C.getJointState()
+        self.tasks.append(Task(self.robots, SingleGoal(q_home)))
+        self.tasks[-1].name = 'terminal'
+
+        random.shuffle(self.sequence)
+        self.sequence.append(len(self.tasks)-1)
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -1422,6 +1454,8 @@ def get_env_by_name(name):
         env = rai_two_dim_simple_manip()
     elif name == "simple_2d":
         env = rai_two_dim_env()
+    elif name=="random_2d":
+        env = rai_random_two_dim()
     elif name == "2d_handover":
         env = rai_two_dim_handover()
     elif name == "three_agents":

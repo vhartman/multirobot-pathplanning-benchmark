@@ -2,12 +2,26 @@ import robotic as ry
 import numpy as np
 import argparse
 
+from typing import List
+
 import os.path
 import random
 
 # make everything predictable
 np.random.seed(2)
 random.seed(2)
+
+def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
+    links = []
+
+    for name in C.getJointNames():
+        if prefix in name:
+            name = name.split(":")[0]
+
+            if name not in links:
+                links.append(name)
+
+    return links
 
 def make_2d_rai_env(view: bool = False):
     C = ry.Config()
@@ -133,6 +147,137 @@ def make_2d_rai_env(view: bool = False):
 
     keyframes = komo.getPath()
     # print(keyframes)
+
+    return C, keyframes
+
+def make_random_two_dim(num_agents:int=3, num_obstacles:int=5, num_goals:int=3, view:bool=False):
+    C = ry.Config()
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 1.0])
+        .setShape(ry.ST.box, size=[4, 4, 0.06, 0.005])
+        .setColor([0.3, 0.3, 0.3])
+        .setContact(1)
+    )
+
+    C.addFrame("wall1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0, 2.1, 0.07]
+    ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0, -2.1, 0.07]
+    ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall3").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [2.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 4.399, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall4").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [-2.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 4.399, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    added_agents = 0
+    agent_names = []
+
+    while added_agents < num_agents:
+        c_coll_tmp = ry.Config()
+        c_coll_tmp.addConfigurationCopy(C)
+
+        pos = np.random.rand(2) * 4 - 2
+
+        pre_agent_1_frame = (
+            c_coll_tmp.addFrame(f"pre_agent_{added_agents}_frame")
+            .setParent(table)
+            .setPosition(table.getPosition() + [pos[0], pos[1], 0.07])
+            .setShape(ry.ST.marker, size=[0.05])
+            .setColor([1, 0.5, 0])
+            .setContact(0)
+            .setJoint(ry.JT.rigid)
+        )
+
+        c_coll_tmp.addFrame(f"a{added_agents}").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[4, 0.1, 0.06, 0.2]
+        ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-3, 3, -3, 3, -3.14, 3.14]))
+
+        binary_collision_free = c_coll_tmp.getCollisionFree()
+        if binary_collision_free:
+            agent_names.append(f"a{added_agents}")
+            added_agents += 1
+
+            C.clear()
+            C.addConfigurationCopy(c_coll_tmp)
+        # else:
+        #     colls = c_coll_tmp.getCollisions()
+        #     for c in colls:
+        #         if c[2] < 0:
+        #             print(c)
+
+        #     c_coll_tmp.view(True)
+
+    added_obstacles = 0
+
+    while added_obstacles < num_obstacles:
+        c_coll_tmp = ry.Config()
+        c_coll_tmp.addConfigurationCopy(C)
+
+        pos = np.random.rand(2) * 4 - 2
+        size = np.random.rand(2) * 0.5 + 0.2
+
+        c_coll_tmp.addFrame(f"obs{added_obstacles}").setParent(c_coll_tmp.getFrame("table")).setPosition(
+            c_coll_tmp.getFrame("table").getPosition() + [pos[0], pos[1], 0.07]
+        ).setShape(ry.ST.box, size=[size[0], size[1], 0.06, 0.005]).setContact(-2).setColor(
+            [0, 0, 0]
+        ).setJoint(ry.JT.rigid)
+
+        binary_collision_free = c_coll_tmp.getCollisionFree()
+        if binary_collision_free:
+            added_obstacles += 1
+
+            C.clear()
+            C.addConfigurationCopy(c_coll_tmp)
+        # else:
+        #     colls = c_coll_tmp.getCollisions()
+        #     for c in colls:
+        #         if c[2] < 0:
+        #             print(c)
+
+        #     c_coll_tmp.view(True)
+
+    keyframes = []
+
+
+    for agent in agent_names:
+        added_goals = 0
+        while added_goals < num_goals:
+            pos = np.random.rand(2) * 4 - 2
+            rot = np.random.rand() * 6 - 3
+
+            c_coll_tmp = ry.Config()
+            c_coll_tmp.addConfigurationCopy(C)
+
+            q_pos = pos - c_coll_tmp.getFrame(agent).getPosition()[:2]
+            q = np.array([q_pos[0], q_pos[1], rot])
+
+            c_coll_tmp.setJointState(q, get_robot_joints(c_coll_tmp, agent))
+
+            binary_collision_free = c_coll_tmp.getCollisionFree()
+            # c_coll_tmp.view(True)
+
+            if binary_collision_free:
+                keyframes.append(q)
+                added_goals += 1
+
+    if view:
+        C.view(True)
 
     return C, keyframes
 
@@ -1754,5 +1899,7 @@ if __name__ == "__main__":
         make_handover_env(view=True)
     elif args.env == "2d_handover":
         make_two_dim_handover(view=True)
+    elif args.env == "random_2d":
+        make_random_two_dim(view=True)
     else:
         make_panda_waypoint_env(2, view=True)
