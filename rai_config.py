@@ -151,6 +151,294 @@ def make_2d_rai_env(view: bool = False):
 
     return C, keyframes
 
+def make_two_dim_handover(view:bool=False):
+    C = ry.Config()
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 1.0])
+        .setShape(ry.ST.box, size=[4, 4, 0.06, 0.005])
+        .setColor([0.3, 0.3, 0.3])
+        .setContact(1)
+    )
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [-.5, 0.8, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[4, 0.1, 0.06, 0.2]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-3, 3, -3, 3, -3.14, 3.14]))
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.2]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-3, 3, -3, 3, -3.14, 3.14]))
+
+    C.addFrame("obj1").setParent(table).setShape(
+        ry.ST.box, size=[0.4, 0.4, 0.06, 0.005]
+    ).setColor([1, 0.5, 0, 1]).setContact(1).setRelativePosition(
+        [0, 0.4, 0.07]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj2").setParent(table).setShape(
+        ry.ST.box, size=[0.3, 0.4, 0.06, 0.005]
+    ).setColor([0.5, 0.5, 0, 1]).setContact(1).setRelativePosition(
+        [0.5, -1.5, 0.07]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([.8, 0.4, 0.07])
+
+    C.addFrame("goal2").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([.8, 1.3, 0.07])
+
+    C.addFrame("obs1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, 0, 0.07]
+    ).setShape(ry.ST.box, size=[2.3, 0.2, 0.06, 0.005]).setContact(-2).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.4, 1.05, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 1.8, 0.06, 0.005]).setContact(-2).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs3").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [-0.4, -.6, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, .9, 0.06, 0.005]).setContact(-2).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs4").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.8, 0.8, 0.07]
+    ).setShape(ry.ST.box, size=[0.6, .2, 0.06, 0.005]).setContact(-2).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0, 2.1, 0.07]
+    ).setShape(ry.ST.box, size=[4, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0, -2.1, 0.07]
+    ).setShape(ry.ST.box, size=[4, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall3").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [2.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 4.4, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall4").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [-2.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 4.4, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    if view:
+        C.view(True)
+
+    def compute_handover():
+        box = "obj1"
+
+        q_home= C.getJointState()
+
+        komo = ry.KOMO(C, phases=4, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, ["a1", box])
+        komo.addObjective(
+            [1, 2], ry.FS.distance, ["a1", box], ry.OT.sos, [1e1], [-0.0]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            ["a1", box],
+            ry.OT.sos,
+            [1e0, 1e0, 1e0],
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     ["a1_" + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, ["a2"], ry.OT.sos, [1e0, 1e1, 0], [1., -0.5, 0]
+        # )
+
+        komo.addObjective(
+            [2], ry.FS.position, [box], ry.OT.sos, [1e0, 1e0, 0], [0.8, -0.8, 0]
+        )
+
+        komo.addModeSwitch([2, 3], ry.SY.stable, ["a2", box])
+        komo.addObjective(
+            [2, 3], ry.FS.distance, ["a2", box], ry.OT.sos, [1e1], [-0.0]
+
+        )
+        komo.addObjective(
+            [2, 3],
+            ry.FS.positionDiff,
+            ["a2", box],
+            ry.OT.sos,
+            [1e0, 1e0, 0e0],
+        )
+        # komo.addObjective(
+        #     [2, 3],
+        #     ry.FS.positionDiff,
+        #     ["a2_" + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        # )
+
+        komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([3, -1], ry.FS.poseDiff, ["goal1", box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[4],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        for _ in range(30):
+            # komo.initRandom()
+            komo.initWithConstant(np.random.rand(6)*2)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            print(retval)
+
+            if view:
+                komo.view(True, "IK solution")
+
+            keyframes = komo.getPath()
+
+            # print(retval)
+
+            if retval['ineq'] < 1 and retval['eq'] < 1 and retval['feasible']:
+                return keyframes
+
+    def compute_place():
+        box = "obj2"
+
+        q_home= C.getJointState()
+
+        komo = ry.KOMO(C, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, ["a1", box])
+        komo.addObjective(
+            [1, 2], ry.FS.distance, ["a1", box], ry.OT.sos, [1e1], [-0.0]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            ["a1", box],
+            ry.OT.sos,
+            [1e0, 1e0, 1e0],
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     ["a1_" + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, ["a2"], ry.OT.sos, [1e0, 1e1, 0], [1., -0.5, 0]
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, [box], ry.OT.sos, [1e0, 1e0, 0], [0.8, -0.8, 0]
+        # )
+
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, ["goal2", box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        for _ in range(30):
+            # komo.initRandom()
+            komo.initWithConstant(np.random.rand(6)*2)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            print(retval)
+
+            if view:
+                komo.view(True, "IK solution")
+
+            keyframes = komo.getPath()
+
+            # print(retval)
+
+            if retval['ineq'] < 1 and retval['eq'] < 1 and retval['feasible']:
+                return keyframes
+
+    handover_keyframes = compute_handover()
+    place_keyframes = compute_place()
+
+    return C, np.concatenate([handover_keyframes, place_keyframes])
 
 def make_piano_mover_env(view: bool = False):
     C = ry.Config()
@@ -1487,5 +1775,7 @@ if __name__ == "__main__":
         make_bottle_insertion(view=True)
     elif args.env == "handover":
         make_handover_env(view=True)
+    elif args.env == "2d_handover":
+        make_two_dim_handover(view=True)
     else:
         make_panda_waypoint_env(2, view=True)

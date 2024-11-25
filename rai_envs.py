@@ -2,6 +2,7 @@ import robotic as ry
 import numpy as np
 import random
 import argparse
+import time
 
 from typing import List
 from numpy.typing import NDArray
@@ -529,6 +530,97 @@ class rai_two_dim_simple_manip(rai_env):
 
         self.sequence = self._make_sequence_from_names(["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"])
         # self.sequence = [2, 0, 3, 1, 4]
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = [0, 0]
+
+class rai_two_dim_handover(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_two_dim_handover()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        self.manipulating_env = True
+
+        translated_handover_poses = []
+        for _ in range(100):
+            new_pose = keyframes[1] *1.
+            translation = np.random.rand(2) * 1 - .5
+            new_pose[0:2] += translation
+            new_pose[3:5] += translation
+
+            translated_handover_poses.append(new_pose)
+
+        translated_handover_poses.append(keyframes[1])
+
+        rotated_terminal_poses = []
+        for _ in range(100):
+            new_pose = keyframes[3] *1.
+            rot = np.random.rand(2) * 6 - 3
+            new_pose[2] =rot[0]
+            new_pose[5] = rot[1]
+
+            rotated_terminal_poses.append(new_pose)
+
+        translated_handover_poses.append(keyframes[3])
+
+        self.tasks = [
+            # a1
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1", "obj1"],
+            ),
+            # TODO: make a goal set
+            Task(
+                ["a1", "a2"],
+                GoalSet(translated_handover_poses),
+                # SingleGoal(keyframes[1]),
+                type="hanover",
+                frames=["a2", "obj1"],
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(keyframes[2][self.robot_idx["a2"]]),
+                type="place",
+                frames=["table", "obj1"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[4][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1", "obj2"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[5][self.robot_idx["a1"]]),
+                type="place",
+                frames=["table", "obj2"],
+            ),
+            # terminal
+            # Task(["a1", "a2"], SingleGoal(keyframes[3])),
+            Task(["a1", "a2"], GoalSet(rotated_terminal_poses)),
+        ]
+
+        self.tasks[0].name = "a1_pick_obj1"
+        self.tasks[1].name = "handover"
+        self.tasks[2].name = "a2_place"
+        self.tasks[3].name = "a1_pick_obj2"
+        self.tasks[4].name = "a1_place_obj2"
+        self.tasks[5].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(["a1_pick_obj1", "handover", "a1_pick_obj2", "a1_place_obj2", "a2_place", "terminal"])
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -1329,6 +1421,8 @@ def get_env_by_name(name):
         env = rai_two_dim_simple_manip()
     elif name == "simple_2d":
         env = rai_two_dim_env()
+    elif name == "2d_handover":
+        env = rai_two_dim_handover()
     elif name == "three_agents":
         env = rai_two_dim_three_agent_env()
     elif name == "box_sorting":
