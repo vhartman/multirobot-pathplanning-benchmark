@@ -134,9 +134,11 @@ class rai_env(base_env):
     def get_current_seq_index(self, mode: List[int]) -> int:
         # Approach: iterate throug all indices, find them in the sequence, and check which is the one 
         # that has to be fulfilled first
-        min_sequence_pos = len(self.sequence)
-        for _, m in enumerate(mode):
-            min_sequence_pos = min(self.sequence.index(m), min_sequence_pos)
+        min_sequence_pos = len(self.sequence)-1
+        for i, m in enumerate(mode):
+            # print("robots in task:", self.tasks[m].robots, self.sequence.index(m))
+            if m != self.terminal_mode[i]:
+                min_sequence_pos = min(self.sequence.index(m), min_sequence_pos)
 
         return min_sequence_pos
 
@@ -149,6 +151,7 @@ class rai_env(base_env):
         if m != self.terminal_mode:
             return False
 
+        # TODO: this is not necessarily true!
         terminal_task_idx = self.sequence[-1]
         terminal_task = self.tasks[terminal_task_idx]
         involved_robots = terminal_task.robots
@@ -193,6 +196,8 @@ class rai_env(base_env):
 
     def get_next_mode(self, q: Configuration, mode: List[int]) -> List[int]:
         seq_idx = self.get_current_seq_index(mode)
+
+        # print('seq_idx', seq_idx)
 
         # find the next mode for the currently constrained one(s)
         task_idx = self.sequence[seq_idx]
@@ -649,6 +654,7 @@ class rai_random_two_dim(rai_env):
         
         # TODO: there seems to be a bug somewhere if we do not have a terminal mode!
         q_home = self.C.getJointState()
+        # self.tasks.append(Task(self.robots, GoalRegion(self.limits)))
         self.tasks.append(Task(self.robots, SingleGoal(q_home)))
         self.tasks[-1].name = 'terminal'
 
@@ -657,6 +663,9 @@ class rai_random_two_dim(rai_env):
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        print('seq', self.sequence)
+        print('terminal', self.terminal_mode)
 
         self.tolerance = 0.05
 
@@ -1394,11 +1403,12 @@ def visualize_modes(env: rai_env):
     m = env.start_mode
     for i in range(len(env.sequence)):
         print('mode', m)
-        if m == env.terminal_mode:
-            switching_robots = [r for r in env.robots]
-        else:
+        # if m == env.terminal_mode:
+        #     print('is terminal mode')
+        #     switching_robots = [r for r in env.robots]
+        # else:
             # find the robot(s) that needs to switch the mode
-            switching_robots = env.get_goal_constrained_robots(m)
+        switching_robots = env.get_goal_constrained_robots(m)
 
         q = []
         task = env.get_active_task(m)
@@ -1432,14 +1442,17 @@ def visualize_modes(env: rai_env):
             env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m),
         )
 
-        m = env.get_next_mode(None, m)
-
         # colls = env.C.getCollisions()
         # for c in colls:
         #     if c[2] < 0:
         #         print(c)
 
         env.show()
+
+        if m == env.terminal_mode:
+            break
+
+        m = env.get_next_mode(None, m)
 
 def display_path(
     env,

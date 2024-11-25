@@ -30,16 +30,27 @@ class Goal(ABC):
     def sample(self):
         pass
 
+# class DummyGoal(ABC):
+#     def __init__(self):
+#         pass
+
+#     def satisfies_constraints(self, q, tolerance):
+#         return True
+
+#     def sample(self):
+#         pass
 
 class GoalRegion(Goal):
-    def __init__(self):
-        pass
+    def __init__(self, limits:NDArray):
+        self.limits = limits
 
-    def satisfies_constraints(self, q, tolerance):
-        pass
+    def satisfies_constraints(self, q:NDArray, tolerance):
+        if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
+            return True
 
     def sample(self):
-        pass
+        q = np.random.rand(len(self.limits[0,:])) * (self.limits[1, :] - self.limits[0, :]) + self.limits[0, :]
+        return q
 
 # TODO: implement sampler to sample a goal
 class ConstrainedGoal(Goal):
