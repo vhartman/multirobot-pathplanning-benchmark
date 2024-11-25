@@ -104,7 +104,6 @@ class State:
         self.mode = m
 
 
-# TODO: switch everything to the State from above?
 class base_env(ABC):
     def __init__(self):
         pass

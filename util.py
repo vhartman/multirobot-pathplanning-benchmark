@@ -5,7 +5,8 @@ from rai_envs import *
 
 from typing import List
 
-from jax import jit
+# TODO:
+# add cost/distance to the envs
 
 def state_dist(start: State, end: State) -> float:
     if start.mode != end.mode:

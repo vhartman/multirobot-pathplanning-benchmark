@@ -188,25 +188,29 @@ def make_random_two_dim(num_agents:int=3, num_obstacles:int=5, num_goals:int=3, 
     added_agents = 0
     agent_names = []
 
+    colors = []
+
     while added_agents < num_agents:
         c_coll_tmp = ry.Config()
         c_coll_tmp.addConfigurationCopy(C)
 
         pos = np.random.rand(2) * 4 - 2
+        size = np.random.rand(2) * 0.2 + 0.3
+        color = np.random.rand(3)
 
         pre_agent_1_frame = (
             c_coll_tmp.addFrame(f"pre_agent_{added_agents}_frame")
             .setParent(table)
             .setPosition(table.getPosition() + [pos[0], pos[1], 0.07])
             .setShape(ry.ST.marker, size=[0.05])
-            .setColor([1, 0.5, 0])
             .setContact(0)
             .setJoint(ry.JT.rigid)
         )
 
         c_coll_tmp.addFrame(f"a{added_agents}").setParent(pre_agent_1_frame).setShape(
+            # ry.ST.box, size=[size[0], size[1], 0.06, 0.2]
             ry.ST.cylinder, size=[4, 0.1, 0.06, 0.2]
-        ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-3, 3, -3, 3, -3.14, 3.14]))
+        ).setColor(color).setContact(1).setJoint(ry.JT.transXYPhi, limits=np.array([-3, 3, -3, 3, -3.14, 3.14]))
 
         binary_collision_free = c_coll_tmp.getCollisionFree()
         if binary_collision_free:
@@ -215,6 +219,8 @@ def make_random_two_dim(num_agents:int=3, num_obstacles:int=5, num_goals:int=3, 
 
             C.clear()
             C.addConfigurationCopy(c_coll_tmp)
+
+            colors.append(color)
         # else:
         #     colls = c_coll_tmp.getCollisions()
         #     for c in colls:
@@ -255,7 +261,7 @@ def make_random_two_dim(num_agents:int=3, num_obstacles:int=5, num_goals:int=3, 
     keyframes = []
 
 
-    for agent in agent_names:
+    for i, agent in enumerate(agent_names):
         added_goals = 0
         while added_goals < num_goals:
             pos = np.random.rand(2) * 4 - 2
@@ -273,6 +279,11 @@ def make_random_two_dim(num_agents:int=3, num_obstacles:int=5, num_goals:int=3, 
             # c_coll_tmp.view(True)
 
             if binary_collision_free:
+                color = colors[i]
+                C.addFrame(f"goal_{agent}_{added_goals}").setParent(C.getFrame('table')).setShape(
+                    ry.ST.box, size=[0.1, 0.1, 0.06, 0.005]
+                ).setColor([color[0], color[1], color[2], 0.3]).setContact(0).setRelativePosition([pos[0], pos[1], 0.07])
+
                 keyframes.append(q)
                 added_goals += 1
 
