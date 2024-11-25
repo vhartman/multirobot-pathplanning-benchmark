@@ -131,13 +131,13 @@ class NpConfiguration(Configuration):
         # for i, other in enumerate(batch_other):
         #     batch_q[i, :] = other.q  # Fill in directly without overhead
         # diff = pt.q - batch_q
-        
+
         # num_items = len(batch_other)
         # q_dim = pt.q.size
 
         # # if num_items > cls._batch_size:
         # #   cls._batch_size += 5000
-        
+
         # # Ensure memory is initialized
         # cls._initialize_memory(max_size=10000, q_dim=q_dim)
 
@@ -145,7 +145,6 @@ class NpConfiguration(Configuration):
         # for i, other in enumerate(batch_other):
         #     cls._preallocated_q[i, :] = other.state.q.q
         # # cls._preallocated_q[:num_items, :] = np.array([other.state.q.q for other in batch_other])
-
 
         # # Use only the relevant part of the array
         # batch_q = cls._preallocated_q[:num_items, :]

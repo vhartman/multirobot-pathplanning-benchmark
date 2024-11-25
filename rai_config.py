@@ -141,7 +141,12 @@ def make_2d_rai_env(view: bool = False):
 
     # komo.addObjective([3, -1], ry.FS.poseDiff, ['a1', 'goal2'], ry.OT.eq, [1e1])
     komo.addObjective(
-        [3, -1], ry.FS.positionDiff, ["a2", "pre_agent_2_frame"], ry.OT.eq, [1e1], [0, 0.5, 0]
+        [3, -1],
+        ry.FS.positionDiff,
+        ["a2", "pre_agent_2_frame"],
+        ry.OT.eq,
+        [1e1],
+        [0, 0.5, 0],
     )
 
     solver = ry.NLP_Solver(komo.nlp(), verbose=4)
@@ -324,7 +329,7 @@ def make_two_dim_handover(view: bool = False):
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
         .setParent(table)
-        .setPosition(table.getPosition() + [0, 0., 0.07])
+        .setPosition(table.getPosition() + [0, 0.0, 0.07])
         # .setPosition(table.getPosition() + [-0.5, 0.8, 0.07])
         .setShape(ry.ST.marker, size=[0.05])
         .setColor([1, 0.5, 0])
@@ -341,7 +346,7 @@ def make_two_dim_handover(view: bool = False):
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
         .setParent(table)
-        .setPosition(table.getPosition() + [0.0, 0., 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
         # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
         .setShape(ry.ST.marker, size=[0.05])
         .setColor([1, 0.5, 0])
@@ -620,12 +625,12 @@ def make_piano_mover_env(view: bool = False):
         ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.075]
     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
-    ).setJointState([0.0, -0.5, 0.])
+    ).setJointState([0.0, -0.5, 0.0])
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
         .setParent(table)
-        .setPosition(table.getPosition() + [0, 0., 0.07])
+        .setPosition(table.getPosition() + [0, 0.0, 0.07])
         .setShape(ry.ST.marker, size=[0.05])
         .setColor([1, 0.5, 0])
         .setContact(0)
@@ -798,12 +803,12 @@ def make_two_dim_tunnel_env(view: bool = False):
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
-    ).setJointState([1.5, -0., 0.])
+    ).setJointState([1.5, -0.0, 0.0])
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
         .setParent(table)
-        .setPosition(table.getPosition() + [0, 0., 0.07])
+        .setPosition(table.getPosition() + [0, 0.0, 0.07])
         .setShape(ry.ST.marker, size=[0.05])
         .setColor([1, 0.5, 0])
         .setContact(0)
@@ -814,38 +819,42 @@ def make_two_dim_tunnel_env(view: bool = False):
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
-    ).setJointState([-1.5, -0., 0.0])
+    ).setJointState([-1.5, -0.0, 0.0])
 
     g1_state = np.array([-1.5, -0.5, 0])
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
-    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([g1_state[0], g1_state[1], 0.07])
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition(
+        [g1_state[0], g1_state[1], 0.07]
+    )
 
-    g2_state = np.array([.5, +0.8, 0])
+    g2_state = np.array([0.5, +0.8, 0])
     C.addFrame("goal2").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
-    ).setColor([0.5, 0.5, 0, 0.3]).setContact(0).setRelativePosition([g2_state[0], g2_state[1], 0.07])
+    ).setColor([0.5, 0.5, 0, 0.3]).setContact(0).setRelativePosition(
+        [g2_state[0], g2_state[1], 0.07]
+    )
 
     C.addFrame("obs1").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0., 0.3, 0.07]
+        C.getFrame("table").getPosition() + [0.0, 0.3, 0.07]
     ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("obs2").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0., -0.3, 0.07]
+        C.getFrame("table").getPosition() + [0.0, -0.3, 0.07]
     ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("obs3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0., -0.9, 0.07]
+        C.getFrame("table").getPosition() + [0.0, -0.9, 0.07]
     ).setShape(ry.ST.box, size=[0.2, 0.8, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("obs4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0., 1.15, 0.07]
+        C.getFrame("table").getPosition() + [0.0, 1.15, 0.07]
     ).setShape(ry.ST.box, size=[0.2, 1.4, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
@@ -853,9 +862,7 @@ def make_two_dim_tunnel_env(view: bool = False):
     if view:
         C.view(True)
 
-    keyframes = [
-        g1_state, g2_state, C.getJointState()
-    ]
+    keyframes = [g1_state, g2_state, C.getJointState()]
 
     return C, keyframes
 
@@ -874,7 +881,7 @@ def make_2d_rai_env_3_agents(view: bool = False):
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
         .setParent(table)
-        .setPosition(table.getPosition() + [0.0, 0., 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
         .setShape(ry.ST.marker, size=[0.05])
         .setColor([1, 0.5, 0])
         .setContact(0)
@@ -908,7 +915,7 @@ def make_2d_rai_env_3_agents(view: bool = False):
     pre_agent_3_frame = (
         C.addFrame("pre_agent_3_frame")
         .setParent(table)
-        .setPosition(table.getPosition() + [0., 0.0, 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
         .setShape(ry.ST.marker, size=[0.05])
         .setColor([1, 0.5, 0])
         .setContact(0)
@@ -1500,23 +1507,19 @@ def make_box_rearrangement_env(view: bool = False):
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 np.random.rand(3)
-            ).setContact(1).setQuaternion(perturbation_quaternion).setJoint(
-                ry.JT.rigid
-            )
+            ).setContact(1).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
 
             C.addFrame("goal" + str(j) + str(k)).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 [0, 0, 0.1, 0.5]
-            ).setContact(0).setQuaternion(perturbation_quaternion).setJoint(
-                ry.JT.rigid
-            )
+            ).setContact(0).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
 
             boxes.append("box" + str(j) + str(k))
             goals.append("goal" + str(j) + str(k))
-    
+
     if view:
-        C.view(True)    
+        C.view(True)
 
     # figure out what should go where
     random.shuffle(boxes)
@@ -1533,10 +1536,11 @@ def make_box_rearrangement_env(view: bool = False):
             if frame_name != box:
                 c_tmp.getFrame(frame_name).setContact(0)
 
-
-        komo = ry.KOMO(c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
         komo.addObjective(
-            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.]
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
         )
 
         komo.addControlObjective([], 0, 1e-1)
@@ -1603,6 +1607,7 @@ def make_box_rearrangement_env(view: bool = False):
         compute_rearrangment("a1_", box, goal)
 
     return C, keyframes
+
 
 def make_handover_env(view: bool = False):
     C = ry.Config()
