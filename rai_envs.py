@@ -73,6 +73,12 @@ class rai_env(base_env):
 
         self.tolerance = 0.1
 
+    def config_cost(self, start, end):
+        return config_cost(start, end, 'max')
+
+    def batch_config_cost(self, starts, ends):
+        return batch_config_cost(starts, ends, 'max')
+
     def _make_sequence_from_names(self, names):
         sequence = []
 
@@ -330,21 +336,7 @@ class rai_env(base_env):
             m_prev = mode.copy()
             mode = self.get_next_mode(None, mode)
 
-            # figure out which robot switched from the previous mode to this mode
-            # TODO: this does currently not work for multiple robots switching at the same time
-
-            # print("we assume a single switch at a time")
-            # mode_switching_robots = 0
-            # for r in range(len(self.robots)):
-            #     if mode[r] != m_prev[r]:
-            #         # this mode switched
-            #         mode_switching_robot = r
-            #         break
-
             mode_switching_robots = self.get_goal_constrained_robots(m_prev)
-            # print('switching robots:', mode_switching_robots)
-
-            # print(robot_idx, mode_switching_robot)
 
             # set robot to config
             prev_mode_index = m_prev[self.robots.index(mode_switching_robots[0])]
@@ -575,7 +567,6 @@ class rai_two_dim_handover(rai_env):
                 type="pick",
                 frames=["a1", "obj1"],
             ),
-            # TODO: make a goal set
             Task(
                 ["a1", "a2"],
                 GoalSet(translated_handover_poses),
@@ -1403,11 +1394,6 @@ def visualize_modes(env: rai_env):
     m = env.start_mode
     for i in range(len(env.sequence)):
         print('mode', m)
-        # if m == env.terminal_mode:
-        #     print('is terminal mode')
-        #     switching_robots = [r for r in env.robots]
-        # else:
-            # find the robot(s) that needs to switch the mode
         switching_robots = env.get_goal_constrained_robots(m)
 
         q = []
@@ -1419,8 +1405,6 @@ def visualize_modes(env: rai_env):
 
         print("switching robots: ", switching_robots)
 
-        # env.show()
-        
         for j, r in enumerate(env.robots):
             if r in switching_robots:
                 # TODO: need to check all goals here

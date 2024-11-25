@@ -1,6 +1,4 @@
 import numpy as np
-import jax
-import jax.numpy as jnp
 
 from typing import List
 from numpy.typing import NDArray
@@ -166,13 +164,13 @@ class NpConfiguration(Configuration):
 
 
 def config_dist(
-    q_start: Configuration, q_end: Configuration, metric: str = "."
+    q_start: Configuration, q_end: Configuration, metric: str = "euclidean"
 ) -> float:
     return type(q_start)._dist(q_start, q_end, metric)
 
 
 def batch_config_dist(
-    pt: Configuration, batch_pts: List[Configuration], metric: str = "."
+    pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean"
 ) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 

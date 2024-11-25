@@ -937,13 +937,13 @@ def make_2d_rai_env_3_agents(view: bool = False):
 
     C.addFrame("obs1").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0.75, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.5, 0.2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.box, size=[0.499, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("obs2").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [-0.75, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.5, 0.2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.box, size=[0.499, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
@@ -955,25 +955,25 @@ def make_2d_rai_env_3_agents(view: bool = False):
 
     C.addFrame("wall1").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0, 1.1, 0.07]
-    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.box, size=[2.39, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall2").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0, -1.1, 0.07]
-    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.box, size=[2.39, 0.2, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall3").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [1.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.box, size=[0.2, 1.99, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("wall4").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [-1.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 2, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.box, size=[0.2, 1.99, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
