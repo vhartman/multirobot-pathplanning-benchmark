@@ -4,7 +4,7 @@ import random
 import argparse
 import time
 
-from typing import List
+from typing import List, Dict
 from numpy.typing import NDArray
 
 # from dependency_graph import DependencyGraph
@@ -41,9 +41,10 @@ class rai_env(base_env):
     # robot things
     C: ry.Config
     robots: List[str]
-    robot_dims: dict[str]
+    robot_dims: Dict[str, NDArray]
+    robot_idx: Dict[str, NDArray]
     start_pos: Configuration
-    bounds: NDArray
+    limits: NDArray
     
     # sequence things
     sequence: List[int]
@@ -653,6 +654,43 @@ class rai_random_two_dim(rai_env):
 
         random.shuffle(self.sequence)
         self.sequence.append(len(self.tasks)-1)
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = [0, 0]
+
+
+class rai_hallway_two_dim(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_two_dim_tunnel_env()
+        # self.C.view(True)
+
+        self.robots = ['a1', 'a2']
+
+        super().__init__()
+
+        self.tasks = []
+        self.sequence = []
+
+        print(keyframes)
+
+        self.tasks = [
+            Task(['a1'], SingleGoal(keyframes[0])),
+            Task(['a2'], SingleGoal(keyframes[1])),
+            Task(['a1', 'a2'], SingleGoal(keyframes[2])),
+        ]
+
+        self.tasks[0].name = "a1_goal_1"
+        self.tasks[1].name = "a2_goal_1"
+        self.tasks[2].name = "terminal"
+        
+        self.sequence = [0, 1, 2]
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -1454,6 +1492,8 @@ def get_env_by_name(name):
         env = rai_two_dim_simple_manip()
     elif name == "simple_2d":
         env = rai_two_dim_env()
+    elif name == "hallway":
+        env = rai_hallway_two_dim()
     elif name=="random_2d":
         env = rai_random_two_dim()
     elif name == "2d_handover":
