@@ -70,6 +70,7 @@ class ListConfiguration(Configuration):
 
 
 class NpConfiguration(Configuration):
+    # __slots__ = 'slice', 'q', '_num_agents'
     def __init__(self, q: NDArray, slice: List[int]):
         self.slice = slice
         self.q = q

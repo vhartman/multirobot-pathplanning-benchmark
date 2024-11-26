@@ -130,7 +130,7 @@ def state_dist(start: State, end: State) -> float:
 
     return config_dist(start.q, end.q)
 
-
+# TODO: split into env + problem specification
 class base_env(ABC):
     def __init__(self):
         pass

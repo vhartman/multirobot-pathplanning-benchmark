@@ -225,7 +225,6 @@ class rai_env(base_env):
 
         return m_next
 
-    # TODO: this does currently not work for the terminal mode
     def get_active_task(self, mode: List[int]) -> Task:
         seq_idx = self.get_current_seq_index(mode)
         return self.tasks[self.sequence[seq_idx]]
@@ -274,7 +273,7 @@ class rai_env(base_env):
 
         idx = list(range(int(N)))
         if randomize_order:
-            random.shuffle(idx)
+            np.random.shuffle(idx)
 
         for i in idx:
             # print(i / (N-1))
@@ -288,7 +287,7 @@ class rai_env(base_env):
     def is_path_collision_free(self, path: List[State], randomize_order=True) -> bool:
         idx = list(range(len(path) - 1))
         if randomize_order:
-            random.shuffle(idx)
+            np.random.shuffle(idx)
 
         for i in idx:
             # skip transition nodes

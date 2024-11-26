@@ -803,7 +803,7 @@ def make_two_dim_tunnel_env(view: bool = False):
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
-    ).setJointState([1.5, -0.0, 0.0])
+    ).setJointState([1.5, -0.0, 0])
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
@@ -819,16 +819,17 @@ def make_two_dim_tunnel_env(view: bool = False):
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
-    ).setJointState([-1.5, -0.0, 0.0])
+    ).setJointState([-1.5, -0.0, 0])
 
     g1_state = np.array([-1.5, -0.5, 0])
+    g2_state = np.array([0.5, +0.8, 0])
+
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
     ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition(
         [g1_state[0], g1_state[1], 0.07]
     )
 
-    g2_state = np.array([0.5, +0.8, 0])
     C.addFrame("goal2").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
     ).setColor([0.5, 0.5, 0, 0.3]).setContact(0).setRelativePosition(
