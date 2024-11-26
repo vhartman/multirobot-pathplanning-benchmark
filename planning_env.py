@@ -2,18 +2,13 @@ import robotic as ry
 import numpy as np
 
 from abc import ABC, abstractmethod
-# from matplotlib import pyplot as plt
-# import random
 
 from typing import List
 from numpy.typing import NDArray
 
-from configuration import *
+from configuration import Configuration
 
 # from dependency_graph import DependencyGraph
-
-# questions:
-# - how to sample? in env? how to do goal sampling?
 
 
 class Goal(ABC):
@@ -21,7 +16,7 @@ class Goal(ABC):
         pass
 
     @abstractmethod
-    def satisfies_constraints(self, q):
+    def satisfies_constraints(self, q: NDArray, tolerance:float):
         pass
 
     @abstractmethod
@@ -44,7 +39,7 @@ class GoalRegion(Goal):
     def __init__(self, limits: NDArray):
         self.limits = limits
 
-    def satisfies_constraints(self, q: NDArray, tolerance):
+    def satisfies_constraints(self, q: NDArray, _):
         if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
             return True
 

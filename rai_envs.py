@@ -10,8 +10,8 @@ from numpy.typing import NDArray
 # from dependency_graph import DependencyGraph
 
 from rai_config import *
-from planning_env import *
-from util import *
+from planning_env import base_env, State, Task, SingleGoal, GoalSet, GoalRegion
+from configuration import Configuration, NpConfiguration, config_dist, config_cost, batch_config_cost
 
 
 def get_joint_indices(C: ry.Config, prefix: str) -> List[int]:
