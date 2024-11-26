@@ -1057,7 +1057,7 @@ def make_box_sorting_env(view: bool = False):
     #         .setParent(C.getFrame('table')) \
     #         .setRelativePosition([-0.3, 0.5, 0]) \
     #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
-    robot_path = os.path.join(os.path.dirname(__file__), "ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "models/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -1277,7 +1277,7 @@ def make_egg_carton_env(view: bool = False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "models/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -1465,7 +1465,7 @@ def make_box_rearrangement_env(view: bool = False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "models/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -1625,7 +1625,7 @@ def make_handover_env(view: bool = False):
     #         .setParent(C.getFrame('table')) \
     #         .setRelativePosition([-0.3, 0.5, 0]) \
     #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
-    robot_path = os.path.join(os.path.dirname(__file__), "ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "models/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(table).setRelativePosition(
         [-0.5, -0.5, 0.0]
@@ -1892,7 +1892,7 @@ def quaternion_from_z_rotation(angle):
 def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
     C = ry.Config()
 
-    robot_path = os.path.join(os.path.dirname(__file__), "ur10/ur_welding.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "models/ur10/ur_welding.g")
 
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
         ry.ST.box, size=[2, 2, 0.06, 0.005]
@@ -2070,7 +2070,7 @@ def make_shelf_env(view: bool = False):
 def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = False):
     C = ry.Config()
 
-    path = os.path.join(os.path.dirname(__file__), "bottle.g")
+    path = os.path.join(os.path.dirname(__file__), "models/bottle.g")
     C.addFile(path).setPosition([1, 0, 0.2])
 
     if remove_non_moved_bottles:
@@ -2179,10 +2179,12 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
 def make_mobile_manip_env(view: bool = False):
     C = ry.Config()
 
-    C.addFile("mobile-manipulator-restricted.g", namePrefix="a1_").setPosition(
+    mobile_robot_path = os.path.join(os.path.dirname(__file__), "models/mobile-manipulator-restricted.g")
+
+    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition(
         [1, 0, 0.2]
     )
-    C.addFile("mobile-manipulator-restricted.g", namePrefix="a1_").setPosition(
+    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition(
         [-1, 0, 0.2]
     )
 
