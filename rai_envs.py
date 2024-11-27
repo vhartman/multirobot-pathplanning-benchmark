@@ -13,6 +13,7 @@ from rai_config import *
 from planning_env import base_env, State, Task, SingleGoal, GoalSet, GoalRegion
 from configuration import Configuration, NpConfiguration, config_dist, config_cost, batch_config_cost
 
+from util import generate_binary_search_indices
 
 def get_joint_indices(C: ry.Config, prefix: str) -> List[int]:
     all_joints_weird = C.getJointNames()
@@ -273,7 +274,8 @@ class rai_env(base_env):
 
         idx = list(range(int(N)))
         if randomize_order:
-            np.random.shuffle(idx)
+            # np.random.shuffle(idx)
+            idx = generate_binary_search_indices(int(N)).copy()
 
         for i in idx:
             # print(i / (N-1))
