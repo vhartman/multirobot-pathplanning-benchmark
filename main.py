@@ -1,30 +1,36 @@
-from rai_envs import *
+import os
+import json
 import cProfile
-from datetime import datetime
-from planner import *
+from rrtstar_planner import *
+from rai_envs import *
+from util import *
 
+def execute_planner(args, config_manager):
+    env = get_env_by_name(args.env_name)
+    env.show()
+    
+    if args.planner == "rrtstar":
+        rrt_star = RRTstar(env, config_manager)
+        path = rrt_star.Plan()
+        path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(path)}
+        config_manager.logger.info("Path: %s", json.dumps(path_dict, indent=4))
 
+def main():
+    parser = argparse.ArgumentParser(description="Environment Viewer")
+    parser.add_argument("env_name", nargs="?", default="default", help="Environment to show")
+    parser.add_argument("--planner", choices=["rrtstar"], required=True, help="Planner type")
+    args = parser.parse_args()
+
+    config_manager = ConfigManager('config.yaml')
+    config_manager.log_params(args)
+
+    if config_manager.cprofiler:
+        with cProfile.Profile() as profiler:
+            execute_planner(args, config_manager)
+        profiler.dump_stats(os.path.join(config_manager.output_dir, 'results.prof'))
+        os.system(f"snakeviz {os.path.join(config_manager.output_dir, 'results.prof')}")
+    else:
+        execute_planner(args, config_manager)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Env shower")
-    parser.add_argument("env_name", nargs="?", default="default", help="env to show")
-    parser.add_argument(
-        "--planner",
-        choices=["RRTstar"],
-        required=True,
-        help="Select the type of planner",
-    )
-    args = parser.parse_args()
-    time = datetime.now().strftime("%H%M%S")
-    timestamp = datetime.now().strftime("%d%m%y") + "_" + time
-    directory = f'./output/evaluation/{timestamp}/'
-    os.makedirs(os.path.dirname(directory), exist_ok=True)
-    with cProfile.Profile() as profiler:
-        env = get_env_by_name(args.env_name)
-        if args.planner == "RRTstar":
-            print("RRTstar")
-            user_defined_metrics
-            rrt_star = RRTstar(env, user_defined_metrics)
-            env.show()
-    profiler.dump_stats(directory + 'results.prof')
-    os.system(f"snakeviz {directory + 'results.prof'}")
+    main()

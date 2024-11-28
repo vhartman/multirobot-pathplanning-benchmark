@@ -4,7 +4,7 @@ import random
 import argparse
 import time
 
-from typing import List
+from typing import List, Dict
 from numpy.typing import NDArray
 
 # from dependency_graph import DependencyGraph
@@ -12,19 +12,6 @@ from numpy.typing import NDArray
 from rai_config import *
 from planning_env import *
 from util import *
-
-
-def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
-    links = []
-
-    for name in C.getJointNames():
-        if prefix in name:
-            name = name.split(":")[0]
-
-            if name not in links:
-                links.append(name)
-
-    return links
 
 
 def get_joint_indices(C: ry.Config, prefix: str) -> List[int]:
@@ -54,16 +41,17 @@ class rai_env(base_env):
     # robot things
     C: ry.Config
     robots: List[str]
-    robot_dims: dict[str]
+    robot_dims: Dict[str, NDArray]
+    robot_idx: Dict[str, NDArray]
     start_pos: Configuration
-    bounds: NDArray
-    
+    limits: NDArray
+
     # sequence things
     sequence: List[int]
     tasks: List[Task]
     start_mode: List[int]
     terminal_mode: List[int]
-    
+
     # misc
     tolerance: float
 
@@ -85,6 +73,12 @@ class rai_env(base_env):
 
         self.tolerance = 0.1
 
+    def config_cost(self, start, end):
+        return config_cost(start, end, "max")
+
+    def batch_config_cost(self, starts, ends):
+        return batch_config_cost(starts, ends, "max")
+
     def _make_sequence_from_names(self, names):
         sequence = []
 
@@ -94,7 +88,7 @@ class rai_env(base_env):
                 if name == task.name:
                     sequence.append(idx)
                     no_task_with_name_found = False
-            
+
             if no_task_with_name_found:
                 raise ValueError(f"Task with name {name} not found.")
 
@@ -144,11 +138,13 @@ class rai_env(base_env):
 
     # TODO: this only works for the sequence, i.e. a single task being active
     def get_current_seq_index(self, mode: List[int]) -> int:
-        # Approach: iterate throug all indices, find them in the sequence, and check which is the one 
+        # Approach: iterate throug all indices, find them in the sequence, and check which is the one
         # that has to be fulfilled first
-        min_sequence_pos = len(self.sequence)
-        for _, m in enumerate(mode):
-            min_sequence_pos = min(self.sequence.index(m), min_sequence_pos)
+        min_sequence_pos = len(self.sequence) - 1
+        for i, m in enumerate(mode):
+            # print("robots in task:", self.tasks[m].robots, self.sequence.index(m))
+            if m != self.terminal_mode[i]:
+                min_sequence_pos = min(self.sequence.index(m), min_sequence_pos)
 
         return min_sequence_pos
 
@@ -161,6 +157,7 @@ class rai_env(base_env):
         if m != self.terminal_mode:
             return False
 
+        # TODO: this is not necessarily true!
         terminal_task_idx = self.sequence[-1]
         terminal_task = self.tasks[terminal_task_idx]
         involved_robots = terminal_task.robots
@@ -169,7 +166,7 @@ class rai_env(base_env):
         for r in involved_robots:
             r_idx = self.robots.index(r)
             q_concat.append(q.robot_state(r_idx))
-        
+
         q_concat = np.concatenate(q_concat)
 
         if terminal_task.goal.satisfies_constraints(q_concat, self.tolerance):
@@ -195,7 +192,7 @@ class rai_env(base_env):
         for r in robots_with_constraints_in_current_mode:
             r_idx = self.robots.index(r)
             q_concat.append(q.robot_state(r_idx))
-            
+
         q_concat = np.concatenate(q_concat)
 
         if task.goal.satisfies_constraints(q_concat, self.tolerance):
@@ -205,6 +202,8 @@ class rai_env(base_env):
 
     def get_next_mode(self, q: Configuration, mode: List[int]) -> List[int]:
         seq_idx = self.get_current_seq_index(mode)
+
+        # print('seq_idx', seq_idx)
 
         # find the next mode for the currently constrained one(s)
         task_idx = self.sequence[seq_idx]
@@ -226,7 +225,6 @@ class rai_env(base_env):
 
         return m_next
 
-    # TODO: this does currently not work for the terminal mode
     def get_active_task(self, mode: List[int]) -> Task:
         seq_idx = self.get_current_seq_index(mode)
         return self.tasks[self.sequence[seq_idx]]
@@ -246,18 +244,18 @@ class rai_env(base_env):
 
         self.set_to_mode(m)
         self.C.setJointState(q)
-        self.C.computeCollisions()
+
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
             return True
-        
+
         col = self.C.getCollisionsTotalPenetration()
         # print(col)
-        # self.C.view(True)
+        # self.C.view(False)
         if col > collision_tolerance:
             # self.C.view(False)
             return False
- 
+
         return True
 
     def is_edge_collision_free(
@@ -275,7 +273,7 @@ class rai_env(base_env):
 
         idx = list(range(int(N)))
         if randomize_order:
-            random.shuffle(idx)
+            np.random.shuffle(idx)
 
         for i in idx:
             # print(i / (N-1))
@@ -289,7 +287,7 @@ class rai_env(base_env):
     def is_path_collision_free(self, path: List[State], randomize_order=True) -> bool:
         idx = list(range(len(path) - 1))
         if randomize_order:
-            random.shuffle(idx)
+            np.random.shuffle(idx)
 
         for i in idx:
             # skip transition nodes
@@ -337,21 +335,7 @@ class rai_env(base_env):
             m_prev = mode.copy()
             mode = self.get_next_mode(None, mode)
 
-            # figure out which robot switched from the previous mode to this mode
-            # TODO: this does currently not work for multiple robots switching at the same time
-
-            # print("we assume a single switch at a time")
-            # mode_switching_robots = 0
-            # for r in range(len(self.robots)):
-            #     if mode[r] != m_prev[r]:
-            #         # this mode switched
-            #         mode_switching_robot = r
-            #         break
-
             mode_switching_robots = self.get_goal_constrained_robots(m_prev)
-            # print('switching robots:', mode_switching_robots)
-
-            # print(robot_idx, mode_switching_robot)
 
             # set robot to config
             prev_mode_index = m_prev[self.robots.index(mode_switching_robots[0])]
@@ -451,8 +435,17 @@ class rai_two_dim_env(rai_env):
             # r2
             Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
             # terminal mode
-            Task(["a1", "a2"], SingleGoal(np.concatenate([keyframes[0][self.robot_idx["a1"]],
-                                                          keyframes[2][self.robot_idx["a2"]]])))
+            Task(
+                ["a1", "a2"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[0][self.robot_idx["a1"]],
+                            keyframes[2][self.robot_idx["a2"]],
+                        ]
+                    )
+                ),
+            ),
         ]
 
         self.tasks[0].name = "a1_goal"
@@ -460,7 +453,9 @@ class rai_two_dim_env(rai_env):
         self.tasks[2].name = "terminal"
 
         # # TODO: this should eventually be replaced by a dependency graph
-        self.sequence = self._make_sequence_from_names(["a2_goal", "a1_goal", "terminal"])
+        self.sequence = self._make_sequence_from_names(
+            ["a2_goal", "a1_goal", "terminal"]
+        )
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -519,7 +514,17 @@ class rai_two_dim_simple_manip(rai_env):
                 frames=["table", "obj2"],
             ),
             # terminal
-            Task(["a1", "a2"], SingleGoal(np.concatenate([keyframes[2][self.robot_idx["a1"]], keyframes[2][self.robot_idx["a2"]]]))),
+            Task(
+                ["a1", "a2"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[2][self.robot_idx["a1"]],
+                            keyframes[2][self.robot_idx["a2"]],
+                        ]
+                    )
+                ),
+            ),
         ]
 
         self.tasks[0].name = "a1_pick"
@@ -528,7 +533,9 @@ class rai_two_dim_simple_manip(rai_env):
         self.tasks[3].name = "a2_place"
         self.tasks[4].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"])
+        self.sequence = self._make_sequence_from_names(
+            ["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"]
+        )
         # self.sequence = [2, 0, 3, 1, 4]
 
         self.start_mode = self._make_start_mode_from_sequence()
@@ -540,6 +547,7 @@ class rai_two_dim_simple_manip(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         self.prev_mode = [0, 0]
+
 
 class rai_two_dim_handover(rai_env):
     def __init__(self):
@@ -554,8 +562,8 @@ class rai_two_dim_handover(rai_env):
 
         translated_handover_poses = []
         for _ in range(100):
-            new_pose = keyframes[1] *1.
-            translation = np.random.rand(2) * 1 - .5
+            new_pose = keyframes[1] * 1.0
+            translation = np.random.rand(2) * 1 - 0.5
             new_pose[0:2] += translation
             new_pose[3:5] += translation
 
@@ -565,14 +573,14 @@ class rai_two_dim_handover(rai_env):
 
         rotated_terminal_poses = []
         for _ in range(100):
-            new_pose = keyframes[3] *1.
+            new_pose = keyframes[3] * 1.0
             rot = np.random.rand(2) * 6 - 3
-            new_pose[2] =rot[0]
+            new_pose[2] = rot[0]
             new_pose[5] = rot[1]
 
             rotated_terminal_poses.append(new_pose)
 
-        translated_handover_poses.append(keyframes[3])
+        rotated_terminal_poses.append(keyframes[3])
 
         self.tasks = [
             # a1
@@ -582,7 +590,6 @@ class rai_two_dim_handover(rai_env):
                 type="pick",
                 frames=["a1", "obj1"],
             ),
-            # TODO: make a goal set
             Task(
                 ["a1", "a2"],
                 GoalSet(translated_handover_poses),
@@ -620,7 +627,103 @@ class rai_two_dim_handover(rai_env):
         self.tasks[4].name = "a1_place_obj2"
         self.tasks[5].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(["a1_pick_obj1", "handover", "a1_pick_obj2", "a1_place_obj2", "a2_place", "terminal"])
+        self.sequence = self._make_sequence_from_names(
+            [
+                "a1_pick_obj1",
+                "handover",
+                "a1_pick_obj2",
+                "a1_place_obj2",
+                "a2_place",
+                "terminal",
+            ]
+        )
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = [0, 0]
+
+
+class rai_random_two_dim(rai_env):
+    def __init__(self):
+        num_robots = 3
+        num_goals = 4
+        self.C, keyframes = make_random_two_dim(
+            num_agents=num_robots, num_goals=num_goals, num_obstacles=10
+        )
+        # self.C.view(True)
+
+        self.robots = [f"a{i}" for i in range(num_robots)]
+
+        super().__init__()
+
+        self.tasks = []
+        self.sequence = []
+
+        print(keyframes)
+
+        cnt = 0
+        for r in self.robots:
+            for i in range(num_goals):
+                self.tasks.append(Task([r], SingleGoal(keyframes[cnt])))
+                self.tasks[-1].name = f"goal_{r}_{i}"
+                self.sequence.append(cnt)
+
+                cnt += 1
+
+        # TODO: there seems to be a bug somewhere if we do not have a terminal mode!
+        q_home = self.C.getJointState()
+        # self.tasks.append(Task(self.robots, GoalRegion(self.limits)))
+        self.tasks.append(Task(self.robots, SingleGoal(q_home)))
+        self.tasks[-1].name = "terminal"
+
+        random.shuffle(self.sequence)
+        self.sequence.append(len(self.tasks) - 1)
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        print("seq", self.sequence)
+        print("terminal", self.terminal_mode)
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = [0, 0]
+
+
+class rai_hallway_two_dim(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_two_dim_tunnel_env()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        self.tasks = []
+        self.sequence = []
+
+        print(keyframes)
+
+        self.tasks = [
+            Task(["a1"], SingleGoal(keyframes[0])),
+            Task(["a2"], SingleGoal(keyframes[1])),
+            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+        ]
+
+        self.tasks[0].name = "a1_goal_1"
+        self.tasks[1].name = "a2_goal_1"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = [0, 1, 2]
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -653,12 +756,21 @@ class rai_two_dim_three_agent_env(rai_env):
             # a2
             Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
             Task(["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
-            #a3
+            # a3
             Task(["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
             # terminal
-            Task(["a1", "a2", "a3"], SingleGoal(np.concatenate([keyframes[5][self.robot_idx["a1"]], 
-                                                                keyframes[5][self.robot_idx["a2"]], 
-                                                                keyframes[5][self.robot_idx["a3"]]]))),
+            Task(
+                ["a1", "a2", "a3"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[5][self.robot_idx["a1"]],
+                            keyframes[5][self.robot_idx["a2"]],
+                            keyframes[5][self.robot_idx["a3"]],
+                        ]
+                    )
+                ),
+            ),
         ]
 
         self.tasks[0].name = "a1_goal_1"
@@ -668,7 +780,16 @@ class rai_two_dim_three_agent_env(rai_env):
         self.tasks[4].name = "a3_goal_1"
         self.tasks[5].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(["a1_goal_1", "a1_goal_2", "a2_goal_1", "a2_goal_2", "a3_goal_1", "terminal"])
+        self.sequence = self._make_sequence_from_names(
+            [
+                "a1_goal_1",
+                "a1_goal_2",
+                "a2_goal_1",
+                "a2_goal_2",
+                "a3_goal_1",
+                "terminal",
+            ]
+        )
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -731,8 +852,17 @@ class rai_dual_ur10_arm_env(rai_env):
             Task(["a2"], SingleGoal(self.keyframes[3][self.robot_idx["a2"]])),
             Task(["a2"], SingleGoal(self.keyframes[4][self.robot_idx["a2"]])),
             # terminal
-            Task(["a1", "a2"], SingleGoal(np.concatenate([self.keyframes[2][self.robot_idx["a1"]], 
-                                                          self.keyframes[5][self.robot_idx["a2"]]]))),
+            Task(
+                ["a1", "a2"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            self.keyframes[2][self.robot_idx["a1"]],
+                            self.keyframes[5][self.robot_idx["a2"]],
+                        ]
+                    )
+                ),
+            ),
         ]
 
         self.tasks[0].name = "a1_goal_1"
@@ -741,7 +871,9 @@ class rai_dual_ur10_arm_env(rai_env):
         self.tasks[3].name = "a2_goal_2"
         self.tasks[4].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(["a1_goal_1", "a2_goal_1", "a1_goal_2", "a2_goal_2", "terminal"])
+        self.sequence = self._make_sequence_from_names(
+            ["a1_goal_1", "a2_goal_1", "a1_goal_2", "a2_goal_2", "terminal"]
+        )
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -769,10 +901,14 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
+        # frame_names = self.C.getFrameNames()
+        # # for f in self.C_coll.frames():
+        # for frame_name in frame_names:
+        #     f = self.C.frame(frame_name)
+        #     info = f.info()
+        #     if "shape" in info and info["shape"] == "mesh":
+        #         # self.C_coll.delFrame(f.name)
+        #         self.C_coll.delFrame(frame_name)
 
         self.C.clear()
         self.C.addConfigurationCopy(self.C_coll)
@@ -786,10 +922,12 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
         cnt = 0
         for r in self.robots:
-            self.tasks.extend([
-                Task([r], SingleGoal(keyframes[cnt + i][self.robot_idx[r]]))
-                for i in range(num_waypoints)
-            ])
+            self.tasks.extend(
+                [
+                    Task([r], SingleGoal(keyframes[cnt + i][self.robot_idx[r]]))
+                    for i in range(num_waypoints)
+                ]
+            )
             cnt += num_waypoints + 1
 
         q_home = self.C.getJointState()
@@ -799,14 +937,14 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
         for i in range(num_waypoints):
             for j in range(num_robots):
-                self.sequence.append(i + j*num_waypoints)
+                self.sequence.append(i + j * num_waypoints)
 
         # permute goals, but only the ones that ware waypoints, not the final configuration
         if shuffle_goals:
             random.shuffle(self.sequence)
 
         # append terminal task
-        self.sequence.append(len(self.tasks)-1)
+        self.sequence.append(len(self.tasks) - 1)
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -816,7 +954,7 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
 # goals are poses
 class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
-    def __init__(self, num_pts: int = 2,shuffle_goals:bool=False):
+    def __init__(self, num_pts: int = 2, shuffle_goals: bool = False):
         self.C, keyframes = make_welding_env(view=False, num_pts=num_pts)
 
         self.C_coll = ry.Config()
@@ -848,7 +986,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
                 self.tasks.append(
                     Task([r], SingleGoal(keyframes[cnt][self.robot_idx[r]]))
                 )
-                # self.robot_goals[-1].name = 
+                # self.robot_goals[-1].name =
                 cnt += 1
             cnt += 1
 
@@ -858,13 +996,13 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
         self.sequence = []
         for i in range(num_pts):
             for j, r in enumerate(self.robots):
-                self.sequence.append(i + j*num_pts)
+                self.sequence.append(i + j * num_pts)
 
         # permute goals, but only the ones that ware waypoints, not the final configuration
         if shuffle_goals:
             random.shuffle(self.sequence)
-                
-        self.sequence.append(len(self.tasks)-1)
+
+        self.sequence.append(len(self.tasks) - 1)
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -1022,8 +1160,17 @@ class rai_ur10_arm_egg_carton_env(rai_env):
                 side_effect="remove",
             ),
             # terminal
-            Task(["a1", "a2"], SingleGoal(np.concatenate([keyframes[11][self.robot_idx["a1"]], 
-                                                    keyframes[26][self.robot_idx["a2"]]]))),
+            Task(
+                ["a1", "a2"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[11][self.robot_idx["a1"]],
+                            keyframes[26][self.robot_idx["a2"]],
+                        ]
+                    )
+                ),
+            ),
         ]
 
         # really ugly way to construct this
@@ -1086,8 +1233,17 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
                 frames=["table", "box101"],
                 side_effect="remove",
             ),
-            Task(["a1", "a2"], SingleGoal(np.concatenate([self.keyframes[2][self.robot_idx["a1"]],
-                                                          self.keyframes[5][self.robot_idx["a2"]]]))),
+            Task(
+                ["a1", "a2"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            self.keyframes[2][self.robot_idx["a1"]],
+                            self.keyframes[5][self.robot_idx["a2"]],
+                        ]
+                    )
+                ),
+            ),
         ]
 
         self.tasks[0].name = "a1_goal_1"
@@ -1096,7 +1252,9 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
         self.tasks[3].name = "a2_goal_2"
         self.tasks[4].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(["a1_goal_1", "a2_goal_1", "a1_goal_2", "a2_goal_2", "terminal"])
+        self.sequence = self._make_sequence_from_names(
+            ["a1_goal_1", "a2_goal_1", "a1_goal_2", "a2_goal_2", "terminal"]
+        )
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -1122,7 +1280,6 @@ class rai_ur10_arm_shelf_env:
 
 class rai_ur10_arm_conveyor_env:
     pass
-
 
 
 class rai_ur10_handover_env(rai_env):
@@ -1182,7 +1339,9 @@ class rai_ur10_handover_env(rai_env):
         self.tasks[2].name = "a2_place"
         self.tasks[3].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(["a1_pick", "handover", "a2_place", "terminal"])
+        self.sequence = self._make_sequence_from_names(
+            ["a1_pick", "handover", "a2_place", "terminal"]
+        )
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -1278,8 +1437,17 @@ class rai_ur10_arm_bottle_env(rai_env):
                 type="place",
                 frames=["table", "bottle_5"],
             ),
-            Task(["a0", "a1"], SingleGoal(np.concatenate([keyframes[5][self.robot_idx["a0"]], 
-                                                    keyframes[11][self.robot_idx["a1"]]]))),
+            Task(
+                ["a0", "a1"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[5][self.robot_idx["a0"]],
+                            keyframes[11][self.robot_idx["a1"]],
+                        ]
+                    )
+                ),
+            ),
         ]
 
         self.tasks[0].name = "a1_pick_b1"
@@ -1292,8 +1460,19 @@ class rai_ur10_arm_bottle_env(rai_env):
         self.tasks[7].name = "a2_place_b2"
         self.tasks[8].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(["a1_pick_b1", "a2_pick_b1", "a1_place_b1", "a2_place_b1",
-                                                        "a1_pick_b2", "a2_pick_b2", "a1_place_b2", "a2_place_b2", "terminal"])
+        self.sequence = self._make_sequence_from_names(
+            [
+                "a1_pick_b1",
+                "a2_pick_b1",
+                "a1_place_b1",
+                "a2_place_b1",
+                "a1_pick_b2",
+                "a2_pick_b2",
+                "a1_place_b2",
+                "a2_place_b2",
+                "terminal",
+            ]
+        )
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
@@ -1318,17 +1497,13 @@ class rai_mobile_manip_wall:
 # TODO: make rai-independent
 def visualize_modes(env: rai_env):
     env.show()
-    
+
     q_home = env.start_pos
 
     m = env.start_mode
     for i in range(len(env.sequence)):
-        print('mode', m)
-        if m == env.terminal_mode:
-            switching_robots = [r for r in env.robots]
-        else:
-            # find the robot(s) that needs to switch the mode
-            switching_robots = env.get_goal_constrained_robots(m)
+        print("mode", m)
+        switching_robots = env.get_goal_constrained_robots(m)
 
         q = []
         task = env.get_active_task(m)
@@ -1339,8 +1514,6 @@ def visualize_modes(env: rai_env):
 
         print("switching robots: ", switching_robots)
 
-        # env.show()
-        
         for j, r in enumerate(env.robots):
             if r in switching_robots:
                 # TODO: need to check all goals here
@@ -1348,13 +1521,15 @@ def visualize_modes(env: rai_env):
                 offset = 0
                 for _, task_robot in enumerate(task.robots):
                     if task_robot == r:
-                        q.append(goal_sample[offset:offset+env.robot_dims[task_robot]])
+                        q.append(
+                            goal_sample[offset : offset + env.robot_dims[task_robot]]
+                        )
                         break
                     offset += env.robot_dims[task_robot]
                 # q.append(goal_sample)
             else:
                 q.append(q_home.robot_state(j))
-        
+
         print(q)
 
         print(
@@ -1362,13 +1537,18 @@ def visualize_modes(env: rai_env):
             env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m),
         )
 
-        m = env.get_next_mode(None, m)
         # colls = env.C.getCollisions()
         # for c in colls:
         #     if c[2] < 0:
         #         print(c)
 
         env.show()
+
+        if m == env.terminal_mode:
+            break
+
+        m = env.get_next_mode(None, m)
+
 
 def display_path(
     env,
@@ -1421,6 +1601,10 @@ def get_env_by_name(name):
         env = rai_two_dim_simple_manip()
     elif name == "simple_2d":
         env = rai_two_dim_env()
+    elif name == "hallway":
+        env = rai_hallway_two_dim()
+    elif name == "random_2d":
+        env = rai_random_two_dim()
     elif name == "2d_handover":
         env = rai_two_dim_handover()
     elif name == "three_agents":
@@ -1430,7 +1614,7 @@ def get_env_by_name(name):
     elif name == "eggs":
         env = rai_ur10_arm_egg_carton_env()
     elif name == "triple_waypoints":
-        env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
+        env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=2)
     elif name == "welding":
         env = rai_quadruple_ur10_arm_spot_welding_env()
     elif name == "bottles":
@@ -1474,7 +1658,7 @@ def check_all_modes():
             print("switching robots: ", switching_robots)
 
             # env.show()
-            
+
             for j, r in enumerate(env.robots):
                 if r in switching_robots:
                     # TODO: need to check all goals here
@@ -1482,7 +1666,11 @@ def check_all_modes():
                     offset = 0
                     for _, task_robot in enumerate(task.robots):
                         if task_robot == r:
-                            q.append(goal_sample[offset:offset+env.robot_dims[task_robot]])
+                            q.append(
+                                goal_sample[
+                                    offset : offset + env.robot_dims[task_robot]
+                                ]
+                            )
                             break
                         offset += env.robot_dims[task_robot]
                     # q.append(goal_sample)
@@ -1503,7 +1691,7 @@ def check_all_modes():
 
             if not is_collision_free:
                 raise ValueError()
-            
+
             m = env.get_next_mode(None, m)
 
 
@@ -1515,23 +1703,12 @@ def load_env_from_file(filepath):
     pass
 
 
-def visualize_sampling(env: rai_env, N=20):
-    for _ in range(N):
-        # m = env.start_mode
-        m = env.sample_random_mode()
-        q = env.sampling(m, 0)
-        env.show()
-        
-        
-
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument("env_name", nargs="?", default="default", help="env to show")
     parser.add_argument(
         "--mode",
-        choices=["benchmark", "show", "modes", "sampling"],
+        choices=["benchmark", "show", "modes"],
         required=True,
         help="Select the mode of operation",
     )
@@ -1549,6 +1726,3 @@ if __name__ == "__main__":
     elif args.mode == "modes":
         print("Environment modes/goals")
         visualize_modes(env)
-    elif args.mode == "sampling":
-        print("Environment sampling")
-        visualize_sampling(env)

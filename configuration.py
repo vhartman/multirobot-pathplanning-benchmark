@@ -1,6 +1,4 @@
 import numpy as np
-import jax
-import jax.numpy as jnp
 
 from typing import List
 from numpy.typing import NDArray
@@ -41,6 +39,21 @@ class Configuration(ABC):
                 dists[robot_index] = np.max(np.abs(diff))
 
         return np.max(dists)
+    
+    @classmethod
+    def _agent_dist(cls, pt, other, metric: str = "euclidean") -> float:
+        num_agents = pt.num_agents()
+        dists = np.zeros(num_agents)
+
+        for robot_index in range(num_agents):
+            diff = pt.robot_state(robot_index) - other.robot_state(robot_index)
+            if metric == "euclidean":
+                d = 0
+                for j in range(len(diff)):
+                    d += (diff[j]) ** 2
+                dists[robot_index] = d**0.5
+
+        return dists
 
     @classmethod
     def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> float:
@@ -72,6 +85,7 @@ class ListConfiguration(Configuration):
 
 
 class NpConfiguration(Configuration):
+    # __slots__ = 'slice', 'q', '_num_agents'
     def __init__(self, q: NDArray, slice: List[int]):
         self.slice = slice
         self.q = q
@@ -133,13 +147,13 @@ class NpConfiguration(Configuration):
         # for i, other in enumerate(batch_other):
         #     batch_q[i, :] = other.q  # Fill in directly without overhead
         # diff = pt.q - batch_q
-        
+
         # num_items = len(batch_other)
         # q_dim = pt.q.size
 
         # # if num_items > cls._batch_size:
         # #   cls._batch_size += 5000
-        
+
         # # Ensure memory is initialized
         # cls._initialize_memory(max_size=10000, q_dim=q_dim)
 
@@ -147,7 +161,6 @@ class NpConfiguration(Configuration):
         # for i, other in enumerate(batch_other):
         #     cls._preallocated_q[i, :] = other.state.q.q
         # # cls._preallocated_q[:num_items, :] = np.array([other.state.q.q for other in batch_other])
-
 
         # # Use only the relevant part of the array
         # batch_q = cls._preallocated_q[:num_items, :]
@@ -166,13 +179,18 @@ class NpConfiguration(Configuration):
 
 
 def config_dist(
-    q_start: Configuration, q_end: Configuration, metric: str = "."
+    q_start: Configuration, q_end: Configuration, metric: str = "euclidean"
 ) -> float:
     return type(q_start)._dist(q_start, q_end, metric)
 
+def config_agent_dist(
+    q_start: Configuration, q_end: Configuration, metric: str = "."
+) -> float:
+    return type(q_start)._agent_dist(q_start, q_end, metric)
+
 
 def batch_config_dist(
-    pt: Configuration, batch_pts: List[Configuration], metric: str = "."
+    pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean"
 ) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
@@ -200,7 +218,6 @@ def config_cost(
     # dists = np.linalg.norm(np.array(q_start) - np.array(q_end), axis=1)
     return max(dists) + 0.01 * sum(dists)
     # return np.sum(dists)
-
 
 def batch_config_cost(
     starts: List[Configuration],

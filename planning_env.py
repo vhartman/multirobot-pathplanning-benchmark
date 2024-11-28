@@ -13,9 +13,7 @@ from configuration import *
 # from dependency_graph import DependencyGraph
 
 # questions:
-# - what to do with final mode? goal?
 # - how to sample? in env? how to do goal sampling?
-# - mode represenatition needs to be better
 
 
 class Goal(ABC):
@@ -31,19 +29,38 @@ class Goal(ABC):
         pass
 
 
-class GoalRegion(Goal):
-    def __init__(self):
-        pass
+# class DummyGoal(ABC):
+#     def __init__(self):
+#         pass
 
-    def satisfies_constraints(self, q, tolerance):
-        pass
+#     def satisfies_constraints(self, q, tolerance):
+#         return True
+
+#     def sample(self):
+#         pass
+
+
+class GoalRegion(Goal):
+    def __init__(self, limits: NDArray):
+        self.limits = limits
+
+    def satisfies_constraints(self, q: NDArray, tolerance):
+        if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
+            return True
 
     def sample(self):
-        pass
+        q = (
+            np.random.rand(len(self.limits[0, :]))
+            * (self.limits[1, :] - self.limits[0, :])
+            + self.limits[0, :]
+        )
+        return q
+
 
 # TODO: implement sampler to sample a goal
 class ConstrainedGoal(Goal):
     pass
+
 
 class GoalSet(Goal):
     def __init__(self, goals):
@@ -85,6 +102,9 @@ class Task:
     frames: List[str]
     side_effect: str
 
+    # things for the future:
+    constraints = List
+
     def __init__(self, robots, goal, type=None, frames=None, side_effect=None):
         self.robots = robots
         self.goal = goal
@@ -104,7 +124,13 @@ class State:
         self.mode = m
 
 
-# TODO: switch everything to the State from above?
+def state_dist(start: State, end: State) -> float:
+    if start.mode != end.mode:
+        return np.inf
+
+    return config_dist(start.q, end.q)
+
+# TODO: split into env + problem specification
 class base_env(ABC):
     def __init__(self):
         pass
@@ -166,7 +192,7 @@ class base_env(ABC):
         for i in range(len(path)):
             # check if the state is collision free
             if not self.is_collision_free(path[i].q.state(), mode):
-                print(f'There is a collision at index {i}')
+                print(f"There is a collision at index {i}")
                 # col = self.C.getCollisionsTotalPenetration()
                 # print(col)
                 self.C.view(True)
@@ -181,28 +207,25 @@ class base_env(ABC):
                     mode = next_mode
 
         if not self.done(path[-1].q, path[-1].mode):
-            print('Final mode not reached')
+            print("Final mode not reached")
             return False
 
         return True
 
-    # @abstractmethod
-    # def cost(self, path):
-    #     pass
+    @abstractmethod
+    def config_cost(self, start: Configuration, goal: Configuration):
+        pass
 
-class RRTstar_env(base_env):
+    @abstractmethod
+    def batch_config_cost(
+        self,
+        starts: List[Configuration],
+        ends: List[Configuration],
+    ):
+        pass
 
-    def sampling(self, m: List[int], sampling_type:int) -> Configuration:
-        while True:
-            q = []
-            for i in range(len(env.robots)):
-                lims = self.limits[:, self.robot_idx[self.robots[i]]]
-                if sampling_type == 2:  #goal sampling
-                    pass
-                elif sampling_type == 1: #informed sampling
-                    pass
-                elif sampling_type == 0: #uniformed sampling
-                    qr = np.random.uniform(lims[0], lims[1])
-                q.append(qr)
-            if env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m):
-                return q
+    def state_cost(self, start: State, end: State) -> float:
+        if start.mode != end.mode:
+            return np.inf
+
+        return self.config_cost(start.q, end.q)
