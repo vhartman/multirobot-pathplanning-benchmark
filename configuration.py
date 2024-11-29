@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import List
+from typing import List, Tuple
 from numpy.typing import NDArray
 
 from abc import ABC, abstractmethod
@@ -10,6 +10,9 @@ class Configuration(ABC):
     @abstractmethod
     def num_agents(self) -> int:
         pass
+
+    def __getitem__(self, ind):
+        return self.robot_state(ind)
 
     @abstractmethod
     def robot_state(self, ind: int) -> NDArray:
@@ -38,10 +41,10 @@ class Configuration(ABC):
             else:
                 dists[robot_index] = np.max(np.abs(diff))
 
-        return np.max(dists)
+        return float(np.max(dists))
 
     @classmethod
-    def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> float:
+    def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> NDArray:
         return np.array([cls._dist(pt, o, metric) for o in batch_other])
 
 
@@ -71,7 +74,7 @@ class ListConfiguration(Configuration):
 
 class NpConfiguration(Configuration):
     # __slots__ = 'slice', 'q', '_num_agents'
-    def __init__(self, q: NDArray, slice: List[int]):
+    def __init__(self, q: NDArray, slice: List[Tuple[int, int]]):
         self.slice = slice
         self.q = q
 
@@ -79,9 +82,6 @@ class NpConfiguration(Configuration):
 
     def num_agents(self):
         return self._num_agents
-
-    def __getitem__(self, ind):
-        return self.robot_state(ind)
 
     def __setitem__(self, ind, data):
         self.q[self.slice[ind][0] : self.slice[ind][1]] = data
@@ -116,9 +116,9 @@ class NpConfiguration(Configuration):
                 for j in range(s, e):
                     d += (diff[j]) ** 2
                 dists[i] = d**0.5
-            return np.max(dists)
+            return float(np.max(dists))
         else:
-            return np.max(np.abs(diff))
+            return float(np.max(np.abs(diff)))
 
     # _preallocated_q = None
     # @classmethod
@@ -127,7 +127,7 @@ class NpConfiguration(Configuration):
     #         cls._preallocated_q = np.empty((max_size, q_dim))  # Preallocate
 
     @classmethod
-    def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> float:
+    def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> NDArray:
         # batch_q = np.empty((len(batch_other), pt.q.size))  # Preallocate memory
         # for i, other in enumerate(batch_other):
         #     batch_q[i, :] = other.q  # Fill in directly without overhead
@@ -199,7 +199,7 @@ def config_cost(
     return max(dists) + 0.01 * sum(dists)
     # return np.sum(dists)
 
-
+# TODO: this is only applicable to NpConfiguration atm.
 def batch_config_cost(
     starts: List[Configuration],
     batch_other: List[Configuration],

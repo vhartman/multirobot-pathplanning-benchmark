@@ -4,16 +4,31 @@ import random
 import argparse
 import time
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-# from dependency_graph import DependencyGraph
+from dependency_graph import DependencyGraph
 
 from rai_config import *
-from planning_env import base_env, State, Task, SingleGoal, GoalSet, GoalRegion
-from configuration import Configuration, NpConfiguration, config_dist, config_cost, batch_config_cost
+from planning_env import (
+    base_env,
+    SequenceMixin,
+    State,
+    Task,
+    SingleGoal,
+    GoalSet,
+    GoalRegion,
+)
+from configuration import (
+    Configuration,
+    NpConfiguration,
+    config_dist,
+    config_cost,
+    batch_config_cost,
+)
 
 from util import generate_binary_search_indices
+
 
 def get_joint_indices(C: ry.Config, prefix: str) -> List[int]:
     all_joints_weird = C.getJointNames()
@@ -38,13 +53,9 @@ def set_robot_active(C: ry.Config, robot_prefix: str) -> None:
     C.selectJoints(robot_joints)
 
 
-class rai_env(base_env):
+class rai_env(base_env, SequenceMixin):
     # robot things
     C: ry.Config
-    robots: List[str]
-    robot_dims: Dict[str, NDArray]
-    robot_idx: Dict[str, NDArray]
-    start_pos: Configuration
     limits: NDArray
 
     # sequence things
@@ -79,75 +90,6 @@ class rai_env(base_env):
 
     def batch_config_cost(self, starts, ends):
         return batch_config_cost(starts, ends, "max")
-
-    def _make_sequence_from_names(self, names):
-        sequence = []
-
-        for name in names:
-            no_task_with_name_found = True
-            for idx, task in enumerate(self.tasks):
-                if name == task.name:
-                    sequence.append(idx)
-                    no_task_with_name_found = False
-
-            if no_task_with_name_found:
-                raise ValueError(f"Task with name {name} not found.")
-
-        return sequence
-
-    def _make_start_mode_from_sequence(self):
-        mode_dict = {}
-
-        for task_index in self.sequence:
-            task_robots = self.tasks[task_index].robots
-
-            for r in task_robots:
-                if r not in mode_dict:
-                    mode_dict[r] = task_index
-
-        mode = []
-        for r in self.robots:
-            mode.append(mode_dict[r])
-
-        return mode
-
-    def _make_terminal_mode_from_sequence(self):
-        mode_dict = {}
-
-        for task_index in self.sequence:
-            task_robots = self.tasks[task_index].robots
-
-            # difference to above: we do not check if the robot already has a task assigned
-            for r in task_robots:
-                mode_dict[r] = task_index
-
-        mode = []
-        for r in self.robots:
-            mode.append(mode_dict[r])
-
-        return mode
-
-    # TODO: is that really a good way to sample a mode?
-    def sample_random_mode(self) -> List[int]:
-        m = self.start_mode
-        rnd = random.randint(0, len(self.sequence))
-
-        for _ in range(rnd):
-            m = self.get_next_mode(_, m)
-
-        return m
-
-    # TODO: this only works for the sequence, i.e. a single task being active
-    def get_current_seq_index(self, mode: List[int]) -> int:
-        # Approach: iterate throug all indices, find them in the sequence, and check which is the one
-        # that has to be fulfilled first
-        min_sequence_pos = len(self.sequence) - 1
-        for i, m in enumerate(mode):
-            # print("robots in task:", self.tasks[m].robots, self.sequence.index(m))
-            if m != self.terminal_mode[i]:
-                min_sequence_pos = min(self.sequence.index(m), min_sequence_pos)
-
-        return min_sequence_pos
 
     def get_goal_constrained_robots(self, mode: List[int]) -> List[str]:
         seq_index = self.get_current_seq_index(mode)
@@ -186,11 +128,11 @@ class rai_env(base_env):
         if m == self.terminal_mode:
             return False
 
-        robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
+        # robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
         task = self.get_active_task(m)
 
         q_concat = []
-        for r in robots_with_constraints_in_current_mode:
+        for r in task.robots:
             r_idx = self.robots.index(r)
             q_concat.append(q.robot_state(r_idx))
 
@@ -201,7 +143,7 @@ class rai_env(base_env):
 
         return False
 
-    def get_next_mode(self, q: Configuration, mode: List[int]) -> List[int]:
+    def get_next_mode(self, q: Optional[Configuration], mode: List[int]) -> List[int]:
         seq_idx = self.get_current_seq_index(mode)
 
         # print('seq_idx', seq_idx)
@@ -237,6 +179,7 @@ class rai_env(base_env):
 
         return tasks
 
+    # Environment functions: collision checking
     def is_collision_free(
         self, q: Configuration, m: List[int], collision_tolerance: float = 0.01
     ) -> bool:
@@ -470,10 +413,6 @@ class rai_two_dim_single_agent_neighbourhood(rai_env):
 
 
 class rai_two_dim_two_agents_long_horizon(rai_env):
-    pass
-
-
-class rai_two_dim_many_narrow_passage(rai_env):
     pass
 
 
@@ -713,8 +652,6 @@ class rai_hallway_two_dim(rai_env):
         self.tasks = []
         self.sequence = []
 
-        print(keyframes)
-
         self.tasks = [
             Task(["a1"], SingleGoal(keyframes[0])),
             Task(["a2"], SingleGoal(keyframes[1])),
@@ -735,7 +672,41 @@ class rai_hallway_two_dim(rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.prev_mode = [0, 0]
+class rai_hallway_two_dim_dependency_graph(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_two_dim_tunnel_env()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        self.tasks = []
+        self.sequence = []
+
+        self.tasks = [
+            Task(["a1"], SingleGoal(keyframes[0])),
+            Task(["a2"], SingleGoal(keyframes[1])),
+            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+        ]
+
+        self.tasks[0].name = "a1_goal_1"
+        self.tasks[1].name = "a2_goal_1"
+        self.tasks[2].name = "terminal"
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("a1_goal_1", "terminal")
+        self.graph.add_dependency("a2_goal_1", "terminal")
+
+        print(self.graph)
+
+        # self.start_mode = self._make_start_mode_from_sequence()
+        # self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
 
 
 class rai_two_dim_piano_mover(rai_env):
@@ -795,6 +766,60 @@ class rai_two_dim_three_agent_env(rai_env):
 
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.1
+
+class rai_two_dim_three_agent_env_dependency_graph(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_2d_rai_env_3_agents()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2", "a3"]
+
+        super().__init__()
+
+        self.tasks = [
+            # a1
+            Task(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
+            Task(["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]])),
+            # a2
+            Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
+            Task(["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
+            # a3
+            Task(["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
+            # terminal
+            Task(
+                ["a1", "a2", "a3"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[5][self.robot_idx["a1"]],
+                            keyframes[5][self.robot_idx["a2"]],
+                            keyframes[5][self.robot_idx["a3"]],
+                        ]
+                    )
+                ),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_goal_1"
+        self.tasks[1].name = "a1_goal_2"
+        self.tasks[2].name = "a2_goal_1"
+        self.tasks[3].name = "a2_goal_2"
+        self.tasks[4].name = "a3_goal_1"
+        self.tasks[5].name = "terminal"
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("a1_goal_1", "a1_goal_2")
+        self.graph.add_dependency("a1_goal_2", "terminal")
+        self.graph.add_dependency("a2_goal_1", "a2_goal_2")
+        self.graph.add_dependency("a2_goal_2", "terminal")
+        self.graph.add_dependency("a3_goal_1", "terminal")
+
+        print(self.graph)
+
+        # self.start_mode = self._make_start_mode_from_sequence()
+        # self.terminal_mode = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.1
 
@@ -1549,7 +1574,7 @@ def visualize_modes(env: rai_env):
 
 
 def display_path(
-    env,
+    env: rai_env,
     path: List[State],
     stop: bool = True,
     export: bool = False,
@@ -1702,6 +1727,10 @@ def load_env_from_file(filepath):
 
 
 if __name__ == "__main__":
+    a= rai_hallway_two_dim_dependency_graph()
+    print()
+    rai_two_dim_three_agent_env_dependency_graph()
+
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument("env_name", nargs="?", default="default", help="env to show")
     parser.add_argument(

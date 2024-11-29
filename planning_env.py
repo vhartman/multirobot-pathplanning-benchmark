@@ -1,14 +1,15 @@
 import robotic as ry
 import numpy as np
+import random
 
 from abc import ABC, abstractmethod
 
-from typing import List
+from typing import List, Dict
 from numpy.typing import NDArray
 
 from configuration import Configuration, config_dist
 
-# from dependency_graph import DependencyGraph
+from dependency_graph import DependencyGraph
 
 
 class Goal(ABC):
@@ -16,7 +17,7 @@ class Goal(ABC):
         pass
 
     @abstractmethod
-    def satisfies_constraints(self, q: NDArray, tolerance:float):
+    def satisfies_constraints(self, q: NDArray, tolerance: float):
         pass
 
     @abstractmethod
@@ -125,8 +126,103 @@ def state_dist(start: State, end: State) -> float:
 
     return config_dist(start.q, end.q)
 
+
+# concrete implementations of the required abstract classes for the sequence-setting.
+class SequenceMixin(ABC):
+    def _make_sequence_from_names(self, names):
+        sequence = []
+
+        for name in names:
+            no_task_with_name_found = True
+            for idx, task in enumerate(self.tasks):
+                if name == task.name:
+                    sequence.append(idx)
+                    no_task_with_name_found = False
+
+            if no_task_with_name_found:
+                raise ValueError(f"Task with name {name} not found.")
+
+        return sequence
+
+    def _make_start_mode_from_sequence(self):
+        mode_dict = {}
+
+        for task_index in self.sequence:
+            task_robots = self.tasks[task_index].robots
+
+            for r in task_robots:
+                if r not in mode_dict:
+                    mode_dict[r] = task_index
+
+        mode = []
+        for r in self.robots:
+            mode.append(mode_dict[r])
+
+        return mode
+
+    def _make_terminal_mode_from_sequence(self):
+        mode_dict = {}
+
+        for task_index in self.sequence:
+            task_robots = self.tasks[task_index].robots
+
+            # difference to above: we do not check if the robot already has a task assigned
+            for r in task_robots:
+                mode_dict[r] = task_index
+
+        mode = []
+        for r in self.robots:
+            mode.append(mode_dict[r])
+
+        return mode
+    
+    def get_current_seq_index(self, mode: List[int]) -> int:
+        # Approach: iterate through all indices, find them in the sequence, and check which is the one
+        # that has to be fulfilled first
+        min_sequence_pos = len(self.sequence) - 1
+        for i, m in enumerate(mode):
+            # print("robots in task:", self.tasks[m].robots, self.sequence.index(m))
+            if m != self.terminal_mode[i]:
+                min_sequence_pos = min(self.sequence.index(m), min_sequence_pos)
+
+        return min_sequence_pos
+    
+    # TODO: is that really a good way to sample a mode?
+    def sample_random_mode(self) -> List[int]:
+        m = self.start_mode
+        rnd = random.randint(0, len(self.sequence))
+
+        for _ in range(rnd):
+            m = self.get_next_mode(None, m)
+
+        return m
+
+
+    def get_sequence(self):
+        return self.sequence
+
+    def get_robot_sequence(self, robot: str):
+        pass
+
+    def get_next_mode(self, q: Configuration, mode: List[int]):
+        pass
+
+
+class DependencyGraphMixin(ABC):
+    def get_next_mode(self, q, mode):
+        pass
+
+
 # TODO: split into env + problem specification
 class base_env(ABC):
+    robots: List[str]
+    robot_dims: Dict[str, int]
+    robot_idx: Dict[str, NDArray]
+    start_pos: Configuration
+
+    start_mode: List[int]
+    terminal_mode: List[int]
+    
     def __init__(self):
         pass
 
@@ -139,13 +235,11 @@ class base_env(ABC):
     def get_start_mode(self):
         return self.start_mode
 
-    def get_sequence(self):
-        return self.sequence
-
-    def get_robot_sequence(self, robot: str):
+    def set_to_mode(self, mode: List[int]):
         pass
 
-    def set_to_mode(self, mode: List[int]):
+    @abstractmethod
+    def sample_random_mode(self) -> List[int]:
         pass
 
     def get_all_bounds(self):
@@ -171,7 +265,19 @@ class base_env(ABC):
         pass
 
     @abstractmethod
+    def is_transition(self, q: Configuration, m: List[int]) -> bool:
+        pass
+
+    @abstractmethod
     def get_next_mode(self, q: Configuration, mode: List[int]):
+        pass
+
+    @abstractmethod
+    def get_active_task(self, mode: List[int]) -> Task:
+        pass
+
+    @abstractmethod
+    def get_tasks_for_mode(self, mode: List[int]) -> List[Task]:
         pass
 
     @abstractmethod
@@ -235,4 +341,4 @@ class base_env(ABC):
         if start.mode != end.mode:
             return np.inf
 
-        return self.cost(start.q, end.q)
+        return self.config_cost(start.q, end.q)
