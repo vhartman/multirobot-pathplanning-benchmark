@@ -8,10 +8,10 @@ from rai_config import *
 from planning_env import *
 from util import *
 from analysis.analysis_util import *
-from rrtstar_planner import *
+from planner_rrtstar import *
 import webbrowser
 
-def init_discretization(path, costs, modes, indices, transition, resolution=0.05):
+def init_discretization(path, costs, modes, indices, transition, resolution=0.1):
     discretized_path, discretized_modes, discretized_costs, discretized_transition = [], [], [], []
     for i in range(len(path) - 1):
         start = np.array(path[i])
@@ -54,11 +54,7 @@ def init_discretization(path, costs, modes, indices, transition, resolution=0.05
     discretized_transition.append(True)
     return discretized_path, discretized_modes, discretized_costs, discretized_transition
 
-def update(path , cost, idx2):
-    
-    if idx2 == len(cost)-1:
-        return
-    idx = idx2 +1
+def update(path , cost, idx):
     while True:
         cost[idx] = cost[idx -1] + config_dist(path[idx-1].q, path[idx].q, "euclidean")
         # agent_cost[idx] = agent_cost[idx -1] + config_agent_dist(path[idx-1].q, path[idx].q, "euclidean")
@@ -66,56 +62,38 @@ def update(path , cost, idx2):
             break
         idx+=1
 
-def interpolate(path, m1, cost, indices):
+def interpolate(path, m1, cost, indices, dim, version):
     q0 = path[0].q.state()
     q1 = path[-1].q.state()
     edge, edge_modes = [], []
     edge_cost = [cost]
     segment_vector = q1 - q0
+    # dim_indices = [indices[i][dim] for i in range(len(indices))]
 
     if len(m1) < 2 :
         mode = m1
     else:
         mode = [m1[1]]
     for i in range(len(path)):
-        q = q0 +  (segment_vector * (i / len(path)))
+        if version == 0:
+            q = q0 +  (segment_vector * (i / len(path)))
+        elif version == 1:
+            q = path[i].q.state()
+            q[dim] = q0[dim] + ((q1[dim] - q0[dim])* (i / len(path)))
+        elif version == 2:
+            q = path[i].q.state()
+            for idx in dim:
+                q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / len(path)))
         q_list = [q[indices[i]] for i in range(len(indices))]
         if i == 0:
             edge.append(State(ListConfiguration(q_list), m1))
             edge_modes.append(m1)
             continue
         edge.append(State(ListConfiguration(q_list), mode))
-        edge_cost.append(cost + config_dist(edge[-2].q, edge[-1].q, "euclidean"))
+        edge_cost.append(edge_cost[-1] + config_dist(edge[-2].q, edge[-1].q, "euclidean"))
         edge_modes.append(mode)
 
     return edge, edge_modes, edge_cost
-
-# def interpolate(path, m1, cost, indices, resolution = 0.05):
-#     q0 = path[0].q.state()
-#     q1 = path[-1].q.state()modes_legend
-#     edge, edge_modes = [], []
-#     edge_cost = [cost]
-#     segment_vector = q1 - q0
-#     segment_length = np.linalg.norm(segment_vector)
-        
-#     # Determine the number of points needed for the current segment
-#     num_points = max(int(segment_length // resolution), 1)
-#     if len(m1) < 2 :
-#         mode = m1
-#     else:
-#         mode = [m1[1]]
-#     for i in range(num_points):
-#         q = q0 +  (segment_vector * (i / num_points))
-#         q_list = [q[indices[i]] for i in range(len(indices))]
-#         if i == 0:
-#             edge.append(State(ListConfiguration(q_list), m1))
-#             edge_modes.append(m1)
-#             continue
-#         edge.append(State(ListConfiguration(q_list), mode))
-#         edge_cost.append(cost + config_dist(edge[-2].q, edge[-1].q, "euclidean"))
-#         edge_modes.append(mode)
-
-#     return edge, edge_modes, edge_cost
 
 def path_traces(colors, modes, path):
     trace = []
@@ -130,7 +108,7 @@ def path_traces(colors, modes, path):
                     mode="lines+markers",
                     line=dict(color=colors[len(modes)+robot_idx], width=6),
                     marker=dict(
-                        size=4,  # Very small markers
+                        size=5,  # Very small markers
                         color=colors[len(modes)+robot_idx],  # Match marker color with line
                         opacity=1
                     ),
@@ -323,7 +301,7 @@ def path_visualization(all_frame_traces, env_path, modes_legend, original_path, 
     fig.write_html(output_html)
     print(f"Animation saved to {output_html}")
 
-def shortcutting(dir, env, env_path, pkl_folder, output_html):
+def shortcutting(dir, env, env_path, pkl_folder, config,  output_html, version = 0):
 
     pkl_files = sorted(
         [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
@@ -339,6 +317,7 @@ def shortcutting(dir, env, env_path, pkl_folder, output_html):
         intermediate_tot = results["intermediate_tot"]
         intermediate_agent_cost = results["intermediate_agent_cost"]
         transition = results["is_transition"]
+        transition[0] = True
         modes = results["modes"]
         colors = colors_plotly()
         all_frame_traces = []
@@ -350,16 +329,28 @@ def shortcutting(dir, env, env_path, pkl_folder, output_html):
             if m == env.terminal_mode:
                 break
             m = env.get_next_mode(None, m)
-
+        overall_costs = [total_cost]
+        time_list = [0]
+        start = time.time()
         discretized_path, discretized_modes, discretized_costs, discretized_transition =init_discretization(path_, intermediate_tot, modes, indices, transition)  
         original_discretized_path = discretized_path.copy()     
         original_discretized_modes = discretized_modes.copy()      
         modes_legend = [mode for idx, mode in enumerate(original_discretized_modes) if discretized_transition[idx]]
         all_frame_traces.append(path_traces(colors, mode_sequence, discretized_path))
-        
-        for i in range(1000):
+        dim = None
+        all_indices = [i for i in range(len(discretized_path[0].q.state()))]
+        for _ in range(100000):
             i1 = np.random.choice(len(discretized_path))
             i2 = np.random.choice(len(discretized_path))
+            if version == 1:
+                dim = np.random.choice(range(len(discretized_path[0].q.state())))
+                # dim = np.random.choice(range(env.robot_dims[env.robots[0]]))# TODO only feasible for same dimension across all robots
+            if version == 2:
+                num_indices = np.random.choice(range(len(discretized_path[0].q.state())))
+                random.shuffle(all_indices)
+                dim = all_indices[:num_indices]
+            if np.abs(i1-i2) < 2:
+                continue
             idx1 = min(i1, i2)
             idx2 = max(i1, i2)
             m1 = discretized_modes[idx1]    
@@ -372,40 +363,48 @@ def shortcutting(dir, env, env_path, pkl_folder, output_html):
                     continue
             elif m1 != m2:
                 continue
-            
             state1 = discretized_path[idx1]
             state2 = discretized_path[idx2]
-            c_new = discretized_costs[idx1] + config_dist(state1.q, state2.q, "euclidean")
-            if c_new < discretized_costs[idx2] and env.is_edge_collision_free(state1.q, state2.q, m1): # also need to check the terminal cost?
-                discretized_costs[idx2] = c_new
-                # intermediate_agent_cost[idx2] =  intermediate_agent_cost[idx1] + config_agent_dist(state1.q, state2.q, "euclidean")
-                update(discretized_path, discretized_costs, idx2)
-                edge, edge_modes, edge_cost =  interpolate(discretized_path[idx1:idx2+1], m1, discretized_costs[idx1], indices)
+            edge, edge_modes, edge_cost =  interpolate(discretized_path[idx1:idx2], m1, 
+                                                           discretized_costs[idx1], indices, dim, version)
+            c_new = edge_cost[-1] + config_dist(edge[-1].q, state2.q, "euclidean") - edge_cost[0]
+            if c_new < (discretized_costs[idx2]- discretized_costs[idx1]) and env.is_edge_collision_free(state1.q, state2.q, m1):
                 discretized_path[idx1:idx2] = edge
-                discretized_costs[idx2] = c_new
                 discretized_costs[idx1:idx2] = edge_cost
-                # intermediate_agent_cost[idx1:idx2+1] = [intermediate_agent_cost[idx1], intermediate_agent_cost[idx2]]
                 discretized_modes[idx1:idx2] = edge_modes
-
+                update(discretized_path, discretized_costs, idx2)
                 all_frame_traces.append(path_traces(colors, mode_sequence, discretized_path))
+                overall_costs.append(discretized_costs[-1])
+                diff = time.time()- start
+                time_list.append(diff)
         path_visualization(all_frame_traces, env_path,modes_legend,original_discretized_path, discretized_transition, output_html)
         path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(discretized_path)}
         json_dir =os.path.join(dir, 'general.log') 
-        log_entry1 = f"Path shortcut: {json.dumps(path_dict, indent=4)}\n"
-        log_entry2 = f"Before: {json.dumps(total_cost, indent=4)}\n"
-        log_entry3 = f"Afzter: {json.dumps(discretized_costs[-1], indent=4)}\n"
-        # Append to the log file
         with open(json_dir, 'a') as log_file:
-            log_file.write(log_entry1)
-            log_file.write(log_entry2)
-            log_file.write(log_entry3)
+            log_file.write(f"Path shortcut: {json.dumps(path_dict, indent=4)}\n")
+            log_file.write(f"Before: {json.dumps(total_cost, indent=4)}\n")
+            log_file.write(f"After: {json.dumps(discretized_costs[-1], indent=4)}\n")
         print("Before: ", total_cost, "After " ,   discretized_costs[-1])
+        frames_directory = os.path.join(config["output_dir"], f'Post_{version}')
+        os.makedirs(frames_directory, exist_ok=True)
+        data = {
+            "total_cost": overall_costs, 
+            "time": time_list}
+        # Find next available file number
+        existing_files = (int(file.split('.')[0]) for file in os.listdir(frames_directory) if file.endswith('.pkl') and file.split('.')[0].isdigit())
+        next_file_number = max(existing_files, default=-1) + 1
+
+        # Save data as pickle file
+        filename = os.path.join(frames_directory, f"{next_file_number:04d}.pkl")
+        with open(filename, 'wb') as file:
+            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument(
         "--do",
-        choices=["shortcutting"],
+        choices=["shortcutting", "partial_singledim", "partial_random"],
         required=True,
         help="Select the mode of operation",
     )
@@ -421,8 +420,15 @@ if __name__ == "__main__":
 
     if args.do == "shortcutting":
         output_html = os.path.join(path, 'shortcutting.html')
-        shortcutting(path, env, env_path, pkl_folder, output_html)
-        webbrowser.open('file://' + os.path.realpath(output_html))
+        shortcutting(path, env, env_path, pkl_folder, config_params, output_html, 0)
+    if args.do == "partial_singledim":
+        output_html = os.path.join(path, 'partial_shortcutting_singledim.html')
+        shortcutting(path, env, env_path, pkl_folder, config_params, output_html, 1)
+    if args.do == "partial_random":
+        output_html = os.path.join(path, 'partial_shortcutting_random.html')
+        shortcutting(path, env, env_path, pkl_folder, config_params, output_html, 2)
+
+    # webbrowser.open('file://' + os.path.realpath(output_html))
 
 
 

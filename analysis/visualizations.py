@@ -84,7 +84,7 @@ def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
             x=time,
             y=agent_costs[agent],
             mode='lines',
-            name=f"$\\mathsf{{Agent \;{agent})}}$", 
+            name=f"$\\mathsf{{Agent \;{agent}}}$", 
             line=dict(color=colors[agent]),
             showlegend=True  # Show legend for each agent color
         ))
@@ -103,8 +103,8 @@ def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
     print(np.nanmin(costs), max_time)
     # Update layout with titles, axis labels, and legend
     if fix_axis:
-        max_time = 6600
-        max_cost = 130
+        max_time = 1200
+        max_cost = 17
    
     fig.update_layout(
         title="Cost vs Time",
@@ -121,6 +121,141 @@ def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
     )
     
     fig.write_image(output_filename)
+
+def average(sum_times, runs, max_len, times, costs):
+    stop_time = sum_times/runs
+    average_time = np.linspace(0, stop_time, max_len, endpoint = True)
+    average_costs = []
+    for idx, cost in enumerate(costs):
+        cost_average = []
+        for time in average_time:
+            if time == 0:
+                cost_average.append(cost[0])
+                continue
+            if times[idx][-1] < time:
+                cost_average.append(cost[-1])
+            for c_idx, c in enumerate(cost):
+                if times[idx][c_idx] > time:
+                    cost_average.append(cost[c_idx-1])
+                    break
+                    
+        average_costs.append(cost_average)
+    
+    return np.mean(average_costs, axis=0).tolist(), average_time
+
+
+def get_post_cost_plot(env, config, path, output_filename):
+    # Initialize lists and Plotly objects
+    costs = []
+    times = []
+    colors_list = []
+    labels_list = []
+    labels_bool = []
+    fig = go.Figure()
+    num_agents = len(env.robots)
+    colors = colors_plotly()  # Assuming this function is defined elsewhere
+    cost_function = config["cost_function"]
+    cost_label = get_cost_label(cost_function, num_agents - 1)  # Assuming this function is defined elsewhere
+    labels = ["Shortcutting", "Partial single dim", "Partial random subset"]
+    
+
+    # Loop through versions to process data
+    for version in range(3):
+        bool_legend = True
+        folder = os.path.join(path, f"Post_{version}")
+        # Get sorted list of .pkl files in the folder
+        pkl_files = sorted(
+            [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith('.pkl')],
+            key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+        )
+        print(f"Found {len(pkl_files)} .pkl files in {folder}.")
+        
+        # Retrieve environment and configuration details
+        
+        sum_times = 0
+        max_len = 0
+        version_times = []
+        version_costs = []
+        # Process each .pkl file
+        for pkl_file in pkl_files:
+            with open(pkl_file, 'rb') as file:
+                data = dill.load(file)
+            
+            # Append data for flattening later
+            times.append(data["time"])
+            version_times.append(data["time"])
+            costs.append(data["total_cost"])
+            version_costs.append(data["total_cost"])
+            colors_list.append(colors[version])
+            labels_list.append(labels[version])
+            labels_bool.append(bool_legend)
+            bool_legend = False
+            sum_times += data["time"][-1]
+            if len(data["time"]) > max_len:
+                max_len = len(data["time"])
+
+
+
+        average_cost, average_time = average(sum_times, len(pkl_files), max_len, version_times, version_costs)
+        fig.add_trace(go.Scatter(
+            x=average_time,
+            y=average_cost,
+            mode='lines',
+            name=labels[version],  
+            opacity=1,
+            line=dict(color=colors[version], width=5),  # Adjust 'width' to make the line thicker
+            showlegend=True  
+        ))
+
+            
+        
+
+    for time_series, cost_series, color, label, label_bool in zip(times, costs, colors_list, labels_list, labels_bool):
+        fig.add_trace(go.Scatter(
+            x=time_series,
+            y=cost_series,
+            mode='lines',
+            name=label,  
+            opacity = 0.15,
+            line=dict(color=color),  # Assign a single color to this series
+            showlegend=False  # Ensure the legend entry is shown
+        ))
+    
+    # Flatten the nested lists for cost and time
+    flattened_costs = [item for sublist in costs for item in sublist]
+    flattened_times = [item for sublist in times for item in sublist]
+
+    # Calculate maximum values for axes range
+    max_cost = np.nanmax(flattened_costs) if flattened_costs else 0
+    min_cost = np.nanmin(flattened_costs) if flattened_costs else 0
+    max_time = np.nanmax(flattened_times) if flattened_times else 0
+
+    fig.add_trace(go.Scatter(
+                x=[0],
+                y=[min_cost],
+                name=cost_label,  
+                mode='markers',
+                marker=dict(size=0.001, color="white"),
+                showlegend=True  # Ensure the l1egend entry is shown
+            ))
+    # Update layout with titles, axis labels, and legend
+    fig.update_layout(
+        title="Cost vs Time",
+        xaxis=dict(title="Time [s]", range=[0, max_time + 0.5], autorange=False),
+        yaxis=dict(title="Cost [m]", range=[min_cost -0.01, max_cost + 0.01], autorange=False),
+        margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1  # Position legend outside the plot area on the right
+        )
+    )
+    
+    # Save the plot as an image
+    fig.write_image(output_filename)
+
 
 def count_files_in_folder(folder_path):
     files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
@@ -522,7 +657,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument(
         "--show",
-        choices=["development", "cost"],
+        choices=["development", "cost", "shortcutting_cost"],
         required=True,
         help="Select the mode of operation",
     )
@@ -549,8 +684,12 @@ if __name__ == "__main__":
         webbrowser.open('file://' + os.path.realpath(output_html))
 
     if args.show == "cost":
-        fix_axis = False
+        fix_axis = True
         output_filename_cost = os.path.join(path, 'Cost.png')
         get_cost_plot(env, config_params, pkl_folder, output_filename_cost, fix_axis)
+    if args.show == "shortcutting_cost":
+        fix_axis = False
+        output_filename_cost = os.path.join(path, 'ShortcuttingCost.png')
+        get_post_cost_plot(env, config_params, path, output_filename_cost)
 
 

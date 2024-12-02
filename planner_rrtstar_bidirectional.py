@@ -112,7 +112,7 @@ class ConfigManager:
             'goal_radius': 0.1, 'p_goal': 0.95, 'general_goal_sampling': True, 
             'step_size': 0.3, 'cost_function': 2, 'ptc_threshold': 0.1, 
             'ptc_max_iter': 3000, 'mode_probability': 0.4, 
-            'informed_sampling': True, 'informed_sampling_version': None, 
+            'informed_sampling': True, 'informed_sampling_version': 0, 
             'cprofiler': False
         }
         for key, value in defaults.items():
@@ -183,13 +183,16 @@ class Mode:
         self.label = mode
         self.transition_nodes = []
         self.subtree = kdtree.create(dimensions=sum(env.robot_dims.values()))
+        self.subtree_bi = kdtree.create(dimensions=sum(env.robot_dims.values()))
         self.subtree_size = 0
+        self.subtree_size_ni = 0
         self.informed = Informed()
 
 class Sampling:
-    def __init__(self, env, operation):
+    def __init__(self, env, operation, config):
         self.env = env
         self.operation = operation
+        self.config = config
         pass
 
     def sample_state(self, mode:Mode, sampling_type:int, config:ConfigManager) -> State: # or in rai_env?
@@ -243,15 +246,20 @@ class Sampling:
         mode = self.mode_selection(agent)
         if not mode:
             return  # Initial path not yet found
+        if not self.operation.init_path and self.config.informed_sampling_version == 1:
+            return
+        c_tot, c_start_tot, cmax =  mode.informed.cmax(mode.transition_nodes, self.operation.path_nodes, goal_radius, agent, mode.informed.start[agent]) # reach task for all agents, reach goal of task for specific agent
+        if self.config.informed_sampling_version == 0:
+            cmax = cmax
+            cmin = mode.informed.cmin[agent]
+        elif self.config.informed_sampling_version == 1:
+            cmax = self.operation.path_nodes[-1].data.cost
+            cmin = mode.informed.cmin[agent] + self.operation.path_nodes[-1].data.cost -c_tot + c_start_tot
 
-        cmax = mode.informed.cmax(mode.transition_nodes, self.operation.path_nodes, goal_radius, agent, mode.informed.start[agent])
+
         r1 = cmax / 2
-        r2 = np.sqrt(cmax**2 - mode.informed.cmin[agent]**2) / 2
+        r2 = np.sqrt(cmax**2 - cmin**2) / 2
         
-        # Debugging condition
-        if abs(r1 - mode.informed.cmin[agent]) <= 8e-10:
-            print(mode.informed.cmin[agent], cmax)
-
         agent_name = self.env.robots[agent]
         n = self.env.robot_dims[agent_name]
         mode.informed.L[agent] = np.diag([r1] + [r2] * (n - 1))
@@ -331,23 +339,25 @@ class Informed:
         else:
             for node in transition_nodes:
                 if node in path_nodes:
-                    c = node.data.agent_cost[agent]
+                    c_agent = node.data.agent_cost[agent]
+                    c_tot = node.data.cost
                     break
-            return c-self.get_start_node(path_nodes, goal_radius, agent, start)
+            c_start_agent, c_start_tot = self.get_start_node(path_nodes, goal_radius, agent, start)
+            return c_tot, c_start_tot, c_agent - c_start_agent
 
     def get_start_node(self, path_nodes, goal_radius, agent, start):
         for node in path_nodes:
             if np.array_equal(node.data.state.q[agent], start) or np.linalg.norm(start - node.data.state.q[agent])< goal_radius:
-                return node.data.agent_cost[agent]
- 
-class RRTstar:
+                return node.data.agent_cost[agent], node.data.cost 
+
+class BidirectionalRRTstar:
     def __init__(self, env, config: ConfigManager):
         self.env = env
         # self.gamma = ((2 *(1 + 1/self.dim))**(1/self.dim) * (self.FreeSpace()/self.UnitBallVolume())**(1/self.dim))*1.1 
         self.config = config
         self.r = self.config.step_size * sum(self.env.robot_dims.values()) # TODO
         self.operation = Operation(env)
-        self.sampling = Sampling(env, self.operation)
+        self.sampling = Sampling(env, self.operation, self.config)
         self.optimization_mode_idx = 0
         self.start = time.time()
         
@@ -500,7 +510,6 @@ class RRTstar:
             if idx != len(self.operation.modes) - 1:
                 self.operation.modes[idx + 1].subtree.add(n.data)
                 self.operation.modes[idx+1].subtree_size +=1
-                n.transition = True
     
     def ManageTransition(self, n_new, iteration):
         constrained_robots = self.env.get_active_task(self.operation.active_mode.label).robots

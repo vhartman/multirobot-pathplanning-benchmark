@@ -48,19 +48,7 @@
                 "sampling"
             ],
             "console": "integratedTerminal"
-        },
-        {
-            "name": "main.py -simple_2d --planner rrtstar",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "args": [
-                "simple_2d",
-                "--planner",
-                "rrtstar"
-            ],
-            "console": "integratedTerminal"
-        },
+        }, 
         {
             "name": "visualizations.py --show development",
             "type": "debugpy",
@@ -106,7 +94,31 @@
                 "rrtstar"
             ],
             "console": "integratedTerminal"
+        },{
+            "name": "main.py -simple_2d --planner rrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "rrtstar"
+            ],
+            "console": "integratedTerminal"
         },
+        {
+            "name": "main.py -hallway --planner rrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": [
+                "hallway",
+                "--planner",
+                "rrtstar"
+            ],
+            "console": "integratedTerminal"
+        },
+
         {
             "name": "postprocessing.py -simple_2d --do shortcutting",
             "type": "debugpy",
@@ -119,6 +131,28 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "postprocessing.py -simple_2d --do partial_singledim",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/postprocessing.py",
+            "args": [
+                "--do",
+                "partial_singledim"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "postprocessing.py -simple_2d --do partial_random",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/postprocessing.py",
+            "args": [
+                "--do",
+                "partial_random"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "simulations.py --show path_shortcutt",
             "type": "debugpy",
             "request": "launch",
@@ -126,6 +160,28 @@
             "args": [
                 "--sim",
                 "path_shortcutt"
+            ],
+            "console": "integratedTerminal"
+        }, 
+        {
+            "name": "visualizations.py --show shortcutting_cost",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "args": [
+                "--show",
+                "shortcutting_cost"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "visualizations.py --show cost",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "args": [
+                "--show",
+                "cost"
             ],
             "console": "integratedTerminal"
         }

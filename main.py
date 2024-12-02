@@ -1,17 +1,20 @@
 import os
 import json
 import cProfile
-from rrtstar_planner import *
+from planner_rrtstar import *
 from rai_envs import *
 from util import *
 
 def execute_planner(args, config_manager):
     env = get_env_by_name(args.env_name)
-    env.show()
+    
     
     if args.planner == "rrtstar":
         rrt_star = RRTstar(env, config_manager)
         path = rrt_star.Plan()
+        vid_path = os.path.join(config_manager.output_dir,"Path/")
+        os.makedirs(vid_path, exist_ok=True)
+        display_path(env, path, export = True, dir =  vid_path)
         path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(path)}
         config_manager.logger.info("Path: %s", json.dumps(path_dict, indent=4))
 

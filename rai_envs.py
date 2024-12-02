@@ -931,7 +931,7 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
             cnt += num_waypoints + 1
 
         q_home = self.C.getJointState()
-        self.tasks.append(Task(["a0", "a1", "a2"], SingleGoal(q_home)))
+        self.tasks.append(Task(self.robots, SingleGoal(q_home)))
 
         self.sequence = []
 
@@ -1556,6 +1556,7 @@ def display_path(
     stop: bool = True,
     export: bool = False,
     pause_time: float = 0.01,
+    dir: str = "./z.vid/"
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
@@ -1566,7 +1567,7 @@ def display_path(
         env.C.view(stop)
 
         if export:
-            env.C.view_savePng("./z.vid/")
+            env.C.view_savePng(dir)
 
         time.sleep(pause_time)
 
@@ -1614,7 +1615,7 @@ def get_env_by_name(name):
     elif name == "eggs":
         env = rai_ur10_arm_egg_carton_env()
     elif name == "triple_waypoints":
-        env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=2)
+        env = rai_multi_panda_arm_waypoint_env(num_robots=2, num_waypoints=2)
     elif name == "welding":
         env = rai_quadruple_ur10_arm_spot_welding_env()
     elif name == "bottles":
