@@ -359,49 +359,49 @@ class RRTstar:
         self.optimization_mode_idx = 0
         self.start = time.time()
         
-    def Cost(self, n1, n2):
+    def Cost(self, n1, n2, batch = False):
+        if batch:
+            n1_state = [n1.data.state if hasattr(n1, 'data') else n1.state]
+            N2 = [n.state for n in n2]
+            return batch_config_cost(n1_state, N2, "euclidean")
         n1_state = n1.data.state if hasattr(n1, 'data') else n1.state
         n2_state = n2.data.state if hasattr(n2, 'data') else n2.state
-        # print(config_dist(n1_state.q, n2_state.q, "euclidean"))
-        # print(self.env.state_cost(n1_state, n2_state))
-        # return self.env.state_cost(n1_state, n2_state)
-        return config_dist(n1_state.q, n2_state.q, "euclidean")
-
-    def AgentDist(self, n1, n2): 
-        n1_state = n1.data.state if hasattr(n1, 'data') else n1.state
-        n2_state = n2.data.state if hasattr(n2, 'data') else n2.state
-        return config_agent_dist(n1_state.q, n2_state.q, "euclidean")
+        return config_cost(n1_state.q, n2_state.q, "euclidean")
 
     def StateDist(self, n1, n2):
-        n1_state = n1.data.state.q.state() if hasattr(n1, 'data') else n1.state.q.state()
-        n2_state = n2.data.state.q.state() if hasattr(n2, 'data') else n2.state.q.state()
-        direction = n2_state - n1_state
-        # d = config_dist(n1.data.state.q.state(), n2.data.state.q.state(), "euclidean")
-        return np.linalg.norm(direction)
-        # return state_dist(n1_state, n2_state)
+        return config_dist(n1.state.q, n2.state.q, "euclidean")        
     
     def Nearest(self, n_rand): 
-        nearest_node, _ = self.operation.active_mode.subtree.search_nn(n_rand.data, self.StateDist)
+        nearest_node, _ = self.operation.active_mode.subtree.search_nn(n_rand.data, dist = self.StateDist)
         return  nearest_node
       
     def Steer(self,
         n_nearest: kdtree.KDNode,
         n_rand: kdtree.KDNode,
         m: List[int]
-    ) -> bool:        
-        dist = config_dist(n_nearest.data.state.q, n_rand.data.state.q, "euclidean") #TODO
-        if dist <=self.config.step_size:
-            return n_rand
-        
+    ) -> bool:    
+
+        dists = config_dists(n_nearest.data.state.q, n_rand.data.state.q, "euclidean") #TODO
+        q_new = []
         q_nearest = n_nearest.data.state.q.state()
         q_rand = n_rand.data.state.q.state()
         direction = q_rand - q_nearest
-        norm = np.linalg.norm(direction)
-        N = int(np.ceil(norm / self.config.step_size))
-        t = 1 / N
-        q = q_nearest + t * direction
-        q = np.clip(q, self.env.limits[0], self.env.limits[1]) 
-        state_new = State(type(self.env.get_start_pos())(q, n_nearest.data.state.q.slice), m)
+        for idx, robot in enumerate(self.env.robots):
+            indices = self.env.robot_idx[robot]
+            if dists[idx] < self.config.step_size:
+                q = q_rand[indices]
+                q_new.extend(q)
+                continue
+            dist = dists[idx]
+            N = int(np.ceil(dist / self.config.step_size))
+            if N == 0:
+                t = 0
+            else:
+                t = 1 / N
+            q = q_nearest[indices] + t * direction[indices]
+            q_new.extend(q)
+        q_new = np.clip(q_new, self.env.limits[0], self.env.limits[1]) 
+        state_new = State(type(self.env.get_start_pos())(q_new, n_nearest.data.state.q.slice), m)
         n_new = Node(state_new)
         return kdtree.KDNode(data=n_new, dimensions=sum(self.env.robot_dims.values()))
   
@@ -409,7 +409,7 @@ class RRTstar:
         # n_nodes = sum(1 for _ in self.operation.current_mode.subtree.inorder()) + 1
         #TODO generalize the radius!!!!!
         # r = min((7)*self.step_size, 3 + self.gamma * ((math.log(n_nodes) / n_nodes) ** (1 / self.dim)))
-        N_near = self.operation.active_mode.subtree.search_nn_dist(n_new.data, self.r, dist =  self.StateDist) 
+        N_near = self.operation.active_mode.subtree.search_nn_dist(n_new.data, self.r, dist = self.StateDist) 
         if not self.config.informed_sampling:
             return N_near
         # else:
@@ -419,11 +419,11 @@ class RRTstar:
         #     #N_near needs to be preselected
         return self.sampling.fit_to_informed_subset(N_near)        
     
-    def FindParent(self, N_near, n_new, n_nearest):
+    def FindParent(self, N_near, n_new, n_nearest, batch_cost):
         c_min = n_nearest.data.cost + self.Cost(n_nearest, n_new)
         n_min = n_nearest.data
-        for n_near in N_near:
-            c_new = n_near.cost + self.Cost(n_near, n_new.data)
+        for idx, n_near in enumerate(N_near):
+            c_new = n_near.cost + batch_cost[idx]
             if c_new < c_min :
                 if self.env.is_edge_collision_free(n_near.state.q, n_new.data.state.q, self.operation.active_mode.label):
                     c_min = c_new
@@ -431,7 +431,7 @@ class RRTstar:
         n_new.data.cost = c_min
         n_new.data.parent = kdtree.KDNode(data=n_min, dimensions=len(n_min.coords))
         n_min.children.append(n_new.data) #Set child
-        n_new.data.agent_cost = n_new.data.parent.data.agent_cost + self.AgentDist(n_new.data.parent.data, n_new.data)
+        n_new.data.agent_cost = n_new.data.parent.data.agent_cost + config_dists(n_new.data.parent.data.state.q, n_new.data.state.q)
         self.operation.tree.add(n_new.data)
         self.operation.active_mode.subtree.add(n_new.data)
         self.operation.tree_size+=1
@@ -440,16 +440,16 @@ class RRTstar:
     def UnitBallVolume(self):
         return math.pi ** (self.dim / 2) / math.gamma((self.dim / 2) + 1)
 
-    def Rewire(self, N_near, n_new, costs_before):
+    def Rewire(self, N_near, n_new, costs_before, batch_cost):
         rewired = False
-        for n_near in N_near:
+        for idx, n_near in enumerate(N_near):
             costs_before.append(n_near.cost)
             if n_near in {n_new.data, n_new.data.parent.data}:
                 continue       
-            c_pot = n_new.data.cost + self.Cost(n_new.data, n_near)
+            c_pot = n_new.data.cost + batch_cost[idx]
             if c_pot < n_near.cost:
                 if  self.env.is_edge_collision_free(n_near.state.q, n_new.data.state.q, self.operation.active_mode.label):
-                    c_agent = n_new.data.agent_cost + self.AgentDist(n_new.data, n_near)
+                    c_agent = n_new.data.agent_cost + config_dists(n_new.data.state.q, n_near.state.q)
                     #reset children
                     n_near.parent.data.children.remove(n_near)
                     #set parent
@@ -481,7 +481,7 @@ class RRTstar:
             n_agent_cost = current_node.agent_cost
             for child in current_node.children:
                 child.cost = current_node.cost + self.Cost(current_node, child)
-                child.agent_cost = n_agent_cost + self.AgentDist(current_node, child)
+                child.agent_cost = n_agent_cost + config_dists(current_node.state.q, child.state.q)
                 stack.append(child)
    
     def FindOptimalTransitionNode(self, iteration):
@@ -630,8 +630,11 @@ class RRTstar:
             if self.env.terminal_mode != operation.modes[-1].label and operation.active_mode.label == operation.modes[-1].label:
             # if operation.task_sequence != [] and operation.task_sequence[0] == operation.current_mode.constraint.label: # initial path not yet found -> sample uniformly
                 state = self.sampling.sample_state(operation.active_mode, 0, self.config) 
-            else:   
-                state = self.sampling.sample_state(operation.active_mode, 1, self.config)
+            else:  
+                if self.config.informed_sampling: 
+                    state = self.sampling.sample_state(operation.active_mode, 1, self.config)
+                else:
+                    state = self.sampling.sample_state(operation.active_mode, 0, self.config)
         else:
             state = self.sampling.sample_state(operation.active_mode, 2, self.config)
 
@@ -653,6 +656,8 @@ class RRTstar:
                 self.operation.active_mode.subtree_size +=1
 
             # RRT* core
+            if i == 4469:
+                print("hallo")
             n_rand = self.SampleNodeManifold(self.operation)
             n_nearest = self.Nearest(n_rand)    
             # self.env.C.setJointState(n_rand.data.state.q.state())
@@ -663,10 +668,14 @@ class RRTstar:
 
             if self.env.is_collision_free(n_new.data.state.q.state(), self.operation.active_mode.label) and self.env.is_edge_collision_free(n_nearest.data.state.q, n_new.data.state.q, self.operation.active_mode.label):
                 N_near = self.Near(n_new)
-                self.FindParent(N_near, n_new, n_nearest)
+                if N_near == []:
+                    print("halloo")
+                batch_cost = self.Cost(n_new.data, N_near, True)
+                
+                self.FindParent(N_near, n_new, n_nearest, batch_cost)
                 costs_before = []
 
-                if self.Rewire(N_near, n_new, costs_before):
+                if self.Rewire(N_near, n_new, costs_before, batch_cost):
                     self.UpdateCost(n_new.data)
                      
                 self.ManageTransition(n_new, i)

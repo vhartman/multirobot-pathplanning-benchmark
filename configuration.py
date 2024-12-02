@@ -41,7 +41,7 @@ class Configuration(ABC):
         return np.max(dists)
     
     @classmethod
-    def _agent_dist(cls, pt, other, metric: str = "euclidean") -> float:
+    def _dists(cls, pt, other, metric: str = "euclidean") -> float:
         num_agents = pt.num_agents()
         dists = np.zeros(num_agents)
 
@@ -52,6 +52,8 @@ class Configuration(ABC):
                 for j in range(len(diff)):
                     d += (diff[j]) ** 2
                 dists[robot_index] = d**0.5
+            else:
+                dists[robot_index] = np.max(np.abs(diff))
 
         return dists
 
@@ -183,10 +185,10 @@ def config_dist(
 ) -> float:
     return type(q_start)._dist(q_start, q_end, metric)
 
-def config_agent_dist(
+def config_dists(
     q_start: Configuration, q_end: Configuration, metric: str = "."
 ) -> float:
-    return type(q_start)._agent_dist(q_start, q_end, metric)
+    return type(q_start)._dists(q_start, q_end, metric)
 
 
 def batch_config_dist(
@@ -194,6 +196,30 @@ def batch_config_dist(
 ) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
+
+def config_cost(
+    q_start: Configuration, q_end: Configuration, metric: str = "euclidean"
+) -> float:
+    num_agents = q_start.num_agents()
+    dists = np.zeros(num_agents)
+
+    for robot_index in range(num_agents):
+        # print(robot_index)
+        # print(q_start)
+        # print(q_end)
+        # d = np.linalg.norm(q_start[robot_index] - q_end[robot_index])
+        diff = q_start.robot_state(robot_index) - q_end.robot_state(robot_index)
+        if metric == "euclidean":
+            d = 0
+            for j in range(len(diff)):
+                d += (diff[j]) ** 2
+            dists[robot_index] = d**0.5
+        else:
+            dists[robot_index] = np.max(np.abs(diff))
+
+    # dists = np.linalg.norm(np.array(q_start) - np.array(q_end), axis=1)
+    return max(dists) + 0.01 * sum(dists)
+    # return np.sum(dists)
 
 def config_cost(
     q_start: Configuration, q_end: Configuration, metric: str = "euclidean"

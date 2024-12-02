@@ -11,10 +11,10 @@ cost_function: 2                            # 1: Sum(Euclidean norm per agent), 
 ptc_threshold: 0.1                          # Converge Threshold
 ptc_max_iter: 3000                          # Max iteration with no change before stopping
 mode_probability: None                       # Probability to choose new mode (0: unfiormly, 1: greedy None: equally, else: manually set) 
-informed_sampling: true                     # True: Informed sampling is applied 
+informed_sampling: false                     # True: Informed sampling is applied 
 informed_sampling_version: 0                # If 'informed_sampling: true', the specified version is applied (0: Only regarding agent, 1: Including other agents)
 cprofiler: True                            # Use cprofiler to run the 
-cost: euclidean                             #Type of cost function: euclidean (Euclidean norm), euclidean_max
+cost: euclidean                             #Type of cost function: euclidean (Max euclidean norm), euclidean_tot
 
 
 

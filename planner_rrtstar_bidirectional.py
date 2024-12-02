@@ -444,6 +444,7 @@ class BidirectionalRRTstar:
 
     def Rewire(self, N_near, n_new, costs_before):
         rewired = False
+        
         for n_near in N_near:
             costs_before.append(n_near.cost)
             if n_near in {n_new.data, n_new.data.parent.data}:

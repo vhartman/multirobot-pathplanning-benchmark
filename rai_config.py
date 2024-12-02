@@ -8,8 +8,8 @@ import os.path
 import random
 
 # make everything predictable
-# np.random.seed(10)
-# random.seed(10)
+np.random.seed(10)
+random.seed(10)
 
 def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
     links = []
