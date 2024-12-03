@@ -2,18 +2,13 @@ import robotic as ry
 import numpy as np
 
 from abc import ABC, abstractmethod
-# from matplotlib import pyplot as plt
-# import random
 
 from typing import List
 from numpy.typing import NDArray
 
-from configuration import *
+from configuration import Configuration, config_dist
 
 # from dependency_graph import DependencyGraph
-
-# questions:
-# - how to sample? in env? how to do goal sampling?
 
 
 class Goal(ABC):
@@ -21,7 +16,7 @@ class Goal(ABC):
         pass
 
     @abstractmethod
-    def satisfies_constraints(self, q):
+    def satisfies_constraints(self, q: NDArray, tolerance:float):
         pass
 
     @abstractmethod
@@ -44,7 +39,7 @@ class GoalRegion(Goal):
     def __init__(self, limits: NDArray):
         self.limits = limits
 
-    def satisfies_constraints(self, q: NDArray, tolerance):
+    def satisfies_constraints(self, q: NDArray, _):
         if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
             return True
 
@@ -141,8 +136,8 @@ class base_env(ABC):
     def __init__(self):
         pass
 
-    def get_robot_dim(self, r: str):
-        return self.robot_dims[r]
+    def get_robot_dim(self, robot: str):
+        return self.robot_dims[robot]
 
     def get_start_pos(self):
         return self.start_pos
@@ -153,10 +148,10 @@ class base_env(ABC):
     def get_sequence(self):
         return self.sequence
 
-    def get_robot_sequence(self, r: str):
+    def get_robot_sequence(self, robot: str):
         pass
 
-    def set_to_mode(self, m: List[int]):
+    def set_to_mode(self, mode: List[int]):
         pass
 
     def get_all_bounds(self):
@@ -165,16 +160,28 @@ class base_env(ABC):
     # def get_robot_bounds(self):
     #     self.bounds
 
+    # @abstractmethod
+    # def get_single_robot_env(self, robot):
+    #     pass
+
     @abstractmethod
-    def done(self, q: Configuration, m: List[int]):
+    def show_config(self, q):
         pass
 
     @abstractmethod
-    def get_next_mode(self, q: Configuration, m: List[int]):
+    def show(self):
         pass
 
     @abstractmethod
-    def is_collision_free(self, q: Configuration, m: List[int]):
+    def done(self, q: Configuration, mode: List[int]):
+        pass
+
+    @abstractmethod
+    def get_next_mode(self, q: Configuration, mode: List[int]):
+        pass
+
+    @abstractmethod
+    def is_collision_free(self, q: Configuration, mode: List[int]):
         pass
 
     @abstractmethod
@@ -182,7 +189,7 @@ class base_env(ABC):
         self,
         q1: Configuration,
         q2: Configuration,
-        m: List[int],
+        mode: List[int],
         resolution: float = 0.1,
     ):
         pass
@@ -201,7 +208,7 @@ class base_env(ABC):
                 print(f"There is a collision at index {i}")
                 # col = self.C.getCollisionsTotalPenetration()
                 # print(col)
-                self.C.view(True)
+                self.show()
                 return False
 
             # if the next mode is a transition, check where to go
