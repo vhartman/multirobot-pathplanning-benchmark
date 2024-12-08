@@ -4,7 +4,7 @@ import random
 
 from abc import ABC, abstractmethod
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
 from configuration import Configuration, config_dist
@@ -128,7 +128,7 @@ def state_dist(start: State, end: State) -> float:
 
 
 # concrete implementations of the required abstract classes for the sequence-setting.
-class SequenceMixin(ABC):
+class SequenceMixin:
     def _make_sequence_from_names(self, names):
         sequence = []
 
@@ -175,7 +175,7 @@ class SequenceMixin(ABC):
             mode.append(mode_dict[r])
 
         return mode
-    
+
     def get_current_seq_index(self, mode: List[int]) -> int:
         # Approach: iterate through all indices, find them in the sequence, and check which is the one
         # that has to be fulfilled first
@@ -186,7 +186,7 @@ class SequenceMixin(ABC):
                 min_sequence_pos = min(self.sequence.index(m), min_sequence_pos)
 
         return min_sequence_pos
-    
+
     # TODO: is that really a good way to sample a mode?
     def sample_random_mode(self) -> List[int]:
         m = self.start_mode
@@ -196,7 +196,6 @@ class SequenceMixin(ABC):
             m = self.get_next_mode(None, m)
 
         return m
-
 
     def get_sequence(self):
         return self.sequence
@@ -222,7 +221,7 @@ class base_env(ABC):
 
     start_mode: List[int]
     terminal_mode: List[int]
-    
+
     def __init__(self):
         pass
 
@@ -245,7 +244,7 @@ class base_env(ABC):
     def get_all_bounds(self):
         self.bounds
 
-    # def get_robot_bounds(self):
+    # def get_robot_bounds(self, robot):
     #     self.bounds
 
     # @abstractmethod
@@ -281,7 +280,7 @@ class base_env(ABC):
         pass
 
     @abstractmethod
-    def is_collision_free(self, q: Configuration, mode: List[int]):
+    def is_collision_free(self, q: Optional[Configuration], mode: List[int]):
         pass
 
     @abstractmethod
@@ -302,6 +301,7 @@ class base_env(ABC):
         # check if it is collision free and if all modes are passed in order
         # only take the configuration into account for that
         mode = self.start_mode
+        collision = False
         for i in range(len(path)):
             # check if the state is collision free
             if not self.is_collision_free(path[i].q.state(), mode):
@@ -309,7 +309,7 @@ class base_env(ABC):
                 # col = self.C.getCollisionsTotalPenetration()
                 # print(col)
                 self.show()
-                return False
+                collision = True
 
             # if the next mode is a transition, check where to go
             if self.is_transition(path[i].q, mode):
@@ -321,6 +321,10 @@ class base_env(ABC):
 
         if not self.done(path[-1].q, path[-1].mode):
             print("Final mode not reached")
+            return False
+
+        if collision:
+            print("There was a collision")
             return False
 
         return True

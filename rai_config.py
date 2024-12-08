@@ -339,7 +339,7 @@ def make_two_dim_handover(view: bool = False):
 
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
         ry.ST.cylinder, size=[4, 0.1, 0.04, 0.2]
-    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+    ).setColor([1, 0., 0]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
     ).setJointState([-0.5, 0.8, 0])
 

@@ -53,7 +53,7 @@ def set_robot_active(C: ry.Config, robot_prefix: str) -> None:
     C.selectJoints(robot_joints)
 
 
-class rai_env(base_env, SequenceMixin):
+class rai_env(SequenceMixin, base_env):
     # robot things
     C: ry.Config
     limits: NDArray
@@ -117,12 +117,12 @@ class rai_env(base_env, SequenceMixin):
 
         return False
 
-    def show_config(self, q):
+    def show_config(self, q, blocking=True):
         self.C.setJointState(q)
-        self.C.view(True)
+        self.C.view(blocking)
 
-    def show(self):
-        self.C.view(True)
+    def show(self, blocking=True):
+        self.C.view(blocking)
 
     def is_transition(self, q: Configuration, m: List[int]) -> bool:
         if m == self.terminal_mode:
@@ -181,13 +181,14 @@ class rai_env(base_env, SequenceMixin):
 
     # Environment functions: collision checking
     def is_collision_free(
-        self, q: Configuration, m: List[int], collision_tolerance: float = 0.01
+        self, q: Optional[Configuration], m: List[int], collision_tolerance: float = 0.01
     ) -> bool:
         # print(q)
         # self.C.setJointState(q)
 
-        self.set_to_mode(m)
-        self.C.setJointState(q)
+        if q is not None:
+            self.set_to_mode(m)
+            self.C.setJointState(q)
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:

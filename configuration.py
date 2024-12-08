@@ -164,19 +164,19 @@ class NpConfiguration(Configuration):
 
 
 def config_dist(
-    q_start: Configuration, q_end: Configuration, metric: str = "euclidean"
+    q_start: Configuration, q_end: Configuration, metric: str = "."
 ) -> float:
     return type(q_start)._dist(q_start, q_end, metric)
 
 
 def batch_config_dist(
-    pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean"
+    pt: Configuration, batch_pts: List[Configuration], metric: str = "."
 ) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
 
 def config_cost(
-    q_start: Configuration, q_end: Configuration, metric: str = "euclidean"
+    q_start: Configuration, q_end: Configuration, metric: str = "."
 ) -> float:
     num_agents = q_start.num_agents()
     dists = np.zeros(num_agents)
@@ -203,7 +203,7 @@ def config_cost(
 def batch_config_cost(
     starts: List[Configuration],
     batch_other: List[Configuration],
-    metric: str = "euclidean",
+    metric: str = ".",
 ) -> float:
     diff = np.array([start.q.state() for start in starts]) - np.array(
         [other.q.state() for other in batch_other]
