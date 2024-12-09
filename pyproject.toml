@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multi-robot-multi-goal-path-planning"
+version = "0.1.0"
+description = "A benchmarking framework for multi-robot path planning"
+readme = "readme.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.21.0",
+    "networkx>=2.6.0",
+    "matplotlib>=3.4.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.2.0",
+    "mypy>=0.910",
+    "black>=21.5b1"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["multi_robot_multi_goal_planning*"]
