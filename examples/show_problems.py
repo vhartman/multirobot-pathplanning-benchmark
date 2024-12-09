@@ -1,4 +1,3 @@
-import multi_robot_multi_goal_planning as mrmgp
 import multi_robot_multi_goal_planning.problems as problems
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 
@@ -7,7 +6,6 @@ import argparse
 import time
 
 
-# TODO: make rai-independent
 def visualize_modes(env: rai_env):
     env.show()
 
@@ -15,14 +13,19 @@ def visualize_modes(env: rai_env):
 
     m = env.start_mode
     for i in range(len(env.sequence)):
-        print("mode", m)
+        print('--------')
+        print("Mode", m)
         switching_robots = env.get_goal_constrained_robots(m)
 
         q = []
         task = env.get_active_task(m)
         goal_sample = task.goal.sample()
 
-        print(task.name)
+        if task.name is not None:
+            print('Active Task name:', task.name)
+        print('Involved robots: ', task.robots)
+        
+        print('Goal state:')
         print(goal_sample)
 
         print("switching robots: ", switching_robots)
@@ -46,7 +49,7 @@ def visualize_modes(env: rai_env):
         print(q)
 
         print(
-            "is collision free: ",
+            "Is collision free: ",
             env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m),
         )
 

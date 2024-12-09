@@ -7,9 +7,8 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from configuration import Configuration, config_dist
-
-from dependency_graph import DependencyGraph
+from multi_robot_multi_goal_planning.problems.configuration import Configuration, config_dist
+from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
 
 
 class Goal(ABC):
