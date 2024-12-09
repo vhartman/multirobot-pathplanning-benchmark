@@ -4,6 +4,7 @@ from typing import List
 from numpy.typing import NDArray
 
 from abc import ABC, abstractmethod
+import torch
 
 
 class Configuration(ABC):
@@ -54,14 +55,12 @@ class Configuration(ABC):
                 dists[robot_index] = d**0.5
             else:
                 dists[robot_index] = np.max(np.abs(diff))
-
         return dists
-
+     
     @classmethod
     def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> float:
         return np.array([cls._dist(pt, o, metric) for o in batch_other])
-
-
+     
 class ListConfiguration(Configuration):
     def __init__(self, q_list):
         self.q = q_list
@@ -84,7 +83,6 @@ class ListConfiguration(Configuration):
 
     def num_agents(self):
         return len(self.q)
-
 
 class NpConfiguration(Configuration):
     # __slots__ = 'slice', 'q', '_num_agents'
@@ -178,7 +176,40 @@ class NpConfiguration(Configuration):
             return np.max(dists, axis=0)
         else:
             return np.max(np.abs(diff), axis=1)
+    
+    @classmethod
+    def _batch_dist_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
+        q_tensor = torch.as_tensor(pt.q, device='cuda')
+        diff = q_tensor - batch_other  # Shape: (batch_size, dim)
 
+        if metric == "euclidean":
+            dists = [
+            torch.linalg.norm(diff[:, s:e], dim=1, keepdim=True) for s, e in pt.slice
+            ] 
+            dists = torch.cat(dists, dim=1)
+            return dists.max(dim=1).values 
+        # elif metric == "chebyshev":
+        else:
+            return torch.max(torch.abs(diff), dim=1).values  # Shape: (batch_size,)
+        
+    @classmethod
+    def _batch_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
+        q_tensor = torch.as_tensor(pt.q, device='cuda')
+        diff = q_tensor - batch_other  
+
+        if metric == "euclidean":
+            dists = [
+                torch.linalg.norm(diff[:, s:e], dim=1, keepdim=True) for s, e in pt.slice
+            ]  
+        else:  
+            dists = [
+                torch.max(torch.abs(diff[:, s:e]), dim=1, keepdim=True).values for s, e in pt.slice
+            ] 
+        dists = torch.cat(dists, dim=1)  
+        max_dists = dists.max(dim=1).values 
+        sum_dists = dists.sum(dim=1)  
+        costs = max_dists + 0.01 * sum_dists
+        return costs, dists
 
 def config_dist(
     q_start: Configuration, q_end: Configuration, metric: str = "euclidean"
@@ -187,39 +218,23 @@ def config_dist(
 
 def config_dists(
     q_start: Configuration, q_end: Configuration, metric: str = "."
-) -> float:
+) -> NDArray:
     return type(q_start)._dists(q_start, q_end, metric)
-
 
 def batch_config_dist(
     pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean"
 ) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
+def batch_config_dist_torch(
+    pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean"
+) -> NDArray:
+    return type(pt)._batch_dist_torch(pt, batch_pts, metric)
 
-def config_cost(
-    q_start: Configuration, q_end: Configuration, metric: str = "euclidean"
-) -> float:
-    num_agents = q_start.num_agents()
-    dists = np.zeros(num_agents)
-
-    for robot_index in range(num_agents):
-        # print(robot_index)
-        # print(q_start)
-        # print(q_end)
-        # d = np.linalg.norm(q_start[robot_index] - q_end[robot_index])
-        diff = q_start.robot_state(robot_index) - q_end.robot_state(robot_index)
-        if metric == "euclidean":
-            d = 0
-            for j in range(len(diff)):
-                d += (diff[j]) ** 2
-            dists[robot_index] = d**0.5
-        else:
-            dists[robot_index] = np.max(np.abs(diff))
-
-    # dists = np.linalg.norm(np.array(q_start) - np.array(q_end), axis=1)
-    return max(dists) + 0.01 * sum(dists)
-    # return np.sum(dists)
+def batch_config_torch(
+    pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean"
+) -> torch.Tensor:
+    return type(pt)._batch_torch(pt, batch_pts, metric)
 
 def config_cost(
     q_start: Configuration, q_end: Configuration, metric: str = "euclidean"

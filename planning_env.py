@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import List
 from numpy.typing import NDArray
 
-from configuration import Configuration, config_dist
+from configuration import Configuration, config_dist, config_dists
 
 # from dependency_graph import DependencyGraph
 
@@ -124,12 +124,6 @@ def state_dist(start: State, end: State) -> float:
         return np.inf
 
     return config_dist(start.q, end.q)
-
-def state_dists(start: State, end: State) -> float:
-    if start.mode != end.mode:
-        return np.inf
-
-    return config_dists(start.q, end.q)
 
 # TODO: split into env + problem specification
 class base_env(ABC):

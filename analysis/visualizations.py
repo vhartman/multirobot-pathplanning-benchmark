@@ -52,11 +52,11 @@ def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
         result = data["result"]
         time.append(data["time"])
         
-
         all_init_path = data["all_init_path"]
         if all_init_path and not init_path:
             init_path = True # iteration where first iteration was found
             print(time[-1])
+            init_path_time = time[-1]
         if init_path:
             
             cost = result["total"]
@@ -64,13 +64,13 @@ def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
             if cost is None:
                 costs.append(float('nan'))
             else:
-                costs.append(cost)
+                costs.append(cost.item())
 
             for agent in range(num_agents):
-                cost = agent_cost[agent]
+                cost = agent_cost[0][agent]
                 if cost is None:
-                    cost = float('nan')
-                agent_costs[agent].append(cost)
+                    cost = np.array(float('nan'))
+                agent_costs[agent].append(cost.cpu().numpy())
         else:
             costs.append(float('nan'))
             for agent in range(num_agents):
@@ -96,6 +96,22 @@ def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
         mode='lines',
         name=cost_label,
         line=dict(color='black'),
+        showlegend=True  # Ensure "Total Cost" is in the legend
+    ))
+    fig.add_trace(go.Scatter(
+        x=[0],
+        y=[0],
+        mode='lines',
+        name= "",
+        line=dict(color='white'),
+        showlegend=True  # Ensure "Total Cost" is in the legend
+    ))
+    fig.add_trace(go.Scatter(
+        x=[0],
+        y=[0],
+        mode='markers',
+        name= f"Initial sol.found after {np.round(init_path_time,3)}s",
+        line=dict(color='white'),
         showlegend=True  # Ensure "Total Cost" is in the legend
     ))
     max_cost = np.nanmax(costs)
@@ -143,8 +159,7 @@ def average(sum_times, runs, max_len, times, costs):
     
     return np.mean(average_costs, axis=0).tolist(), average_time
 
-
-def get_post_cost_plot(env, config, path, output_filename):
+def get_cost_shortcutting_plot(env, config, path, output_filename):
     # Initialize lists and Plotly objects
     costs = []
     times = []
@@ -156,11 +171,13 @@ def get_post_cost_plot(env, config, path, output_filename):
     colors = colors_plotly()  # Assuming this function is defined elsewhere
     cost_function = config["cost_function"]
     cost_label = get_cost_label(cost_function, num_agents - 1)  # Assuming this function is defined elsewhere
-    labels = ["Shortcutting", "Partial single dim", "Partial random subset"]
+    labels = ["Shortcutting per mode", "Partial single dim per mode", "Partial random subset per mode", 
+              "Shortcutting per task (1 robot)", "Partial single dim per task (1 robot)", "Partial random subset per task (1 robot)", 
+              "Shortcutting per task (all possible robot)", "Partial single dim per task (all possible robot)", "Partial random subset per task (all possible robot)"]
     
 
     # Loop through versions to process data
-    for version in range(3):
+    for version in range(9):
         bool_legend = True
         folder = os.path.join(path, f"Post_{version}")
         # Get sorted list of .pkl files in the folder
@@ -180,7 +197,7 @@ def get_post_cost_plot(env, config, path, output_filename):
         for pkl_file in pkl_files:
             with open(pkl_file, 'rb') as file:
                 data = dill.load(file)
-            
+            data["total_cost"][0] = data["total_cost"][0].item()
             # Append data for flattening later
             times.append(data["time"])
             version_times.append(data["time"])
@@ -241,7 +258,7 @@ def get_post_cost_plot(env, config, path, output_filename):
     # Update layout with titles, axis labels, and legend
     fig.update_layout(
         title="Cost vs Time",
-        xaxis=dict(title="Time [s]", range=[0, max_time + 0.5], autorange=False),
+        xaxis=dict(title="Time [s]", range=[0, max_time + 0.1], autorange=False),
         yaxis=dict(title="Cost [m]", range=[min_cost -0.01, max_cost + 0.01], autorange=False),
         margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
         legend=dict(
@@ -255,12 +272,6 @@ def get_post_cost_plot(env, config, path, output_filename):
     
     # Save the plot as an image
     fig.write_image(output_filename)
-
-
-def count_files_in_folder(folder_path):
-    files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-    print(f"Found {len(files)} files")
-    return len(files)
 
 def developement_animation(config, env, env_path, pkl_folder, output_html, with_tree, divider = None):
 
@@ -499,9 +510,9 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
                 for robot_idx, robot in enumerate(env.robots):
                     if informed_sampling['L']:
                         if robot_idx in informed_sampling['L'].keys():
-                            C = informed_sampling['C'][robot_idx]
-                            L = informed_sampling['L'][robot_idx]
-                            center = informed_sampling['center'][robot_idx]
+                            C = informed_sampling['C'][robot_idx].cpu().numpy()
+                            L = informed_sampling['L'][robot_idx].cpu().numpy()
+                            center = informed_sampling['center'][robot_idx].cpu().numpy()
                             focal_points = [informed_sampling['start'][robot_idx], informed_sampling['goal'][robot_idx]]
 
                             if C.shape[0] == 3:  # 3D case
@@ -661,10 +672,12 @@ if __name__ == "__main__":
         required=True,
         help="Select the mode of operation",
     )
+    
     args = parser.parse_args()
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
     path = get_latest_folder(directory)
+    path = "/home/tirza/output/091224_083733"
     env_name, config_params, _, _ = get_config(path)
     env = get_env_by_name(env_name)    
     pkl_folder = os.path.join(path, 'FramesData')
@@ -673,7 +686,7 @@ if __name__ == "__main__":
 
     if args.show == "development":
         print("Development")
-        with_tree = False
+        with_tree = True
         if with_tree:
             output_html = os.path.join(path, 'tree_animation_3d.html')
             reducer = 100
@@ -682,14 +695,13 @@ if __name__ == "__main__":
             reducer = 400
         developement_animation(config_params, env, env_path, pkl_folder, output_html, with_tree, reducer)    
         webbrowser.open('file://' + os.path.realpath(output_html))
-
     if args.show == "cost":
-        fix_axis = True
+        fix_axis = False
         output_filename_cost = os.path.join(path, 'Cost.png')
         get_cost_plot(env, config_params, pkl_folder, output_filename_cost, fix_axis)
     if args.show == "shortcutting_cost":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'ShortcuttingCost.png')
-        get_post_cost_plot(env, config_params, path, output_filename_cost)
+        get_cost_shortcutting_plot(env, config_params, path, output_filename_cost)
 
 

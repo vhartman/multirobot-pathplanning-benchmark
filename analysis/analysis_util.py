@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 
 def colors_plotly():
     return [
-    'blue', 'green', 'purple', 'orange', 'cyan', 'magenta', 'pink',
+    'blue', 'green', 'purple', 'orange', 'cyan', 'magenta', 
     'brown', 'lime', 'olive', 'navy', 'teal', 'coral', 'turquoise', 'gold', 'violet',
     'indigo', 'salmon', 'maroon', 'plum', 'orchid', 'tan', 'crimson', 'lavender',
     'chartreuse', 'azure', 'beige', 'khaki', 'slateblue', 'forestgreen', 'darkorange',
@@ -353,6 +353,11 @@ def mesh_traces_env(folder_path):
 
     # Create and show the plot
     return meshes
+
+def count_files_in_folder(folder_path):
+    files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+    print(f"Found {len(files)} files")
+    return len(files)
 
 # def visualize_rrt_with_joint_states(pkl_file_idx, env, tree, table, node_size=[0.005], edge_color=[0, 0, 1]):
 #     modes = []

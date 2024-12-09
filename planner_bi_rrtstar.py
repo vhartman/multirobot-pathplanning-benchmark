@@ -5,9 +5,7 @@ from planner_base import *
 import time as time
 import math
 
-
-
-class RRTstar:
+class BidirectionalRRTstar:
     def __init__(self, env, config: ConfigManager):
         self.env = env
         # self.gamma = ((2 *(1 + 1/self.dim))**(1/self.dim) * (self.FreeSpace()/self.UnitBallVolume())**(1/self.dim))*1.1 
@@ -17,10 +15,10 @@ class RRTstar:
         self.sampling = Sampling(env, self.operation, self.config)
         self.start = time.time()
      
-    def Nearest(self, n_rand, subtree_set): 
-        set_dists = batch_config_dist_torch(n_rand.state.q, subtree_set, "euclidean")
+    def Nearest(self, n_rand, subtree, batch_subtree): 
+        set_dists = batch_config_dist_torch(n_rand.state.q, batch_subtree, "euclidean")
         idx = torch.argmin(set_dists).item()
-        return  self.operation.active_mode.subtree[idx]
+        return  subtree[idx]
       
     def Steer(self,
         n_nearest: Node,
@@ -77,17 +75,17 @@ class RRTstar:
                 if self.env.is_edge_collision_free(
                     N_near[idx].state.q, n_new.state.q, self.operation.active_mode.label
                 ):
-                    c_min = c_new_tensor[idx]
-                    c_min_to_parent = batch_cost[idx]       # Update minimum cost
+                    c_min = c_new_tensor[idx]        # Update minimum cost
+                    c_min_to_parent = batch_cost[idx]
                     n_min = N_near[idx]              # Update nearest node
                     break
 
         n_new.cost = c_min
         n_new.parent = n_min
-        n_new.cost_to_parent = c_min_to_parent
         n_min.children.append(n_new) #Set child
         n_new.agent_cost = n_new.parent.agent_cost + batch_dist[N_near.index(n_min)].unsqueeze(0) 
         n_new.agent_cost_to_parent = batch_dist[N_near.index(n_min)].unsqueeze(0)
+        n_new.cost_to_parent = c_min_to_parent
         self.operation.tree +=1
         self.operation.active_mode.subtree[len(self.operation.active_mode.subtree)] = n_new
         self.operation.active_mode.batch_subtree = torch.cat((self.operation.active_mode.batch_subtree, n_new.q_tensor.unsqueeze(0)), dim=0)
@@ -138,23 +136,55 @@ class RRTstar:
         self.operation.path_nodes = path_nodes[::-1]
         self.operation.cost = self.operation.path_nodes[-1].cost
 
-    def UpdateCost(self, n):
+    def UpdateCost(self, n, connection = False):
         stack = [n]
         while stack:
             current_node = stack.pop()
+            if connection:
+                        if current_node not in self.operation.active_mode.subtree.values():
+                            self.operation.active_mode.subtree[len(self.operation.active_mode.subtree)] = current_node
+                            self.operation.active_mode.batch_subtree = torch.cat((self.operation.active_mode.batch_subtree, current_node.q_tensor.unsqueeze(0)), dim=0)
             children = current_node.children
             if children:
                 for _, child in enumerate(children):
                     child.cost = current_node.cost + child.cost_to_parent
                     child.agent_cost = current_node.agent_cost + child.agent_cost_to_parent
+                    
                 stack.extend(children)
-   
-    def FindOptimalTransitionNode(self, iteration):
+
+    def UpdateTree(self, n, n_parent, cost_to_parent, dists): #TODO need to update it
+        while True:
+            n.cost = n_parent.cost +  cost_to_parent
+            n.agent_cost = n_parent.parent.agent_cost + dists
+            self.UpdateCost(n, True)
+            n_parent_inter = n.parent
+            cost_to_parent_inter = n.cost_to_parent
+            agent_cost_to_parent_inter = n.agent_cost_to_parent
+
+            n.parent = n_parent
+            n.cost_to_parent = cost_to_parent
+            n.agent_cost_to_parent = dists
+            n_parent.children.append(n) #Set child
+            
+            cost_to_parent = cost_to_parent_inter
+            dists = agent_cost_to_parent_inter
+            n_parent = n
+            n = n_parent_inter
+            if not n:
+                self.operation.active_mode.transition_nodes.append(n_parent)
+                return n_parent
+            n.children.remove(n_parent)
+        
+    def FindOptimalTransitionNode(self, iteration, connection = False):
         transition_nodes = self.operation.modes[-1].transition_nodes
         if not transition_nodes:
             return
         costs = torch.cat([node.cost.unsqueeze(0) for node in transition_nodes])
-        valid_mask = costs < self.operation.cost
+        if connection:
+            valid_mask = costs < np.inf
+
+        else:
+            valid_mask = costs < self.operation.cost
 
         if valid_mask.any(): 
             # Find the index of the node with the lowest cost among valid nodes
@@ -165,7 +195,8 @@ class RRTstar:
             lowest_cost_node = transition_nodes[torch.nonzero(valid_mask)[min_cost_idx].item()]
 
             self.GeneratePath(lowest_cost_node)
-            print(f"iter  {iteration}: Changed cost to ", self.operation.cost, " Mode ", self.operation.active_mode.label)
+            if not connection:
+                print(f"iter  {iteration}: Changed cost to ", self.operation.cost, " Mode ", self.operation.active_mode.label)
 
             if (self.operation.ptc_cost - self.operation.cost) > self.config.ptc_threshold:
                 self.operation.ptc_cost = self.operation.cost
@@ -173,46 +204,34 @@ class RRTstar:
 
             save_data(self.config, self.operation, time.time()-self.start)
 
-    def AddTransitionNode(self, n):
+    def AddTransitionNode(self, n): #Don't need both trees
             idx = self.operation.modes.index(self.operation.active_mode)
             if idx != len(self.operation.modes) - 1:
                 self.operation.modes[idx + 1].subtree[len(self.operation.modes[idx + 1].subtree)] = n
                 self.operation.modes[idx + 1].batch_subtree = torch.cat((self.operation.modes[idx + 1].batch_subtree, n.q_tensor.unsqueeze(0)), dim=0)
-    
+
     def ManageTransition(self, n_new, iteration):
-        constrained_robots = self.env.get_active_task(self.operation.active_mode.label).robots
-        indices = []
-        radius = 0
-        for r in constrained_robots:
-            indices.extend(self.env.robot_idx[r])
-            radius += self.config.goal_radius
-        if self.env.get_active_task(self.operation.active_mode.label).goal.satisfies_constraints(n_new.state.q.state()[indices], self.config.goal_radius):
-            self.operation.active_mode.transition_nodes.append(n_new)
-            n_new.transition = True
-            # Check if initial transition node of current mode is found
-            if self.operation.active_mode.label == self.operation.modes[-1].label and not self.operation.init_path:
-            # if self.operation.task_sequence != [] and self.operation.active_mode.constraint.label == self.operation.task_sequence[0]:
-                print(f"iter  {iteration}: {constrained_robots} found T{self.env.get_current_seq_index(self.operation.active_mode.label)}: Cost: ", n_new.cost)
-                # if self.operation.task_sequence != []:
-                self.InitializationMode(self.operation.modes[-1])
-                if self.env.terminal_mode != self.operation.modes[-1].label:
-                    self.operation.modes.append(Mode(self.env.get_next_mode(n_new.state.q,self.operation.active_mode.label), self.env))
-                elif self.operation.active_mode.label == self.env.terminal_mode:
-                    self.operation.ptc_iter = iteration
-                    self.operation.ptc_cost = n_new.cost
-                    self.operation.init_path = True
-                
-                self.GeneratePath(n_new)
-                save_data(self.config, self.operation, time.time()-self.start, init_path=self.operation.init_path)
-            self.AddTransitionNode(n_new)
-        self.FindOptimalTransitionNode(iteration)
+            constrained_robots = self.env.get_active_task(self.operation.active_mode.label).robots
+            indices = []
+            radius = 0
+            for r in constrained_robots:
+                indices.extend(self.env.robot_idx[r])
+                radius += self.config.goal_radius
+            if self.env.get_active_task(self.operation.active_mode.label).goal.satisfies_constraints(n_new.state.q.state()[indices], self.config.goal_radius):
+                if not self.operation.active_mode.connected:
+                    n_new.transition = True
+                    return
+                self.operation.active_mode.transition_nodes.append(n_new)
+                n_new.transition = True
+                self.AddTransitionNode(n_new)
+            self.FindOptimalTransitionNode(iteration)
 
     def SetModePorbability(self):
         num_modes = len(self.operation.modes)
         if num_modes == 1:
             return [1] 
         # if self.operation.task_sequence == [] and self.config.mode_probability != 0:
-        if self.env.terminal_mode == self.operation.modes[-1].label and self.config.mode_probability != 0:
+        if self.operation.init_path and self.config.mode_probability != 0:
                 return [1/num_modes] * num_modes
         
         elif self.config.mode_probability == 'None':
@@ -293,7 +312,23 @@ class RRTstar:
                     if robot == constrained_robtos[-1]:
                         return
             mode = self.env.get_next_mode(None,mode)
-                
+
+    def Initialization(self):
+        active_mode = self.operation.modes[0]
+        start_state = State(self.env.start_pos, active_mode.label)
+        start_node = Node(start_state)
+        active_mode.batch_subtree = torch.cat((active_mode.batch_subtree, start_node.q_tensor.unsqueeze(0)), dim=0)
+        active_mode.subtree[len(active_mode.subtree)] = start_node
+        # Bidirectional
+        for _ in range(100): 
+            end_state = self.GetGoalStateOfMode(active_mode.label, start_node)
+            first_end_node = Node(end_state)
+            self.operation.tree += 1
+            # active_mode.transition_nodes.append(first_end_node)
+            first_end_node.transition = True
+            active_mode.batch_subtree_b = torch.cat((active_mode.batch_subtree_b, first_end_node.q_tensor.unsqueeze(0)), dim=0)
+            active_mode.subtree_b[len(active_mode.subtree_b)] = first_end_node
+       
     def SampleNodeManifold(self, operation: Operation):
         if np.random.uniform(0, 1) <= self.config.p_goal:
             if self.env.terminal_mode != operation.modes[-1].label and operation.active_mode.label == operation.modes[-1].label:
@@ -302,14 +337,84 @@ class RRTstar:
                 if self.config.informed_sampling: 
                     return Node(self.sampling.sample_state(operation.active_mode, 1, self.config))
                 return Node(self.sampling.sample_state(operation.active_mode, 0, self.config))
-        return Node(self.sampling.sample_state(operation.active_mode, 2, self.config)) 
+        return Node(self.sampling.sample_state(operation.active_mode, 2, self.config))
     
-    def Initialization(self):
-        active_mode = self.operation.modes[0]
-        start_state = State(self.env.start_pos, active_mode.label)
-        start_node = Node(start_state)
-        active_mode.batch_subtree = torch.cat((active_mode.batch_subtree, start_node.q_tensor.unsqueeze(0)), dim=0)
-        active_mode.subtree[len(active_mode.subtree)] = start_node
+    #New
+    def GetGoalStateOfMode(self, mode:List[int], n:Node)-> State:
+        constrained_robots = self.env.get_active_task(mode).robots
+        q = np.zeros(len(n.state.q.state()))
+        i = 0
+        for robot in self.env.robots:
+            indices = self.env.robot_idx[robot]
+            if robot in constrained_robots:
+                if len(constrained_robots) > 1:
+                    dim = self.env.robot_dims[robot]
+                    q[indices] = self.env.get_active_task(mode).goal.goal[i*dim:(i+1)*dim]
+                    i+=1
+                else:
+                    q[indices] = self.env.get_active_task(mode).goal.goal
+            else:
+                lims = self.env.limits[:, self.env.robot_idx[robot]]
+                q[indices] = np.random.uniform(lims[0], lims[1])
+
+        return State(type(self.env.get_start_pos())(q, n.state.q.slice), mode)
+    #New
+    def SWAP(self):
+        if not self.operation.active_mode.connected:
+            self.operation.active_mode.subtree, self.operation.active_mode.subtree_b = self.operation.active_mode.subtree_b, self.operation.active_mode.subtree
+            self.operation.active_mode.batch_subtree, self.operation.active_mode.batch_subtree_b = self.operation.active_mode.batch_subtree_b, self.operation.active_mode.batch_subtree
+            self.operation.active_mode.order *= (-1)
+    #New
+    def Connect(self, n_new, n_nearest_b, iteration):
+        #Only need to connect if initial path not found for this mode
+        if not self.operation.active_mode.connected:
+            # dists = config_dists(n_new.state.q, n_nearest_b.state.q, "euclidean")
+            cost, dists = batch_config_torch(n_new.state.q, torch.tensor([n_nearest_b.state.q.state()], device = 'cuda'), "euclidean")
+            constrained_robots = self.env.get_active_task(self.operation.active_mode.label).robots
+            relevant_dists = []
+            for r_idx, r in enumerate(self.env.robots):
+                if r in constrained_robots:
+                    relevant_dists.append(dists[0][r_idx].item())
+
+            # active_robot = 0 #TODO only connect if path for active mode is found
+            if np.max(relevant_dists) < self.config.step_size:
+                if self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, self.operation.active_mode.label): 
+                    if self.operation.active_mode.order == -1: # Meaning we switch again such that subtree is beginning from start and subtree_b from goal
+                        self.SWAP() 
+                        n = self.UpdateTree(n_new, n_nearest_b, cost[0], dists[0].unsqueeze(0)) #Need to make all the costs right of the other tre #TODO not working yet
+                    else:
+                        n = self.UpdateTree(n_nearest_b, n_new, cost[0], dists[0].unsqueeze(0)) #Need to make all the costs right of the other tre #TODO not working yet
+                     
+                    self.FindOptimalTransitionNode(iteration, True)
+                    self.operation.active_mode.connected = True
+                    print(f"iter  {iteration}: {constrained_robots} found T{self.env.get_current_seq_index(self.operation.active_mode.label)}: Cost: ", self.operation.cost)
+                    # if self.operation.task_sequence != []:
+                    self.InitializationMode(self.operation.modes[-1])
+                    if self.env.terminal_mode != self.operation.modes[-1].label:
+                        self.operation.modes.append(Mode(self.env.get_next_mode(n_new.state.q,self.operation.active_mode.label), self.env))
+                        # Need to initialize goal tree
+                        if self.operation.modes[-1].label == self.env.terminal_mode:
+                            nr = 1
+                        else:
+                            nr = 100
+                        for _ in range(nr):
+                            end_state = self.GetGoalStateOfMode(self.operation.modes[-1].label, n_new)
+                            first_end_node = Node(end_state)
+                            self.operation.tree += 1
+                            # self.operation.modes[-1].transition_nodes.append(first_end_node)
+                            first_end_node.transition = True
+                            self.operation.modes[-1].batch_subtree_b = torch.cat((self.operation.modes[-1].batch_subtree_b, first_end_node.q_tensor.unsqueeze(0)), dim=0)
+                            self.operation.modes[-1].subtree_b[len(self.operation.modes[-1].subtree_b)] = first_end_node
+                        self.AddTransitionNode(n)
+
+                    elif self.operation.active_mode.label == self.env.terminal_mode:
+                        self.operation.ptc_iter = iteration
+                        self.operation.ptc_cost = self.operation.cost
+                        self.operation.init_path = True
+                    save_data(self.config, self.operation, time.time()-self.start, init_path=self.operation.init_path)
+                                   
+                #TODO rewire everything?
+                #TODO only check dist of active robots to connect?
 
     def Plan(self) -> dict:
         i = 0
@@ -317,9 +422,11 @@ class RRTstar:
         while True:
             # Mode selection
             self.operation.active_mode  = (np.random.choice(self.operation.modes, p= self.SetModePorbability()))
+            # InitializationMode of active mode
+
             # RRT* core
             n_rand = self.SampleNodeManifold(self.operation)
-            n_nearest = self.Nearest(n_rand, self.operation.active_mode.batch_subtree)    
+            n_nearest = self.Nearest(n_rand, self.operation.active_mode.subtree, self.operation.active_mode.batch_subtree)    
             n_new = self.Steer(n_nearest, n_rand, self.operation.active_mode.label)
 
             if self.env.is_collision_free(n_new.state.q.state(), self.operation.active_mode.label) and self.env.is_edge_collision_free(n_nearest.state.q, n_new.state.q, self.operation.active_mode.label):
@@ -331,16 +438,17 @@ class RRTstar:
                 self.FindParent(N_near, n_new, n_nearest, batch_cost, batch_dist, n_near_costs)
                 if self.Rewire(N_near, n_new, batch_cost, batch_dist, n_near_costs):
                     self.UpdateCost(n_new)
-                     
+                n_nearest_b =  self.Nearest(n_new, self.operation.active_mode.subtree_b, self.operation.active_mode.batch_subtree_b)
+                self.Connect(n_new, n_nearest_b, i) 
                 self.ManageTransition(n_new, i)
             if self.operation.init_path and i != self.operation.ptc_iter and (i- self.operation.ptc_iter)%self.config.ptc_max_iter == 0:
                 diff = self.operation.ptc_cost - self.operation.cost
                 self.operation.ptc_cost = self.operation.cost
                 if diff < self.config.ptc_threshold:
                     break
-            if i% 10 == 0 and i > 1000 and i < 1300:
-                save_data(self.config, self.operation, time.time()-self.start)
+            self.SWAP()
             i += 1
+            
 
         save_data(self.config, self.operation, time.time()-self.start, n_new = n_new, N_near = N_near, r =self.r, n_rand = n_rand.state.q)
         return self.operation.path    

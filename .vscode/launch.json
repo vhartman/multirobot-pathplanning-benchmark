@@ -107,6 +107,18 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "main.py -simple_2d --planner bi_rrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "bi_rrtstar"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "main.py -hallway --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
@@ -120,34 +132,68 @@
         },
 
         {
-            "name": "postprocessing.py -simple_2d --do shortcutting",
+            "name": "postprocessing.py -simple_2d --mode shortcutting",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",
             "args": [
-                "--do",
+                "--mode",
                 "shortcutting"
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py -simple_2d --do partial_singledim",
+            "name": "postprocessing.py -simple_2d --mode partial_singledim",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",
             "args": [
-                "--do",
+                "--mode",
                 "partial_singledim"
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py -simple_2d --do partial_random",
+            "name": "postprocessing.py -simple_2d --mode partial_random",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",
             "args": [
-                "--do",
+                "--mode",
+                "partial_random"
+            ],
+            "console": "integratedTerminal"
+        },
+
+        {
+            "name": "postprocessing.py -simple_2d --agent shortcutting",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/postprocessing.py",
+            "args": [
+                "--agent",
+                "shortcutting"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "postprocessing.py -simple_2d --agent partial_singledim",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/postprocessing.py",
+            "args": [
+                "--agent",
+                "partial_singledim"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "postprocessing.py -simple_2d --agent partial_random",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/postprocessing.py",
+            "args": [
+                "--agent",
                 "partial_random"
             ],
             "console": "integratedTerminal"
@@ -182,6 +228,39 @@
             "args": [
                 "--show",
                 "cost"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "check.py --do interpolation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/check.py",
+            "args": [
+                "--do",
+                "interpolation"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "check.py --do nn",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/check.py",
+            "args": [
+                "--do",
+                "nn"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "check.py --do tree",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/check.py",
+            "args": [
+                "--do",
+                "tree"
             ],
             "console": "integratedTerminal"
         }

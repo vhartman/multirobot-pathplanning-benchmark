@@ -3,6 +3,7 @@ import numpy as np
 import random
 import argparse
 import time
+import torch
 
 from typing import List, Dict
 from numpy.typing import NDArray
@@ -285,7 +286,7 @@ class rai_env(base_env):
                 return False
 
         return True
-
+    
     def is_path_collision_free(self, path: List[State], randomize_order=True) -> bool:
         idx = list(range(len(path) - 1))
         if randomize_order:
@@ -1617,7 +1618,7 @@ def get_env_by_name(name):
     elif name == "eggs":
         env = rai_ur10_arm_egg_carton_env()
     elif name == "triple_waypoints":
-        env = rai_multi_panda_arm_waypoint_env(num_robots=2, num_waypoints=2)
+        env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=1)
     elif name == "welding":
         env = rai_quadruple_ur10_arm_spot_welding_env()
     elif name == "bottles":
