@@ -132,7 +132,7 @@
         },
 
         {
-            "name": "postprocessing.py -simple_2d --mode shortcutting",
+            "name": "postprocessing.py --mode shortcutting",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",
@@ -143,7 +143,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py -simple_2d --mode partial_singledim",
+            "name": "postprocessing.py --mode partial_singledim",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",
@@ -154,7 +154,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py -simple_2d --mode partial_random",
+            "name": "postprocessing.py --mode partial_random",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",
@@ -166,7 +166,7 @@
         },
 
         {
-            "name": "postprocessing.py -simple_2d --agent shortcutting",
+            "name": "postprocessing.py --agent shortcutting",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",
@@ -177,7 +177,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py -simple_2d --agent partial_singledim",
+            "name": "postprocessing.py --agent partial_singledim",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",
@@ -188,7 +188,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py -simple_2d --agent partial_random",
+            "name": "postprocessing.py --agent partial_random",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/postprocessing.py",

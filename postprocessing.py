@@ -435,7 +435,7 @@ def shortcutting_mode(dir, env, env_path, pkl_folder, config,  output_html, vers
         with open(filename, 'wb') as file:
             pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
-def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, version = 0, choice = 0):
+def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, version = 0, choice = 0, deterministic = False):
 
     pkl_files = sorted(
         [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
@@ -470,61 +470,73 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
         modes_legend = [mode for idx, mode in enumerate(original_discretized_modes) if discretized_transition[idx]]
         all_frame_traces.append(path_traces(colors, mode_sequence, discretized_path))
         dim = None
-        for _ in range(100000):
-            i1 = np.random.choice(len(discretized_path))
-            i2 = np.random.choice(len(discretized_path))
-                # dim = np.random.choice(range(env.robot_dims[env.robots[0]]))# TODO only feasible for same dimension across all robots
-            if np.abs(i1-i2) < 2:
-                continue
-            idx1 = min(i1, i2)
-            idx2 = max(i1, i2)
-            m1 = discretized_modes[idx1]    
-            m2 = discretized_modes[idx2]    
-            if m1 == m2 and choice == 0:
-                robot = None
-                if version == 4:
-                    dim = [np.random.choice(indices[r_idx]) for r_idx in range(len(env.robots))]
-                
-                if version == 5:
-                    dim = []
-                    for r_idx in range(len(env.robots)):
-                        all_indices = [i for i in indices[r_idx]]
-                        num_indices = np.random.choice(range(len(indices[r_idx])))
-                        random.shuffle(all_indices)
-                        dim.append(all_indices[:num_indices])
-            else:
-                robot = np.random.choice(len(env.robots))
-                if len(m1) > 1:
-                    task_agent = m1[1][robot]
+
+        if not deterministic:
+            range1 = 1
+            range2 = 100000
+        else:
+            range1 = len(discretized_path)
+            range2 = range1
+
+        for i in range(range1):
+            for j in range(range2):
+                if not deterministic:
+                    i1 = np.random.choice(len(discretized_path))
+                    i2 = np.random.choice(len(discretized_path))
                 else:
-                    task_agent = m1[0][robot]
-
-                if m2[0][robot] != task_agent:
+                    i1 = i
+                    i2 = j
+                    # dim = np.random.choice(range(env.robot_dims[env.robots[0]]))# TODO only feasible for same dimension across all robots
+                if np.abs(i1-i2) < 2:
                     continue
+                idx1 = min(i1, i2)
+                idx2 = max(i1, i2)
+                m1 = discretized_modes[idx1]    
+                m2 = discretized_modes[idx2]    
+                if m1 == m2 and choice == 0:
+                    robot = None
+                    if version == 4:
+                        dim = [np.random.choice(indices[r_idx]) for r_idx in range(len(env.robots))]
+                    
+                    if version == 5:
+                        dim = []
+                        for r_idx in range(len(env.robots)):
+                            all_indices = [i for i in indices[r_idx]]
+                            num_indices = np.random.choice(range(len(indices[r_idx])))
+                            random.shuffle(all_indices)
+                            dim.append(all_indices[:num_indices])
+                else:
+                    robot = np.random.choice(len(env.robots))
+                    if len(m1) > 1:
+                        task_agent = m1[1][robot]
+                    else:
+                        task_agent = m1[0][robot]
 
-                if version == 4:
-                    dim = [np.random.choice(indices[robot])]
-                if version == 5:
-                    all_indices = [i for i in indices[robot]]
-                    num_indices = np.random.choice(range(len(indices[robot])))
+                    if m2[0][robot] != task_agent:
+                        continue
 
-                    random.shuffle(all_indices)
-                    dim = all_indices[:num_indices]
+                    if version == 4:
+                        dim = [np.random.choice(indices[robot])]
+                    if version == 5:
+                        all_indices = [i for i in indices[robot]]
+                        num_indices = np.random.choice(range(len(indices[robot])))
 
-            state1 = discretized_path[idx1]
-            state2 = discretized_path[idx2]
-            edge, edge_cost =  interpolate(discretized_path[idx1:idx2], 
-                                                           discretized_costs[idx1], discretized_modes, indices, dim, version, robot, env.robots)
-            c_new = edge_cost[-1] + config_cost(edge[-1].q, state2.q, "euclidean") - edge_cost[0]
-            if c_new < (discretized_costs[idx2]- discretized_costs[idx1]) and env.is_edge_collision_free(state1.q, state2.q, m1): #what when two different modes??? (possible for one task) 
-                discretized_path[idx1:idx2] = edge
-                discretized_costs[idx1:idx2] = edge_cost
-                # discretized_modes[idx1:idx2] = edge_modes
-                update(discretized_path, discretized_costs, idx2)
-                all_frame_traces.append(path_traces(colors, mode_sequence, discretized_path))
-                overall_costs.append(discretized_costs[-1])
-                diff = time.time()- start
-                time_list.append(diff)
+                        random.shuffle(all_indices)
+                        dim = all_indices[:num_indices]
+
+                state1 = discretized_path[idx1]
+                state2 = discretized_path[idx2]
+                edge, edge_cost =  interpolate(discretized_path[idx1:idx2], 
+                                                            discretized_costs[idx1], discretized_modes, indices, dim, version, robot, env.robots)
+                c_new = edge_cost[-1] + config_cost(edge[-1].q, state2.q, "euclidean") - edge_cost[0]
+                if c_new < (discretized_costs[idx2]- discretized_costs[idx1]) and env.is_edge_collision_free(state1.q, state2.q, m1): #what when two different modes??? (possible for one task) 
+                    discretized_path[idx1:idx2] = edge
+                    discretized_costs[idx1:idx2] = edge_cost
+                    # discretized_modes[idx1:idx2] = edge_modes
+                    update(discretized_path, discretized_costs, idx2)
+                    all_frame_traces.append(path_traces(colors, mode_sequence, discretized_path))
+                    overall_costs.append(discretized_costs[-1])
+                    time_list.append(time.time()- start)
         path_visualization(all_frame_traces, env_path,modes_legend,original_discretized_path, discretized_transition, output_html)
         path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(discretized_path)}
         json_dir =os.path.join(dir, 'general.log') 
@@ -533,7 +545,10 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
             log_file.write(f"Before: {json.dumps(total_cost.item(), indent=4)}\n")
             log_file.write(f"After: {json.dumps(discretized_costs[-1].item(), indent=4)}\n")
         print("Before: ", total_cost.item(), "After " ,   discretized_costs[-1].item())
-        frames_directory = os.path.join(config["output_dir"], f'Post_{version+3*choice}')
+        if not deterministic:
+            frames_directory = os.path.join(config["output_dir"], f'Post_{version+3*choice}')
+        else:
+            frames_directory = os.path.join(config["output_dir"], f'Post_{version+6*(choice+1)}')
         os.makedirs(frames_directory, exist_ok=True)
         data = {
             "total_cost": overall_costs, 
@@ -547,17 +562,18 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
         with open(filename, 'wb') as file:
             pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     group = parser.add_mutually_exclusive_group(required=True)
 
+    # Nodes need to be in same mode (Post_{idx} with idx: 0,1,2)
     group.add_argument(
         "--mode",
         choices=["shortcutting", "partial_singledim", "partial_random"],
         help="Select the mode of operation for the environment",
     )
-
+    # Nodes need to be at least for one agent in the same task execution 
+    # (Post_{idx} with idx: 3-11, 3-5: choice=0, 6-8: choice=1, 9-11: choice=0/deterministic=True, 12-14: choice=1/deterministic=True)
     group.add_argument(
         "--agent",
         choices=["shortcutting", "partial_singledim", "partial_random"],
@@ -565,51 +581,57 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    #     parser.add_argument(
-    #     "--version",
-    #     choices=["mode", "task", "agent", "combination"],
-    #     required=True,
-    #     help="Specify the version for the selected type."
-    # )
 
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
     path = get_latest_folder(directory)
     # path = "/home/tirza/output/091224_083733"
-    path = '/home/tirza/output/091224_094935'
+    path = '/home/tirza/output/091224_083733'
     env_name, config_params, _, _ = get_config(path)
     env = get_env_by_name(env_name)    
     pkl_folder = os.path.join(path, 'FramesData')
     env_path = os.path.join(home_dir, f'env/{env_name}')
     save_env_as_mesh(env, env_path)
     choice = 0 # 0: all possible agents, 1: only one agent at a time
+    iteration = 20
+    deterministic = True
+    if choice == 0:
+        choice_name = 'all'
+    else:
+        choice_name = 'one'
+    if not deterministic:
+        name = 'prob'
+    else:
+        name = 'deterministic'
+    
 
-    if args.mode == "shortcutting": #in each mode
-        for _ in range(20):
+
+
+    #Each creates a folder with name Post_{idx} with idx as the corresponding number
+    if args.mode == "shortcutting":
+        for _ in range(iteration):
             output_html = os.path.join(path, 'shortcutting_mode.html')
             shortcutting_mode(path, env, env_path, pkl_folder, config_params, output_html, 0)
-    if args.mode == "partial_singledim": # in each mode
-        for _ in range(20):
+    if args.mode == "partial_singledim": 
+        for _ in range(iteration):
             output_html = os.path.join(path, 'partial_shortcutting_singledim_mode.html')
             shortcutting_mode(path, env, env_path, pkl_folder, config_params, output_html, 1)
-    if args.mode == "partial_random": # in each mode
-        for _ in range(20):
+    if args.mode == "partial_random": 
+        for _ in range(iteration):
             output_html = os.path.join(path, 'partial_shortcutting_random_mode.html')
             shortcutting_mode(path, env, env_path, pkl_folder, config_params, output_html, 2)
-    if args.agent == "shortcutting": #in each mode
-        for _ in range(20):
-            output_html = os.path.join(path, f'shortcutting_agent_{choice}.html')
-            shortcutting_agent(path, env, env_path, pkl_folder, config_params, output_html, 3, choice)
-    if args.agent == "partial_singledim": # in each mode
-        for _ in range(20):
-            output_html = os.path.join(path, f'partial_shortcutting_singledim_agent_{choice}.html')
-            shortcutting_agent(path, env, env_path, pkl_folder, config_params, output_html, 4, choice)
-    if args.agent == "partial_random": # in each mode
-        for _ in range(20):
-            output_html = os.path.join(path, f'partial_shortcutting_random_agent_{choice}.html')
-            shortcutting_agent(path, env, env_path, pkl_folder, config_params, output_html, 5, choice)
-
-    
+    if args.agent == "shortcutting":
+        for _ in range(iteration):
+            output_html = os.path.join(path, f'shortcutting_agent_{choice_name}_{name}.html')
+            shortcutting_agent(path, env, env_path, pkl_folder, config_params, output_html, 3, choice, deterministic)
+    if args.agent == "partial_singledim": 
+        for _ in range(iteration):
+            output_html = os.path.join(path, f'partial_shortcutting_singledim_agent_{choice_name}_{name}.html')
+            shortcutting_agent(path, env, env_path, pkl_folder, config_params, output_html, 4, choice, deterministic )
+    if args.agent == "partial_random": 
+        for _ in range(iteration):
+            output_html = os.path.join(path, f'partial_shortcutting_random_agent_{choice_name}_{name}.html')
+            shortcutting_agent(path, env, env_path, pkl_folder, config_params, output_html, 5, choice, deterministic)
 
     # webbrowser.open('file://' + os.path.realpath(output_html))
 

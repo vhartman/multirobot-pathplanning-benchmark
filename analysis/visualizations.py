@@ -44,7 +44,7 @@ def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
     agent_costs = {agent: [] for agent in range(num_agents)}
     costs = []
     time = []
-    init_path = False
+    init_sol = False
     for pkl_file in pkl_files:
         fig = go.Figure()
         with open(pkl_file, 'rb') as file:
@@ -53,11 +53,11 @@ def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
         time.append(data["time"])
         
         all_init_path = data["all_init_path"]
-        if all_init_path and not init_path:
-            init_path = True # iteration where first iteration was found
+        if all_init_path and not init_sol:
+            init_sol = True # iteration where first iteration was found
             print(time[-1])
             init_path_time = time[-1]
-        if init_path:
+        if init_sol:
             
             cost = result["total"]
             agent_cost = result["agent_cost"]
@@ -172,20 +172,25 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
     cost_function = config["cost_function"]
     cost_label = get_cost_label(cost_function, num_agents - 1)  # Assuming this function is defined elsewhere
     labels = ["Shortcutting per mode", "Partial single dim per mode", "Partial random subset per mode", 
-              "Shortcutting per task (1 robot)", "Partial single dim per task (1 robot)", "Partial random subset per task (1 robot)", 
-              "Shortcutting per task (all possible robot)", "Partial single dim per task (all possible robot)", "Partial random subset per task (all possible robot)"]
+              "Shortcutting per task (1 robot) Prob", "Partial single dim per task (1 robot) Prob", "Partial random subset per task (1 robot) Prob", 
+              "Shortcutting per task (all possible robot) Prob", "Partial single dim per task (all possible robot) Prob", "Partial random subset per task (all possible robot) Prob",
+              "Shortcutting per task (1 robot) Deter", "Partial single dim per task (1 robot) Deter", "Partial random subset per task (1 robot) Deter", 
+              "Shortcutting per task (all possible robot) Deter", "Partial single dim per task (all possible robot) Deter", "Partial random subset per task (all possible robot) Deter" ]
     
 
     # Loop through versions to process data
-    for version in range(9):
+    for version in range(14):
         bool_legend = True
         folder = os.path.join(path, f"Post_{version}")
         # Get sorted list of .pkl files in the folder
-        pkl_files = sorted(
-            [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith('.pkl')],
-            key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
-        )
-        print(f"Found {len(pkl_files)} .pkl files in {folder}.")
+        try:
+            pkl_files = sorted(
+                [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith('.pkl')],
+                key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+            )
+            print(f"Found {len(pkl_files)} .pkl files in {folder}.")
+        except:
+            continue
         
         # Retrieve environment and configuration details
         
@@ -199,8 +204,9 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
                 data = dill.load(file)
             data["total_cost"][0] = data["total_cost"][0].item()
             # Append data for flattening later
-            times.append(data["time"])
-            version_times.append(data["time"])
+            time = data["time"]
+            times.append(time) 
+            version_times.append(time)
             costs.append(data["total_cost"])
             version_costs.append(data["total_cost"])
             colors_list.append(colors[version])
@@ -214,8 +220,9 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
 
 
         average_cost, average_time = average(sum_times, len(pkl_files), max_len, version_times, version_costs)
+        average_time = [t+1 for t in average_time]
         fig.add_trace(go.Scatter(
-            x=average_time,
+            x=np.log10(average_time),
             y=average_cost,
             mode='lines',
             name=labels[version],  
@@ -226,10 +233,11 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
 
             
         
-
+    times = [[time + 1 for time in sublist] for sublist in times]
     for time_series, cost_series, color, label, label_bool in zip(times, costs, colors_list, labels_list, labels_bool):
+
         fig.add_trace(go.Scatter(
-            x=time_series,
+            x=np.log10(time_series),
             y=cost_series,
             mode='lines',
             name=label,  
@@ -242,13 +250,15 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
     flattened_costs = [item for sublist in costs for item in sublist]
     flattened_times = [item for sublist in times for item in sublist]
 
+
     # Calculate maximum values for axes range
     max_cost = np.nanmax(flattened_costs) if flattened_costs else 0
     min_cost = np.nanmin(flattened_costs) if flattened_costs else 0
     max_time = np.nanmax(flattened_times) if flattened_times else 0
+    min_time = np.nanmin(flattened_times) if flattened_times else 1
 
     fig.add_trace(go.Scatter(
-                x=[0],
+                x=[np.log10(min_time)],
                 y=[min_cost],
                 name=cost_label,  
                 mode='markers',
@@ -258,7 +268,7 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
     # Update layout with titles, axis labels, and legend
     fig.update_layout(
         title="Cost vs Time",
-        xaxis=dict(title="Time [s]", range=[0, max_time + 0.1], autorange=False),
+        xaxis=dict(title="Log(time) [s]",range=[np.log10(min_time), np.log10(max_time)], autorange=False, tickmode="auto",),
         yaxis=dict(title="Cost [m]", range=[min_cost -0.01, max_cost + 0.01], autorange=False),
         margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
         legend=dict(
@@ -267,7 +277,8 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
             y=1,
             xanchor="left",
             x=1  # Position legend outside the plot area on the right
-        )
+        ),
+        
     )
     
     # Save the plot as an image
@@ -677,13 +688,15 @@ if __name__ == "__main__":
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
     path = get_latest_folder(directory)
-    path = "/home/tirza/output/091224_083733"
+    # path = "/home/tirza/output/091224_083733"
+    # path = '/home/tirza/output/091224_083733'
+    
     env_name, config_params, _, _ = get_config(path)
     env = get_env_by_name(env_name)    
     pkl_folder = os.path.join(path, 'FramesData')
     env_path = os.path.join(home_dir, f'env/{env_name}')
     save_env_as_mesh(env, env_path)
-
+    print(path)
     if args.show == "development":
         print("Development")
         with_tree = True

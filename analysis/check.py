@@ -250,8 +250,6 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
     
     # dynamic_traces
     for idx, pkl_file in enumerate(pkl_files):
-        if idx < 5000 or idx > 5100:
-            continue
         with open(pkl_file, 'rb') as file:
             data = dill.load(file)
             tree = data["tree"]
@@ -261,6 +259,8 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
             N_near = data["N_near"]
             rewire_radius = data["rewire_r"]
             n_new = data["n_new"]
+            n_nearest = data["n_nearest"]
+            n_rand= data["n_rand"]
 
 
         frame_traces = []
@@ -312,8 +312,8 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                         z=transition_z,
                         mode="markers",
                         marker=dict(
-                            size=5,  # Very small markers
-                            color="red",  # Match marker color with line
+                            size=5,  
+                            color="red", 
                             opacity=1
                         ),
                         opacity=1,
@@ -324,10 +324,6 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                 )
 
             
-
-            
-
-
         if with_tree:
             for robot_idx, robot in enumerate(env.robots):
                 indices = env.robot_idx[robot]
@@ -372,83 +368,11 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                         )
                     )
 
-        #informed sampling 
-        if config['informed_sampling'] != []:
-            informed = data["informed_sampling"]
-            for informed_sampling in informed:
-                for robot_idx, robot in enumerate(env.robots):
-                    if informed_sampling['L']:
-                        if robot_idx in informed_sampling['L'].keys():
-                            C = informed_sampling['C'][robot_idx].cpu().numpy()
-                            L = informed_sampling['L'][robot_idx].cpu().numpy()
-                            center = informed_sampling['center'][robot_idx].cpu().numpy()
-                            focal_points = [informed_sampling['start'][robot_idx], informed_sampling['goal'][robot_idx]]
-
-                            if C.shape[0] == 3:  # 3D case
-                                theta = np.linspace(0, 2 * np.pi, 100)
-                                phi = np.linspace(0, np.pi, 50)
-                                theta, phi = np.meshgrid(theta, phi)
-
-                                # Generate unit sphere points
-                                x = np.sin(phi) * np.cos(theta)
-                                y = np.sin(phi) * np.sin(theta)
-                                z = np.cos(phi)
-                                unit_sphere = np.array([x.flatten(), y.flatten(), z.flatten()])
-
-                                # Transform the unit sphere into an ellipsoid
-                                ellipsoid_transformed = C @ L @ unit_sphere
-
-                                # Translate to center
-                                x_ellipsoid = ellipsoid_transformed[0, :] + center[0]
-                                y_ellipsoid = ellipsoid_transformed[1, :] + center[1]
-                                z_ellipsoid = ellipsoid_transformed[2, :] + center[2] + 1
-
-                                # Add 3D ellipsoid using Mesh3d
-                                frame_traces.append(
-                                    go.Mesh3d(
-                                        x=x_ellipsoid,
-                                        y=y_ellipsoid,
-                                        z=z_ellipsoid,
-                                        alphahull=0,  # Ensure it forms a hull
-                                        color=color_informed,  # Grey color for the surface
-                                        opacity=0.1,  # High transparency
-                                        name='Ellipsoid (3D)',
-                                        legendgroup = 'Informed Smapling - Ellipse/Ellipsoid',
-                                        showlegend = False,
-                                    )
-                                )
-
-                                # Add focal points (3D)
-                                for i, f in enumerate(focal_points):
-                                    frame_traces.append(go.Scatter3d(
-                                        x=[f[0]],
-                                        y=[f[1]],
-                                        z = [1],
-                                        mode='markers',
-                                        name=f'Focal Point {i+1} (2D)',
-                                        marker=dict(size=8, color=color_informed),
-                                        legendgroup = 'Informed Smapling - Ellipse/Ellipsoid',
-                                        showlegend = False,
-                                    ))
-
-                                # Add center (2D)
-                                frame_traces.append(go.Scatter3d(
-                                    x=[center[0]],
-                                    y=[center[1]],
-                                    z = [1],
-                                    mode='markers',
-                                    name='Center (2D)',
-                                    marker=dict(size=3, color=color_informed),
-                                    legendgroup = 'Informed Smapling - Ellipse/Ellipsoid',
-                                    showlegend = False,
-                                ))
-
         if N_near is not None and N_near != []:
             active_mode = data["active_mode"]
             mode_idx = modes.index(active_mode)
             for r, robot in enumerate(env.robots):
                 indices = env.robot_idx[robot]
-                n_new = np.array(n_new)
                 theta = np.linspace(0, 2 * np.pi, 100)  # Angle values
                 x = n_new[indices][0] + rewire_radius * np.cos(theta)  # X-coordinates
                 y = n_new[indices][1] + rewire_radius * np.sin(theta)  # Y-coordinates
@@ -459,12 +383,45 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                     y=y,  # Y-coordinates
                     z=z,  # Z-coordinates
                     mode='lines',  # Use 'lines' or 'markers+lines' for connections
-                    marker=dict(size=6, color=colors[len(modes)+r]), 
+                    marker=dict(size=9, color=colors[len(modes)+r]), 
                     legendgroup = legends[mode_idx],
                     showlegend = False  # Marker style
                     )
                 )
-                for i, state in enumerate(N_near):
+                frame_traces.append(
+                go.Scatter3d(
+                    x=[n_new[indices][0]],  # X-coordinates
+                    y=[n_new[indices][1]],  # Y-coordinates
+                    z=[1],  # Z-coordinates
+                    mode='markers',  # Use 'lines' or 'markers+lines' for connections
+                    marker=dict(size=9, color='black'), 
+                    legendgroup = legends[mode_idx],
+                    showlegend = False  # Marker style
+                    )
+                )
+                frame_traces.append(
+                go.Scatter3d(
+                    x=[n_nearest[indices][0]],  # X-coordinates
+                    y=[n_nearest[indices][1]],  # Y-coordinates
+                    z=[1],  # Z-coordinates
+                    mode='markers',  # Use 'lines' or 'markers+lines' for connections
+                    marker=dict(size=9, color=colors[len(modes)+r]), 
+                    legendgroup = legends[mode_idx],
+                    showlegend = False  # Marker style
+                    )
+                )
+                frame_traces.append(
+                go.Scatter3d(
+                    x=[n_rand[indices][0]],  # X-coordinates
+                    y=[n_rand[indices][1]],  # Y-coordinates
+                    z=[1],  # Z-coordinates
+                    mode='markers',  # Use 'lines' or 'markers+lines' for connections
+                    marker=dict(size=6, color='red'), 
+                    legendgroup = legends[mode_idx],
+                    showlegend = False  # Marker style
+                    )
+                )
+                for _, state in enumerate(N_near):
                     states = np.array(state)[indices]
 
                     frame_traces.append(go.Scatter3d(
@@ -477,67 +434,7 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                         legendgroup = legends[mode_idx],
                         showlegend = False,
                     ))
-                    # if i != 0:
-                    #     u = np.cos(states[2]) * 0.2
-                    #     v = np.sin(states[2]) * 0.2
-                    #     w = 0 
-                    #     frame_traces.append(
-                    #         go.Scatter3d(
-                    #             x=[states[0], states[0] + u],  # Line from base to arrowhead
-                    #             y=[states[1], states[1] + v],
-                    #             z=[0, 0],  # Constant z (no change in height)
-                    #             mode='lines',
-                    #             line=dict(color=color_, width=3),  # Arrow shaft style
-                    #             showlegend=False,
-                    #         )
-                    #     )
-
-                    #     # Add the arrowhead as a cone
-                    #     frame_traces.append(
-                    #         go.Cone(
-                    #             x=[states[0] + u],  # End position of the arrow shaft
-                    #             y=[states[1] + v],
-                    #             z=[0],  # Arrowhead position
-                    #             u=[u],  # x-direction
-                    #             v=[v],  # y-direction
-                    #             w=[w],  # z-direction
-                    #             colorscale=[[0, color_], [1, color_]],  # Coloring the arrow
-                    #             showscale=False,
-                    #             sizemode="absolute",
-                    #             sizeref=0.05,  # Adjust the arrowhead size
-                    #         )
-                    #     )
-                    
-
-                    # u = np.cos(N_near[0][2]) * 0.2
-                    # v = np.sin(N_near[0][2]) * 0.2
-                    # w = 0 
-                    # frame_traces.append(
-                    #     go.Scatter3d(
-                    #         x=[states[0], states[0] + u],  # Line from base to arrowhead
-                    #         y=[states[1], states[1] + v],
-                    #         z=[0, 0],  # Constant z (no change in height)
-                    #         mode='lines',
-                    #         line=dict(color="grey", width=3),  # Arrow shaft style
-                    #         showlegend=False,
-                    #     )
-                    # )
-
-                    # # Add the arrowhead as a cone
-                    # frame_traces.append(
-                    #     go.Cone(
-                    #         x=[states[0] + u],  # End position of the arrow shaft
-                    #         y=[states[1] + v],
-                    #         z=[0],  # Arrowhead position
-                    #         u=[u],  # x-direction
-                    #         v=[v],  # y-direction
-                    #         w=[w],  # z-direction
-                    #         colorscale=[[0, "grey"], [1, "grey"]],  # Coloring the arrow
-                    #         showscale=False,
-                    #         sizemode="absolute",
-                    #         sizeref=0.05,  # Adjust the arrowhead size
-                    #     )
-                    # )
+          
 
 
         all_frame_traces.append(frame_traces)
@@ -1008,7 +905,7 @@ if __name__ == "__main__":
     if args.do == "interpolation":
         interpolation_check(env)
     if args.do == "nn":
-        with_tree = False
+        with_tree = True
         if with_tree:
             output_html = os.path.join(path, 'tree_animation_3d.html')
             reducer = 50

@@ -210,7 +210,7 @@ class NpConfiguration(Configuration):
         sum_dists = dists.sum(dim=1)  
         costs = max_dists + 0.01 * sum_dists
         return costs, dists
-
+    
 def config_dist(
     q_start: Configuration, q_end: Configuration, metric: str = "euclidean"
 ) -> float:
