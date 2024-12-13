@@ -401,7 +401,6 @@ class rai_two_dim_env(rai_env):
         self.tasks[1].name = "a2_goal"
         self.tasks[2].name = "terminal"
 
-        # # TODO: this should eventually be replaced by a dependency graph
         self.sequence = self._make_sequence_from_names(
             ["a2_goal", "a1_goal", "terminal"]
         )
@@ -412,7 +411,7 @@ class rai_two_dim_env(rai_env):
         self.tolerance = 0.1
 
 
-# very simple task: 
+# very simple task:
 # make the robots go back and forth.
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
 class rai_two_dim_env_no_obs(rai_env):
@@ -438,9 +437,7 @@ class rai_two_dim_env_no_obs(rai_env):
             # terminal mode
             Task(
                 ["a1", "a2"],
-                SingleGoal(
-                    self.C.getJointState()
-                ),
+                SingleGoal(self.C.getJointState()),
             ),
         ]
 
@@ -451,7 +448,6 @@ class rai_two_dim_env_no_obs(rai_env):
         self.tasks[4].name = "a2_goal_3"
         self.tasks[5].name = "terminal"
 
-        # # TODO: this should eventually be replaced by a dependency graph
         self.sequence = self._make_sequence_from_names(
             ["a2_goal_0", "a2_goal_1", "a2_goal_2", "a2_goal_3", "a1_goal", "terminal"]
         )
@@ -461,11 +457,8 @@ class rai_two_dim_env_no_obs(rai_env):
 
         self.tolerance = 0.01
 
+
 class rai_two_dim_single_agent_neighbourhood(rai_env):
-    pass
-
-
-class rai_two_dim_two_agents_long_horizon(rai_env):
     pass
 
 
@@ -1344,11 +1337,17 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
         self.prev_mode = [0, 0]
 
 
+# moving objects from a rolling cage to a 'conveyor'
 class rai_ur10_box_sort_env:
     pass
 
 
+# moving objects from a 'conveyor' to a rolling cage
 class rai_ur10_palletizing_env:
+    pass
+
+
+class rai_ur10_strut_env:
     pass
 
 

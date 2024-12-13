@@ -2118,6 +2118,145 @@ def make_mobile_manip_env(view: bool = False):
 
     C.view(True)
 
+def make_depalletizing_env():
+    C = ry.Config()
+
+    path = os.path.join(os.path.dirname(__file__), "../models/rollcage.g")
+    C.addFile(path).setPosition([0, 0, 0.0])
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_vacuum.g")
+
+    C.addFrame("robot_1_base").setPosition(
+        [0.4, 0.8, 0.1]
+    ).setShape(ry.ST.box, size=[0.2, 0.2, 0.2, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)#.setQuaternion([ 0.924, 0, -0.383, 0])
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        C.getFrame("robot_1_base")
+    ).setRelativePosition([-0.0, 0.0, 0.1]).setRelativeQuaternion(
+        [0, 0, 0, 1]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("robot_2_base").setPosition(
+        [-0.4, 0.8, 0.1]
+    ).setShape(ry.ST.box, size=[0.2, 0.2, 0.2, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)#.setQuaternion([ 0.924, 0, 0.383, 0])
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        C.getFrame("robot_2_base")
+    ).setRelativePosition([0., 0., 0.1]).setJoint(ry.JT.rigid)
+
+    C.addFrame("conveyor").setPosition(
+        [0., 2., 0.4]
+    ).setShape(ry.ST.box, size=[0.4, 1.6, 0.01, 0.005]).setColor(
+        [0.3, 0.3, 0.3]
+    ).setContact(1)#.setQuaternion([ 0.924, 0, 0.383, 0])
+
+    size = np.array([0.2, 0.1, 0.1])
+
+    C.addFrame("box").setParent(C.getFrame("floor")).setShape(
+        ry.ST.box, [size[0], size[1], size[2], 0.005]
+    ).setRelativePosition([0, 0, 0.1]).setMass(0.1).setColor(
+        np.random.rand(3)
+    ).setContact(1).setJoint(
+        ry.JT.rigid
+    )
+
+    C.addFrame("goal").setParent(C.getFrame("conveyor")).setShape(
+        ry.ST.box, [size[0], size[1], size[2], 0.005]
+    ).setRelativePosition([0., -0.5, 0.1]).setMass(0.1).setColor(
+        np.random.rand(3)
+    ).setContact(0).setJoint(
+        ry.JT.rigid
+    )
+
+    C.view(True)
+
+    def compute_pick_and_place(box, goal, robot_prefix):
+        ee = "ur_vacuum"
+
+        q_home = C.getJointState()
+
+        komo = ry.KOMO(C, phases=4, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1], [-0.0])
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + ee, box])
+        komo.addObjective([1, 2], ry.FS.distance, [robot_prefix + ee, box], ry.OT.sos, [1e1], [-0.0])
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + ee, box],
+            ry.OT.sos,
+            [1e0, 1e0, 1e0],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [robot_prefix + ee, box],
+            ry.OT.sos,
+            [1e1],
+            [-1]
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     ["a1_" + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, ["a2"], ry.OT.sos, [1e0, 1e1, 0], [1., -0.5, 0]
+        # )
+
+        komo.addObjective(
+            [2], ry.FS.position, [box], ry.OT.sos, [1e0, 1e0, 0], [1, -1, 0]
+        )
+
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["conveyor", box])
+        komo.addObjective([3, -1], ry.FS.poseDiff, ["goal", box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[4],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        for _ in range(100):
+            # komo.initRandom()
+            # komo.initWithConstant(np.random.rand(6) * 2)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            print(retval)
+            komo.view(True, "IK solution")
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                keyframes = komo.getPath()
+                return keyframes
+            
+    box = "box"
+    robot_prefix = "a1_"
+    compute_pick_and_place(box, "goal", robot_prefix)
+
+    robot_prefix = "a2_"
+    compute_pick_and_place(box, "goal", robot_prefix)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
@@ -2153,5 +2292,7 @@ if __name__ == "__main__":
         make_two_dim_tunnel_env(view=True)
     elif args.env == "box_rearrangement":
         make_box_rearrangement_env(view=True)
+    elif args.env == "depalletizing":
+        make_depalletizing_env()
     else:
         make_panda_waypoint_env(2, view=True)
