@@ -154,6 +154,7 @@ class NpConfiguration(Configuration):
         diff = pt.q - np.array([other.q for other in batch_other])
 
         if metric == "euclidean":
+            # return np.linalg.norm(diff, axis=1)
             dists = np.zeros((pt._num_agents, diff.shape[0]))
             for i, (s, e) in enumerate(pt.slice):
                 dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)

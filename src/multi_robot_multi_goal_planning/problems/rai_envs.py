@@ -412,6 +412,55 @@ class rai_two_dim_env(rai_env):
         self.tolerance = 0.1
 
 
+# very simple task: 
+# make the robots go back and forth.
+# should be trivial for decoupled methods, hard for joint methods that sample partial goals
+class rai_two_dim_env_no_obs(rai_env):
+    def __init__(self):
+        self.C = make_2d_rai_env_no_obs()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        # r1 starts at both negative
+        # r2 starts at both positive
+
+        self.tasks = [
+            # r1
+            Task(["a1"], SingleGoal(np.array([-0.5, 0.5, 0]))),
+            # r2
+            Task(["a2"], SingleGoal(np.array([0.5, -0.5, 0]))),
+            Task(["a2"], SingleGoal(np.array([0.5, 0.5, 0]))),
+            Task(["a2"], SingleGoal(np.array([0.5, -0.5, 0]))),
+            Task(["a2"], SingleGoal(np.array([0.5, 0.5, 0]))),
+            # terminal mode
+            Task(
+                ["a1", "a2"],
+                SingleGoal(
+                    self.C.getJointState()
+                ),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_goal"
+        self.tasks[1].name = "a2_goal_0"
+        self.tasks[2].name = "a2_goal_1"
+        self.tasks[3].name = "a2_goal_2"
+        self.tasks[4].name = "a2_goal_3"
+        self.tasks[5].name = "terminal"
+
+        # # TODO: this should eventually be replaced by a dependency graph
+        self.sequence = self._make_sequence_from_names(
+            ["a2_goal_0", "a2_goal_1", "a2_goal_2", "a2_goal_3", "a1_goal", "terminal"]
+        )
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.01
+
 class rai_two_dim_single_agent_neighbourhood(rai_env):
     pass
 
@@ -1569,6 +1618,8 @@ def get_env_by_name(name):
         env = rai_ur10_arm_bottle_env()
     elif name == "handover":
         env = rai_ur10_handover_env()
+    elif name == "one_agent_many_goals":
+        env = rai_two_dim_env_no_obs()
     else:
         raise NotImplementedError("Name does not exist")
 

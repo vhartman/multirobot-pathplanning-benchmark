@@ -311,7 +311,7 @@ class base_env(ABC):
                 collision = True
 
             # if the next mode is a transition, check where to go
-            if self.is_transition(path[i].q, mode):
+            if i < len(path) - 1 and self.is_transition(path[i].q, mode):
                 # TODO: this does not work if multiple switches are possible at the same time
                 next_mode = self.get_next_mode(path[i].q, mode)
 

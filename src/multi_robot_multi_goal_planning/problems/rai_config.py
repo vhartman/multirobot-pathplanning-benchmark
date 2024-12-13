@@ -25,16 +25,88 @@ def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
     return links
 
 
-def make_2d_rai_env(view: bool = False):
+def make_table_with_walls(width = 2, length=2):
     C = ry.Config()
 
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 1.0])
-        .setShape(ry.ST.box, size=[2, 2, 0.06, 0.005])
+        .setShape(ry.ST.box, size=[width, length, 0.06, 0.005])
         .setColor([0.3, 0.3, 0.3])
         .setContact(1)
     )
+    
+    C.addFrame("wall1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0, width/2 + 0.1, 0.07]
+    ).setShape(ry.ST.box, size=[width - 0.001, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0, -width/2 -0.1, 0.07]
+    ).setShape(ry.ST.box, size=[width - 0.001, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall3").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [length/2 + 0.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, length + 0.2 * 2 - 0.001, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("wall4").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [-length/2-.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, length + 0.2 * 2 - 0.001, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    return C
+
+def make_2d_rai_env_no_obs(view: bool = False):
+    C = make_table_with_walls(2,2)
+    table = C.getFrame('table')
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+    ).setJointState([-0.5, -0.5, 0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0, 0.5, 0.07])
+        .setPosition(table.getPosition() + [0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.box,
+        size=[0.1, 0.2, 0.06, 0.005],
+        # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+    ).setJointState([0.5, 0.5, 0])
+
+    return C
+
+def make_2d_rai_env(view: bool = False):
+    C = make_table_with_walls(2,2)
+    table = C.getFrame('table')
 
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
@@ -98,30 +170,6 @@ def make_2d_rai_env(view: bool = False):
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
-    C.addFrame("wall1").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, 1.1, 0.07]
-    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall2").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, -1.1, 0.07]
-    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [1.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 2.4, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [-1.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 2.4, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
     # pairs = C.getCollidablePairs()
 
     # for i in range(0, len(pairs), 2):
@@ -167,39 +215,41 @@ def make_2d_rai_env(view: bool = False):
 def make_random_two_dim(
     num_agents: int = 3, num_obstacles: int = 5, num_goals: int = 3, view: bool = False
 ):
-    C = ry.Config()
+    C = make_table_with_walls(4, 4)
 
-    table = (
-        C.addFrame("table")
-        .setPosition([0, 0, 1.0])
-        .setShape(ry.ST.box, size=[4, 4, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
-        .setContact(1)
-    )
+    C.view()
 
-    C.addFrame("wall1").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, 2.1, 0.07]
-    ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+    # table = (
+    #     C.addFrame("table")
+    #     .setPosition([0, 0, 1.0])
+    #     .setShape(ry.ST.box, size=[4, 4, 0.06, 0.005])
+    #     .setColor([0.3, 0.3, 0.3])
+    #     .setContact(1)
+    # )
 
-    C.addFrame("wall2").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, -2.1, 0.07]
-    ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+    # C.addFrame("wall1").setParent(table).setPosition(
+    #     C.getFrame("table").getPosition() + [0, 2.1, 0.07]
+    # ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
+    #     [0, 0, 0]
+    # ).setJoint(ry.JT.rigid)
 
-    C.addFrame("wall3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [2.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 4.399, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+    # C.addFrame("wall2").setParent(table).setPosition(
+    #     C.getFrame("table").getPosition() + [0, -2.1, 0.07]
+    # ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
+    #     [0, 0, 0]
+    # ).setJoint(ry.JT.rigid)
 
-    C.addFrame("wall4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [-2.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 4.399, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+    # C.addFrame("wall3").setParent(table).setPosition(
+    #     C.getFrame("table").getPosition() + [2.1, 0, 0.07]
+    # ).setShape(ry.ST.box, size=[0.2, 4.399, 0.06, 0.005]).setContact(1).setColor(
+    #     [0, 0, 0]
+    # ).setJoint(ry.JT.rigid)
+
+    # C.addFrame("wall4").setParent(table).setPosition(
+    #     C.getFrame("table").getPosition() + [-2.1, 0, 0.07]
+    # ).setShape(ry.ST.box, size=[0.2, 4.399, 0.06, 0.005]).setContact(1).setColor(
+    #     [0, 0, 0]
+    # ).setJoint(ry.JT.rigid)
 
     added_agents = 0
     agent_names = []
@@ -241,13 +291,13 @@ def make_random_two_dim(
             C.addConfigurationCopy(c_coll_tmp)
 
             colors.append(color)
-        # else:
-        #     colls = c_coll_tmp.getCollisions()
-        #     for c in colls:
-        #         if c[2] < 0:
-        #             print(c)
+        else:
+            colls = c_coll_tmp.getCollisions()
+            for c in colls:
+                if c[2] < 0:
+                    print(c)
 
-        #     c_coll_tmp.view(True)
+            c_coll_tmp.view(True)
 
     added_obstacles = 0
 
@@ -316,15 +366,8 @@ def make_random_two_dim(
 
 
 def make_two_dim_handover(view: bool = False):
-    C = ry.Config()
-
-    table = (
-        C.addFrame("table")
-        .setPosition([0, 0, 1.0])
-        .setShape(ry.ST.box, size=[4, 4, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
-        .setContact(1)
-    )
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
 
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
@@ -401,30 +444,6 @@ def make_two_dim_handover(view: bool = False):
     C.addFrame("obs4").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0.8, 0.8, 0.07]
     ).setShape(ry.ST.box, size=[0.6, 0.2, 0.06, 0.005]).setContact(-2).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall1").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, 2.1, 0.07]
-    ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall2").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, -2.1, 0.07]
-    ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [2.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 4.39, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [-2.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 4.39, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
@@ -601,15 +620,8 @@ def make_two_dim_handover(view: bool = False):
 
 
 def make_piano_mover_env(view: bool = False):
-    C = ry.Config()
-
-    table = (
-        C.addFrame("table")
-        .setPosition([0, 0, 1.0])
-        .setShape(ry.ST.box, size=[2, 2, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
-        .setContact(1)
-    )
+    C = make_table_with_walls(2,2)
+    table = C.getFrame("table")
 
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
@@ -675,30 +687,6 @@ def make_piano_mover_env(view: bool = False):
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
-    C.addFrame("wall1").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, 1.1, 0.07]
-    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall2").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, -1.1, 0.07]
-    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [1.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 2.4, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [-1.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 2.4, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
     if view:
         C.view(True)
 
@@ -755,39 +743,8 @@ def make_piano_mover_env(view: bool = False):
 
 # environment to test informed sampling
 def make_two_dim_tunnel_env(view: bool = False):
-    C = ry.Config()
-
-    table = (
-        C.addFrame("table")
-        .setPosition([0, 0, 1.0])
-        .setShape(ry.ST.box, size=[4, 4, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
-        .setContact(1)
-    )
-
-    C.addFrame("wall1").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, 2.1, 0.07]
-    ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall2").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, -2.1, 0.07]
-    ).setShape(ry.ST.box, size=[3.99, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [2.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 4.399, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [-2.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 4.399, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+    C = make_table_with_walls(4,4)
+    table = C.getFrame("table")
 
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
@@ -869,15 +826,8 @@ def make_two_dim_tunnel_env(view: bool = False):
 
 
 def make_2d_rai_env_3_agents(view: bool = False):
-    C = ry.Config()
-
-    table = (
-        C.addFrame("table")
-        .setPosition([0, 0, 1.0])
-        .setShape(ry.ST.box, size=[2, 2, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
-        .setContact(1)
-    )
+    C = make_table_with_walls(2,2)
+    table = C.getFrame("table")
 
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
@@ -958,30 +908,6 @@ def make_2d_rai_env_3_agents(view: bool = False):
     C.addFrame("obs3").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0.1, 0, 0.07]
     ).setShape(ry.ST.box, size=[0.3, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall1").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, 1.1, 0.07]
-    ).setShape(ry.ST.box, size=[2.39, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall2").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, -1.1, 0.07]
-    ).setShape(ry.ST.box, size=[2.39, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [1.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 1.99, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("wall4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [-1.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 1.99, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
