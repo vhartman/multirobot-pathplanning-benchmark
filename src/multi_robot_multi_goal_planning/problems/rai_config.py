@@ -6,6 +6,7 @@ from typing import List
 
 import os.path
 import random
+import json
 
 # make everything predictable
 np.random.seed(2)
@@ -25,7 +26,7 @@ def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
     return links
 
 
-def make_table_with_walls(width = 2, length=2):
+def make_table_with_walls(width=2, length=2):
     C = ry.Config()
 
     table = (
@@ -35,36 +36,37 @@ def make_table_with_walls(width = 2, length=2):
         .setColor([0.3, 0.3, 0.3])
         .setContact(1)
     )
-    
+
     C.addFrame("wall1").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, width/2 + 0.1, 0.07]
-    ).setShape(ry.ST.box, size=[width - 0.001, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+        C.getFrame("table").getPosition() + [0, width / 2 + 0.1, 0.07]
+    ).setShape(ry.ST.box, size=[width - 0.001, 0.2, 0.06, 0.005]).setContact(
+        1
+    ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
 
     C.addFrame("wall2").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0, -width/2 -0.1, 0.07]
-    ).setShape(ry.ST.box, size=[width - 0.001, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+        C.getFrame("table").getPosition() + [0, -width / 2 - 0.1, 0.07]
+    ).setShape(ry.ST.box, size=[width - 0.001, 0.2, 0.06, 0.005]).setContact(
+        1
+    ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
 
     C.addFrame("wall3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [length/2 + 0.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, length + 0.2 * 2 - 0.001, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+        C.getFrame("table").getPosition() + [length / 2 + 0.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, length + 0.2 * 2 - 0.001, 0.06, 0.005]).setContact(
+        1
+    ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
 
     C.addFrame("wall4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [-length/2-.1, 0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, length + 0.2 * 2 - 0.001, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
+        C.getFrame("table").getPosition() + [-length / 2 - 0.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, length + 0.2 * 2 - 0.001, 0.06, 0.005]).setContact(
+        1
+    ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
 
     return C
 
+
 def make_2d_rai_env_no_obs(view: bool = False):
-    C = make_table_with_walls(2,2)
-    table = C.getFrame('table')
+    C = make_table_with_walls(2, 2)
+    table = C.getFrame("table")
 
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
@@ -104,9 +106,72 @@ def make_2d_rai_env_no_obs(view: bool = False):
 
     return C
 
+
+def make_2d_rai_env_no_obs_three_agents(view: bool = False):
+    C = make_table_with_walls(2, 2)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+    ).setJointState([-0.5, -0.5, 0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0, 0.5, 0.07])
+        .setPosition(table.getPosition() + [0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.box,
+        size=[0.1, 0.2, 0.06, 0.005],
+        # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+    ).setJointState([0.5, 0.5, 0])
+
+    pre_agent_3_frame = (
+        C.addFrame("pre_agent_3_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0, 0.5, 0.07])
+        .setPosition(table.getPosition() + [0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a3").setParent(pre_agent_3_frame).setShape(
+        ry.ST.box,
+        size=[0.1, 0.2, 0.06, 0.005],
+        # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+    ).setJointState([0.0, 0.5, 0])
+
+    return C
+
+
 def make_2d_rai_env(view: bool = False):
-    C = make_table_with_walls(2,2)
-    table = C.getFrame('table')
+    C = make_table_with_walls(2, 2)
+    table = C.getFrame("table")
 
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
@@ -382,7 +447,7 @@ def make_two_dim_handover(view: bool = False):
 
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
         ry.ST.cylinder, size=[4, 0.1, 0.04, 0.2]
-    ).setColor([1, 0., 0]).setContact(1).setJoint(
+    ).setColor([1, 0.0, 0]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
     ).setJointState([-0.5, 0.8, 0])
 
@@ -620,7 +685,7 @@ def make_two_dim_handover(view: bool = False):
 
 
 def make_piano_mover_env(view: bool = False):
-    C = make_table_with_walls(2,2)
+    C = make_table_with_walls(2, 2)
     table = C.getFrame("table")
 
     pre_agent_1_frame = (
@@ -743,7 +808,7 @@ def make_piano_mover_env(view: bool = False):
 
 # environment to test informed sampling
 def make_two_dim_tunnel_env(view: bool = False):
-    C = make_table_with_walls(4,4)
+    C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
 
     pre_agent_1_frame = (
@@ -826,7 +891,7 @@ def make_two_dim_tunnel_env(view: bool = False):
 
 
 def make_2d_rai_env_3_agents(view: bool = False):
-    C = make_table_with_walls(2,2)
+    C = make_table_with_walls(2, 2)
     table = C.getFrame("table")
 
     pre_agent_1_frame = (
@@ -2107,16 +2172,15 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
 def make_mobile_manip_env(view: bool = False):
     C = ry.Config()
 
-    mobile_robot_path = os.path.join(os.path.dirname(__file__), "../models/mobile-manipulator-restricted.g")
+    mobile_robot_path = os.path.join(
+        os.path.dirname(__file__), "../models/mobile-manipulator-restricted.g"
+    )
 
-    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition(
-        [1, 0, 0.2]
-    )
-    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition(
-        [-1, 0, 0.2]
-    )
+    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([1, 0, 0.2])
+    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([-1, 0, 0.2])
 
     C.view(True)
+
 
 def make_depalletizing_env():
     C = ry.Config()
@@ -2126,11 +2190,9 @@ def make_depalletizing_env():
 
     robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_vacuum.g")
 
-    C.addFrame("robot_1_base").setPosition(
-        [0.4, 0.8, 0.1]
-    ).setShape(ry.ST.box, size=[0.2, 0.2, 0.2, 0.005]).setColor(
-        [0.3, 0.3, 0.3]
-    ).setContact(1)#.setQuaternion([ 0.924, 0, -0.383, 0])
+    C.addFrame("robot_1_base").setPosition([0.4, 0.8, 0.1]).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.2, 0.005]
+    ).setColor([0.3, 0.3, 0.3]).setContact(1)  # .setQuaternion([ 0.924, 0, -0.383, 0])
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("robot_1_base")
@@ -2138,21 +2200,17 @@ def make_depalletizing_env():
         [0, 0, 0, 1]
     ).setJoint(ry.JT.rigid)
 
-    C.addFrame("robot_2_base").setPosition(
-        [-0.4, 0.8, 0.1]
-    ).setShape(ry.ST.box, size=[0.2, 0.2, 0.2, 0.005]).setColor(
-        [0.3, 0.3, 0.3]
-    ).setContact(1)#.setQuaternion([ 0.924, 0, 0.383, 0])
+    C.addFrame("robot_2_base").setPosition([-0.4, 0.8, 0.1]).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.2, 0.005]
+    ).setColor([0.3, 0.3, 0.3]).setContact(1)  # .setQuaternion([ 0.924, 0, 0.383, 0])
 
     C.addFile(robot_path, namePrefix="a2_").setParent(
         C.getFrame("robot_2_base")
-    ).setRelativePosition([0., 0., 0.1]).setJoint(ry.JT.rigid)
+    ).setRelativePosition([0.0, 0.0, 0.1]).setJoint(ry.JT.rigid)
 
-    C.addFrame("conveyor").setPosition(
-        [0., 2., 0.4]
-    ).setShape(ry.ST.box, size=[0.4, 1.6, 0.01, 0.005]).setColor(
-        [0.3, 0.3, 0.3]
-    ).setContact(1)#.setQuaternion([ 0.924, 0, 0.383, 0])
+    C.addFrame("conveyor").setPosition([0.0, 2.0, 0.4]).setShape(
+        ry.ST.box, size=[0.4, 1.6, 0.01, 0.005]
+    ).setColor([0.3, 0.3, 0.3]).setContact(1)  # .setQuaternion([ 0.924, 0, 0.383, 0])
 
     size = np.array([0.2, 0.1, 0.1])
 
@@ -2160,17 +2218,13 @@ def make_depalletizing_env():
         ry.ST.box, [size[0], size[1], size[2], 0.005]
     ).setRelativePosition([0, 0, 0.1]).setMass(0.1).setColor(
         np.random.rand(3)
-    ).setContact(1).setJoint(
-        ry.JT.rigid
-    )
+    ).setContact(1).setJoint(ry.JT.rigid)
 
     C.addFrame("goal").setParent(C.getFrame("conveyor")).setShape(
         ry.ST.box, [size[0], size[1], size[2], 0.005]
-    ).setRelativePosition([0., -0.5, 0.1]).setMass(0.1).setColor(
+    ).setRelativePosition([0.0, -0.5, 0.1]).setMass(0.1).setColor(
         np.random.rand(3)
-    ).setContact(0).setJoint(
-        ry.JT.rigid
-    )
+    ).setContact(0).setJoint(ry.JT.rigid)
 
     C.view(True)
 
@@ -2187,7 +2241,9 @@ def make_depalletizing_env():
         # komo.addControlObjective([], 2, 1e-1)
 
         komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + ee, box])
-        komo.addObjective([1, 2], ry.FS.distance, [robot_prefix + ee, box], ry.OT.sos, [1e1], [-0.0])
+        komo.addObjective(
+            [1, 2], ry.FS.distance, [robot_prefix + ee, box], ry.OT.sos, [1e1], [-0.0]
+        )
         komo.addObjective(
             [1, 2],
             ry.FS.positionDiff,
@@ -2201,7 +2257,7 @@ def make_depalletizing_env():
             [robot_prefix + ee, box],
             ry.OT.sos,
             [1e1],
-            [-1]
+            [-1],
         )
         # komo.addObjective(
         #     [1, 2],
@@ -2249,13 +2305,109 @@ def make_depalletizing_env():
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                 keyframes = komo.getPath()
                 return keyframes
-            
+
     box = "box"
     robot_prefix = "a1_"
     compute_pick_and_place(box, "goal", robot_prefix)
 
     robot_prefix = "a2_"
     compute_pick_and_place(box, "goal", robot_prefix)
+
+    return C
+
+def quaternion_from_z_to_target(target_z):
+    # Ensure the target vector is normalized
+    target_z = target_z / np.linalg.norm(target_z)
+
+    # The source vector is the unit z vector
+    source_z = np.array([0, 0, 1])
+
+    # Compute the axis of rotation (cross product)
+    axis = np.cross(source_z, target_z)
+
+    # Compute the angle of rotation using dot product
+    cos_theta = np.dot(source_z, target_z)
+    angle = np.arccos(np.clip(cos_theta, -1.0, 1.0))
+
+    # Handle the case where source and target are identical (no rotation needed)
+    if np.isclose(angle, 0):
+        return np.array([1, 0, 0, 0])  # Quaternion for no rotation
+
+    # Handle the case where source and target are opposite (180-degree rotation)
+    if np.isclose(angle, np.pi):
+        # Choose an arbitrary orthogonal vector for the axis
+        axis = np.cross(source_z, np.array([1, 0, 0]))
+        if np.linalg.norm(axis) < 1e-6:  # If the axis is still zero, try another vector
+            axis = np.cross(source_z, np.array([0, 1, 0]))
+        axis = axis / np.linalg.norm(axis)
+
+    # Normalize the rotation axis
+    axis = axis / np.linalg.norm(axis)
+
+    # Compute the quaternion components
+    qw = np.cos(angle / 2)
+    qx = axis[0] * np.sin(angle / 2)
+    qy = axis[1] * np.sin(angle / 2)
+    qz = axis[2] * np.sin(angle / 2)
+
+    return np.array([qw, qx, qy, qz])
+
+
+def make_strut_assembly_problem():
+    C = ry.Config()
+
+    mobile_robot_path = os.path.join(
+        os.path.dirname(__file__), "../models/mobile-manipulator-restricted.g"
+    )
+
+    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([1, 2, 0.2])
+    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([-1, 2, 0.2])
+
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/yijiang_strut.json")
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/florian_strut.json")
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/z_shape.json")
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/tower.json")
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/bridge.json")
+    assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/roboarch.json")
+
+    with open(assembly_path) as f:
+        d = json.load(f)
+
+        sequence = d['elements']
+        nodes = d['nodes']
+
+        num_parts = len(sequence)
+
+        print(num_parts)
+
+        if 'assembly_sequence' in d and len(d['assembly_sequence']) > 0:
+            assembly_sequence = []
+            for seq in d['assembly_sequence']:
+                assembly_sequence.extend(seq['installPartIDs'])
+        else:
+            assembly_sequence = np.arange(0, num_parts)
+
+        print(assembly_sequence)
+
+        for i in assembly_sequence:
+            s = sequence[i]
+            i1, i2 = s['end_node_inds']
+            print(i1, i2)
+
+            p1 = np.array(nodes[i1]['point'])
+            p2 = np.array(nodes[i2]['point'])
+
+            z_vec = p2 - p1
+            origin = p1 + (p2 - p1) / 2
+            length = np.linalg.norm(p2 - p1) * 0.95
+
+            quat = quaternion_from_z_to_target(z_vec)
+
+            C.addFrame("goal_" + str(i)).setPosition(origin).setShape(
+                ry.ST.box, size=[0.01, 0.01, length, 0.005]
+            ).setColor([0.3, 0.3, 0.3, 0.5]).setContact(0).setQuaternion(quat)
+
+        C.view(True)
 
 
 if __name__ == "__main__":
@@ -2294,5 +2446,7 @@ if __name__ == "__main__":
         make_box_rearrangement_env(view=True)
     elif args.env == "depalletizing":
         make_depalletizing_env()
+    elif args.env == "struts":
+        make_strut_assembly_problem()
     else:
         make_panda_waypoint_env(2, view=True)
