@@ -4,7 +4,7 @@ from util import *
 from rrt_base import *
 import time as time
 
-class BidirectionalRRTstar(BaseRRTstar):
+class ParallelizedBidirectionalRRTstar(BaseRRTstar):
     def __init__(self, env, config: ConfigManager):
         super().__init__(env, config)
     
@@ -106,8 +106,8 @@ class BidirectionalRRTstar(BaseRRTstar):
             #TODO rewire everything?
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
           
-            constrained_robots = self.env.get_active_task(self.operation.active_mode.label).robots
-            cost, dists = batch_config_torch(n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), "euclidean")
+            # constrained_robots = self.env.get_active_task(self.operation.active_mode.label).robots
+            # cost, dists = batch_config_torch(n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), "euclidean")
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
             #     if r in constrained_robots:
@@ -115,12 +115,13 @@ class BidirectionalRRTstar(BaseRRTstar):
             # if np.max(relevant_dists) > self.config.step_size:
             #     return
 
-            if torch.max(dists).item() > self.config.step_size:
-                return
+            # if torch.max(dists).item() > self.config.step_size:
+            #     return
 
             if not self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, self.operation.active_mode.label): 
                 return
-          
+
+            
 
         elif self.config.birrtstar_version == 2 and not self.operation.active_mode.connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
             n_nearest_b = self.Extend(n_nearest_b, n_new.state.q)
@@ -136,36 +137,14 @@ class BidirectionalRRTstar(BaseRRTstar):
         if self.operation.active_mode.connected:
             self.AddTransitionNode(self.operation.active_mode.transition_nodes[-1])
         
-        if not self.operation.active_mode.connected: #initial sol of this mode hasn't been found yet
+        if not self.operation.active_mode.connected: #initial sol of mode hasn't been found yet -> connect trees for the frist time
             self.operation.active_mode.connected = True
-            self.InitializationMode(self.operation.modes[-1])
-            if self.env.terminal_mode != self.operation.modes[-1].label:
-                self.operation.modes.append(Mode(self.env.get_next_mode(n_new.state.q,self.operation.active_mode.label), self.env))
-                # self.operation.active_mode.subtree_b = {}
-                # self.operation.active_mode.batch_subtree_b = None
-                # self.operation.active_mode.node_idx_subtree_b =  None
-                # Initialization of new goal tree T_b
-                if self.operation.modes[-1].label == self.env.terminal_mode:
-                    nr = 1
-                else:
-                    nr = self.config.transition_nodes
-                for _ in range(nr):
-                    end_state = self.GetGoalStateOfMode(self.operation.modes[-1].label, n_new)
-                    end_node = Node(end_state, self.operation.tree, self.operation)
-                    self.operation.tree += 1
-                    # self.operation.modes[-1].transition_nodes.append(first_end_node)
-                    end_node.transition = True
-                    self.operation.modes[-1].batch_subtree_b = torch.cat((self.operation.modes[-1].batch_subtree_b, end_node.q_tensor.unsqueeze(0)), dim=0)
-                    self.operation.modes[-1].subtree_b[len(self.operation.modes[-1].subtree_b)] = end_node
-                    self.operation.costs = torch.cat((self.operation.costs, torch.tensor([0], device='cuda')), dim=0)
-                    self.operation.modes[-1].node_idx_subtree_b = torch.cat((self.operation.modes[-1].node_idx_subtree_b, torch.tensor([end_node.idx], device='cuda')),dim=0)
-            elif self.operation.active_mode.label == self.env.terminal_mode:
+            if self.operation.active_mode.label == self.env.terminal_mode:
                 self.operation.ptc_iter = iter
                 self.operation.ptc_cost = self.operation.cost
                 self.operation.init_sol = True
                 print(time.time()-self.start)
-            constrained_robots = self.env.get_active_task(self.operation.active_mode.label).robots
-            print(f"{iter}: {constrained_robots} found T{self.env.get_current_seq_index(self.operation.active_mode.label)}")
+
             self.SaveData(time.time()-self.start)
             self.FindOptimalTransitionNode(iter, True)
             self.AddTransitionNode(self.operation.active_mode.transition_nodes[-1])
@@ -202,23 +181,46 @@ class BidirectionalRRTstar(BaseRRTstar):
                 return 
                                  
     def PlannerInitialization(self) -> None:
+        # Initialize all nodes:
+        # Initialization of frist mode (handled separately as start condition is given for all robots)
         active_mode = self.operation.modes[0]
         start_state = State(self.env.start_pos, active_mode.label)
         start_node = Node(start_state, (self.operation.tree -1), self.operation)
         active_mode.batch_subtree = torch.cat((active_mode.batch_subtree, start_node.q_tensor.unsqueeze(0)), dim=0)
         active_mode.subtree[len(active_mode.subtree)] = start_node
         active_mode.node_idx_subtree = torch.cat((active_mode.node_idx_subtree, torch.tensor([start_node.idx], device='cuda')),dim=0)
-        for _ in range(self.config.transition_nodes): 
-            end_state = self.GetGoalStateOfMode(active_mode.label, start_node)
-            end_node = Node(end_state, self.operation.tree, self.operation)
-            self.operation.tree += 1
-            # active_mode.transition_nodes.append(first_end_node)
-            end_node.transition = True
-            active_mode.batch_subtree_b = torch.cat((active_mode.batch_subtree_b, end_node.q_tensor.unsqueeze(0)), dim=0)
-            active_mode.subtree_b[len(active_mode.subtree_b)] = end_node
-            active_mode.node_idx_subtree_b = torch.cat((active_mode.node_idx_subtree_b, torch.tensor([end_node.idx], device='cuda')),dim=0)
-            self.operation.costs = torch.cat((self.operation.costs, torch.tensor([0], device='cuda')), dim=0)
-                  
+
+        while True:
+            #Add mode to mode list
+            self.InitializationMode(self.operation.modes[-1])            
+            if active_mode.label == self.env.terminal_mode:
+                nr = 1
+            else:
+                self.operation.modes.append( Mode(self.env.get_next_mode(None,active_mode.label), self.env))
+                nr = self.config.transition_nodes
+            for _ in range(nr): 
+                end_state = self.GetGoalStateOfMode(active_mode.label, start_node)
+                end_node = Node(end_state, self.operation.tree, self.operation)
+                self.operation.tree += 1
+                # possible goal nodes for this mode #TODO also need to add them as start nodes for next mode
+                end_node.transition = True
+                active_mode.batch_subtree_b = torch.cat((active_mode.batch_subtree_b, end_node.q_tensor.unsqueeze(0)), dim=0)
+                active_mode.subtree_b[len(active_mode.subtree_b)] = end_node
+                active_mode.node_idx_subtree_b = torch.cat((active_mode.node_idx_subtree_b, torch.tensor([end_node.idx], device='cuda')),dim=0)
+                self.operation.costs = torch.cat((self.operation.costs, torch.tensor([0], device='cuda')), dim=0)
+
+                if active_mode.label == self.env.terminal_mode:
+                    return
+                self.operation.modes[-1].batch_subtree = torch.cat((self.operation.modes[-1].batch_subtree, end_node.q_tensor.unsqueeze(0)), dim=0)
+                self.operation.modes[-1].subtree[len(self.operation.modes[-1].subtree)] = end_node
+                self.operation.costs = torch.cat((self.operation.costs, torch.tensor([0], device='cuda')), dim=0)
+                self.operation.modes[-1].node_idx_subtree = torch.cat((self.operation.modes[-1].node_idx_subtree, torch.tensor([end_node.idx], device='cuda')),dim=0)
+                
+            
+            #TODO need to change the costs if subtree of next mode as its not right yet ...
+            # Update active_mode
+            active_mode =  self.operation.modes[-1]
+             
     def Plan(self) -> dict:
         i = 0
         self.PlannerInitialization()
@@ -227,11 +229,15 @@ class BidirectionalRRTstar(BaseRRTstar):
             self.operation.active_mode  = (np.random.choice(self.operation.modes, p= self.SetModePorbability()))
             
             # Bi-RRT* core
-            q_rand, _ = self.SampleNodeManifold(self.operation)
-            
+            q_rand, sampling_type = self.SampleNodeManifold(self.operation)
+            if sampling_type == 2 and self.operation.active_mode.order == -1: # A start of this node was sampled and need to add it as goal node to previous mode
+                pass #TODO
+            if sampling_type == 2 and self.operation.active_mode.order == 1: # A goal of this node was sampled and need to add it as start node to next mode
+                pass #TODO
+
             n_nearest= self.Nearest(q_rand, self.operation.active_mode.subtree, self.operation.active_mode.batch_subtree)    
             n_new = self.Steer(n_nearest, q_rand, self.operation.active_mode.label)
-            if not n_new: # meaning n_new is exact the same as one of the nodes in the tree
+            if not n_new: # meaning n_new is exactly the same as one of the nodes in the tree
                 continue
 
             if self.env.is_collision_free(n_new.state.q.state(), self.operation.active_mode.label) and self.env.is_edge_collision_free(n_nearest.state.q, n_new.state.q, self.operation.active_mode.label):
@@ -241,10 +247,8 @@ class BidirectionalRRTstar(BaseRRTstar):
                 n_nearest_index = torch.where(node_indices == n_nearest.idx)[0].item() 
                 batch_cost, batch_dist =  batch_config_torch(n_new.state.q, N_near_batch, "euclidean")
                 self.FindParent(N_near_indices, n_nearest_index, n_new, n_nearest, batch_cost, batch_dist, n_near_costs)
-                # if self.operation.init_sol:
                 if self.Rewire(N_near_indices, n_new, batch_cost, batch_dist, n_near_costs, n_rand = q_rand.state(), n_nearest = n_nearest.state.q.state() ):
                     self.UpdateCost(n_new)
-                # if not self.operation.active_mode.connected: 
                 self.Connect(n_new, i)
                 self.ManageTransition(n_new, i)
             if self.operation.init_sol and i != self.operation.ptc_iter and (i- self.operation.ptc_iter)%self.config.ptc_max_iter == 0:
@@ -257,7 +261,6 @@ class BidirectionalRRTstar(BaseRRTstar):
             
 
         self.SaveData(time.time()-self.start, n_new = n_new.state.q)
-        print(time.time()-self.start)
         return self.operation.path    
 
 

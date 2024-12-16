@@ -9,7 +9,6 @@ from planning_env import *
 from util import *
 from analysis.analysis_util import *
 from planner_rrtstar import *
-import webbrowser
 
 def init_discretization(path, costs, modes, indices, transition, resolution=0.1):
     discretized_path, discretized_modes, discretized_costs, discretized_transition = [], [], [], []
@@ -24,11 +23,15 @@ def init_discretization(path, costs, modes, indices, transition, resolution=0.1)
         segment_length = np.linalg.norm(segment_vector)
         
         # Determine the number of points needed for the current segment
-        num_points = max(int(segment_length // resolution), 1)
+        if resolution is None: 
+            num_points = 1
+        else:
+            num_points = max(int(segment_length // resolution), 1)
         # num_points = 1
         
         # Create the points along the segment
         mode_idx = i
+        
         for j in range(num_points):
             interpolated_point = start + (segment_vector * (j / num_points))
             q_list = [interpolated_point[indices[i]] for i in range(len(indices))]
@@ -41,8 +44,11 @@ def init_discretization(path, costs, modes, indices, transition, resolution=0.1)
 
             else:
                 discretized_transition.append(False)
-
-            discretized_path.append(State(ListConfiguration(q_list), mode))
+            if j == 0:
+                original_mode = mode[0]
+            else:
+                original_mode = mode[-1]
+            discretized_path.append(State(ListConfiguration(q_list), original_mode))
             discretized_modes.append(mode)
             if i == 0 and j == 0:
                 continue
@@ -51,7 +57,7 @@ def init_discretization(path, costs, modes, indices, transition, resolution=0.1)
     # Append the final point of the path
     q_list = [path[-1][indices[i]] for i in range(len(indices))]
     mode = [modes[i+1]]
-    discretized_path.append(State(ListConfiguration(q_list), mode))
+    discretized_path.append(State(ListConfiguration(q_list), original_mode))
     discretized_modes.append(mode)
     discretized_costs.append(discretized_costs[-1]+ config_cost(discretized_path[-2].q, discretized_path[-1].q, "euclidean"))
     discretized_transition.append(True)
@@ -414,18 +420,19 @@ def shortcutting_mode(dir, env, env_path, pkl_folder, config,  output_html, vers
                 diff = time.time()- start
                 time_list.append(diff)
         path_visualization(all_frame_traces, env_path,modes_legend,original_discretized_path, discretized_transition, output_html)
-        path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(discretized_path)}
-        json_dir =os.path.join(dir, 'general.log') 
-        with open(json_dir, 'a') as log_file:
-            log_file.write(f"Path shortcut: {json.dumps(path_dict, indent=4)}\n")
-            log_file.write(f"Before: {json.dumps(total_cost.item(), indent=4)}\n")
-            log_file.write(f"After: {json.dumps(discretized_costs[-1].item(), indent=4)}\n")
+        # path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(discretized_path)}
+        # json_dir =os.path.join(dir, 'general.log') 
+        # with open(json_dir, 'a') as log_file:
+        #     log_file.write(f"Path shortcut: {json.dumps(path_dict, indent=4)}\n")
+        #     log_file.write(f"Before: {json.dumps(total_cost.item(), indent=4)}\n")
+        #     log_file.write(f"After: {json.dumps(discretized_costs[-1].item(), indent=4)}\n")
         print("Before: ", total_cost.item(), "After " ,   discretized_costs[-1].item())
         frames_directory = os.path.join(config["output_dir"], f'Post_{version}')
         os.makedirs(frames_directory, exist_ok=True)
         data = {
             "total_cost": overall_costs, 
-            "time": time_list}
+            "time": time_list,
+            "path": discretized_path }
         # Find next available file number
         existing_files = (int(file.split('.')[0]) for file in os.listdir(frames_directory) if file.endswith('.pkl') and file.split('.')[0].isdigit())
         next_file_number = max(existing_files, default=-1) + 1
@@ -441,7 +448,7 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
         [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
         key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
     )
-
+    
     with open(pkl_files[-1], 'rb') as file:
         data = dill.load(file)
         results = data["result"]
@@ -465,6 +472,8 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
         time_list = [0]
         start = time.time()
         discretized_path, discretized_modes, discretized_costs, discretized_transition =init_discretization(path_, intermediate_tot, modes, indices, transition)  
+        termination_cost = discretized_costs[-1]
+        termination_iter = 0
         original_discretized_path = discretized_path.copy()     
         original_discretized_modes = discretized_modes.copy()      
         modes_legend = [mode for idx, mode in enumerate(original_discretized_modes) if discretized_transition[idx]]
@@ -493,7 +502,7 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
                 idx2 = max(i1, i2)
                 m1 = discretized_modes[idx1]    
                 m2 = discretized_modes[idx2]    
-                if m1 == m2 and choice == 0:
+                if m1 == m2 and choice == 0: #take all possible robots
                     robot = None
                     if version == 4:
                         dim = [np.random.choice(indices[r_idx]) for r_idx in range(len(env.robots))]
@@ -537,22 +546,30 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
                     all_frame_traces.append(path_traces(colors, mode_sequence, discretized_path))
                     overall_costs.append(discretized_costs[-1])
                     time_list.append(time.time()- start)
+                    if not deterministic:
+                        if np.abs(discretized_costs[-1] - termination_cost) > 0.001:
+                            termination_cost = discretized_costs[-1]
+                            termination_iter = j
+                        elif np.abs(termination_iter -j) > 25000:
+                            break
+                    
         path_visualization(all_frame_traces, env_path,modes_legend,original_discretized_path, discretized_transition, output_html)
-        path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(discretized_path)}
-        json_dir =os.path.join(dir, 'general.log') 
-        with open(json_dir, 'a') as log_file:
-            log_file.write(f"Path shortcut: {json.dumps(path_dict, indent=4)}\n")
-            log_file.write(f"Before: {json.dumps(total_cost.item(), indent=4)}\n")
-            log_file.write(f"After: {json.dumps(discretized_costs[-1].item(), indent=4)}\n")
+        # path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(discretized_path)}
+        # json_dir =os.path.join(dir, 'general.log') 
+        # with open(json_dir, 'a') as log_file:
+        #     log_file.write(f"Path shortcut: {json.dumps(path_dict, indent=4)}\n")
+        #     log_file.write(f"Before: {json.dumps(total_cost.item(), indent=4)}\n")
+        #     log_file.write(f"After: {json.dumps(discretized_costs[-1].item(), indent=4)}\n")
         print("Before: ", total_cost.item(), "After " ,   discretized_costs[-1].item())
         if not deterministic:
             frames_directory = os.path.join(config["output_dir"], f'Post_{version+3*choice}')
         else:
-            frames_directory = os.path.join(config["output_dir"], f'Post_{version+6*(choice+1)}')
+            frames_directory = os.path.join(config["output_dir"], f'Post_{version+6+(choice*3)}')
         os.makedirs(frames_directory, exist_ok=True)
         data = {
             "total_cost": overall_costs, 
-            "time": time_list}
+            "time": time_list,
+            "path": discretized_path }
         # Find next available file number
         existing_files = (int(file.split('.')[0]) for file in os.listdir(frames_directory) if file.endswith('.pkl') and file.split('.')[0].isdigit())
         next_file_number = max(existing_files, default=-1) + 1
@@ -586,15 +603,17 @@ if __name__ == "__main__":
     directory = os.path.join(home_dir, 'output')
     path = get_latest_folder(directory)
     # path = "/home/tirza/output/091224_083733"
-    path = '/home/tirza/output/091224_083733'
+    # path = '/home/tirza/output/091224_083733'
+    # path = '/home/tirza/output/151224_105746'
+    # path = '/home/tirza/output/151224_101608'
     env_name, config_params, _, _ = get_config(path)
     env = get_env_by_name(env_name)    
     pkl_folder = os.path.join(path, 'FramesData')
     env_path = os.path.join(home_dir, f'env/{env_name}')
     save_env_as_mesh(env, env_path)
-    choice = 0 # 0: all possible agents, 1: only one agent at a time
-    iteration = 20
-    deterministic = True
+    choice = 1 # 0: all possible agents, 1: only one agent at a time
+    iteration = 1
+    deterministic = False
     if choice == 0:
         choice_name = 'all'
     else:

@@ -32,7 +32,7 @@ class RRTstar(BaseRRTstar):
             # Check if initial transition node of current mode is found
             if self.operation.active_mode.label == self.operation.modes[-1].label and not self.operation.init_sol:
                 print(time.time()-self.start)
-                print(f"{iter} {constrained_robots} found T{self.env.get_current_seq_index(self.operation.active_mode.label)}: Cost: ", n_new.cost)
+                print(f"{iter} {constrained_robots} found T{self.env.get_current_seq_index(self.operation.active_mode.label)}")
                 self.InitializationMode(self.operation.modes[-1])
                 if self.env.terminal_mode != self.operation.modes[-1].label:
                     self.operation.modes.append(Mode(self.env.get_next_mode(n_new.state.q,self.operation.active_mode.label), self.env))
@@ -63,10 +63,11 @@ class RRTstar(BaseRRTstar):
             # Mode selection
             self.operation.active_mode  = (np.random.choice(self.operation.modes, p= self.SetModePorbability()))
             # RRT* core
-            q_rand = self.SampleNodeManifold(self.operation)
-            n_nearest, _ = self.Nearest(q_rand, self.operation.active_mode.subtree, self.operation.active_mode.batch_subtree)        
+            q_rand, _ = self.SampleNodeManifold(self.operation)
+            n_nearest= self.Nearest(q_rand, self.operation.active_mode.subtree, self.operation.active_mode.batch_subtree)        
             n_new = self.Steer(n_nearest, q_rand, self.operation.active_mode.label)
-
+            if not n_new: # meaning n_new is exact the same as one of the nodes in the tree
+                continue
             if self.env.is_collision_free(n_new.state.q.state(), self.operation.active_mode.label) and self.env.is_edge_collision_free(n_nearest.state.q, n_new.state.q, self.operation.active_mode.label):
                 N_near_indices, N_near_batch, n_near_costs, node_indices = self.Near(n_new, self.operation.active_mode.batch_subtree)
                 if n_nearest.idx not in node_indices:
@@ -88,8 +89,10 @@ class RRTstar(BaseRRTstar):
                     break
             
             i += 1
+         
 
         self.SaveData(time.time()-self.start)
+        print(time.time()-self.start)
         return self.operation.path    
 
 

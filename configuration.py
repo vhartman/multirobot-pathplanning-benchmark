@@ -4,6 +4,8 @@ from typing import List
 from numpy.typing import NDArray
 
 from abc import ABC, abstractmethod
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import torch
 
 
@@ -179,8 +181,10 @@ class NpConfiguration(Configuration):
     
     @classmethod
     def _batch_dist_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
+        torch.cuda.empty_cache()
         q_tensor = torch.as_tensor(pt.q, device='cuda')
-        diff = q_tensor - batch_other  # Shape: (batch_size, dim)
+        with torch.no_grad():
+            diff = q_tensor - batch_other
 
         if metric == "euclidean":
             dists = [
@@ -194,8 +198,10 @@ class NpConfiguration(Configuration):
         
     @classmethod
     def _batch_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
+        torch.cuda.empty_cache()
         q_tensor = torch.as_tensor(pt.q, device='cuda')
-        diff = q_tensor - batch_other  
+        with torch.no_grad():
+            diff = q_tensor - batch_other  
 
         if metric == "euclidean":
             dists = [

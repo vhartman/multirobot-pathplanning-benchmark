@@ -4,17 +4,15 @@ from datetime import datetime
 import yaml
 import json
 import pickle
-import os
+
 from configuration import *
 from planning_env import *
 from util import *
 import argparse
 import copy
-import torch
 import time as time
 import math as math
 from typing import Tuple, Optional
-from operator import itemgetter
 
 torch.cuda.manual_seed_all(10)
 
@@ -30,7 +28,7 @@ class ConfigManager:
             'step_size': 0.3, 'cost_function': 2, 'ptc_threshold': 0.1, 
             'ptc_max_iter': 3000, 'mode_probability': 0.4, 
             'informed_sampling': True, 'informed_sampling_version': 0, 
-            'cprofiler': False, 'cost': 'euclidean', 'show_path': False 
+            'cprofiler': False, 'cost': 'euclidean', 'debug_mode': False, 'transition_nodes': 100, 'birrtstar_version' :1, 'amount_of_runs' : 1
         }
         for key, value in defaults.items():
             setattr(self, key, config.get(key, value))
@@ -38,10 +36,6 @@ class ConfigManager:
         # Output directory
         self.timestamp = datetime.now().strftime("%d%m%y_%H%M%S")
         self.output_dir = os.path.join(os.path.expanduser("~"), f'output/{self.timestamp}/')
-        os.makedirs(self.output_dir, exist_ok=True)
-
-        # Set up logging
-        self._setup_logger()
 
     def _setup_logger(self) -> None:
         logging.basicConfig(
@@ -52,6 +46,9 @@ class ConfigManager:
         self.logger = logging.getLogger(__name__)
 
     def log_params(self, args: argparse) -> None:
+        # Set up logging
+        os.makedirs(self.output_dir, exist_ok=True)
+        self._setup_logger()
         """Logs configuration parameters along with environment and planner details."""
         config_dict = {k: v for k, v in self.__dict__.items() if k != "logger"}
         self.logger.info('Environment: %s', json.dumps(args.env_name, indent=2))
@@ -94,8 +91,6 @@ class Operation:
         """
         return self.costs[idx]
     
-
-
 class Node:
     def __init__(self, state:State, idx: int, operation: Operation):
         self.idx = idx
@@ -104,6 +99,8 @@ class Node:
         self.parent = None  
         self.children = []    
         self.transition = False
+        self.start_transition = False
+        self.goal_transition = False
         num_agents = state.q.num_agents()
         # self.cost = torch.tensor(0, device='cuda')
         self.agent_cost = torch.zeros(1, num_agents, device = 'cuda')
@@ -376,6 +373,8 @@ class BaseRRTstar(ABC):
 
     def SaveData(self, passed_time: time, n_new:NDArray=None, 
                  N_near:List[Node]=None, r:float=None, n_rand:NDArray=None, n_nearest:NDArray = None) -> None:
+        if self.config.debug_mode:
+            return
         tree_data = []
         for mode in self.operation.modes:
             m = mode.label
@@ -478,9 +477,11 @@ class BaseRRTstar(ABC):
     def Nearest(self, q_rand: Configuration, subtree: List[Node], subtree_set: torch.tensor) -> Node: 
         set_dists = batch_config_dist_torch(q_rand, subtree_set, "euclidean")
         idx = torch.argmin(set_dists).item()
-        return  subtree[idx], idx
+        return  subtree[idx]
 
     def Steer(self, n_nearest: Node, q_rand: Configuration, m_label: List[int]) -> Node: 
+        if np.equal(n_nearest.state.q.state(), q_rand.state()).all():
+            return None
         dists = config_dists(n_nearest.state.q, q_rand, "euclidean")
         if np.max(dists) < self.config.step_size:
             state_new = State(q_rand, m_label)
@@ -699,12 +700,12 @@ class BaseRRTstar(ABC):
     def SampleNodeManifold(self, operation: Operation) -> Configuration:
         if np.random.uniform(0, 1) <= self.config.p_goal:
             if self.env.terminal_mode != operation.modes[-1].label and operation.active_mode.label == operation.modes[-1].label:
-                return self.sampling.sample_state(operation.active_mode, 0)
+                return self.sampling.sample_state(operation.active_mode, 0), 0
             else:  
                 if self.config.informed_sampling: 
-                    return self.sampling.sample_state(operation.active_mode, 1)
-                return self.sampling.sample_state(operation.active_mode, 0)
-        return self.sampling.sample_state(operation.active_mode, 2)
+                    return self.sampling.sample_state(operation.active_mode, 1), 1
+                return self.sampling.sample_state(operation.active_mode, 0), 0
+        return self.sampling.sample_state(operation.active_mode, 2), 2
     
     def FindOptimalTransitionNode(self, iter: int, mode_init_sol: bool = False) -> None:
         if len(self.operation.modes) < 2:
@@ -728,8 +729,7 @@ class BaseRRTstar(ABC):
             ].item()
             lowest_cost_node = transition_nodes[min_cost_idx]
             self.GeneratePath(lowest_cost_node)
-            if not mode_init_sol:
-                print(f"{iter} Cost: ", self.operation.cost, " Mode: ", self.operation.active_mode.label)
+            print(f"{iter} Cost: ", self.operation.cost, " Mode: ", self.operation.active_mode.label)
 
             if (self.operation.ptc_cost - self.operation.cost) > self.config.ptc_threshold:
                 self.operation.ptc_cost = self.operation.cost

@@ -50,28 +50,6 @@
             "console": "integratedTerminal"
         }, 
         {
-            "name": "visualizations.py --show development",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/analysis/visualizations.py",
-            "args": [
-                "--show",
-                "development"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "simulations.py --show path",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/analysis/simulations.py",
-            "args": [
-                "--sim",
-                "path"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
             "name": "rai_envs.py -triple_waypoints --mode show",
             "type": "debugpy",
             "request": "launch",
@@ -94,13 +72,26 @@
                 "rrtstar"
             ],
             "console": "integratedTerminal"
-        },{
+        },
+        {
             "name": "main.py -simple_2d --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "args": [
                 "simple_2d",
+                "--planner",
+                "rrtstar"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "main.py -box_sorting --planner rrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": [
+                "box_sorting",
                 "--planner",
                 "rrtstar"
             ],
@@ -115,6 +106,18 @@
                 "simple_2d",
                 "--planner",
                 "bi_rrtstar"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "main.py -simple_2d --planner bi_rrtstar_par",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "bi_rrtstar_par"
             ],
             "console": "integratedTerminal"
         },
@@ -142,6 +145,7 @@
             ],
             "console": "integratedTerminal"
         },
+        
         {
             "name": "postprocessing.py --mode partial_singledim",
             "type": "debugpy",
@@ -199,6 +203,17 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "simulations.py --show path",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/simulations.py",
+            "args": [
+                "--sim",
+                "path"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "simulations.py --show path_shortcutt",
             "type": "debugpy",
             "request": "launch",
@@ -228,6 +243,28 @@
             "args": [
                 "--show",
                 "cost"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "visualizations.py --show path",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "args": [
+                "--show",
+                "path"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "visualizations.py --show development",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "args": [
+                "--show",
+                "development"
             ],
             "console": "integratedTerminal"
         },

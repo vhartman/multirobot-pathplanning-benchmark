@@ -13,6 +13,7 @@ from util import *
 from rai_config import *
 from planning_env import *
 from util import *
+import re
 
 def interpolation_check(env):
     array = np.array
@@ -368,11 +369,12 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                         )
                     )
 
-        if N_near is not None and N_near != []:
-            active_mode = data["active_mode"]
-            mode_idx = modes.index(active_mode)
-            for r, robot in enumerate(env.robots):
-                indices = env.robot_idx[robot]
+        active_mode = data["active_mode"]
+        mode_idx = modes.index(active_mode)
+        legend_bool = True
+        for r, robot in enumerate(env.robots):
+            indices = env.robot_idx[robot]
+            if n_new is not None and N_near is not None and N_near != []:
                 theta = np.linspace(0, 2 * np.pi, 100)  # Angle values
                 x = n_new[indices][0] + rewire_radius * np.cos(theta)  # X-coordinates
                 y = n_new[indices][1] + rewire_radius * np.sin(theta)  # Y-coordinates
@@ -388,6 +390,7 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                     showlegend = False  # Marker style
                     )
                 )
+            if n_new is not None:
                 frame_traces.append(
                 go.Scatter3d(
                     x=[n_new[indices][0]],  # X-coordinates
@@ -396,9 +399,11 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                     mode='markers',  # Use 'lines' or 'markers+lines' for connections
                     marker=dict(size=9, color='black'), 
                     legendgroup = legends[mode_idx],
-                    showlegend = False  # Marker style
+                    showlegend = legend_bool,  # Marker style
+                    name = 'New Node'
                     )
                 )
+            if n_nearest is not None:
                 frame_traces.append(
                 go.Scatter3d(
                     x=[n_nearest[indices][0]],  # X-coordinates
@@ -407,9 +412,11 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                     mode='markers',  # Use 'lines' or 'markers+lines' for connections
                     marker=dict(size=9, color=colors[len(modes)+r]), 
                     legendgroup = legends[mode_idx],
-                    showlegend = False  # Marker style
+                    showlegend = True , # Marker style
+                    name = f'Nearest Node {robot}'
                     )
                 )
+            if n_rand is not None:
                 frame_traces.append(
                 go.Scatter3d(
                     x=[n_rand[indices][0]],  # X-coordinates
@@ -418,9 +425,11 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                     mode='markers',  # Use 'lines' or 'markers+lines' for connections
                     marker=dict(size=6, color='red'), 
                     legendgroup = legends[mode_idx],
-                    showlegend = False  # Marker style
+                    showlegend = legend_bool,  # Marker style,
+                    name = 'Random Node'
                     )
                 )
+            if N_near is not None and N_near != []:
                 for _, state in enumerate(N_near):
                     states = np.array(state)[indices]
 
@@ -434,6 +443,7 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                         legendgroup = legends[mode_idx],
                         showlegend = False,
                     ))
+            legend_bool = False
           
 
 
@@ -523,8 +533,8 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
     ]
     )
     fig.show()
-    # fig.write_html(output_html)
-    # print(f"Animation saved to {output_html}")
+    fig.write_html(output_html)
+    print(f"Animation saved to {output_html}")
 
 def tree(config, env, env_path, pkl_folder, divider = None):
 
@@ -895,7 +905,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
-    path = get_latest_folder(directory)
+    datetime_pattern = r"^\d{6}_\d{6}$"
+    dir = get_latest_folder(directory)
+    if re.search(datetime_pattern, dir):
+        path = dir
+    else: #TODO
+        path = os.path.join(dir, '0')
     env_name, config_params, _, _ = get_config(path)
     env = get_env_by_name(env_name)    
     pkl_folder = os.path.join(path, 'FramesData')

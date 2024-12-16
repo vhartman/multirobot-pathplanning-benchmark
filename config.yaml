@@ -8,14 +8,18 @@ p_goal: 0.93                                # Probability of performing goal sam
 general_goal_sampling: false                # True: For all tasks in mode goal sampling is done otherwise only for active task
 step_size: 0.25                             # Max allowable distance that newly generated node can be from the nearest node in the tree 
 cost_function: 2                            # 1: Sum(Euclidean norm per agent), 2: Worst(Euclidean norm per agent per edge)                       
-ptc_threshold: 0.1                          # Converge Threshold
-ptc_max_iter: 3000                          # Max iteration with no change before stopping
+ptc_threshold: 0.1 #!!float 1e-10                          # Converge Threshold
+ptc_max_iter: 100                         # Max iteration with no change before stopping
 mode_probability: 1                         # Probability to choose new mode (0: unfiormly, 1: greedy None: equally, else: manually set) 
 informed_sampling: false                    # True: Informed sampling is applied 
 informed_sampling_version: 2                # If 'informed_sampling: true', the specified version is applied (0: Only regarding agent, 1: Including other agents 2: corrected 1)
 cprofiler: False                            # Use cprofiler to run the 
-show_path: False                            # Show the path in the end
+show_path: True                            # Show the path in the end
 cost: euclidean                             # Type of cost function: euclidean (Max euclidean norm), euclidean_tot
+transition_nodes: 100                         # Number of generated transition nodes during mode initialization (only used in bi-rrt*)
+birrtstar_version: 2                        # Version of Bi-RRT*: 1: Inspired by Bi-RRT* by b. Wang 2: Inspired by RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
+amount_of_runs: 1                           # Amount of runs executed 
+debug_mode: True                             # True: Data isn't stored, as in debug modus
 
 
 

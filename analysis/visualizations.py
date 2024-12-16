@@ -13,6 +13,9 @@ from util import *
 from rai_config import *
 from planning_env import *
 from util import *
+from postprocessing import *
+import subprocess
+import re
 
 
 def get_cost_label(cost_function, number_agents):
@@ -30,7 +33,7 @@ def get_cost_label(cost_function, number_agents):
                
     return cost_label
 
-def get_cost_plot(env, config, pkl_folder, output_filename, fix_axis):
+def cost(env, config, pkl_folder, output_filename, fix_axis):
     # Get the list of .pkl files
     pkl_files = sorted(
         [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
@@ -159,7 +162,7 @@ def average(sum_times, runs, max_len, times, costs):
     
     return np.mean(average_costs, axis=0).tolist(), average_time
 
-def get_cost_shortcutting_plot(env, config, path, output_filename):
+def shortcutting_cost(env, config, path, output_filename):
     # Initialize lists and Plotly objects
     costs = []
     times = []
@@ -179,7 +182,7 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
     
 
     # Loop through versions to process data
-    for version in range(14):
+    for version in range(9):
         bool_legend = True
         folder = os.path.join(path, f"Post_{version}")
         # Get sorted list of .pkl files in the folder
@@ -284,6 +287,7 @@ def get_cost_shortcutting_plot(env, config, path, output_filename):
     # Save the plot as an image
     fig.write_image(output_filename)
 
+# Only for 2D problems possible 
 def developement_animation(config, env, env_path, pkl_folder, output_html, with_tree, divider = None):
 
     # Print the parsed task sequence
@@ -675,22 +679,110 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
     fig.write_html(output_html)
     print(f"Animation saved to {output_html}")
 
+def path_as_png(
+    env,
+    path: List[State],
+    stop: bool = True,
+    export: bool = False,
+    pause_time: float = 0.05,
+    dir: str = "./z.vid/", 
+    framerate = 1
+) -> None:
+    for i in range(len(path)):
+        env.set_to_mode(path[i].mode)
+        for k in range(len(env.robots)):
+            q = path[i].q[k]
+            env.C.setJointState(q, get_robot_joints(env.C, env.robots[k]))
+        if i == 0:
+            env.C.view(True)
+        else:
+            env.C.view(False)
+
+        if export:
+            env.C.view_savePng(dir)
+
+        time.sleep(pause_time)
+
+    for i in range(2*framerate):
+        if export:
+            env.C.view_savePng(dir)
+
+def path_vis(env: base_env, vid_path:str, framerate:int = 1, generate_png:bool = True, path_original:bool = False):
+    pkl_files = sorted(
+        [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
+        key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+    )
+    
+    if generate_png:
+        with open(pkl_files[-1], 'rb') as file:
+            data = dill.load(file)
+            results = data["result"]
+            path_ = results["path"]
+            intermediate_tot = results["intermediate_tot"]
+            transition = results["is_transition"]
+            transition[0] = True
+            modes = results["modes"]
+            mode_sequence = []
+            m = env.start_mode
+            indices  = [env.robot_idx[r] for r in env.robots]
+            while True:
+                mode_sequence.append(m)
+                if m == env.terminal_mode:
+                    break
+                m = env.get_next_mode(None, m)
+            if path_original:
+                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=None)
+            else:
+                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=0.005)  
+            path_as_png(env, discretized_path, export = True, dir =  vid_path, framerate = framerate)
+    # Generate a gif
+    palette_file = os.path.join(vid_path, 'palette.png')
+    output_gif = os.path.join(vid_path, 'out.gif')
+    for file in [palette_file, output_gif]:
+        if os.path.exists(file):
+            os.remove(file)
+    palette_command = [
+        "ffmpeg",
+        "-framerate", f"{framerate}",
+        "-i", os.path.join(vid_path, "%04d.png"),
+        "-vf", "scale=iw:-1:flags=lanczos,palettegen",
+        palette_file
+    ]
+
+    # Command 2: Use palette.png to generate the out.gif
+    gif_command = [
+        "ffmpeg",
+        "-framerate", f"{framerate}",
+        "-i", os.path.join(vid_path, "%04d.png"),
+        "-i", palette_file,
+        "-lavfi", "scale=iw:-1:flags=lanczos [scaled]; [scaled][1:v] paletteuse=dither=bayer:bayer_scale=5",
+        output_gif
+    ]
+    subprocess.run(palette_command, check=True)
+    subprocess.run(gif_command, check=True)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument(
         "--show",
-        choices=["development", "cost", "shortcutting_cost"],
+        choices=["development", "cost", "shortcutting_cost", "path"],
         required=True,
         help="Select the mode of operation",
     )
-    
     args = parser.parse_args()
+    datetime_pattern = r"^\d{6}_\d{6}$"
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
-    path = get_latest_folder(directory)
-    # path = "/home/tirza/output/091224_083733"
-    # path = '/home/tirza/output/091224_083733'
+    dir = get_latest_folder(directory)
+    if re.search(datetime_pattern, dir):
+        path = dir
+    else: #TODO
+        path = os.path.join(dir, '0')
     
+    path = '/home/tirza/output/161224_082143'
+
+
+
     env_name, config_params, _, _ = get_config(path)
     env = get_env_by_name(env_name)    
     pkl_folder = os.path.join(path, 'FramesData')
@@ -699,7 +791,7 @@ if __name__ == "__main__":
     print(path)
     if args.show == "development":
         print("Development")
-        with_tree = True
+        with_tree = False
         if with_tree:
             output_html = os.path.join(path, 'tree_animation_3d.html')
             reducer = 100
@@ -711,10 +803,21 @@ if __name__ == "__main__":
     if args.show == "cost":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'Cost.png')
-        get_cost_plot(env, config_params, pkl_folder, output_filename_cost, fix_axis)
+        cost(env, config_params, pkl_folder, output_filename_cost, fix_axis)
     if args.show == "shortcutting_cost":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'ShortcuttingCost.png')
-        get_cost_shortcutting_plot(env, config_params, path, output_filename_cost)
+        shortcutting_cost(env, config_params, path, output_filename_cost)
+    if args.show == "path":
+        path_original = True
+        generate_png = True
+        if path_original:
+            output_filename_path = os.path.join(path,"PathOriginal/")
+            vid_path = os.path.join(path,"PathOriginal/")
+        else:
+            output_filename_path = os.path.join(path,"Path/")
+            vid_path = os.path.join(path,"Path/")
+        os.makedirs(vid_path, exist_ok=True)
+        path_vis(env, vid_path, framerate=35, generate_png = generate_png, path_original= path_original)
 
 

@@ -3,7 +3,6 @@ import numpy as np
 import random
 import argparse
 import time
-import torch
 
 from typing import List, Dict
 from numpy.typing import NDArray
@@ -832,10 +831,10 @@ class rai_dual_ur10_arm_env(rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
+        # for f in self.C_coll.frames():
+        #     info = f.info()
+        #     if "shape" in info and info["shape"] == "mesh":
+        #         self.C_coll.delFrame(f.name)
 
         # self.C_coll.view(True)
         # self.C.view(True)
@@ -1618,7 +1617,7 @@ def get_env_by_name(name):
     elif name == "eggs":
         env = rai_ur10_arm_egg_carton_env()
     elif name == "triple_waypoints":
-        env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=1)
+        env = rai_multi_panda_arm_waypoint_env(num_robots=2, num_waypoints=2)
     elif name == "welding":
         env = rai_quadruple_ur10_arm_spot_welding_env()
     elif name == "bottles":
