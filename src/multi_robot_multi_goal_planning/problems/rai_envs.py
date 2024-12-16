@@ -1623,7 +1623,7 @@ class rai_ur10_arm_bottle_env(rai_env):
 
 class rai_ur10_arm_box_rearrangement_env(rai_env):
     def __init__(self):
-        self.C, actions = make_box_rearrangement_env()
+        self.C, actions, self.robots = make_box_rearrangement_env()
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -1642,8 +1642,6 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
 
         self.C.clear()
         self.C.addConfigurationCopy(self.C_coll)
-
-        self.robots = ["a1_", "a2_"]
 
         super().__init__()
 
@@ -1686,7 +1684,7 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
                 else:
                     action_names[obj] = [self.tasks[-1].name]
 
-        self.tasks.append(Task(["a1_", "a2_"], SingleGoal(self.C.getJointState())))
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
         self.tasks[-1].name = "terminal"
 
         # initialize the sequence with picking the first object
@@ -1697,7 +1695,11 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
         # initialize the available action sequences with the first two objects
         available_action_sequences = [actions[0][1], actions[1][1]]
 
-        robot_gripper_free = {"a1_": False, "a2_": True}
+        robot_gripper_free = {}
+        for r in self.robots:
+            robot_gripper_free[r] = True
+
+        robot_gripper_free[self.tasks[0].name[:3]] = False
         location_is_free = {}
 
         for k, v in obj_goal.items():

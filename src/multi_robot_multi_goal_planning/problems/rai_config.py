@@ -1445,7 +1445,7 @@ def make_egg_carton_env(view: bool = False):
     return C, keyframes
 
 
-def make_box_rearrangement_env(view: bool = False):
+def make_box_rearrangement_env(num_robots = 2, view: bool = False):
     C = ry.Config()
 
     table = (
@@ -1466,11 +1466,26 @@ def make_box_rearrangement_env(view: bool = False):
 
     # C.getFrame('a1_ur_coll0').setContact(-5)
 
-    C.addFile(robot_path, namePrefix="a2_").setParent(
-        C.getFrame("table")
-    ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
-        [0.7071, 0, 0, -0.7071]
-    ).setJoint(ry.JT.rigid)
+    if num_robots >= 2:
+        C.addFile(robot_path, namePrefix="a2_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, -0.7071]
+        ).setJoint(ry.JT.rigid)
+
+    if num_robots >= 3:
+        C.addFile(robot_path, namePrefix="a3_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.5, -0.6, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, 0.7071]
+        ).setJoint(ry.JT.rigid)
+
+    if num_robots >= 4:
+        C.addFile(robot_path, namePrefix="a4_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([-0.5, -0.6, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, 0.7071]
+        ).setJoint(ry.JT.rigid)
 
     # C.getFrame('a2_ur_coll0').setContact(-5)
 
@@ -1541,14 +1556,18 @@ def make_box_rearrangement_env(view: bool = False):
     random.shuffle(goals)
     random.shuffle(intermediate_goals)
 
-    q_home = C.getJointState()
-
     def compute_rearrangment(
         robot_prefix, box, intermediate_goal, goal, directly_place=False
     ):
         # set everything but the crrent box to non-contact
         c_tmp = ry.Config()
         c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
 
         for frame_name in boxes:
             if frame_name != box:
@@ -1670,40 +1689,48 @@ def make_box_rearrangement_env(view: bool = False):
 
         keyframes = komo.getPath()
         
-        if robot_prefix == "a1_":
-            keyframes = keyframes[:, :6]
-        else:
-            keyframes = keyframes[:, 6:]
-
         return keyframes
 
-    direct_pick_place_keyframes = {"a1_": {}, "a2_": {}}
-    indirect_pick_place_keyframes = {"a1_": {}, "a2_": {}}
+    # all_robots = ["a1_", "a2_"]
+    all_robots = ["a1_", "a2_", "a3_", "a4_"]
 
-    for box, intermediate_goal, goal in zip(boxes, intermediate_goals, goals):
-        r1 = compute_rearrangment(
-            "a1_", box, intermediate_goal, goal, directly_place=True
-        )
-        direct_pick_place_keyframes["a1_"][box] = r1[:2]
+    all_robots = all_robots[:num_robots]
 
-        r2 = compute_rearrangment("a1_", box, intermediate_goal, goal)
-        indirect_pick_place_keyframes["a1_"][box] = r2[:4]
+    print(all_robots)
 
-        r3 = compute_rearrangment(
-            "a2_", box, intermediate_goal, goal, directly_place=True
-        )
-        direct_pick_place_keyframes["a2_"][box] = r3[:2]
+    # direct_pick_place_keyframes = {"a1_": {}, "a2_": {}}
+    # indirect_pick_place_keyframes = {"a1_": {}, "a2_": {}}
 
-        r4 = compute_rearrangment("a2_", box, intermediate_goal, goal)
-        indirect_pick_place_keyframes["a2_"][box] = r4[:4]
+    direct_pick_place_keyframes = {}
+    indirect_pick_place_keyframes = {}
+
+    for r in all_robots:
+        direct_pick_place_keyframes[r] = {}
+        indirect_pick_place_keyframes[r] = {}
+
+    for r in all_robots:
+        for box, intermediate_goal, goal in zip(boxes, intermediate_goals, goals):
+            r1 = compute_rearrangment(
+                r, box, intermediate_goal, goal, directly_place=True
+            )
+            direct_pick_place_keyframes[r][box] = r1[:2]
+
+            r2 = compute_rearrangment(r, box, intermediate_goal, goal)
+            indirect_pick_place_keyframes[r][box] = r2[:4]
+
+            # r3 = compute_rearrangment(
+            #     "a2_", box, intermediate_goal, goal, directly_place=True
+            # )
+            # direct_pick_place_keyframes["a2_"][box] = r3[:2]
+
+            # r4 = compute_rearrangment("a2_", box, intermediate_goal, goal)
+            # indirect_pick_place_keyframes["a2_"][box] = r4[:4]
 
     all_objs = boxes.copy()
     random.shuffle(all_objs)
     robot_to_use = []
     for _ in range(len(all_objs)):
-        r = "a1_"
-        if random.randint(0, 1) == 1:
-            r = "a2_"
+        r = random.choice(all_robots)
         robot_to_use.append(r)
 
     box_goal = {}
@@ -1741,7 +1768,7 @@ def make_box_rearrangement_env(view: bool = False):
                 (robot, obj_to_move, indirect_pick_place_keyframes[robot][obj_to_move], goal)
             )
 
-    return C, keyframes
+    return C, keyframes, all_robots
 
 
 def make_handover_env(view: bool = False):
