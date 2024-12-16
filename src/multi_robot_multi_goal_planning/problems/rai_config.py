@@ -1445,7 +1445,7 @@ def make_egg_carton_env(view: bool = False):
     return C, keyframes
 
 
-def make_box_rearrangement_env(num_robots = 2, view: bool = False):
+def make_box_rearrangement_env(num_robots = 2, num_boxes=9, view: bool = False):
     C = ry.Config()
 
     table = (
@@ -1496,6 +1496,7 @@ def make_box_rearrangement_env(num_robots = 2, view: bool = False):
     boxes = []
     goals = []
 
+    cnt = 0
     for k in range(d):
         for j in range(w):
             axis = np.random.randn(3)
@@ -1524,6 +1525,14 @@ def make_box_rearrangement_env(num_robots = 2, view: bool = False):
 
             boxes.append("box" + str(j) + str(k))
             goals.append("goal" + str(j) + str(k))
+
+            cnt += 1
+
+            if cnt == num_boxes:
+                break
+        
+        if cnt == num_boxes:
+            break
 
     intermediate_goals = []
 
@@ -1554,6 +1563,23 @@ def make_box_rearrangement_env(num_robots = 2, view: bool = False):
     # figure out what should go where
     # random.shuffle(boxes)
     random.shuffle(goals)
+
+    while True:
+        print()
+        obj_in_same_place = False
+        for i, obj in enumerate(boxes):
+            print(obj)
+            print(goals[i])
+            if obj[-2:] == goals[i][-2:]:
+                print(obj)
+                obj_in_same_place = True
+
+        if not obj_in_same_place:
+            break
+
+        random.shuffle(goals)
+
+
     random.shuffle(intermediate_goals)
 
     def compute_rearrangment(
@@ -1696,8 +1722,6 @@ def make_box_rearrangement_env(num_robots = 2, view: bool = False):
 
     all_robots = all_robots[:num_robots]
 
-    print(all_robots)
-
     # direct_pick_place_keyframes = {"a1_": {}, "a2_": {}}
     # indirect_pick_place_keyframes = {"a1_": {}, "a2_": {}}
 
@@ -1728,10 +1752,27 @@ def make_box_rearrangement_env(num_robots = 2, view: bool = False):
 
     all_objs = boxes.copy()
     random.shuffle(all_objs)
+
     robot_to_use = []
-    for _ in range(len(all_objs)):
-        r = random.choice(all_robots)
-        robot_to_use.append(r)
+    
+    while True:
+        robot_to_use = []
+
+        for _ in range(len(all_objs)):
+            r = random.choice(all_robots)
+            robot_to_use.append(r)
+
+            print(r)
+
+        robot_unused = False
+        for r in all_robots:
+            if robot_to_use.count(r) == 0:
+                robot_unused = True
+
+        if not robot_unused:
+            break
+
+        print(robot_to_use)
 
     box_goal = {}
     for b, g in zip(boxes, goals):

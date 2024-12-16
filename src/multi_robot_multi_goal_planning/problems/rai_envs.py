@@ -1,7 +1,6 @@
 import robotic as ry
 import numpy as np
 import random
-import argparse
 import time
 
 from typing import List, Dict, Optional
@@ -27,7 +26,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     batch_config_cost,
 )
 
-from util import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
 
 
 def get_joint_indices(C: ry.Config, prefix: str) -> List[int]:
@@ -1623,7 +1622,7 @@ class rai_ur10_arm_bottle_env(rai_env):
 
 class rai_ur10_arm_box_rearrangement_env(rai_env):
     def __init__(self):
-        self.C, actions, self.robots = make_box_rearrangement_env()
+        self.C, actions, self.robots = make_box_rearrangement_env(num_boxes=9)
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
