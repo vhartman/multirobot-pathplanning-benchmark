@@ -457,6 +457,7 @@ class rai_two_dim_env_no_obs(rai_env):
 
         self.tolerance = 0.01
 
+
 class rai_two_dim_env_no_obs_three_agents(rai_env):
     def __init__(self):
         self.C = make_2d_rai_env_no_obs_three_agents()
@@ -479,7 +480,6 @@ class rai_two_dim_env_no_obs_three_agents(rai_env):
             Task(["a2"], SingleGoal(np.array([0.5, 0.5, 0]))),
             # r3
             Task(["a3"], SingleGoal(np.array([0.0, -0.5, 0]))),
-
             # terminal mode
             Task(
                 ["a1", "a2", "a3"],
@@ -496,7 +496,15 @@ class rai_two_dim_env_no_obs_three_agents(rai_env):
         self.tasks[6].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
-            ["a2_goal_0", "a2_goal_1", "a2_goal_2", "a2_goal_3", "a1_goal", "a3_goal", "terminal"]
+            [
+                "a2_goal_0",
+                "a2_goal_1",
+                "a2_goal_2",
+                "a2_goal_3",
+                "a1_goal",
+                "a3_goal",
+                "terminal",
+            ]
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
@@ -1613,6 +1621,159 @@ class rai_ur10_arm_bottle_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
+class rai_ur10_arm_box_rearrangement_env(rai_env):
+    def __init__(self):
+        self.C, actions = make_box_rearrangement_env()
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        self.robots = ["a1_", "a2_"]
+
+        super().__init__()
+
+        self.manipulating_env = True
+
+        self.tasks = []
+
+        direct_place_actions = ["pick", "place"]
+        indirect_place_actions = ["pick", "place", "pick", "place"]
+
+        action_names = {}
+
+        obj_goal = {}
+
+        for a in actions:
+            robot = a[0]
+            obj = a[1]
+            keyframes = a[2]
+            obj_goal[obj] = a[3]
+
+            task_names = None
+            if len(keyframes) == 2:
+                task_names = direct_place_actions
+            else:
+                task_names = indirect_place_actions
+
+            cnt = 0
+            for t, k in zip(task_names, keyframes):
+                if t == "pick":
+                    ee_name = robot + "ur_vacuum"
+                    self.tasks.append(Task([robot], SingleGoal(k), t, frames=[ee_name, obj]))
+                else:
+                    self.tasks.append(Task([robot], SingleGoal(k), t, frames=["table", obj]))
+
+                self.tasks[-1].name = robot + t + "_" + obj + "_" + str(cnt)
+                cnt += 1
+
+                if obj in action_names:
+                    action_names[obj].append(self.tasks[-1].name)
+                else:
+                    action_names[obj] = [self.tasks[-1].name]
+
+        self.tasks.append(Task(["a1_", "a2_"], SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        # initialize the sequence with picking the first object
+        named_sequence = [self.tasks[0].name]
+        # remove the first task from the first action sequence
+        action_names[actions[0][1]].pop(0)
+
+        # initialize the available action sequences with the first two objects
+        available_action_sequences = [actions[0][1], actions[1][1]]
+
+        robot_gripper_free = {"a1_": False, "a2_": True}
+        location_is_free = {}
+
+        for k, v in obj_goal.items():
+            location_is_free[k[-2:]] = False
+
+        location_is_free[available_action_sequences[0][-2:]] = True
+        print(location_is_free)
+
+        while True:
+            # choose an action thingy from the available action sequences at random
+            obj = random.choice(available_action_sequences)
+
+            if len(action_names[obj]) == 0:
+                continue
+
+            potential_next_task = action_names[obj][0]
+            r = potential_next_task[:3]
+
+            if len(action_names[obj]) == 2 and not location_is_free[obj_goal[obj][-2:]]:
+                continue
+
+            if "pick" in potential_next_task and not robot_gripper_free[r]:
+                continue
+
+            if "place" in potential_next_task:
+                robot_gripper_free[r] = True
+
+            if "pick" in potential_next_task:
+                robot_gripper_free[r] = False
+
+            next_task = action_names[obj].pop(0)
+
+            print(available_action_sequences)
+            print(robot_gripper_free)
+            print(next_task)
+
+            if next_task[-1] == "0":
+                location_is_free[obj[-2:]] = True
+                if len(available_action_sequences) < len(actions):
+                    available_action_sequences.append(actions[len(available_action_sequences)][1])
+
+            print(location_is_free)
+
+            named_sequence.append(next_task)
+
+            no_more_actions_available = True
+
+            for obj, a in action_names.items():
+                if len(a) > 0:
+                    no_more_actions_available = False
+                    break
+
+            if no_more_actions_available:
+                break
+
+        named_sequence.append("terminal")
+
+        self.sequence = self._make_sequence_from_names(named_sequence)
+
+        print(self.sequence)
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode.copy()
+
+        self.tolerance = 0.1
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+
 # mobile manip
 class rai_mobile_manip_wall:
     pass
@@ -1668,6 +1829,8 @@ def get_env_by_name(name):
         env = rai_two_dim_env_no_obs()
     elif name == "three_agent_many_goals":
         env = rai_two_dim_env_no_obs_three_agents()
+    elif name == "box_rearrangement":
+        env = rai_ur10_arm_box_rearrangement_env()
     else:
         raise NotImplementedError("Name does not exist")
 

@@ -1502,24 +1502,50 @@ def make_box_rearrangement_env(view: bool = False):
             ).setContact(1).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
 
             C.addFrame("goal" + str(j) + str(k)).setParent(table).setShape(
-                ry.ST.box, [size[0], size[1], size[2], 0.005]
-            ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
+                ry.ST.marker, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition([pos[0], pos[1], pos[2]]).setColor(
                 [0, 0, 0.1, 0.5]
             ).setContact(0).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
 
             boxes.append("box" + str(j) + str(k))
             goals.append("goal" + str(j) + str(k))
 
+    intermediate_goals = []
+
+    for k in range(d + 2):
+        for j in range(w + 2):
+            if k == 0 or k == d + 1 or j == 0 or j == w + 1:
+                pos = np.array(
+                    [
+                        j * size[0] * 1.5 - (w + 2) / 2 * size[0],
+                        k * size[1] * 1.5 - 0.35,
+                        0.1,
+                    ]
+                )
+
+                C.addFrame("intermediate_goal" + str(j) + str(k)).setParent(
+                    table
+                ).setShape(
+                    ry.ST.marker, [size[0], size[1], size[2], 0.005]
+                ).setRelativePosition([pos[0], pos[1], pos[2]]).setColor(
+                    [0, 0, 0.1, 0.1]
+                ).setContact(0).setJoint(ry.JT.rigid)
+
+                intermediate_goals.append("intermediate_goal" + str(j) + str(k))
+
     if view:
         C.view(True)
 
     # figure out what should go where
-    random.shuffle(boxes)
+    # random.shuffle(boxes)
     random.shuffle(goals)
+    random.shuffle(intermediate_goals)
 
     q_home = C.getJointState()
 
-    def compute_rearrangment(robot_prefix, box, goal):
+    def compute_rearrangment(
+        robot_prefix, box, intermediate_goal, goal, directly_place=False
+    ):
         # set everything but the crrent box to non-contact
         c_tmp = ry.Config()
         c_tmp.addConfigurationCopy(C)
@@ -1529,7 +1555,7 @@ def make_box_rearrangement_env(view: bool = False):
                 c_tmp.getFrame(frame_name).setContact(0)
 
         komo = ry.KOMO(
-            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+            c_tmp, phases=5, slicesPerPhase=1, kOrder=1, enableCollisions=True
         )
         komo.addObjective(
             [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
@@ -1570,17 +1596,68 @@ def make_box_rearrangement_env(view: bool = False):
             [1e1],
         )
 
-        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
-        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+        # for pick and place directly
+        if directly_place:
+            komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+            komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
 
-        komo.addObjective(
-            times=[3],
-            feature=ry.FS.jointState,
-            frames=[],
-            type=ry.OT.eq,
-            scale=[1e0],
-            target=q_home,
-        )
+            komo.addObjective(
+                times=[3, -1],
+                feature=ry.FS.jointState,
+                frames=[],
+                type=ry.OT.eq,
+                scale=[1e0],
+                target=q_home,
+            )
+
+        else:
+            komo.addModeSwitch([2, 3], ry.SY.stable, ["table", box])
+            komo.addObjective(
+                [2, 3], ry.FS.poseDiff, [intermediate_goal, box], ry.OT.eq, [1e1]
+            )
+
+            komo.addModeSwitch([3, 4], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+            komo.addObjective(
+                [3, 4],
+                ry.FS.distance,
+                [robot_prefix + "ur_vacuum", box],
+                ry.OT.sos,
+                [1e0],
+                [0.05],
+            )
+            komo.addObjective(
+                [3, 4],
+                ry.FS.positionDiff,
+                [robot_prefix + "ur_vacuum", box],
+                ry.OT.sos,
+                [1e1, 1e1, 1],
+            )
+            komo.addObjective(
+                [3, 4],
+                ry.FS.scalarProductYZ,
+                [robot_prefix + "ur_ee_marker", box],
+                ry.OT.sos,
+                [1e1],
+            )
+            komo.addObjective(
+                [3, 4],
+                ry.FS.scalarProductZZ,
+                [robot_prefix + "ur_ee_marker", box],
+                ry.OT.sos,
+                [1e1],
+            )
+
+            komo.addModeSwitch([4, -1], ry.SY.stable, ["table", box])
+            komo.addObjective([4, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+            komo.addObjective(
+                times=[5],
+                feature=ry.FS.jointState,
+                frames=[],
+                type=ry.OT.eq,
+                scale=[1e0],
+                target=q_home,
+            )
 
         solver = ry.NLP_Solver(komo.nlp(), verbose=10)
         solver.setOptions(damping=0.1, wolfe=0.001)
@@ -1591,12 +1668,78 @@ def make_box_rearrangement_env(view: bool = False):
         if view:
             komo.view(True, "IK solution")
 
-        return komo.getPath()
+        keyframes = komo.getPath()
+        
+        if robot_prefix == "a1_":
+            keyframes = keyframes[:, :6]
+        else:
+            keyframes = keyframes[:, 6:]
+
+        return keyframes
+
+    direct_pick_place_keyframes = {"a1_": {}, "a2_": {}}
+    indirect_pick_place_keyframes = {"a1_": {}, "a2_": {}}
+
+    for box, intermediate_goal, goal in zip(boxes, intermediate_goals, goals):
+        r1 = compute_rearrangment(
+            "a1_", box, intermediate_goal, goal, directly_place=True
+        )
+        direct_pick_place_keyframes["a1_"][box] = r1[:2]
+
+        r2 = compute_rearrangment("a1_", box, intermediate_goal, goal)
+        indirect_pick_place_keyframes["a1_"][box] = r2[:4]
+
+        r3 = compute_rearrangment(
+            "a2_", box, intermediate_goal, goal, directly_place=True
+        )
+        direct_pick_place_keyframes["a2_"][box] = r3[:2]
+
+        r4 = compute_rearrangment("a2_", box, intermediate_goal, goal)
+        indirect_pick_place_keyframes["a2_"][box] = r4[:4]
+
+    all_objs = boxes.copy()
+    random.shuffle(all_objs)
+    robot_to_use = []
+    for _ in range(len(all_objs)):
+        r = "a1_"
+        if random.randint(0, 1) == 1:
+            r = "a2_"
+        robot_to_use.append(r)
+
+    box_goal = {}
+    for b, g in zip(boxes, goals):
+        box_goal[b] = g
 
     keyframes = []
 
-    for box, goal in zip(boxes, goals):
-        compute_rearrangment("a1_", box, goal)
+    for i in range(len(all_objs)):
+        obj_to_move = all_objs[i]
+        goal = box_goal[obj_to_move]
+
+        goal_location_is_free = False
+        for prev_moved_obj in all_objs[:i]:
+            # check if the 'coordinates' of a boxes goal location appear in the
+            # objects that were already moved. If yes,
+            # we already moved the object that previoulsy occupied
+            # this location.
+            if goal[-2:] == prev_moved_obj[-2:]:
+                goal_location_is_free = True
+                break
+
+        place_directly = False
+        if goal_location_is_free:
+            place_directly = True
+
+        robot = robot_to_use[i]
+
+        if place_directly:
+            keyframes.append(
+                (robot, obj_to_move, direct_pick_place_keyframes[robot][obj_to_move], goal)
+            )
+        else:
+            keyframes.append(
+                (robot, obj_to_move, indirect_pick_place_keyframes[robot][obj_to_move], goal)
+            )
 
     return C, keyframes
 
@@ -2315,6 +2458,7 @@ def make_depalletizing_env():
 
     return C
 
+
 def quaternion_from_z_to_target(target_z):
     # Ensure the target vector is normalized
     target_z = target_z / np.linalg.norm(target_z)
@@ -2368,22 +2512,24 @@ def make_strut_assembly_problem():
     # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/z_shape.json")
     # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/tower.json")
     # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/bridge.json")
-    assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/roboarch.json")
+    assembly_path = os.path.join(
+        os.path.dirname(__file__), "../models/strut_assemblies/roboarch.json"
+    )
 
     with open(assembly_path) as f:
         d = json.load(f)
 
-        sequence = d['elements']
-        nodes = d['nodes']
+        sequence = d["elements"]
+        nodes = d["nodes"]
 
         num_parts = len(sequence)
 
         print(num_parts)
 
-        if 'assembly_sequence' in d and len(d['assembly_sequence']) > 0:
+        if "assembly_sequence" in d and len(d["assembly_sequence"]) > 0:
             assembly_sequence = []
-            for seq in d['assembly_sequence']:
-                assembly_sequence.extend(seq['installPartIDs'])
+            for seq in d["assembly_sequence"]:
+                assembly_sequence.extend(seq["installPartIDs"])
         else:
             assembly_sequence = np.arange(0, num_parts)
 
@@ -2391,11 +2537,11 @@ def make_strut_assembly_problem():
 
         for i in assembly_sequence:
             s = sequence[i]
-            i1, i2 = s['end_node_inds']
+            i1, i2 = s["end_node_inds"]
             print(i1, i2)
 
-            p1 = np.array(nodes[i1]['point'])
-            p2 = np.array(nodes[i2]['point'])
+            p1 = np.array(nodes[i1]["point"])
+            p2 = np.array(nodes[i2]["point"])
 
             z_vec = p2 - p1
             origin = p1 + (p2 - p1) / 2
