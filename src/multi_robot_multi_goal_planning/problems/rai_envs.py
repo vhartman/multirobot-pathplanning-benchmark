@@ -412,7 +412,7 @@ class rai_two_dim_env(rai_env):
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
 # Optimal cost is be: TODO (no matter if rotationis enabled or not)
 class rai_two_dim_env_no_obs(rai_env):
-    def __init__(self, agents_can_rotate=[False, False]):
+    def __init__(self, agents_can_rotate=True):
         self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
@@ -1104,7 +1104,7 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
 # goals are poses
 class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
-    def __init__(self, num_robots=4, num_pts: int = 2, shuffle_goals: bool = False):
+    def __init__(self, num_robots=4, num_pts: int = 6, shuffle_goals: bool = False):
         self.C, keyframes = make_welding_env(num_robots=num_robots, view=False, num_pts=num_pts)
 
         self.C_coll = ry.Config()
@@ -1831,10 +1831,16 @@ def get_env_by_name(name):
         env = rai_two_dim_simple_manip()
     elif name == "simple_2d":
         env = rai_two_dim_env()
+    elif name == "simple_2d_no_rot":
+        env = rai_two_dim_env(agents_can_rotate=False)
     elif name == "hallway":
         env = rai_hallway_two_dim()
+    elif name == "hallway_no_rot":
+        env = rai_hallway_two_dim(agents_can_rotate=False)
     elif name == "random_2d":
         env = rai_random_two_dim()
+    elif name == "random_2d_no_rot":
+        env = rai_random_two_dim(agents_can_rotate=False)
     elif name == "2d_handover":
         env = rai_two_dim_handover()
     elif name == "three_agents":
@@ -1853,10 +1859,18 @@ def get_env_by_name(name):
         env = rai_ur10_handover_env()
     elif name == "one_agent_many_goals":
         env = rai_two_dim_env_no_obs()
+    elif name == "one_agent_many_goals_no_rot":
+        env = rai_two_dim_env_no_obs(agents_can_rotate=False)
     elif name == "three_agent_many_goals":
         env = rai_two_dim_env_no_obs_three_agents()
+    elif name == "three_agent_many_goals_no_rot":
+        env = rai_two_dim_env_no_obs_three_agents(agents_can_rotate=False)
     elif name == "box_rearrangement":
         env = rai_ur10_arm_box_rearrangement_env()
+    elif name == "box_rearrangement_only_five":
+        env = rai_ur10_arm_box_rearrangement_env(num_boxes=5)
+    elif name == "box_rearrangement_four_robots":
+        env = rai_ur10_arm_box_rearrangement_env(num_robots=4)
     else:
         raise NotImplementedError("Name does not exist")
 
