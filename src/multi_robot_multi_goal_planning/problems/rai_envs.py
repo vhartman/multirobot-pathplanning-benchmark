@@ -366,12 +366,9 @@ class rai_env(SequenceMixin, base_env):
 
 
 class rai_two_dim_env(rai_env):
-    def __init__(self):
-        self.C, keyframes = make_2d_rai_env()
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = make_2d_rai_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
-
-        print("keyframes")
-        print(keyframes)
 
         self.robots = ["a1", "a2"]
 
@@ -413,9 +410,10 @@ class rai_two_dim_env(rai_env):
 # very simple task:
 # make the robots go back and forth.
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
+# Optimal cost is be: TODO (no matter if rotationis enabled or not)
 class rai_two_dim_env_no_obs(rai_env):
-    def __init__(self):
-        self.C = make_2d_rai_env_no_obs()
+    def __init__(self, agents_can_rotate=[False, False]):
+        self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -423,16 +421,26 @@ class rai_two_dim_env_no_obs(rai_env):
         super().__init__()
 
         # r1 starts at both negative
+        r1_state = self.C.getJointState()[self.robot_idx["a1"]]
         # r2 starts at both positive
+        r2_state = self.C.getJointState()[self.robot_idx["a2"]]
+
+        r1_goal = r1_state * 1.
+        r1_goal[:2] = [-0.5, 0.5]
+
+        r2_goal_1 = r2_state * 1.
+        r2_goal_1[:2] = [0.5, -0.5]
+        r2_goal_2 = r2_state * 1.
+        r2_goal_2[:2] = [0.5, 0.5]
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(np.array([-0.5, 0.5, 0]))),
+            Task(["a1"], SingleGoal(r1_goal)),
             # r2
-            Task(["a2"], SingleGoal(np.array([0.5, -0.5, 0]))),
-            Task(["a2"], SingleGoal(np.array([0.5, 0.5, 0]))),
-            Task(["a2"], SingleGoal(np.array([0.5, -0.5, 0]))),
-            Task(["a2"], SingleGoal(np.array([0.5, 0.5, 0]))),
+            Task(["a2"], SingleGoal(r2_goal_1)),
+            Task(["a2"], SingleGoal(r2_goal_2)),
+            Task(["a2"], SingleGoal(r2_goal_1)),
+            Task(["a2"], SingleGoal(r2_goal_2)),
             # terminal mode
             Task(
                 ["a1", "a2"],
@@ -456,10 +464,12 @@ class rai_two_dim_env_no_obs(rai_env):
 
         self.tolerance = 0.01
 
-
+# trivial environment for planing
+# challenging to get the optimal solution dpeending on the approach
+# optimal solution is TODO (independent of rotation or not)
 class rai_two_dim_env_no_obs_three_agents(rai_env):
-    def __init__(self):
-        self.C = make_2d_rai_env_no_obs_three_agents()
+    def __init__(self, agents_can_rotate=True):
+        self.C = make_2d_rai_env_no_obs_three_agents(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2", "a3"]
@@ -467,18 +477,34 @@ class rai_two_dim_env_no_obs_three_agents(rai_env):
         super().__init__()
 
         # r1 starts at both negative
+        r1_state = self.C.getJointState()[self.robot_idx["a1"]]
+
         # r2 starts at both positive
+        r2_state = self.C.getJointState()[self.robot_idx["a2"]]
+
+        r3_state = self.C.getJointState()[self.robot_idx["a3"]]
+
+        r1_goal = r1_state * 1.
+        r1_goal[:2] = [-0.5, 0.5]
+
+        r2_goal_1 = r2_state * 1.
+        r2_goal_1[:2] = [0.5, -0.5]
+        r2_goal_2 = r2_state * 1.
+        r2_goal_2[:2] = [0.5, 0.5]
+
+        r3_goal = r3_state * 1.
+        r3_goal[:2] = [0.0, -0.5]
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(np.array([-0.5, 0.5, 0]))),
+            Task(["a1"], SingleGoal(r1_goal)),
             # r2
-            Task(["a2"], SingleGoal(np.array([0.5, -0.5, 0]))),
-            Task(["a2"], SingleGoal(np.array([0.5, 0.5, 0]))),
-            Task(["a2"], SingleGoal(np.array([0.5, -0.5, 0]))),
-            Task(["a2"], SingleGoal(np.array([0.5, 0.5, 0]))),
+            Task(["a2"], SingleGoal(r2_goal_1)),
+            Task(["a2"], SingleGoal(r2_goal_2)),
+            Task(["a2"], SingleGoal(r2_goal_1)),
+            Task(["a2"], SingleGoal(r2_goal_2)),
             # r3
-            Task(["a3"], SingleGoal(np.array([0.0, -0.5, 0]))),
+            Task(["a3"], SingleGoal(r3_goal)),
             # terminal mode
             Task(
                 ["a1", "a2", "a3"],
@@ -612,6 +638,7 @@ class rai_two_dim_handover(rai_env):
 
         translated_handover_poses.append(keyframes[1])
 
+        # generate set of random translations of the original keyframe
         rotated_terminal_poses = []
         for _ in range(100):
             new_pose = keyframes[3] * 1.0
@@ -691,11 +718,9 @@ class rai_two_dim_handover(rai_env):
 
 
 class rai_random_two_dim(rai_env):
-    def __init__(self):
-        num_robots = 3
-        num_goals = 4
+    def __init__(self, num_robots = 3, num_goals=4, agents_can_rotate=False):
         self.C, keyframes = make_random_two_dim(
-            num_agents=num_robots, num_goals=num_goals, num_obstacles=10
+            num_agents=num_robots, num_goals=num_goals, num_obstacles=10, agents_can_rotate=agents_can_rotate
         )
         # self.C.view(True)
 
@@ -741,8 +766,8 @@ class rai_random_two_dim(rai_env):
 
 
 class rai_hallway_two_dim(rai_env):
-    def __init__(self):
-        self.C, keyframes = make_two_dim_tunnel_env()
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -1079,8 +1104,8 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
 # goals are poses
 class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
-    def __init__(self, num_pts: int = 2, shuffle_goals: bool = False):
-        self.C, keyframes = make_welding_env(view=False, num_pts=num_pts)
+    def __init__(self, num_robots=4, num_pts: int = 2, shuffle_goals: bool = False):
+        self.C, keyframes = make_welding_env(num_robots=num_robots, view=False, num_pts=num_pts)
 
         self.C_coll = ry.Config()
         self.C_coll.addConfigurationCopy(self.C)
@@ -1621,8 +1646,8 @@ class rai_ur10_arm_bottle_env(rai_env):
 
 
 class rai_ur10_arm_box_rearrangement_env(rai_env):
-    def __init__(self):
-        self.C, actions, self.robots = make_box_rearrangement_env(num_boxes=9)
+    def __init__(self, num_robots=2, num_boxes=9):
+        self.C, actions, self.robots = make_box_rearrangement_env(num_boxes=num_boxes, num_robots=num_robots)
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
