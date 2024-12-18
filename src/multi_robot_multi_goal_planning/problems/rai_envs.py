@@ -69,8 +69,10 @@ class rai_env(SequenceMixin, base_env):
     def __init__(self):
         self.robot_idx = {}
         self.robot_dims = {}
+        self.robot_joints = {}
 
         for r in self.robots:
+            self.robot_joints[r] = get_robot_joints(self.C, r)
             self.robot_idx[r] = get_joint_indices(self.C, r)
             self.robot_dims[r] = len(get_joint_indices(self.C, r))
 
@@ -293,7 +295,7 @@ class rai_env(SequenceMixin, base_env):
             q = self.tasks[prev_mode_index].goal.sample()
             joint_names = []
             for r in mode_switching_robots:
-                joint_names.extend(get_robot_joints(self.C, r))
+                joint_names.extend(self.robot_joints[r])
 
             self.C.setJointState(q, joint_names)
 
