@@ -425,12 +425,12 @@ class rai_two_dim_env_no_obs(rai_env):
         # r2 starts at both positive
         r2_state = self.C.getJointState()[self.robot_idx["a2"]]
 
-        r1_goal = r1_state * 1.
+        r1_goal = r1_state * 1.0
         r1_goal[:2] = [-0.5, 0.5]
 
-        r2_goal_1 = r2_state * 1.
+        r2_goal_1 = r2_state * 1.0
         r2_goal_1[:2] = [0.5, -0.5]
-        r2_goal_2 = r2_state * 1.
+        r2_goal_2 = r2_state * 1.0
         r2_goal_2[:2] = [0.5, 0.5]
 
         self.tasks = [
@@ -464,12 +464,15 @@ class rai_two_dim_env_no_obs(rai_env):
 
         self.tolerance = 0.01
 
+
 # trivial environment for planing
 # challenging to get the optimal solution dpeending on the approach
 # optimal solution is TODO (independent of rotation or not)
 class rai_two_dim_env_no_obs_three_agents(rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C = make_2d_rai_env_no_obs_three_agents(agents_can_rotate=agents_can_rotate)
+        self.C = make_2d_rai_env_no_obs_three_agents(
+            agents_can_rotate=agents_can_rotate
+        )
         # self.C.view(True)
 
         self.robots = ["a1", "a2", "a3"]
@@ -484,15 +487,15 @@ class rai_two_dim_env_no_obs_three_agents(rai_env):
 
         r3_state = self.C.getJointState()[self.robot_idx["a3"]]
 
-        r1_goal = r1_state * 1.
+        r1_goal = r1_state * 1.0
         r1_goal[:2] = [-0.5, 0.5]
 
-        r2_goal_1 = r2_state * 1.
+        r2_goal_1 = r2_state * 1.0
         r2_goal_1[:2] = [0.5, -0.5]
-        r2_goal_2 = r2_state * 1.
+        r2_goal_2 = r2_state * 1.0
         r2_goal_2[:2] = [0.5, 0.5]
 
-        r3_goal = r3_state * 1.
+        r3_goal = r3_state * 1.0
         r3_goal[:2] = [0.0, -0.5]
 
         self.tasks = [
@@ -718,9 +721,12 @@ class rai_two_dim_handover(rai_env):
 
 
 class rai_random_two_dim(rai_env):
-    def __init__(self, num_robots = 3, num_goals=4, agents_can_rotate=False):
+    def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=False):
         self.C, keyframes = make_random_two_dim(
-            num_agents=num_robots, num_goals=num_goals, num_obstacles=10, agents_can_rotate=agents_can_rotate
+            num_agents=num_robots,
+            num_goals=num_goals,
+            num_obstacles=10,
+            agents_can_rotate=agents_can_rotate,
         )
         # self.C.view(True)
 
@@ -1105,7 +1111,9 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 # goals are poses
 class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
     def __init__(self, num_robots=4, num_pts: int = 6, shuffle_goals: bool = False):
-        self.C, keyframes = make_welding_env(num_robots=num_robots, view=False, num_pts=num_pts)
+        self.C, keyframes = make_welding_env(
+            num_robots=num_robots, view=False, num_pts=num_pts
+        )
 
         self.C_coll = ry.Config()
         self.C_coll.addConfigurationCopy(self.C)
@@ -1163,7 +1171,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
 # TODO: enable making this a simpler environment where one can set the number of boxes
 class rai_ur10_arm_egg_carton_env(rai_env):
     def __init__(self, num_boxes: int = 9):
-        self.C, keyframes = make_egg_carton_env()
+        self.C, keyframes = make_egg_carton_env(num_boxes)
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -1183,156 +1191,59 @@ class rai_ur10_arm_egg_carton_env(rai_env):
         self.C.clear()
         self.C.addConfigurationCopy(self.C_coll)
 
-        self.robots = ["a1", "a2"]
+        self.robots = ["a1_", "a2_"]
 
         super().__init__()
 
         self.manipulating_env = True
 
-        self.tasks = [
-            # a1
-            Task(
-                ["a1"],
-                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1_ur_vacuum", "box000"],
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(keyframes[1][self.robot_idx["a1"]]),
-                type="place",
-                frames=["table", "box000"],
-                side_effect="remove",
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(keyframes[3][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1_ur_vacuum", "box001"],
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(keyframes[4][self.robot_idx["a1"]]),
-                type="place",
-                frames=["table", "box001"],
-                side_effect="remove",
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(keyframes[6][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1_ur_vacuum", "box011"],
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(keyframes[7][self.robot_idx["a1"]]),
-                type="place",
-                frames=["table", "box011"],
-                side_effect="remove",
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(keyframes[9][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1_ur_vacuum", "box002"],
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(keyframes[10][self.robot_idx["a1"]]),
-                type="place",
-                frames=["table", "box002"],
-                side_effect="remove",
-            ),
-            # a2
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[12][self.robot_idx["a2"]]),
-                type="pick",
-                frames=["a2_ur_vacuum", "box021"],
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[13][self.robot_idx["a2"]]),
-                type="place",
-                frames=["table", "box021"],
-                side_effect="remove",
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[15][self.robot_idx["a2"]]),
-                type="pick",
-                frames=["a2_ur_vacuum", "box010"],
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[16][self.robot_idx["a2"]]),
-                type="place",
-                frames=["table", "box010"],
-                side_effect="remove",
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[18][self.robot_idx["a2"]]),
-                type="pick",
-                frames=["a2_ur_vacuum", "box012"],
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[19][self.robot_idx["a2"]]),
-                type="place",
-                frames=["table", "box012"],
-                side_effect="remove",
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[21][self.robot_idx["a2"]]),
-                type="pick",
-                frames=["a2_ur_vacuum", "box022"],
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[22][self.robot_idx["a2"]]),
-                type="place",
-                frames=["table", "box022"],
-                side_effect="remove",
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[24][self.robot_idx["a2"]]),
-                type="pick",
-                frames=["a2_ur_vacuum", "box020"],
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(keyframes[25][self.robot_idx["a2"]]),
-                type="place",
-                frames=["table", "box020"],
-                side_effect="remove",
-            ),
-            # terminal
-            Task(
-                ["a1", "a2"],
-                SingleGoal(
-                    np.concatenate(
-                        [
-                            keyframes[11][self.robot_idx["a1"]],
-                            keyframes[26][self.robot_idx["a2"]],
-                        ]
+        self.tasks = []
+
+        obj_tasks = []
+
+        for robot_name, v in keyframes.items():
+            for t in v:
+                for i, task_name in enumerate(["pick", "place"]):
+                    sideeffect = None
+                    if task_name == "place":
+                        frames = ["table", t[0]]
+                        sideeffect = "remove"
+                    else:
+                        frames = [robot_name + "ur_vacuum", t[0]]
+
+                    self.tasks.append(
+                        Task(
+                            [robot_name],
+                            SingleGoal(t[1][i][self.robot_idx[robot_name]]),
+                            type=task_name,
+                            frames=frames,
+                            side_effect=sideeffect,
+                        )
                     )
-                ),
+                    name = robot_name + "_" + task_name + t[0]
+
+                    self.tasks[-1].name = name
+
+                obj_tasks.append((self.tasks[-2].name, self.tasks[-1].name))
+
+        self.tasks.append(
+            Task(
+                ["a1_", "a2_"],
+                SingleGoal(self.C.getJointState()),
             ),
-        ]
+        )
+        self.tasks[-1].name = "terminal"
 
-        # really ugly way to construct this
-        num_a1_tasks = 8
-        self.sequence = []
-        for i in range(8):
-            self.sequence.append(i)
-            self.sequence.append(i + num_a1_tasks)
+        named_sequence = []
+        random.shuffle(obj_tasks)
 
-        self.sequence.append(16)
-        self.sequence.append(17)
-        self.sequence.append(18)
+        for t1, t2 in obj_tasks:
+            named_sequence.append(t1)
+            named_sequence.append(t2)
+
+        named_sequence.append("terminal")
+
+        self.sequence = self._make_sequence_from_names(named_sequence)
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1647,7 +1558,9 @@ class rai_ur10_arm_bottle_env(rai_env):
 
 class rai_ur10_arm_box_rearrangement_env(rai_env):
     def __init__(self, num_robots=2, num_boxes=9):
-        self.C, actions, self.robots = make_box_rearrangement_env(num_boxes=num_boxes, num_robots=num_robots)
+        self.C, actions, self.robots = make_box_rearrangement_env(
+            num_boxes=num_boxes, num_robots=num_robots
+        )
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -1696,9 +1609,13 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
             for t, k in zip(task_names, keyframes):
                 if t == "pick":
                     ee_name = robot + "ur_vacuum"
-                    self.tasks.append(Task([robot], SingleGoal(k), t, frames=[ee_name, obj]))
+                    self.tasks.append(
+                        Task([robot], SingleGoal(k), t, frames=[ee_name, obj])
+                    )
                 else:
-                    self.tasks.append(Task([robot], SingleGoal(k), t, frames=["table", obj]))
+                    self.tasks.append(
+                        Task([robot], SingleGoal(k), t, frames=["table", obj])
+                    )
 
                 self.tasks[-1].name = robot + t + "_" + obj + "_" + str(cnt)
                 cnt += 1
@@ -1763,7 +1680,9 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
             if next_task[-1] == "0":
                 location_is_free[obj[-2:]] = True
                 if len(available_action_sequences) < len(actions):
-                    available_action_sequences.append(actions[len(available_action_sequences)][1])
+                    available_action_sequences.append(
+                        actions[len(available_action_sequences)][1]
+                    )
 
             print(location_is_free)
 
@@ -1849,6 +1768,8 @@ def get_env_by_name(name):
         env = rai_ur10_arm_pick_and_place_env()
     elif name == "eggs":
         env = rai_ur10_arm_egg_carton_env()
+    elif name == "eggs_five_only":
+        env = rai_ur10_arm_egg_carton_env(5)
     elif name == "triple_waypoints":
         env = rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5)
     elif name == "welding":

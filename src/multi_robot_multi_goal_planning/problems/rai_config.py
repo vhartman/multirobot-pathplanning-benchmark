@@ -1332,7 +1332,7 @@ def make_box_sorting_env(view: bool = False):
     return C, keyframes
 
 
-def make_egg_carton_env(view: bool = False):
+def make_egg_carton_env(num_boxes = 9, view: bool = False):
     C = ry.Config()
 
     table = (
@@ -1366,6 +1366,8 @@ def make_egg_carton_env(view: bool = False):
     h = 1
     size = np.array([0.3, 0.1, 0.07])
 
+    all_boxes = []
+
     for k in range(d):
         for i in range(h):
             for j in range(w):
@@ -1381,7 +1383,9 @@ def make_egg_carton_env(view: bool = False):
                         i * size[2] * 1.3 + 0.05 + 0.1,
                     ]
                 )
-                C.addFrame("box" + str(i) + str(j) + str(k)).setParent(table).setShape(
+                box_name = "box" + str(i) + str(j) + str(k)
+                all_boxes.append(box_name)
+                C.addFrame(box_name).setParent(table).setShape(
                     ry.ST.box, [size[0], size[1], size[2], 0.005]
                 ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                     np.random.rand(3)
@@ -1503,20 +1507,14 @@ def make_egg_carton_env(view: bool = False):
 
         return komo.getPath()
 
-    a1_boxes = ["box000", "box001", "box011", "box002"]
-    a2_boxes = ["box021", "box010", "box012", "box022", "box020"]
+    keyframes = {"a1_": [], "a2_": []}
+    all_robots = ["a1_", "a2_"]
 
-    keyframes = np.zeros((0, 12))
+    for b in all_boxes[:num_boxes]:
+        r = random.choice(all_robots)
+        res = compute_keyframes_for_obj(r, b)
+        keyframes[r].append((b, res))
 
-    for b in a1_boxes:
-        keyframes = np.concatenate([keyframes, compute_keyframes_for_obj("a1_", b)])
-
-    for b in a2_boxes:
-        keyframes = np.concatenate([keyframes, compute_keyframes_for_obj("a2_", b)])
-
-    # print(keyframes)
-
-    # keyframes = np.concatenate([keyframes_a1, keyframes_a2])
     return C, keyframes
 
 
