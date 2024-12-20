@@ -1423,8 +1423,75 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
-def rai_ur10_arm_box_stack_env():
-    pass
+class rai_ur10_arm_box_stack_env(rai_env):
+    def __init__(self, num_robots=4, num_boxes: int = 8):
+        self.C, keyframes, self.robots = make_box_stacking_env(num_robots, num_boxes)
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        super().__init__()
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        action_names = {}
+        for r, b, qs, g in keyframes:
+            cnt = 0
+            for t, k in zip(task_names, qs):
+                if t == "pick":
+                    ee_name = r + "ur_vacuum"
+                    self.tasks.append(
+                        Task([r], SingleGoal(k), t, frames=[ee_name, b])
+                    )
+                else:
+                    self.tasks.append(
+                        Task([r], SingleGoal(k), t, frames=["table", b])
+                    )
+
+                self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+        
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode.copy()
+
+        self.tolerance = 0.1
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
 
 # mobile manip
 class rai_mobile_manip_wall:
@@ -1480,6 +1547,7 @@ def get_env_by_name(name):
         "handover": lambda: rai_ur10_handover_env(),        
         "triple_waypoints": lambda: rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5),
         "welding": lambda: rai_quadruple_ur10_arm_spot_welding_env(),
+        "box_stacking": lambda: rai_ur10_arm_box_stack_env(),
 
         "box_rearrangement": lambda: rai_ur10_arm_box_rearrangement_env(), # 2 robots, 9 boxes
         "box_rearrangement_only_five": lambda: rai_ur10_arm_box_rearrangement_env(num_boxes=5),
