@@ -7,7 +7,10 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.configuration import Configuration, config_dist
+from multi_robot_multi_goal_planning.problems.configuration import (
+    Configuration,
+    config_dist,
+)
 from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
 
 
@@ -100,7 +103,7 @@ class Task:
     # things for the future:
     constraints = List
 
-    def __init__(self, robots, goal, type=None, frames=None, side_effect=None):
+    def __init__(self, robots: List[str], goal:NDArray, type=None, frames=None, side_effect=None):
         self.robots = robots
         self.goal = goal
 
@@ -114,7 +117,7 @@ class State:
     q: Configuration
     m: List[int]
 
-    def __init__(self, q, m):
+    def __init__(self, q: Configuration, m: List[int]):
         self.q = q
         self.mode = m
 
@@ -128,7 +131,7 @@ def state_dist(start: State, end: State) -> float:
 
 # concrete implementations of the required abstract classes for the sequence-setting.
 class SequenceMixin:
-    def _make_sequence_from_names(self, names):
+    def _make_sequence_from_names(self, names: List[str]) -> List[int]:
         sequence = []
 
         for name in names:
@@ -143,7 +146,7 @@ class SequenceMixin:
 
         return sequence
 
-    def _make_start_mode_from_sequence(self):
+    def _make_start_mode_from_sequence(self) -> List[int]:
         mode_dict = {}
 
         for task_index in self.sequence:
@@ -159,7 +162,7 @@ class SequenceMixin:
 
         return mode
 
-    def _make_terminal_mode_from_sequence(self):
+    def _make_terminal_mode_from_sequence(self) -> List[int]:
         mode_dict = {}
 
         for task_index in self.sequence:
@@ -221,24 +224,24 @@ class base_env(ABC):
     start_mode: List[int]
     terminal_mode: List[int]
 
-    def __init__(self):
+    # visualization
+    @abstractmethod
+    def show_config(self, q: Configuration):
         pass
 
-    def get_robot_dim(self, robot: str):
-        return self.robot_dims[robot]
+    @abstractmethod
+    def show(self):
+        pass
 
+    ## General methods
     def get_start_pos(self):
         return self.start_pos
 
     def get_start_mode(self):
         return self.start_mode
 
-    def set_to_mode(self, mode: List[int]):
-        pass
-
-    @abstractmethod
-    def sample_random_mode(self) -> List[int]:
-        pass
+    def get_robot_dim(self, robot: str):
+        return self.robot_dims[robot]
 
     def get_all_bounds(self):
         self.bounds
@@ -246,16 +249,13 @@ class base_env(ABC):
     # def get_robot_bounds(self, robot):
     #     self.bounds
 
-    # @abstractmethod
-    # def get_single_robot_env(self, robot):
-    #     pass
-
+    # Task sequencing methods
     @abstractmethod
-    def show_config(self, q):
+    def set_to_mode(self, mode: List[int]):
         pass
 
     @abstractmethod
-    def show(self):
+    def sample_random_mode(self) -> List[int]:
         pass
 
     @abstractmethod
@@ -278,9 +278,15 @@ class base_env(ABC):
     def get_tasks_for_mode(self, mode: List[int]) -> List[Task]:
         pass
 
+    # Collision checking and environment related methods
     @abstractmethod
-    def is_collision_free(self, q: Optional[Configuration], mode: List[int]):
+    def is_collision_free(self, q: Optional[Configuration], mode: List[int]) -> bool:
         pass
+
+    def is_collision_free_for_robot(
+        self, r: str, q, m: List[int], collision_tolerance: float = 0.01
+    ) -> bool:
+        raise NotImplementedError
 
     @abstractmethod
     def is_edge_collision_free(
@@ -289,14 +295,14 @@ class base_env(ABC):
         q2: Configuration,
         mode: List[int],
         resolution: float = 0.1,
-    ):
+    ) -> bool:
         pass
 
     @abstractmethod
-    def is_path_collision_free(self, path: List[State]):
+    def is_path_collision_free(self, path: List[State]) -> bool:
         pass
 
-    def is_valid_plan(self, path: List[State]):
+    def is_valid_plan(self, path: List[State]) -> bool:
         # check if it is collision free and if all modes are passed in order
         # only take the configuration into account for that
         mode = self.start_mode
@@ -329,7 +335,7 @@ class base_env(ABC):
         return True
 
     @abstractmethod
-    def config_cost(self, start: Configuration, goal: Configuration):
+    def config_cost(self, start: Configuration, goal: Configuration) -> float:
         pass
 
     @abstractmethod
@@ -337,7 +343,7 @@ class base_env(ABC):
         self,
         starts: List[Configuration],
         ends: List[Configuration],
-    ):
+    ) -> List[float]:
         pass
 
     def state_cost(self, start: State, end: State) -> float:
