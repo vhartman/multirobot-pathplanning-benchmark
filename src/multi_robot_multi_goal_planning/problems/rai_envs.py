@@ -207,6 +207,38 @@ class rai_env(SequenceMixin, base_env):
 
         return True
 
+    def is_collision_free_for_robot(self, r, q, m, collision_tolerance=0.01):
+        if q is not None:
+            self.set_to_mode(m)
+            self.C.setJointState(q, self.robot_joints[r])
+
+        binary_collision_free = self.C.getCollisionFree()
+        if binary_collision_free:
+            return True
+
+        col = self.C.getCollisionsTotalPenetration()
+        # print(col)
+        # self.C.view(False)
+        if col > collision_tolerance:
+            # self.C.view(False)
+            colls = self.C.getCollisions()
+            for c in colls:
+                if c[2] < 0 and (r in c[0] or r in c[1]):
+                    is_collision_with_other_robot = False
+                    for other_robot in self.robots:
+                        if other_robot == r:
+                            continue
+                        if other_robot in c[0] or other_robot in c[1]:
+                            is_collision_with_other_robot = True
+                            break
+
+                    if not is_collision_with_other_robot:
+                        # print(c)
+                        return False
+
+        return True
+
+
     def is_edge_collision_free(
         self,
         q1: Configuration,
@@ -263,7 +295,7 @@ class rai_env(SequenceMixin, base_env):
 
         self.prev_mode = m
 
-        # self.C.view(True)
+        # TODO: we might want to cache different modes
         self.C.clear()
         self.C.addConfigurationCopy(self.C_base)
 
@@ -412,7 +444,7 @@ class rai_two_dim_env(rai_env):
 # very simple task:
 # make the robots go back and forth.
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
-# Optimal cost is be: TODO (no matter if rotationis enabled or not)
+# Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
 class rai_two_dim_env_no_obs(rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
@@ -464,12 +496,12 @@ class rai_two_dim_env_no_obs(rai_env):
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
 
-        self.tolerance = 0.01
+        self.tolerance = 0.001
 
 
 # trivial environment for planing
 # challenging to get the optimal solution dpeending on the approach
-# optimal solution is TODO (independent of rotation or not)
+# optimal solution is 5.15 (independent of rotation or not)
 class rai_two_dim_env_no_obs_three_agents(rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = make_2d_rai_env_no_obs_three_agents(

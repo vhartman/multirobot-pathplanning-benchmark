@@ -2040,7 +2040,6 @@ def make_handover_env(view: bool = False):
     return C, keyframes
 
 
-# TODO: the parameters are implemented horribly
 def make_panda_waypoint_env(
     num_robots: int = 3, num_waypoints: int = 6, view: bool = False
 ):
