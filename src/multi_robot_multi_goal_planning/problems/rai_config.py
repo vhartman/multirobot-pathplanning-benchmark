@@ -1899,7 +1899,6 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
     return C, keyframes, all_robots
 
 
-# TODO: add two finger gripper and constraints
 def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
     C = ry.Config()
 
@@ -1911,7 +1910,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_two_finger.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -2023,36 +2022,78 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         # komo.addControlObjective([], 1, 1e-1)
         # komo.addControlObjective([], 2, 1e-1)
 
-        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
-        komo.addObjective(
-            [1, 2],
-            ry.FS.distance,
-            [robot_prefix + "ur_vacuum", box],
-            ry.OT.sos,
-            [1e0],
-            [0.05],
-        )
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_gripper", box])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_gripper_center", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        #     # [0.05],
+        # )
         komo.addObjective(
             [1, 2],
             ry.FS.positionDiff,
-            [robot_prefix + "ur_vacuum", box],
+            [robot_prefix + "ur_gripper_center", box],
             ry.OT.sos,
             [1e1, 1e1, 1],
         )
         komo.addObjective(
             [1, 2],
-            ry.FS.scalarProductYZ,
-            [robot_prefix + "ur_ee_marker", box],
+            ry.FS.scalarProductZZ,
+            [robot_prefix + "ur_gripper_center", box],
             ry.OT.sos,
             [1e1],
+            [-1]
         )
         komo.addObjective(
             [1, 2],
-            ry.FS.scalarProductZZ,
-            [robot_prefix + "ur_ee_marker", box],
+            ry.FS.scalarProductXX,
+            [robot_prefix + "ur_gripper_center", box],
             ry.OT.sos,
             [1e1],
+            [1]
         )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductZZ,
+        #     [robot_prefix + "ur_gripper", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+
+
+        # komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_vacuum", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        #     [0.05],
+        # )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     [robot_prefix + "ur_vacuum", box],
+        #     ry.OT.sos,
+        #     [1e1, 1e1, 1],
+        # )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductYZ,
+        #     [robot_prefix + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductZZ,
+        #     [robot_prefix + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+
 
         # for pick and place directly
         # komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])

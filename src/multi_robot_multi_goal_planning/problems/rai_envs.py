@@ -1451,12 +1451,11 @@ class rai_ur10_arm_box_stack_env(rai_env):
 
         self.tasks = []
         task_names = ["pick", "place"]
-        action_names = {}
         for r, b, qs, g in keyframes:
             cnt = 0
             for t, k in zip(task_names, qs):
                 if t == "pick":
-                    ee_name = r + "ur_vacuum"
+                    ee_name = r + "ur_gripper_center"
                     self.tasks.append(
                         Task([r], SingleGoal(k), t, frames=[ee_name, b])
                     )
@@ -1481,16 +1480,13 @@ class rai_ur10_arm_box_stack_env(rai_env):
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
 
-        self.C_base = ry.Config()
-        self.C_base.addConfigurationCopy(self.C)
-
         # buffer for faster collision checking
         self.prev_mode = self.start_mode.copy()
 
-        self.tolerance = 0.1
-
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
+
+        self.tolerance = 0.01
 
 
 # mobile manip

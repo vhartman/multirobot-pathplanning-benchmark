@@ -1,5 +1,5 @@
 
-base_link: { }
+base_link: { multibody:true}
 base_link_0(base_link): { shape: mesh, mesh: <ur_description/meshes/ur10/visual/Base.ply>, visual: True }
 shoulder_pan_joint_origin(base_link): { rel: [0, 0, 0.1273, 1, 0, 0, 0] }
 shoulder_pan_joint(shoulder_pan_joint_origin): { joint: hingeZ, limits: [-6.28319, 6.28319, 2.16, -1, 330], ctrl_limits: [2.16, -1, 330] }
