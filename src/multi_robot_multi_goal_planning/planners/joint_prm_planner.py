@@ -152,9 +152,10 @@ class Graph:
         dim = len(node.state.q.state())
 
         if True:
-            # k_star = int(np.e * (1 + 1 / dim) * np.log(len(node_list))) + 1
-            # # print(k_star)
-            # k = k_star
+            # if key in self.nodes:
+            #     k_star = int(np.e * (1 + 1 / dim) * np.log(len(node_list))) + 1
+            #     # # print(k_star)
+            #     k = k_star
             best_nodes = []
 
             if key in self.nodes:
@@ -186,7 +187,7 @@ class Graph:
 
         return best_nodes[1:]
 
-    def search(self, start_node, goal_nodes: List, env: base_env):
+    def search(self, start_node, goal_nodes: List, env: base_env, best_cost=None):
         open_queue = []
         closed_list = set()
 
@@ -204,9 +205,8 @@ class Graph:
                     tuple(node.state.mode)
                 ]
 
-            return lb_to_goal_through_rest_of_modes
+            # return lb_to_goal_through_rest_of_modes
 
-            # commented out bc. it is very slow.
             # compute lowest cost to get to the goal:
             current_mode = node.state.mode
             if current_mode == env.terminal_mode:
@@ -219,19 +219,12 @@ class Graph:
                 h_cache[node] = mode_cost
                 return mode_cost
 
-            mode_cost = None
             mode_cost = min(
                 env.batch_config_cost(
                     [node.state] * len(self.transition_nodes[tuple(node.state.mode)]),
                     [n.state for n in self.transition_nodes[tuple(node.state.mode)]],
                 )
             )
-            # for transition in self.transition_nodes[tuple(node.state.mode)]:
-            #     cost_to_transition = env.config_cost(node.state.q, transition.state.q)
-            #     if mode_cost is None or cost_to_transition < mode_cost:
-            #         mode_cost = cost_to_transition
-
-            # print(mode_cost)
 
             h_cache[node] = mode_cost + lb_to_goal_through_rest_of_modes
             return mode_cost + lb_to_goal_through_rest_of_modes
@@ -264,31 +257,8 @@ class Graph:
             if num_iter % 10000 == 0:
                 print(len(open_queue))
 
-            # get next node to look at
-            # edge = None
-            # min_f_cost = None
-            # for i, e in enumerate(open_queue):
-            #     f_cost = fs[e]
-            #     if min_f_cost is None or f_cost < min_f_cost:
-            #         min_f_cost = f_cost
-            #         edge = e
-            #         best_idx = i
-
-            # print(best_idx)
-            # open_queue.remove(edge)
-
             f_pred, edge_cost, edge = heapq.heappop(open_queue)
-
-            # print('g:', v)
-
-            # print(num_iter, len(open_queue))
-
             n0, n1 = edge
-
-            # closed_list.add(n0)
-
-            # if n0.state.mode == [0, 3]:
-            #     env.show(True)
 
             g_tentative = gs[n0] + edge_cost
 
@@ -297,13 +267,6 @@ class Graph:
                 continue
 
             # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
-            
-            # if edge in self.blacklist or (edge[1], edge[0]) in self.blacklist:
-            #     continue
-
-            # if env.is_edge_collision_free(q0, q1, n0.state.mode, 1):
-            #     self.blacklist.add(edge)
-
             collision_free = False
             if edge in self.whitelist or (edge[1], edge[0]) in self.whitelist:
                 collision_free = True
@@ -321,15 +284,6 @@ class Graph:
                 else:
                     self.whitelist.add(edge)
 
-            # env.show(False)
-
-            # print(q0.state())
-            # print(q1.state())
-
-            # print(n0.state.mode)
-            # print(n1.state.mode)
-            # env.show(False)
-
             if n0.state.mode not in reached_modes:
                 reached_modes.append(n0.state.mode)
 
@@ -343,10 +297,7 @@ class Graph:
                 break
 
             # get_neighbors
-            neighbors = self.get_neighbors(n1, 50)
-
-            # print('blacklist',len(self.blacklist))
-            # print('whitelist',len(self.whitelist))
+            neighbors = self.get_neighbors(n1, 10)
 
             # add neighbors to open_queue
             edge_costs = env.batch_config_cost(
@@ -363,10 +314,11 @@ class Graph:
 
                 if n not in gs or g_new < gs[n]:
                     # sparsely check only when expanding
-                    # open_queue.append((n1, n))
-
                     # cost to get to neighbor:
                     fs[(n1, n)] = g_new + h(n)
+
+                    if best_cost is not None and fs[(n1, n)] > best_cost:
+                        continue
 
                     if n not in closed_list:
                         heapq.heappush(
@@ -649,7 +601,7 @@ def joint_prm_planner(
     current_best_path = None
 
     batch_size = 500
-    transition_batch_size = 50
+    transition_batch_size = 500
 
     costs = []
     times = []
@@ -684,65 +636,72 @@ def joint_prm_planner(
             )
             g.add_transition_nodes(new_transitions)
 
-            # g.compute_lb_mode_transisitons(env.config_cost, mode_sequence)
+            g.compute_lb_mode_transisitons(env.config_cost, mode_sequence)
 
         # search over nodes:
         # 1. search from goal state with sparse check
         if env.terminal_mode not in reached_modes:
             continue
 
-        sparsely_checked_path = g.search(g.root, g.goal_nodes, env)
+        while True:
+            sparsely_checked_path = g.search(g.root, g.goal_nodes, env, current_best_cost)
 
-        # 2. in case this found a path, search with dense check from the other side
-        if len(sparsely_checked_path) > 0:
-            add_new_batch = False
+            # 2. in case this found a path, search with dense check from the other side
+            if len(sparsely_checked_path) > 0:
+                add_new_batch = False
 
-            is_valid_path = True
-            for i in range(len(sparsely_checked_path) - 1):
-                n0 = sparsely_checked_path[i]
-                n1 = sparsely_checked_path[i + 1]
+                is_valid_path = True
+                for i in range(len(sparsely_checked_path) - 1):
+                    n0 = sparsely_checked_path[i]
+                    n1 = sparsely_checked_path[i + 1]
 
-                s0 = n0.state
-                s1 = n1.state
+                    s0 = n0.state
+                    s1 = n1.state
 
-                # this is a transition, we do not need to collision check this
-                if s0.mode != s1.mode:
-                    continue
+                    # this is a transition, we do not need to collision check this
+                    if s0.mode != s1.mode:
+                        continue
 
-                if (n0, n1) in g.whitelist:
-                    continue
+                    if (n0, n1) in g.whitelist:
+                        continue
 
-                if not env.is_edge_collision_free(s0.q, s1.q, s0.mode):
-                    print("Path is in collision")
-                    is_valid_path = False
-                    # env.show(True)
-                    g.blacklist.add((n0, n1))
+                    if not env.is_edge_collision_free(s0.q, s1.q, s0.mode):
+                        print("Path is in collision")
+                        is_valid_path = False
+                        # env.show(True)
+                        g.blacklist.add((n0, n1))
+                        break
+                    else:
+                        g.whitelist.add((n0, n1))
+
+                if is_valid_path:
+                    path = [node.state for node in sparsely_checked_path]
+                    new_path_cost = path_cost(path, env.batch_config_cost)
+                    if current_best_cost is None or new_path_cost < current_best_cost:
+                        current_best_path = path
+                        current_best_cost = new_path_cost
+
+                        costs.append(new_path_cost)
+                        times.append(time.time() - start_time)
+
+                    add_new_batch = True
                     break
-                else:
-                    g.whitelist.add((n0, n1))
-
-            if is_valid_path:
-                path = [node.state for node in sparsely_checked_path]
-                new_path_cost = path_cost(path, env.batch_config_cost)
-                if current_best_cost is None or new_path_cost < current_best_cost:
-                    current_best_path = path
-                    current_best_cost = new_path_cost
-
-                    costs.append(new_path_cost)
-                    times.append(time.time() - start_time)
-
+                
+            else:
+                print("Did not find a solution")
                 add_new_batch = True
-
-            if not optimize and current_best_cost is not None:
                 break
-        else:
-            print("Did not find solutio")
-            add_new_batch = True
+            
+        if not optimize and current_best_cost is not None:
+            break
 
-        if cnt > max_iter:
+        if cnt >= max_iter:
             break
 
         cnt += batch_size
+
+    costs.append(costs[-1])
+    times.append(time.time() - start_time)
 
     info = {"costs": costs, "times": times}
     return current_best_path, info
