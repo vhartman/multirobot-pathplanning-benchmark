@@ -19,11 +19,11 @@ class Goal(ABC):
         pass
 
     @abstractmethod
-    def satisfies_constraints(self, q: NDArray, tolerance: float):
+    def satisfies_constraints(self, q: NDArray, tolerance: float) -> bool:
         pass
 
     @abstractmethod
-    def sample(self):
+    def sample(self) -> NDArray:
         pass
 
 
@@ -42,11 +42,11 @@ class GoalRegion(Goal):
     def __init__(self, limits: NDArray):
         self.limits = limits
 
-    def satisfies_constraints(self, q: NDArray, _):
+    def satisfies_constraints(self, q: NDArray, _) -> bool:
         if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
             return True
 
-    def sample(self):
+    def sample(self) -> NDArray:
         q = (
             np.random.rand(len(self.limits[0, :]))
             * (self.limits[1, :] - self.limits[0, :])
@@ -103,7 +103,9 @@ class Task:
     # things for the future:
     constraints = List
 
-    def __init__(self, robots: List[str], goal:NDArray, type=None, frames=None, side_effect=None):
+    def __init__(
+        self, robots: List[str], goal: NDArray, type=None, frames=None, side_effect=None
+    ):
         self.robots = robots
         self.goal = goal
 

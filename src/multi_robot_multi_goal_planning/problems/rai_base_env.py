@@ -205,9 +205,16 @@ class rai_env(SequenceMixin, base_env):
     def is_collision_free_for_robot(
         self, r: str, q: NDArray, m: List[int], collision_tolerance=0.01
     ) -> bool:
+        if isinstance(r, str):
+            r = [r]
+
         if q is not None:
             self.set_to_mode(m)
-            self.C.setJointState(q, self.robot_joints[r])
+            offset = 0
+            for robot in r:
+                dim = self.robot_dims[robot]
+                self.C.setJointState(q[offset:offset+dim], self.robot_joints[robot])
+                offset += dim
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
@@ -220,18 +227,35 @@ class rai_env(SequenceMixin, base_env):
             # self.C.view(False)
             colls = self.C.getCollisions()
             for c in colls:
-                if c[2] < 0 and (r in c[0] or r in c[1]):
-                    is_collision_with_other_robot = False
-                    for other_robot in self.robots:
-                        if other_robot == r:
-                            continue
-                        if other_robot in c[0] or other_robot in c[1]:
-                            is_collision_with_other_robot = True
-                            break
+                # ignore minor collisions
+                if c[2] > -collision_tolerance / 10:
+                    continue
 
-                    if not is_collision_with_other_robot:
-                        # print(c)
-                        return False
+                # print(c)
+                involves_relevant_robot = False
+                for robot in r:
+                    if c[2] < 0 and (robot in c[0] or robot in c[1]):
+                        involves_relevant_robot = True
+                        break
+                if not involves_relevant_robot:
+                    # print("A")
+                    # print(c)
+                    continue
+                # else:
+                #     print("B")
+                #     print(c)
+
+                is_collision_with_other_robot = False
+                for other_robot in self.robots:
+                    if other_robot in r:
+                        continue
+                    if other_robot in c[0] or other_robot in c[1]:
+                        is_collision_with_other_robot = True
+                        break
+
+                if not is_collision_with_other_robot:
+                    # print(c)
+                    return False
 
         return True
 
