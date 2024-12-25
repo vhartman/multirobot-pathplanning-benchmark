@@ -88,6 +88,9 @@ class NpConfiguration(Configuration):
 
     @classmethod
     def from_list(cls, q_list: List[NDArray]) -> "NpConfiguration":
+        if len(q_list) == 1:
+            return cls(q_list[0], [(0, len(q_list[0]))])
+
         slices = []
         s = 0
         for i in range(len(q_list)):
@@ -95,6 +98,10 @@ class NpConfiguration(Configuration):
             s += len(q_list[i])
 
         return cls(np.concatenate(q_list), slices)
+
+    @classmethod
+    def from_numpy(cls, arr: NDArray):
+        return cls(arr, [(0, len(arr))])
 
     def robot_state(self, ind: int) -> NDArray:
         start, end = self.slice[ind]

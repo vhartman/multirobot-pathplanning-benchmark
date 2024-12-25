@@ -968,6 +968,9 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
 
     keyframes = [g1_state, g2_state, C.getJointState()]
 
+    if agents_can_rotate:
+        keyframes = [g1_state[:2], g2_state[:2], C.getJointState()]
+
     return C, keyframes
 
 
@@ -1910,7 +1913,9 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_two_finger.g")
+    robot_path = os.path.join(
+        os.path.dirname(__file__), "../models/ur10/ur10_two_finger.g"
+    )
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -2044,7 +2049,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
             [robot_prefix + "ur_gripper_center", box],
             ry.OT.sos,
             [1e1],
-            [-1]
+            [-1],
         )
         komo.addObjective(
             [1, 2],
@@ -2052,7 +2057,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
             [robot_prefix + "ur_gripper_center", box],
             ry.OT.sos,
             [1e1],
-            [1]
+            [1],
         )
         # komo.addObjective(
         #     [1, 2],
@@ -2061,7 +2066,6 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         #     ry.OT.sos,
         #     [1e1],
         # )
-
 
         # komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
         # komo.addObjective(
@@ -2093,7 +2097,6 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         #     ry.OT.sos,
         #     [1e1],
         # )
-
 
         # for pick and place directly
         # komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
@@ -2136,7 +2139,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
                 # komo.view(True, "IK solution")
                 keyframes = komo.getPath()
                 return keyframes
-            
+
         return None
 
     all_robots = ["a1_", "a2_", "a3_", "a4_"]
@@ -2149,12 +2152,12 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
 
     c_tmp = ry.Config()
     c_tmp.addConfigurationCopy(C)
-    
+
     robot_to_use = []
 
-    for box, goal in zip(boxes, goals):  
+    for box, goal in zip(boxes, goals):
         c_tmp_2 = ry.Config()
-        c_tmp_2.addConfigurationCopy(c_tmp)  
+        c_tmp_2.addConfigurationCopy(c_tmp)
         # c_tmp_2.computeCollisions()
 
         while True:
@@ -2167,7 +2170,9 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         direct_pick_place_keyframes[r][box] = r1[:2]
         robot_to_use.append(r)
 
-        c_tmp.getFrame(box).setRelativePosition(c_tmp.getFrame(goal).getRelativePosition())
+        c_tmp.getFrame(box).setRelativePosition(
+            c_tmp.getFrame(goal).getRelativePosition()
+        )
 
     box_goal = {}
     for b, g in zip(boxes, goals):

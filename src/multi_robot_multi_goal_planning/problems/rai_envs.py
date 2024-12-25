@@ -110,7 +110,6 @@ class rai_two_dim_env(rai_env):
 
         self.tolerance = 0.1
 
-
 # very simple task:
 # make the robots go back and forth.
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
@@ -836,7 +835,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
         self.C.clear()
         self.C.addConfigurationCopy(self.C_coll)
 
-        self.robots = ["a1", "a2", "a3", "a4"]
+        self.robots = ["a1", "a2", "a3", "a4"][:num_robots]
 
         super().__init__()
 
@@ -1543,6 +1542,7 @@ def get_env_by_name(name):
         "handover": lambda: rai_ur10_handover_env(),        
         "triple_waypoints": lambda: rai_multi_panda_arm_waypoint_env(num_robots=3, num_waypoints=5),
         "welding": lambda: rai_quadruple_ur10_arm_spot_welding_env(),
+        "simplified_welding": lambda: rai_quadruple_ur10_arm_spot_welding_env(num_robots=2, num_pts=2),
         "box_stacking": lambda: rai_ur10_arm_box_stack_env(),
 
         "box_rearrangement": lambda: rai_ur10_arm_box_rearrangement_env(), # 2 robots, 9 boxes
