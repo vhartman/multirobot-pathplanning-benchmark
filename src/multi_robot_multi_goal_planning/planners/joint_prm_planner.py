@@ -160,13 +160,13 @@ class Graph:
 
             if key in self.nodes:
                 k_clip = min(k, len(node_list) - 1)
-                topk = np.argpartition(dists, k_clip)[:k_clip]
+                topk = np.argpartition(dists, k_clip)[:k_clip+1]
                 topk = topk[np.argsort(dists[topk])]
 
                 best_nodes = [node_list[i] for i in topk]
 
             transition_k_clip = min(k, len(transition_node_list) - 1)
-            transition_topk = np.argpartition(transition_dists, transition_k_clip)[:transition_k_clip]
+            transition_topk = np.argpartition(transition_dists, transition_k_clip)[:transition_k_clip+1]
             transition_topk = transition_topk[np.argsort(transition_dists[transition_topk])]
 
             best_transition_nodes = [transition_node_list[i] for i in transition_topk]

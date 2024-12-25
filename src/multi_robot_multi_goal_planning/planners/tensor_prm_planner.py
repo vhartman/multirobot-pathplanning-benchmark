@@ -37,6 +37,8 @@ class Node:
 
         Node.id_counter += 1
 
+        self.hash = None
+
     def __lt__(self, other):
         return self.id < other.id
 
@@ -44,7 +46,11 @@ class Node:
         return hash(self) == hash(other)
 
     def __hash__(self):
-        return hash((tuple(np.round(self.state.q.state(), 3)), tuple(self.state.mode)))
+        if self.hash is None:
+            self.hash = hash((self.state.q.state().data.tobytes(), tuple(self.state.mode)))
+        return self.hash
+    
+        # return hash((tuple(np.round(self.state.q.state(), 3)), tuple(self.state.mode)))
         # return self.id
 
 
@@ -65,6 +71,61 @@ class ImplicitTensorGraph:
         self.blacklist = set()
         self.whitelist = set()
 
+        self.mode_sequence = None
+
+        self.per_robot_task_to_goal_lb_cost = {}
+
+    def compute_lb_mode_transisitons(self, cost, mode_sequence):
+        # cost_per_robot = None
+        self.mode_sequence = mode_sequence
+
+        for i, r in enumerate(self.robots):
+            cheapest_transition = []
+            for j, m in enumerate(mode_sequence[:-1]):
+                next_mode = mode_sequence[j+1]
+
+                if m[i] == next_mode[i]:
+                    continue
+                
+                nodes = self.transition_nodes
+
+                for k in self.transition_nodes.keys():
+                    task = int(k.split("_")[-1])
+                    if m[i] == task:
+                        key = k
+
+                    if next_mode[i] == task:
+                        next_key = k
+
+                # key = self.get_key([r], t)
+                # if key not in self.transition_nodes:
+                #     continue 
+
+                nodes = self.transition_nodes[key]
+                next_nodes = self.transition_nodes[next_key]
+
+                min_cost = None
+                for n in nodes:
+                    q = n.q[n.rs.index(r)]
+                    for nn in next_nodes:
+                        qn = nn.q[nn.rs.index(r)]
+
+                        c = cost(NpConfiguration.from_numpy(q), NpConfiguration.from_numpy(qn))
+                        if min_cost is None or c < min_cost:
+                            min_cost = c
+                
+                cheapest_transition.append(min_cost)
+
+            cnt = 0
+            for j, current_mode in enumerate(mode_sequence[:-1]):
+                if current_mode[i] == mode_sequence[j+1][i]:
+                    continue
+
+                self.per_robot_task_to_goal_lb_cost[tuple([r, current_mode[i]])] = sum(
+                    cheapest_transition[cnt:]
+                )
+                cnt += 1
+
     def get_key(self, rs, t):
         robot_key = "_".join(rs)
         return robot_key + "_" +  str(t)
@@ -76,7 +137,15 @@ class ImplicitTensorGraph:
             # print(f"adding transition with key {key}")
             if key not in self.transition_nodes:
                 self.transition_nodes[key] = []
-            self.transition_nodes[key].append(RobotNode(rs, q, t))
+
+            does_already_exist = False
+            for n in self.transition_nodes[key]:
+                if rs == n.rs and t == n.task and np.linalg.norm(np.concatenate(q) - np.concatenate(n.q)) < 1e-5:
+                    does_already_exist = True
+                    break
+
+            if not does_already_exist:
+                self.transition_nodes[key].append(RobotNode(rs, q, t))
         else:
             # print(f"adding node with key {key}")
             if key not in self.robot_nodes:
@@ -92,15 +161,23 @@ class ImplicitTensorGraph:
         else:
             nodes = self.robot_nodes[key]
 
+        # print(nodes)
+        # print(len(nodes))
+
         # print(f"computing distances for {rs}")
-        # these things here should be configurations
+        # TODO: this makes the thing slow
+        # TODO: introduce possibility to compute distances without having to convert to configuration
         dists = self.batch_dist_fun(q, [NpConfiguration.from_list(n.q) for n in nodes])
 
-        k_clip = min(k, len(nodes) - 1)
-        topk = np.argpartition(dists, k_clip)[:k_clip]
-        topk = topk[np.argsort(dists[topk])]
+        if True:
+            k_clip = min(k, len(nodes) - 1)
+            topk = np.argpartition(dists, k_clip)[:k_clip+1]
+            topk = topk[np.argsort(dists[topk])]
 
-        best_nodes = [nodes[i] for i in topk]
+            best_nodes = [nodes[i] for i in topk]
+        else:
+            r = 5
+            best_nodes = [n for i, n in enumerate(nodes) if dists[i] < r]
 
         # print(q.state())
         # print(best_nodes[0].q)
@@ -117,10 +194,6 @@ class ImplicitTensorGraph:
 
         return [v for k, v in groups.items()]
 
-    # TODO: how do we deal with joint goals??
-    # might be doable by introducing separationi between goals and rest
-    # and then add flag to determine of we need to sample from joint graph
-    # or not
     def get_neighbors_from_implicit_graph(self, node, active_robots, k=10):
         mode = node.state.mode
 
@@ -130,7 +203,7 @@ class ImplicitTensorGraph:
             task = mode[i]
             # extract the correct state here
             q = node.state.q[i]
-            per_group_nn[r] = self.get_robot_neighbors([r], NpConfiguration.from_list([q]), task, False, k)
+            per_group_nn[r] = self.get_robot_neighbors([r], NpConfiguration.from_numpy(q), task, False, k)
 
         # print(f"finding neighbors from transitions for {active_robots}")
         qs = []
@@ -147,11 +220,6 @@ class ImplicitTensorGraph:
         tmp = [per_group_nn[r] for r in self.robots if r not in active_robots]
         tmp.append(transitions)
 
-        # print(tmp)
-        # for t in transitions:
-        #     print(t.q)
-
-        # TODO: need to add the neighbor in the next mode here
         transition_combinations = list(product(*tmp))
         transition_combination_states = []
         for combination in transition_combinations:
@@ -177,21 +245,24 @@ class ImplicitTensorGraph:
         # out of those, get the closest n
         dists = self.batch_dist_fun(node.state.q, combination_states)
 
-        k_clip = min(k, len(combination_states) - 1)
-        topk = np.argpartition(dists, k_clip)[:k_clip]
-        topk = topk[np.argsort(dists[topk])]
+        if True:
+            k_clip = min(k, len(combination_states) - 1)
+            topk = np.argpartition(dists, k_clip)[:k_clip+1]
+            topk = topk[np.argsort(dists[topk])]
 
-        best_normal_nodes = [Node(State(combination_states[i], mode)) for i in topk]
+            best_normal_nodes = [Node(State(combination_states[i], mode)) for i in topk]
+        else:
+            best_normal_nodes = [Node(State(s, mode)) for i, s in enumerate(combination_states) if dists[i] < 1]
 
-        dists = self.batch_dist_fun(node.state.q, transition_combination_states)
+        transition_dists = self.batch_dist_fun(node.state.q, transition_combination_states)
 
         k_clip = min(k, len(transition_combination_states) - 1)
-        topk = np.argpartition(dists, k_clip)[:k_clip]
-        topk = topk[np.argsort(dists[topk])]
+        topk = np.argpartition(transition_dists, k_clip)[:k_clip+1]
+        topk = topk[np.argsort(transition_dists[topk])]
 
         best_transition_nodes = [Node(State(transition_combination_states[i], mode)) for i in topk]
 
-        best_nodes = best_normal_nodes + best_transition_nodes
+        best_nodes = best_transition_nodes + best_normal_nodes
 
         return best_nodes
 
@@ -209,39 +280,42 @@ class ImplicitTensorGraph:
         h_cache = {}
 
         def h(node):
-            return 0
-            # if node in h_cache:
-            #     return h_cache[node]
+            if node in h_cache:
+                return h_cache[node]
 
-            # lb_to_goal_through_rest_of_modes = 0
-            # if len(self.mode_to_goal_lb_cost) > 0:
-            #     lb_to_goal_through_rest_of_modes = self.mode_to_goal_lb_cost[
-            #         tuple(node.state.mode)
-            #     ]
+            per_robot_min_to_goal = []
+            
+            for i, r in enumerate(self.robots):
+                t = node.state.mode[i]
 
-            # # return lb_to_goal_through_rest_of_modes
+                for k in self.transition_nodes.keys():
+                    task = int(k.split("_")[-1])
+                    if t == task:
+                        key = k
+                        break
 
-            # # compute lowest cost to get to the goal:
-            # current_mode = node.state.mode
-            # if current_mode == env.terminal_mode:
-            #     mode_cost = None
-            #     for g in self.goal_nodes:
-            #         cost_to_transition = env.config_cost(node.state.q, g.state.q)
-            #         if mode_cost is None or cost_to_transition < mode_cost:
-            #             mode_cost = cost_to_transition
+                # key = self.get_key([r], t)
+                # if key not in self.transition_nodes:
+                #     continue 
 
-            #     h_cache[node] = mode_cost
-            #     return mode_cost
+                nodes = self.transition_nodes[key]
 
-            # mode_cost = min(
-            #     env.batch_config_cost(
-            #         [node.state] * len(self.transition_nodes[tuple(node.state.mode)]),
-            #         [n.state for n in self.transition_nodes[tuple(node.state.mode)]],
-            #     )
-            # )
+                q = node.state.q[self.robots.index(r)]
 
-            # h_cache[node] = mode_cost + lb_to_goal_through_rest_of_modes
-            # return mode_cost + lb_to_goal_through_rest_of_modes
+                min_dist = 1e6
+                for n in nodes:
+                    transition_q = n.q[n.rs.index(r)]
+                    d = np.max(np.abs(q - transition_q))
+                    if d < min_dist:
+                        min_dist = d
+                
+                from_transition_to_goal = 0
+                if t != env.terminal_mode[i]:
+                    from_transition_to_goal = self.per_robot_task_to_goal_lb_cost[tuple([r, t])]
+
+                per_robot_min_to_goal.append(min_dist + from_transition_to_goal)
+
+            return max(per_robot_min_to_goal)
 
         def d(n0, n1):
             # return 1.0
@@ -284,11 +358,15 @@ class ImplicitTensorGraph:
         while len(open_queue) > 0:
             num_iter += 1
 
-            if num_iter % 100 == 0:
+            if num_iter % 1000 == 0:
                 print(len(open_queue))
 
             f_pred, edge_cost, edge = heapq.heappop(open_queue)
             n0, n1 = edge
+
+            if num_iter % 1000 == 0:
+                print('reached modes', reached_modes)
+                print(f_pred)
 
             g_tentative = gs[n0] + edge_cost
 
@@ -319,12 +397,6 @@ class ImplicitTensorGraph:
 
             # env.show(False)
 
-            print('reached modes', reached_modes)
-            # print(n0.state.q.state())
-            # print(n1.state.q.state())
-            # print(n0.state.mode)
-            # print(n1.state.mode)
-
             gs[n1] = g_tentative
             parents[n1] = n0
 
@@ -338,8 +410,8 @@ class ImplicitTensorGraph:
                 neighbors = [Node(State(n1.state.q, next_mode))]
             else:
                 active_robots = env.get_goal_constrained_robots(n1.state.mode)
-                print(active_robots)
-                neighbors = self.get_neighbors(n1, active_robots, 20)
+                # print(active_robots)
+                neighbors = self.get_neighbors(n1, active_robots, 50)
 
             # add neighbors to open_queue
             edge_costs = env.batch_config_cost(
@@ -354,11 +426,6 @@ class ImplicitTensorGraph:
 
                 g_new = g_tentative + edge_costs[i]
 
-                # print(g_new)
-
-                # if n in gs:
-                #     print("AAAAAA")
-
                 if n not in gs or g_new < gs[n]:
                     # sparsely check only when expanding
                     # cost to get to neighbor:
@@ -368,8 +435,6 @@ class ImplicitTensorGraph:
                         continue
 
                     if n not in closed_list:
-                        # print("adding new")
-                        # print(n.state.q.state())
                         heapq.heappush(
                             open_queue, (fs[(n1, n)], edge_costs[i], (n1, n))
                         )
@@ -424,6 +489,13 @@ def tensor_prm_planner(
 
     cnt = 0
 
+    mode_sequence = [m0]
+    while True:
+        if mode_sequence[-1] == env.terminal_mode:
+            break
+
+        mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
+
     def sample_mode(mode_sampling_type="weighted", found_solution=False):
         # if mode_sampling_type == "uniform_reached":
         m_rnd = random.choice(reached_modes)
@@ -441,8 +513,11 @@ def tensor_prm_planner(
 
     def sample_uniform_valid_per_robot(num_pts = 500):
         pts = []
+        added_pts_dict = {}
+
         for i, r in enumerate(env.robots):
-            for _ in range(num_pts):
+            robot_pts = 0
+            while robot_pts < num_pts:
                 lims = env.limits[:, env.robot_idx[r]]
 
                 if lims[0, 0] < lims[1, 0]:
@@ -459,7 +534,15 @@ def tensor_prm_planner(
                 if env.is_collision_free_for_robot([r], q, m):
                     pt = (r, q, t)
                     pts.append(pt)
-        
+                    robot_pts += 1
+
+                    if tuple([r, t]) not in added_pts_dict:
+                        added_pts_dict[tuple([r, t])] = 0
+
+                    added_pts_dict[tuple([r, t])] += 1
+
+        print(added_pts_dict)
+
         return pts
 
     def sample_uniform_valid_transition_for_active_robots(num_pts=50):
@@ -493,9 +576,9 @@ def tensor_prm_planner(
 
                 if next_mode not in reached_modes and next_mode is not None:
                     reached_modes.append(next_mode)
-            else:
-                print("transition infeasible")
-                env.show(True)
+            # else:
+                # print("transition infeasible")
+                # env.show(True)
 
         print(reached_modes)
 
@@ -511,6 +594,8 @@ def tensor_prm_planner(
                 task = transition[2]
 
                 g.add_robot_node(robots, q, task, True)
+            
+            print('num transitions: ', len(transitions))
 
             # sample uniform
             new_states = sample_uniform_valid_per_robot(batch_size)
@@ -520,6 +605,10 @@ def tensor_prm_planner(
                 task = s[2]
                 
                 g.add_robot_node([r], [q], task, False)
+
+            print('num new_states: ', len(new_states))
+
+            g.compute_lb_mode_transisitons(env.config_cost, mode_sequence)
         
         if env.terminal_mode not in reached_modes:
             continue
