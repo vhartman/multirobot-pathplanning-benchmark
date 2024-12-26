@@ -140,17 +140,17 @@ class ImplicitTensorGraph:
 
             does_already_exist = False
             for n in self.transition_nodes[key]:
-                if rs == n.rs and t == n.task and np.linalg.norm(np.concatenate(q) - np.concatenate(n.q)) < 1e-5:
+                if rs == n.rs and t == n.task and np.linalg.norm(np.concatenate(q) - n.q.state()) < 1e-5:
                     does_already_exist = True
                     break
 
             if not does_already_exist:
-                self.transition_nodes[key].append(RobotNode(rs, q, t))
+                self.transition_nodes[key].append(RobotNode(rs, NpConfiguration.from_list(q), t))
         else:
             # print(f"adding node with key {key}")
             if key not in self.robot_nodes:
                 self.robot_nodes[key] = []
-            self.robot_nodes[key].append(RobotNode(rs, q, t))
+            self.robot_nodes[key].append(RobotNode(rs, NpConfiguration.from_list(q), t))
 
     def get_robot_neighbors(self, rs, q, t, get_transitions, k=10):
         # print(f"finding robot neighbors for {rs}")
@@ -167,7 +167,8 @@ class ImplicitTensorGraph:
         # print(f"computing distances for {rs}")
         # TODO: this makes the thing slow
         # TODO: introduce possibility to compute distances without having to convert to configuration
-        dists = self.batch_dist_fun(q, [NpConfiguration.from_list(n.q) for n in nodes])
+
+        dists = self.batch_dist_fun(q, [n.q for n in nodes])
 
         if True:
             k_clip = min(k, len(nodes) - 1)
@@ -176,7 +177,7 @@ class ImplicitTensorGraph:
 
             best_nodes = [nodes[i] for i in topk]
         else:
-            r = 5
+            r = 1
             best_nodes = [n for i, n in enumerate(nodes) if dists[i] < r]
 
         # print(q.state())
@@ -256,6 +257,8 @@ class ImplicitTensorGraph:
 
         transition_dists = self.batch_dist_fun(node.state.q, transition_combination_states)
 
+        k = k*2
+
         k_clip = min(k, len(transition_combination_states) - 1)
         topk = np.argpartition(transition_dists, k_clip)[:k_clip+1]
         topk = topk[np.argsort(transition_dists[topk])]
@@ -263,6 +266,22 @@ class ImplicitTensorGraph:
         best_transition_nodes = [Node(State(transition_combination_states[i], mode)) for i in topk]
 
         best_nodes = best_transition_nodes + best_normal_nodes
+
+        # plt.figure()
+        # for n in best_normal_nodes:
+        #     c = ['blue', 'red']
+        #     for i in range(n.state.q.num_agents()):
+        #         q = n.state.q[i]
+        #         plt.scatter(q[0], q[1], color=c[i])
+
+        #     for i in range(node.state.q.num_agents()):
+        #         q = node.state.q[i]
+        #         plt.scatter(q[0], q[1], color='orange')
+
+        # plt.gca().set_xlim(-1, 1)
+        # plt.gca().set_ylim(-1, 1)
+
+        # plt.show()
 
         return best_nodes
 
@@ -411,7 +430,7 @@ class ImplicitTensorGraph:
             else:
                 active_robots = env.get_goal_constrained_robots(n1.state.mode)
                 # print(active_robots)
-                neighbors = self.get_neighbors(n1, active_robots, 50)
+                neighbors = self.get_neighbors(n1, active_robots, 10)
 
             # add neighbors to open_queue
             edge_costs = env.batch_config_cost(
@@ -477,7 +496,7 @@ def tensor_prm_planner(
     current_best_cost = None
     current_best_path = None
 
-    batch_size = 200
+    batch_size = 500
     transition_batch_size = 50
 
     costs = []
