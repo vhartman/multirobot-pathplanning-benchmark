@@ -968,7 +968,7 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
 
     keyframes = [g1_state, g2_state, C.getJointState()]
 
-    if agents_can_rotate:
+    if not agents_can_rotate:
         keyframes = [g1_state[:2], g2_state[:2], C.getJointState()]
 
     return C, keyframes

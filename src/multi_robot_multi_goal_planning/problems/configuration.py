@@ -73,7 +73,7 @@ class ListConfiguration(Configuration):
 
 
 class NpConfiguration(Configuration):
-    # __slots__ = 'slice', 'q', '_num_agents'
+    __slots__ = 'slice', 'q', '_num_agents'
     def __init__(self, q: NDArray, slice: List[Tuple[int, int]]):
         self.slice = slice
         self.q = q
@@ -87,15 +87,17 @@ class NpConfiguration(Configuration):
         self.q[self.slice[ind][0] : self.slice[ind][1]] = data
 
     @classmethod
+    # @profile # run with kernprof -l examples/run_planner.py [your environment]
     def from_list(cls, q_list: List[NDArray]) -> "NpConfiguration":
         if len(q_list) == 1:
             return cls(q_list[0], [(0, len(q_list[0]))])
 
-        slices = []
+        slices = [None for _ in range(len(q_list))]
         s = 0
         for i in range(len(q_list)):
-            slices.append((s, s + len(q_list[i])))
-            s += len(q_list[i])
+            dim = len(q_list[i])
+            slices[i] = (s, s + dim)
+            s += dim
 
         return cls(np.concatenate(q_list), slices)
 
@@ -104,6 +106,9 @@ class NpConfiguration(Configuration):
         return cls(arr, [(0, len(arr))])
 
     def robot_state(self, ind: int) -> NDArray:
+        if self._num_agents == 1:
+            return self.q
+        
         start, end = self.slice[ind]
         return self.q[start:end]
 
@@ -161,6 +166,7 @@ class NpConfiguration(Configuration):
         diff = pt.q - np.array([other.q for other in batch_other])
 
         if metric == "euclidean":
+        # if True:
             # return np.linalg.norm(diff, axis=1)
             dists = np.zeros((pt._num_agents, diff.shape[0]))
             for i, (s, e) in enumerate(pt.slice):
