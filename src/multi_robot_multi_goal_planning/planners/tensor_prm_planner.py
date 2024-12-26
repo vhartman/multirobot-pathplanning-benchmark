@@ -221,27 +221,34 @@ class ImplicitTensorGraph:
         tmp = [per_group_nn[r] for r in self.robots if r not in active_robots]
         tmp.append(transitions)
 
-        transition_combinations = list(product(*tmp))
-        transition_combination_states = []
-        for combination in transition_combinations:
-            d = {}
-            for robot_node in combination:
-                for i, r in enumerate(robot_node.rs):
-                    d[r] = robot_node.q[i]
-            q = [d[r] for r in self.robots]
-            transition_combination_states.append(NpConfiguration.from_list(q))
-        
-        # print("making other tensor product")
-        combinations = list(product(*[per_group_nn[r] for r in self.robots]))
+        # @profile # run with kernprof -l examples/run_planner.py [your environment]
+        def get_combinations(to_be_combined):
+            combo = ([a[0] for a in to_be_combined])
 
-        combination_states = []
-        for combination in combinations:
-            d = {}
-            for robot_node in combination:
+            mapping = {}
+            dims = {}
+            for j, robot_node in enumerate(combo):
                 for i, r in enumerate(robot_node.rs):
-                    d[r] = robot_node.q[i]
-            q = [d[r] for r in self.robots]
-            combination_states.append(NpConfiguration.from_list(q))
+                    mapping[r] = (j, i)
+                    dims[r] = len(robot_node.q[i])
+            flat_mapping = [mapping[r] for r in self.robots]
+            
+            slices = []
+            s = 0
+            for r in self.robots:
+                slices.append((s, s+dims[r]))
+                s += dims[r]
+
+            combined = []        
+            for combination in product(*to_be_combined):
+                q = [combination[j].q[i] for (j, i) in flat_mapping]
+                concat = np.concat(q)
+                combined.append(NpConfiguration(concat, slices))
+
+            return combined
+            
+        transition_combination_states = get_combinations(tmp)
+        combination_states = get_combinations([per_group_nn[r] for r in self.robots])
 
         # out of those, get the closest n
         dists = self.batch_dist_fun(node.state.q, combination_states)
@@ -430,7 +437,7 @@ class ImplicitTensorGraph:
             else:
                 active_robots = env.get_goal_constrained_robots(n1.state.mode)
                 # print(active_robots)
-                neighbors = self.get_neighbors(n1, active_robots, 10)
+                neighbors = self.get_neighbors(n1, active_robots, 50)
 
             # add neighbors to open_queue
             edge_costs = env.batch_config_cost(
@@ -496,7 +503,7 @@ def tensor_prm_planner(
     current_best_cost = None
     current_best_path = None
 
-    batch_size = 500
+    batch_size = 200
     transition_batch_size = 50
 
     costs = []
