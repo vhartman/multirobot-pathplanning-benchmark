@@ -492,6 +492,133 @@ def make_random_two_dim(
     return C, keyframes
 
 
+def make_random_two_dim_single_goal(
+    num_agents: int = 3,
+    num_obstacles: int = 5,
+    agents_can_rotate=True,
+    view: bool = False,
+):
+    if not isinstance(agents_can_rotate, list):
+        agents_can_rotate = [agents_can_rotate] * num_agents
+    else:
+        assert len(agents_can_rotate) == num_agents
+
+    C = make_table_with_walls(4, 4)
+    C.view()
+
+    added_agents = 0
+    agent_names = []
+
+    colors = []
+
+    while added_agents < num_agents:
+        c_coll_tmp = ry.Config()
+        c_coll_tmp.addConfigurationCopy(C)
+
+        pos = np.random.rand(2) * 4 - 2
+        rot = np.random.rand() * 6 - 3
+        size = np.random.rand(2) * 0.2 + 0.3
+        color = np.random.rand(3)
+
+        pre_agent_1_frame = (
+            c_coll_tmp.addFrame(f"pre_agent_{added_agents}_frame")
+            .setParent(c_coll_tmp.getFrame("table"))
+            .setPosition(c_coll_tmp.getFrame("table").getPosition() + [0, 0, 0.07])
+            .setShape(ry.ST.marker, size=[0.05])
+            .setContact(0)
+            .setJoint(ry.JT.rigid)
+        )
+
+        if agents_can_rotate[added_agents]:
+            c_coll_tmp.addFrame(f"a{added_agents}").setParent(
+                pre_agent_1_frame
+            ).setShape(
+                # ry.ST.box, size=[size[0], size[1], 0.06, 0.2]
+                ry.ST.cylinder,
+                size=[4, 0.1, 0.06, 0.2],
+            ).setColor(color).setContact(1).setJoint(
+                ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+            ).setJointState([pos[0], pos[1], rot])
+        else:
+            c_coll_tmp.addFrame(f"a{added_agents}").setParent(
+                pre_agent_1_frame
+            ).setShape(
+                # ry.ST.box, size=[size[0], size[1], 0.06, 0.2]
+                ry.ST.cylinder,
+                size=[4, 0.1, 0.06, 0.2],
+            ).setColor(color).setContact(1).setJoint(
+                ry.JT.transXY, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+            ).setJointState([pos[0], pos[1]])
+
+        binary_collision_free = c_coll_tmp.getCollisionFree()
+        if binary_collision_free:
+            agent_names.append(f"a{added_agents}")
+            added_agents += 1
+
+            C.clear()
+            C.addConfigurationCopy(c_coll_tmp)
+
+            colors.append(color)
+        else:
+            colls = c_coll_tmp.getCollisions()
+            for c in colls:
+                if c[2] < 0:
+                    print(c)
+
+    added_obstacles = 0
+
+    while added_obstacles < num_obstacles:
+        c_coll_tmp = ry.Config()
+        c_coll_tmp.addConfigurationCopy(C)
+
+        pos = np.random.rand(2) * 4 - 2
+        size = np.random.rand(2) * 0.5 + 0.2
+
+        c_coll_tmp.addFrame(f"obs{added_obstacles}").setParent(
+            c_coll_tmp.getFrame("table")
+        ).setPosition(
+            c_coll_tmp.getFrame("table").getPosition() + [pos[0], pos[1], 0.07]
+        ).setShape(ry.ST.box, size=[size[0], size[1], 0.06, 0.005]).setContact(
+            -2
+        ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
+
+        binary_collision_free = c_coll_tmp.getCollisionFree()
+        if binary_collision_free:
+            added_obstacles += 1
+
+            C.clear()
+            C.addConfigurationCopy(c_coll_tmp)
+
+    keyframes = []
+
+    while True:
+        c_coll_tmp = ry.Config()
+        c_coll_tmp.addConfigurationCopy(C)
+
+        for i, agent in enumerate(agent_names):
+            pos = np.random.rand(2) * 4 - 2
+            rot = np.random.rand() * 6 - 3
+
+            if agents_can_rotate[i]:
+                q = np.array([pos[0], pos[1], rot])
+            else:
+                q = np.array([pos[0], pos[1]])
+
+            c_coll_tmp.setJointState(q, get_robot_joints(c_coll_tmp, agent))
+
+        binary_collision_free = c_coll_tmp.getCollisionFree()
+        # c_coll_tmp.view(True)
+
+        if binary_collision_free:
+            keyframes.append(c_coll_tmp.getJointState())
+            break
+
+    if view:
+        C.view(True)
+
+    return C, keyframes
+
+
 def make_two_dim_handover(view: bool = False):
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
