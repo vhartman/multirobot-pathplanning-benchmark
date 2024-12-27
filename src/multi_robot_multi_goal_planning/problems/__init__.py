@@ -45,6 +45,10 @@ def get_env_by_name(name):
         "random_2d_single_goal_no_rot": lambda: rsge.rai_random_two_dim(agents_can_rotate=False),
         "hallway_single_goal": lambda: rsge.rai_hallway_two_dim(),
         "hallway_single_goal_no_rot": lambda: rsge.rai_hallway_two_dim(agents_can_rotate=False),
+
+        # 3d single goal envs
+        "multi_agent_panda_single_goal": lambda: rsge.rai_multi_panda_arm_single_goal_env(),
+        "handover_single_goal": lambda: rsge.rai_ur10_handover_env()
     }
     # fmt: on
 

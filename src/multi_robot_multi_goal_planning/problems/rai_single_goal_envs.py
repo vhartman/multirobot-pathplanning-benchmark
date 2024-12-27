@@ -112,3 +112,96 @@ class rai_hallway_two_dim(rai_env):
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
+
+
+class rai_multi_panda_arm_single_goal_env(rai_env):
+    def __init__(self, num_robots: int = 3):
+        self.C, keyframes = make_panda_single_joint_goal_env(num_robots=num_robots)
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        self.robots = ["a0", "a1", "a2"]
+        self.robots = self.robots[:num_robots]
+
+        print(self.robots)
+
+        super().__init__()
+
+        self.tasks = [Task(self.robots, SingleGoal(keyframes[0]))]
+        self.tasks[0].name = "terminal"
+        self.sequence = [0]
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.1
+
+
+class rai_ur10_handover_env(rai_env):
+    def __init__(self):
+        self.C, keyframes = make_handover_env()
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        self.tasks = [
+            Task(
+                ["a1", "a2"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[0][self.robot_idx["a1"]],
+                            keyframes[2][self.robot_idx["a2"]],
+                        ]
+                    )
+                ),
+            ),
+        ]
+
+        self.sequence = [0]
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self.terminal_mode = self._make_terminal_mode_from_sequence()
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode.copy()
+
+        self.tolerance = 0.1
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)

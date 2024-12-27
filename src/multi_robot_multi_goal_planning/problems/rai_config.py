@@ -2591,6 +2591,116 @@ def make_panda_waypoint_env(
     return C, keyframes
 
 
+def make_panda_single_joint_goal_env(
+    num_robots: int = 3, num_waypoints: int = 6, view: bool = False
+):
+    if num_robots > 3:
+        raise NotImplementedError("More than three robot arms are not supported.")
+
+    if num_waypoints > 6:
+        raise NotImplementedError("More than six waypoints are not supported.")
+
+    C = ry.Config()
+    # C.addFile(ry.raiPath('scenarios/pandaSingle.g'))
+
+    C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
+        ry.ST.box, size=[2, 2, 0.06, 0.005]
+    ).setColor([0.3, 0.3, 0.3]).setContact(1)
+
+    robot_path = ry.raiPath("panda/panda.g")
+    # robot_path = "ur10/ur10_vacuum.g"
+
+    C.addFile(robot_path, namePrefix="a0_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([0.0, -0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, 0.7071])
+
+    # this could likely be done nicer
+    if num_robots > 1:
+        C.addFile(robot_path, namePrefix="a1_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([-0.3, 0.5, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, -0.7071]
+        )
+    if num_robots > 2:
+        C.addFile(robot_path, namePrefix="a2_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.3, 0.5, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, -0.7071]
+        )
+
+    C.addFrame("way1").setShape(ry.ST.marker, [0.1]).setPosition([0.3, 0.0, 1.0])
+    C.addFrame("way2").setShape(ry.ST.marker, [0.1]).setPosition([0.3, 0.0, 1.4])
+    C.addFrame("way3").setShape(ry.ST.marker, [0.1]).setPosition([-0.3, 0.0, 1.0])
+    C.addFrame("way4").setShape(ry.ST.marker, [0.1]).setPosition([-0.3, 0.0, 1.4])
+    C.addFrame("way5").setShape(ry.ST.marker, [0.1]).setPosition([-0.3, 0.0, 0.6])
+    C.addFrame("way6").setShape(ry.ST.marker, [0.1]).setPosition([0.3, 0.0, 0.6])
+
+    waypoints = [f"way{i}" for i in range(1,7)]
+
+    q_init = C.getJointState()
+    q_init[1] -= 0.5
+
+    if num_robots > 1:
+        q_init[8] -= 0.5
+    if num_robots > 2:
+        q_init[15] -= 0.5
+
+    C.setJointState(q_init)
+
+    if view:
+        C.view(True)
+
+    qHome = C.getJointState()
+
+    def compute_pose_for_robot(ees, goals):
+        komo = ry.KOMO(
+            C,
+            phases=num_waypoints + 1,
+            slicesPerPhase=1,
+            kOrder=1,
+            enableCollisions=True,
+        )
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1])
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        for robot_ee, goal in zip(ees, goals):
+            komo.addObjective(
+                [1],
+                ry.FS.positionDiff,
+                [robot_ee, goal],
+                ry.OT.eq,
+                [1e1],
+            )
+
+        ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
+        print(ret)
+        q = komo.getPath()
+        # print(q)
+
+        if view:
+            komo.view(True, "IK solution")
+
+        return q
+
+    ees = ["a0_gripper"]
+
+    if num_robots > 1:
+        ees.append("a1_gripper")
+    if num_robots > 2:
+        ees.append("a2_gripper")
+
+    goals = ["way3", "way1", "way5"]
+    goals = goals[:len(ees)]
+
+    print(goals)
+
+    keyframes = compute_pose_for_robot(ees, goals)
+
+    return C, keyframes
+
 def quaternion_from_z_rotation(angle):
     half_angle = angle / 2
     w = np.cos(half_angle)
