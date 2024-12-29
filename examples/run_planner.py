@@ -1,20 +1,29 @@
 import argparse
 from matplotlib import pyplot as plt
+import time
+import numpy as np
+import random
 
 from typing import List
 
-from multi_robot_multi_goal_planning.problems.rai_envs import get_env_by_name
-from multi_robot_multi_goal_planning.problems.rai_envs import display_path
+from multi_robot_multi_goal_planning.problems import get_env_by_name
+from multi_robot_multi_goal_planning.problems.rai_envs import display_path, rai_env
 from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.configuration import config_dist
+from multi_robot_multi_goal_planning.problems.util import path_cost
 
 # planners
-from multi_robot_multi_goal_planning.planners.prioritized_planner import prioritized_planning
+from multi_robot_multi_goal_planning.planners.prioritized_planner import (
+    prioritized_planning,
+)
 from multi_robot_multi_goal_planning.planners.joint_prm_planner import joint_prm_planner
+from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
+    tensor_prm_planner,
+)
 
 # np.random.seed(100)
 
-def discretize_path(path: List[State], resolution: float = 0.1):
+def interpolate_path(path: List[State], resolution: float = 0.1):
     config_type = type(path[0].q)
     new_path = []
 
@@ -48,9 +57,19 @@ def discretize_path(path: List[State], resolution: float = 0.1):
 
     return new_path
 
+
 def main():
     parser = argparse.ArgumentParser(description="Planner runner")
     parser.add_argument("env", nargs="?", default="default", help="env to show")
+    parser.add_argument(
+        "--optimize",
+        type=lambda x: x.lower() in ["true", "1", "yes"],
+        default=True,
+        help="Enable optimization (default: True)",
+    )
+    parser.add_argument(
+        "--num_iters", type=int, default=2000, help="Number of iterations"
+    )
 
     args = parser.parse_args()
 
@@ -59,24 +78,29 @@ def main():
     env.show()
 
     # path, info = prioritized_planning(env)
-    path, info = joint_prm_planner(env, True)
-    discretized_path = discretize_path(path)
+    # path, info = joint_prm_planner(env, optimize=args.optimize, mode_sampling_type=None, max_iter=args.num_iters)
+    path, info = tensor_prm_planner(
+        env, optimize=args.optimize, mode_sampling_type=None, max_iter=args.num_iters
+    )
+    interpolated_path = interpolate_path(path, 0.05)
+
 
     print("Checking original path for validity")
-    print(env.is_valid_plan(discretized_path))
+    print(env.is_valid_plan(interpolated_path))
 
-    print('cost', info['costs'])
-    print('comp_time', info['times'])
+
+    print("cost", info["costs"])
+    print("comp_time", info["times"])
 
     plt.figure()
-    plt.scatter(info['times'], info['costs'])
+    plt.plot(info["times"], info["costs"], "o")
+
     plt.show()
 
     print("displaying path from prioritized planner")
-    # discretized_path = discretize_path(path)
-    display_path(env, discretized_path, stop=False)
+    display_path(env, interpolated_path, stop=False)
+
+
 
 if __name__ == "__main__":
-    # make_2d_rai_env_3_agents()
-
     main()
