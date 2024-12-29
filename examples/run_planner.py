@@ -23,6 +23,7 @@ from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
 
 # np.random.seed(100)
 
+
 def interpolate_path(path: List[State], resolution: float = 0.1):
     config_type = type(path[0].q)
     new_path = []
@@ -70,24 +71,39 @@ def main():
     parser.add_argument(
         "--num_iters", type=int, default=2000, help="Number of iterations"
     )
+    parser.add_argument(
+        "--planner",
+        choices=["joint_prm", "tensor_prm", "prioritized"],
+        default="joint_prm",
+        help="Planner to use (default: joint_prm)",
+    )
 
     args = parser.parse_args()
 
     env = get_env_by_name(args.env)
-
     env.show()
 
-    # path, info = prioritized_planning(env)
-    # path, info = joint_prm_planner(env, optimize=args.optimize, mode_sampling_type=None, max_iter=args.num_iters)
-    path, info = tensor_prm_planner(
-        env, optimize=args.optimize, mode_sampling_type=None, max_iter=args.num_iters
-    )
-    interpolated_path = interpolate_path(path, 0.05)
+    if args.planner == "joint_prm":
+        path, info = joint_prm_planner(
+            env,
+            optimize=args.optimize,
+            mode_sampling_type=None,
+            max_iter=args.num_iters,
+        )
+    elif args.planner == "tensor_prm":
+        path, info = tensor_prm_planner(
+            env,
+            optimize=args.optimize,
+            mode_sampling_type=None,
+            max_iter=args.num_iters,
+        )
+    elif args.planner == "prioritized":
+        path, info = prioritized_planning(env)
 
+    interpolated_path = interpolate_path(path, 0.05)
 
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))
-
 
     print("cost", info["costs"])
     print("comp_time", info["times"])
@@ -99,7 +115,6 @@ def main():
 
     print("displaying path from prioritized planner")
     display_path(env, interpolated_path, stop=False)
-
 
 
 if __name__ == "__main__":
