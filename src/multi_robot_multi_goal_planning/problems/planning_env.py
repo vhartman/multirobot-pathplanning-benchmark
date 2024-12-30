@@ -131,8 +131,22 @@ def state_dist(start: State, end: State) -> float:
     return config_dist(start.q, end.q)
 
 
+class BaseModeLogic(ABC):
+    @abstractmethod
+    def get_next_mode(self, q: Configuration, mode: List[int]):
+        pass
+
+    @abstractmethod
+    def is_transition(self, q: Configuration, m: List[int]) -> bool:
+        pass
+
+    @abstractmethod
+    def get_active_task(self, mode: List[int]) -> Task:
+        pass
+
+
 # concrete implementations of the required abstract classes for the sequence-setting.
-class SequenceMixin:
+class SequenceMixin(BaseModeLogic):
     def _make_sequence_from_names(self, names: List[str]) -> List[int]:
         sequence = []
 
@@ -207,11 +221,89 @@ class SequenceMixin:
     def get_robot_sequence(self, robot: str):
         pass
 
-    def get_next_mode(self, q: Configuration, mode: List[int]):
-        pass
+    def get_goal_constrained_robots(self, mode: List[int]) -> List[str]:
+        seq_index = self.get_current_seq_index(mode)
+        task = self.tasks[self.sequence[seq_index]]
+        return task.robots
+
+    def done(self, q: Configuration, m: List[int]) -> bool:
+        if m != self.terminal_mode:
+            return False
+
+        # TODO: this is not necessarily true!
+        terminal_task_idx = self.sequence[-1]
+        terminal_task = self.tasks[terminal_task_idx]
+        involved_robots = terminal_task.robots
+
+        q_concat = []
+        for r in involved_robots:
+            r_idx = self.robots.index(r)
+            q_concat.append(q.robot_state(r_idx))
+
+        q_concat = np.concatenate(q_concat)
+
+        if terminal_task.goal.satisfies_constraints(q_concat, self.tolerance):
+            return True
+
+        return False
+
+    def is_transition(self, q: Configuration, m: List[int]) -> bool:
+        if m == self.terminal_mode:
+            return False
+
+        # robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
+        task = self.get_active_task(m)
+
+        q_concat = []
+        for r in task.robots:
+            r_idx = self.robots.index(r)
+            q_concat.append(q.robot_state(r_idx))
+
+        q_concat = np.concatenate(q_concat)
+
+        if task.goal.satisfies_constraints(q_concat, self.tolerance):
+            return True
+
+        return False
+
+    def get_next_mode(self, q: Optional[Configuration], mode: List[int]) -> List[int]:
+        seq_idx = self.get_current_seq_index(mode)
+
+        # print('seq_idx', seq_idx)
+
+        # find the next mode for the currently constrained one(s)
+        task_idx = self.sequence[seq_idx]
+        rs = self.tasks[task_idx].robots
+
+        # next_robot_mode_ind = None
+
+        m_next = mode.copy()
+
+        # print(rs)
+
+        # find next occurrence of the robot in the sequence/dep graph
+        for r in rs:
+            for idx in self.sequence[seq_idx + 1 :]:
+                if r in self.tasks[idx].robots:
+                    r_idx = self.robots.index(r)
+                    m_next[r_idx] = idx
+                    break
+
+        return m_next
+
+    def get_active_task(self, mode: List[int]) -> Task:
+        seq_idx = self.get_current_seq_index(mode)
+        return self.tasks[self.sequence[seq_idx]]
+
+    def get_tasks_for_mode(self, mode: List[int]) -> List[Task]:
+        tasks = []
+        for _, j in enumerate(mode):
+            tasks.append(self.tasks[j])
+
+        return tasks
 
 
-class DependencyGraphMixin(ABC):
+class DependencyGraphMixin(BaseModeLogic):
     def get_next_mode(self, q, mode):
         pass
 
@@ -253,10 +345,6 @@ class base_env(ABC):
 
     # Task sequencing methods
     @abstractmethod
-    def set_to_mode(self, mode: List[int]):
-        pass
-
-    @abstractmethod
     def sample_random_mode(self) -> List[int]:
         pass
 
@@ -281,6 +369,10 @@ class base_env(ABC):
         pass
 
     # Collision checking and environment related methods
+    @abstractmethod
+    def set_to_mode(self, mode: List[int]):
+        pass
+
     @abstractmethod
     def is_collision_free(self, q: Optional[Configuration], mode: List[int]) -> bool:
         pass

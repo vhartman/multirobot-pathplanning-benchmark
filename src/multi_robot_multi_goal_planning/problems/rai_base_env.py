@@ -4,7 +4,7 @@ import numpy as np
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.rai_config import *
+from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.planning_env import (
     base_env,
     SequenceMixin,
@@ -87,93 +87,12 @@ class rai_env(SequenceMixin, base_env):
     ) -> NDArray:
         return batch_config_cost(starts, ends, "max")
 
-    def get_goal_constrained_robots(self, mode: List[int]) -> List[str]:
-        seq_index = self.get_current_seq_index(mode)
-        task = self.tasks[self.sequence[seq_index]]
-        return task.robots
-
-    def done(self, q: Configuration, m: List[int]) -> bool:
-        if m != self.terminal_mode:
-            return False
-
-        # TODO: this is not necessarily true!
-        terminal_task_idx = self.sequence[-1]
-        terminal_task = self.tasks[terminal_task_idx]
-        involved_robots = terminal_task.robots
-
-        q_concat = []
-        for r in involved_robots:
-            r_idx = self.robots.index(r)
-            q_concat.append(q.robot_state(r_idx))
-
-        q_concat = np.concatenate(q_concat)
-
-        if terminal_task.goal.satisfies_constraints(q_concat, self.tolerance):
-            return True
-
-        return False
-
     def show_config(self, q: NDArray, blocking: bool = True):
         self.C.setJointState(q)
         self.C.view(blocking)
 
     def show(self, blocking: bool = True):
         self.C.view(blocking)
-
-    def is_transition(self, q: Configuration, m: List[int]) -> bool:
-        if m == self.terminal_mode:
-            return False
-
-        # robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
-        task = self.get_active_task(m)
-
-        q_concat = []
-        for r in task.robots:
-            r_idx = self.robots.index(r)
-            q_concat.append(q.robot_state(r_idx))
-
-        q_concat = np.concatenate(q_concat)
-
-        if task.goal.satisfies_constraints(q_concat, self.tolerance):
-            return True
-
-        return False
-
-    def get_next_mode(self, q: Optional[Configuration], mode: List[int]) -> List[int]:
-        seq_idx = self.get_current_seq_index(mode)
-
-        # print('seq_idx', seq_idx)
-
-        # find the next mode for the currently constrained one(s)
-        task_idx = self.sequence[seq_idx]
-        rs = self.tasks[task_idx].robots
-
-        # next_robot_mode_ind = None
-
-        m_next = mode.copy()
-
-        # print(rs)
-
-        # find next occurrence of the robot in the sequence/dep graph
-        for r in rs:
-            for idx in self.sequence[seq_idx + 1 :]:
-                if r in self.tasks[idx].robots:
-                    r_idx = self.robots.index(r)
-                    m_next[r_idx] = idx
-                    break
-
-        return m_next
-
-    def get_active_task(self, mode: List[int]) -> Task:
-        seq_idx = self.get_current_seq_index(mode)
-        return self.tasks[self.sequence[seq_idx]]
-
-    def get_tasks_for_mode(self, mode: List[int]) -> List[Task]:
-        tasks = []
-        for _, j in enumerate(mode):
-            tasks.append(self.tasks[j])
-
-        return tasks
 
     # Environment functions: collision checking
     def is_collision_free(
