@@ -135,7 +135,10 @@ class Mode:
         Mode.id_counter += 1
 
     def __repr__(self):
-        return self.task_ids
+        return "Tasks: " + str(self.task_ids) + "id: " + str(self.id)
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
 
     def __hash__(self):
         # TODO: add entry mode
@@ -204,9 +207,8 @@ class SequenceMixin(BaseModeLogic):
         for r in self.robots:
             task_ids.append(mode_dict[r])
 
-    
-
-        return task_ids
+        start_mode = Mode(task_ids, None)
+        return start_mode
 
     def _make_terminal_mode_from_sequence(self) -> Mode:
         mode_dict = {}
@@ -223,15 +225,19 @@ class SequenceMixin(BaseModeLogic):
             mode.append(mode_dict[r])
 
         return mode
+    
+    # TODO: actually use this
+    def is_terminal_mode(self, mode: Mode):
+        pass
 
     def get_current_seq_index(self, mode: Mode) -> int:
         # Approach: iterate through all indices, find them in the sequence, and check which is the one
         # that has to be fulfilled first
         min_sequence_pos = len(self.sequence) - 1
-        for i, m in enumerate(mode):
+        for i, task_id in enumerate(mode.task_ids):
             # print("robots in task:", self.tasks[m].robots, self.sequence.index(m))
-            if m != self.terminal_mode[i]:
-                min_sequence_pos = min(self.sequence.index(m), min_sequence_pos)
+            if task_id != self.terminal_mode[i]:
+                min_sequence_pos = min(self.sequence.index(task_id), min_sequence_pos)
 
         return min_sequence_pos
 
@@ -258,7 +264,7 @@ class SequenceMixin(BaseModeLogic):
         return task.robots
 
     def done(self, q: Configuration, m: Mode) -> bool:
-        if m != self.terminal_mode:
+        if m.task_ids != self.terminal_mode:
             return False
 
         # TODO: this is not necessarily true!
@@ -279,7 +285,7 @@ class SequenceMixin(BaseModeLogic):
         return False
 
     def is_transition(self, q: Configuration, m: Mode) -> bool:
-        if m == self.terminal_mode:
+        if m.task_ids == self.terminal_mode:
             return False
 
         # robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
@@ -308,7 +314,7 @@ class SequenceMixin(BaseModeLogic):
 
         # next_robot_mode_ind = None
 
-        m_next = mode.copy()
+        next_task_ids = mode.task_ids.copy()
 
         # print(rs)
 
@@ -317,10 +323,13 @@ class SequenceMixin(BaseModeLogic):
             for idx in self.sequence[seq_idx + 1 :]:
                 if r in self.tasks[idx].robots:
                     r_idx = self.robots.index(r)
-                    m_next[r_idx] = idx
+                    next_task_ids[r_idx] = idx
                     break
 
-        return m_next
+        next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
+        next_mode.prev_mode = mode
+
+        return next_mode
 
     def get_active_task(self, mode: Mode) -> Task:
         seq_idx = self.get_current_seq_index(mode)

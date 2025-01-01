@@ -239,31 +239,29 @@ class rai_env(SequenceMixin, BaseProblem):
         self.C.clear()
         self.C.addConfigurationCopy(self.C_base)
 
-        # find current mode
-        current_mode = self.get_current_seq_index(m)
+        mode_sequence = []
 
-        if current_mode != self.get_current_seq_index(m):
-            print(current_mode, self.get_current_seq_index(m))
-            raise ValueError
+        current_mode = m
+        while True:
+            if current_mode.prev_mode is None:
+                break
 
-        if current_mode == 0:
-            return
+            mode_sequence.append(current_mode)
+            current_mode = current_mode.prev_mode
+        
+        mode_sequence.append(current_mode)
+        mode_sequence = mode_sequence[::-1]
 
-        mode = self.start_mode
-        for i in range(len(self.sequence) + 1):
-            if i == 0:
-                continue
+        # print(mode_sequence)
 
-            m_prev = mode.copy()
-            mode = self.get_next_mode(None, mode)
-
-            mode_switching_robots = self.get_goal_constrained_robots(m_prev)
+        for mode in mode_sequence[:-1]:
+            mode_switching_robots = self.get_goal_constrained_robots(mode)
 
             # set robot to config
-            prev_mode_index = m_prev[self.robots.index(mode_switching_robots[0])]
+            prev_mode_index = mode.task_ids[self.robots.index(mode_switching_robots[0])]
             # robot = self.robots[mode_switching_robots]
 
-            # TODO: ensure that se are choosing the correct goal here
+            # TODO: ensure that we are choosing the correct goal here
             q = self.tasks[prev_mode_index].goal.sample()
             joint_names = []
             for r in mode_switching_robots:
@@ -271,18 +269,16 @@ class rai_env(SequenceMixin, BaseProblem):
 
             self.C.setJointState(q, joint_names)
 
-            if self.tasks[prev_mode_index].type == "goto":
-                pass
-            else:
-                self.C.attach(
-                    self.tasks[prev_mode_index].frames[0],
-                    self.tasks[prev_mode_index].frames[1],
-                )
+            if self.tasks[prev_mode_index].type is not None:
+                if self.tasks[prev_mode_index].type == "goto":
+                    pass
+                else:
+                    self.C.attach(
+                        self.tasks[prev_mode_index].frames[0],
+                        self.tasks[prev_mode_index].frames[1],
+                    )
 
-            # postcondition
-            if self.tasks[prev_mode_index].side_effect is not None:
-                box = self.tasks[prev_mode_index].frames[1]
-                self.C.delFrame(box)
-
-            if i == current_mode:
-                break
+                # postcondition
+                if self.tasks[prev_mode_index].side_effect is not None:
+                    box = self.tasks[prev_mode_index].frames[1]
+                    self.C.delFrame(box)

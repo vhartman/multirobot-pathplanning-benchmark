@@ -47,7 +47,7 @@ class Node:
 
     def __hash__(self):
         if self.hash is None:
-            self.hash = hash((self.state.q.state().data.tobytes(), tuple(self.state.mode)))
+            self.hash = hash((self.state.q.state().data.tobytes(), self.state.mode))
         return self.hash
     
         # return hash((tuple(np.round(self.state.q.state(), 3)), tuple(self.state.mode)))
@@ -84,17 +84,17 @@ class ImplicitTensorGraph:
             for j, m in enumerate(mode_sequence[:-1]):
                 next_mode = mode_sequence[j+1]
 
-                if m[i] == next_mode[i]:
+                if m.task_ids[i] == next_mode.task_ids[i]:
                     continue
                 
                 nodes = self.transition_nodes
 
                 for k in self.transition_nodes.keys():
                     task = int(k.split("_")[-1])
-                    if m[i] == task:
+                    if m.task_ids[i] == task:
                         key = k
 
-                    if next_mode[i] == task:
+                    if next_mode.task_ids[i] == task:
                         next_key = k
 
                 # key = self.get_key([r], t)
@@ -118,10 +118,10 @@ class ImplicitTensorGraph:
 
             cnt = 0
             for j, current_mode in enumerate(mode_sequence[:-1]):
-                if current_mode[i] == mode_sequence[j+1][i]:
+                if current_mode.task_ids[i] == mode_sequence[j+1].task_ids[i]:
                     continue
 
-                self.per_robot_task_to_goal_lb_cost[tuple([r, current_mode[i]])] = sum(
+                self.per_robot_task_to_goal_lb_cost[tuple([r, current_mode.task_ids[i]])] = sum(
                     cheapest_transition[cnt:]
                 )
                 cnt += 1
@@ -201,7 +201,7 @@ class ImplicitTensorGraph:
         # get separate nn for each robot-group
         per_group_nn = {}
         for i, r in enumerate(self.robots):
-            task = mode[i]
+            task = mode.task_ids[i]
             # extract the correct state here
             q = node.state.q[i]
             per_group_nn[r] = self.get_robot_neighbors([r], NpConfiguration.from_numpy(q), task, False, k)
@@ -212,7 +212,7 @@ class ImplicitTensorGraph:
             i = self.robots.index(r)
             q = node.state.q[i]
             qs.append(q)
-            task = mode[i]
+            task = mode.task_ids[i]
 
         active_robot_config = NpConfiguration.from_list(qs)
         transitions = self.get_robot_neighbors(active_robots, active_robot_config, task, True, k)
@@ -312,7 +312,7 @@ class ImplicitTensorGraph:
             per_robot_min_to_goal = []
             
             for i, r in enumerate(self.robots):
-                t = node.state.mode[i]
+                t = node.state.mode.task_ids[i]
 
                 for k in self.transition_nodes.keys():
                     task = int(k.split("_")[-1])
@@ -517,7 +517,7 @@ def tensor_prm_planner(
 
     mode_sequence = [m0]
     while True:
-        if mode_sequence[-1] == env.terminal_mode:
+        if mode_sequence[-1].task_ids == env.terminal_mode:
             break
 
         mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
@@ -555,7 +555,7 @@ def tensor_prm_planner(
                     q = np.random.rand(env.robot_dims[r]) * 6 - 3
                 
                 m = sample_mode("weighted")
-                t = m[i]
+                t = m.task_ids[i]
 
                 if env.is_collision_free_for_robot([r], q, m):
                     pt = (r, q, t)
@@ -581,7 +581,7 @@ def tensor_prm_planner(
             goal_sample = active_task.goal.sample()
 
             q = goal_sample
-            t = m[env.robots.index(goal_constrainted_robots[0])]
+            t = m.task_ids[env.robots.index(goal_constrainted_robots[0])]
 
             q_list = []
             offset = 0
@@ -595,7 +595,7 @@ def tensor_prm_planner(
                 transition = (goal_constrainted_robots, q_list, t)
                 transitions.append(transition)
 
-                if m == env.terminal_mode:
+                if m.task_ids == env.terminal_mode:
                     next_mode = None
                 else:
                     next_mode = env.get_next_mode(q, m)
@@ -636,7 +636,12 @@ def tensor_prm_planner(
 
             g.compute_lb_mode_transisitons(env.config_cost, mode_sequence)
         
-        if env.terminal_mode not in reached_modes:
+        reached_terminal_mode = False
+        for m in reached_modes:
+            if m.task_ids == env.terminal_mode:
+                reached_terminal_mode = True
+
+        if not reached_terminal_mode:
             continue
 
         while True:

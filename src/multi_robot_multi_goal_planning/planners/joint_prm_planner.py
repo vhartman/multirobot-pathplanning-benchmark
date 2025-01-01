@@ -54,7 +54,7 @@ class Graph:
         self.batch_dist_fun = batch_config_dist
 
         self.nodes = {}
-        self.nodes[tuple(self.root.state.mode)] = [self.root]
+        self.nodes[self.root.state.mode] = [self.root]
 
         self.transition_nodes = {}  # contains the transitions at the end of the mode
         self.goal_nodes = []
@@ -73,13 +73,13 @@ class Graph:
             next_mode = mode_sequence[i + 1]
 
             # find transition nodes in current mode
-            current_mode_transitions = self.transition_nodes[tuple(current_mode)]
+            current_mode_transitions = self.transition_nodes[current_mode]
 
             next_mode_transitions = []
             if i == len(mode_sequence) - 2:
                 next_mode_transitions = self.goal_nodes
             else:
-                next_mode_transitions = self.transition_nodes[tuple(next_mode)]
+                next_mode_transitions = self.transition_nodes[next_mode]
 
             min_cost = 1e6
             for cmt in current_mode_transitions:
@@ -89,17 +89,17 @@ class Graph:
             cheapest_transition.append(min_cost)
 
         for i, current_mode in enumerate(mode_sequence[:-1]):
-            self.mode_to_goal_lb_cost[tuple(current_mode)] = sum(
+            self.mode_to_goal_lb_cost[current_mode] = sum(
                 cheapest_transition[i:]
             )
 
-        self.mode_to_goal_lb_cost[tuple(self.goal_nodes[0].state.mode)] = 0
+        self.mode_to_goal_lb_cost[self.goal_nodes[0].state.mode] = 0
 
         # print(cheapest_transition)
         # print(self.mode_to_goal_lb_cost)
 
     def add_node(self, new_node: Node) -> None:
-        key = tuple(new_node.state.mode)
+        key = new_node.state.mode
         if key not in self.nodes:
             self.nodes[key] = []
         node_list = self.nodes[key]
@@ -130,15 +130,15 @@ class Graph:
             else:
                 self.goal_nodes.append(node_this_mode)
 
-            if tuple(this_mode) in self.transition_nodes:
-                self.transition_nodes[tuple(this_mode)].append(node_this_mode)
+            if this_mode in self.transition_nodes:
+                self.transition_nodes[this_mode].append(node_this_mode)
             else:
-                self.transition_nodes[tuple(this_mode)] = [node_this_mode]
+                self.transition_nodes[this_mode] = [node_this_mode]
 
         # self.add_nodes(nodes)
 
     def get_neighbors(self, node, k=20):
-        key = tuple(node.state.mode)
+        key = node.state.mode
         if key in self.nodes:
             node_list = self.nodes[key]
             dists = self.batch_dist_fun(node.state.q, [n.state.q for n in node_list])
@@ -202,14 +202,14 @@ class Graph:
             lb_to_goal_through_rest_of_modes = 0
             if len(self.mode_to_goal_lb_cost) > 0:
                 lb_to_goal_through_rest_of_modes = self.mode_to_goal_lb_cost[
-                    tuple(node.state.mode)
+                    node.state.mode
                 ]
 
             # return lb_to_goal_through_rest_of_modes
 
             # compute lowest cost to get to the goal:
             current_mode = node.state.mode
-            if current_mode == env.terminal_mode:
+            if current_mode.task_ids == env.terminal_mode:
                 mode_cost = None
                 for g in self.goal_nodes:
                     cost_to_transition = env.config_cost(node.state.q, g.state.q)
@@ -221,8 +221,8 @@ class Graph:
 
             mode_cost = min(
                 env.batch_config_cost(
-                    [node.state] * len(self.transition_nodes[tuple(node.state.mode)]),
-                    [n.state for n in self.transition_nodes[tuple(node.state.mode)]],
+                    [node.state] * len(self.transition_nodes[node.state.mode]),
+                    [n.state for n in self.transition_nodes[node.state.mode]],
                 )
             )
 
@@ -490,8 +490,8 @@ def joint_prm_planner(
             # sample such that we tend to get similar number of pts in each mode
             w = []
             for m in reached_modes:
-                if tuple(m) in g.nodes:
-                    w.append(1 / (1+len(g.nodes[tuple(m)])))
+                if m in g.nodes:
+                    w.append(1 / (1+len(g.nodes[m])))
                 else:
                     w.append(1)
             m_rnd = random.choices(reached_modes, weights=w)[0]
@@ -580,7 +580,7 @@ def joint_prm_planner(
 
                     q.append(qr)
 
-            if mode == env.terminal_mode:
+            if mode.task_ids == env.terminal_mode:
                 next_mode = None
             else:
                 next_mode = env.get_next_mode(q, mode)
@@ -612,7 +612,7 @@ def joint_prm_planner(
 
     mode_sequence = [m0]
     while True:
-        if mode_sequence[-1] == env.terminal_mode:
+        if mode_sequence[-1].task_ids == env.terminal_mode:
             break
 
         mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
@@ -640,7 +640,12 @@ def joint_prm_planner(
 
         # search over nodes:
         # 1. search from goal state with sparse check
-        if env.terminal_mode not in reached_modes:
+        reached_terminal_mode = False
+        for m in reached_modes:
+            if m.task_ids == env.terminal_mode:
+                reached_terminal_mode = True
+
+        if not reached_terminal_mode:
             continue
 
         while True:

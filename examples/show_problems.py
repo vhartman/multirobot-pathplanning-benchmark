@@ -1,3 +1,4 @@
+from multi_robot_multi_goal_planning.problems import get_env_by_name
 import multi_robot_multi_goal_planning.problems as problems
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 
@@ -60,7 +61,7 @@ def visualize_modes(env: rai_env):
 
         env.show()
 
-        if m == env.terminal_mode:
+        if m.task_ids == env.terminal_mode:
             break
 
         m = env.get_next_mode(None, m)
@@ -108,7 +109,7 @@ if __name__ == "__main__":
 
     # check_all_modes()
 
-    env = problems.rai_envs.get_env_by_name(args.env_name)
+    env = get_env_by_name(args.env_name)
 
     if args.mode == "show":
         print("Environment starting position")

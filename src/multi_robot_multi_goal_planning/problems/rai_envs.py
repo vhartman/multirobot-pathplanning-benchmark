@@ -319,7 +319,7 @@ class rai_two_dim_simple_manip(rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.prev_mode = [0, 0]
+        self.prev_mode = self.start_mode
 
 
 class rai_two_dim_handover(rai_env):
@@ -420,7 +420,7 @@ class rai_two_dim_handover(rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.prev_mode = [0, 0]
+        self.prev_mode = self.start_mode
 
 
 class rai_random_two_dim(rai_env):
@@ -471,7 +471,7 @@ class rai_random_two_dim(rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.prev_mode = [0, 0]
+        self.prev_mode = self.start_mode
 
 
 class rai_hallway_two_dim(rai_env):
@@ -954,7 +954,7 @@ class rai_ur10_arm_egg_carton_env(rai_env):
         self.start_mode = self._make_start_mode_from_sequence()
         self.terminal_mode = self._make_terminal_mode_from_sequence()
 
-        self.prev_mode = self.start_mode.copy()
+        self.prev_mode = self.start_mode
 
         self.tolerance = 0.1
 
@@ -1027,7 +1027,7 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
         self.C_base.addConfigurationCopy(self.C)
 
         # buffer for faster collision checking
-        self.prev_mode = [0, 0]
+        self.prev_mode = self.start_mode
 
 
 # moving objects from a rolling cage to a 'conveyor'
@@ -1120,7 +1120,7 @@ class rai_ur10_handover_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         # buffer for faster collision checking
-        self.prev_mode = self.start_mode.copy()
+        self.prev_mode = self.start_mode
 
         self.tolerance = 0.1
 
@@ -1251,7 +1251,7 @@ class rai_ur10_arm_bottle_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         # buffer for faster collision checking
-        self.prev_mode = self.start_mode.copy()
+        self.prev_mode = self.start_mode
 
         self.tolerance = 0.1
 
@@ -1414,7 +1414,7 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         # buffer for faster collision checking
-        self.prev_mode = self.start_mode.copy()
+        self.prev_mode = self.start_mode
 
         self.tolerance = 0.1
 
@@ -1480,7 +1480,7 @@ class rai_ur10_arm_box_stack_env(rai_env):
         self.terminal_mode = self._make_terminal_mode_from_sequence()
 
         # buffer for faster collision checking
-        self.prev_mode = self.start_mode.copy()
+        self.prev_mode = self.start_mode
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
