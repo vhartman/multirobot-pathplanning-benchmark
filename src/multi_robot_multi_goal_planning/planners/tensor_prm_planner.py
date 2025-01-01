@@ -10,7 +10,7 @@ from itertools import product
 
 import time
 
-from multi_robot_multi_goal_planning.problems.planning_env import State, base_env
+from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
@@ -297,7 +297,7 @@ class ImplicitTensorGraph:
         return neighbors
 
     # this is a copy of the search from the normal prm
-    def search(self, start_node, goal_nodes: List, env: base_env, best_cost=None):
+    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None):
         open_queue = []
         closed_list = set()
 
@@ -486,7 +486,7 @@ class ImplicitTensorGraph:
 # nearest neighbors are found by checking the nearest neighbors in each separate graph, and then
 # taking the nearest of those
 def tensor_prm_planner(
-    env: base_env,
+    env: BaseProblem,
     optimize: bool = True,
     mode_sampling_type: str = "greedy",
     max_iter: int = 2000,

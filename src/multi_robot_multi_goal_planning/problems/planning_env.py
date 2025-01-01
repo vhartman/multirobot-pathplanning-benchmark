@@ -115,11 +115,39 @@ class Task:
         self.side_effect = side_effect
 
 
+class Mode:
+    task_ids: List[int]
+    entry_configuration: Configuration
+
+    id: int
+    prev_mode: "Mode"
+
+    id_counter = 0
+
+    def __init__(self, task_list, entry_configuration):
+        self.task_ids = task_list
+        self.entry_configuration = entry_configuration
+
+        # TODO: set in constructor?
+        self.prev_mode = None
+
+        self.id = Mode.id_counter
+        Mode.id_counter += 1
+
+    def __repr__(self):
+        return self.task_ids
+
+    def __hash__(self):
+        # TODO: add entry mode
+        res = hash(tuple(self.task_ids))
+        return res
+
+
 class State:
     q: Configuration
-    m: List[int]
+    m: Mode
 
-    def __init__(self, q: Configuration, m: List[int]):
+    def __init__(self, q: Configuration, m: Mode):
         self.q = q
         self.mode = m
 
@@ -133,15 +161,15 @@ def state_dist(start: State, end: State) -> float:
 
 class BaseModeLogic(ABC):
     @abstractmethod
-    def get_next_mode(self, q: Configuration, mode: List[int]):
+    def get_next_mode(self, q: Configuration, mode: Mode):
         pass
 
     @abstractmethod
-    def is_transition(self, q: Configuration, m: List[int]) -> bool:
+    def is_transition(self, q: Configuration, m: Mode) -> bool:
         pass
 
     @abstractmethod
-    def get_active_task(self, mode: List[int]) -> Task:
+    def get_active_task(self, mode: Mode) -> Task:
         pass
 
 
@@ -162,7 +190,7 @@ class SequenceMixin(BaseModeLogic):
 
         return sequence
 
-    def _make_start_mode_from_sequence(self) -> List[int]:
+    def _make_start_mode_from_sequence(self) -> Mode:
         mode_dict = {}
 
         for task_index in self.sequence:
@@ -172,13 +200,15 @@ class SequenceMixin(BaseModeLogic):
                 if r not in mode_dict:
                     mode_dict[r] = task_index
 
-        mode = []
+        task_ids = []
         for r in self.robots:
-            mode.append(mode_dict[r])
+            task_ids.append(mode_dict[r])
 
-        return mode
+    
 
-    def _make_terminal_mode_from_sequence(self) -> List[int]:
+        return task_ids
+
+    def _make_terminal_mode_from_sequence(self) -> Mode:
         mode_dict = {}
 
         for task_index in self.sequence:
@@ -194,7 +224,7 @@ class SequenceMixin(BaseModeLogic):
 
         return mode
 
-    def get_current_seq_index(self, mode: List[int]) -> int:
+    def get_current_seq_index(self, mode: Mode) -> int:
         # Approach: iterate through all indices, find them in the sequence, and check which is the one
         # that has to be fulfilled first
         min_sequence_pos = len(self.sequence) - 1
@@ -206,7 +236,8 @@ class SequenceMixin(BaseModeLogic):
         return min_sequence_pos
 
     # TODO: is that really a good way to sample a mode?
-    def sample_random_mode(self) -> List[int]:
+    # TODO: we should have a list of modes that we have, and sample from that
+    def sample_random_mode(self) -> Mode:
         m = self.start_mode
         rnd = random.randint(0, len(self.sequence))
 
@@ -221,12 +252,12 @@ class SequenceMixin(BaseModeLogic):
     def get_robot_sequence(self, robot: str):
         pass
 
-    def get_goal_constrained_robots(self, mode: List[int]) -> List[str]:
+    def get_goal_constrained_robots(self, mode: Mode) -> List[str]:
         seq_index = self.get_current_seq_index(mode)
         task = self.tasks[self.sequence[seq_index]]
         return task.robots
 
-    def done(self, q: Configuration, m: List[int]) -> bool:
+    def done(self, q: Configuration, m: Mode) -> bool:
         if m != self.terminal_mode:
             return False
 
@@ -247,7 +278,7 @@ class SequenceMixin(BaseModeLogic):
 
         return False
 
-    def is_transition(self, q: Configuration, m: List[int]) -> bool:
+    def is_transition(self, q: Configuration, m: Mode) -> bool:
         if m == self.terminal_mode:
             return False
 
@@ -266,7 +297,7 @@ class SequenceMixin(BaseModeLogic):
 
         return False
 
-    def get_next_mode(self, q: Optional[Configuration], mode: List[int]) -> List[int]:
+    def get_next_mode(self, q: Optional[Configuration], mode: Mode) -> Mode:
         seq_idx = self.get_current_seq_index(mode)
 
         # print('seq_idx', seq_idx)
@@ -291,11 +322,11 @@ class SequenceMixin(BaseModeLogic):
 
         return m_next
 
-    def get_active_task(self, mode: List[int]) -> Task:
+    def get_active_task(self, mode: Mode) -> Task:
         seq_idx = self.get_current_seq_index(mode)
         return self.tasks[self.sequence[seq_idx]]
 
-    def get_tasks_for_mode(self, mode: List[int]) -> List[Task]:
+    def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
         tasks = []
         for _, j in enumerate(mode):
             tasks.append(self.tasks[j])
@@ -304,19 +335,25 @@ class SequenceMixin(BaseModeLogic):
 
 
 class DependencyGraphMixin(BaseModeLogic):
-    def get_next_mode(self, q, mode):
+    def get_next_mode(self, q: Configuration, mode: Mode):
+        pass
+
+    def is_transition(self, q: Configuration, m: Mode) -> bool:
+        pass
+
+    def get_active_task(self, mode: Mode) -> Task:
         pass
 
 
 # TODO: split into env + problem specification
-class base_env(ABC):
+class BaseProblem(ABC):
     robots: List[str]
     robot_dims: Dict[str, int]
     robot_idx: Dict[str, NDArray]
     start_pos: Configuration
 
-    start_mode: List[int]
-    terminal_mode: List[int]
+    start_mode: Mode
+    terminal_mode: Mode
 
     # visualization
     @abstractmethod
@@ -345,40 +382,40 @@ class base_env(ABC):
 
     # Task sequencing methods
     @abstractmethod
-    def sample_random_mode(self) -> List[int]:
+    def sample_random_mode(self) -> Mode:
         pass
 
     @abstractmethod
-    def done(self, q: Configuration, mode: List[int]):
+    def done(self, q: Configuration, mode: Mode):
         pass
 
     @abstractmethod
-    def is_transition(self, q: Configuration, m: List[int]) -> bool:
+    def is_transition(self, q: Configuration, m: Mode) -> bool:
         pass
 
     @abstractmethod
-    def get_next_mode(self, q: Configuration, mode: List[int]):
+    def get_next_mode(self, q: Configuration, mode: Mode):
         pass
 
     @abstractmethod
-    def get_active_task(self, mode: List[int]) -> Task:
+    def get_active_task(self, mode: Mode) -> Task:
         pass
 
     @abstractmethod
-    def get_tasks_for_mode(self, mode: List[int]) -> List[Task]:
+    def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
         pass
 
     # Collision checking and environment related methods
     @abstractmethod
-    def set_to_mode(self, mode: List[int]):
+    def set_to_mode(self, mode: Mode):
         pass
 
     @abstractmethod
-    def is_collision_free(self, q: Optional[Configuration], mode: List[int]) -> bool:
+    def is_collision_free(self, q: Optional[Configuration], mode: Mode) -> bool:
         pass
 
     def is_collision_free_for_robot(
-        self, r: str, q, m: List[int], collision_tolerance: float = 0.01
+        self, r: str, q, m: Mode, collision_tolerance: float = 0.01
     ) -> bool:
         raise NotImplementedError
 
@@ -387,7 +424,7 @@ class base_env(ABC):
         self,
         q1: Configuration,
         q2: Configuration,
-        mode: List[int],
+        mode: Mode,
         resolution: float = 0.1,
     ) -> bool:
         pass

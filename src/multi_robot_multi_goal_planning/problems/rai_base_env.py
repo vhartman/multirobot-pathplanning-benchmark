@@ -6,8 +6,9 @@ from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.planning_env import (
-    base_env,
+    BaseProblem,
     SequenceMixin,
+    Mode,
     State,
     Task,
 )
@@ -45,7 +46,7 @@ def get_robot_state(C: ry.Config, robot_prefix: str) -> NDArray:
 #     C.selectJoints(robot_joints)
 
 
-class rai_env(SequenceMixin, base_env):
+class rai_env(SequenceMixin, BaseProblem):
     # robot things
     C: ry.Config
     limits: NDArray
@@ -53,8 +54,8 @@ class rai_env(SequenceMixin, base_env):
     # sequence things
     sequence: List[int]
     tasks: List[Task]
-    start_mode: List[int]
-    terminal_mode: List[int]
+    start_mode: Mode
+    terminal_mode: Mode
 
     # misc
     tolerance: float
@@ -98,7 +99,7 @@ class rai_env(SequenceMixin, base_env):
     def is_collision_free(
         self,
         q: Optional[Configuration],
-        m: List[int],
+        m: Mode,
         collision_tolerance: float = 0.01,
     ) -> bool:
         # print(q)
@@ -122,7 +123,7 @@ class rai_env(SequenceMixin, base_env):
         return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: List[int], collision_tolerance=0.01
+        self, r: str, q: NDArray, m: Mode, collision_tolerance=0.01
     ) -> bool:
         if isinstance(r, str):
             r = [r]
@@ -182,7 +183,7 @@ class rai_env(SequenceMixin, base_env):
         self,
         q1: Configuration,
         q2: Configuration,
-        m: List[int],
+        m: Mode,
         resolution=0.1,
         randomize_order=True,
     ) -> bool:
@@ -224,7 +225,7 @@ class rai_env(SequenceMixin, base_env):
 
         return True
 
-    def set_to_mode(self, m: List[int]):
+    def set_to_mode(self, m: Mode):
         if not self.manipulating_env:
             return
 

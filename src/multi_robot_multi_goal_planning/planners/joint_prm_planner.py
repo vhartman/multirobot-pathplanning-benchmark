@@ -9,7 +9,7 @@ import heapq
 
 import time
 
-from multi_robot_multi_goal_planning.problems.planning_env import State, base_env
+from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
@@ -187,7 +187,7 @@ class Graph:
 
         return best_nodes[1:]
 
-    def search(self, start_node, goal_nodes: List, env: base_env, best_cost=None):
+    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None):
         open_queue = []
         closed_list = set()
 
@@ -342,7 +342,7 @@ class Graph:
 
         return path
 
-    def search_with_vertex_queue(self, start_node, goal_nodes: List, env: base_env):
+    def search_with_vertex_queue(self, start_node, goal_nodes: List, env: BaseProblem):
         open_queue = []
 
         goal = None
@@ -473,7 +473,7 @@ class Graph:
 
 
 def joint_prm_planner(
-    env: base_env,
+    env: BaseProblem,
     optimize: bool = True,
     mode_sampling_type: str = "greedy",
     max_iter: int = 2000,
