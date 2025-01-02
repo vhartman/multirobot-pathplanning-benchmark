@@ -61,7 +61,7 @@ def visualize_modes(env: rai_env):
 
         env.show()
 
-        if m.task_ids == env.terminal_mode:
+        if env.is_terminal_mode(m):
             break
 
         m = env.get_next_mode(None, m)

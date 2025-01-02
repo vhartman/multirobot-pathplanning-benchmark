@@ -106,7 +106,7 @@ class rai_two_dim_env(rai_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.1
 
@@ -163,7 +163,7 @@ class rai_two_dim_env_no_obs(rai_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.001
 
@@ -239,7 +239,7 @@ class rai_two_dim_env_no_obs_three_agents(rai_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.01
 
@@ -312,7 +312,7 @@ class rai_two_dim_simple_manip(rai_env):
         # self.sequence = [2, 0, 3, 1, 4]
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.05
 
@@ -413,7 +413,7 @@ class rai_two_dim_handover(rai_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.05
 
@@ -461,10 +461,10 @@ class rai_random_two_dim(rai_env):
         self.sequence.append(len(self.tasks) - 1)
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         print("seq", self.sequence)
-        print("terminal", self.terminal_mode)
+        print("terminal", self._terminal_task_ids)
 
         self.tolerance = 0.05
 
@@ -499,7 +499,7 @@ class rai_hallway_two_dim(rai_env):
         self.sequence = [0, 1, 2]
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.05
 
@@ -600,7 +600,7 @@ class rai_two_dim_three_agent_env(rai_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.1
 
@@ -739,7 +739,7 @@ class rai_dual_ur10_arm_env(rai_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.1
 
@@ -806,7 +806,7 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
         self.sequence.append(len(self.tasks) - 1)
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.1
 
@@ -866,7 +866,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
         self.sequence.append(len(self.tasks) - 1)
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.1
 
@@ -952,7 +952,7 @@ class rai_ur10_arm_egg_carton_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.prev_mode = self.start_mode
 
@@ -1021,7 +1021,7 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1114,7 +1114,7 @@ class rai_ur10_handover_env(rai_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1245,7 +1245,7 @@ class rai_ur10_arm_bottle_env(rai_env):
         )
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1408,7 +1408,7 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
         print(self.sequence)
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1477,7 +1477,7 @@ class rai_ur10_arm_box_stack_env(rai_env):
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
@@ -1532,7 +1532,7 @@ def check_all_modes():
         q_home = env.start_pos
         m = env.start_mode
         for i in range(len(env.sequence)):
-            if m == env.terminal_mode:
+            if env.is_terminal_mode(m):
                 switching_robots = [r for r in env.robots]
             else:
                 # find the robot(s) that needs to switch the mode

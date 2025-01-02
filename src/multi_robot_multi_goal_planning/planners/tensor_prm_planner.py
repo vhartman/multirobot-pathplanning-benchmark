@@ -336,7 +336,7 @@ class ImplicitTensorGraph:
                         min_dist = d
                 
                 from_transition_to_goal = 0
-                if t != env.terminal_mode[i]:
+                if t != env._terminal_task_ids[i]:
                     from_transition_to_goal = self.per_robot_task_to_goal_lb_cost[tuple([r, t])]
 
                 per_robot_min_to_goal.append(min_dist + from_transition_to_goal)
@@ -517,7 +517,7 @@ def tensor_prm_planner(
 
     mode_sequence = [m0]
     while True:
-        if mode_sequence[-1].task_ids == env.terminal_mode:
+        if env.is_terminal_mode(mode_sequence[-1]):
             break
 
         mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
@@ -595,7 +595,7 @@ def tensor_prm_planner(
                 transition = (goal_constrainted_robots, q_list, t)
                 transitions.append(transition)
 
-                if m.task_ids == env.terminal_mode:
+                if env.is_terminal_mode(m):
                     next_mode = None
                 else:
                     next_mode = env.get_next_mode(q, m)
@@ -638,7 +638,7 @@ def tensor_prm_planner(
         
         reached_terminal_mode = False
         for m in reached_modes:
-            if m.task_ids == env.terminal_mode:
+            if env.is_terminal_mode(m):
                 reached_terminal_mode = True
 
         if not reached_terminal_mode:

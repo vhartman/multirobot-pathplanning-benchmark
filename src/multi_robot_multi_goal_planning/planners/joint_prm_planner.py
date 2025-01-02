@@ -209,7 +209,7 @@ class Graph:
 
             # compute lowest cost to get to the goal:
             current_mode = node.state.mode
-            if current_mode.task_ids == env.terminal_mode:
+            if env.is_terminal_mode(current_mode):
                 mode_cost = None
                 for g in self.goal_nodes:
                     cost_to_transition = env.config_cost(node.state.q, g.state.q)
@@ -348,13 +348,13 @@ class Graph:
         goal = None
 
         def h(node):
-            return 0
+            # return 0
             # compute lowest cost to get to the next mode:
             total_cost = 0
 
             current_mode = node.state.mode
             next_mode = None
-            if current_mode == env.terminal_mode:
+            if env.is_terminal_mode(current_mode):
                 mode_cost = None
                 for g in self.goal_nodes:
                     cost_to_transition = batch_config_dist(node.state.q, [g.state.q])
@@ -580,7 +580,7 @@ def joint_prm_planner(
 
                     q.append(qr)
 
-            if mode.task_ids == env.terminal_mode:
+            if env.is_terminal_mode(mode):
                 next_mode = None
             else:
                 next_mode = env.get_next_mode(q, mode)
@@ -612,7 +612,7 @@ def joint_prm_planner(
 
     mode_sequence = [m0]
     while True:
-        if mode_sequence[-1].task_ids == env.terminal_mode:
+        if env.is_terminal_mode(mode_sequence[-1]):
             break
 
         mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
@@ -642,7 +642,7 @@ def joint_prm_planner(
         # 1. search from goal state with sparse check
         reached_terminal_mode = False
         for m in reached_modes:
-            if m.task_ids == env.terminal_mode:
+            if env.is_terminal_mode(m):
                 reached_terminal_mode = True
 
         if not reached_terminal_mode:

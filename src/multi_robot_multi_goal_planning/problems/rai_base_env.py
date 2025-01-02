@@ -55,7 +55,7 @@ class rai_env(SequenceMixin, BaseProblem):
     sequence: List[int]
     tasks: List[Task]
     start_mode: Mode
-    terminal_mode: Mode
+    _terminal_task_ids: List[int]
 
     # misc
     tolerance: float

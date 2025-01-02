@@ -228,7 +228,10 @@ class SequenceMixin(BaseModeLogic):
     
     # TODO: actually use this
     def is_terminal_mode(self, mode: Mode):
-        pass
+        if mode.task_ids == self._terminal_task_ids:
+            return True
+        
+        return False
 
     def get_current_seq_index(self, mode: Mode) -> int:
         # Approach: iterate through all indices, find them in the sequence, and check which is the one
@@ -236,7 +239,7 @@ class SequenceMixin(BaseModeLogic):
         min_sequence_pos = len(self.sequence) - 1
         for i, task_id in enumerate(mode.task_ids):
             # print("robots in task:", self.tasks[m].robots, self.sequence.index(m))
-            if task_id != self.terminal_mode[i]:
+            if task_id != self._terminal_task_ids[i]:
                 min_sequence_pos = min(self.sequence.index(task_id), min_sequence_pos)
 
         return min_sequence_pos
@@ -264,7 +267,7 @@ class SequenceMixin(BaseModeLogic):
         return task.robots
 
     def done(self, q: Configuration, m: Mode) -> bool:
-        if m.task_ids != self.terminal_mode:
+        if self.is_terminal_mode(m):
             return False
 
         # TODO: this is not necessarily true!
@@ -285,7 +288,7 @@ class SequenceMixin(BaseModeLogic):
         return False
 
     def is_transition(self, q: Configuration, m: Mode) -> bool:
-        if m.task_ids == self.terminal_mode:
+        if self.is_terminal_mode(m):
             return False
 
         # robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
@@ -348,6 +351,9 @@ class DependencyGraphMixin(BaseModeLogic):
         pass
 
     def is_transition(self, q: Configuration, m: Mode) -> bool:
+        # iterate over all tasks
+        # collect preconditions for a task
+
         pass
 
     def get_active_task(self, mode: Mode) -> Task:
@@ -362,7 +368,7 @@ class BaseProblem(ABC):
     start_pos: Configuration
 
     start_mode: Mode
-    terminal_mode: Mode
+    _terminal_task_ids: List[int]
 
     # visualization
     @abstractmethod
