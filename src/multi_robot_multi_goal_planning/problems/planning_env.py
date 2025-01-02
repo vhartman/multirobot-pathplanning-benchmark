@@ -267,7 +267,7 @@ class SequenceMixin(BaseModeLogic):
         return task.robots
 
     def done(self, q: Configuration, m: Mode) -> bool:
-        if self.is_terminal_mode(m):
+        if not self.is_terminal_mode(m):
             return False
 
         # TODO: this is not necessarily true!
