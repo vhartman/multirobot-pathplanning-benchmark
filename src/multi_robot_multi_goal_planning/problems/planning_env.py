@@ -200,6 +200,9 @@ class BaseModeLogic(ABC):
 # concrete implementations of the required abstract classes for the sequence-setting.
 # TODO: technically, this is a specialization of the dependency graph below
 class SequenceMixin(BaseModeLogic):
+    sequence: List[int]
+    tasks: List[Task]
+
     def _make_sequence_from_names(self, names: List[str]) -> List[int]:
         sequence = []
 
@@ -428,7 +431,7 @@ class DependencyGraphMixin(BaseModeLogic):
     def _make_start_mode_from_graph(self) -> Mode:
         possible_named_sequence = self.graph.get_build_order()
         possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
-        
+
         return self._make_start_mode_from_sequence(possible_id_sequence)
 
     def _make_terminal_mode_from_graph(self) -> Mode:
@@ -498,7 +501,30 @@ class DependencyGraphMixin(BaseModeLogic):
         pass
 
     def get_next_mode(self, q: Configuration, mode: Mode):
-        pass
+        next_mode_ids = self._get_possible_next_task_ids(mode)
+
+        # all of this is duplicated with the method below
+        # TODO: can it be possible that multiple mode transitions are possible?
+        # TODO: should we change this to 'get_next_modes'?
+        for next_mode in next_mode_ids:
+            for i in range(len(self.robots)):
+                if next_mode[i] != mode.task_ids[i]:
+                    # need to check if the goal conditions for this task are fulfilled in the current state
+                    task = self.tasks[mode.task_ids[i]]
+                    q_concat = []
+                    for r in task.robots:
+                        r_idx = self.robots.index(r)
+                        q_concat.append(q.robot_state(r_idx))
+
+                    q_concat = np.concatenate(q_concat)
+
+                    if task.goal.satisfies_constraints(q_concat, self.tolerance):
+                        next_mode = Mode(task_list=next_mode_ids, entry_configuration=q)
+                        next_mode.prev_mode = mode
+                        
+                        return next_mode
+
+        raise ValueError("This does not fulfill the constraints to reach a new mode.")
 
     # TODO: this should probably also return the next_state
     def is_transition(self, q: Configuration, m: Mode) -> bool:
@@ -521,7 +547,7 @@ class DependencyGraphMixin(BaseModeLogic):
 
                     if task.goal.satisfies_constraints(q_concat, self.tolerance):
                         return True
-                    
+
         return False
 
     def done(self, q: Configuration, mode: Mode):
