@@ -68,6 +68,9 @@ class DependencyGraph:
                     
         collect_deps(node)
         return all_deps
+
+    def get_direct_dependencies(self, node):
+        return self.dependencies[node]
     
     def get_dependents(self, node):
         """Get all nodes that depend on this node."""
@@ -79,23 +82,21 @@ class DependencyGraph:
         """Return a valid build order (topological sort)."""
         result = []
         visited = set()
-        
+
         def dfs(node):
             if node in visited:
-                return
+                return 
             visited.add(node)
             
-            # Visit all dependencies first
             for dep in self.dependencies[node]:
                 dfs(dep)
-            
             result.append(node)
-            
+
         # Visit all nodes
         for node in self.dependencies:
             dfs(node)
-            
-        return result[::-1]  # Reverse to get correct order
+
+        return result  # No need to reverse since order is correct
     
     def get_root_nodes(self):
         """Get nodes that don't depend on anything."""

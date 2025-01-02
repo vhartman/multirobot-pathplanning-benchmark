@@ -46,7 +46,7 @@ def get_robot_state(C: ry.Config, robot_prefix: str) -> NDArray:
 #     C.selectJoints(robot_joints)
 
 
-class rai_env(SequenceMixin, BaseProblem):
+class rai_env(BaseProblem):
     # robot things
     C: ry.Config
     limits: NDArray

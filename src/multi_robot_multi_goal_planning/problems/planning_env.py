@@ -163,6 +163,27 @@ def state_dist(start: State, end: State) -> float:
 
 
 class BaseModeLogic(ABC):
+    tasks: List[Task]
+
+    # TODO: cache name -> task in a dict
+    def _get_task_by_name(self, name):
+        for t in self.tasks:
+            if t.name == name:
+                return t
+
+    def _get_task_id_by_name(self, name):
+        for i, t in enumerate(self.tasks):
+            if t.name == name:
+                return i
+
+    @abstractmethod
+    def is_terminal_mode(self, mode: Mode):
+        pass
+
+    @abstractmethod
+    def done(self, q: Configuration, m: Mode) -> bool:
+        pass
+
     @abstractmethod
     def get_next_mode(self, q: Configuration, mode: Mode):
         pass
@@ -177,6 +198,7 @@ class BaseModeLogic(ABC):
 
 
 # concrete implementations of the required abstract classes for the sequence-setting.
+# TODO: technically, this is a specialization of the dependency graph below
 class SequenceMixin(BaseModeLogic):
     def _make_sequence_from_names(self, names: List[str]) -> List[int]:
         sequence = []
@@ -225,12 +247,11 @@ class SequenceMixin(BaseModeLogic):
             mode.append(mode_dict[r])
 
         return mode
-    
-    # TODO: actually use this
+
     def is_terminal_mode(self, mode: Mode):
         if mode.task_ids == self._terminal_task_ids:
             return True
-        
+
         return False
 
     def get_current_seq_index(self, mode: Mode) -> int:
@@ -245,7 +266,7 @@ class SequenceMixin(BaseModeLogic):
         return min_sequence_pos
 
     # TODO: is that really a good way to sample a mode?
-    # TODO: we should have a list of modes that we have, and sample from that
+    # TODO: we should maintain a list of modes that we reached, and sample from that
     def sample_random_mode(self) -> Mode:
         m = self.start_mode
         rnd = random.randint(0, len(self.sequence))
@@ -338,23 +359,201 @@ class SequenceMixin(BaseModeLogic):
         seq_idx = self.get_current_seq_index(mode)
         return self.tasks[self.sequence[seq_idx]]
 
-    def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
-        tasks = []
-        for _, j in enumerate(mode):
-            tasks.append(self.tasks[j])
+    # def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
+    #     tasks = []
+    #     for _, j in enumerate(mode):
+    #         tasks.append(self.tasks[j])
 
-        return tasks
+    #     return tasks
 
 
 class DependencyGraphMixin(BaseModeLogic):
+    graph: DependencyGraph
+    tasks: List[Task]
+
+    def _make_sequence_from_names(self, names: List[str]) -> List[int]:
+        sequence = []
+
+        for name in names:
+            no_task_with_name_found = True
+            for idx, task in enumerate(self.tasks):
+                if name == task.name:
+                    sequence.append(idx)
+                    no_task_with_name_found = False
+
+            if no_task_with_name_found:
+                raise ValueError(f"Task with name {name} not found.")
+
+        return sequence
+
+    def _make_start_mode_from_sequence(self, sequence) -> Mode:
+        mode_dict = {}
+
+        for task_index in sequence:
+            task_robots = self.tasks[task_index].robots
+
+            for r in task_robots:
+                if r not in mode_dict:
+                    mode_dict[r] = task_index
+
+        task_ids = []
+        for r in self.robots:
+            task_ids.append(mode_dict[r])
+
+        start_mode = Mode(task_ids, None)
+        return start_mode
+
+    def _make_terminal_mode_from_sequence(self, sequence) -> Mode:
+        mode_dict = {}
+
+        for task_index in sequence:
+            task_robots = self.tasks[task_index].robots
+
+            # difference to above: we do not check if the robot already has a task assigned
+            for r in task_robots:
+                mode_dict[r] = task_index
+
+        mode = []
+        for r in self.robots:
+            mode.append(mode_dict[r])
+
+        return mode
+
+    def _verify_graph(self) -> bool:
+        # ensure that there are no multiple root nodes for the same robot
+        # ensure that there is only one leaf node
+
+        return True
+
+    def _make_start_mode_from_graph(self) -> Mode:
+        possible_named_sequence = self.graph.get_build_order()
+        possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
+        
+        return self._make_start_mode_from_sequence(possible_id_sequence)
+
+    def _make_terminal_mode_from_graph(self) -> Mode:
+        possible_named_sequence = self.graph.get_build_order()
+        possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
+
+        return self._make_terminal_mode_from_sequence(possible_id_sequence)
+
+    # TODO: this can be cached
+    def _get_finished_tasks_from_mode(self, mode: Mode):
+        completed_tasks = []
+        for i, task_id in enumerate(mode.task_ids):
+            robot = self.robots[i]
+            task_name = self.tasks[task_id].name
+
+            dependencies = self.graph.get_all_dependencies(task_name)
+
+            for dep in dependencies:
+                robots = self._get_task_by_name(dep).robots
+                if robot in robots:
+                    completed_tasks.append(dep)
+
+        # make unique
+        completed_tasks = list(set(completed_tasks))
+
+        return completed_tasks
+
+    def _get_possible_next_task_ids(self, m: Mode):
+        # construct set of all already done tasks
+        done_tasks = self._get_finished_tasks_from_mode(m)
+
+        mode_task_names = []
+        for task_id in m.task_ids:
+            mode_task_names.append(self.tasks[task_id].name)
+
+        possible_next_task_ids = []
+
+        for task_name in mode_task_names:
+            dependencies = self.graph.get_all_dependencies(task_name)
+            if all(dep in done_tasks or dep == task_name for dep in dependencies):
+                # this is a possible next task
+                robots = self._get_task_by_name(task_name).robots
+
+                new_task_ids = m.task_ids.copy()
+
+                for r in robots:
+                    i = self.robots.index(r)
+                    new_task_ids[i] = self._get_task_id_by_name(
+                        self._get_next_task_for_robot(task_name, self.robots[i])
+                    )
+
+                possible_next_task_ids.append(new_task_ids)
+
+        # print(possible_next_task_ids)
+        return possible_next_task_ids
+
+    def _get_next_task_for_robot(self, current_task_name, robot):
+        possible_order = self.graph.get_build_order()
+        idx = possible_order.index(current_task_name)
+        for name in possible_order[idx + 1 :]:
+            id = self._get_task_id_by_name(name)
+            involved_robots = self.tasks[id].robots
+            if robot in involved_robots:
+                return name
+
+    def sample_random_mode(self) -> Mode:
+        pass
+
     def get_next_mode(self, q: Configuration, mode: Mode):
         pass
 
+    # TODO: this should probably also return the next_state
     def is_transition(self, q: Configuration, m: Mode) -> bool:
-        # iterate over all tasks
-        # collect preconditions for a task
+        if self.is_terminal_mode(m):
+            return False
 
-        pass
+        next_mode_ids = self._get_possible_next_task_ids(m)
+
+        for next_mode in next_mode_ids:
+            for i in range(len(self.robots)):
+                if next_mode[i] != m.task_ids[i]:
+                    # need to check if the goal conditions for this task are fulfilled in the current state
+                    task = self.tasks[m.task_ids[i]]
+                    q_concat = []
+                    for r in task.robots:
+                        r_idx = self.robots.index(r)
+                        q_concat.append(q.robot_state(r_idx))
+
+                    q_concat = np.concatenate(q_concat)
+
+                    if task.goal.satisfies_constraints(q_concat, self.tolerance):
+                        return True
+                    
+        return False
+
+    def done(self, q: Configuration, mode: Mode):
+        if not self.is_terminal_mode(mode):
+            return False
+
+        leaf_nodes = self.graph.get_leaf_nodes()
+        assert len(leaf_nodes) == 1
+
+        terminal_task_name = leaf_nodes[0]
+        terminal_task = self._get_task_by_name(terminal_task_name)
+        involved_robots = terminal_task.robots
+
+        q_concat = []
+        for r in involved_robots:
+            r_idx = self.robots.index(r)
+            q_concat.append(q.robot_state(r_idx))
+
+        q_concat = np.concatenate(q_concat)
+
+        if terminal_task.goal.satisfies_constraints(q_concat, self.tolerance):
+            return True
+
+        return False
+
+    # TODO: this is the same as for the sequence, is this always the same?
+    # (it is not in the general TAMP problem)
+    def is_terminal_mode(self, mode: Mode):
+        if mode.task_ids == self._terminal_task_ids:
+            return True
+
+        return False
 
     def get_active_task(self, mode: Mode) -> Task:
         pass
@@ -416,9 +615,9 @@ class BaseProblem(ABC):
     def get_active_task(self, mode: Mode) -> Task:
         pass
 
-    @abstractmethod
-    def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
-        pass
+    # @abstractmethod
+    # def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
+    #     pass
 
     # Collision checking and environment related methods
     @abstractmethod

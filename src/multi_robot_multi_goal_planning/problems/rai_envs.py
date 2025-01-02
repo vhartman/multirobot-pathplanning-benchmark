@@ -10,6 +10,8 @@ from multi_robot_multi_goal_planning.problems.dependency_graph import Dependency
 
 from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import (
+    SequenceMixin,
+    DependencyGraphMixin,
     State,
     Task,
     SingleGoal,
@@ -69,7 +71,7 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 ##############################
 
 
-class rai_two_dim_env(rai_env):
+class rai_two_dim_env(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = make_2d_rai_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
@@ -110,11 +112,12 @@ class rai_two_dim_env(rai_env):
 
         self.tolerance = 0.1
 
+
 # very simple task:
 # make the robots go back and forth.
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
 # Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
-class rai_two_dim_env_no_obs(rai_env):
+class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
@@ -171,7 +174,7 @@ class rai_two_dim_env_no_obs(rai_env):
 # trivial environment for planing
 # challenging to get the optimal solution dpeending on the approach
 # optimal solution is 5.15 (independent of rotation or not)
-class rai_two_dim_env_no_obs_three_agents(rai_env):
+class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = make_2d_rai_env_no_obs_three_agents(
             agents_can_rotate=agents_can_rotate
@@ -244,11 +247,11 @@ class rai_two_dim_env_no_obs_three_agents(rai_env):
         self.tolerance = 0.01
 
 
-class rai_two_dim_single_agent_neighbourhood(rai_env):
+class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
     pass
 
 
-class rai_two_dim_simple_manip(rai_env):
+class rai_two_dim_simple_manip(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_piano_mover_env()
         # self.C.view(True)
@@ -322,7 +325,7 @@ class rai_two_dim_simple_manip(rai_env):
         self.prev_mode = self.start_mode
 
 
-class rai_two_dim_handover(rai_env):
+class rai_two_dim_handover(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_two_dim_handover()
         # self.C.view(True)
@@ -423,7 +426,7 @@ class rai_two_dim_handover(rai_env):
         self.prev_mode = self.start_mode
 
 
-class rai_random_two_dim(rai_env):
+class rai_random_two_dim(SequenceMixin, rai_env):
     def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=False):
         self.C, keyframes = make_random_two_dim(
             num_agents=num_robots,
@@ -474,7 +477,7 @@ class rai_random_two_dim(rai_env):
         self.prev_mode = self.start_mode
 
 
-class rai_hallway_two_dim(rai_env):
+class rai_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
@@ -507,7 +510,7 @@ class rai_hallway_two_dim(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
-class rai_hallway_two_dim_dependency_graph(rai_env):
+class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_two_dim_tunnel_env()
         # self.C.view(True)
@@ -530,13 +533,16 @@ class rai_hallway_two_dim_dependency_graph(rai_env):
         self.tasks[2].name = "terminal"
 
         self.graph = DependencyGraph()
-        self.graph.add_dependency("a1_goal_1", "terminal")
-        self.graph.add_dependency("a2_goal_1", "terminal")
+        self.graph.add_dependency("terminal", "a1_goal_1")
+        self.graph.add_dependency("terminal", "a2_goal_1")
 
         print(self.graph)
 
-        # self.start_mode = self._make_start_mode_from_sequence()
-        # self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self.start_mode = self._make_start_mode_from_graph()
+        self.terminal_mode = self._make_terminal_mode_from_graph()
+
+        print(self.start_mode)
+        print(self.terminal_mode)
 
         self.tolerance = 0.05
 
@@ -544,11 +550,11 @@ class rai_hallway_two_dim_dependency_graph(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
-class rai_two_dim_piano_mover(rai_env):
+class rai_two_dim_piano_mover(SequenceMixin, rai_env):
     pass
 
 
-class rai_two_dim_three_agent_env(rai_env):
+class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_2d_rai_env_3_agents()
         # self.C.view(True)
@@ -605,7 +611,7 @@ class rai_two_dim_three_agent_env(rai_env):
         self.tolerance = 0.1
 
 
-class rai_two_dim_three_agent_env_dependency_graph(rai_env):
+class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_2d_rai_env_3_agents()
         # self.C.view(True)
@@ -681,7 +687,7 @@ class rai_dual_ur10_arm_inspection_env:
 
 
 # TODO: this is messy (currrently pick/place without actual manip)
-class rai_dual_ur10_arm_env(rai_env):
+class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, self.keyframes = make_box_sorting_env()
 
@@ -749,7 +755,7 @@ class rai_dual_ur10_arm_handover_env:
     pass
 
 
-class rai_multi_panda_arm_waypoint_env(rai_env):
+class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
     def __init__(
         self, num_robots: int = 3, num_waypoints: int = 6, shuffle_goals: bool = False
     ):
@@ -812,7 +818,7 @@ class rai_multi_panda_arm_waypoint_env(rai_env):
 
 
 # goals are poses
-class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
+class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_pts: int = 6, shuffle_goals: bool = False):
         self.C, keyframes = make_welding_env(
             num_robots=num_robots, view=False, num_pts=num_pts
@@ -872,7 +878,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(rai_env):
 
 
 # TODO: enable making this a simpler environment where one can set the number of boxes
-class rai_ur10_arm_egg_carton_env(rai_env):
+class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes: int = 9):
         self.C, keyframes = make_egg_carton_env(num_boxes)
 
@@ -1052,7 +1058,7 @@ class rai_ur10_arm_conveyor_env:
     pass
 
 
-class rai_ur10_handover_env(rai_env):
+class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_handover_env()
 
@@ -1128,7 +1134,7 @@ class rai_ur10_handover_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
-class rai_ur10_arm_bottle_env(rai_env):
+class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_bottle_insertion()
 
@@ -1259,7 +1265,7 @@ class rai_ur10_arm_bottle_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
-class rai_ur10_arm_box_rearrangement_env(rai_env):
+class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=2, num_boxes=9):
         self.C, actions, self.robots = make_box_rearrangement_env(
             num_boxes=num_boxes, num_robots=num_robots
@@ -1422,7 +1428,7 @@ class rai_ur10_arm_box_rearrangement_env(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
-class rai_ur10_arm_box_stack_env(rai_env):
+class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 8):
         self.C, keyframes, self.robots = make_box_stacking_env(num_robots, num_boxes)
 
@@ -1455,13 +1461,9 @@ class rai_ur10_arm_box_stack_env(rai_env):
             for t, k in zip(task_names, qs):
                 if t == "pick":
                     ee_name = r + "ur_gripper_center"
-                    self.tasks.append(
-                        Task([r], SingleGoal(k), t, frames=[ee_name, b])
-                    )
+                    self.tasks.append(Task([r], SingleGoal(k), t, frames=[ee_name, b]))
                 else:
-                    self.tasks.append(
-                        Task([r], SingleGoal(k), t, frames=["table", b])
-                    )
+                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
 
                 self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
                 cnt += 1
@@ -1470,7 +1472,7 @@ class rai_ur10_arm_box_stack_env(rai_env):
                 #     action_names[b].append(self.tasks[-1].name)
                 # else:
                 #     action_names[b] = [self.tasks[-1].name]
-        
+
         self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
         self.tasks[-1].name = "terminal"
 
