@@ -98,6 +98,31 @@ class DependencyGraph:
 
         return result  # No need to reverse since order is correct
     
+    def get_all_build_orders(self):
+        """Return all possible build orders (topological sorts)."""
+        result = []
+        build_order = []
+        in_progress = set()  # Tracks nodes currently being added
+        dependencies = {node: set(deps) for node, deps in self.dependencies.items()}  # Copy dependencies
+
+        def dfs():
+            if len(build_order) == len(self.dependencies):
+                result.append(build_order[:])  # Add a copy of the current build order
+                return
+            
+            for node in self.dependencies:
+                if node not in in_progress and dependencies[node] <= set(build_order):
+                    # Try adding this node to the current build order
+                    build_order.append(node)
+                    in_progress.add(node)
+                    dfs()
+                    # Backtrack
+                    build_order.pop()
+                    in_progress.remove(node)
+        
+        dfs()
+        return result
+    
     def get_root_nodes(self):
         """Get nodes that don't depend on anything."""
         return {node for node in self.dependencies 

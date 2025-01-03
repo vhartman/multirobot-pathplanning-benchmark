@@ -20,7 +20,7 @@ def visualize_modes(env: rai_env):
 
         q = []
         task = env.get_active_task(m)
-        goal_sample = task.goal.sample()
+        goal_sample = task.goal.sample(m)
 
         if task.name is not None:
             print('Active Task name:', task.name)

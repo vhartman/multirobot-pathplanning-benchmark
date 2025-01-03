@@ -257,7 +257,10 @@ class rai_env(BaseProblem):
         for i, mode in enumerate(mode_sequence[:-1]):
             next_mode = mode_sequence[i+1]
 
-            mode_switching_robots = self.get_goal_constrained_robots(mode)
+            active_task = self.get_active_task(mode, next_mode.task_ids)
+
+            # mode_switching_robots = self.get_goal_constrained_robots(mode)
+            mode_switching_robots = active_task.robots
 
             # set robot to config
             prev_mode_index = mode.task_ids[self.robots.index(mode_switching_robots[0])]

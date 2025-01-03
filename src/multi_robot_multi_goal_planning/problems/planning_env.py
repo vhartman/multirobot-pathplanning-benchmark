@@ -198,7 +198,7 @@ class BaseModeLogic(ABC):
         pass
 
     @abstractmethod
-    def get_active_task(self, mode: Mode) -> Task:
+    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
         pass
 
 
@@ -320,8 +320,7 @@ class SequenceMixin(BaseModeLogic):
         if self.is_terminal_mode(m):
             return False
 
-        # robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
-        task = self.get_active_task(m)
+        task = self.get_active_task(m, None)
 
         q_concat = []
         for r in task.robots:
@@ -365,8 +364,8 @@ class SequenceMixin(BaseModeLogic):
 
         return next_mode
 
-    def get_active_task(self, mode: Mode) -> Task:
-        seq_idx = self.get_current_seq_index(mode)
+    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+        seq_idx = self.get_current_seq_index(current_mode)
         return self.tasks[self.sequence[seq_idx]]
 
     # def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
@@ -466,9 +465,12 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return completed_tasks
 
-    def get_valid_next_task_combinations(self, m: Mode):
+    def get_valid_next_task_combinations(self, m: Mode) -> List[List[int]]:
         # construct set of all already done tasks
         done_tasks = self._get_finished_tasks_from_mode(m)
+
+        if m.task_ids == self._terminal_task_ids:
+            return []
 
         mode_task_names = []
         for task_id in m.task_ids:
@@ -505,7 +507,7 @@ class DependencyGraphMixin(BaseModeLogic):
                 return name
 
     def sample_random_mode(self) -> Mode:
-        pass
+        raise NotImplementedError
 
     def get_next_mode(self, q: Configuration, mode: Mode):
         next_mode_ids = self.get_valid_next_task_combinations(mode)
@@ -526,10 +528,10 @@ class DependencyGraphMixin(BaseModeLogic):
                     q_concat = np.concatenate(q_concat)
 
                     if task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=self.tolerance):
-                        next_mode = Mode(task_list=next_mode_ids, entry_configuration=q)
-                        next_mode.prev_mode = mode
+                        tmp = Mode(task_list=next_mode, entry_configuration=q)
+                        tmp.prev_mode = mode
 
-                        return next_mode
+                        return tmp
 
         raise ValueError("This does not fulfill the constraints to reach a new mode.")
 
@@ -561,7 +563,7 @@ class DependencyGraphMixin(BaseModeLogic):
         if not self.is_terminal_mode(mode):
             return False
 
-        leaf_nodes = self.graph.get_leaf_nodes()
+        leaf_nodes = list(self.graph.get_leaf_nodes())
         assert len(leaf_nodes) == 1
 
         terminal_task_name = leaf_nodes[0]
@@ -588,8 +590,22 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return False
 
-    def get_active_task(self, mode: Mode) -> Task:
-        pass
+    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+        if next_task_ids is None:
+            # we should return the terminal task here
+            return self.tasks[self._terminal_task_ids[0]]
+        else:
+            different_tasks = []
+            for i, task_id in enumerate(current_mode.task_ids):
+                if task_id != next_task_ids[i]:
+                    different_tasks.append(task_id)
+
+            # print("next", next_task_ids)
+            # print("current", current_mode.task_ids)
+            # print("changing task_ids", different_tasks)
+            assert(len(different_tasks) == 1)
+
+            return self.tasks[different_tasks[0]]
 
 
 # TODO: split into env + problem specification

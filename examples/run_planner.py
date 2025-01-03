@@ -113,7 +113,7 @@ def main():
 
     plt.show()
 
-    print("displaying path from prioritized planner")
+    print("displaying path from planner")
     display_path(env, interpolated_path, stop=False)
 
 

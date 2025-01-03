@@ -324,6 +324,83 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
+class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
+    def __init__(self):
+        self.C, keyframes = make_piano_mover_env()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        self.manipulating_env = True
+
+        self.tasks = [
+            # a1
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1", "obj1"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[1][self.robot_idx["a1"]]),
+                type="place",
+                frames=["table", "obj1"],
+            ),
+            # a2
+            Task(
+                ["a2"],
+                SingleGoal(keyframes[0][self.robot_idx["a2"]]),
+                type="pick",
+                frames=["a2", "obj2"],
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(keyframes[1][self.robot_idx["a2"]]),
+                type="place",
+                frames=["table", "obj2"],
+            ),
+            # terminal
+            Task(
+                ["a1", "a2"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[2][self.robot_idx["a1"]],
+                            keyframes[2][self.robot_idx["a2"]],
+                        ]
+                    )
+                ),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_pick"
+        self.tasks[1].name = "a1_place"
+        self.tasks[2].name = "a2_pick"
+        self.tasks[3].name = "a2_place"
+        self.tasks[4].name = "terminal"
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("a1_place", "a1_pick")
+        self.graph.add_dependency("a2_place", "a2_pick")
+
+        self.graph.add_dependency("terminal", "a1_place")
+        self.graph.add_dependency("terminal", "a2_place")
+
+        print(self.graph)
+
+        self.start_mode = self._make_start_mode_from_graph()
+        self._terminal_task_ids = self._make_terminal_mode_from_graph()
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = self.start_mode
+
 
 class rai_two_dim_handover(SequenceMixin, rai_env):
     def __init__(self):
@@ -539,10 +616,10 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
         print(self.graph)
 
         self.start_mode = self._make_start_mode_from_graph()
-        self.terminal_mode = self._make_terminal_mode_from_graph()
+        self._terminal_task_ids = self._make_terminal_mode_from_graph()
 
         print(self.start_mode)
-        print(self.terminal_mode)
+        print(self._terminal_task_ids)
 
         self.tolerance = 0.05
 
@@ -652,16 +729,19 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env
         self.tasks[5].name = "terminal"
 
         self.graph = DependencyGraph()
-        self.graph.add_dependency("a1_goal_1", "a1_goal_2")
-        self.graph.add_dependency("a1_goal_2", "terminal")
-        self.graph.add_dependency("a2_goal_1", "a2_goal_2")
-        self.graph.add_dependency("a2_goal_2", "terminal")
-        self.graph.add_dependency("a3_goal_1", "terminal")
+        self.graph.add_dependency("a1_goal_2", "a1_goal_1")
+        self.graph.add_dependency("terminal", "a1_goal_2")
+        self.graph.add_dependency("a2_goal_2", "a2_goal_1")
+        self.graph.add_dependency("terminal", "a2_goal_2")
+        self.graph.add_dependency("terminal", "a3_goal_1")
 
         print(self.graph)
 
-        # self.start_mode = self._make_start_mode_from_sequence()
-        # self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self.start_mode = self._make_start_mode_from_graph()
+        self._terminal_task_ids = self._make_terminal_mode_from_graph()
+
+        print(self.start_mode)
+        print(self._terminal_task_ids)
 
         self.tolerance = 0.1
 

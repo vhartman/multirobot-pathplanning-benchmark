@@ -48,7 +48,11 @@ def get_env_by_name(name):
 
         # 3d single goal envs
         "multi_agent_panda_single_goal": lambda: rsge.rai_multi_panda_arm_single_goal_env(),
-        "handover_single_goal": lambda: rsge.rai_ur10_handover_env()
+        "handover_single_goal": lambda: rsge.rai_ur10_handover_env(),
+
+        ##### DEPENDENCY GRAPHS
+        "hallway_dep": lambda: re.rai_hallway_two_dim_dependency_graph(),
+        "piano_dep": lambda: re.rai_two_dim_simple_manip_dependency_graph()
     }
     # fmt: on
 

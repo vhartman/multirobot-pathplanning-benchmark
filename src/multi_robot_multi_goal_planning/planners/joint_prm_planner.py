@@ -558,8 +558,17 @@ def joint_prm_planner(
             mode = sample_mode("uniform_reached", None)
 
             # sample transition at the end of this mode
-            goals_to_sample = env.get_goal_constrained_robots(mode)
-            active_task = env.get_active_task(mode)
+            # possible_next_modes
+            # goals_to_sample = env.get_goal_constrained_robots(mode)
+            possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
+            if len(possible_next_task_combinations) > 0:
+                ind = random.randint(0, len(possible_next_task_combinations)-1)
+                active_task = env.get_active_task(mode, possible_next_task_combinations[ind])
+            else:
+                active_task = env.get_active_task(mode, None)
+
+            goals_to_sample = active_task.robots
+
             goal_sample = active_task.goal.sample(mode)
 
             q = []
@@ -619,12 +628,12 @@ def joint_prm_planner(
 
     start_time = time.time()
 
-    mode_sequence = [m0]
-    while True:
-        if env.is_terminal_mode(mode_sequence[-1]):
-            break
+    # mode_sequence = [m0]
+    # while True:
+    #     if env.is_terminal_mode(mode_sequence[-1]):
+    #         break
 
-        mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
+    #     mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
 
     cnt = 0
     while True:
@@ -644,8 +653,9 @@ def joint_prm_planner(
                 transistion_batch_size=transition_batch_size
             )
             g.add_transition_nodes(new_transitions)
+            print("Done adding transitions")
 
-            g.compute_lb_mode_transisitons(env.batch_config_cost, mode_sequence)
+            # g.compute_lb_mode_transisitons(env.batch_config_cost, mode_sequence)
 
         # search over nodes:
         # 1. search from goal state with sparse check
