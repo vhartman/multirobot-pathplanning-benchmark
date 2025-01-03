@@ -355,7 +355,7 @@ class ImplicitTensorGraph:
 
         # populate open_queue and fs
         active_robots = env.get_goal_constrained_robots(start_node.state.mode)
-        next_mode = env.get_next_mode(None, start_node.state.mode)
+        # next_mode = env.get_next_mode(None, start_node.state.mode)
 
         start_edges = [(start_node, n) for n in self.get_neighbors(start_node, active_robots)]
 
@@ -432,7 +432,9 @@ class ImplicitTensorGraph:
 
             # get_neighbors
             if env.is_transition(n1.state.q, n1.state.mode):
-                next_mode = env.get_next_mode(None, n1.state.mode)
+                next_mode = env.get_next_mode(n1.state.q, n1.state.mode)
+
+                # TODO: we should still look for the normal neighbor shere as well
                 neighbors = [Node(State(n1.state.q, next_mode))]
             else:
                 active_robots = env.get_goal_constrained_robots(n1.state.mode)
@@ -520,6 +522,7 @@ def tensor_prm_planner(
         if env.is_terminal_mode(mode_sequence[-1]):
             break
 
+        # TODO: this does very much nor work anymore for the dependency graph
         mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
 
     def sample_mode(mode_sampling_type="weighted", found_solution=False):

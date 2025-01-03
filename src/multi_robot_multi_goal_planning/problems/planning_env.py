@@ -175,6 +175,10 @@ class BaseModeLogic(ABC):
         for i, t in enumerate(self.tasks):
             if t.name == name:
                 return i
+            
+    @abstractmethod
+    def get_valid_next_task_combinations(self, m: Mode):
+        pass
 
     @abstractmethod
     def is_terminal_mode(self, mode: Mode):
@@ -330,20 +334,17 @@ class SequenceMixin(BaseModeLogic):
 
         return False
 
-    def get_next_mode(self, q: Optional[Configuration], mode: Mode) -> Mode:
-        seq_idx = self.get_current_seq_index(mode)
+    def get_valid_next_task_combinations(self, mode: Mode) -> List[List[int]]:
+        if self.is_terminal_mode(mode):
+            return []
 
-        # print('seq_idx', seq_idx)
+        seq_idx = self.get_current_seq_index(mode)
 
         # find the next mode for the currently constrained one(s)
         task_idx = self.sequence[seq_idx]
         rs = self.tasks[task_idx].robots
 
-        # next_robot_mode_ind = None
-
         next_task_ids = mode.task_ids.copy()
-
-        # print(rs)
 
         # find next occurrence of the robot in the sequence/dep graph
         for r in rs:
@@ -352,6 +353,11 @@ class SequenceMixin(BaseModeLogic):
                     r_idx = self.robots.index(r)
                     next_task_ids[r_idx] = idx
                     break
+
+        return [next_task_ids]
+
+    def get_next_mode(self, q: Optional[Configuration], mode: Mode) -> Mode:
+        next_task_ids = self.get_valid_next_task_combinations(mode)[0]
 
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
         next_mode.prev_mode = mode
@@ -459,7 +465,7 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return completed_tasks
 
-    def _get_possible_next_task_ids(self, m: Mode):
+    def get_valid_next_task_combinations(self, m: Mode):
         # construct set of all already done tasks
         done_tasks = self._get_finished_tasks_from_mode(m)
 
@@ -501,7 +507,7 @@ class DependencyGraphMixin(BaseModeLogic):
         pass
 
     def get_next_mode(self, q: Configuration, mode: Mode):
-        next_mode_ids = self._get_possible_next_task_ids(mode)
+        next_mode_ids = self.get_valid_next_task_combinations(mode)
 
         # all of this is duplicated with the method below
         # TODO: can it be possible that multiple mode transitions are possible?
@@ -531,7 +537,7 @@ class DependencyGraphMixin(BaseModeLogic):
         if self.is_terminal_mode(m):
             return False
 
-        next_mode_ids = self._get_possible_next_task_ids(m)
+        next_mode_ids = self.get_valid_next_task_combinations(m)
 
         for next_mode in next_mode_ids:
             for i in range(len(self.robots)):
