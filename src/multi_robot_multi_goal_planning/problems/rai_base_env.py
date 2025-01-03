@@ -254,19 +254,25 @@ class rai_env(BaseProblem):
 
         # print(mode_sequence)
 
-        for mode in mode_sequence[:-1]:
+        for i, mode in enumerate(mode_sequence[:-1]):
+            next_mode = mode_sequence[i+1]
+
             mode_switching_robots = self.get_goal_constrained_robots(mode)
 
             # set robot to config
             prev_mode_index = mode.task_ids[self.robots.index(mode_switching_robots[0])]
             # robot = self.robots[mode_switching_robots]
 
-            # TODO: ensure that we are choosing the correct goal here
-            q = self.tasks[prev_mode_index].goal.sample()
+            q_new = []
             joint_names = []
             for r in mode_switching_robots:
                 joint_names.extend(self.robot_joints[r])
+                q_new.append(next_mode.entry_configuration[self.robots.index(r)])
 
+            assert(mode is not None)
+            assert(mode.entry_configuration is not None)
+
+            q = np.concat(q_new)
             self.C.setJointState(q, joint_names)
 
             if self.tasks[prev_mode_index].type is not None:
