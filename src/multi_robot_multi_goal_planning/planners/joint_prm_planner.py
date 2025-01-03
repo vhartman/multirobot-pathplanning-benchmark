@@ -66,7 +66,7 @@ class Graph:
 
         self.mode_to_goal_lb_cost = {}
 
-    def compute_lb_mode_transisitons(self, cost, mode_sequence):
+    def compute_lb_mode_transisitons(self, batch_cost, mode_sequence):
         # this assumes that we deal with a sequence
         cheapest_transition = []
         for i, current_mode in enumerate(mode_sequence[:-1]):
@@ -84,8 +84,8 @@ class Graph:
             # TODO: this can be batched as well
             min_cost = 1e6
             for cmt in current_mode_transitions:
-                for nmt in next_mode_transitions:
-                    min_cost = min(cost(cmt.state.q, nmt.state.q), min_cost)
+                min_cmt_to_next_transition_cost = min(batch_cost([cmt.state] * len(next_mode_transitions), [nmt.state for nmt in next_mode_transitions]))
+                min_cost = min(min_cmt_to_next_transition_cost, min_cost)
 
             cheapest_transition.append(min_cost)
 
@@ -644,7 +644,7 @@ def joint_prm_planner(
             )
             g.add_transition_nodes(new_transitions)
 
-            g.compute_lb_mode_transisitons(env.config_cost, mode_sequence)
+            g.compute_lb_mode_transisitons(env.batch_config_cost, mode_sequence)
 
         # search over nodes:
         # 1. search from goal state with sparse check
