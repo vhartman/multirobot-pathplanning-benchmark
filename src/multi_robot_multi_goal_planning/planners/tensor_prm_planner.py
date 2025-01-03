@@ -581,7 +581,7 @@ def tensor_prm_planner(
             goal_constrainted_robots = env.get_goal_constrained_robots(m)
             active_task = env.get_active_task(m)
 
-            goal_sample = active_task.goal.sample()
+            goal_sample = active_task.goal.sample(m)
 
             q = goal_sample
             t = m.task_ids[env.robots.index(goal_constrainted_robots[0])]

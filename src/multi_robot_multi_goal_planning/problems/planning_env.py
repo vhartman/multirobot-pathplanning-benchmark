@@ -18,12 +18,13 @@ class Goal(ABC):
     def __init__(self):
         pass
 
+    # TODO: this should be a coficturaiotn not an ndarray
     @abstractmethod
-    def satisfies_constraints(self, q: NDArray, tolerance: float) -> bool:
+    def satisfies_constraints(self, q: NDArray, mode: "Mode", tolerance: float) -> bool:
         pass
 
     @abstractmethod
-    def sample(self) -> NDArray:
+    def sample(self, mode: "Mode") -> NDArray:
         pass
 
 
@@ -42,11 +43,11 @@ class GoalRegion(Goal):
     def __init__(self, limits: NDArray):
         self.limits = limits
 
-    def satisfies_constraints(self, q: NDArray, _) -> bool:
+    def satisfies_constraints(self, q: NDArray, mode: "Mode", _) -> bool:
         if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
             return True
 
-    def sample(self) -> NDArray:
+    def sample(self, mode: "Mode") -> NDArray:
         q = (
             np.random.rand(len(self.limits[0, :]))
             * (self.limits[1, :] - self.limits[0, :])
@@ -64,14 +65,14 @@ class GoalSet(Goal):
     def __init__(self, goals):
         self.goals = goals
 
-    def satisfies_constraints(self, q: NDArray, tolerance: float) -> bool:
+    def satisfies_constraints(self, q: NDArray, mode: "Mode", tolerance: float) -> bool:
         for g in self.goals:
             if np.linalg.norm(g - q) < tolerance:
                 return True
 
         return False
 
-    def sample(self) -> NDArray:
+    def sample(self, mode: "Mode") -> NDArray:
         rnd = np.random.randint(0, len(self.goals))
         return self.goals[rnd]
 
@@ -80,13 +81,13 @@ class SingleGoal(Goal):
     def __init__(self, goal: NDArray):
         self.goal = goal
 
-    def satisfies_constraints(self, q: ry.Config, tolerance: float) -> bool:
+    def satisfies_constraints(self, q: ry.Config, mode: "Mode", tolerance: float) -> bool:
         if np.linalg.norm(self.goal - q) < tolerance:
             return True
 
         return False
 
-    def sample(self) -> NDArray:
+    def sample(self, mode: "Mode") -> NDArray:
         return self.goal
 
 
@@ -175,7 +176,7 @@ class BaseModeLogic(ABC):
         for i, t in enumerate(self.tasks):
             if t.name == name:
                 return i
-            
+
     @abstractmethod
     def get_valid_next_task_combinations(self, m: Mode):
         pass
@@ -236,7 +237,7 @@ class SequenceMixin(BaseModeLogic):
         for r in self.robots:
             task_ids.append(mode_dict[r])
 
-        start_mode = Mode(task_ids, None)
+        start_mode = Mode(task_ids, self.start_pos)
         return start_mode
 
     def _make_terminal_mode_from_sequence(self) -> Mode:
@@ -310,7 +311,7 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if terminal_task.goal.satisfies_constraints(q_concat, self.tolerance):
+        if terminal_task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.tolerance):
             return True
 
         return False
@@ -329,7 +330,7 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if task.goal.satisfies_constraints(q_concat, self.tolerance):
+        if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.tolerance):
             return True
 
         return False
@@ -409,7 +410,7 @@ class DependencyGraphMixin(BaseModeLogic):
         for r in self.robots:
             task_ids.append(mode_dict[r])
 
-        start_mode = Mode(task_ids, None)
+        start_mode = Mode(task_ids, self.start_pos)
         return start_mode
 
     def _make_terminal_mode_from_sequence(self, sequence) -> Mode:
@@ -524,10 +525,10 @@ class DependencyGraphMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(q_concat, self.tolerance):
+                    if task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=self.tolerance):
                         next_mode = Mode(task_list=next_mode_ids, entry_configuration=q)
                         next_mode.prev_mode = mode
-                        
+
                         return next_mode
 
         raise ValueError("This does not fulfill the constraints to reach a new mode.")
@@ -551,7 +552,7 @@ class DependencyGraphMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(q_concat, self.tolerance):
+                    if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.tolerance):
                         return True
 
         return False
@@ -574,7 +575,7 @@ class DependencyGraphMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if terminal_task.goal.satisfies_constraints(q_concat, self.tolerance):
+        if terminal_task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=self.tolerance):
             return True
 
         return False

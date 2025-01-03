@@ -138,7 +138,7 @@ class Graph:
 
         # self.add_nodes(nodes)
 
-    def get_neighbors(self, node, k=20):
+    def get_neighbors(self, node, k=20, use_k_nearest=True):
         key = node.state.mode
         if key in self.nodes:
             node_list = self.nodes[key]
@@ -152,7 +152,7 @@ class Graph:
 
         dim = len(node.state.q.state())
 
-        if True:
+        if use_k_nearest:
             # if key in self.nodes:
             #     k_star = int(np.e * (1 + 1 / dim) * np.log(len(node_list))) + 1
             #     # # print(k_star)
@@ -197,6 +197,7 @@ class Graph:
         h_cache = {}
 
         def h(node):
+            return 0
             if node in h_cache:
                 return h_cache[node]
 
@@ -305,7 +306,7 @@ class Graph:
                 break
 
             # get_neighbors
-            neighbors = self.get_neighbors(n1, 10)
+            neighbors = self.get_neighbors(n1)
 
             # add neighbors to open_queue
             edge_costs = env.batch_config_cost(
@@ -559,7 +560,7 @@ def joint_prm_planner(
             # sample transition at the end of this mode
             goals_to_sample = env.get_goal_constrained_robots(mode)
             active_task = env.get_active_task(mode)
-            goal_sample = active_task.goal.sample()
+            goal_sample = active_task.goal.sample(mode)
 
             q = []
             for i in range(len(env.robots)):

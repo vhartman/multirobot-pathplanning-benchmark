@@ -1542,7 +1542,7 @@ def check_all_modes():
 
             q = []
             task = env.get_active_task(m)
-            goal_sample = task.goal.sample()
+            goal_sample = task.goal.sample(m)
 
             print("switching robots: ", switching_robots)
 
@@ -1584,7 +1584,12 @@ def check_all_modes():
             m = env.get_next_mode(None, m)
 
 
-def export_env(env):
+def export_env(env: rai_env):
+    # export scene
+    rai_env.C.writeURDF()
+
+    # export dependendency graph/sequence
+    ## export computed exact keyframes
     pass
 
 

@@ -697,7 +697,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
 
         if rnd < goal_sampling_probability:
             t_rnd = np.random.rand() * (t_ub - t_lb) + t_lb
-            q_goal = goal.sample()
+            q_goal = goal.sample(None)
 
             q_goal_as_list = []
             offset = 0
@@ -762,7 +762,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
 
     # estimate distance
     start_poses = prev_plans.get_robot_poses_at_time(robots, t_lb)
-    goal_pose = goal.sample()
+    goal_pose = goal.sample(None)
     goal_config = []
     offset = 0
     for r in robots:
@@ -980,7 +980,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
 
                 added_pt = True
 
-        if added_pt and  goal.satisfies_constraints(q_new.state(), 0.1) and t_new > t_lb:
+        if added_pt and  goal.satisfies_constraints(q_new.state(), mode=None, tolerance=0.1) and t_new > t_lb:
             configurations = [q_new.state()]
             times = [t_new]
 
@@ -1024,7 +1024,7 @@ def interpolate_in_time_space(
     # t0 = min([t for _, t in end_times.items()])
 
     print("start_pose", q0)
-    qg = goal.sample()
+    qg = goal.sample(None)
     print("goal pose", qg)
 
     offset = 0
@@ -1291,7 +1291,7 @@ def prioritized_planning(env: rai_env):
         ]
 
         while True:
-            qg = next_goal.sample()
+            qg = next_goal.sample(mode)
             env.C.setJointState(qg, next_robots_joint_names)
 
             q = (
