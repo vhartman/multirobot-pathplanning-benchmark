@@ -603,6 +603,7 @@ class DependencyGraphMixin(BaseModeLogic):
             # print("next", next_task_ids)
             # print("current", current_mode.task_ids)
             # print("changing task_ids", different_tasks)
+            different_tasks = list(set(different_tasks))
             assert(len(different_tasks) == 1)
 
             return self.tasks[different_tasks[0]]

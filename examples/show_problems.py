@@ -19,7 +19,7 @@ def visualize_modes(env: rai_env):
         switching_robots = env.get_goal_constrained_robots(m)
 
         q = []
-        task = env.get_active_task(m)
+        task = env.get_active_task(m, None)
         goal_sample = task.goal.sample(m)
 
         if task.name is not None:

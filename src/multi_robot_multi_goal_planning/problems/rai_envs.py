@@ -170,6 +170,65 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
 
         self.tolerance = 0.001
 
+class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
+    def __init__(self, agents_can_rotate=True):
+        self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        # r1 starts at both negative
+        r1_state = self.C.getJointState()[self.robot_idx["a1"]]
+        # r2 starts at both positive
+        r2_state = self.C.getJointState()[self.robot_idx["a2"]]
+
+        r1_goal = r1_state * 1.0
+        r1_goal[:2] = [-0.5, 0.5]
+
+        r2_goal_1 = r2_state * 1.0
+        r2_goal_1[:2] = [0.5, -0.5]
+        r2_goal_2 = r2_state * 1.0
+        r2_goal_2[:2] = [0.5, 0.5]
+
+        self.tasks = [
+            # r1
+            Task(["a1"], SingleGoal(r1_goal)),
+            # r2
+            Task(["a2"], SingleGoal(r2_goal_1)),
+            Task(["a2"], SingleGoal(r2_goal_2)),
+            Task(["a2"], SingleGoal(r2_goal_1)),
+            Task(["a2"], SingleGoal(r2_goal_2)),
+            # terminal mode
+            Task(
+                ["a1", "a2"],
+                SingleGoal(self.C.getJointState()),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_goal"
+        self.tasks[1].name = "a2_goal_0"
+        self.tasks[2].name = "a2_goal_1"
+        self.tasks[3].name = "a2_goal_2"
+        self.tasks[4].name = "a2_goal_3"
+        self.tasks[5].name = "terminal"
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("a2_goal_1", "a2_goal_0")
+        self.graph.add_dependency("a2_goal_2", "a2_goal_1")
+        self.graph.add_dependency("a2_goal_3", "a2_goal_2")
+
+        self.graph.add_dependency("terminal", "a1_goal")
+        self.graph.add_dependency("terminal", "a2_goal_3")
+
+        print(self.graph)
+
+        self.start_mode = self._make_start_mode_from_graph()
+        self._terminal_task_ids = self._make_terminal_mode_from_graph()
+
+        self.tolerance = 0.001
+
 
 # trivial environment for planing
 # challenging to get the optimal solution dpeending on the approach
@@ -502,6 +561,105 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
+
+class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
+    def __init__(self):
+        self.C, keyframes = make_two_dim_handover()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        super().__init__()
+
+        self.manipulating_env = True
+
+        translated_handover_poses = []
+        for _ in range(100):
+            new_pose = keyframes[1] * 1.0
+            translation = np.random.rand(2) * 1 - 0.5
+            new_pose[0:2] += translation
+            new_pose[3:5] += translation
+
+            translated_handover_poses.append(new_pose)
+
+        translated_handover_poses.append(keyframes[1])
+
+        # generate set of random translations of the original keyframe
+        rotated_terminal_poses = []
+        for _ in range(100):
+            new_pose = keyframes[3] * 1.0
+            rot = np.random.rand(2) * 6 - 3
+            new_pose[2] = rot[0]
+            new_pose[5] = rot[1]
+
+            rotated_terminal_poses.append(new_pose)
+
+        rotated_terminal_poses.append(keyframes[3])
+
+        self.tasks = [
+            # a1
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1", "obj1"],
+            ),
+            Task(
+                ["a1", "a2"],
+                GoalSet(translated_handover_poses),
+                # SingleGoal(keyframes[1]),
+                type="hanover",
+                frames=["a2", "obj1"],
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(keyframes[2][self.robot_idx["a2"]]),
+                type="place",
+                frames=["table", "obj1"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[4][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1", "obj2"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[5][self.robot_idx["a1"]]),
+                type="place",
+                frames=["table", "obj2"],
+            ),
+            # terminal
+            # Task(["a1", "a2"], SingleGoal(keyframes[3])),
+            Task(["a1", "a2"], GoalSet(rotated_terminal_poses)),
+        ]
+
+        self.tasks[0].name = "a1_pick_obj1"
+        self.tasks[1].name = "handover"
+        self.tasks[2].name = "a2_place"
+        self.tasks[3].name = "a1_pick_obj2"
+        self.tasks[4].name = "a1_place_obj2"
+        self.tasks[5].name = "terminal"
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("handover", "a1_pick_obj1")
+        self.graph.add_dependency("a1_pick_obj2", "handover")
+        self.graph.add_dependency("a1_place_obj2", "a1_pick_obj2")
+        self.graph.add_dependency("terminal", "a1_place_obj2")
+        self.graph.add_dependency("a2_place", "handover")
+        self.graph.add_dependency("terminal", "a2_place")
+
+        print(self.graph)
+
+        self.start_mode = self._make_start_mode_from_graph()
+        self._terminal_task_ids = self._make_terminal_mode_from_graph()
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = self.start_mode
 
 class rai_random_two_dim(SequenceMixin, rai_env):
     def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=False):
