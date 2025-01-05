@@ -5,6 +5,7 @@ from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 import numpy as np
 import argparse
 import time
+import random
 
 
 def visualize_modes(env: rai_env):
@@ -13,13 +14,18 @@ def visualize_modes(env: rai_env):
     q_home = env.start_pos
 
     m = env.start_mode
-    for i in range(len(env.sequence)):
+    while True:
         print('--------')
         print("Mode", m)
-        switching_robots = env.get_goal_constrained_robots(m)
 
         q = []
-        task = env.get_active_task(m, None)
+        next_task_combos = env.get_valid_next_task_combinations(m)
+        if len(next_task_combos) > 0:
+            idx = random.randint(0, len(next_task_combos)-1)
+            task = env.get_active_task(m, next_task_combos[idx])
+        else:
+            task = env.get_active_task(m, None)
+        switching_robots = task.robots
         goal_sample = task.goal.sample(m)
 
         if task.name is not None:
@@ -64,7 +70,7 @@ def visualize_modes(env: rai_env):
         if env.is_terminal_mode(m):
             break
 
-        m = env.get_next_mode(None, m)
+        m = env.get_next_mode(type(env.get_start_pos()).from_list(q), m)
 
 
 def benchmark_collision_checking(env: rai_env, N=5000):
