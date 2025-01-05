@@ -44,7 +44,7 @@ def cost(env, config, pkl_folder, output_filename, fix_axis):
     colors = colors_plotly()
     cost_function= config["cost_function"]
     cost_label = get_cost_label(cost_function, num_agents-1)
-    agent_costs = {agent: [] for agent in range(num_agents)}
+    agent_dists = {agent: [] for agent in range(num_agents)}
     costs = []
     time = []
     init_sol = False
@@ -63,21 +63,21 @@ def cost(env, config, pkl_folder, output_filename, fix_axis):
         if init_sol:
             
             cost = result["total"]
-            agent_cost = result["agent_cost"]
+            agent_dists = result["agent_dists"]
             if cost is None:
                 costs.append(float('nan'))
             else:
                 costs.append(cost.item())
 
             for agent in range(num_agents):
-                cost = agent_cost[0][agent]
+                cost = agent_dists[0][agent]
                 if cost is None:
                     cost = np.array(float('nan'))
-                agent_costs[agent].append(cost.cpu().numpy())
+                agent_dists[agent].append(cost.cpu().numpy())
         else:
             costs.append(float('nan'))
             for agent in range(num_agents):
-                agent_costs[agent].append(float('nan'))
+                agent_dists[agent].append(float('nan'))
 
     
     fig = go.Figure()
@@ -85,7 +85,7 @@ def cost(env, config, pkl_folder, output_filename, fix_axis):
     for agent in range(num_agents):
         fig.add_trace(go.Scatter(
             x=time,
-            y=agent_costs[agent],
+            y=agent_dists[agent],
             mode='lines',
             name=f"$\\mathsf{{Agent \;{agent}}}$", 
             line=dict(color=colors[agent]),
@@ -300,7 +300,7 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
 
 
     count = count_files_in_folder(pkl_folder)
-    if count > 500 and divider is not None:
+    if count > 150 and divider is not None:
         frame = int(count / divider)
     else:
         frame = 1
@@ -309,6 +309,10 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
         [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
         key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
     )[::frame]
+    pkl_files.append(os.path.join(pkl_folder, sorted(
+        [os.path.basename(f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
+        key=lambda x: int(os.path.splitext(x)[0])
+    )[-1]))
     print(f'Take {len(pkl_files)} .pkl files')
 
     # Initialize figure and static elements
@@ -383,22 +387,22 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
             showlegend=True
         )
     )
-    if with_tree:
-        legends = []
-        for idx in range(len(modes)):
-            name = f"Mode: {modes[idx]}"
-            legends.append(name)
-            static_traces.append(
-                go.Mesh3d(
-                    x=[0],  # Position outside the visible grid
-                    y=[0],  # Position outside the visible grid
-                    z=[0],
-                    name=name,
-                    color = colors[idx],
-                    legendgroup=name,  # Unique legend group for each mode
-                    showlegend=True  # This will create a single legend entry for each mode
-                )
+    # if with_tree:
+    legends = []
+    for idx in range(len(modes)):
+        name = f"Mode: {modes[idx]}"
+        legends.append(name)
+        static_traces.append(
+            go.Mesh3d(
+                x=[0],  # Position outside the visible grid
+                y=[0],  # Position outside the visible grid
+                z=[0],
+                name=name,
+                color = colors[idx],
+                legendgroup=name,  # Unique legend group for each mode
+                showlegend=True  # This will create a single legend entry for each mode
             )
+        )
     
     # dynamic_traces
     for idx, pkl_file in enumerate(pkl_files):
@@ -408,66 +412,98 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
             results = data["result"]
             path = results["path"]
             transition = results["is_transition"]
+            inter_results = data["inter_result"]
+            inter_paths = inter_results[0]['path']
 
         frame_traces = []
 
         # Collect traces for the path (if any)
-        for robot_idx, robot in enumerate(env.robots):
-            indices = env.robot_idx[robot]
-            legend_group = robot
-            if path:
-                path_x = [state[indices][0] for state in path]
-                path_y = [state[indices][1] for state in path]
-                path_z = [1 for state in path]
+        if inter_paths is None:
+            for robot_idx, robot in enumerate(env.robots):
+                indices = env.robot_idx[robot]
+                legend_group = robot
+                if path:
+                    path_x = [state[indices][0] for state in path]
+                    path_y = [state[indices][1] for state in path]
+                    path_z = [1 for state in path]
 
-                
-            else:
-                start = env.start_pos.q[indices]
-                path_x = [start[0]]
-                path_y = [start[1]]
-                path_z = [1]
+                    
+                else:
+                    start = env.start_pos.q[indices]
+                    path_x = [start[0]]
+                    path_y = [start[1]]
+                    path_z = [1]
 
-
-            frame_traces.append(
-                go.Scatter3d(
-                    x=path_x, 
-                    y=path_y,
-                    z=path_z,
-                    mode="lines+markers",
-                    line=dict(color=colors[len(modes)+robot_idx], width=6),
-                    marker=dict(
-                        size=3,  # Very small markers
-                        color=colors[len(modes)+robot_idx],  # Match marker color with line
-                        opacity=1
-                    ),
-                    opacity=1,
-                    name=legend_group,
-                    legendgroup=legend_group,
-                    showlegend=False
-                )
-            )
-            if path:
-                transition_x = [state[indices][0] for idx, state in enumerate(path) if transition[idx]]
-                transition_y = [state[indices][1] for idx, state in enumerate(path) if transition[idx]]
-                transition_z = [1] * len(path_x)
 
                 frame_traces.append(
                     go.Scatter3d(
-                        x=transition_x, 
-                        y=transition_y,
-                        z=transition_z,
-                        mode="markers",
+                        x=path_x, 
+                        y=path_y,
+                        z=path_z,
+                        mode="lines+markers",
+                        line=dict(color=colors[len(modes)+robot_idx], width=6),
                         marker=dict(
-                            size=5,  # Very small markers
-                            color="red",  # Match marker color with line
+                            size=3,  # Very small markers
+                            color=colors[len(modes)+robot_idx],  # Match marker color with line
                             opacity=1
                         ),
                         opacity=1,
-                        name="Transitions",
-                        legendgroup="Transitions",
+                        name=legend_group,
+                        legendgroup=legend_group,
                         showlegend=False
                     )
                 )
+                if path:
+                    transition_x = [state[indices][0] for idx, state in enumerate(path) if transition[idx]]
+                    transition_y = [state[indices][1] for idx, state in enumerate(path) if transition[idx]]
+                    transition_z = [1] * len(path_x)
+
+                    frame_traces.append(
+                        go.Scatter3d(
+                            x=transition_x, 
+                            y=transition_y,
+                            z=transition_z,
+                            mode="markers",
+                            marker=dict(
+                                size=5,  
+                                color="red", 
+                                opacity=1
+                            ),
+                            opacity=1,
+                            name="Transitions",
+                            legendgroup="Transitions",
+                            showlegend=False
+                        )
+                    )
+        else:
+            for robot_idx, robot in enumerate(env.robots):
+                indices = env.robot_idx[robot]
+                legend_group = robot
+                for inter_result in inter_results:
+                    path = inter_result['path']
+                    mode = inter_result['modes'][-1]
+                    mode_idx = modes.index(mode)
+                    path_x = [state[indices][0] for state in path]
+                    path_y = [state[indices][1] for state in path]
+                    path_z = [1 for _ in path]
+                    frame_traces.append(
+                        go.Scatter3d(
+                            x=path_x, 
+                            y=path_y,
+                            z=path_z,
+                            mode="lines+markers",
+                            line=dict(color=colors[mode_idx], width=6),
+                            marker=dict(
+                                size=3,  # Very small markers
+                                color=colors[mode_idx],  # Match marker color with line
+                                opacity=1
+                            ),
+                            opacity=1,
+                            name=legend_group,
+                            legendgroup=legend_group,
+                            showlegend=False
+                        )
+                        )
 
             
 
@@ -510,8 +546,8 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
                             z = [1] * len(line_data['x']),
                             mode='markers + lines',
                             marker=dict(size=0.8, color=color),
-                            line=dict(color=color, width=1.3),
-                            opacity=0.2,
+                            line=dict(color=color, width=8),
+                            opacity=0.1,
                             name=legend_group,
                             legendgroup=legend_group,
                             showlegend=False
@@ -770,7 +806,7 @@ if __name__ == "__main__":
         help="Select the mode of operation",
     )
     args = parser.parse_args()
-    datetime_pattern = r"^\d{6}_\d{6}$"
+    datetime_pattern = r"\d{6}_\d{6}"
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
     dir = get_latest_folder(directory)
@@ -779,7 +815,7 @@ if __name__ == "__main__":
     else: #TODO
         path = os.path.join(dir, '0')
     
-    path = '/home/tirza/output/161224_082143'
+    # path = '/home/tirza/output/161224_082143'
 
 
 
@@ -797,7 +833,7 @@ if __name__ == "__main__":
             reducer = 100
         else:
             output_html = os.path.join(path, 'path_animation_3d.html')
-            reducer = 400
+            reducer = 100
         developement_animation(config_params, env, env_path, pkl_folder, output_html, with_tree, reducer)    
         webbrowser.open('file://' + os.path.realpath(output_html))
     if args.show == "cost":

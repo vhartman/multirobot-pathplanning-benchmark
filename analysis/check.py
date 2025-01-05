@@ -255,9 +255,12 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
             data = dill.load(file)
             tree = data["tree"]
             results = data["result"]
+            inter_results = data["inter_result"]
+            inter_paths = inter_results[0]['path']
             path = results["path"]
             transition = results["is_transition"]
             N_near = data["N_near"]
+            N_parent = data["N_parent"]
             rewire_radius = data["rewire_r"]
             n_new = data["n_new"]
             n_nearest = data["n_nearest"]
@@ -267,62 +270,93 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
         frame_traces = []
 
         # Collect traces for the path (if any)
-        for robot_idx, robot in enumerate(env.robots):
-            indices = env.robot_idx[robot]
-            legend_group = robot
-            if path:
-                path_x = [state[indices][0] for state in path]
-                path_y = [state[indices][1] for state in path]
-                path_z = [1 for state in path]
+        if inter_paths is None:
+            for robot_idx, robot in enumerate(env.robots):
+                indices = env.robot_idx[robot]
+                legend_group = robot
+                if path:
+                    path_x = [state[indices][0] for state in path]
+                    path_y = [state[indices][1] for state in path]
+                    path_z = [1 for state in path]
 
-                
-            else:
-                start = env.start_pos.q[indices]
-                path_x = [start[0]]
-                path_y = [start[1]]
-                path_z = [1]
+                    
+                else:
+                    start = env.start_pos.q[indices]
+                    path_x = [start[0]]
+                    path_y = [start[1]]
+                    path_z = [1]
 
-
-            frame_traces.append(
-                go.Scatter3d(
-                    x=path_x, 
-                    y=path_y,
-                    z=path_z,
-                    mode="lines+markers",
-                    line=dict(color=colors[len(modes)+robot_idx], width=6),
-                    marker=dict(
-                        size=3,  # Very small markers
-                        color=colors[len(modes)+robot_idx],  # Match marker color with line
-                        opacity=1
-                    ),
-                    opacity=1,
-                    name=legend_group,
-                    legendgroup=legend_group,
-                    showlegend=False
-                )
-            )
-            if path:
-                transition_x = [state[indices][0] for idx, state in enumerate(path) if transition[idx]]
-                transition_y = [state[indices][1] for idx, state in enumerate(path) if transition[idx]]
-                transition_z = [1] * len(path_x)
 
                 frame_traces.append(
                     go.Scatter3d(
-                        x=transition_x, 
-                        y=transition_y,
-                        z=transition_z,
-                        mode="markers",
+                        x=path_x, 
+                        y=path_y,
+                        z=path_z,
+                        mode="lines+markers",
+                        line=dict(color=colors[len(modes)+robot_idx], width=6),
                         marker=dict(
-                            size=5,  
-                            color="red", 
+                            size=3,  # Very small markers
+                            color=colors[len(modes)+robot_idx],  # Match marker color with line
                             opacity=1
                         ),
                         opacity=1,
-                        name="Transitions",
-                        legendgroup="Transitions",
+                        name=legend_group,
+                        legendgroup=legend_group,
                         showlegend=False
                     )
                 )
+                if path:
+                    transition_x = [state[indices][0] for idx, state in enumerate(path) if transition[idx]]
+                    transition_y = [state[indices][1] for idx, state in enumerate(path) if transition[idx]]
+                    transition_z = [1] * len(path_x)
+
+                    frame_traces.append(
+                        go.Scatter3d(
+                            x=transition_x, 
+                            y=transition_y,
+                            z=transition_z,
+                            mode="markers",
+                            marker=dict(
+                                size=5,  
+                                color="red", 
+                                opacity=1
+                            ),
+                            opacity=1,
+                            name="Transitions",
+                            legendgroup="Transitions",
+                            showlegend=False
+                        )
+                    )
+        else:
+            for robot_idx, robot in enumerate(env.robots):
+                indices = env.robot_idx[robot]
+                legend_group = robot
+                for inter_result in inter_results:
+                    path = inter_result['path']
+                    mode = inter_result['modes'][-1]
+                    mode_idx = modes.index(mode)
+                    path_x = [state[indices][0] for state in path]
+                    path_y = [state[indices][1] for state in path]
+                    path_z = [1 for _ in path]
+                    frame_traces.append(
+                        go.Scatter3d(
+                            x=path_x, 
+                            y=path_y,
+                            z=path_z,
+                            mode="lines+markers",
+                            line=dict(color=colors[mode_idx], width=6),
+                            marker=dict(
+                                size=3,  # Very small markers
+                                color=colors[mode_idx],  # Match marker color with line
+                                opacity=1
+                            ),
+                            opacity=1,
+                            name=legend_group,
+                            legendgroup=legend_group,
+                            showlegend=False
+                        )
+                        )
+
 
             
         if with_tree:
@@ -360,9 +394,9 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                             y=line_data['y'],
                             z = [1] * len(line_data['x']),
                             mode='markers + lines',
-                            marker=dict(size=0.8, color=color),
-                            line=dict(color=color, width=1.3),
-                            opacity=0.2,
+                            marker=dict(size=5, color=color),
+                            line=dict(color=color, width=8),
+                            opacity=0.1,
                             name=legend_group,
                             legendgroup=legend_group,
                             showlegend=False
@@ -431,7 +465,7 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                 )
             if N_near is not None and N_near != []:
                 for _, state in enumerate(N_near):
-                    states = np.array(state)[indices]
+                    states = np.array(state.cpu().numpy())[indices]
 
                     frame_traces.append(go.Scatter3d(
                         x=[states[0]],
@@ -443,6 +477,22 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                         legendgroup = legends[mode_idx],
                         showlegend = False,
                     ))
+            if N_parent is not None and N_parent != []:
+                n_parent_bool = True
+                for _, state in enumerate(N_parent):
+                    states = np.array(state.cpu().numpy())[indices]
+                    frame_traces.append(go.Scatter3d(
+                        x=[states[0]],
+                        y=[states[1]],
+                        z = [1],
+                        mode='markers',
+                        name= f"Ancestors {robot}",
+                        marker=dict(size=14, color=colors[len(modes)+r]),
+                        legendgroup = legends[mode_idx],
+                        showlegend = n_parent_bool,
+                        opacity=0.2
+                    ))
+                    n_parent_bool = False
             legend_bool = False
           
 
@@ -729,7 +779,7 @@ def tree(config, env, env_path, pkl_folder, divider = None):
                     )
                 )
                 for i, state in enumerate(N_near):
-                    states = np.array(state)[indices]
+                    states = np.array(state.cpu().numpy())[indices]
 
                     frame_traces.append(go.Scatter3d(
                         x=[states[0]],
@@ -905,7 +955,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
-    datetime_pattern = r"^\d{6}_\d{6}$"
+    datetime_pattern = r"\d{6}_\d{6}"
     dir = get_latest_folder(directory)
     if re.search(datetime_pattern, dir):
         path = dir

@@ -66,7 +66,7 @@ def init_discretization(path, costs, modes, indices, transition, resolution=0.1)
 def update(path , cost, idx):
     while True:
         cost[idx] = cost[idx -1] + config_cost(path[idx-1].q, path[idx].q, "euclidean")
-        # agent_cost[idx] = agent_cost[idx -1] + config_agent_dist(path[idx-1].q, path[idx].q, "euclidean")
+        # agent_dists[idx] = agent_dists[idx -1] + config_agent_dist(path[idx-1].q, path[idx].q, "euclidean")
         if idx == len(path)-1:
             break
         idx+=1
@@ -356,9 +356,9 @@ def shortcutting_mode(dir, env, env_path, pkl_folder, config,  output_html, vers
         results = data["result"]
         path_ = results["path"]
         total_cost = results["total"]
-        agent_cost = results["agent_cost"]
+        agent_dists = results["agent_dists"]
         intermediate_tot = results["intermediate_tot"]
-        intermediate_agent_cost = results["intermediate_agent_cost"]
+        intermediate_agent_dists = results["intermediate_agent_dists"]
         transition = results["is_transition"]
         transition[0] = True
         modes = results["modes"]

@@ -1,16 +1,21 @@
-import os
-import json
 import cProfile
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 from planner_rrtstar import *
 from planner_bi_rrtstar import *
 from planner_bi_rrtstar_parallelized import *
+from planner_q_rrtstar import *
 from rai_envs import *
-from util import *
+
 
 def execute_planner(env, args, config_manager):
     if args.planner == "rrtstar":
         rrt_star = RRTstar(env, config_manager)
         path = rrt_star.Plan()
+    
+    if args.planner == "q_rrtstar":
+        bi_rrt_star = QRRTstar(env, config_manager)
+        path = bi_rrt_star.Plan()
 
     if args.planner == "bi_rrtstar":
         bi_rrt_star = BidirectionalRRTstar(env, config_manager)
@@ -19,20 +24,23 @@ def execute_planner(env, args, config_manager):
     if args.planner == "bi_rrtstar_par":
         bi_rrt_star = ParallelizedBidirectionalRRTstar(env, config_manager)
         path = bi_rrt_star.Plan()
+
     print('Path is collision free:', env.is_path_collision_free(path))
     if config_manager.debug_mode:
         return
     path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(path)}
     config_manager.logger.info("Path: %s", json.dumps(path_dict, indent=4))
     
-
 def main():
     parser = argparse.ArgumentParser(description="Environment Viewer")
     parser.add_argument("env_name", nargs="?", default="default", help="Environment to show")
-    parser.add_argument("--planner", choices=["rrtstar", "bi_rrtstar", "bi_rrtstar_par"], required=True, help="Planner type")
+    parser.add_argument("--planner", choices=["rrtstar", "bi_rrtstar", "bi_rrtstar_par", "q_rrtstar"], required=True, help="Planner type")
     args = parser.parse_args()
 
     config_manager = ConfigManager('config.yaml')
+    if config_manager.use_seed:
+        np.random.seed(3)
+        random.seed(3)
     if config_manager.amount_of_runs < 2 and not config_manager.debug_mode:
         config_manager.log_params(args)
     env = get_env_by_name(args.env_name)

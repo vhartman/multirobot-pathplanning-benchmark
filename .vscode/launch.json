@@ -86,6 +86,18 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "main.py -simple_2d --planner q_rrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "q_rrtstar"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "main.py -box_sorting --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
@@ -199,28 +211,6 @@
             "args": [
                 "--agent",
                 "partial_random"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "simulations.py --show path",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/analysis/simulations.py",
-            "args": [
-                "--sim",
-                "path"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "simulations.py --show path_shortcutt",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/analysis/simulations.py",
-            "args": [
-                "--sim",
-                "path_shortcutt"
             ],
             "console": "integratedTerminal"
         }, 

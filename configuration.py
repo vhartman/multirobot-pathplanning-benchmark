@@ -182,6 +182,9 @@ class NpConfiguration(Configuration):
     @classmethod
     def _batch_dist_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
         torch.cuda.empty_cache()
+        q_tensor = torch.as_tensor(pt.q, device='cuda').unsqueeze(0)
+        # batch_other = batch_other.to(dtype=torch.float16)
+    
         q_tensor = torch.as_tensor(pt.q, device='cuda')
         with torch.no_grad():
             diff = q_tensor - batch_other
@@ -196,12 +199,123 @@ class NpConfiguration(Configuration):
         else:
             return torch.max(torch.abs(diff), dim=1).values  # Shape: (batch_size,)
         
+   
+
+    # @classmethod
+    # def _batch_dist_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
+    #     torch.cuda.empty_cache()
+    #     q_tensor = torch.as_tensor(pt.q, device='cuda', dtype=torch.float16)
+    #     batch_other = batch_other.to(dtype=torch.float16)
+
+    #     with torch.no_grad():
+    #         diff = q_tensor - batch_other
+
+    #     if metric == "euclidean":
+    #         dists = [
+    #             torch.linalg.norm(diff[:, s:e], dim=1, keepdim=True) for s, e in pt.slice
+    #         ]
+    #         dists = torch.cat(dists, dim=1)
+    #         del diff
+    #         torch.cuda.empty_cache()
+    #         return dists.max(dim=1).values
+    #     else:
+    #         return torch.max(torch.abs(diff), dim=1).values
+
+    # @classmethod
+    # def _batch_dist_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
+    #     q_tensor = torch.as_tensor(pt.q, device='cuda', dtype=torch.float16).unsqueeze(0)
+    #     batch_other = batch_other.to(dtype=torch.float16)
+    #     slice_indices = torch.tensor(pt.slice, device='cuda')
+    #     slice_starts, slice_ends = slice_indices[:, 0], slice_indices[:, 1]
+
+    #     max_batch_size = 4000
+    #     total_size = batch_other.size(0)
+    #     num_batches = (total_size + max_batch_size - 1) // max_batch_size
+
+    #     results = []
+
+    #     with torch.no_grad():
+    #         for batch_idx in range(num_batches):
+    #             # Determine batch range
+    #             start_idx = batch_idx * max_batch_size
+    #             end_idx = min(start_idx + max_batch_size, total_size)
+    #             batch_part = batch_other[start_idx:end_idx]
+
+    #             # Compute differences in a single operation
+    #             batch_diff = q_tensor - batch_part.unsqueeze(1)  # Shape: (batch_size, 1, dim)
+
+    #             if metric == "euclidean":
+    #                 dists = torch.linalg.norm(
+    #                     torch.stack([batch_diff[:, :, start:end] for start, end in zip(slice_starts, slice_ends)], dim=2),
+    #                     dim=3
+    #                 )  # Shape: (batch_size, num_slices, dim_slices)
+    #                 dists_max = dists.max(dim=2).values  # Max distance across slices
+    #             else:
+    #                 # Compute max absolute differences in a single operation
+    #                 dists_max = torch.max(
+    #                     torch.abs(torch.stack([batch_diff[:, :, start:end] for start, end in zip(slice_starts, slice_ends)], dim=2)),
+    #                     dim=3
+    #                 ).values
+    #             # Append batch results
+    #             results.append(dists_max)
+
+    #     # Concatenate results for all batches
+    #     return torch.cat(results, dim=0)
+
+    # @classmethod
+    # def _batch_dist_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
+    #     import torch
+    #     q_tensor = torch.as_tensor(pt.q, device='cuda').unsqueeze(0)
+
+    #     max_batch_size = 1000  # Adjust based on available GPU memory
+    #     total_size = batch_other.size(0)
+    #     num_batches = (total_size + max_batch_size - 1) // max_batch_size
+
+    #     slice_indices = torch.tensor(pt.slice, device='cuda')
+    #     slice_starts, slice_ends = slice_indices[:, 0], slice_indices[:, 1]
+
+    #     results = []
+
+    #     with torch.no_grad():
+    #         for batch_idx in range(num_batches):
+    #             # Process one batch
+    #             start_idx = batch_idx * max_batch_size
+    #             end_idx = min(start_idx + max_batch_size, total_size)
+    #             batch_part = batch_other[start_idx:end_idx]
+
+    #             max_dists_per_batch = []
+
+    #             # Compute distances slice by slice to avoid large intermediate tensors
+    #             for start, end in zip(slice_starts, slice_ends):
+    #                 batch_diff = q_tensor[..., start:end] - batch_part[..., start:end]
+
+    #                 if metric == "euclidean":
+    #                     dists = torch.linalg.norm(batch_diff, dim=-1)  # Shape: (batch_size, num_points)
+    #                 else:  # Chebyshev metric
+    #                     dists = torch.max(torch.abs(batch_diff), dim=-1).values  # Shape: (batch_size, num_points)
+
+    #                 max_dists_per_batch.append(dists)  # Collect max distances for this slice
+
+    #             # Take maximum across slices for the current batch
+    #             max_dists_per_batch = torch.stack(max_dists_per_batch, dim=-1).max(dim=-1).values  # Shape: (batch_size,)
+    #             results.append(max_dists_per_batch)
+
+    #             # Clear intermediate tensors to free memory
+    #             del batch_part, batch_diff, dists, max_dists_per_batch
+    #             torch.cuda.empty_cache()
+
+    #     # Concatenate results across all batches
+        # return torch.cat(results, dim=0)
+
+
+            
     @classmethod
     def _batch_torch(cls, pt, batch_other, metric: str = "euclidean") -> torch.Tensor:
         torch.cuda.empty_cache()
         q_tensor = torch.as_tensor(pt.q, device='cuda')
         with torch.no_grad():
             diff = q_tensor - batch_other  
+
 
         if metric == "euclidean":
             dists = [
@@ -233,12 +347,12 @@ def batch_config_dist(
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
 def batch_config_dist_torch(
-    pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean"
+    pt: Configuration, batch_pts: torch.tensor, metric: str = "euclidean"
 ) -> NDArray:
     return type(pt)._batch_dist_torch(pt, batch_pts, metric)
 
 def batch_config_torch(
-    pt: Configuration, batch_pts: List[Configuration], metric: str = "euclidean"
+    pt: Configuration, batch_pts: torch.tensor,metric: str = "euclidean"
 ) -> torch.Tensor:
     return type(pt)._batch_torch(pt, batch_pts, metric)
 
