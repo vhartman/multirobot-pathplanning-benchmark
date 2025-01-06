@@ -1,19 +1,9 @@
-import argparse
+
 import sys
 import dill
 import plotly.graph_objects as go
 import os
-import webbrowser
 from analysis_util import *
-parent_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # One level up
-sys.path.append(parent_folder)
-from rai_envs import *
-from planning_env import *
-from util import *
-from rai_config import *
-from planning_env import *
-from util import *
-import re
 
 def interpolation_check(env):
     array = np.array
@@ -943,46 +933,4 @@ def tree(config, env, env_path, pkl_folder, divider = None):
     # fig.write_html(output_html)
     # print(f"Animation saved to {output_html}")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Env shower")
-    parser.add_argument(
-        "--do",
-        choices=["interpolation", "nn", "tree"],
-        required=True,
-        help="Select the mode of operation",
-    )
-    
-    args = parser.parse_args()
-    home_dir = os.path.expanduser("~")
-    directory = os.path.join(home_dir, 'output')
-    dir = get_latest_folder(directory)
-    # dir = '/home/tirza/output/050125_161619'
-    pattern = r'^\d{6}_\d{6}$'
-    # Extract the last part of the path
-    last_part = os.path.basename(dir)
-    # Check if it matches the pattern
-    if re.match(pattern, last_part):
-        path = dir
-        print(path)
-    else: #TODO
-        path = os.path.join(dir, '0')
-    env_name, config_params, _, _ = get_config(path)
-    env = get_env_by_name(env_name)    
-    pkl_folder = os.path.join(path, 'FramesData')
-    env_path = os.path.join(home_dir, f'env/{env_name}')
-    save_env_as_mesh(env, env_path)
-
-    if args.do == "interpolation":
-        interpolation_check(env)
-    if args.do == "nn":
-        with_tree = True
-        if with_tree:
-            output_html = os.path.join(path, 'tree_animation_3d.html')
-            reducer = 50
-        else:
-            output_html = os.path.join(path, 'path_animation_3d.html')
-            reducer = 400
-        nearest_neighbor(config_params, env, env_path, pkl_folder, output_html, with_tree, reducer)    
-    if args.do == "tree":
-        tree(config_params, env, env_path, pkl_folder)    
 

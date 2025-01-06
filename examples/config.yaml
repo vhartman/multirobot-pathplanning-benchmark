@@ -1,0 +1,61 @@
+
+description: |
+  General
+
+goal_radius: 0.1                            # Distance threshold within a node is considered to have reached the goal 
+step_size: 0.25                             # Max allowable distance that newly generated node can be from the nearest node in the tree                    
+ptc_threshold: 0.05 #!!float 1e-10                # Converge Threshold
+ptc_max_iter: 100                          # Max iteration with no change before stopping
+amount_of_runs: 2                           # Amount of runs executed 
+debug_mode: false                           # True: Data isn't stored, as in debug modus
+use_seed: false                              # True: Use a seed for the algorithm
+seed:  10                                    # User defined seed
+cprofiler: false                             # Use cprofiler to run the 
+cost_type: euclidean                        # Type of cost function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
+dist_type: euclidean                        # Type of dist function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
+
+
+description: |
+  Sampling strategy
+
+p_goal: 0.93                                # Probability of performing goal sampling
+general_goal_sampling: false                # True: For all tasks in mode goal sampling is done otherwise only for active task
+mode_probability: None                      # Probability to choose new mode (0: unfiormly, 1: greedy None: equally, else: manually set) 
+informed_sampling: false                    # True: Informed sampling is applied 
+informed_sampling_version: 2                # If 'informed_sampling: true', the specified version is applied (0: Only regarding agent, 1: Including other agents 2: corrected 1)
+
+
+description: |
+  Bi-RRT*
+
+transition_nodes: 1000                         # Number of generated transition nodes during mode initialization (only used in bi-rrt*)
+birrtstar_version: 2                        # Version of Bi-RRT*: 1: Inspired by Bi-RRT* by b. Wang 2: Inspired by RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
+
+
+
+description: |
+  Q-RRT*
+
+depth: 3                                    # User-defined depth parameter for the Quick-RRT*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+description: |
+  TODO
+# step-size adjustable based on dimension??
+# adapt goal radius for more DOF -> make it dependent on DOF
+# TODO's in planner.py and env.py
+# Handle singularities properly!
+# ATTENTION: The assumption is made that dist_type and cost_type are the same for the batch_config_torch function as it makes the algorithm more efficient -> would be easy changeable if necessary

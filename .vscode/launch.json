@@ -2,70 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "rai_envs.py -simple_2d --mode modes",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/rai_envs.py",
-            "args": [
-                "simple_2d",
-                "--mode",
-                "modes"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "rai_envs.py -piano --mode modes",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/rai_envs.py",
-            "args": [
-                "piano",
-                "--mode",
-                "modes"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "rai_envs.py -simple_2d --mode benchmark",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/rai_envs.py",
-            "args": [
-                "simple_2d",
-                "--mode",
-                "benchmark"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "rai_envs.py -simple_2d --mode sampling",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/rai_envs.py",
-            "args": [
-                "simple_2d",
-                "--mode",
-                "sampling"
-            ],
-            "console": "integratedTerminal"
-        }, 
-        {
-            "name": "rai_envs.py -triple_waypoints --mode show",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/rai_envs.py",
-            "args": [
-                "triple_waypoints",
-                "--mode",
-                "show"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
             "name": "main.py -triple_waypoints --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "triple_waypoints",
                 "--planner",
@@ -74,22 +14,26 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "main.py -simple_2d --planner rrtstar",
+            "name": "main.py - simple_2d --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "simple_2d",
                 "--planner",
                 "rrtstar"
             ],
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         },
         {
             "name": "main.py -simple_2d --planner q_rrtstar",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "simple_2d",
                 "--planner",
@@ -101,7 +45,7 @@
             "name": "main.py -box_sorting --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "box_sorting",
                 "--planner",
@@ -113,7 +57,7 @@
             "name": "main.py -simple_2d --planner bi_rrtstar",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "simple_2d",
                 "--planner",
@@ -125,7 +69,7 @@
             "name": "main.py -simple_2d --planner bi_rrtstar_par",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "simple_2d",
                 "--planner",
@@ -137,7 +81,7 @@
             "name": "main.py -hallway --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "hallway",
                 "--planner",
@@ -147,10 +91,10 @@
         },
 
         {
-            "name": "postprocessing.py --mode shortcutting",
+            "name": "shortcutting.py --mode shortcutting",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/postprocessing.py",
+            "program": "${workspaceFolder}/analysis/shortcutting.py",
             "args": [
                 "--mode",
                 "shortcutting"
@@ -159,10 +103,10 @@
         },
         
         {
-            "name": "postprocessing.py --mode partial_singledim",
+            "name": "shortcutting.py --mode partial_singledim",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/postprocessing.py",
+            "program": "${workspaceFolder}/analysis/shortcutting.py",
             "args": [
                 "--mode",
                 "partial_singledim"
@@ -170,10 +114,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py --mode partial_random",
+            "name": "shortcutting.py --mode partial_random",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/postprocessing.py",
+            "program": "${workspaceFolder}/analysis/shortcutting.py",
             "args": [
                 "--mode",
                 "partial_random"
@@ -182,10 +126,10 @@
         },
 
         {
-            "name": "postprocessing.py --agent shortcutting",
+            "name": "shortcutting.py --agent shortcutting",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/postprocessing.py",
+            "program": "${workspaceFolder}/analysis/shortcutting.py",
             "args": [
                 "--agent",
                 "shortcutting"
@@ -193,10 +137,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py --agent partial_singledim",
+            "name": "shortcutting.py --agent partial_singledim",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/postprocessing.py",
+            "program": "${workspaceFolder}/analysis/shortcutting.py",
             "args": [
                 "--agent",
                 "partial_singledim"
@@ -204,10 +148,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py --agent partial_random",
+            "name": "shortcutting.py --agent partial_random",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/postprocessing.py",
+            "program": "${workspaceFolder}/analysis/shortcutting.py",
             "args": [
                 "--agent",
                 "partial_random"
@@ -215,65 +159,65 @@
             "console": "integratedTerminal"
         }, 
         {
-            "name": "visualizations.py --show shortcutting_cost",
+            "name": "postprocessing.py --do shortcutting_cost",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
-                "--show",
+                "--do",
                 "shortcutting_cost"
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "visualizations.py --show cost",
+            "name": "postprocessing.py --do cost",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
-                "--show",
+                "--do",
                 "cost"
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "visualizations.py --show sum",
+            "name": "postprocessing.py --do sum",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
-                "--show",
+                "--do",
                 "sum"
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "visualizations.py --show path",
+            "name": "postprocessing.py --do path",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
-                "--show",
+                "--do",
                 "path"
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "visualizations.py --show development",
+            "name": "postprocessing.py --do development",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
-                "--show",
+                "--do",
                 "development"
             ],
             "console": "integratedTerminal"
         },
         {
-            "name": "check.py --do interpolation",
+            "name": "postprocessing.py --check interpolation",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analysis/check.py",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
                 "--do",
                 "interpolation"
@@ -281,10 +225,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "check.py --do nn",
+            "name": "postprocessing.py --check nn",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analysis/check.py",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
                 "--do",
                 "nn"
@@ -292,10 +236,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "check.py --do tree",
+            "name": "postprocessing.py --check tree",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/analysis/check.py",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
                 "--do",
                 "tree"

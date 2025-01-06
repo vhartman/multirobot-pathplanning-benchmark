@@ -19,6 +19,12 @@ Other than that, this module should work out of the box after cloning/forking.
 We formulate some multi robot multi goal motion planning problems, and try to provide some baselines and base-classes to formulate your own problems.
 At the moment, all of thi sis in python, with collision checks and other performance critical parts happening in cpp.
 
+## Examples
+
+...
+
+## Problem description
+
 #### Nomenclature
 
 - **Configuration**: A configuration describes the joint-pose that all robots are in.
@@ -43,7 +49,7 @@ A path consists of a configuration for all robot at a time-index, and the index 
 - `planning_env.py` implements the abstract base class for a planning problem.
 There are two main requirements:
   - we need a scene that we are planning in, and
-  - we need a description o fthe tast sequence, respectively the dependence between tasks
+  - we need a description of the task sequence, respectively the dependence between tasks
 
 - `rai_envs.py` implements some concrete environments, ans some utilities to have a look at them.
 
