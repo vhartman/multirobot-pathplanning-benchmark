@@ -955,10 +955,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
-    datetime_pattern = r"\d{6}_\d{6}"
     dir = get_latest_folder(directory)
-    if re.search(datetime_pattern, dir):
+    # dir = '/home/tirza/output/050125_161619'
+    pattern = r'^\d{6}_\d{6}$'
+    # Extract the last part of the path
+    last_part = os.path.basename(dir)
+    # Check if it matches the pattern
+    if re.match(pattern, last_part):
         path = dir
+        print(path)
     else: #TODO
         path = os.path.join(dir, '0')
     env_name, config_params, _, _ = get_config(path)

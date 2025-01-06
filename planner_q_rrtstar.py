@@ -122,6 +122,8 @@ class QRRTstar(RRTstar):
                 self.operation.ptc_cost = self.operation.cost
                 if diff < self.config.ptc_threshold:
                     break
+            if i%1000 == 0:
+                print(i)
             
             i += 1
          

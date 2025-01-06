@@ -5,12 +5,12 @@ description: |
 goal_radius: 0.1                            # Distance threshold within a node is considered to have reached the goal 
 step_size: 0.25                             # Max allowable distance that newly generated node can be from the nearest node in the tree                    
 ptc_threshold: 0.01 #!!float 1e-10                # Converge Threshold
-ptc_max_iter: 18000                          # Max iteration with no change before stopping
+ptc_max_iter: 20000                          # Max iteration with no change before stopping
 amount_of_runs: 1                           # Amount of runs executed 
 debug_mode: false                           # True: Data isn't stored, as in debug modus
-use_seed: true                              # True: Use a seed for the algorithm
+use_seed: false                              # True: Use a seed for the algorithm
 seed:  10                                    # User defined seed
-cprofiler: true                             # Use cprofiler to run the 
+cprofiler: false                             # Use cprofiler to run the 
 cost_type: euclidean                        # Type of cost function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
 dist_type: euclidean                        # Type of dist function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
 

@@ -42,7 +42,7 @@ def cost(env, config, pkl_folder, output_filename, fix_axis):
     print(f"Found {len(pkl_files)} .pkl files.")
     num_agents = len(env.robots)
     colors = colors_plotly()
-    cost_function= config["cost_function"]
+    cost_function= 2 # TODO hardcoded
     cost_label = get_cost_label(cost_function, num_agents-1)
     agent_dists = {agent: [] for agent in range(num_agents)}
     costs = []
@@ -63,14 +63,14 @@ def cost(env, config, pkl_folder, output_filename, fix_axis):
         if init_sol:
             
             cost = result["total"]
-            agent_dists = result["agent_dists"]
+            agent_dists_ = result["agent_dists"]
             if cost is None:
                 costs.append(float('nan'))
             else:
                 costs.append(cost.item())
 
             for agent in range(num_agents):
-                cost = agent_dists[0][agent]
+                cost = agent_dists_[0][agent]
                 if cost is None:
                     cost = np.array(float('nan'))
                 agent_dists[agent].append(cost.cpu().numpy())
@@ -140,6 +140,65 @@ def cost(env, config, pkl_folder, output_filename, fix_axis):
     )
     
     fig.write_image(output_filename)
+
+def sum(env, config, parent_folder, single_folder):
+    init_sol_time = []
+    init_sol_cost = []
+    terminal_cost = []
+    terminal_time = []
+    if not single_folder:
+        for folder_name in os.listdir(parent_folder):
+            print(folder_name)
+            folder_path = os.path.join(parent_folder, folder_name)
+            pkl_folder =  os.path.join(folder_path, 'FramesData')
+            pkl_files = sorted(
+                [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
+                key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+                )
+            for pkl_file in pkl_files:
+                with open(pkl_file, 'rb') as file:
+                    data = dill.load(file)
+                all_init_path = data["all_init_path"]
+                if all_init_path:
+                    init_sol_time.append(data["time"])
+                    init_sol_cost.append(data["result"]["total"].item())
+                    break
+            pkl_file = pkl_files[-1]
+            with open(pkl_file, 'rb') as file:
+                    data = dill.load(file)
+            terminal_time.append(data["time"])
+            terminal_cost.append(data["result"]["total"].item())  
+            print(data["result"]["total"].item())  
+    else:
+        pkl_folder =  os.path.join(parent_folder, 'FramesData')
+        pkl_files = sorted(
+            [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
+            key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+            )
+        for pkl_file in pkl_files:
+            with open(pkl_file, 'rb') as file:
+                data = dill.load(file)
+            all_init_path = data["all_init_path"]
+            if all_init_path:
+                init_sol_time.append(data["time"])
+                init_sol_cost.append(data["result"]["total"].item())
+                break
+        pkl_file = pkl_files[-1]
+        with open(pkl_file, 'rb') as file:
+                data = dill.load(file)
+        terminal_time.append(data["time"])
+        terminal_cost.append(data["result"]["total"].item())  
+        print(data["result"]["total"].item())  
+
+    print("Initial solution time", np.mean(init_sol_time))
+    print("Initial solution cost", np.mean(init_sol_cost))
+    print("Terminal time", np.mean(terminal_time))
+    print("Terminal cost", np.mean(terminal_cost))
+    # print("Variation of terminal cost", np.var(terminal_cost, ddof=1))
+
+           
+
+           
 
 def average(sum_times, runs, max_len, times, costs):
     stop_time = sum_times/runs
@@ -769,7 +828,7 @@ def path_vis(env: base_env, vid_path:str, framerate:int = 1, generate_png:bool =
             if path_original:
                 discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=None)
             else:
-                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=0.005)  
+                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=0.01)  
             path_as_png(env, discretized_path, export = True, dir =  vid_path, framerate = framerate)
     # Generate a gif
     palette_file = os.path.join(vid_path, 'palette.png')
@@ -801,17 +860,25 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument(
         "--show",
-        choices=["development", "cost", "shortcutting_cost", "path"],
+        choices=["development", "cost", "shortcutting_cost", "path", "sum"],
         required=True,
         help="Select the mode of operation",
     )
     args = parser.parse_args()
-    datetime_pattern = r"\d{6}_\d{6}"
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
     dir = get_latest_folder(directory)
-    if re.search(datetime_pattern, dir):
+    dir = '/home/tirza/output/050125_220652'
+    # dir = '/home/tirza/output/050125_161619'
+    pattern = r'^\d{6}_\d{6}$'
+    # Extract the last part of the path
+    last_part = os.path.basename(dir)
+    # Check if it matches the pattern
+    single_folder = False
+    if re.match(pattern, last_part):
         path = dir
+        print(path)
+        single_folder = True
     else: #TODO
         path = os.path.join(dir, '0')
     
@@ -821,6 +888,8 @@ if __name__ == "__main__":
 
     env_name, config_params, _, _ = get_config(path)
     env = get_env_by_name(env_name)    
+    if not re.match(pattern, last_part):
+        path = os.path.join(dir, '2')
     pkl_folder = os.path.join(path, 'FramesData')
     env_path = os.path.join(home_dir, f'env/{env_name}')
     save_env_as_mesh(env, env_path)
@@ -840,12 +909,14 @@ if __name__ == "__main__":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'Cost.png')
         cost(env, config_params, pkl_folder, output_filename_cost, fix_axis)
+    if args.show == "sum":
+        sum(env, config_params, dir, single_folder)
     if args.show == "shortcutting_cost":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'ShortcuttingCost.png')
         shortcutting_cost(env, config_params, path, output_filename_cost)
     if args.show == "path":
-        path_original = True
+        path_original = False
         generate_png = True
         if path_original:
             output_filename_path = os.path.join(path,"PathOriginal/")
@@ -854,6 +925,6 @@ if __name__ == "__main__":
             output_filename_path = os.path.join(path,"Path/")
             vid_path = os.path.join(path,"Path/")
         os.makedirs(vid_path, exist_ok=True)
-        path_vis(env, vid_path, framerate=35, generate_png = generate_png, path_original= path_original)
+        path_vis(env, vid_path, framerate=63, generate_png = generate_png, path_original= path_original)
 
 

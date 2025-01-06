@@ -1,6 +1,7 @@
 import cProfile
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+import gc
 from planner_rrtstar import *
 from planner_bi_rrtstar import *
 from planner_bi_rrtstar_parallelized import *
@@ -57,6 +58,9 @@ def main():
             execute_planner(env, args, config_manager)
 
         print(f'======= Run {run+1}/{config_manager.amount_of_runs} terminated =======')
+        
+        gc.collect()
+        torch.cuda.empty_cache()
         print()
 if __name__ == "__main__":
     main()

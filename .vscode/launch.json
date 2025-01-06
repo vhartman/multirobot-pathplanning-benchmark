@@ -237,6 +237,17 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "visualizations.py --show sum",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/visualizations.py",
+            "args": [
+                "--show",
+                "sum"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "visualizations.py --show path",
             "type": "debugpy",
             "request": "launch",

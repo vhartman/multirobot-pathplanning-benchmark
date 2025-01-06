@@ -578,8 +578,6 @@ class BaseRRTstar(ABC):
                     c_min_to_parent = batch_cost[idx]       # Update minimum cost
                     n_min = node                            # Update nearest node
                     break
-        if n_new.idx == 2:
-            print("hallo")
         n_new.parent = n_min
         n_new.cost_to_parent = c_min_to_parent
         n_min.children.append(n_new) #Set child
