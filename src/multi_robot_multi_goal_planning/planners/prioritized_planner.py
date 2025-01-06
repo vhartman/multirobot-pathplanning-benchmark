@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from collections import namedtuple
 import copy
 
-from multi_robot_multi_goal_planning.problems.planning_env import SingleGoal
+from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem, SingleGoal
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration, batch_config_dist, config_dist
@@ -362,7 +362,9 @@ def collision_free_with_moving_obs(env, t, q, prev_plans, end_times, robots, rob
 
     return False
 
-def edge_collision_free_with_moving_obs(env, qs, qe, ts, te, prev_plans, robots, end_times, joint_names, task_idx, resolution = 0.1):
+def edge_collision_free_with_moving_obs(env: BaseProblem, qs, qe, ts, te, prev_plans, robots, end_times, joint_names, task_idx, resolution = 0.1):
+    conf_type = type(env.get_start_pos())
+
     # print("A", ts, te)
     # print('edge check')
     assert(ts < te)
@@ -570,7 +572,7 @@ def edge_collision_free_with_moving_obs(env, qs, qe, ts, te, prev_plans, robots,
         # _, q_config = project_sample_to_preplanned_path(t, NpConfiguration.from_list(q_l))
         # q = q_config.state()
 
-        q_conf = NpConfiguration.from_list(ql)
+        q_conf = conf_type.from_list(ql)
 
         # if prev is not None:
         #     # print('dist: ', config_dist(q_conf, prev))
@@ -609,14 +611,16 @@ def edge_collision_free_with_moving_obs(env, qs, qe, ts, te, prev_plans, robots,
     return True
 
 
-def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx, end_times, goal, t_lb):
+def plan_in_time_space(env: BaseProblem, prev_plans:MultiRobotPath, robots, task_idx, end_times, goal, t_lb):
     max_iter = 50000
     t0 = min([v for k, v in end_times.items()])
     # t0 = max([v for k, v in end_times.items()])
     # t0 = prev_plans.get_final_time()
 
+    conf_type = type(env.get_start_pos())
+
     start_configuration = prev_plans.get_robot_poses_at_time(robots, t0)
-    q0 = NpConfiguration.from_list(start_configuration)
+    q0 = conf_type.from_list(start_configuration)
 
     print('start state', q0.state())
 
@@ -688,7 +692,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
             q_list.append(q[offset: dim+offset])
             offset += dim
 
-        return t, NpConfiguration.from_list(q_list)
+        return t, conf_type.from_list(q_list)
 
     sampled_goals = []
 
@@ -706,9 +710,9 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
                 q_goal_as_list.append(q_goal[offset:offset+dim])
                 offset += dim
 
-            sampled_goals.append((t_rnd, NpConfiguration.from_list(q_goal_as_list)))
+            sampled_goals.append((t_rnd, conf_type.from_list(q_goal_as_list)))
 
-            return t_rnd, NpConfiguration.from_list(q_goal_as_list)
+            return t_rnd, conf_type.from_list(q_goal_as_list)
 
         t_rnd = np.random.rand() * (t_ub - t0) + t0
 
@@ -742,7 +746,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
 
         # print(q_rnd)
 
-        return t_rnd, NpConfiguration.from_list(q_rnd)
+        return t_rnd, conf_type.from_list(q_rnd)
 
     def project_sample_to_preplanned_path(t, q):
         q_new = q
@@ -769,7 +773,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
         dim = env.robot_dims[r]
         goal_config.append(goal_pose[offset: offset+dim])
         offset += dim
-    d = config_dist(NpConfiguration.from_list(goal_config), NpConfiguration.from_list(start_poses))
+    d = config_dist(conf_type.from_list(goal_config), conf_type.from_list(start_poses))
 
     # compute max time from it
     max_t = t_lb + (d / v_max) * 50
@@ -1096,9 +1100,11 @@ def plan_in_time_space_bidirectional(env: rai_env, prev_plans:MultiRobotPath, ro
     pass
 
 
-def shortcut_with_dynamic_obstacles(env:rai_env, other_paths: MultiRobotPath, robots, path, task_idx, max_iter = 500):
+def shortcut_with_dynamic_obstacles(env:BaseProblem, other_paths: MultiRobotPath, robots, path, task_idx, max_iter = 500):
     # costs = [path_cost(new_path, env.batch_config_cost)]
     # times = [0.0]
+
+    conf_type = type(env.get_start_pos())
 
     def arr_to_config(q):
         offset = 0
@@ -1107,7 +1113,7 @@ def shortcut_with_dynamic_obstacles(env:rai_env, other_paths: MultiRobotPath, ro
             dim = env.robot_dims[r]
             ql.append(q[offset:offset+dim])
             offset += dim
-        return NpConfiguration.from_list(ql)
+        return conf_type.from_list(ql)
 
     def arr_to_state(q):
         return State(arr_to_config(q), None)
@@ -1269,9 +1275,11 @@ def plan_robots_in_dyn_env(env, other_paths, robots, task_idx, q0, end_times, go
 
     return separate_paths
 
-def prioritized_planning(env: rai_env):
+def prioritized_planning(env: BaseProblem):
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
+
+    conf_type = type(env.get_start_pos())
 
     robots = env.robots
 
@@ -1442,7 +1450,7 @@ def prioritized_planning(env: rai_env):
         t = i * T / N
 
         q = robot_paths.get_robot_poses_at_time(env.robots, t)
-        config = NpConfiguration.from_list(q)
+        config = conf_type.from_list(q)
         mode = robot_paths.get_mode_at_time(t)
 
         state = State(config, mode)

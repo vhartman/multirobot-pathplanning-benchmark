@@ -76,6 +76,8 @@ def visualize_modes(env: rai_env):
 
 
 def benchmark_collision_checking(env: rai_env, N=5000):
+    conf_type = type(env.get_start_pos())
+
     def sample_next_mode(mode: Mode):
         while True:
             possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
@@ -118,7 +120,7 @@ def benchmark_collision_checking(env: rai_env, N=5000):
 
                     q.append(qr)
 
-            q = NpConfiguration.from_list(q)
+            q = conf_type.from_list(q)
 
             if env.is_collision_free(q.state(), mode):
                 if env.is_terminal_mode(mode):

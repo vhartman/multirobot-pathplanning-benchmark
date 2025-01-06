@@ -75,6 +75,8 @@ class ImplicitTensorGraph:
 
         self.per_robot_task_to_goal_lb_cost = {}
 
+        self.conf_type = type(start.q)
+
     def compute_lb_mode_transisitons(self, cost, mode_sequence):
         # cost_per_robot = None
         self.mode_sequence = mode_sequence
@@ -110,7 +112,7 @@ class ImplicitTensorGraph:
                     for nn in next_nodes:
                         qn = nn.q[nn.rs.index(r)]
 
-                        c = cost(NpConfiguration.from_numpy(q), NpConfiguration.from_numpy(qn))
+                        c = cost(self.conf_type.from_numpy(q), self.conf_type.from_numpy(qn))
                         if min_cost is None or c < min_cost:
                             min_cost = c
                 
@@ -145,12 +147,12 @@ class ImplicitTensorGraph:
                     break
 
             if not does_already_exist:
-                self.transition_nodes[key].append(RobotNode(rs, NpConfiguration.from_list(q), t))
+                self.transition_nodes[key].append(RobotNode(rs, self.conf_type.from_list(q), t))
         else:
             # print(f"adding node with key {key}")
             if key not in self.robot_nodes:
                 self.robot_nodes[key] = []
-            self.robot_nodes[key].append(RobotNode(rs, NpConfiguration.from_list(q), t))
+            self.robot_nodes[key].append(RobotNode(rs, self.conf_type.from_list(q), t))
 
     def get_robot_neighbors(self, rs, q, t, get_transitions, k=10):
         # print(f"finding robot neighbors for {rs}")
@@ -204,7 +206,7 @@ class ImplicitTensorGraph:
             task = mode.task_ids[i]
             # extract the correct state here
             q = node.state.q[i]
-            per_group_nn[r] = self.get_robot_neighbors([r], NpConfiguration.from_numpy(q), task, False, k)
+            per_group_nn[r] = self.get_robot_neighbors([r], self.conf_type.from_numpy(q), task, False, k)
 
         # print(f"finding neighbors from transitions for {active_robots}")
         qs = []
@@ -214,7 +216,7 @@ class ImplicitTensorGraph:
             qs.append(q)
             task = mode.task_ids[i]
 
-        active_robot_config = NpConfiguration.from_list(qs)
+        active_robot_config = self.conf_type.from_list(qs)
         transitions = self.get_robot_neighbors(active_robots, active_robot_config, task, True, k)
 
         # print("making transition tensor product")
@@ -243,7 +245,7 @@ class ImplicitTensorGraph:
             for combination in product(*to_be_combined):
                 q = [combination[j].q[i] for (j, i) in flat_mapping]
                 concat = np.concat(q)
-                combined.append(NpConfiguration(concat, slices))
+                combined.append(self.conf_type(concat, slices))
 
             return combined
             

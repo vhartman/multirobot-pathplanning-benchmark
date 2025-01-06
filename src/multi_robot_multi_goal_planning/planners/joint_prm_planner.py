@@ -492,6 +492,8 @@ def joint_prm_planner(
 
     reached_modes = [m0]
 
+    conf_type = type(env.get_start_pos())
+
     def sample_mode(mode_sampling_type="weighted", found_solution=False):
         if mode_sampling_type == "uniform_reached":
             m_rnd = random.choice(reached_modes)
@@ -543,7 +545,7 @@ def joint_prm_planner(
 
                 q.append(qr)
 
-            q = NpConfiguration.from_list(q)
+            q = conf_type.from_list(q)
 
             if env.is_collision_free(q.state(), m):
                 new_samples.append(State(q, m))
@@ -558,8 +560,6 @@ def joint_prm_planner(
             mode = sample_mode("uniform_reached", None)
 
             # sample transition at the end of this mode
-            # possible_next_modes
-            # goals_to_sample = env.get_goal_constrained_robots(mode)
             possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
             if len(possible_next_task_combinations) > 0:
                 ind = random.randint(0, len(possible_next_task_combinations)-1)
@@ -598,7 +598,7 @@ def joint_prm_planner(
 
                     q.append(qr)
 
-            q = NpConfiguration.from_list(q)
+            q = conf_type.from_list(q)
 
             if env.is_collision_free(q.state(), mode):
                 if env.is_terminal_mode(mode):
@@ -628,6 +628,7 @@ def joint_prm_planner(
 
     start_time = time.time()
 
+    # TODO: add this again
     # mode_sequence = [m0]
     # while True:
     #     if env.is_terminal_mode(mode_sequence[-1]):
