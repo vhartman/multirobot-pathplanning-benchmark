@@ -310,31 +310,32 @@ class Graph:
             # get_neighbors
             neighbors = self.get_neighbors(n1)
 
-            # add neighbors to open_queue
-            edge_costs = env.batch_config_cost(
-                [n1.state] * len(neighbors), [n.state for n in neighbors]
-            )
-            for i, n in enumerate(neighbors):
-                if n == n1 or n == n0:
-                    continue
-
-                if (n, n1) in self.blacklist or (n1, n) in self.blacklist:
-                    continue
-
-                g_new = g_tentative + edge_costs[i]
-
-                if n not in gs or g_new < gs[n]:
-                    # sparsely check only when expanding
-                    # cost to get to neighbor:
-                    fs[(n1, n)] = g_new + h(n)
-
-                    if best_cost is not None and fs[(n1, n)] > best_cost:
+            if len(neighbors) != 0:
+                # add neighbors to open_queue
+                edge_costs = env.batch_config_cost(
+                    [n1.state] * len(neighbors), [n.state for n in neighbors]
+                )
+                for i, n in enumerate(neighbors):
+                    if n == n1 or n == n0:
                         continue
 
-                    if n not in closed_list:
-                        heapq.heappush(
-                            open_queue, (fs[(n1, n)], edge_costs[i], (n1, n))
-                        )
+                    if (n, n1) in self.blacklist or (n1, n) in self.blacklist:
+                        continue
+
+                    g_new = g_tentative + edge_costs[i]
+
+                    if n not in gs or g_new < gs[n]:
+                        # sparsely check only when expanding
+                        # cost to get to neighbor:
+                        fs[(n1, n)] = g_new + h(n)
+
+                        if best_cost is not None and fs[(n1, n)] > best_cost:
+                            continue
+
+                        if n not in closed_list:
+                            heapq.heappush(
+                                open_queue, (fs[(n1, n)], edge_costs[i], (n1, n))
+                            )
 
         path = []
 
