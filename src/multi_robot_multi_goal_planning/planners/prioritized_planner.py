@@ -368,48 +368,6 @@ def edge_collision_free_with_moving_obs(env: BaseProblem, qs, qe, ts, te, prev_p
     # print("A", ts, te)
     # print('edge check')
     assert(ts < te)
-    # pts = []
-
-    # time_pts_of_interest = [ts, te]
-    # for r in robots:
-    #     if end_times[r] > ts and end_times[r] < te:
-    #         time_pts_of_interest.append(end_times[r])
-
-    # time_pts_of_interest.sort()
-
-    # print('edge check')
-    # print(ts, te)
-    # print(time_pts_of_interest)
-
-    # for k, t in enumerate(time_pts_of_interest):
-    #     pose = []
-    #     for i, r in enumerate(robots):
-    #         if t < end_times[r]:
-    #             p = prev_plans.get_robot_poses_at_time(r, t)[0]
-    #             print('proj', p)
-    #             # raise ValueError
-    #         else:
-    #             p = qs[i] + (qe[i] - qs[i]) * (t-ts) / (te-ts)
-    #             print("time", (t - ts) / (te-ts))
-    #             print('normal interp', p)
-    #             print(qe[i])
-
-    #         pose.append(p)
-
-    #     pts.append(NpConfiguration.from_list(pose))
-
-    # lengths = []
-    # part_indices = []
-    # for i in range(len(pts)-1):
-    #     lengths.append(config_dist(pts[i], pts[i+1]))
-
-    #     N_part = int(lengths[-1] / resolution)
-    #     N_part = max(2, N_part)
-    #     part_indices.append(N_part)
-
-    # cum_sum_part_indices = [part_indices[0]]
-    # for j in part_indices[1:]:
-    #     cum_sum_part_indices.append(j + cum_sum_part_indices[-1])
 
     # # compute discretizatoin step
     N = config_dist(qe, qs) / resolution
@@ -466,147 +424,22 @@ def edge_collision_free_with_moving_obs(env: BaseProblem, qs, qe, ts, te, prev_p
 
             robot_poses[r].append(p)
 
-
-    # print(times)
-
-    # robot_poses = {}
-    # for r in robots:
-    #     robot_poses[r] = []
-
-    # for i in indices:
-    #     print(i)
-    #     # which part are we in
-    #     for j, l in enumerate(cum_sum_part_indices):
-    #         if i <= l:
-    #             current_part = j
-    #             break
-
-    #     offset = 0
-    #     if current_part > 0:
-    #         offset = cum_sum_part_indices[current_part - 1]
-
-    #     # print((i - offset) / (part_indices[current_part]))
-
-    #     for j, r in enumerate(robots):
-    #         p = pts[current_part][j] + (pts[current_part+1][j] - pts[current_part][j]) * (i - offset) / (part_indices[current_part])
-    #         robot_poses[r].append(p)
-
-    #         if p[0] > 1:
-    #             print("A")
-    #             print((i - offset) / (part_indices[current_part]))
-    #             print(pts[current_part][j])
-    #             print(pts[current_part+1][j] )
-    #             print((pts[current_part+1][j] - pts[current_part][j]) * (i - offset) / (part_indices[current_part]))
-    #             print(p)
-    #             raise ValueError
-
-    # for j, r in enumerate(robots):
-    #     offset = 0
-    #     had_to_project = False
-    #     for idx in range(N):
-    #         if times[idx] < end_times[r]:
-    #             p = prev_plans.get_robot_poses_at_time(robots, times[idx])[j]
-    #             offset = idx
-    #             had_to_project = True
-    #         else:
-    #             if had_to_project:
-    #                 p_start = prev_plans.get_robot_poses_at_time(robots, times[idx])[j]
-    #             else:
-    #                 p_start = qs[j]
-
-    #             p = p_start + (qe[j] - p_start) * (idx) / (N - 1)
-
-    #             if len(robot_poses[r]) > 0 and np.linalg.norm(p - robot_poses[r][-1]) > 0.2:
-    #                 print("AAAAAAAAAAAAA")
-    #                 print((idx-offset) / (N - offset - 1))
-    #                 print(N, times[idx], te, ts)
-
-    #             if (idx-offset) / (N - offset - 1) > 1:
-    #                 print("AAAAAAA")
-    #             # print((idx-offset) / (N - offset - 1), times[idx], p)
-            
-    #         robot_poses[r].append(p)
-
-    # for idx in range(N):
-    #     pose = []
-    #     for j, r in enumerate(robots):
-    #         if times[idx] < end_times[r]:
-    #             p = prev_plans.get_robot_poses_at_time(robots, times[idx])[j]
-    #         else:
-    #             p = qs[j] + (qe[j] - qs[j]) * (idx) / (N-1)
-            
-    #         pose.append(p)
-
-    #         print(pose)
-
-    #     pose = NpConfiguration.from_list(pose)
-    #     # _, q_config = project_sample_to_preplanned_path(t, NpConfiguration.from_list(pose))
-    #     # q = q_config.state()
-
-    #     poses.append(pose)
-
-    prev = None
-    # np.random.shuffle(indices)
-    # random.shuffle(indices)
     indices = generate_binary_search_indices(len(indices)).copy()
 
     for idx in indices:
         # todo this interpolatoin is wrong if we need to project to the manifold
         t = times[idx]
-        # q = poses[idx]
-
-        # if t < t0:
-        #     raise ValueError
 
         ql = []
         for i, r in enumerate(robots):
             ql.append(robot_poses[r][idx])
 
-        # q_l = []
-        # offset = 0
-        # for r in robots:
-        #     dim = env.robot_dims[r]
-        #     q_l.append(q[offset:offset+dim])
-        #     offset += dim
-
-        # _, q_config = project_sample_to_preplanned_path(t, NpConfiguration.from_list(q_l))
-        # q = q_config.state()
-
-        q_conf = conf_type.from_list(ql)
-
-        # if prev is not None:
-        #     # print('dist: ', config_dist(q_conf, prev))
-        #     # print('speed: ', config_dist(q_conf, prev) / (times[idx] - times[idx-1]))
-        #     if config_dist(q_conf, prev) / (times[idx] - times[idx-1]) > v_max:
-        #         # print('speed')
-        #         # return False
-        #         raise ValueError
-
-        prev = q_conf
-
         q = np.concatenate(ql)
 
-        # print(q)
-        # if len(q) > 3 and np.sign(qe[0][0]) == np.sign(qs[0][0]) and qe[0][0] > 0.1:
-        #     print('qs', qs.state())
-        #     print('qe', qe.state())
-
         if not collision_free_with_moving_obs(env, t, q, prev_plans, end_times, robots, joint_names, task_idx):
-            # print('coll')
-            # env.show(True)
-                
-            # if len(q) > 3 and np.sign(qe[0][0]) == np.sign(qs[0][0]) and qe[0][0] > 0.1:
-            #     env.show(True)
-            #     pass
             return False
         
 
-        # if len(q) > 3 and np.sign(qe[0][0]) == np.sign(qs[0][0]) and qe[0][0] > 0.1:
-        #     env.show(True)
-        #     pass
-    
-        # env.show(False)
-        # time.sleep(0.01)
 
     return True
 
