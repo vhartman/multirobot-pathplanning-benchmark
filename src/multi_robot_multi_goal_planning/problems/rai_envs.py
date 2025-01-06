@@ -170,6 +170,7 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
 
         self.tolerance = 0.001
 
+# for the case of the dependency graph, the optimal solution should be 4.1
 class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
@@ -1739,6 +1740,7 @@ def display_path(
     stop: bool = True,
     export: bool = False,
     pause_time: float = 0.01,
+    stop_at_end = False
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
@@ -1752,6 +1754,9 @@ def display_path(
             env.C.view_savePng("./z.vid/")
 
         time.sleep(pause_time)
+    
+    if stop_at_end:
+        env.C.view(True)
 
 
 def check_all_modes():
