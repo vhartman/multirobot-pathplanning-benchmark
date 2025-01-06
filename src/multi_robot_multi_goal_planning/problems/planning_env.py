@@ -61,6 +61,29 @@ class ConstrainedGoal(Goal):
     pass
 
 
+class ConditionalGoal(Goal):
+    def __init__(self, conditions, goals):
+        self.conditions = conditions
+        self.goals = goals
+
+    def satisfies_constraints(self, q: NDArray, mode: "Mode", tolerance: float) -> bool:
+        for c, g in zip(self.conditions, self.goals):
+            if (
+                np.linalg.norm(mode.entry_configuration[0] - c) < tolerance
+                and np.linalg.norm(g - q) < tolerance
+            ):
+                return True
+
+        return False
+
+    def sample(self, mode: "Mode") -> NDArray:
+        for c, g in zip(self.conditions, self.goals):
+            if np.linalg.norm(mode.entry_configuration[0] - c) < 1e-5:
+                return g
+
+        raise ValueError("No feasible goal in mode")
+
+
 class GoalSet(Goal):
     def __init__(self, goals):
         self.goals = goals
@@ -81,7 +104,9 @@ class SingleGoal(Goal):
     def __init__(self, goal: NDArray):
         self.goal = goal
 
-    def satisfies_constraints(self, q: ry.Config, mode: "Mode", tolerance: float) -> bool:
+    def satisfies_constraints(
+        self, q: ry.Config, mode: "Mode", tolerance: float
+    ) -> bool:
         if np.linalg.norm(self.goal - q) < tolerance:
             return True
 
@@ -142,9 +167,11 @@ class Mode:
         return hash(self) == hash(other)
 
     def __hash__(self):
-        # TODO: add entry mode
-        res = hash(tuple(self.task_ids))
-        return res
+        entry_hash = hash(
+            self.entry_configuration.state().tobytes()
+        )  # TODO: this is too restrictive at the moment - we need to check if the scene graph is the same as in another setting
+        task_hash = hash(tuple(self.task_ids))
+        return hash((entry_hash, task_hash))
 
 
 class State:
@@ -311,7 +338,9 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if terminal_task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.tolerance):
+        if terminal_task.goal.satisfies_constraints(
+            q_concat, mode=m, tolerance=self.tolerance
+        ):
             return True
 
         return False
@@ -527,7 +556,9 @@ class DependencyGraphMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=self.tolerance):
+                    if task.goal.satisfies_constraints(
+                        q_concat, mode=mode, tolerance=self.tolerance
+                    ):
                         tmp = Mode(task_list=next_mode, entry_configuration=q)
                         tmp.prev_mode = mode
 
@@ -554,7 +585,9 @@ class DependencyGraphMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.tolerance):
+                    if task.goal.satisfies_constraints(
+                        q_concat, mode=m, tolerance=self.tolerance
+                    ):
                         return True
 
         return False
@@ -577,7 +610,9 @@ class DependencyGraphMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if terminal_task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=self.tolerance):
+        if terminal_task.goal.satisfies_constraints(
+            q_concat, mode=mode, tolerance=self.tolerance
+        ):
             return True
 
         return False
@@ -604,7 +639,7 @@ class DependencyGraphMixin(BaseModeLogic):
             # print("current", current_mode.task_ids)
             # print("changing task_ids", different_tasks)
             different_tasks = list(set(different_tasks))
-            assert(len(different_tasks) == 1)
+            assert len(different_tasks) == 1
 
             return self.tasks[different_tasks[0]]
 

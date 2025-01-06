@@ -16,6 +16,9 @@ def get_env_by_name(name):
         "random_2d_no_rot": lambda: re.rai_random_two_dim(agents_can_rotate=False),
         "2d_handover": lambda: re.rai_two_dim_handover(),
         "three_agents": lambda: re.rai_two_dim_three_agent_env(),
+
+        # 2D with neighborhood
+        "single_agent_mover": lambda: re.rai_two_dim_single_agent_neighbourhood(),
         
         # Envs without obstacles, used to test optimality convergence
         "one_agent_many_goals": lambda: re.rai_two_dim_env_no_obs(),

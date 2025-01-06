@@ -144,8 +144,9 @@ class Graph:
             node_list = self.nodes[key]
             dists = self.batch_dist_fun(node.state.q, [n.state.q for n in node_list])
 
-        transition_node_list = self.transition_nodes[key]
-        transition_dists = self.batch_dist_fun(node.state.q, [n.state.q for n in transition_node_list])
+        if key in self.transition_nodes:
+            transition_node_list = self.transition_nodes[key]
+            transition_dists = self.batch_dist_fun(node.state.q, [n.state.q for n in transition_node_list])
 
         # plt.plot(dists)
         # plt.show()
@@ -158,7 +159,6 @@ class Graph:
             #     # # print(k_star)
             #     k = k_star
             best_nodes = []
-
             if key in self.nodes:
                 k_clip = min(k, len(node_list) - 1)
                 topk = np.argpartition(dists, k_clip)[:k_clip+1]
@@ -166,11 +166,13 @@ class Graph:
 
                 best_nodes = [node_list[i] for i in topk]
 
-            transition_k_clip = min(k, len(transition_node_list) - 1)
-            transition_topk = np.argpartition(transition_dists, transition_k_clip)[:transition_k_clip+1]
-            transition_topk = transition_topk[np.argsort(transition_dists[transition_topk])]
+            best_transition_nodes = []
+            if key in self.transition_nodes:
+                transition_k_clip = min(k, len(transition_node_list) - 1)
+                transition_topk = np.argpartition(transition_dists, transition_k_clip)[:transition_k_clip+1]
+                transition_topk = transition_topk[np.argsort(transition_dists[transition_topk])]
 
-            best_transition_nodes = [transition_node_list[i] for i in transition_topk]
+                best_transition_nodes = [transition_node_list[i] for i in transition_topk]
 
             best_nodes = best_nodes + best_transition_nodes
         else:

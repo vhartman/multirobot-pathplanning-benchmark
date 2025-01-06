@@ -17,6 +17,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     SingleGoal,
     GoalSet,
     GoalRegion,
+    ConditionalGoal,
 )
 from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
@@ -170,6 +171,7 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
 
         self.tolerance = 0.001
 
+
 # for the case of the dependency graph, the optimal solution should be 4.1
 class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
@@ -308,7 +310,56 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
 
 
 class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
-    pass
+    def __init__(self):
+        self.C, keyframes = make_single_agent_mover_env(num_goals=50, view=False)
+        # self.C.view(True)
+
+        self.robots = ["a1"]
+
+        super().__init__()
+
+        self.manipulating_env = True
+
+        pick_task = Task(
+            ["a1"],
+            GoalSet([k[0] for k in keyframes]),
+            type="pick",
+            frames=["a1", "obj1"],
+        )
+
+        place_task = Task(
+            ["a1"],
+            ConditionalGoal([k[0] for k in keyframes], [k[1] for k in keyframes]),
+            type="place",
+            frames=["table", "obj1"],
+        )
+
+        terminal_task = Task(
+            ["a1"],
+            SingleGoal(
+                keyframes[0][2],
+            ),
+        )
+
+        self.tasks = [pick_task, place_task, terminal_task]
+
+        self.tasks[0].name = "a1_pick"
+        self.tasks[1].name = "a1_place"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_pick", "a1_place", "terminal"]
+        )
+
+        self.start_mode = self._make_start_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
+
+        self.tolerance = 0.01
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = self.start_mode
 
 
 class rai_two_dim_simple_manip(SequenceMixin, rai_env):
@@ -383,6 +434,7 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         self.prev_mode = self.start_mode
+
 
 class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
@@ -661,6 +713,7 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         self.prev_mode = self.start_mode
+
 
 class rai_random_two_dim(SequenceMixin, rai_env):
     def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=False):
@@ -1740,7 +1793,7 @@ def display_path(
     stop: bool = True,
     export: bool = False,
     pause_time: float = 0.01,
-    stop_at_end = False
+    stop_at_end=False,
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
@@ -1754,7 +1807,7 @@ def display_path(
             env.C.view_savePng("./z.vid/")
 
         time.sleep(pause_time)
-    
+
     if stop_at_end:
         env.C.view(True)
 
