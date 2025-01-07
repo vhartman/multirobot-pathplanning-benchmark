@@ -10,6 +10,8 @@ from multi_robot_multi_goal_planning.problems.dependency_graph import Dependency
 
 from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import (
+    BaseModeLogic,
+    SequenceMixin,
     State,
     Task,
     SingleGoal,
@@ -19,14 +21,14 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
 
-class rai_two_dim_env(rai_env):
+class rai_two_dim_env(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = make_2d_rai_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
 
-        super().__init__()
+        rai_env.__init__(self)
 
         self.tasks = [
             Task(
@@ -46,13 +48,12 @@ class rai_two_dim_env(rai_env):
 
         self.sequence = self._make_sequence_from_names(["terminal"])
 
-        self.start_mode = self._make_start_mode_from_sequence()
-        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
+        BaseModeLogic.__init__(self)
 
         self.tolerance = 0.1
 
 
-class rai_random_two_dim(rai_env):
+class rai_random_two_dim(SequenceMixin, rai_env):
     def __init__(self, num_robots=3, agents_can_rotate=False):
         self.C, keyframes = make_random_two_dim_single_goal(
             num_agents=num_robots,
@@ -63,7 +64,7 @@ class rai_random_two_dim(rai_env):
 
         self.robots = [f"a{i}" for i in range(num_robots)]
 
-        super().__init__()
+        rai_env.__init__(self)
 
         self.tasks = []
         self.tasks.append(Task(self.robots, SingleGoal(keyframes[0])))
@@ -72,8 +73,7 @@ class rai_random_two_dim(rai_env):
         self.sequence = []
         self.sequence.append(len(self.tasks) - 1)
 
-        self.start_mode = self._make_start_mode_from_sequence()
-        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
+        BaseModeLogic.__init__(self)
 
         self.tolerance = 0.05
 
@@ -82,15 +82,43 @@ class rai_random_two_dim(rai_env):
 
         self.prev_mode = [0, 0]
 
+class rai_random_two_dim_single_agent(SequenceMixin, rai_env):
+    def __init__(self, agents_can_rotate=False):
+        self.C, keyframes = make_random_two_dim_single_goal(
+            num_agents=1,
+            num_obstacles=5,
+            agents_can_rotate=agents_can_rotate,
+        )
+        # self.C.view(True)
 
-class rai_hallway_two_dim(rai_env):
+        self.robots = [f"a{i}" for i in range(1)]
+
+        rai_env.__init__(self)
+
+        self.tasks = []
+        self.tasks.append(Task(self.robots, SingleGoal(keyframes[0])))
+        self.tasks[-1].name = "terminal"
+
+        self.sequence = []
+        self.sequence.append(len(self.tasks) - 1)
+
+        BaseModeLogic.__init__(self)
+
+        self.tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.prev_mode = [0, 0]
+
+class rai_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
 
-        super().__init__()
+        rai_env.__init__(self)
 
         self.tasks = []
         self.sequence = []
@@ -105,8 +133,7 @@ class rai_hallway_two_dim(rai_env):
 
         self.sequence = [0]
 
-        self.start_mode = self._make_start_mode_from_sequence()
-        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
+        BaseModeLogic.__init__(self)
 
         self.tolerance = 0.05
 
@@ -114,7 +141,7 @@ class rai_hallway_two_dim(rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
-class rai_multi_panda_arm_single_goal_env(rai_env):
+class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
     def __init__(self, num_robots: int = 3):
         self.C, keyframes = make_panda_single_joint_goal_env(num_robots=num_robots)
 
@@ -138,19 +165,51 @@ class rai_multi_panda_arm_single_goal_env(rai_env):
 
         print(self.robots)
 
-        super().__init__()
+        rai_env.__init__(self)
 
         self.tasks = [Task(self.robots, SingleGoal(keyframes[0]))]
         self.tasks[0].name = "terminal"
         self.sequence = [0]
 
-        self.start_mode = self._make_start_mode_from_sequence()
-        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
+        BaseModeLogic.__init__(self)
 
         self.tolerance = 0.1
 
 
-class rai_ur10_handover_env(rai_env):
+class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, keyframes = make_panda_single_joint_goal_env(num_robots=1)
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        self.robots = ["a0"]
+
+        print(self.robots)
+
+        rai_env.__init__(self)
+
+        self.tasks = [Task(self.robots, SingleGoal(keyframes[0]))]
+        self.tasks[0].name = "terminal"
+        self.sequence = [0]
+
+        BaseModeLogic.__init__(self)
+
+        self.tolerance = 0.1
+
+class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_handover_env()
 
@@ -174,7 +233,7 @@ class rai_ur10_handover_env(rai_env):
 
         self.robots = ["a1", "a2"]
 
-        super().__init__()
+        rai_env.__init__(self)
 
         self.tasks = [
             Task(
@@ -192,8 +251,7 @@ class rai_ur10_handover_env(rai_env):
 
         self.sequence = [0]
 
-        self.start_mode = self._make_start_mode_from_sequence()
-        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
+        BaseModeLogic.__init__(self)
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
