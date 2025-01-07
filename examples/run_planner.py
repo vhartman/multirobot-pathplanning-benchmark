@@ -214,7 +214,7 @@ def main():
     plt.show()
 
     print("displaying path from planner")
-    display_path(env, interpolated_path, stop=False)
+    display_path(env, interpolated_path, stop=False, stop_at_end=True)
 
     print("displaying path from shortcut path")
     shortcut_discretized_path = interpolate_path(shortcut_path)

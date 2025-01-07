@@ -1,7 +1,10 @@
-import os, sys; sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+import os, sys
+
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 import src.multi_robot_multi_goal_planning.problems.rai_envs as re
 import src.multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
+
 
 def get_env_by_name(name):
     # fmt: off
@@ -48,6 +51,11 @@ def get_env_by_name(name):
         "random_2d_single_goal_no_rot": lambda: rsge.rai_random_two_dim(agents_can_rotate=False),
         "hallway_single_goal": lambda: rsge.rai_hallway_two_dim(),
         "hallway_single_goal_no_rot": lambda: rsge.rai_hallway_two_dim(agents_can_rotate=False),
+
+        # single robot, single goal: debugging
+        "two_dim_single_robot_single_goal": lambda: rsge.rai_random_two_dim_single_agent(),
+        "single_panda_arm_single_goal": lambda: rsge.rai_single_panda_arm_single_goal_env(),
+        "single_agent_box_stacking": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=1, num_boxes=2),
 
         # 3d single goal envs
         "multi_agent_panda_single_goal": lambda: rsge.rai_multi_panda_arm_single_goal_env(),
