@@ -18,6 +18,8 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 )
 from multi_robot_multi_goal_planning.problems.util import path_cost
 
+from concurrent.futures import ThreadPoolExecutor
+
 
 class Node:
     state: State
@@ -138,11 +140,19 @@ class Graph:
 
         # self.add_nodes(nodes)
 
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_neighbors(self, node, k=20, use_k_nearest=True):
         key = node.state.mode
         if key in self.nodes:
             node_list = self.nodes[key]
-            dists = self.batch_dist_fun(node.state.q, [n.state.q for n in node_list])
+
+            # with ThreadPoolExecutor() as executor:
+            #     result = list(executor.map(lambda node: node.state.q, node_list))
+
+            # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
+            # result = list(map(lambda n: n.state.q, node_list))
+            # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
+            dists = self.batch_dist_fun(node.state.q, [n.state.q for n in node_list]) # this, and the list copm below are the slowest parts
 
         if key in self.transition_nodes:
             transition_node_list = self.transition_nodes[key]
@@ -154,13 +164,14 @@ class Graph:
         dim = len(node.state.q.state())
 
         if use_k_nearest:
-            # if key in self.nodes:
-            #     k_star = int(np.e * (1 + 1 / dim) * np.log(len(node_list))) + 1
-            #     # # print(k_star)
-            #     k = k_star
             best_nodes = []
             if key in self.nodes:
-                k_clip = min(k, len(node_list) - 1)
+                k_star = int(np.e * (1 + 1 / dim) * np.log(len(node_list))) + 1
+                # # print(k_star)
+                # k = k_star
+                k_normal_nodes = k_star
+
+                k_clip = min(k_normal_nodes, len(node_list) - 1)
                 topk = np.argpartition(dists, k_clip)[:k_clip+1]
                 topk = topk[np.argsort(dists[topk])]
 
@@ -168,7 +179,12 @@ class Graph:
 
             best_transition_nodes = []
             if key in self.transition_nodes:
-                transition_k_clip = min(k, len(transition_node_list) - 1)
+                k_star = int(np.e * (1 + 1 / dim) * np.log(len(transition_node_list))) + 1
+                # # print(k_star)
+                # k_transition_nodes = k
+                k_transition_nodes = k_star
+
+                transition_k_clip = min(k_transition_nodes, len(transition_node_list) - 1)
                 transition_topk = np.argpartition(transition_dists, transition_k_clip)[:transition_k_clip+1]
                 transition_topk = transition_topk[np.argsort(transition_dists[transition_topk])]
 
@@ -177,10 +193,20 @@ class Graph:
             best_nodes = best_nodes + best_transition_nodes
         else:
             r = 10
-            # r_star = (np.log(len(node_list)) / len(node_list)) ** (1/dim) * 2 * (1 + 1/dim) ** (1/dim)
-            # r = r_star
+            
+            best_nodes = []
+            if key in self.nodes:
+                # r_star = (np.log(len(node_list)) / len(node_list)) ** (1/dim) * 2 * (1 + 1/dim) ** (1/dim)
+                # print(r_star)
+                # # r = r_star
 
-            best_nodes = [n for i, n in enumerate(node_list) if dists[i] < r]
+                best_nodes = [n for i, n in enumerate(node_list) if dists[i] < r]
+            
+            best_transition_nodes = []
+            if key in self.transition_nodes:
+                best_transition_nodes = [n for i, n in enumerate(transition_node_list) if transition_dists[i] < r]
+
+            best_nodes = best_nodes + best_transition_nodes
 
         if node.is_transition:
             # we do not want to have other transition nodes as neigbors
