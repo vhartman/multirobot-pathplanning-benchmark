@@ -873,6 +873,114 @@ def make_two_dim_handover(view: bool = False):
     return C, np.concatenate([handover_keyframes, place_keyframes])
 
 
+def make_single_agent_mover_env(num_goals = 30, view: bool = False):
+    C = make_table_with_walls(2, 2)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.075]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+    ).setJointState([0.0, -0.5, 0.0])
+
+    C.addFrame("obj1").setParent(table).setShape(
+        ry.ST.box, size=[0.4, 0.4, 0.06, 0.005]
+    ).setColor([1, 0.5, 0, 1]).setContact(1).setRelativePosition(
+        [+0.5, +0.5, 0.07]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-0.5, -0.5, 0.07])
+
+    C.addFrame("obs1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.7, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.6, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [-0.7, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.6, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+
+    if view:
+        C.view(True)
+
+    qHome = C.getJointState()
+
+    komo = ry.KOMO(C, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.1])
+    komo.addControlObjective([], 0, 1e-1)
+    # komo.addControlObjective([], 1, 1e0)
+    # komo.addControlObjective([], 2, 1e0)
+
+    komo.addModeSwitch([1, 2], ry.SY.stable, ["a1", "obj1"])
+    komo.addObjective([1, 2], ry.FS.distance, ["a1", "obj1"], ry.OT.eq, [1e1])
+    komo.addModeSwitch([2, -1], ry.SY.stable, ["table", "obj1"])
+
+
+    komo.addObjective([2, -1], ry.FS.positionDiff, ["obj1", "goal1"], ry.OT.eq, [1e1])
+
+    komo.addObjective(
+        times=[3],
+        feature=ry.FS.jointState,
+        frames=[],
+        type=ry.OT.eq,
+        scale=[1e0],
+        target=qHome,
+    )
+
+    # komo.addObjective([2], ry.FS.poseDiff, ["a2", "goal2"], ry.OT.eq, [1e1])
+
+    # komo.addObjective([3, -1], ry.FS.poseDiff, ['a1', 'goal2'], ry.OT.eq, [1e1])
+    # komo.addObjective(
+    #     [3, -1], ry.FS.poseDiff, ["a2", "pre_agent_2_frame"], ry.OT.eq, [1e1]
+    # )
+
+    # we try to produce a couple different solutions
+    sols = []
+    for _ in range(num_goals):
+        dim = len(C.getJointState())
+        x_init = np.random.rand(dim) * 2 - 1.
+        komo.initWithConstant(x_init)
+        
+        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+        # options.nonStrictSteps = 50;
+
+        # solver.setOptions(damping=0.01, wolfe=0.001)
+        # solver.setOptions(damping=0.001)
+        retval = solver.solve()
+        retval = retval.dict()
+
+        # print(bottle, retval)
+
+        if view:
+            komo.view(True, "IK solution")
+
+        keyframes = komo.getPath()
+
+        # print(retval)
+
+        if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+            sols.append(keyframes)
+
+    # # print(keyframes)
+
+    return C, sols
+
 def make_piano_mover_env(view: bool = False):
     C = make_table_with_walls(2, 2)
     table = C.getFrame("table")

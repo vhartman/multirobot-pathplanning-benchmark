@@ -4,10 +4,11 @@ import numpy as np
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.rai_config import *
+from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.planning_env import (
-    base_env,
+    BaseProblem,
     SequenceMixin,
+    Mode,
     State,
     Task,
 )
@@ -45,7 +46,7 @@ def get_robot_state(C: ry.Config, robot_prefix: str) -> NDArray:
 #     C.selectJoints(robot_joints)
 
 
-class rai_env(SequenceMixin, base_env):
+class rai_env(BaseProblem):
     # robot things
     C: ry.Config
     limits: NDArray
@@ -53,8 +54,8 @@ class rai_env(SequenceMixin, base_env):
     # sequence things
     sequence: List[int]
     tasks: List[Task]
-    start_mode: List[int]
-    terminal_mode: List[int]
+    start_mode: Mode
+    _terminal_task_ids: List[int]
 
     # misc
     tolerance: float
@@ -87,32 +88,6 @@ class rai_env(SequenceMixin, base_env):
     ) -> NDArray:
         return batch_config_cost(starts, ends, "max")
 
-    def get_goal_constrained_robots(self, mode: List[int]) -> List[str]:
-        seq_index = self.get_current_seq_index(mode)
-        task = self.tasks[self.sequence[seq_index]]
-        return task.robots
-
-    def done(self, q: Configuration, m: List[int]) -> bool:
-        if m != self.terminal_mode:
-            return False
-
-        # TODO: this is not necessarily true!
-        terminal_task_idx = self.sequence[-1]
-        terminal_task = self.tasks[terminal_task_idx]
-        involved_robots = terminal_task.robots
-
-        q_concat = []
-        for r in involved_robots:
-            r_idx = self.robots.index(r)
-            q_concat.append(q.robot_state(r_idx))
-
-        q_concat = np.concatenate(q_concat)
-
-        if terminal_task.goal.satisfies_constraints(q_concat, self.tolerance):
-            return True
-
-        return False
-
     def show_config(self, q: NDArray, blocking: bool = True):
         self.C.setJointState(q)
         self.C.view(blocking)
@@ -120,66 +95,11 @@ class rai_env(SequenceMixin, base_env):
     def show(self, blocking: bool = True):
         self.C.view(blocking)
 
-    def is_transition(self, q: Configuration, m: List[int]) -> bool:
-        if m == self.terminal_mode:
-            return False
-
-        # robots_with_constraints_in_current_mode = self.get_goal_constrained_robots(m)
-        task = self.get_active_task(m)
-
-        q_concat = []
-        for r in task.robots:
-            r_idx = self.robots.index(r)
-            q_concat.append(q.robot_state(r_idx))
-
-        q_concat = np.concatenate(q_concat)
-
-        if task.goal.satisfies_constraints(q_concat, self.tolerance):
-            return True
-
-        return False
-
-    def get_next_mode(self, q: Optional[Configuration], mode: List[int]) -> List[int]:
-        seq_idx = self.get_current_seq_index(mode)
-
-        # print('seq_idx', seq_idx)
-
-        # find the next mode for the currently constrained one(s)
-        task_idx = self.sequence[seq_idx]
-        rs = self.tasks[task_idx].robots
-
-        # next_robot_mode_ind = None
-
-        m_next = mode.copy()
-
-        # print(rs)
-
-        # find next occurrence of the robot in the sequence/dep graph
-        for r in rs:
-            for idx in self.sequence[seq_idx + 1 :]:
-                if r in self.tasks[idx].robots:
-                    r_idx = self.robots.index(r)
-                    m_next[r_idx] = idx
-                    break
-
-        return m_next
-
-    def get_active_task(self, mode: List[int]) -> Task:
-        seq_idx = self.get_current_seq_index(mode)
-        return self.tasks[self.sequence[seq_idx]]
-
-    def get_tasks_for_mode(self, mode: List[int]) -> List[Task]:
-        tasks = []
-        for _, j in enumerate(mode):
-            tasks.append(self.tasks[j])
-
-        return tasks
-
     # Environment functions: collision checking
     def is_collision_free(
         self,
         q: Optional[Configuration],
-        m: List[int],
+        m: Mode,
         collision_tolerance: float = 0.01,
     ) -> bool:
         # print(q)
@@ -203,7 +123,7 @@ class rai_env(SequenceMixin, base_env):
         return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: List[int], collision_tolerance=0.01
+        self, r: str, q: NDArray, m: Mode, collision_tolerance=0.01
     ) -> bool:
         if isinstance(r, str):
             r = [r]
@@ -263,7 +183,7 @@ class rai_env(SequenceMixin, base_env):
         self,
         q1: Configuration,
         q2: Configuration,
-        m: List[int],
+        m: Mode,
         resolution=0.1,
         randomize_order=True,
     ) -> bool:
@@ -305,7 +225,25 @@ class rai_env(SequenceMixin, base_env):
 
         return True
 
-    def set_to_mode(self, m: List[int]):
+    def get_scenegraph_info_for_mode(self, mode: Mode):
+        if not self.manipulating_env:
+            return {}
+        
+        self.set_to_mode(mode)
+
+        # TODO: should we simply list the movable objects manually?
+        # collect all movable objects and colect parents and relative transformations
+        movable_objects = []
+
+        sg = {}
+        for frame in self.C.frames():
+            if "obj" in frame.name:
+                movable_objects.append(frame.name)
+                sg[frame.name] = (frame.getParent().name, np.round(frame.getRelativeTransform(), 3).tobytes())
+
+        return sg
+
+    def set_to_mode(self, m: Mode):
         if not self.manipulating_env:
             return
 
@@ -319,50 +257,55 @@ class rai_env(SequenceMixin, base_env):
         self.C.clear()
         self.C.addConfigurationCopy(self.C_base)
 
-        # find current mode
-        current_mode = self.get_current_seq_index(m)
+        mode_sequence = []
 
-        if current_mode != self.get_current_seq_index(m):
-            print(current_mode, self.get_current_seq_index(m))
-            raise ValueError
+        current_mode = m
+        while True:
+            if current_mode.prev_mode is None:
+                break
 
-        if current_mode == 0:
-            return
+            mode_sequence.append(current_mode)
+            current_mode = current_mode.prev_mode
+        
+        mode_sequence.append(current_mode)
+        mode_sequence = mode_sequence[::-1]
 
-        mode = self.start_mode
-        for i in range(len(self.sequence) + 1):
-            if i == 0:
-                continue
+        # print(mode_sequence)
 
-            m_prev = mode.copy()
-            mode = self.get_next_mode(None, mode)
+        for i, mode in enumerate(mode_sequence[:-1]):
+            next_mode = mode_sequence[i+1]
 
-            mode_switching_robots = self.get_goal_constrained_robots(m_prev)
+            active_task = self.get_active_task(mode, next_mode.task_ids)
+
+            # mode_switching_robots = self.get_goal_constrained_robots(mode)
+            mode_switching_robots = active_task.robots
 
             # set robot to config
-            prev_mode_index = m_prev[self.robots.index(mode_switching_robots[0])]
+            prev_mode_index = mode.task_ids[self.robots.index(mode_switching_robots[0])]
             # robot = self.robots[mode_switching_robots]
 
-            # TODO: ensure that se are choosing the correct goal here
-            q = self.tasks[prev_mode_index].goal.sample()
+            q_new = []
             joint_names = []
             for r in mode_switching_robots:
                 joint_names.extend(self.robot_joints[r])
+                q_new.append(next_mode.entry_configuration[self.robots.index(r)])
 
+            assert(mode is not None)
+            assert(mode.entry_configuration is not None)
+
+            q = np.concat(q_new)
             self.C.setJointState(q, joint_names)
 
-            if self.tasks[prev_mode_index].type == "goto":
-                pass
-            else:
-                self.C.attach(
-                    self.tasks[prev_mode_index].frames[0],
-                    self.tasks[prev_mode_index].frames[1],
-                )
+            if self.tasks[prev_mode_index].type is not None:
+                if self.tasks[prev_mode_index].type == "goto":
+                    pass
+                else:
+                    self.C.attach(
+                        self.tasks[prev_mode_index].frames[0],
+                        self.tasks[prev_mode_index].frames[1],
+                    )
 
-            # postcondition
-            if self.tasks[prev_mode_index].side_effect is not None:
-                box = self.tasks[prev_mode_index].frames[1]
-                self.C.delFrame(box)
-
-            if i == current_mode:
-                break
+                # postcondition
+                if self.tasks[prev_mode_index].side_effect is not None:
+                    box = self.tasks[prev_mode_index].frames[1]
+                    self.C.delFrame(box)

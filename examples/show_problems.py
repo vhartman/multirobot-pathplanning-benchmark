@@ -1,9 +1,13 @@
+from multi_robot_multi_goal_planning.problems import get_env_by_name
 import multi_robot_multi_goal_planning.problems as problems
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
+from multi_robot_multi_goal_planning.problems.planning_env import Mode
+from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration
 
 import numpy as np
 import argparse
 import time
+import random
 
 
 def visualize_modes(env: rai_env):
@@ -12,20 +16,25 @@ def visualize_modes(env: rai_env):
     q_home = env.start_pos
 
     m = env.start_mode
-    for i in range(len(env.sequence)):
-        print('--------')
+    while True:
+        print("--------")
         print("Mode", m)
-        switching_robots = env.get_goal_constrained_robots(m)
 
         q = []
-        task = env.get_active_task(m)
-        goal_sample = task.goal.sample()
+        next_task_combos = env.get_valid_next_task_combinations(m)
+        if len(next_task_combos) > 0:
+            idx = random.randint(0, len(next_task_combos) - 1)
+            task = env.get_active_task(m, next_task_combos[idx])
+        else:
+            task = env.get_active_task(m, None)
+        switching_robots = task.robots
+        goal_sample = task.goal.sample(m)
 
         if task.name is not None:
-            print('Active Task name:', task.name)
-        print('Involved robots: ', task.robots)
-        
-        print('Goal state:')
+            print("Active Task name:", task.name)
+        print("Involved robots: ", task.robots)
+
+        print("Goal state:")
         print(goal_sample)
 
         print("switching robots: ", switching_robots)
@@ -60,13 +69,78 @@ def visualize_modes(env: rai_env):
 
         env.show()
 
-        if m == env.terminal_mode:
+        if env.is_terminal_mode(m):
             break
 
-        m = env.get_next_mode(None, m)
+        m = env.get_next_mode(type(env.get_start_pos()).from_list(q), m)
 
 
 def benchmark_collision_checking(env: rai_env, N=5000):
+    conf_type = type(env.get_start_pos())
+
+    def sample_next_mode(mode: Mode):
+        while True:
+            possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
+            if len(possible_next_task_combinations) > 0:
+                ind = random.randint(0, len(possible_next_task_combinations) - 1)
+                active_task = env.get_active_task(
+                    mode, possible_next_task_combinations[ind]
+                )
+            else:
+                active_task = env.get_active_task(mode, None)
+
+            goals_to_sample = active_task.robots
+
+            goal_sample = active_task.goal.sample(mode)
+
+            q = []
+            for i in range(len(env.robots)):
+                r = env.robots[i]
+                if r in goals_to_sample:
+                    offset = 0
+                    for _, task_robot in enumerate(active_task.robots):
+                        if task_robot == r:
+                            q.append(
+                                goal_sample[
+                                    offset : offset + env.robot_dims[task_robot]
+                                ]
+                            )
+                            break
+                        offset += env.robot_dims[task_robot]
+                else:  # uniform sample
+                    lims = env.limits[:, env.robot_idx[r]]
+                    if lims[0, 0] < lims[1, 0]:
+                        qr = (
+                            np.random.rand(env.robot_dims[r])
+                            * (lims[1, :] - lims[0, :])
+                            + lims[0, :]
+                        )
+                    else:
+                        qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+
+                    q.append(qr)
+
+            q = conf_type.from_list(q)
+
+            if env.is_collision_free(q.state(), mode):
+                if env.is_terminal_mode(mode):
+                    next_mode = None
+                else:
+                    next_mode = env.get_next_mode(q, mode)
+
+                return next_mode
+
+    # create list of modes that we can reach
+    reachable_modes = [env.get_start_mode()]
+    max_iter = 500
+    for _ in range(max_iter):
+        m_rnd = random.choice(reachable_modes)
+        next_mode = sample_next_mode(m_rnd)
+
+        if next_mode is not None:
+            reachable_modes.append(next_mode)
+
+    # actually do the benchmarking
     start = time.time()
     for _ in range(N):
         q = []
@@ -82,7 +156,7 @@ def benchmark_collision_checking(env: rai_env, N=5000):
                 qr = np.random.rand(env.robot_dims[env.robots[i]]) * 6 - 3
             q.append(qr)
 
-        m = env.sample_random_mode()
+        m = random.choice(reachable_modes)
 
         env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m)
 
@@ -108,7 +182,7 @@ if __name__ == "__main__":
 
     # check_all_modes()
 
-    env = problems.rai_envs.get_env_by_name(args.env_name)
+    env = get_env_by_name(args.env_name)
 
     if args.mode == "show":
         print("Environment starting position")

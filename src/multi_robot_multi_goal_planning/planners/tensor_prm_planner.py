@@ -10,7 +10,7 @@ from itertools import product
 
 import time
 
-from multi_robot_multi_goal_planning.problems.planning_env import State, base_env
+from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
@@ -47,7 +47,7 @@ class Node:
 
     def __hash__(self):
         if self.hash is None:
-            self.hash = hash((self.state.q.state().data.tobytes(), tuple(self.state.mode)))
+            self.hash = hash((self.state.q.state().data.tobytes(), self.state.mode))
         return self.hash
     
         # return hash((tuple(np.round(self.state.q.state(), 3)), tuple(self.state.mode)))
@@ -75,6 +75,8 @@ class ImplicitTensorGraph:
 
         self.per_robot_task_to_goal_lb_cost = {}
 
+        self.conf_type = type(start.q)
+
     def compute_lb_mode_transisitons(self, cost, mode_sequence):
         # cost_per_robot = None
         self.mode_sequence = mode_sequence
@@ -84,17 +86,17 @@ class ImplicitTensorGraph:
             for j, m in enumerate(mode_sequence[:-1]):
                 next_mode = mode_sequence[j+1]
 
-                if m[i] == next_mode[i]:
+                if m.task_ids[i] == next_mode.task_ids[i]:
                     continue
                 
                 nodes = self.transition_nodes
 
                 for k in self.transition_nodes.keys():
                     task = int(k.split("_")[-1])
-                    if m[i] == task:
+                    if m.task_ids[i] == task:
                         key = k
 
-                    if next_mode[i] == task:
+                    if next_mode.task_ids[i] == task:
                         next_key = k
 
                 # key = self.get_key([r], t)
@@ -110,7 +112,7 @@ class ImplicitTensorGraph:
                     for nn in next_nodes:
                         qn = nn.q[nn.rs.index(r)]
 
-                        c = cost(NpConfiguration.from_numpy(q), NpConfiguration.from_numpy(qn))
+                        c = cost(self.conf_type.from_numpy(q), self.conf_type.from_numpy(qn))
                         if min_cost is None or c < min_cost:
                             min_cost = c
                 
@@ -118,10 +120,10 @@ class ImplicitTensorGraph:
 
             cnt = 0
             for j, current_mode in enumerate(mode_sequence[:-1]):
-                if current_mode[i] == mode_sequence[j+1][i]:
+                if current_mode.task_ids[i] == mode_sequence[j+1].task_ids[i]:
                     continue
 
-                self.per_robot_task_to_goal_lb_cost[tuple([r, current_mode[i]])] = sum(
+                self.per_robot_task_to_goal_lb_cost[tuple([r, current_mode.task_ids[i]])] = sum(
                     cheapest_transition[cnt:]
                 )
                 cnt += 1
@@ -145,12 +147,12 @@ class ImplicitTensorGraph:
                     break
 
             if not does_already_exist:
-                self.transition_nodes[key].append(RobotNode(rs, NpConfiguration.from_list(q), t))
+                self.transition_nodes[key].append(RobotNode(rs, self.conf_type.from_list(q), t))
         else:
             # print(f"adding node with key {key}")
             if key not in self.robot_nodes:
                 self.robot_nodes[key] = []
-            self.robot_nodes[key].append(RobotNode(rs, NpConfiguration.from_list(q), t))
+            self.robot_nodes[key].append(RobotNode(rs, self.conf_type.from_list(q), t))
 
     def get_robot_neighbors(self, rs, q, t, get_transitions, k=10):
         # print(f"finding robot neighbors for {rs}")
@@ -201,10 +203,10 @@ class ImplicitTensorGraph:
         # get separate nn for each robot-group
         per_group_nn = {}
         for i, r in enumerate(self.robots):
-            task = mode[i]
+            task = mode.task_ids[i]
             # extract the correct state here
             q = node.state.q[i]
-            per_group_nn[r] = self.get_robot_neighbors([r], NpConfiguration.from_numpy(q), task, False, k)
+            per_group_nn[r] = self.get_robot_neighbors([r], self.conf_type.from_numpy(q), task, False, k)
 
         # print(f"finding neighbors from transitions for {active_robots}")
         qs = []
@@ -212,9 +214,9 @@ class ImplicitTensorGraph:
             i = self.robots.index(r)
             q = node.state.q[i]
             qs.append(q)
-            task = mode[i]
+            task = mode.task_ids[i]
 
-        active_robot_config = NpConfiguration.from_list(qs)
+        active_robot_config = self.conf_type.from_list(qs)
         transitions = self.get_robot_neighbors(active_robots, active_robot_config, task, True, k)
 
         # print("making transition tensor product")
@@ -243,7 +245,7 @@ class ImplicitTensorGraph:
             for combination in product(*to_be_combined):
                 q = [combination[j].q[i] for (j, i) in flat_mapping]
                 concat = np.concat(q)
-                combined.append(NpConfiguration(concat, slices))
+                combined.append(self.conf_type(concat, slices))
 
             return combined
             
@@ -297,7 +299,7 @@ class ImplicitTensorGraph:
         return neighbors
 
     # this is a copy of the search from the normal prm
-    def search(self, start_node, goal_nodes: List, env: base_env, best_cost=None):
+    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None):
         open_queue = []
         closed_list = set()
 
@@ -312,7 +314,7 @@ class ImplicitTensorGraph:
             per_robot_min_to_goal = []
             
             for i, r in enumerate(self.robots):
-                t = node.state.mode[i]
+                t = node.state.mode.task_ids[i]
 
                 for k in self.transition_nodes.keys():
                     task = int(k.split("_")[-1])
@@ -336,7 +338,7 @@ class ImplicitTensorGraph:
                         min_dist = d
                 
                 from_transition_to_goal = 0
-                if t != env.terminal_mode[i]:
+                if t != env._terminal_task_ids[i]:
                     from_transition_to_goal = self.per_robot_task_to_goal_lb_cost[tuple([r, t])]
 
                 per_robot_min_to_goal.append(min_dist + from_transition_to_goal)
@@ -355,7 +357,7 @@ class ImplicitTensorGraph:
 
         # populate open_queue and fs
         active_robots = env.get_goal_constrained_robots(start_node.state.mode)
-        next_mode = env.get_next_mode(None, start_node.state.mode)
+        # next_mode = env.get_next_mode(None, start_node.state.mode)
 
         start_edges = [(start_node, n) for n in self.get_neighbors(start_node, active_robots)]
 
@@ -432,7 +434,9 @@ class ImplicitTensorGraph:
 
             # get_neighbors
             if env.is_transition(n1.state.q, n1.state.mode):
-                next_mode = env.get_next_mode(None, n1.state.mode)
+                next_mode = env.get_next_mode(n1.state.q, n1.state.mode)
+
+                # TODO: we should still look for the normal neighbor shere as well
                 neighbors = [Node(State(n1.state.q, next_mode))]
             else:
                 active_robots = env.get_goal_constrained_robots(n1.state.mode)
@@ -486,7 +490,7 @@ class ImplicitTensorGraph:
 # nearest neighbors are found by checking the nearest neighbors in each separate graph, and then
 # taking the nearest of those
 def tensor_prm_planner(
-    env: base_env,
+    env: BaseProblem,
     optimize: bool = True,
     mode_sampling_type: str = "greedy",
     max_iter: int = 2000,
@@ -517,9 +521,10 @@ def tensor_prm_planner(
 
     mode_sequence = [m0]
     while True:
-        if mode_sequence[-1] == env.terminal_mode:
+        if env.is_terminal_mode(mode_sequence[-1]):
             break
 
+        # TODO: this does very much nor work anymore for the dependency graph
         mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
 
     def sample_mode(mode_sampling_type="weighted", found_solution=False):
@@ -555,7 +560,7 @@ def tensor_prm_planner(
                     q = np.random.rand(env.robot_dims[r]) * 6 - 3
                 
                 m = sample_mode("weighted")
-                t = m[i]
+                t = m.task_ids[i]
 
                 if env.is_collision_free_for_robot([r], q, m):
                     pt = (r, q, t)
@@ -578,10 +583,10 @@ def tensor_prm_planner(
             goal_constrainted_robots = env.get_goal_constrained_robots(m)
             active_task = env.get_active_task(m)
 
-            goal_sample = active_task.goal.sample()
+            goal_sample = active_task.goal.sample(m)
 
             q = goal_sample
-            t = m[env.robots.index(goal_constrainted_robots[0])]
+            t = m.task_ids[env.robots.index(goal_constrainted_robots[0])]
 
             q_list = []
             offset = 0
@@ -595,7 +600,7 @@ def tensor_prm_planner(
                 transition = (goal_constrainted_robots, q_list, t)
                 transitions.append(transition)
 
-                if m == env.terminal_mode:
+                if env.is_terminal_mode(m):
                     next_mode = None
                 else:
                     next_mode = env.get_next_mode(q, m)
@@ -636,7 +641,12 @@ def tensor_prm_planner(
 
             g.compute_lb_mode_transisitons(env.config_cost, mode_sequence)
         
-        if env.terminal_mode not in reached_modes:
+        reached_terminal_mode = False
+        for m in reached_modes:
+            if env.is_terminal_mode(m):
+                reached_terminal_mode = True
+
+        if not reached_terminal_mode:
             continue
 
         while True:

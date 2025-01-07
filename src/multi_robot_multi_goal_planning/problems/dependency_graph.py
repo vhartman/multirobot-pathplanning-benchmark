@@ -68,6 +68,9 @@ class DependencyGraph:
                     
         collect_deps(node)
         return all_deps
+
+    def get_direct_dependencies(self, node):
+        return self.dependencies[node]
     
     def get_dependents(self, node):
         """Get all nodes that depend on this node."""
@@ -79,23 +82,46 @@ class DependencyGraph:
         """Return a valid build order (topological sort)."""
         result = []
         visited = set()
-        
+
         def dfs(node):
             if node in visited:
-                return
+                return 
             visited.add(node)
             
-            # Visit all dependencies first
             for dep in self.dependencies[node]:
                 dfs(dep)
-            
             result.append(node)
-            
+
         # Visit all nodes
         for node in self.dependencies:
             dfs(node)
+
+        return result  # No need to reverse since order is correct
+    
+    def get_all_build_orders(self):
+        """Return all possible build orders (topological sorts)."""
+        result = []
+        build_order = []
+        in_progress = set()  # Tracks nodes currently being added
+        dependencies = {node: set(deps) for node, deps in self.dependencies.items()}  # Copy dependencies
+
+        def dfs():
+            if len(build_order) == len(self.dependencies):
+                result.append(build_order[:])  # Add a copy of the current build order
+                return
             
-        return result[::-1]  # Reverse to get correct order
+            for node in self.dependencies:
+                if node not in in_progress and dependencies[node] <= set(build_order):
+                    # Try adding this node to the current build order
+                    build_order.append(node)
+                    in_progress.add(node)
+                    dfs()
+                    # Backtrack
+                    build_order.pop()
+                    in_progress.remove(node)
+        
+        dfs()
+        return result
     
     def get_root_nodes(self):
         """Get nodes that don't depend on anything."""

@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from collections import namedtuple
 import copy
 
-from multi_robot_multi_goal_planning.problems.planning_env import SingleGoal
+from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem, SingleGoal
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration, batch_config_dist, config_dist
@@ -362,52 +362,12 @@ def collision_free_with_moving_obs(env, t, q, prev_plans, end_times, robots, rob
 
     return False
 
-def edge_collision_free_with_moving_obs(env, qs, qe, ts, te, prev_plans, robots, end_times, joint_names, task_idx, resolution = 0.1):
+def edge_collision_free_with_moving_obs(env: BaseProblem, qs, qe, ts, te, prev_plans, robots, end_times, joint_names, task_idx, resolution = 0.1):
+    conf_type = type(env.get_start_pos())
+
     # print("A", ts, te)
     # print('edge check')
     assert(ts < te)
-    # pts = []
-
-    # time_pts_of_interest = [ts, te]
-    # for r in robots:
-    #     if end_times[r] > ts and end_times[r] < te:
-    #         time_pts_of_interest.append(end_times[r])
-
-    # time_pts_of_interest.sort()
-
-    # print('edge check')
-    # print(ts, te)
-    # print(time_pts_of_interest)
-
-    # for k, t in enumerate(time_pts_of_interest):
-    #     pose = []
-    #     for i, r in enumerate(robots):
-    #         if t < end_times[r]:
-    #             p = prev_plans.get_robot_poses_at_time(r, t)[0]
-    #             print('proj', p)
-    #             # raise ValueError
-    #         else:
-    #             p = qs[i] + (qe[i] - qs[i]) * (t-ts) / (te-ts)
-    #             print("time", (t - ts) / (te-ts))
-    #             print('normal interp', p)
-    #             print(qe[i])
-
-    #         pose.append(p)
-
-    #     pts.append(NpConfiguration.from_list(pose))
-
-    # lengths = []
-    # part_indices = []
-    # for i in range(len(pts)-1):
-    #     lengths.append(config_dist(pts[i], pts[i+1]))
-
-    #     N_part = int(lengths[-1] / resolution)
-    #     N_part = max(2, N_part)
-    #     part_indices.append(N_part)
-
-    # cum_sum_part_indices = [part_indices[0]]
-    # for j in part_indices[1:]:
-    #     cum_sum_part_indices.append(j + cum_sum_part_indices[-1])
 
     # # compute discretizatoin step
     N = config_dist(qe, qs) / resolution
@@ -464,159 +424,36 @@ def edge_collision_free_with_moving_obs(env, qs, qe, ts, te, prev_plans, robots,
 
             robot_poses[r].append(p)
 
-
-    # print(times)
-
-    # robot_poses = {}
-    # for r in robots:
-    #     robot_poses[r] = []
-
-    # for i in indices:
-    #     print(i)
-    #     # which part are we in
-    #     for j, l in enumerate(cum_sum_part_indices):
-    #         if i <= l:
-    #             current_part = j
-    #             break
-
-    #     offset = 0
-    #     if current_part > 0:
-    #         offset = cum_sum_part_indices[current_part - 1]
-
-    #     # print((i - offset) / (part_indices[current_part]))
-
-    #     for j, r in enumerate(robots):
-    #         p = pts[current_part][j] + (pts[current_part+1][j] - pts[current_part][j]) * (i - offset) / (part_indices[current_part])
-    #         robot_poses[r].append(p)
-
-    #         if p[0] > 1:
-    #             print("A")
-    #             print((i - offset) / (part_indices[current_part]))
-    #             print(pts[current_part][j])
-    #             print(pts[current_part+1][j] )
-    #             print((pts[current_part+1][j] - pts[current_part][j]) * (i - offset) / (part_indices[current_part]))
-    #             print(p)
-    #             raise ValueError
-
-    # for j, r in enumerate(robots):
-    #     offset = 0
-    #     had_to_project = False
-    #     for idx in range(N):
-    #         if times[idx] < end_times[r]:
-    #             p = prev_plans.get_robot_poses_at_time(robots, times[idx])[j]
-    #             offset = idx
-    #             had_to_project = True
-    #         else:
-    #             if had_to_project:
-    #                 p_start = prev_plans.get_robot_poses_at_time(robots, times[idx])[j]
-    #             else:
-    #                 p_start = qs[j]
-
-    #             p = p_start + (qe[j] - p_start) * (idx) / (N - 1)
-
-    #             if len(robot_poses[r]) > 0 and np.linalg.norm(p - robot_poses[r][-1]) > 0.2:
-    #                 print("AAAAAAAAAAAAA")
-    #                 print((idx-offset) / (N - offset - 1))
-    #                 print(N, times[idx], te, ts)
-
-    #             if (idx-offset) / (N - offset - 1) > 1:
-    #                 print("AAAAAAA")
-    #             # print((idx-offset) / (N - offset - 1), times[idx], p)
-            
-    #         robot_poses[r].append(p)
-
-    # for idx in range(N):
-    #     pose = []
-    #     for j, r in enumerate(robots):
-    #         if times[idx] < end_times[r]:
-    #             p = prev_plans.get_robot_poses_at_time(robots, times[idx])[j]
-    #         else:
-    #             p = qs[j] + (qe[j] - qs[j]) * (idx) / (N-1)
-            
-    #         pose.append(p)
-
-    #         print(pose)
-
-    #     pose = NpConfiguration.from_list(pose)
-    #     # _, q_config = project_sample_to_preplanned_path(t, NpConfiguration.from_list(pose))
-    #     # q = q_config.state()
-
-    #     poses.append(pose)
-
-    prev = None
-    # np.random.shuffle(indices)
-    # random.shuffle(indices)
     indices = generate_binary_search_indices(len(indices)).copy()
 
     for idx in indices:
         # todo this interpolatoin is wrong if we need to project to the manifold
         t = times[idx]
-        # q = poses[idx]
-
-        # if t < t0:
-        #     raise ValueError
 
         ql = []
         for i, r in enumerate(robots):
             ql.append(robot_poses[r][idx])
 
-        # q_l = []
-        # offset = 0
-        # for r in robots:
-        #     dim = env.robot_dims[r]
-        #     q_l.append(q[offset:offset+dim])
-        #     offset += dim
-
-        # _, q_config = project_sample_to_preplanned_path(t, NpConfiguration.from_list(q_l))
-        # q = q_config.state()
-
-        q_conf = NpConfiguration.from_list(ql)
-
-        # if prev is not None:
-        #     # print('dist: ', config_dist(q_conf, prev))
-        #     # print('speed: ', config_dist(q_conf, prev) / (times[idx] - times[idx-1]))
-        #     if config_dist(q_conf, prev) / (times[idx] - times[idx-1]) > v_max:
-        #         # print('speed')
-        #         # return False
-        #         raise ValueError
-
-        prev = q_conf
-
         q = np.concatenate(ql)
 
-        # print(q)
-        # if len(q) > 3 and np.sign(qe[0][0]) == np.sign(qs[0][0]) and qe[0][0] > 0.1:
-        #     print('qs', qs.state())
-        #     print('qe', qe.state())
-
         if not collision_free_with_moving_obs(env, t, q, prev_plans, end_times, robots, joint_names, task_idx):
-            # print('coll')
-            # env.show(True)
-                
-            # if len(q) > 3 and np.sign(qe[0][0]) == np.sign(qs[0][0]) and qe[0][0] > 0.1:
-            #     env.show(True)
-            #     pass
             return False
         
 
-        # if len(q) > 3 and np.sign(qe[0][0]) == np.sign(qs[0][0]) and qe[0][0] > 0.1:
-        #     env.show(True)
-        #     pass
-    
-        # env.show(False)
-        # time.sleep(0.01)
 
     return True
 
 
-def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx, end_times, goal, t_lb):
+def plan_in_time_space(env: BaseProblem, prev_plans:MultiRobotPath, robots, task_idx, end_times, goal, t_lb):
     max_iter = 50000
     t0 = min([v for k, v in end_times.items()])
     # t0 = max([v for k, v in end_times.items()])
     # t0 = prev_plans.get_final_time()
 
+    conf_type = type(env.get_start_pos())
+
     start_configuration = prev_plans.get_robot_poses_at_time(robots, t0)
-    q0 = NpConfiguration.from_list(start_configuration)
+    q0 = conf_type.from_list(start_configuration)
 
     print('start state', q0.state())
 
@@ -688,7 +525,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
             q_list.append(q[offset: dim+offset])
             offset += dim
 
-        return t, NpConfiguration.from_list(q_list)
+        return t, conf_type.from_list(q_list)
 
     sampled_goals = []
 
@@ -697,7 +534,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
 
         if rnd < goal_sampling_probability:
             t_rnd = np.random.rand() * (t_ub - t_lb) + t_lb
-            q_goal = goal.sample()
+            q_goal = goal.sample(None)
 
             q_goal_as_list = []
             offset = 0
@@ -706,9 +543,9 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
                 q_goal_as_list.append(q_goal[offset:offset+dim])
                 offset += dim
 
-            sampled_goals.append((t_rnd, NpConfiguration.from_list(q_goal_as_list)))
+            sampled_goals.append((t_rnd, conf_type.from_list(q_goal_as_list)))
 
-            return t_rnd, NpConfiguration.from_list(q_goal_as_list)
+            return t_rnd, conf_type.from_list(q_goal_as_list)
 
         t_rnd = np.random.rand() * (t_ub - t0) + t0
 
@@ -742,7 +579,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
 
         # print(q_rnd)
 
-        return t_rnd, NpConfiguration.from_list(q_rnd)
+        return t_rnd, conf_type.from_list(q_rnd)
 
     def project_sample_to_preplanned_path(t, q):
         q_new = q
@@ -762,14 +599,14 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
 
     # estimate distance
     start_poses = prev_plans.get_robot_poses_at_time(robots, t_lb)
-    goal_pose = goal.sample()
+    goal_pose = goal.sample(None)
     goal_config = []
     offset = 0
     for r in robots:
         dim = env.robot_dims[r]
         goal_config.append(goal_pose[offset: offset+dim])
         offset += dim
-    d = config_dist(NpConfiguration.from_list(goal_config), NpConfiguration.from_list(start_poses))
+    d = config_dist(conf_type.from_list(goal_config), conf_type.from_list(start_poses))
 
     # compute max time from it
     max_t = t_lb + (d / v_max) * 50
@@ -980,7 +817,7 @@ def plan_in_time_space(env: rai_env, prev_plans:MultiRobotPath, robots, task_idx
 
                 added_pt = True
 
-        if added_pt and  goal.satisfies_constraints(q_new.state(), 0.1) and t_new > t_lb:
+        if added_pt and  goal.satisfies_constraints(q_new.state(), mode=None, tolerance=0.1) and t_new > t_lb:
             configurations = [q_new.state()]
             times = [t_new]
 
@@ -1024,7 +861,7 @@ def interpolate_in_time_space(
     # t0 = min([t for _, t in end_times.items()])
 
     print("start_pose", q0)
-    qg = goal.sample()
+    qg = goal.sample(None)
     print("goal pose", qg)
 
     offset = 0
@@ -1096,9 +933,11 @@ def plan_in_time_space_bidirectional(env: rai_env, prev_plans:MultiRobotPath, ro
     pass
 
 
-def shortcut_with_dynamic_obstacles(env:rai_env, other_paths: MultiRobotPath, robots, path, task_idx, max_iter = 500):
+def shortcut_with_dynamic_obstacles(env:BaseProblem, other_paths: MultiRobotPath, robots, path, task_idx, max_iter = 500):
     # costs = [path_cost(new_path, env.batch_config_cost)]
     # times = [0.0]
+
+    conf_type = type(env.get_start_pos())
 
     def arr_to_config(q):
         offset = 0
@@ -1107,7 +946,7 @@ def shortcut_with_dynamic_obstacles(env:rai_env, other_paths: MultiRobotPath, ro
             dim = env.robot_dims[r]
             ql.append(q[offset:offset+dim])
             offset += dim
-        return NpConfiguration.from_list(ql)
+        return conf_type.from_list(ql)
 
     def arr_to_state(q):
         return State(arr_to_config(q), None)
@@ -1269,9 +1108,11 @@ def plan_robots_in_dyn_env(env, other_paths, robots, task_idx, q0, end_times, go
 
     return separate_paths
 
-def prioritized_planning(env: rai_env):
+def prioritized_planning(env: BaseProblem):
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
+
+    conf_type = type(env.get_start_pos())
 
     robots = env.robots
 
@@ -1291,7 +1132,7 @@ def prioritized_planning(env: rai_env):
         ]
 
         while True:
-            qg = next_goal.sample()
+            qg = next_goal.sample(mode)
             env.C.setJointState(qg, next_robots_joint_names)
 
             q = (
@@ -1442,7 +1283,7 @@ def prioritized_planning(env: rai_env):
         t = i * T / N
 
         q = robot_paths.get_robot_poses_at_time(env.robots, t)
-        config = NpConfiguration.from_list(q)
+        config = conf_type.from_list(q)
         mode = robot_paths.get_mode_at_time(t)
 
         state = State(config, mode)

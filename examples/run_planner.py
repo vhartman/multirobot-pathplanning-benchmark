@@ -55,7 +55,7 @@ def robot_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
 
         can_shortcut_this = True
         for r in robots_to_shortcut:
-            if new_path[i].mode[r] != new_path[j].mode[r]:
+            if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
                 can_shortcut_this = False
 
         if not can_shortcut_this:
@@ -112,7 +112,6 @@ def robot_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
 
     return new_path, [costs, times]
 
-
 def interpolate_path(path: List[State], resolution: float = 0.1):
     config_type = type(path[0].q)
     new_path = []
@@ -160,27 +159,44 @@ def main():
     parser.add_argument(
         "--num_iters", type=int, default=2000, help="Number of iterations"
     )
+    parser.add_argument(
+        "--planner",
+        choices=["joint_prm", "tensor_prm", "prioritized"],
+        default="joint_prm",
+        help="Planner to use (default: joint_prm)",
+    )
 
     args = parser.parse_args()
 
     env = get_env_by_name(args.env)
-
     env.show()
 
-    # path, info = prioritized_planning(env)
-    # path, info = joint_prm_planner(env, optimize=args.optimize, mode_sampling_type=None, max_iter=args.num_iters)
-    path, info = tensor_prm_planner(
-        env, optimize=args.optimize, mode_sampling_type=None, max_iter=args.num_iters
-    )
-    interpolated_path = interpolate_path(path, 0.05)
+    if args.planner == "joint_prm":
+        path, info = joint_prm_planner(
+            env,
+            optimize=args.optimize,
+            mode_sampling_type=None,
+            max_iter=args.num_iters,
+        )
+    elif args.planner == "tensor_prm":
+        path, info = tensor_prm_planner(
+            env,
+            optimize=args.optimize,
+            mode_sampling_type=None,
+            max_iter=args.num_iters,
+        )
+    elif args.planner == "prioritized":
+        path, info = prioritized_planning(env)
 
     shortcut_path, info_shortcut = robot_mode_shortcut(env, path, 10000)
+    interpolated_path = interpolate_path(path, 0.05)
 
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))
 
     print("Checking shortcutted path for validity")
     print(env.is_valid_plan(shortcut_path))
+
 
     print("cost", info["costs"])
     print("comp_time", info["times"])
@@ -197,13 +213,12 @@ def main():
 
     plt.show()
 
-    print("displaying path from prioritized planner")
+    print("displaying path from planner")
     display_path(env, interpolated_path, stop=False)
 
     print("displaying path from shortcut path")
     shortcut_discretized_path = interpolate_path(shortcut_path)
     display_path(env, shortcut_discretized_path, stop=False)
-
 
 if __name__ == "__main__":
     main()

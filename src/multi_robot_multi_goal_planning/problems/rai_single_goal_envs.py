@@ -47,7 +47,7 @@ class rai_two_dim_env(rai_env):
         self.sequence = self._make_sequence_from_names(["terminal"])
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.1
 
@@ -73,7 +73,7 @@ class rai_random_two_dim(rai_env):
         self.sequence.append(len(self.tasks) - 1)
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.05
 
@@ -106,7 +106,7 @@ class rai_hallway_two_dim(rai_env):
         self.sequence = [0]
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.05
 
@@ -145,7 +145,7 @@ class rai_multi_panda_arm_single_goal_env(rai_env):
         self.sequence = [0]
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.tolerance = 0.1
 
@@ -193,7 +193,7 @@ class rai_ur10_handover_env(rai_env):
         self.sequence = [0]
 
         self.start_mode = self._make_start_mode_from_sequence()
-        self.terminal_mode = self._make_terminal_mode_from_sequence()
+        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
