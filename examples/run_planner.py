@@ -114,7 +114,7 @@ def main():
     plt.show()
 
     print("displaying path from planner")
-    display_path(env, interpolated_path, stop=False)
+    display_path(env, interpolated_path, stop=False, stop_at_end=True)
 
 
 if __name__ == "__main__":
