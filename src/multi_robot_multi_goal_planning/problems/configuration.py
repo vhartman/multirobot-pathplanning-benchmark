@@ -165,14 +165,15 @@ class NpConfiguration(Configuration):
 
         diff = pt.q - np.array([other.q for other in batch_other])
 
-        if metric == "euclidean":
-        # if True:
+        # if metric == "euclidean":
+        if True:
             # return np.linalg.norm(diff, axis=1)
             dists = np.zeros((pt._num_agents, diff.shape[0]))
             for i, (s, e) in enumerate(pt.slice):
                 dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
             # dists = np.array([np.linalg.norm(diff[:, s:e], axis=1) for s, e in pt.slice])
-            return np.max(dists, axis=0)
+            return np.sum(dists, axis=0)
+            # return np.max(dists, axis=0)
         else:
             return np.max(np.abs(diff), axis=1)
 
@@ -224,6 +225,8 @@ def batch_config_cost(
     )
     all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
 
+    # return np.linalg.norm(diff, axis=1)
+
     for i, (s, e) in enumerate(starts[0].q.slice):
         if metric == "euclidean":
             all_robot_dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
@@ -232,4 +235,5 @@ def batch_config_cost(
 
         # print(all_robot_dists)
 
-    return np.max(all_robot_dists, axis=0) + 0.01 * np.sum(all_robot_dists, axis=0)
+    # return np.max(all_robot_dists, axis=0) + 0.01 * np.sum(all_robot_dists, axis=0)
+    return np.sum(all_robot_dists, axis=0)
