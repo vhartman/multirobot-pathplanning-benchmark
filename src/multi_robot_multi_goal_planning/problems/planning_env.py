@@ -167,9 +167,10 @@ class Mode:
         return hash(self) == hash(other)
 
     def __hash__(self):
-        entry_hash = hash(
-            self.entry_configuration.state().tobytes()
-        )  # TODO: this is too restrictive at the moment - we need to check if the scene graph is the same as in another setting
+        entry_hash = 0
+        # entry_hash = hash(
+        #     self.entry_configuration.state().tobytes()
+        # )  # TODO: this is too restrictive at the moment - we need to check if the scene graph is the same as in another setting
         task_hash = hash(tuple(self.task_ids))
         return hash((entry_hash, task_hash))
 
@@ -192,6 +193,12 @@ def state_dist(start: State, end: State) -> float:
 
 class BaseModeLogic(ABC):
     tasks: List[Task]
+    _task_name_dict: Dict[str, Task]
+    _task_id_dict: Dict[str, int]
+
+    def __init__(self):
+        self.start_mode = self.make_start_mode()
+        self._terminal_task_ids = self.make_symbolic_end()
 
     # TODO: cache name -> task in a dict
     def _get_task_by_name(self, name):
@@ -203,6 +210,14 @@ class BaseModeLogic(ABC):
         for i, t in enumerate(self.tasks):
             if t.name == name:
                 return i
+            
+    @abstractmethod
+    def make_start_mode(self):
+        pass
+
+    @abstractmethod
+    def make_symbolic_end(self):
+        pass
 
     @abstractmethod
     def get_valid_next_task_combinations(self, m: Mode):
@@ -230,7 +245,7 @@ class BaseModeLogic(ABC):
 
 
 # concrete implementations of the required abstract classes for the sequence-setting.
-# TODO: technically, this is a specialization of the dependency graph below
+# TODO: technically, this is a specialization of the dependency graph below - should we make this explicit?
 class SequenceMixin(BaseModeLogic):
     sequence: List[int]
     tasks: List[Task]
@@ -250,7 +265,7 @@ class SequenceMixin(BaseModeLogic):
 
         return sequence
 
-    def _make_start_mode_from_sequence(self) -> Mode:
+    def make_start_mode(self) -> Mode:
         mode_dict = {}
 
         for task_index in self.sequence:
@@ -267,7 +282,7 @@ class SequenceMixin(BaseModeLogic):
         start_mode = Mode(task_ids, self.start_pos)
         return start_mode
 
-    def _make_terminal_mode_from_sequence(self) -> Mode:
+    def make_symbolic_end(self) -> List[int]:
         mode_dict = {}
 
         for task_index in self.sequence:
@@ -299,17 +314,6 @@ class SequenceMixin(BaseModeLogic):
                 min_sequence_pos = min(self.sequence.index(task_id), min_sequence_pos)
 
         return min_sequence_pos
-
-    # TODO: is that really a good way to sample a mode?
-    # TODO: we should maintain a list of modes that we reached, and sample from that
-    def sample_random_mode(self) -> Mode:
-        m = self.start_mode
-        rnd = random.randint(0, len(self.sequence))
-
-        for _ in range(rnd):
-            m = self.get_next_mode(None, m)
-
-        return m
 
     def get_sequence(self):
         return self.sequence
@@ -397,13 +401,6 @@ class SequenceMixin(BaseModeLogic):
         seq_idx = self.get_current_seq_index(current_mode)
         return self.tasks[self.sequence[seq_idx]]
 
-    # def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
-    #     tasks = []
-    #     for _, j in enumerate(mode):
-    #         tasks.append(self.tasks[j])
-
-    #     return tasks
-
 
 class DependencyGraphMixin(BaseModeLogic):
     graph: DependencyGraph
@@ -443,6 +440,7 @@ class DependencyGraphMixin(BaseModeLogic):
 
     def _make_terminal_mode_from_sequence(self, sequence) -> Mode:
         mode_dict = {}
+        _completed_symbolic_tasks_cache: Dict[Mode, List[str]]
 
         for task_index in sequence:
             task_robots = self.tasks[task_index].robots
@@ -463,20 +461,20 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return True
 
-    def _make_start_mode_from_graph(self) -> Mode:
+    def make_start_mode(self) -> Mode:
         possible_named_sequence = self.graph.get_build_order()
         possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
 
         return self._make_start_mode_from_sequence(possible_id_sequence)
 
-    def _make_terminal_mode_from_graph(self) -> Mode:
+    def make_symbolic_end(self) -> Mode:
         possible_named_sequence = self.graph.get_build_order()
         possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
 
         return self._make_terminal_mode_from_sequence(possible_id_sequence)
 
     # TODO: this can be cached
-    def _get_finished_tasks_from_mode(self, mode: Mode):
+    def _get_finished_tasks_from_mode(self, mode: Mode) -> List[str]:
         completed_tasks = []
         for i, task_id in enumerate(mode.task_ids):
             robot = self.robots[i]
@@ -534,9 +532,6 @@ class DependencyGraphMixin(BaseModeLogic):
             involved_robots = self.tasks[id].robots
             if robot in involved_robots:
                 return name
-
-    def sample_random_mode(self) -> Mode:
-        raise NotImplementedError
 
     def get_next_mode(self, q: Configuration, mode: Mode):
         next_mode_ids = self.get_valid_next_task_combinations(mode)
@@ -678,11 +673,6 @@ class BaseProblem(ABC):
 
     # def get_robot_bounds(self, robot):
     #     self.bounds
-
-    # Task sequencing methods
-    @abstractmethod
-    def sample_random_mode(self) -> Mode:
-        pass
 
     @abstractmethod
     def done(self, q: Configuration, mode: Mode):
