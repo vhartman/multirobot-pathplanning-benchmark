@@ -225,6 +225,24 @@ class rai_env(BaseProblem):
 
         return True
 
+    def get_scenegraph_info_for_mode(self, mode: Mode):
+        if not self.manipulating_env:
+            return {}
+        
+        self.set_to_mode(mode)
+
+        # TODO: should we simply list the movable objects manually?
+        # collect all movable objects and colect parents and relative transformations
+        movable_objects = []
+
+        sg = {}
+        for frame in self.C.frames():
+            if "obj" in frame.name:
+                movable_objects.append(frame.name)
+                sg[frame.name] = (frame.getParent().name, np.round(frame.getRelativeTransform(), 3).tobytes())
+
+        return sg
+
     def set_to_mode(self, m: Mode):
         if not self.manipulating_env:
             return

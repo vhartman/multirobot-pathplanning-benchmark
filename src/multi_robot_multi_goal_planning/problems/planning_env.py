@@ -144,6 +144,7 @@ class Task:
 class Mode:
     task_ids: List[int]
     entry_configuration: Configuration
+    sg: Dict[str, tuple]
 
     id: int
     prev_mode: "Mode"
@@ -156,6 +157,7 @@ class Mode:
 
         # TODO: set in constructor?
         self.prev_mode = None
+        self.sg = {}
 
         self.id = Mode.id_counter
         Mode.id_counter += 1
@@ -168,11 +170,12 @@ class Mode:
 
     def __hash__(self):
         entry_hash = 0
+        sg_hash = hash(frozenset(self.sg.items()))
         # entry_hash = hash(
         #     self.entry_configuration.state().tobytes()
         # )  # TODO: this is too restrictive at the moment - we need to check if the scene graph is the same as in another setting
         task_hash = hash(tuple(self.task_ids))
-        return hash((entry_hash, task_hash))
+        return hash((entry_hash, sg_hash, task_hash))
 
 
 class State:
@@ -210,7 +213,7 @@ class BaseModeLogic(ABC):
         for i, t in enumerate(self.tasks):
             if t.name == name:
                 return i
-            
+
     @abstractmethod
     def make_start_mode(self):
         pass
@@ -392,8 +395,12 @@ class SequenceMixin(BaseModeLogic):
     def get_next_mode(self, q: Optional[Configuration], mode: Mode) -> Mode:
         next_task_ids = self.get_valid_next_task_combinations(mode)[0]
 
+
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
         next_mode.prev_mode = mode
+
+        sg = self.get_scenegraph_info_for_mode(next_mode)
+        next_mode.sg = sg
 
         return next_mode
 
@@ -557,6 +564,9 @@ class DependencyGraphMixin(BaseModeLogic):
                         tmp = Mode(task_list=next_mode, entry_configuration=q)
                         tmp.prev_mode = mode
 
+                        sg = self.get_scenegraph_info_for_mode(tmp)
+                        tmp.sg = sg
+
                         return tmp
 
         raise ValueError("This does not fulfill the constraints to reach a new mode.")
@@ -695,6 +705,10 @@ class BaseProblem(ABC):
     #     pass
 
     # Collision checking and environment related methods
+    @abstractmethod
+    def get_scenegraph_info_for_mode(self, mode: Mode):
+        pass
+
     @abstractmethod
     def set_to_mode(self, mode: Mode):
         pass

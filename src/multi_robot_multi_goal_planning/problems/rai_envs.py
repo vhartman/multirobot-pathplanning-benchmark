@@ -352,8 +352,9 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.prev_mode = self.start_mode
         BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
 
 
 class rai_two_dim_simple_manip(SequenceMixin, rai_env):
@@ -423,9 +424,9 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
+        BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
-        BaseModeLogic.__init__(self)
 
 
 class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
