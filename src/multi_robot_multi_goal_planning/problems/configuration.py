@@ -193,6 +193,7 @@ def batch_config_dist(
 def config_cost(
     q_start: Configuration, q_end: Configuration, metric: str = "."
 ) -> float:
+    # return batch_config_cost([q_start], [q_end], metric)
     num_agents = q_start.num_agents()
     dists = np.zeros(num_agents)
 
@@ -211,8 +212,8 @@ def config_cost(
             dists[robot_index] = np.max(np.abs(diff))
 
     # dists = np.linalg.norm(np.array(q_start) - np.array(q_end), axis=1)
-    return max(dists) + 0.01 * sum(dists)
-    # return np.sum(dists)
+    # return max(dists) + 0.01 * sum(dists)
+    return np.sum(dists)
 
 # TODO: this is only applicable to NpConfiguration atm.
 def batch_config_cost(
