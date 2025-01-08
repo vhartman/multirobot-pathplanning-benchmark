@@ -59,7 +59,7 @@ def visualize_modes(env: rai_env):
 
         print(
             "Is collision free: ",
-            env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m),
+            env.is_collision_free(type(env.get_start_pos()).from_list(q), m),
         )
 
         # colls = env.C.getCollisions()
@@ -122,7 +122,7 @@ def benchmark_collision_checking(env: rai_env, N=5000):
 
             q = conf_type.from_list(q)
 
-            if env.is_collision_free(q.state(), mode):
+            if env.is_collision_free(q, mode):
                 if env.is_terminal_mode(mode):
                     next_mode = None
                 else:
@@ -158,7 +158,7 @@ def benchmark_collision_checking(env: rai_env, N=5000):
 
         m = random.choice(reachable_modes)
 
-        env.is_collision_free(type(env.get_start_pos()).from_list(q).state(), m)
+        env.is_collision_free(type(env.get_start_pos()).from_list(q), m)
 
     end = time.time()
 

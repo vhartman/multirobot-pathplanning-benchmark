@@ -718,7 +718,7 @@ class BaseProblem(ABC):
         pass
 
     def is_collision_free_for_robot(
-        self, r: str, q, m: Mode, collision_tolerance: float = 0.01
+        self, r: str, q: NDArray, m: Mode, collision_tolerance: float = 0.01
     ) -> bool:
         raise NotImplementedError
 
@@ -743,7 +743,7 @@ class BaseProblem(ABC):
         collision = False
         for i in range(len(path)):
             # check if the state is collision free
-            if not self.is_collision_free(path[i].q.state(), mode):
+            if not self.is_collision_free(path[i].q, mode):
                 print(f"There is a collision at index {i}")
                 # col = self.C.getCollisionsTotalPenetration()
                 # print(col)
