@@ -256,8 +256,8 @@ class ImplicitTensorGraph:
         dists = self.batch_dist_fun(node.state.q, combination_states)
 
         if True:
-            k_clip = min(k, len(combination_states) - 1)
-            topk = np.argpartition(dists, k_clip)[:k_clip+1]
+            k_clip = min(k, len(combination_states))
+            topk = np.argpartition(dists, k_clip-1)[:k_clip]
             topk = topk[np.argsort(dists[topk])]
 
             best_normal_nodes = [Node(State(combination_states[i], mode)) for i in topk]
@@ -268,8 +268,8 @@ class ImplicitTensorGraph:
 
         k = k*2
 
-        k_clip = min(k, len(transition_combination_states) - 1)
-        topk = np.argpartition(transition_dists, k_clip)[:k_clip+1]
+        k_clip = min(k, len(transition_combination_states))
+        topk = np.argpartition(transition_dists, k_clip-1)[:k_clip]
         topk = topk[np.argsort(transition_dists[topk])]
 
         best_transition_nodes = [Node(State(transition_combination_states[i], mode)) for i in topk]

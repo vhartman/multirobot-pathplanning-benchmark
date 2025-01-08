@@ -137,13 +137,23 @@ class Graph:
 
             if next_mode is not None:
                 nodes.append(node_next_mode)
-            else:
-                self.goal_nodes.append(node_this_mode)
 
-            if this_mode in self.transition_nodes:
-                self.transition_nodes[this_mode].append(node_this_mode)
+                if this_mode in self.transition_nodes:
+                    self.transition_nodes[this_mode].append(node_this_mode)
+                else:
+                    self.transition_nodes[this_mode] = [node_this_mode]
             else:
-                self.transition_nodes[this_mode] = [node_this_mode]
+                is_in_goal_nodes_already = False
+                for g in self.goal_nodes:
+                    if np.linalg.norm(g.state.q.state() - node_this_mode.state.q.state()) < 1e-3:
+                        is_in_goal_nodes_already =  True
+
+                if not is_in_goal_nodes_already:
+                    self.goal_nodes.append(node_this_mode)
+                    if this_mode in self.transition_nodes:
+                        self.transition_nodes[this_mode].append(node_this_mode)
+                    else:
+                        self.transition_nodes[this_mode] = [node_this_mode]
 
         # self.add_nodes(nodes)
 
@@ -185,8 +195,8 @@ class Graph:
                 # k = k_star
                 k_normal_nodes = k_star
 
-                k_clip = min(k_normal_nodes, len(node_list) - 1)
-                topk = np.argpartition(dists, k_clip)[:k_clip+1]
+                k_clip = min(k_normal_nodes, len(node_list))
+                topk = np.argpartition(dists, k_clip-1)[:k_clip]
                 topk = topk[np.argsort(dists[topk])]
 
                 best_nodes = [node_list[i] for i in topk]
@@ -198,8 +208,8 @@ class Graph:
                 # k_transition_nodes = k
                 k_transition_nodes = k_star
 
-                transition_k_clip = min(k_transition_nodes, len(transition_node_list) - 1)
-                transition_topk = np.argpartition(transition_dists, transition_k_clip)[:transition_k_clip+1]
+                transition_k_clip = min(k_transition_nodes, len(transition_node_list))
+                transition_topk = np.argpartition(transition_dists, transition_k_clip-1)[:transition_k_clip]
                 transition_topk = transition_topk[np.argsort(transition_dists[transition_topk])]
 
                 best_transition_nodes = [transition_node_list[i] for i in transition_topk]
@@ -230,6 +240,7 @@ class Graph:
 
         return best_nodes[1:]
 
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None):
         open_queue = []
         closed_list = set()
@@ -362,19 +373,21 @@ class Graph:
                     if (n, n1) in self.blacklist or (n1, n) in self.blacklist:
                         continue
 
-                    g_new = g_tentative + edge_costs[i]
+                    edge_cost = edge_costs[i]
+                    g_new = g_tentative + edge_cost
 
                     if n not in gs or g_new < gs[n]:
                         # sparsely check only when expanding
                         # cost to get to neighbor:
-                        fs[(n1, n)] = g_new + h(n)
+                        f_node = g_new + h(n)
+                        fs[(n1, n)] = f_node
 
-                        if best_cost is not None and fs[(n1, n)] > best_cost:
+                        if best_cost is not None and f_node > best_cost:
                             continue
 
                         if n not in closed_list:
                             heapq.heappush(
-                                open_queue, (fs[(n1, n)], edge_costs[i], (n1, n))
+                                open_queue, (f_node, edge_cost, (n1, n))
                             )
 
         path = []
