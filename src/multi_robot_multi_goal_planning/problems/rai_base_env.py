@@ -107,7 +107,7 @@ class rai_env(BaseProblem):
 
         if q is not None:
             self.set_to_mode(m)
-            self.C.setJointState(q)
+            self.C.setJointState(q.state())
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
@@ -200,7 +200,8 @@ class rai_env(BaseProblem):
         for i in idx:
             # print(i / (N-1))
             q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
-            if not self.is_collision_free(q, m):
+            q_conf = NpConfiguration(q, q1.slice)
+            if not self.is_collision_free(q_conf, m):
                 # print('coll')
                 return False
 

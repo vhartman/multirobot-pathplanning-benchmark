@@ -576,7 +576,7 @@ def joint_prm_planner(
 
             q = conf_type.from_list(q)
 
-            if env.is_collision_free(q.state(), m):
+            if env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
 
         return new_samples
@@ -629,7 +629,7 @@ def joint_prm_planner(
 
             q = conf_type.from_list(q)
 
-            if env.is_collision_free(q.state(), mode):
+            if env.is_collision_free(q, mode):
                 if env.is_terminal_mode(mode):
                     next_mode = None
                 else:
