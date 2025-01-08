@@ -68,6 +68,9 @@ class Graph:
 
         self.mode_to_goal_lb_cost = {}
 
+        self.node_list_cache = {}
+        self.transition_node_list_cache = {}
+
     def compute_lb_mode_transisitons(self, batch_cost, mode_sequence):
         # this assumes that we deal with a sequence
         cheapest_transition = []
@@ -102,6 +105,8 @@ class Graph:
         # print(self.mode_to_goal_lb_cost)
 
     def add_node(self, new_node: Node) -> None:
+        self.node_list_cache = {}
+
         key = new_node.state.mode
         if key not in self.nodes:
             self.nodes[key] = []
@@ -117,6 +122,8 @@ class Graph:
             self.add_node(n)
 
     def add_transition_nodes(self, transitions):
+        self.transition_node_list_cache = {}
+
         nodes = []
         for q, this_mode, next_mode in transitions:
             node_this_mode = Node(State(q, this_mode), True)
@@ -146,17 +153,24 @@ class Graph:
         if key in self.nodes:
             node_list = self.nodes[key]
 
+            if key not in self.node_list_cache:
+                self.node_list_cache[key] = [n.state.q for n in node_list]
+
             # with ThreadPoolExecutor() as executor:
             #     result = list(executor.map(lambda node: node.state.q, node_list))
 
             # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
             # result = list(map(lambda n: n.state.q, node_list))
             # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
-            dists = self.batch_dist_fun(node.state.q, [n.state.q for n in node_list]) # this, and the list copm below are the slowest parts
+            dists = self.batch_dist_fun(node.state.q, self.node_list_cache[key]) # this, and the list copm below are the slowest parts
 
         if key in self.transition_nodes:
             transition_node_list = self.transition_nodes[key]
-            transition_dists = self.batch_dist_fun(node.state.q, [n.state.q for n in transition_node_list])
+
+            if key not in self.transition_node_list_cache:
+                self.transition_node_list_cache[key] = [n.state.q for n in transition_node_list]
+
+            transition_dists = self.batch_dist_fun(node.state.q, self.transition_node_list_cache[key])
 
         # plt.plot(dists)
         # plt.show()
