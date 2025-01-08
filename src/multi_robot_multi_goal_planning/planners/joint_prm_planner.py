@@ -154,7 +154,7 @@ class Graph:
             node_list = self.nodes[key]
 
             if key not in self.node_list_cache:
-                self.node_list_cache[key] = [n.state.q for n in node_list]
+                self.node_list_cache[key] = np.array([n.state.q.q for n in node_list])
 
             # with ThreadPoolExecutor() as executor:
             #     result = list(executor.map(lambda node: node.state.q, node_list))
@@ -168,7 +168,7 @@ class Graph:
             transition_node_list = self.transition_nodes[key]
 
             if key not in self.transition_node_list_cache:
-                self.transition_node_list_cache[key] = [n.state.q for n in transition_node_list]
+                self.transition_node_list_cache[key] = np.array([n.state.q.q for n in transition_node_list])
 
             transition_dists = self.batch_dist_fun(node.state.q, self.transition_node_list_cache[key])
 

@@ -190,7 +190,7 @@ class rai_env(BaseProblem):
         # print('q1', q1)
         # print('q2', q2)
         N = config_dist(q1, q2) / resolution
-        N = max(5, N)
+        N = max(2, N)
 
         idx = list(range(int(N)))
         if randomize_order:
