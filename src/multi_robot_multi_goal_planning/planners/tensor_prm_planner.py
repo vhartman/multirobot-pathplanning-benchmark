@@ -308,6 +308,7 @@ class ImplicitTensorGraph:
         h_cache = {}
 
         def h(node):
+            return 0
             if node in h_cache:
                 return h_cache[node]
 
@@ -519,13 +520,13 @@ def tensor_prm_planner(
 
     cnt = 0
 
-    mode_sequence = [m0]
-    while True:
-        if env.is_terminal_mode(mode_sequence[-1]):
-            break
+    # mode_sequence = [m0]
+    # while True:
+    #     if env.is_terminal_mode(mode_sequence[-1]):
+    #         break
 
-        # TODO: this does very much nor work anymore for the dependency graph
-        mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
+    #     # TODO: this does very much nor work anymore for the dependency graph
+    #     mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
 
     def sample_mode(mode_sampling_type="weighted", found_solution=False):
         # if mode_sampling_type == "uniform_reached":
@@ -580,30 +581,47 @@ def tensor_prm_planner(
         transitions = []
         for _ in range(num_pts):
             m = sample_mode("weighted")
-            goal_constrainted_robots = env.get_goal_constrained_robots(m)
-            active_task = env.get_active_task(m)
+
+            possible_next_task_combinations = env.get_valid_next_task_combinations(m)
+            if len(possible_next_task_combinations) > 0:
+                ind = random.randint(0, len(possible_next_task_combinations)-1)
+                active_task = env.get_active_task(m, possible_next_task_combinations[ind])
+            else:
+                active_task = env.get_active_task(m, None)
+
+            goal_constrained_robots = active_task.robots
 
             goal_sample = active_task.goal.sample(m)
 
             q = goal_sample
-            t = m.task_ids[env.robots.index(goal_constrainted_robots[0])]
+            t = m.task_ids[env.robots.index(goal_constrained_robots[0])]
 
             q_list = []
             offset = 0
-            for r in goal_constrainted_robots:
+            for r in goal_constrained_robots:
                 dim = env.robot_dims[r]
                 q_list.append(q[offset:offset+dim])
                 offset += dim
+
+            q_list_full_state = []
+            offset = 0
+            for r in env.robots:
+                dim = env.robot_dims[r]
+                if r in goal_constrained_robots:
+                    q_list_full_state.append(q[offset:offset+dim])
+                    offset += dim
+                else:
+                    q_list_full_state.append(np.zeros(dim))
             
             # print(f"checking colls for {goal_constrainted_robots}")
-            if env.is_collision_free_for_robot(goal_constrainted_robots, q, m):
-                transition = (goal_constrainted_robots, q_list, t)
+            if env.is_collision_free_for_robot(goal_constrained_robots, q, m):
+                transition = (goal_constrained_robots, q_list, t)
                 transitions.append(transition)
 
                 if env.is_terminal_mode(m):
                     next_mode = None
                 else:
-                    next_mode = env.get_next_mode(q, m)
+                    next_mode = env.get_next_mode(NpConfiguration.from_list(q_list_full_state), m)
 
                 if next_mode not in reached_modes and next_mode is not None:
                     reached_modes.append(next_mode)
@@ -639,7 +657,7 @@ def tensor_prm_planner(
 
             print('num new_states: ', len(new_states))
 
-            g.compute_lb_mode_transisitons(env.config_cost, mode_sequence)
+            # g.compute_lb_mode_transisitons(env.config_cost, mode_sequence)
         
         reached_terminal_mode = False
         for m in reached_modes:
