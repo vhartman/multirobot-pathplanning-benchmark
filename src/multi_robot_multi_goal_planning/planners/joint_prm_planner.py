@@ -241,7 +241,7 @@ class Graph:
         return best_nodes[1:]
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None):
+    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None, resolution=0.2):
         open_queue = []
         closed_list = set()
 
@@ -338,7 +338,7 @@ class Graph:
             
                 q0 = n0.state.q
                 q1 = n1.state.q
-                collision_free = env.is_edge_collision_free(q0, q1, n0.state.mode)
+                collision_free = env.is_edge_collision_free(q0, q1, n0.state.mode, resolution)
 
                 if not collision_free:
                     self.blacklist.add(edge)
@@ -692,6 +692,9 @@ def joint_prm_planner(
 
     #     mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
 
+    # resolution 0.2 is too big
+    resolution = 0.1
+
     cnt = 0
     while True:
         print("Count:", cnt, "max_iter:", max_iter)
@@ -725,7 +728,7 @@ def joint_prm_planner(
             continue
 
         while True:
-            sparsely_checked_path = g.search(g.root, g.goal_nodes, env, current_best_cost)
+            sparsely_checked_path = g.search(g.root, g.goal_nodes, env, current_best_cost, resolution)
 
             # 2. in case this found a path, search with dense check from the other side
             if len(sparsely_checked_path) > 0:
@@ -746,7 +749,7 @@ def joint_prm_planner(
                     if (n0, n1) in g.whitelist:
                         continue
 
-                    if not env.is_edge_collision_free(s0.q, s1.q, s0.mode):
+                    if not env.is_edge_collision_free(s0.q, s1.q, s0.mode, resolution):
                         print("Path is in collision")
                         is_valid_path = False
                         # env.show(True)
