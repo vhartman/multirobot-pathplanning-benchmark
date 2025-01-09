@@ -165,9 +165,9 @@ class NpConfiguration(Configuration):
 
         diff = pt.q - np.array([other.q for other in batch_other])
 
-        # if metric == "euclidean":
-        if True:
-            # return np.linalg.norm(diff, axis=1)
+        if metric == "euclidean":
+            return np.linalg.norm(diff, axis=1)
+        elif metric == "sum_euclidean":
             dists = np.zeros((pt._num_agents, diff.shape[0]))
             for i, (s, e) in enumerate(pt.slice):
                 dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
@@ -179,19 +179,19 @@ class NpConfiguration(Configuration):
 
 
 def config_dist(
-    q_start: Configuration, q_end: Configuration, metric: str = "."
+    q_start: Configuration, q_end: Configuration, metric: str = "sum_euclidean"
 ) -> float:
     return type(q_start)._dist(q_start, q_end, metric)
 
 
 def batch_config_dist(
-    pt: Configuration, batch_pts: List[Configuration], metric: str = "."
+    pt: Configuration, batch_pts: List[Configuration], metric: str = "sum_euclidean"
 ) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
 
 def config_cost(
-    q_start: Configuration, q_end: Configuration, metric: str = "."
+    q_start: Configuration, q_end: Configuration, metric: str = "euclidean", reduction: str = "max"
 ) -> float:
     # return batch_config_cost([q_start], [q_end], metric)
     num_agents = q_start.num_agents()
@@ -212,14 +212,16 @@ def config_cost(
             dists[robot_index] = np.max(np.abs(diff))
 
     # dists = np.linalg.norm(np.array(q_start) - np.array(q_end), axis=1)
-    # return max(dists) + 0.01 * sum(dists)
-    return np.sum(dists)
+    if reduction == "max":
+        return max(dists) + 0.01 * sum(dists)
+    elif reduction == "sum":
+        return np.sum(dists)
 
 # TODO: this is only applicable to NpConfiguration atm.
 def batch_config_cost(
     starts: List[Configuration],
     batch_other: List[Configuration],
-    metric: str = ".",
+    metric: str = "euclidean", reduction: str = "max"
 ) -> float:
     diff = np.array([start.q.state() for start in starts]) - np.array(
         [other.q.state() for other in batch_other]
@@ -236,5 +238,7 @@ def batch_config_cost(
 
         # print(all_robot_dists)
 
-    # return np.max(all_robot_dists, axis=0) + 0.01 * np.sum(all_robot_dists, axis=0)
-    return np.sum(all_robot_dists, axis=0)
+    if reduction == "max":
+        return np.max(all_robot_dists, axis=0) + 0.01 * np.sum(all_robot_dists, axis=0)
+    elif reduction == "sum":
+        return np.sum(all_robot_dists, axis=0)

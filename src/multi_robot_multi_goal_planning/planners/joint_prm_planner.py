@@ -49,7 +49,7 @@ class Graph:
 
     # batch_dist_fun
 
-    def __init__(self, start: State, dist_fun):
+    def __init__(self, start: State):
         self.root = Node(start)
         # self.nodes = [self.root]
 
@@ -63,8 +63,6 @@ class Graph:
 
         self.blacklist = set()
         self.whitelist = set()
-
-        self.dist = dist_fun
 
         self.mode_to_goal_lb_cost = {}
 
@@ -642,7 +640,7 @@ def joint_prm_planner(
 
         return transitions
 
-    g = Graph(State(q0, m0), batch_config_dist)
+    g = Graph(State(q0, m0))
 
     current_best_cost = None
     current_best_path = None
