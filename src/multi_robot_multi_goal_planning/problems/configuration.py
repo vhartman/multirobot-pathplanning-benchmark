@@ -163,7 +163,10 @@ class NpConfiguration(Configuration):
         # batch_q = cls._preallocated_q[:num_items, :]
         # diff = pt.q - batch_q
 
-        diff = pt.q - np.array([other.q for other in batch_other])
+        if isinstance(batch_other, np.ndarray):
+            diff = pt.q - batch_other
+        else:
+            diff = pt.q - np.array([other.q for other in batch_other])
 
         if metric == "euclidean":
             return np.linalg.norm(diff, axis=1)
