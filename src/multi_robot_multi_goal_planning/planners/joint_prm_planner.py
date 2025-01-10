@@ -239,7 +239,7 @@ class Graph:
         return best_nodes[1:]
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None, resolution=0.2):
+    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None, resolution=0.1):
         open_queue = []
         closed_list = set()
 
@@ -247,10 +247,21 @@ class Graph:
 
         h_cache = {}
 
+        # TODO: decent heuristic makes everything better but is computationally not amazing
         def h(node):
             return 0
+        
             if node in h_cache:
                 return h_cache[node]
+
+            # mode_cost = min(
+            #     env.batch_config_cost(
+            #         [node.state] * len(self.transition_nodes[node.state.mode]),
+            #         [n.state for n in self.transition_nodes[node.state.mode]],
+            #     )
+            # )
+            # h_cache[node] = mode_cost
+            # return mode_cost
 
             lb_to_goal_through_rest_of_modes = 0
             if len(self.mode_to_goal_lb_cost) > 0:

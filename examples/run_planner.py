@@ -223,14 +223,24 @@ def main():
     print("comp_time", info["times"])
 
     plt.figure()
-    plt.plot(info["times"], info["costs"], "o")
+    plt.plot(info["times"], info["costs"], "-o", drawstyle='steps-post')
 
     plt.figure()
     for info in [info_shortcut]:
-        plt.plot(info[1], info[0])
+        plt.plot(info[1], info[0], drawstyle='steps-post')
 
     plt.xlabel("time")
     plt.ylabel("cost")
+
+    mode_switch_indices = []
+    for i in range(len(interpolated_path)-1):
+        if interpolated_path[i].mode != interpolated_path[i+1].mode:
+            mode_switch_indices.append(i)
+
+    plt.figure("Path cost")
+    plt.plot(env.batch_config_cost(interpolated_path[:-1], interpolated_path[1:]), label="Original")
+    plt.plot(env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:]), label="Shortcut")
+    plt.plot(mode_switch_indices, [0.1]*len(mode_switch_indices), 'o')
 
     plt.show()
 
