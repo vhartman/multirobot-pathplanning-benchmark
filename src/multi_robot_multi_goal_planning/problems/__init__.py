@@ -67,6 +67,7 @@ def get_env_by_name(name):
         "2d_handover_dep": lambda: re.rai_two_dim_handover_dependency_graph(),
         "two_agents_many_goals_dep": lambda: re.rai_two_dim_env_no_obs_dep_graph(),
         "two_agents_many_goals_dep_no_rot": lambda: re.rai_two_dim_env_no_obs_dep_graph(agents_can_rotate=False),
+        "three_agent_many_goals_dep": lambda: re.rai_two_dim_three_agent_env_dependency_graph(),
     }
     # fmt: on
 

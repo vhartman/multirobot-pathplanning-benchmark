@@ -49,11 +49,11 @@ class Graph:
 
     # batch_dist_fun
 
-    def __init__(self, start: State, dist_fun):
+    def __init__(self, start: State, batch_dist_fun):
         self.root = Node(start)
         # self.nodes = [self.root]
 
-        self.batch_dist_fun = batch_config_dist
+        self.batch_dist_fun = batch_dist_fun
 
         self.nodes = {}
         self.nodes[self.root.state.mode] = [self.root]
@@ -64,9 +64,10 @@ class Graph:
         self.blacklist = set()
         self.whitelist = set()
 
-        self.dist = dist_fun
-
         self.mode_to_goal_lb_cost = {}
+
+        self.node_list_cache = {}
+        self.transition_node_list_cache = {}
 
     def compute_lb_mode_transisitons(self, batch_cost, mode_sequence):
         # this assumes that we deal with a sequence
@@ -102,6 +103,8 @@ class Graph:
         # print(self.mode_to_goal_lb_cost)
 
     def add_node(self, new_node: Node) -> None:
+        self.node_list_cache = {}
+
         key = new_node.state.mode
         if key not in self.nodes:
             self.nodes[key] = []
@@ -117,6 +120,8 @@ class Graph:
             self.add_node(n)
 
     def add_transition_nodes(self, transitions):
+        self.transition_node_list_cache = {}
+
         nodes = []
         for q, this_mode, next_mode in transitions:
             node_this_mode = Node(State(q, this_mode), True)
@@ -130,13 +135,23 @@ class Graph:
 
             if next_mode is not None:
                 nodes.append(node_next_mode)
-            else:
-                self.goal_nodes.append(node_this_mode)
 
-            if this_mode in self.transition_nodes:
-                self.transition_nodes[this_mode].append(node_this_mode)
+                if this_mode in self.transition_nodes:
+                    self.transition_nodes[this_mode].append(node_this_mode)
+                else:
+                    self.transition_nodes[this_mode] = [node_this_mode]
             else:
-                self.transition_nodes[this_mode] = [node_this_mode]
+                is_in_goal_nodes_already = False
+                for g in self.goal_nodes:
+                    if np.linalg.norm(g.state.q.state() - node_this_mode.state.q.state()) < 1e-3:
+                        is_in_goal_nodes_already =  True
+
+                if not is_in_goal_nodes_already:
+                    self.goal_nodes.append(node_this_mode)
+                    if this_mode in self.transition_nodes:
+                        self.transition_nodes[this_mode].append(node_this_mode)
+                    else:
+                        self.transition_nodes[this_mode] = [node_this_mode]
 
         # self.add_nodes(nodes)
 
@@ -146,17 +161,24 @@ class Graph:
         if key in self.nodes:
             node_list = self.nodes[key]
 
+            if key not in self.node_list_cache:
+                self.node_list_cache[key] = np.array([n.state.q.q for n in node_list])
+
             # with ThreadPoolExecutor() as executor:
             #     result = list(executor.map(lambda node: node.state.q, node_list))
 
             # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
             # result = list(map(lambda n: n.state.q, node_list))
             # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
-            dists = self.batch_dist_fun(node.state.q, [n.state.q for n in node_list]) # this, and the list copm below are the slowest parts
+            dists = self.batch_dist_fun(node.state.q, self.node_list_cache[key]) # this, and the list copm below are the slowest parts
 
         if key in self.transition_nodes:
             transition_node_list = self.transition_nodes[key]
-            transition_dists = self.batch_dist_fun(node.state.q, [n.state.q for n in transition_node_list])
+
+            if key not in self.transition_node_list_cache:
+                self.transition_node_list_cache[key] = np.array([n.state.q.q for n in transition_node_list])
+
+            transition_dists = self.batch_dist_fun(node.state.q, self.transition_node_list_cache[key])
 
         # plt.plot(dists)
         # plt.show()
@@ -171,8 +193,8 @@ class Graph:
                 # k = k_star
                 k_normal_nodes = k_star
 
-                k_clip = min(k_normal_nodes, len(node_list) - 1)
-                topk = np.argpartition(dists, k_clip)[:k_clip+1]
+                k_clip = min(k_normal_nodes, len(node_list))
+                topk = np.argpartition(dists, k_clip-1)[:k_clip]
                 topk = topk[np.argsort(dists[topk])]
 
                 best_nodes = [node_list[i] for i in topk]
@@ -184,8 +206,8 @@ class Graph:
                 # k_transition_nodes = k
                 k_transition_nodes = k_star
 
-                transition_k_clip = min(k_transition_nodes, len(transition_node_list) - 1)
-                transition_topk = np.argpartition(transition_dists, transition_k_clip)[:transition_k_clip+1]
+                transition_k_clip = min(k_transition_nodes, len(transition_node_list))
+                transition_topk = np.argpartition(transition_dists, transition_k_clip-1)[:transition_k_clip]
                 transition_topk = transition_topk[np.argsort(transition_dists[transition_topk])]
 
                 best_transition_nodes = [transition_node_list[i] for i in transition_topk]
@@ -216,7 +238,8 @@ class Graph:
 
         return best_nodes[1:]
 
-    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None):
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None, resolution=0.2):
         open_queue = []
         closed_list = set()
 
@@ -313,7 +336,7 @@ class Graph:
             
                 q0 = n0.state.q
                 q1 = n1.state.q
-                collision_free = env.is_edge_collision_free(q0, q1, n0.state.mode)
+                collision_free = env.is_edge_collision_free(q0, q1, n0.state.mode, resolution)
 
                 if not collision_free:
                     self.blacklist.add(edge)
@@ -348,19 +371,21 @@ class Graph:
                     if (n, n1) in self.blacklist or (n1, n) in self.blacklist:
                         continue
 
-                    g_new = g_tentative + edge_costs[i]
+                    edge_cost = edge_costs[i]
+                    g_new = g_tentative + edge_cost
 
                     if n not in gs or g_new < gs[n]:
                         # sparsely check only when expanding
                         # cost to get to neighbor:
-                        fs[(n1, n)] = g_new + h(n)
+                        f_node = g_new + h(n)
+                        fs[(n1, n)] = f_node
 
-                        if best_cost is not None and fs[(n1, n)] > best_cost:
+                        if best_cost is not None and f_node > best_cost:
                             continue
 
                         if n not in closed_list:
                             heapq.heappush(
-                                open_queue, (fs[(n1, n)], edge_costs[i], (n1, n))
+                                open_queue, (f_node, edge_cost, (n1, n))
                             )
 
         path = []
@@ -515,6 +540,7 @@ def joint_prm_planner(
     optimize: bool = True,
     mode_sampling_type: str = "greedy",
     max_iter: int = 2000,
+    distance_metric = "euclidean",
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
@@ -576,7 +602,7 @@ def joint_prm_planner(
 
             q = conf_type.from_list(q)
 
-            if env.is_collision_free(q.state(), m):
+            if env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
 
         return new_samples
@@ -629,7 +655,7 @@ def joint_prm_planner(
 
             q = conf_type.from_list(q)
 
-            if env.is_collision_free(q.state(), mode):
+            if env.is_collision_free(q, mode):
                 if env.is_terminal_mode(mode):
                     next_mode = None
                 else:
@@ -642,7 +668,7 @@ def joint_prm_planner(
 
         return transitions
 
-    g = Graph(State(q0, m0), batch_config_dist)
+    g = Graph(State(q0, m0), lambda a, b: batch_config_dist(a, b, distance_metric))
 
     current_best_cost = None
     current_best_path = None
@@ -664,6 +690,9 @@ def joint_prm_planner(
     #         break
 
     #     mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
+
+    # resolution 0.2 is too big
+    resolution = 0.1
 
     cnt = 0
     while True:
@@ -698,7 +727,7 @@ def joint_prm_planner(
             continue
 
         while True:
-            sparsely_checked_path = g.search(g.root, g.goal_nodes, env, current_best_cost)
+            sparsely_checked_path = g.search(g.root, g.goal_nodes, env, current_best_cost, resolution)
 
             # 2. in case this found a path, search with dense check from the other side
             if len(sparsely_checked_path) > 0:
@@ -719,7 +748,7 @@ def joint_prm_planner(
                     if (n0, n1) in g.whitelist:
                         continue
 
-                    if not env.is_edge_collision_free(s0.q, s1.q, s0.mode):
+                    if not env.is_edge_collision_free(s0.q, s1.q, s0.mode, resolution):
                         print("Path is in collision")
                         is_valid_path = False
                         # env.show(True)

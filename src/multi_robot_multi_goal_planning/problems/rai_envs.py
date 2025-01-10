@@ -1946,7 +1946,7 @@ def check_all_modes():
                     q.append(q_home.robot_state(j))
 
             is_collision_free = env.is_collision_free(
-                type(env.get_start_pos()).from_list(q).state(), m
+                type(env.get_start_pos()).from_list(q), m
             )
             print(f"mode {m} is collision free: ", is_collision_free)
 

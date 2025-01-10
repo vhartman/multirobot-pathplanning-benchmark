@@ -165,10 +165,30 @@ def main():
         default="joint_prm",
         help="Planner to use (default: joint_prm)",
     )
-
+    parser.add_argument(
+        "--distance_metric",
+        choices=["euclidean", "sum_euclidean", "max"],
+        default="max",
+        help="Distance metric to use (default: max)",
+    )
+    parser.add_argument(
+        "--per_agent_cost_function",
+        choices=["euclidean", "max"],
+        default="max",
+        help="Per agent cost function to use (default: max)",
+    )
+    parser.add_argument(
+        "--cost_reduction",
+        choices=["sum", "max"],
+        default="max",
+        help="How the agent specific cost functions are reduced to one single number (default: max)",
+    )
     args = parser.parse_args()
 
     env = get_env_by_name(args.env)
+    env.cost_reduction = args.cost_reduction
+    env.cost_metric = args.per_agent_cost_function
+
     env.show()
 
     if args.planner == "joint_prm":
@@ -177,6 +197,7 @@ def main():
             optimize=args.optimize,
             mode_sampling_type=None,
             max_iter=args.num_iters,
+            distance_metric=args.distance_metric
         )
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
