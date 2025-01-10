@@ -781,7 +781,7 @@ def joint_prm_planner(
         if cnt >= max_iter:
             break
 
-        cnt += batch_size
+        cnt += batch_size + transition_batch_size
 
     costs.append(costs[-1])
     times.append(time.time() - start_time)
