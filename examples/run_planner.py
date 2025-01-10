@@ -77,6 +77,12 @@ def main():
         default="joint_prm",
         help="Planner to use (default: joint_prm)",
     )
+    parser.add_argument(
+        "--distance_metric",
+        choices=["euclidean", "sum", "max"],
+        default="max",
+        help="Distance metric to use (default: max)",
+    )
 
     args = parser.parse_args()
 
@@ -89,6 +95,7 @@ def main():
             optimize=args.optimize,
             mode_sampling_type=None,
             max_iter=args.num_iters,
+            distance_metric=args.distance_metric
         )
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(

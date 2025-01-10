@@ -49,11 +49,11 @@ class Graph:
 
     # batch_dist_fun
 
-    def __init__(self, start: State):
+    def __init__(self, start: State, batch_dist_fun):
         self.root = Node(start)
         # self.nodes = [self.root]
 
-        self.batch_dist_fun = batch_config_dist
+        self.batch_dist_fun = batch_dist_fun
 
         self.nodes = {}
         self.nodes[self.root.state.mode] = [self.root]
@@ -540,6 +540,7 @@ def joint_prm_planner(
     optimize: bool = True,
     mode_sampling_type: str = "greedy",
     max_iter: int = 2000,
+    distance_metric = "euclidean",
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
@@ -667,7 +668,7 @@ def joint_prm_planner(
 
         return transitions
 
-    g = Graph(State(q0, m0))
+    g = Graph(State(q0, m0), lambda a, b: batch_config_dist(a, b, distance_metric))
 
     current_best_cost = None
     current_best_path = None

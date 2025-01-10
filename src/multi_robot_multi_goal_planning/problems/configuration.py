@@ -139,7 +139,7 @@ class NpConfiguration(Configuration):
     #         cls._preallocated_q = np.empty((max_size, q_dim))  # Preallocate
 
     @classmethod
-    def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> NDArray:
+    def _batch_dist(cls, pt, batch_other, metric: str = "max") -> NDArray:
         # batch_q = np.empty((len(batch_other), pt.q.size))  # Preallocate memory
         # for i, other in enumerate(batch_other):
         #     batch_q[i, :] = other.q  # Fill in directly without overhead
@@ -182,21 +182,21 @@ class NpConfiguration(Configuration):
 
 
 def config_dist(
-    q_start: Configuration, q_end: Configuration, metric: str = "sum_euclidean"
+    q_start: Configuration, q_end: Configuration, metric: str = "max"
 ) -> float:
     return type(q_start)._dist(q_start, q_end, metric)
 
 
 def batch_config_dist(
-    pt: Configuration, batch_pts: List[Configuration], metric: str = "sum_euclidean"
+    pt: Configuration, batch_pts: List[Configuration], metric: str = "max"
 ) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
 
 def config_cost(
-    q_start: Configuration, q_end: Configuration, metric: str = "euclidean", reduction: str = "max"
+    q_start: Configuration, q_end: Configuration, metric: str = "max", reduction: str = "max"
 ) -> float:
-    # return batch_config_cost([q_start], [q_end], metric)
+    # return batch_config_cost([q_start], [q_end], metric, reduction)
     num_agents = q_start.num_agents()
     dists = np.zeros(num_agents)
 
@@ -220,11 +220,10 @@ def config_cost(
     elif reduction == "sum":
         return np.sum(dists)
 
-# TODO: this is only applicable to NpConfiguration atm.
 def batch_config_cost(
     starts: List[Configuration],
     batch_other: List[Configuration],
-    metric: str = "euclidean", reduction: str = "max"
+    metric: str = "max", reduction: str = "max"
 ) -> float:
     diff = np.array([start.q.state() for start in starts]) - np.array(
         [other.q.state() for other in batch_other]
