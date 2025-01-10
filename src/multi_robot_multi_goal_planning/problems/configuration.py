@@ -225,14 +225,20 @@ def batch_config_cost(
     batch_other: List[Configuration],
     metric: str = "max", reduction: str = "max"
 ) -> float:
-    diff = np.array([start.q.state() for start in starts]) - np.array(
-        [other.q.state() for other in batch_other]
-    )
-    all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
+    if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
+        diff = starts.state() - batch_other
+        all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
+        agent_slices = starts.slice
+    else:
+        diff = np.array([start.q.state() for start in starts]) - np.array(
+            [other.q.state() for other in batch_other]
+        )
+        all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
+        agent_slices = starts[0].q.slice
 
     # return np.linalg.norm(diff, axis=1)
 
-    for i, (s, e) in enumerate(starts[0].q.slice):
+    for i, (s, e) in enumerate(agent_slices):
         if metric == "euclidean":
             all_robot_dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
         else:
