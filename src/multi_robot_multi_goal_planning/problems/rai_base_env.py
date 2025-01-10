@@ -80,13 +80,16 @@ class rai_env(BaseProblem):
 
         self.tolerance = 0.1
 
+        self.cost_metric = "max"
+        self.cost_reduction = "max"
+
     def config_cost(self, start: Configuration, end: Configuration) -> float:
-        return config_cost(start, end, "max")
+        return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
     def batch_config_cost(
         self, starts: List[Configuration], ends: List[Configuration]
     ) -> NDArray:
-        return batch_config_cost(starts, ends, "max")
+        return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction)
 
     def show_config(self, q: NDArray, blocking: bool = True):
         self.C.setJointState(q)
