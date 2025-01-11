@@ -712,6 +712,9 @@ def joint_prm_planner(
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
+            if current_best_path is not None:
+                pass
+
             # add new batch of nodes to
             print("Sampling uniform")
             new_states = sample_valid_uniform_batch(
@@ -777,6 +780,7 @@ def joint_prm_planner(
                         current_best_path = path
                         current_best_cost = new_path_cost
 
+                        print("New cost: ", new_path_cost)
                         costs.append(new_path_cost)
                         times.append(time.time() - start_time)
 
