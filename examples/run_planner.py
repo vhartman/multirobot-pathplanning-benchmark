@@ -242,6 +242,11 @@ def main():
     plt.plot(env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:]), label="Shortcut")
     plt.plot(mode_switch_indices, [0.1]*len(mode_switch_indices), 'o')
 
+    plt.figure("Cumulative path cost")
+    plt.plot(np.cumsum(env.batch_config_cost(interpolated_path[:-1], interpolated_path[1:])), label="Original")
+    plt.plot(np.cumsum(env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])), label="Shortcut")
+    plt.plot(mode_switch_indices, [0.1]*len(mode_switch_indices), 'o')
+
     plt.show()
 
     print("displaying path from planner")
