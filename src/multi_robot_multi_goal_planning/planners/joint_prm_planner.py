@@ -20,11 +20,13 @@ from multi_robot_multi_goal_planning.problems.util import path_cost
 
 from concurrent.futures import ThreadPoolExecutor
 
+
 def edge_tuple(n0, n1):
     if n0.id < n1.id:
         return (n0, n1)
     else:
         return (n1, n0)
+
 
 class Node:
     state: State
@@ -89,18 +91,21 @@ class Graph:
             else:
                 next_mode_transitions = self.transition_nodes[next_mode]
 
-            # TODO: this can be batched as well
+            # TODO: this could be even futher batched
             min_cost = 1e6
             for cmt in current_mode_transitions:
-                min_cmt_to_next_transition_cost = min(batch_cost([cmt.state] * len(next_mode_transitions), [nmt.state for nmt in next_mode_transitions]))
+                min_cmt_to_next_transition_cost = min(
+                    batch_cost(
+                        [cmt.state] * len(next_mode_transitions),
+                        [nmt.state for nmt in next_mode_transitions],
+                    )
+                )
                 min_cost = min(min_cmt_to_next_transition_cost, min_cost)
 
             cheapest_transition.append(min_cost)
 
         for i, current_mode in enumerate(mode_sequence[:-1]):
-            self.mode_to_goal_lb_cost[current_mode] = sum(
-                cheapest_transition[i:]
-            )
+            self.mode_to_goal_lb_cost[current_mode] = sum(cheapest_transition[i:])
 
         self.mode_to_goal_lb_cost[self.goal_nodes[0].state.mode] = 0
 
@@ -148,8 +153,13 @@ class Graph:
             else:
                 is_in_goal_nodes_already = False
                 for g in self.goal_nodes:
-                    if np.linalg.norm(g.state.q.state() - node_this_mode.state.q.state()) < 1e-3:
-                        is_in_goal_nodes_already =  True
+                    if (
+                        np.linalg.norm(
+                            g.state.q.state() - node_this_mode.state.q.state()
+                        )
+                        < 1e-3
+                    ):
+                        is_in_goal_nodes_already = True
 
                 if not is_in_goal_nodes_already:
                     self.goal_nodes.append(node_this_mode)
@@ -175,15 +185,21 @@ class Graph:
             # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
             # result = list(map(lambda n: n.state.q, node_list))
             # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
-            dists = self.batch_dist_fun(node.state.q, self.node_array_cache[key]) # this, and the list copm below are the slowest parts
+            dists = self.batch_dist_fun(
+                node.state.q, self.node_array_cache[key]
+            )  # this, and the list copm below are the slowest parts
 
         if key in self.transition_nodes:
             transition_node_list = self.transition_nodes[key]
 
             if key not in self.transition_node_array_cache:
-                self.transition_node_array_cache[key] = np.array([n.state.q.q for n in transition_node_list])
+                self.transition_node_array_cache[key] = np.array(
+                    [n.state.q.q for n in transition_node_list]
+                )
 
-            transition_dists = self.batch_dist_fun(node.state.q, self.transition_node_array_cache[key])
+            transition_dists = self.batch_dist_fun(
+                node.state.q, self.transition_node_array_cache[key]
+            )
 
         # plt.plot(dists)
         # plt.show()
@@ -199,28 +215,36 @@ class Graph:
                 k_normal_nodes = k_star
 
                 k_clip = min(k_normal_nodes, len(node_list))
-                topk = np.argpartition(dists, k_clip-1)[:k_clip]
+                topk = np.argpartition(dists, k_clip - 1)[:k_clip]
                 topk = topk[np.argsort(dists[topk])]
 
                 best_nodes = [node_list[i] for i in topk]
 
             best_transition_nodes = []
             if key in self.transition_nodes:
-                k_star = int(np.e * (1 + 1 / dim) * np.log(len(transition_node_list))) + 1
+                k_star = (
+                    int(np.e * (1 + 1 / dim) * np.log(len(transition_node_list))) + 1
+                )
                 # # print(k_star)
                 # k_transition_nodes = k
                 k_transition_nodes = k_star
 
                 transition_k_clip = min(k_transition_nodes, len(transition_node_list))
-                transition_topk = np.argpartition(transition_dists, transition_k_clip-1)[:transition_k_clip]
-                transition_topk = transition_topk[np.argsort(transition_dists[transition_topk])]
+                transition_topk = np.argpartition(
+                    transition_dists, transition_k_clip - 1
+                )[:transition_k_clip]
+                transition_topk = transition_topk[
+                    np.argsort(transition_dists[transition_topk])
+                ]
 
-                best_transition_nodes = [transition_node_list[i] for i in transition_topk]
+                best_transition_nodes = [
+                    transition_node_list[i] for i in transition_topk
+                ]
 
             best_nodes = best_nodes + best_transition_nodes
         else:
             r = 10
-            
+
             best_nodes = []
             if key in self.nodes:
                 # r_star = (np.log(len(node_list)) / len(node_list)) ** (1/dim) * 2 * (1 + 1/dim) ** (1/dim)
@@ -228,10 +252,14 @@ class Graph:
                 # # r = r_star
 
                 best_nodes = [n for i, n in enumerate(node_list) if dists[i] < r]
-            
+
             best_transition_nodes = []
             if key in self.transition_nodes:
-                best_transition_nodes = [n for i, n in enumerate(transition_node_list) if transition_dists[i] < r]
+                best_transition_nodes = [
+                    n
+                    for i, n in enumerate(transition_node_list)
+                    if transition_dists[i] < r
+                ]
 
             best_nodes = best_nodes + best_transition_nodes
 
@@ -244,7 +272,14 @@ class Graph:
         return best_nodes[1:]
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def search(self, start_node, goal_nodes: List, env: BaseProblem, best_cost=None, resolution=0.2):
+    def search(
+        self,
+        start_node,
+        goal_nodes: List,
+        env: BaseProblem,
+        best_cost=None,
+        resolution=0.2,
+    ):
         open_queue = []
         closed_list = set()
 
@@ -258,7 +293,9 @@ class Graph:
                 return h_cache[node]
 
             if node.state.mode not in self.transition_node_array_cache:
-                self.transition_node_array_cache[node.state.mode] = np.array([n.state.q.q for n in self.transition_nodes[node.state.mode]])
+                self.transition_node_array_cache[node.state.mode] = np.array(
+                    [n.state.q.q for n in self.transition_nodes[node.state.mode]]
+                )
 
             mode_cost = min(
                 env.batch_config_cost(
@@ -282,14 +319,14 @@ class Graph:
             current_mode = node.state.mode
             if env.is_terminal_mode(current_mode):
                 mode_cost = min(
-                        env.batch_config_cost(
-                            [node.state] * len(self.goal_nodes),
-                            [g.state for g in self.goal_nodes]
-                        )
+                    env.batch_config_cost(
+                        [node.state] * len(self.goal_nodes),
+                        [g.state for g in self.goal_nodes],
                     )
+                )
                 # mode_cost = None
                 # for g in self.goal_nodes:
-                    
+
                 #     cost_to_transition = env.config_cost(node.state.q, g.state.q)
                 #     if mode_cost is None or cost_to_transition < mode_cost:
                 #         mode_cost = cost_to_transition
@@ -353,10 +390,12 @@ class Graph:
             else:
                 if et in self.blacklist:
                     continue
-            
+
                 q0 = n0.state.q
                 q1 = n1.state.q
-                collision_free = env.is_edge_collision_free(q0, q1, n0.state.mode, resolution)
+                collision_free = env.is_edge_collision_free(
+                    q0, q1, n0.state.mode, resolution
+                )
 
                 if not collision_free:
                     self.blacklist.add(et)
@@ -404,9 +443,7 @@ class Graph:
                             continue
 
                         if n not in closed_list:
-                            heapq.heappush(
-                                open_queue, (f_node, edge_cost, (n1, n))
-                            )
+                            heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
 
         path = []
 
@@ -560,7 +597,8 @@ def joint_prm_planner(
     optimize: bool = True,
     mode_sampling_type: str = "greedy",
     max_iter: int = 2000,
-    distance_metric = "euclidean",
+    distance_metric="euclidean",
+    try_sampling_around_path=True
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
@@ -577,7 +615,7 @@ def joint_prm_planner(
             w = []
             for m in reached_modes:
                 if m in g.nodes:
-                    w.append(1 / (1+len(g.nodes[m])))
+                    w.append(1 / (1 + len(g.nodes[m])))
                 else:
                     w.append(1)
             m_rnd = random.choices(reached_modes, weights=w)[0]
@@ -595,35 +633,53 @@ def joint_prm_planner(
 
         return m_rnd
 
-    def sample_valid_uniform_batch(batch_size, found_solution):
+    def sample_valid_uniform_batch(batch_size, cost):
         new_samples = []
 
-        while len(new_samples) < batch_size:
-            # print(len(new_samples))
-            # sample mode
-            m = sample_mode("weighted", found_solution)
+        if True:
+            while len(new_samples) < batch_size:
+                # print(len(new_samples))
+                # sample mode
+                m = sample_mode("weighted", cost is not None)
 
-            # print(m)
+                # print(m)
 
-            # sample configuration
-            q = []
-            for i in range(len(env.robots)):
-                r = env.robots[i]
-                lims = env.limits[:, env.robot_idx[r]]
-                if lims[0, 0] < lims[1, 0]:
-                    qr = (
-                        np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
-                        + lims[0, :]
-                    )
-                else:
-                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+                # sample configuration
+                q = []
+                for i in range(len(env.robots)):
+                    r = env.robots[i]
+                    lims = env.limits[:, env.robot_idx[r]]
+                    if lims[0, 0] < lims[1, 0]:
+                        qr = (
+                            np.random.rand(env.robot_dims[r])
+                            * (lims[1, :] - lims[0, :])
+                            + lims[0, :]
+                        )
+                    else:
+                        qr = np.random.rand(env.robot_dims[r]) * 6 - 3
 
-                q.append(qr)
+                    q.append(qr)
 
-            q = conf_type.from_list(q)
+                q = conf_type.from_list(q)
 
-            if env.is_collision_free(q, m):
-                new_samples.append(State(q, m))
+                if env.is_collision_free(q, m):
+                    new_samples.append(State(q, m))
+        else:
+            # we found a solution, and can do informed sampling:
+            # cost = (cost to get to mode) + cost in mode + (cost_to_goal)
+            # maybe better formulation:
+            # cost = 
+
+            # NOTES:
+            # minimum cost to reach a mode is the lower bound of all the mode transitions we have so far
+            # admissible possibilities to compute the minimum cost:
+            # - lb through each mode, sum them up?
+            # -- disregards continuity, might underestimate massively
+            # - use dependency graph and compute lb per task?
+            #####
+            # inadmissible possibilities:
+            # - take only cost in current mode
+            pass
 
         return new_samples
 
@@ -637,8 +693,10 @@ def joint_prm_planner(
             # sample transition at the end of this mode
             possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
             if len(possible_next_task_combinations) > 0:
-                ind = random.randint(0, len(possible_next_task_combinations)-1)
-                active_task = env.get_active_task(mode, possible_next_task_combinations[ind])
+                ind = random.randint(0, len(possible_next_task_combinations) - 1)
+                active_task = env.get_active_task(
+                    mode, possible_next_task_combinations[ind]
+                )
             else:
                 active_task = env.get_active_task(mode, None)
 
@@ -719,46 +777,46 @@ def joint_prm_planner(
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
-            # if current_best_path is not None:
-            #     # sample inde
-            #     states_near_path = []
-            #     for _ in range(100):
-            #         idx = random.randint(0, len(current_best_path)-2)
-            #         state = current_best_path[idx]
+            if try_sampling_around_path and current_best_path is not None:
+                # sample inde
+                states_near_path = []
+                for _ in range(200):
+                    idx = random.randint(0, len(current_best_path)-2)
+                    state = current_best_path[idx]
 
-            #         # this is a transition. we would need to figure out which robots are active and not sample those
-            #         if state.mode != current_best_path[idx+1].mode:
-            #             continue
+                    # this is a transition. we would need to figure out which robots are active and not sample those
+                    if state.mode != current_best_path[idx+1].mode:
+                        continue
 
-            #         q = []
-            #         for i in range(len(env.robots)):
-            #             r = env.robots[i]
-            #             qr_mean = state.q[i]
+                    q = []
+                    for i in range(len(env.robots)):
+                        r = env.robots[i]
+                        qr_mean = state.q[i]
 
-            #             qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+                        qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
 
-            #             lims = env.limits[:, env.robot_idx[r]]
-            #             if lims[0, 0] < lims[1, 0]:
-            #                 qr = np.clip(qr, lims[0, :], lims[1, :])
-            #                 # qr = (
-            #                 #     np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
-            #                 #     + lims[0, :]
-            #                 # )
+                        lims = env.limits[:, env.robot_idx[r]]
+                        if lims[0, 0] < lims[1, 0]:
+                            qr = np.clip(qr, lims[0, :], lims[1, :])
+                            # qr = (
+                            #     np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
+                            #     + lims[0, :]
+                            # )
 
-            #             q.append(qr)
+                        q.append(qr)
 
-            #         q = conf_type.from_list(q)
+                    q = conf_type.from_list(q)
 
-            #         if env.is_collision_free(q, state.mode):
-            #             rnd_state = State(q, state.mode)
-            #             states_near_path.append(rnd_state)
+                    if env.is_collision_free(q, state.mode):
+                        rnd_state = State(q, state.mode)
+                        states_near_path.append(rnd_state)
 
-            #     g.add_states(states_near_path)
+                g.add_states(states_near_path)
 
             # add new batch of nodes to
             print("Sampling uniform")
             new_states = sample_valid_uniform_batch(
-                batch_size=batch_size, found_solution=(current_best_cost is not None)
+                batch_size=batch_size, cost=current_best_cost
             )
             g.add_states(new_states)
 
@@ -783,7 +841,9 @@ def joint_prm_planner(
             continue
 
         while True:
-            sparsely_checked_path = g.search(g.root, g.goal_nodes, env, current_best_cost, resolution)
+            sparsely_checked_path = g.search(
+                g.root, g.goal_nodes, env, current_best_cost, resolution
+            )
 
             # 2. in case this found a path, search with dense check from the other side
             if len(sparsely_checked_path) > 0:
@@ -826,12 +886,12 @@ def joint_prm_planner(
 
                     add_new_batch = True
                     break
-                
+
             else:
                 print("Did not find a solution")
                 add_new_batch = True
                 break
-            
+
         if not optimize and current_best_cost is not None:
             break
 
