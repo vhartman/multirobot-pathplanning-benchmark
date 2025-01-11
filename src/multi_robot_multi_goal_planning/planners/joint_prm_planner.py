@@ -777,6 +777,7 @@ def joint_prm_planner(
                         current_best_path = path
                         current_best_cost = new_path_cost
 
+                        print("New cost: ", new_path_cost)
                         costs.append(new_path_cost)
                         times.append(time.time() - start_time)
 

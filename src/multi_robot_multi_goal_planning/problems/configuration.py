@@ -170,13 +170,15 @@ class NpConfiguration(Configuration):
 
         if metric == "euclidean":
             return np.linalg.norm(diff, axis=1)
-        elif metric == "sum_euclidean":
+        elif metric == "sum_euclidean" or metric == "max_euclidean":
             dists = np.zeros((pt._num_agents, diff.shape[0]))
             for i, (s, e) in enumerate(pt.slice):
                 dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
             # dists = np.array([np.linalg.norm(diff[:, s:e], axis=1) for s, e in pt.slice])
-            return np.sum(dists, axis=0)
-            # return np.max(dists, axis=0)
+            if metric == "sum_euclidean":
+                return np.sum(dists, axis=0)
+            elif metric == "max_euclidean":
+                return np.max(dists, axis=0) + 0.01 * np.sum(dists, axis=0)
         else:
             return np.max(np.abs(diff), axis=1)
 
