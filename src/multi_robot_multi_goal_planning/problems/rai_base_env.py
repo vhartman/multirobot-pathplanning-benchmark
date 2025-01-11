@@ -83,6 +83,8 @@ class rai_env(BaseProblem):
         self.cost_metric = "max"
         self.cost_reduction = "max"
 
+        self.C_cache = {}
+
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
@@ -257,6 +259,11 @@ class rai_env(BaseProblem):
 
         self.prev_mode = m
 
+        if m in self.C_cache:
+            self.C.clear()
+            self.C.addConfigurationCopy(self.C_cache[m])
+            return
+
         # TODO: we might want to cache different modes
         self.C.clear()
         self.C.addConfigurationCopy(self.C_base)
@@ -313,3 +320,6 @@ class rai_env(BaseProblem):
                 if self.tasks[prev_mode_index].side_effect is not None:
                     box = self.tasks[prev_mode_index].frames[1]
                     self.C.delFrame(box)
+
+        self.C_cache[m] = ry.Config()
+        self.C_cache[m].addConfigurationCopy(self.C)

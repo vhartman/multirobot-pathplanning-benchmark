@@ -162,6 +162,8 @@ class Mode:
         self.id = Mode.id_counter
         Mode.id_counter += 1
 
+        self.cached_hash = None
+
     def __repr__(self):
         return "Tasks: " + str(self.task_ids) + "id: " + str(self.id)
 
@@ -169,14 +171,17 @@ class Mode:
         return hash(self) == hash(other)
 
     def __hash__(self):
-        entry_hash = 0
-        sg_hash = hash(frozenset(self.sg.items()))
-        # entry_hash = hash(
-        #     self.entry_configuration.state().tobytes()
-        # )  # TODO: this is too restrictive at the moment - we need to check if the scene graph is the same as in another setting
-        task_hash = hash(tuple(self.task_ids))
-        return hash((entry_hash, sg_hash, task_hash))
-
+        if self.cached_hash is None:
+            entry_hash = 0
+            sg_hash = hash(frozenset(self.sg.items()))
+            # entry_hash = hash(
+            #     self.entry_configuration.state().tobytes()
+            # )  # TODO: this is too restrictive at the moment - we need to check if the scene graph is the same as in another setting
+            task_hash = hash(tuple(self.task_ids))
+            self.cached_hash = hash((entry_hash, sg_hash, task_hash))
+        
+        return self.cached_hash
+        
 
 class State:
     q: Configuration
