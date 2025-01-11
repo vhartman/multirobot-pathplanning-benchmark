@@ -20,6 +20,11 @@ from multi_robot_multi_goal_planning.problems.util import path_cost
 
 from concurrent.futures import ThreadPoolExecutor
 
+def edge_tuple(n0, n1):
+    if n0.id < n1.id:
+        return (n0, n1)
+    else:
+        return (n1, n0)
 
 class Node:
     state: State
@@ -333,6 +338,8 @@ class Graph:
             f_pred, edge_cost, edge = heapq.heappop(open_queue)
             n0, n1 = edge
 
+            et = edge_tuple(n0, n1)
+
             g_tentative = gs[n0] + edge_cost
 
             # if we found a better way to get there before, do not expand this edge
@@ -341,10 +348,10 @@ class Graph:
 
             # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
             collision_free = False
-            if edge in self.whitelist or (edge[1], edge[0]) in self.whitelist:
+            if et in self.whitelist:
                 collision_free = True
             else:
-                if edge in self.blacklist or (edge[1], edge[0]) in self.blacklist:
+                if et in self.blacklist:
                     continue
             
                 q0 = n0.state.q
@@ -352,10 +359,10 @@ class Graph:
                 collision_free = env.is_edge_collision_free(q0, q1, n0.state.mode, resolution)
 
                 if not collision_free:
-                    self.blacklist.add(edge)
+                    self.blacklist.add(et)
                     continue
                 else:
-                    self.whitelist.add(edge)
+                    self.whitelist.add(et)
 
             if n0.state.mode not in reached_modes:
                 reached_modes.append(n0.state.mode)
@@ -381,7 +388,7 @@ class Graph:
                     if n == n1 or n == n0:
                         continue
 
-                    if (n, n1) in self.blacklist or (n1, n) in self.blacklist:
+                    if edge_tuple(n, n1) in self.blacklist:
                         continue
 
                     edge_cost = edge_costs[i]
@@ -794,17 +801,17 @@ def joint_prm_planner(
                     if s0.mode != s1.mode:
                         continue
 
-                    if (n0, n1) in g.whitelist:
+                    if edge_tuple(n0, n1) in g.whitelist:
                         continue
 
                     if not env.is_edge_collision_free(s0.q, s1.q, s0.mode, resolution):
                         print("Path is in collision")
                         is_valid_path = False
                         # env.show(True)
-                        g.blacklist.add((n0, n1))
+                        g.blacklist.add(edge_tuple(n0, n1))
                         break
                     else:
-                        g.whitelist.add((n0, n1))
+                        g.whitelist.add(edge_tuple(n0, n1))
 
                 if is_valid_path:
                     path = [node.state for node in sparsely_checked_path]
