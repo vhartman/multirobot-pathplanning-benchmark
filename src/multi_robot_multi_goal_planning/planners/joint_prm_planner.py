@@ -712,8 +712,41 @@ def joint_prm_planner(
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
-            if current_best_path is not None:
-                pass
+            # if current_best_path is not None:
+            #     # sample inde
+            #     states_near_path = []
+            #     for _ in range(100):
+            #         idx = random.randint(0, len(current_best_path)-2)
+            #         state = current_best_path[idx]
+
+            #         # this is a transition. we would need to figure out which robots are active and not sample those
+            #         if state.mode != current_best_path[idx+1].mode:
+            #             continue
+
+            #         q = []
+            #         for i in range(len(env.robots)):
+            #             r = env.robots[i]
+            #             qr_mean = state.q[i]
+
+            #             qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+
+            #             lims = env.limits[:, env.robot_idx[r]]
+            #             if lims[0, 0] < lims[1, 0]:
+            #                 qr = np.clip(qr, lims[0, :], lims[1, :])
+            #                 # qr = (
+            #                 #     np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
+            #                 #     + lims[0, :]
+            #                 # )
+
+            #             q.append(qr)
+
+            #         q = conf_type.from_list(q)
+
+            #         if env.is_collision_free(q, state.mode):
+            #             rnd_state = State(q, state.mode)
+            #             states_near_path.append(rnd_state)
+
+            #     g.add_states(states_near_path)
 
             # add new batch of nodes to
             print("Sampling uniform")
