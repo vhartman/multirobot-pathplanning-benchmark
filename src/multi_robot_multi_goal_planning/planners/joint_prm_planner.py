@@ -787,25 +787,44 @@ def joint_prm_planner(
                     state = current_best_path[idx]
 
                     # this is a transition. we would need to figure out which robots are active and not sample those
-                    if state.mode != current_best_path[idx + 1].mode:
-                        continue
-
                     q = []
-                    for i in range(len(env.robots)):
-                        r = env.robots[i]
-                        qr_mean = state.q[i]
+                    if state.mode != current_best_path[idx+1].mode:
+                        current_task_ids = state.mode.task_ids
+                        next_task_ids = state.mode.task_ids
 
-                        qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+                        task = env.get_active_task(state.mode, next_task_ids)
+                        involved_robots = task.robots
+                        for i in range(len(env.robots)):
+                            r = env.robots[i]
+                            if r in involved_robots:
+                                qr = state.q[i]
+                            else:
+                                qr_mean = state.q[i]
 
-                        lims = env.limits[:, env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = np.clip(qr, lims[0, :], lims[1, :])
-                            # qr = (
-                            #     np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
-                            #     + lims[0, :]
-                            # )
+                                qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
 
-                        q.append(qr)
+                                lims = env.limits[:, env.robot_idx[r]]
+                                if lims[0, 0] < lims[1, 0]:
+                                    qr = np.clip(qr, lims[0, :], lims[1, :])
+
+                            q.append(qr)
+
+                    else:
+                        for i in range(len(env.robots)):
+                            r = env.robots[i]
+                            qr_mean = state.q[i]
+
+                            qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+
+                            lims = env.limits[:, env.robot_idx[r]]
+                            if lims[0, 0] < lims[1, 0]:
+                                qr = np.clip(qr, lims[0, :], lims[1, :])
+                                # qr = (
+                                #     np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
+                                #     + lims[0, :]
+                                # )
+
+                            q.append(qr)
 
                     q = conf_type.from_list(q)
 

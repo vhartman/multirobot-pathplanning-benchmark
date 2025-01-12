@@ -702,7 +702,7 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def get_active_task(self, mode: Mode) -> Task:
+    def get_active_task(self, mode: Mode, next_task_ids: List[int]) -> Task:
         pass
 
     # @abstractmethod
