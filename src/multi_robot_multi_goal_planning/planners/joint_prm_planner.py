@@ -132,7 +132,7 @@ class Graph:
     def add_transition_nodes(self, transitions):
         self.transition_node_array_cache = {}
 
-        nodes = []
+        # nodes = []
         for q, this_mode, next_mode in transitions:
             node_this_mode = Node(State(q, this_mode), True)
             node_next_mode = Node(State(q, next_mode), True)
@@ -141,10 +141,12 @@ class Graph:
                 node_next_mode.neighbors = [node_this_mode]
                 node_this_mode.neighbors = [node_next_mode]
 
-            nodes.append(node_this_mode)
+                assert(this_mode.task_ids != next_mode.task_ids)
+
+            # nodes.append(node_this_mode)
 
             if next_mode is not None:
-                nodes.append(node_next_mode)
+                # nodes.append(node_next_mode)
 
                 if this_mode in self.transition_nodes:
                     self.transition_nodes[this_mode].append(node_this_mode)
@@ -243,7 +245,7 @@ class Graph:
 
             best_nodes = best_nodes + best_transition_nodes
         else:
-            r = 10
+            r = 3
 
             best_nodes = []
             if key in self.nodes:
@@ -777,6 +779,105 @@ def joint_prm_planner(
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
+            if False and current_best_path is not None:
+            # if cnt > 7000 and current_best_path is not None:
+                def cost_to_mode_on_path(mode, path):
+                    for i in range(len(path)):
+                        curr_state = path[i]
+
+                        if curr_state.mode == mode:
+                            if i == 0:
+                                return 0, curr_state.q
+                            
+                            cost = path_cost(path[:i+1], env.batch_config_cost)
+                            # env.show_config(curr_state.q)
+
+                            return cost, curr_state.q
+                        
+                    return None, None
+                        
+                def cost_to_next_mode_on_path(mode, path):
+                    for i in range(1, len(path)):
+                        curr_state = path[i-1]
+                        next_state = path[i]
+
+                        if curr_state.mode == mode and (curr_state.mode != next_state.mode or i == len(path)-1):
+                            cost = path_cost(path[:i+1], env.batch_config_cost)
+                            # env.show_config(next_state.q)
+                            return cost, next_state.q
+                        
+                    return None, None
+
+                somewhat_informed_samples = []
+                for _ in range(200):
+                    mode = sample_mode("uniform_reached", None)
+                    print(mode.task_ids)
+
+                    cost_to_reach_mode, mode_start_config = cost_to_mode_on_path(mode, current_best_path)
+                    next_mode_cost, mode_end_config = cost_to_next_mode_on_path(mode, current_best_path)
+
+                    print('next mode cost:', next_mode_cost)
+                    print('path_cost', current_best_cost)
+
+                    if cost_to_reach_mode is None:
+                        continue
+
+                    this_mode_cost = next_mode_cost - cost_to_reach_mode
+                    print('this mode cost:', this_mode_cost)                    
+
+                    print(mode_start_config.state())
+                    print(mode_end_config.state())
+
+                    print("min cost", env.config_cost(mode_start_config, mode_end_config))
+                    
+                    assert(this_mode_cost - env.config_cost(mode_start_config, mode_end_config) > -1e-3)
+                    if this_mode_cost - env.config_cost(mode_start_config, mode_end_config) < 1e-3:
+                        continue
+                    
+                    tmp = []
+                    for _ in range(1000):
+                        for _ in range(500):
+                            q = []
+                            for i in range(len(env.robots)):
+                                r = env.robots[i]
+                                
+                                lims = env.limits[:, env.robot_idx[r]]
+                                if lims[0, 0] < lims[1, 0]:
+                                    qr = (
+                                        np.random.rand(env.robot_dims[r])
+                                        * (lims[1, :] - lims[0, :])
+                                        + lims[0, :]
+                                    )
+                                else:
+                                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+
+                                q.append(qr)
+
+                            q = conf_type.from_list(q)                
+                            heuristic_cost = env.config_cost(mode_start_config, q) + env.config_cost(mode_end_config, q)
+                            # print(heuristic_cost)
+                            if heuristic_cost < this_mode_cost:
+                                break
+                            
+                            q = None
+                        
+                        if q is None:
+                            continue
+
+                        tmp.append(q)
+
+                    plt.figure()
+                    plt.scatter([a[0][0] for a in tmp],[a[0][1] for a in tmp])
+                    plt.scatter([a[1][0] for a in tmp],[a[1][1] for a in tmp])
+                    plt.show()
+
+                    if env.is_collision_free(q, mode):
+                        rnd_state = State(q, mode)
+                        somewhat_informed_samples.append(rnd_state)
+
+                g.add_states(somewhat_informed_samples)
+
+
             if try_sampling_around_path and current_best_path is not None:
                 # sample inde
                 states_near_path = []
@@ -788,7 +889,22 @@ def joint_prm_planner(
                     q = []
                     if state.mode != current_best_path[idx+1].mode:
                         current_task_ids = state.mode.task_ids
-                        next_task_ids = state.mode.task_ids
+                        next_task_ids = current_best_path[idx+1].mode.task_ids
+
+                        # print(current_task_ids, next_task_ids)
+                        # print(hash(state.mode), hash(current_best_path[idx+1].mode))
+                        # print(state.mode.sg)
+                        # print(current_best_path[idx+1].mode.sg)
+                        # print(idx, len(current_best_path))
+
+                        # print("prev mode task ids", state.mode.prev_mode.task_ids)
+                        # print("prev mode task ids", current_best_path[idx+1].mode.prev_mode.task_ids)
+
+                        # env.set_to_mode(state.mode)
+                        # env.show_config(state.q)
+
+                        # env.set_to_mode(current_best_path[idx+1].mode)
+                        # env.show_config(current_best_path[idx+1].q)
 
                         task = env.get_active_task(state.mode, next_task_ids)
                         involved_robots = task.robots

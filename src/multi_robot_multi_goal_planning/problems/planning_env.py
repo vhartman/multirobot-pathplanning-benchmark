@@ -566,7 +566,7 @@ class DependencyGraphMixin(BaseModeLogic):
                     if task.goal.satisfies_constraints(
                         q_concat, mode=mode, tolerance=self.tolerance
                     ):
-                        tmp = Mode(task_list=next_mode, entry_configuration=q)
+                        tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
 
                         sg = self.get_scenegraph_info_for_mode(tmp)
