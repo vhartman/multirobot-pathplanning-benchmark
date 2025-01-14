@@ -1796,12 +1796,82 @@ class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
 
 # TODO
 class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
-    def __init__(self, num_robots=2, num_boxes=9):
-        self.C, actions, self.robots = make_box_pile_env(
-            num_boxes=num_boxes, num_robots=num_robots
+    def __init__(self, num_boxes=5):
+        self.C, keyframes = make_box_pile_env(
+            num_boxes=num_boxes
         )
 
-        raise NotImplementedError
+        self.robots = ["a1_", "a2_"]
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.frames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        pick_task_names = ["pick", "place"]
+        handover_task_names = ["pick", "handover", "place"]
+
+        cnt = 0
+        for primitive_type, robots, box_index, qs in keyframes:
+            box_name = "box" + str(box_index)
+            if primitive_type == "pick":
+                for t, k in zip(pick_task_names, qs):
+                    if t == "pick":
+                        ee_name = robots[0] + "ur_vacuum"
+                        self.tasks.append(Task(robots, SingleGoal(k), t, frames=[ee_name, box_name]))
+                    else:
+                        self.tasks.append(Task(robots, SingleGoal(k), t, frames=["tray", box_name]))
+
+                    self.tasks[-1].name = robots[0] + t + "_" + box_name + "_" + str(cnt)
+                    cnt += 1
+            else:
+                for t, k in zip(handover_task_names, qs):
+                    print(robots)
+                    if t == "pick":
+                        ee_name = robots[0] + "ur_vacuum"
+                        self.tasks.append(Task([robots[0]], SingleGoal(k[self.robot_idx[robots[0]]]), t, frames=[ee_name, box_name]))
+                    elif t == "handover":
+                        ee_name = robots[1] + "ur_vacuum"
+                        self.tasks.append(Task(self.robots, SingleGoal(k), t, frames=[ee_name, box_name]))
+                    else:
+                        print(robots[1])
+                        self.tasks.append(Task([robots[1]], SingleGoal(k[self.robot_idx[robots[1]]]), t, frames=["tray", box_name]))
+
+                    self.tasks[-1].name = robots[0] + t + "_" + box_name + "_" + str(cnt)
+                    cnt += 1
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.tolerance = 0.01
 
 
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
