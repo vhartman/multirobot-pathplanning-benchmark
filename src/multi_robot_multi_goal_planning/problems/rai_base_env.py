@@ -315,6 +315,7 @@ class rai_env(BaseProblem):
                         self.tasks[prev_mode_index].frames[0],
                         self.tasks[prev_mode_index].frames[1],
                     )
+                    self.C.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
 
                 # postcondition
                 if self.tasks[prev_mode_index].side_effect is not None:
