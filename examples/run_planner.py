@@ -183,6 +183,18 @@ def main():
         default="max",
         help="How the agent specific cost functions are reduced to one single number (default: max)",
     )
+    parser.add_argument(
+        "--prm_k_nearest",
+        type=lambda x: x.lower() in ["true", "1", "yes"],
+        default=True,
+        help="Use k-nearest (default: True)",
+    )
+    parser.add_argument(
+        "--prm_sample_near_path",
+        type=lambda x: x.lower() in ["true", "1", "yes"],
+        default=False,
+        help="Generate samples near a previously found path (default: False)",
+    )
     args = parser.parse_args()
 
     env = get_env_by_name(args.env)
@@ -197,7 +209,9 @@ def main():
             optimize=args.optimize,
             mode_sampling_type=None,
             max_iter=args.num_iters,
-            distance_metric=args.distance_metric
+            distance_metric=args.distance_metric,
+            try_sampling_around_path=args.prm_sample_near_path,
+            use_k_nearest=args.prm_k_nearest
         )
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(

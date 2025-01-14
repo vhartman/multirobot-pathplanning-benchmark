@@ -93,8 +93,8 @@ class rai_env(BaseProblem):
     ) -> NDArray:
         return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction)
 
-    def show_config(self, q: NDArray, blocking: bool = True):
-        self.C.setJointState(q)
+    def show_config(self, q: Configuration, blocking: bool = True):
+        self.C.setJointState(q.state())
         self.C.view(blocking)
 
     def show(self, blocking: bool = True):
@@ -315,6 +315,7 @@ class rai_env(BaseProblem):
                         self.tasks[prev_mode_index].frames[0],
                         self.tasks[prev_mode_index].frames[1],
                     )
+                    self.C.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
 
                 # postcondition
                 if self.tasks[prev_mode_index].side_effect is not None:
