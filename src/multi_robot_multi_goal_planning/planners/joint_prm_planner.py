@@ -17,7 +17,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     config_dist,
     batch_config_dist,
 )
-from multi_robot_multi_goal_planning.problems.util import path_cost
+from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate_path
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -1072,17 +1072,19 @@ def joint_prm_planner(
                 g.add_states(somewhat_informed_samples)
 
             if try_sampling_around_path and current_best_path is not None:
-                # sample inde
+                # sample index
+                interpolated_path = interpolate_path(current_best_path)
+                # interpolated_path = current_best_path
                 states_near_path = []
                 for _ in range(200):
-                    idx = random.randint(0, len(current_best_path) - 2)
-                    state = current_best_path[idx]
+                    idx = random.randint(0, len(interpolated_path) - 2)
+                    state = interpolated_path[idx]
 
                     # this is a transition. we would need to figure out which robots are active and not sample those
                     q = []
-                    if state.mode != current_best_path[idx + 1].mode:
+                    if state.mode != interpolated_path[idx + 1].mode:
                         current_task_ids = state.mode.task_ids
-                        next_task_ids = current_best_path[idx + 1].mode.task_ids
+                        next_task_ids = interpolated_path[idx + 1].mode.task_ids
 
                         # print(current_task_ids, next_task_ids)
                         # print(hash(state.mode), hash(current_best_path[idx+1].mode))
