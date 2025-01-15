@@ -517,21 +517,22 @@ class Graph:
             cost = env.config_cost(n0.state.q, n1.state.q)
             return cost
 
-        reached_modes = []
+        # reached_modes = []
 
         parents = {start_node: None}
-        gs = {start_node: 0}  # best cost to get to a node
+        gs = {start_node.id: 0}  # best cost to get to a node
 
         # populate open_queue and fs
         start_edges = [(start_node, n) for n in self.get_neighbors(start_node, space_extent=np.prod(np.diff(env.limits, axis=0)))]
 
-        fs = {}  # total cost of a node (f = g + h)
+        # fs = {}  # total cost of a node (f = g + h)
         for e in start_edges:
             if e[0] != e[1]:
                 # open_queue.append(e)
                 edge_cost = d(e[0], e[1])
-                fs[e] = gs[start_node] + edge_cost + h(e[1])
-                heapq.heappush(open_queue, (fs[e], edge_cost, e))
+                cost = gs[start_node.id] + edge_cost + h(e[1])
+                # fs[(e[0].id, e[1].id)] = cost
+                heapq.heappush(open_queue, (cost, edge_cost, e))
 
         num_iter = 0
         while len(open_queue) > 0:
@@ -543,10 +544,10 @@ class Graph:
             f_pred, edge_cost, edge = heapq.heappop(open_queue)
             n0, n1 = edge
 
-            g_tentative = gs[n0] + edge_cost
+            g_tentative = gs[n0.id] + edge_cost
 
             # if we found a better way to get there before, do not expand this edge
-            if n1 in gs and g_tentative >= gs[n1]:
+            if n1.id in gs and g_tentative >= gs[n1.id]:
                 continue
 
             # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
@@ -578,7 +579,7 @@ class Graph:
 
             # print('reached modes', reached_modes)
 
-            gs[n1] = g_tentative
+            gs[n1.id] = g_tentative
             parents[n1] = n0
 
             if n1 in goal_nodes:
@@ -604,11 +605,11 @@ class Graph:
                     edge_cost = edge_costs[i]
                     g_new = g_tentative + edge_cost
 
-                    if n not in gs or g_new < gs[n]:
+                    if n.id not in gs or g_new < gs[n.id]:
                         # sparsely check only when expanding
                         # cost to get to neighbor:
                         f_node = g_new + h(n)
-                        fs[(n1, n)] = f_node
+                        # fs[(n1, n)] = f_node
 
                         if best_cost is not None and f_node > best_cost:
                             continue
