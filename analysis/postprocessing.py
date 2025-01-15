@@ -39,7 +39,8 @@ def get_cost_label(cost_function, number_agents):
                
     return cost_label
 
-def cost(env, config, pkl_folder, output_filename, fix_axis):
+def cost_single(env, config, pkl_folder, output_filename, fix_axis):
+    """Plot cost of single run"""
     # Get the list of .pkl files
     pkl_files = sorted(
         [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
@@ -147,7 +148,157 @@ def cost(env, config, pkl_folder, output_filename, fix_axis):
     
     fig.write_image(output_filename)
 
-def sum(env, config, parent_folder, single_folder):
+def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output_filename):
+    """Plot cost of multiple runs with upper and lower bounds (= min/max values)""" # TODO for several different planners 
+    fig = go.Figure() 
+    colors = colors_plotly()
+    max_cost_average = []
+    max_time_average = []
+    for planner, parent_folder in enumerate(parent_folders):
+        planner_costs = []
+        planner_times = []
+        planner_init_times = []
+        max_init_times = 0
+        sum_terminal_times = 0
+        for folder_name in os.listdir(parent_folder):
+            print(folder_name)
+            if folder_name == '3':
+                print('hallo')
+            folder_path = os.path.join(parent_folder, folder_name)
+            pkl_folder =  os.path.join(folder_path, 'FramesData')
+            pkl_files = sorted(
+                [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
+                key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+                )
+            for pkl_file in pkl_files:
+                with open(pkl_file, 'rb') as file:
+                    data = dill.load(file)
+
+            print(f"Found {len(pkl_files)} .pkl files.")
+            num_agents = len(env.robots)
+            cost_function= 2 # TODO hardcoded
+            cost_label = get_cost_label(cost_function, num_agents-1)
+            costs = []
+            time = []
+            init_sol = False
+            for pkl_file in pkl_files:
+                with open(pkl_file, 'rb') as file:
+                    data = dill.load(file)
+                result = data["result"]
+                time.append(data["time"])
+                
+                
+                all_init_path = data["all_init_path"]
+                if all_init_path and not init_sol:
+                    init_sol = True # iteration where first iteration was found
+                    print(time[-1])
+                    init_path_time = time[-1]
+                    planner_init_times.append(init_path_time)
+                    if init_path_time > max_init_times:
+                        max_init_times = init_path_time
+
+                if init_sol:
+                    cost = result["total"]
+                    if cost is None:
+                        costs.append(float('nan'))
+                    else:
+                        costs.append(cost.item())
+
+                else:
+                    costs.append(float('nan'))
+            planner_costs.append(costs)
+            planner_times.append(time)
+            sum_terminal_times += time[-1]
+    
+        average_cost, average_time, min_costs, max_costs = discretization(max_init_times, sum_terminal_times, len(pkl_files), planner_times, planner_costs)
+        average_time = [t+1 for t in average_time]
+        fig.add_trace(go.Scatter(
+            x=[0],
+            y=[0],
+            mode='lines',
+            name= f"{config['planner']}",
+            line=dict(color=colors[planner]),
+            showlegend=True  
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=[0],
+            y=[0],
+            mode='markers',
+            name= f"with ⌀ initial sol.found after {np.round(np.mean(planner_init_times),3)}s",
+            line=dict(color='white'),
+            showlegend=True 
+        ))
+        # max_cost = np.nanmax(costs)
+        max_time_average.append(average_time[-1])
+        max_cost_average.append(np.max(max_costs))
+        # Update layout with titles, axis labels, and legend
+
+        fig.add_trace(go.Scatter(
+            x=average_time,
+            y=average_cost,
+            mode='lines', 
+            opacity=1,
+            line=dict(color=colors[planner]),
+            showlegend=False  
+        ))
+        fig.add_trace(go.Scatter(
+            x=average_time,
+            y=max_costs,
+            mode='lines',
+            line=dict(color=colors[planner], width = 0),
+            opacity=0.05,
+            fill=None,  # No fill above this line
+            showlegend=False
+        ))
+
+        fig.add_trace(go.Scatter(
+            x=average_time,
+            y=min_costs,
+            mode='lines',
+            line=dict(color=colors[planner], width = 0),
+            opacity=0.05,
+            fill='tonexty',  # Fill the area between this line and the previous one
+            showlegend=False
+        ))
+        
+    fig.add_trace(go.Scatter(
+        x=[None], 
+        y=[None], 
+        mode='markers',
+        name= f"",
+        line=dict(color='white'),
+        showlegend=True 
+    ))
+    fig.add_trace(go.Scatter(
+        x=[None], 
+        y=[None],  
+        mode='none',  # No line, marker, or text will be displayed
+        name=cost_label,  
+        showlegend=True  # Ensures this entry appears in the legend
+    ))
+    max_time = np.max(max_time_average)
+    max_cost = np.max(max_cost_average)
+
+    fig.update_layout(
+        title="Cost vs Time",
+        xaxis=dict(title="Time [s]", range=[0, max_time+2], autorange=False ),
+        yaxis=dict(title="Cost [m]", range=[0, max_cost+0.5], autorange=False ), 
+        margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1,
+            traceorder="normal"  # Position legend outside the plot area on the right
+        ) 
+    )
+    
+    fig.write_image(output_filename)
+
+def sum(parent_folder, single_folder):
+    """Get average of inital time/cost and terminal time/cost over several runs"""
     init_sol_time = []
     init_sol_cost = []
     terminal_cost = []
@@ -202,8 +353,8 @@ def sum(env, config, parent_folder, single_folder):
     print("Terminal cost", np.mean(terminal_cost))
     # print("Variation of terminal cost", np.var(terminal_cost, ddof=1))
 
-def average(sum_times, runs, max_len, times, costs):
-    stop_time = sum_times/runs
+def discretization_shortcutting(sum_times, runs, max_len, times, costs):
+    stop_time = sum_times/runs # get the average stop time
     average_time = np.linspace(0, stop_time, max_len, endpoint = True)
     average_costs = []
     for idx, cost in enumerate(costs):
@@ -214,7 +365,7 @@ def average(sum_times, runs, max_len, times, costs):
                 continue
             if times[idx][-1] < time:
                 cost_average.append(cost[-1])
-            for c_idx, c in enumerate(cost):
+            for c_idx, _ in enumerate(cost):
                 if times[idx][c_idx] > time:
                     cost_average.append(cost[c_idx-1])
                     break
@@ -222,6 +373,24 @@ def average(sum_times, runs, max_len, times, costs):
         average_costs.append(cost_average)
     
     return np.mean(average_costs, axis=0).tolist(), average_time
+
+def discretization(start_time, sum_times, runs, times, costs, max_len = 50):
+    stop_time = sum_times/runs # get the average stop time
+    average_time = np.linspace(start_time, stop_time, max_len, endpoint = True)
+    average_costs = []
+    for idx, cost in enumerate(costs):
+        cost_average = []
+        for time in average_time:
+            if times[idx][-1] < time:
+                cost_average.append(cost[-1])
+            for c_idx, _ in enumerate(cost):
+                if times[idx][c_idx] > time:
+                    cost_average.append(cost[c_idx-1])
+                    break
+                    
+        average_costs.append(cost_average)
+    
+    return np.mean(average_costs, axis=0).tolist(), average_time, np.min(average_costs, axis=0).tolist(), np.max(average_costs, axis=0).tolist()
 
 def shortcutting_cost(env, config, path, output_filename):
     # Initialize lists and Plotly objects
@@ -232,9 +401,9 @@ def shortcutting_cost(env, config, path, output_filename):
     labels_bool = []
     fig = go.Figure()
     num_agents = len(env.robots)
-    colors = colors_plotly()  # Assuming this function is defined elsewhere
-    cost_function = config["cost_function"]
-    cost_label = get_cost_label(cost_function, num_agents - 1)  # Assuming this function is defined elsewhere
+    colors = colors_plotly() 
+    cost_function = 2 #TODO hardcoded
+    cost_label = get_cost_label(cost_function, num_agents - 1) 
     labels = ["Shortcutting per mode", "Partial single dim per mode", "Partial random subset per mode", 
               "Shortcutting per task (1 robot) Prob", "Partial single dim per task (1 robot) Prob", "Partial random subset per task (1 robot) Prob", 
               "Shortcutting per task (all possible robot) Prob", "Partial single dim per task (all possible robot) Prob", "Partial random subset per task (all possible robot) Prob",
@@ -283,7 +452,7 @@ def shortcutting_cost(env, config, path, output_filename):
 
 
 
-        average_cost, average_time = average(sum_times, len(pkl_files), max_len, version_times, version_costs)
+        average_cost, average_time = discretization_shortcutting(sum_times, len(pkl_files), max_len, version_times, version_costs)
         average_time = [t+1 for t in average_time]
         fig.add_trace(go.Scatter(
             x=np.log10(average_time),
@@ -327,20 +496,20 @@ def shortcutting_cost(env, config, path, output_filename):
                 name=cost_label,  
                 mode='markers',
                 marker=dict(size=0.001, color="white"),
-                showlegend=True  # Ensure the l1egend entry is shown
+                showlegend=True  
             ))
     # Update layout with titles, axis labels, and legend
     fig.update_layout(
         title="Cost vs Time",
         xaxis=dict(title="Log(time) [s]",range=[np.log10(min_time), np.log10(max_time)], autorange=False, tickmode="auto",),
         yaxis=dict(title="Cost [m]", range=[min_cost -0.01, max_cost + 0.01], autorange=False),
-        margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
+        margin=dict(l=0, r=50, t=50, b=50), 
         legend=dict(
             orientation="v",
             yanchor="top",
             y=1,
             xanchor="left",
-            x=1  # Position legend outside the plot area on the right
+            x=1 
         ),
         
     )
@@ -348,7 +517,89 @@ def shortcutting_cost(env, config, path, output_filename):
     # Save the plot as an image
     fig.write_image(output_filename)
 
-# Only for 2D problems possible 
+def path_as_png(
+    env,
+    path: List[State],
+    stop: bool = True,
+    export: bool = False,
+    pause_time: float = 0.05,
+    dir: str = "./z.vid/", 
+    framerate = 1
+) -> None:
+    for i in range(len(path)):
+        env.set_to_mode(path[i].mode)
+        for k in range(len(env.robots)):
+            q = path[i].q[k]
+            env.C.setJointState(q, get_robot_joints(env.C, env.robots[k]))
+        if i == 0:
+            env.C.view(True)
+        else:
+            env.C.view(False)
+
+        if export:
+            env.C.view_savePng(dir)
+
+        time.sleep(pause_time)
+
+    for i in range(2*framerate):
+        if export:
+            env.C.view_savePng(dir)
+
+def path_vis(env: base_env, vid_path:str, framerate:int = 1, generate_png:bool = True, path_original:bool = False):
+    pkl_files = sorted(
+        [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
+        key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+    )
+    
+    if generate_png:
+        with open(pkl_files[-1], 'rb') as file:
+            data = dill.load(file)
+            results = data["result"]
+            path_ = results["path"]
+            intermediate_tot = results["intermediate_tot"]
+            transition = results["is_transition"]
+            transition[0] = True
+            modes = results["modes"]
+            mode_sequence = []
+            m = env.start_mode
+            indices  = [env.robot_idx[r] for r in env.robots]
+            while True:
+                mode_sequence.append(m)
+                if m == env.terminal_mode:
+                    break
+                m = env.get_next_mode(None, m)
+            if path_original:
+                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=None)
+            else:
+                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=0.01)  
+            path_as_png(env, discretized_path, export = True, dir =  vid_path, framerate = framerate)
+    # Generate a gif
+    palette_file = os.path.join(vid_path, 'palette.png')
+    output_gif = os.path.join(vid_path, 'out.gif')
+    for file in [palette_file, output_gif]:
+        if os.path.exists(file):
+            os.remove(file)
+    palette_command = [
+        "ffmpeg",
+        "-framerate", f"{framerate}",
+        "-i", os.path.join(vid_path, "%04d.png"),
+        "-vf", "scale=iw:-1:flags=lanczos,palettegen",
+        palette_file
+    ]
+
+    # Command 2: Use palette.png to generate the out.gif
+    gif_command = [
+        "ffmpeg",
+        "-framerate", f"{framerate}",
+        "-i", os.path.join(vid_path, "%04d.png"),
+        "-i", palette_file,
+        "-lavfi", "scale=iw:-1:flags=lanczos [scaled]; [scaled][1:v] paletteuse=dither=bayer:bayer_scale=5",
+        output_gif
+    ]
+    subprocess.run(palette_command, check=True)
+    subprocess.run(gif_command, check=True)
+
+# Only possible for env 2/3 DOFs
 def developement_animation(config, env, env_path, pkl_folder, output_html, with_tree, divider = None):
 
     # Print the parsed task sequence
@@ -776,93 +1027,11 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
     fig.write_html(output_html)
     print(f"Animation saved to {output_html}")
 
-def path_as_png(
-    env,
-    path: List[State],
-    stop: bool = True,
-    export: bool = False,
-    pause_time: float = 0.05,
-    dir: str = "./z.vid/", 
-    framerate = 1
-) -> None:
-    for i in range(len(path)):
-        env.set_to_mode(path[i].mode)
-        for k in range(len(env.robots)):
-            q = path[i].q[k]
-            env.C.setJointState(q, get_robot_joints(env.C, env.robots[k]))
-        if i == 0:
-            env.C.view(True)
-        else:
-            env.C.view(False)
-
-        if export:
-            env.C.view_savePng(dir)
-
-        time.sleep(pause_time)
-
-    for i in range(2*framerate):
-        if export:
-            env.C.view_savePng(dir)
-
-def path_vis(env: base_env, vid_path:str, framerate:int = 1, generate_png:bool = True, path_original:bool = False):
-    pkl_files = sorted(
-        [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
-        key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
-    )
-    
-    if generate_png:
-        with open(pkl_files[-1], 'rb') as file:
-            data = dill.load(file)
-            results = data["result"]
-            path_ = results["path"]
-            intermediate_tot = results["intermediate_tot"]
-            transition = results["is_transition"]
-            transition[0] = True
-            modes = results["modes"]
-            mode_sequence = []
-            m = env.start_mode
-            indices  = [env.robot_idx[r] for r in env.robots]
-            while True:
-                mode_sequence.append(m)
-                if m == env.terminal_mode:
-                    break
-                m = env.get_next_mode(None, m)
-            if path_original:
-                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=None)
-            else:
-                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=0.01)  
-            path_as_png(env, discretized_path, export = True, dir =  vid_path, framerate = framerate)
-    # Generate a gif
-    palette_file = os.path.join(vid_path, 'palette.png')
-    output_gif = os.path.join(vid_path, 'out.gif')
-    for file in [palette_file, output_gif]:
-        if os.path.exists(file):
-            os.remove(file)
-    palette_command = [
-        "ffmpeg",
-        "-framerate", f"{framerate}",
-        "-i", os.path.join(vid_path, "%04d.png"),
-        "-vf", "scale=iw:-1:flags=lanczos,palettegen",
-        palette_file
-    ]
-
-    # Command 2: Use palette.png to generate the out.gif
-    gif_command = [
-        "ffmpeg",
-        "-framerate", f"{framerate}",
-        "-i", os.path.join(vid_path, "%04d.png"),
-        "-i", palette_file,
-        "-lavfi", "scale=iw:-1:flags=lanczos [scaled]; [scaled][1:v] paletteuse=dither=bayer:bayer_scale=5",
-        output_gif
-    ]
-    subprocess.run(palette_command, check=True)
-    subprocess.run(gif_command, check=True)
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument(
         "--do",
-        choices=["development", "cost", "shortcutting_cost", "path", "sum", "interpolation", "nn", "tree"],
+        choices=["dev", "cost_single", "cost_multiple", "shortcutting_cost", "path", "sum", "interpolation", "nn", "tree"],
         required=True,
         help="Select the mode of operation",
     )
@@ -871,16 +1040,14 @@ if __name__ == "__main__":
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
     dir = get_latest_folder(directory)
-    # dir = '/home/tirza/output/050125_220652'
-    # dir = '/home/tirza/output/050125_161619'
+    # dir = '/home/tirza/output/simple_2d_120125_171604'
     pattern = r'^\d{6}_\d{6}$'
     last_part = os.path.basename(dir)
     single_folder = False
     if re.match(pattern, last_part):
         path = dir
-        print(path)
         single_folder = True
-    else: #TODO
+    else:
         path = os.path.join(dir, '0')
     
     env_name, config_params, _, _ = get_config(path)
@@ -888,8 +1055,9 @@ if __name__ == "__main__":
     pkl_folder = os.path.join(path, 'FramesData')
     env_path = os.path.join(home_dir, f'env/{env_name}')
     save_env_as_mesh(env, env_path)
+    print(dir)
     print(path)
-    if args.do == "development":
+    if args.do == "dev":
         print("Development")
         with_tree = False
         if with_tree:
@@ -900,16 +1068,27 @@ if __name__ == "__main__":
             reducer = 100
         developement_animation(config_params, env, env_path, pkl_folder, output_html, with_tree, reducer)    
         webbrowser.open('file://' + os.path.realpath(output_html))
-    if args.do == "cost":
+    
+    if args.do == "cost_single":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'Cost.png')
-        cost(env, config_params, pkl_folder, output_filename_cost, fix_axis)
+        cost_single(env, config_params, pkl_folder, output_filename_cost, fix_axis)
+
+    if args.do == "cost_multiple":
+        output_filename_cost = os.path.join(os.path.dirname(dir), f'Cost_{datetime.now().strftime("%d%m%y_%H%M%S")}.png')
+        dir = ['/home/tirza/output/simple_2d_120125_171604', '/home/tirza/output/simple_2d_120125_195145' ]
+        if not isinstance(dir, list):
+            dir = [dir]
+        cost_multiple(env, config_params, pkl_folder,single_folder ,dir ,output_filename_cost)
+    
     if args.do == "sum":
-        sum(env, config_params, dir, single_folder)
+        sum(dir, single_folder)
+    
     if args.do == "shortcutting_cost":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'ShortcuttingCost.png')
         shortcutting_cost(env, config_params, path, output_filename_cost)
+    
     if args.do == "path":
         path_original = False
         generate_png = True
