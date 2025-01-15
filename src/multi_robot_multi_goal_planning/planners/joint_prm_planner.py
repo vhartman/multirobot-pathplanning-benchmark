@@ -1075,7 +1075,6 @@ def joint_prm_planner(
                 # sample index
                 interpolated_path = interpolate_path(current_best_path)
                 # interpolated_path = current_best_path
-                states_near_path = []
                 for _ in range(200):
                     idx = random.randint(0, len(interpolated_path) - 2)
                     state = interpolated_path[idx]
@@ -1117,6 +1116,11 @@ def joint_prm_planner(
                                     qr = np.clip(qr, lims[0, :], lims[1, :])
 
                             q.append(qr)
+                        
+                        q = conf_type.from_list(q)
+
+                        if env.is_collision_free(q, state.mode):
+                            g.add_transition_nodes([(q, state.mode, interpolated_path[idx+1].mode)])
 
                     else:
                         for i in range(len(env.robots)):
@@ -1135,13 +1139,12 @@ def joint_prm_planner(
 
                             q.append(qr)
 
-                    q = conf_type.from_list(q)
+                        q = conf_type.from_list(q)
 
-                    if env.is_collision_free(q, state.mode):
-                        rnd_state = State(q, state.mode)
-                        states_near_path.append(rnd_state)
+                        if env.is_collision_free(q, state.mode):
+                            rnd_state = State(q, state.mode)
 
-                g.add_states(states_near_path)
+                            g.add_states([rnd_state])
 
             # add new batch of nodes to
             print("Sampling uniform")
