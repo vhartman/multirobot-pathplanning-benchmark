@@ -3124,6 +3124,30 @@ def generate_rnd_axis_quaternion():
         q = (s * 0.5, v[0] / s, v[1] / s, v[2] / s)
 
         return q
+    
+    def quaternion_multiply(q1, q2):
+        w1, x1, y1, z1 = q1
+        w2, x2, y2, z2 = q2
+        
+        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+        
+        return np.array([w, x, y, z])
+    
+    def axis_to_quaternion(axis, angle):
+        axis = np.array(axis, dtype=float)
+        norm = np.linalg.norm(axis)
+        if norm == 0:
+            raise ValueError("Axis vector must not be zero.")
+        
+        axis = axis / norm  # Normalize the axis
+        half_angle = angle / 2
+        w = np.cos(half_angle)
+        x, y, z = axis * np.sin(half_angle)
+        
+        return np.array([w, x, y, z])
 
     # Randomly select one of the major axes (±X, ±Y, ±Z)
     axes = [
@@ -3141,7 +3165,14 @@ def generate_rnd_axis_quaternion():
     print(chosen_axis)
 
     # Compute the quaternion to align the X-axis with the selected axis
-    return align_x_with_target(chosen_axis)
+    quat = align_x_with_target(chosen_axis)
+
+    angle = np.random.random() * np.pi * 2 - np.pi
+    rotate_around_axis_quat = axis_to_quaternion(chosen_axis, angle)
+
+    result = quaternion_multiply(quat, rotate_around_axis_quat)
+
+    return result
 
 
 def is_z_axis_up(quaternion):
@@ -3160,6 +3191,8 @@ def is_z_axis_up(quaternion):
 
 
 def make_box_pile_env(num_boxes=6, view: bool = False):
+    assert(num_boxes >= 9)
+
     C = ry.Config()
 
     table = (
@@ -3187,30 +3220,28 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("tray").setParent(C.getFrame("table")).setShape(
-        ry.ST.box, [0.5, 0.4, 0.025, 0.005]
+        ry.ST.box, [0.5, 0.5, 0.025, 0.005]
     ).setPosition([0, 0, 0.25]).setMass(0.1).setColor((1, 0, 0, 1)).setContact(
         0
     ).setJoint(ry.JT.rigid)
 
-
     C.addFrame("back_wall").setParent(C.getFrame("table")).setShape(
         ry.ST.box, [2, 0.1, 1, 0.005]
-    ).setPosition([0, 1.5, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.1)).setContact(
+    ).setPosition([0, 1.5, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.01)).setContact(
         1
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("side_wall_r").setParent(C.getFrame("table")).setShape(
         ry.ST.box, [0.1, 2.8, 1, 0.005]
-    ).setPosition([-1, 0, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.1)).setContact(
+    ).setPosition([-1, 0, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.01)).setContact(
         1
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("side_wall_l").setParent(C.getFrame("table")).setShape(
         ry.ST.box, [0.1, 2.8, 1, 0.005]
-    ).setPosition([1, 0, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.1)).setContact(
+    ).setPosition([1, 0, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.01)).setContact(
         1
     ).setJoint(ry.JT.rigid)
-
 
     size = np.array([0.1, 0.1, 0.1])
 
@@ -3221,7 +3252,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
 
         pos = np.array(
             [
-                (random.random() - 0.5) * 1.5,
+                (random.random() - 0.5) * 1.2,
                 (random.random() - 0.7) * 0.6,
                 0.3,
             ]
@@ -3232,7 +3263,6 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             continue
 
         quat = generate_rnd_axis_quaternion()
-        # quat = (1, 0, 0, 0)
 
         box = (
             c_coll_tmp.addFrame("box" + str(added_boxes))
@@ -3264,7 +3294,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         pos = np.array(
             [
                 x_ind * 0.15 - 0.15,
-                y_ind * 0.2 - 0.1,
+                y_ind * 0.15 - 0.15,
                 0.07,
             ]
         )
@@ -3282,8 +3312,6 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
 
     if view:
         C.view(True)
-
-    C.view(True)
 
     keyframes = []
 
@@ -3314,7 +3342,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             [r1 + "ur_vacuum", box],
             ry.OT.sos,
             [1e0],
-            [0.05],
+            [0.07],
         )
         komo.addObjective(
             [1, 2],
@@ -3325,17 +3353,11 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         )
         komo.addObjective(
             [1, 2],
-            ry.FS.scalarProductYZ,
+            ry.FS.scalarProductXZ,
             [r1 + "ur_ee_marker", "table"],
             ry.OT.sos,
-            [1e1],
-        )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.scalarProductZZ,
-            [r1 + "ur_ee_marker", "table"],
-            ry.OT.sos,
-            [1e1],
+            [2e1],
+            [-1]
         )
 
         komo.addModeSwitch([2, 3], ry.SY.stable, [r2 + "ur_vacuum", box])
@@ -3345,7 +3367,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             [r2 + "ur_vacuum", box],
             ry.OT.sos,
             [1e0],
-            [0.05],
+            [0.07],
         )
         komo.addObjective(
             [2, 3],
@@ -3356,17 +3378,11 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         )
         komo.addObjective(
             [2, 3],
-            ry.FS.scalarProductYZ,
+            ry.FS.scalarProductXZ,
             [r2 + "ur_ee_marker", box],
             ry.OT.sos,
-            [1e1],
-        )
-        komo.addObjective(
-            [2, 3],
-            ry.FS.scalarProductZZ,
-            [r2 + "ur_ee_marker", box],
-            ry.OT.sos,
-            [1e1],
+            [2e1],
+            [-1]
         )
 
         komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
@@ -3382,8 +3398,8 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         )
 
         for i in range(5):
-            # if i > 0:
-            #     # komo.initRandom()
+            if i > 0:
+                komo.initRandom()
             #     # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
             #     x_init = np.random.rand(len(q_home)) * 4 - 2.0
             #     komo.initWithConstant(x_init)
@@ -3400,6 +3416,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
 
             if view:
                 komo.view(True, "IK solution")
+            # komo.view(True, "IK solution")
 
             keyframes = komo.getPath()
 
@@ -3408,21 +3425,9 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                 # komo.view(True, "IK solution")
 
-                return keyframes
+                return keyframes[:-1,:]
 
-        # solver = ry.NLP_Solver(komo.nlp(), verbose=10)
-        # solver.setOptions(damping=0.1, wolfe=0.001)
-        # retval = solver.solve()
-
-        # print(retval.dict())
-
-        # if view:
-        #     komo.view(True, "IK solution")
-        # komo.view(True, "IK solution")
-
-        # sol = komo.getPath()
-
-        # return sol
+        return None
 
     def pick_and_place(robot_prefix, box_num):
         c_tmp = ry.Config()
@@ -3465,17 +3470,11 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         )
         komo.addObjective(
             [1, 2],
-            ry.FS.scalarProductYZ,
+            ry.FS.scalarProductXZ,
             [robot_prefix + "ur_ee_marker", box],
             ry.OT.sos,
-            [1e1],
-        )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.scalarProductZZ,
-            [robot_prefix + "ur_ee_marker", box],
-            ry.OT.sos,
-            [1e1],
+            [2e1],
+            [-1]
         )
 
         # for pick and place directly
@@ -3499,7 +3498,6 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
 
         if view:
             komo.view(True, "IK solution")
-        komo.view(True, "IK solution")
 
         sol = komo.getPath()[:-1, :]
 
@@ -3513,7 +3511,10 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             for r in ["a1_", "a2_"]:
                 keyframe = pick_and_place(r, i)
                 print(keyframe)
+                if keyframe is None:
+                    continue
                 keyframes.append(("pick", [r], i, keyframe))
+                break
         else:
             # otherwise a handover/regrasp is required
             found_sol = False

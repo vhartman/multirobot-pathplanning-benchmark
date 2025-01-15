@@ -1794,9 +1794,8 @@ class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
 
-# TODO
 class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
-    def __init__(self, num_boxes=5):
+    def __init__(self, num_boxes=9):
         self.C, keyframes = make_box_pile_env(
             num_boxes=num_boxes
         )
@@ -1832,8 +1831,11 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         cnt = 0
         for primitive_type, robots, box_index, qs in keyframes:
             box_name = "box" + str(box_index)
+            print(primitive_type)
             if primitive_type == "pick":
                 for t, k in zip(pick_task_names, qs):
+                    print(robots)
+                    print(k)
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(Task(robots, SingleGoal(k), t, frames=[ee_name, box_name]))
@@ -1844,7 +1846,6 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                     cnt += 1
             else:
                 for t, k in zip(handover_task_names, qs):
-                    print(robots)
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(Task([robots[0]], SingleGoal(k[self.robot_idx[robots[0]]]), t, frames=[ee_name, box_name]))
@@ -1852,7 +1853,6 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                         ee_name = robots[1] + "ur_vacuum"
                         self.tasks.append(Task(self.robots, SingleGoal(k), t, frames=[ee_name, box_name]))
                     else:
-                        print(robots[1])
                         self.tasks.append(Task([robots[1]], SingleGoal(k[self.robot_idx[robots[1]]]), t, frames=["tray", box_name]))
 
                     self.tasks[-1].name = robots[0] + t + "_" + box_name + "_" + str(cnt)

@@ -17,7 +17,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     config_dist,
     batch_config_dist,
 )
-from multi_robot_multi_goal_planning.problems.util import path_cost
+from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate_path
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -90,7 +90,6 @@ class Graph:
     def compute_lb_mode_transisitons(self, batch_cost):
         if True:
             # run a reverse search on the transition nodes without any collision checking
-            parents = {}
             costs = {}
 
             queue = []
@@ -134,6 +133,8 @@ class Graph:
                         costs[id] = cost
                         n.lb_cost_to_goal = cost
                         n.neighbors[0].lb_cost_to_goal = cost
+
+                        print(cost)
                         # parents[n] = node
                     # if id not in costs or cost < costs[id]:
                     #     costs[id] = cost
@@ -149,7 +150,67 @@ class Graph:
             # -> cost in mode/node is min(robot)
             #    this is not amazing, and could likely be better via taking more information (configs?)
             #    into account, but we leave this for future work
-            pass
+            for r in range(self.root.state.q.num_agents()):
+                costs = {}
+
+                queue = []
+                for g in self.goal_nodes:
+                    heapq.heappush(queue, (0, g))
+
+                    costs[(g.state.mode, g.state.q[r].tobytes())] = 0
+                    # parents[hash(g)] = None
+
+                while len(queue) > 0:
+                    # node = queue.pop(0)
+                    _, node = heapq.heappop(queue)
+                    # print(node)
+
+                    # error happens at start node
+                    if node.state.mode == self.root.state.mode:
+                        continue
+
+                    neighbors = [
+                        n.neighbors[0] for n in self.reverse_transition_nodes[node.state.mode]
+                    ]
+
+                    if len(neighbors) == 0:
+                        continue
+
+                    # if node.state.mode not in self.reverse_transition_node_array_cache:
+                        # self.reverse_transition_node_array_cache[node.state.mode] = np.array(
+                        #     [n.state.q.state() for n in neighbors]
+                        # )
+                    tmp = np.array(
+                        [n.state.q[r] for n in neighbors]
+                    )
+
+                    tmp_config = NpConfiguration.from_list([node.state.q[r]])
+
+                    # add neighbors to open_queue
+                    edge_costs = batch_cost(
+                        tmp_config, tmp
+                    )
+                    parent_cost = costs[(node.state.mode, node.state.q[r].tobytes())]
+                    for i, n in enumerate(neighbors):
+                        cost = parent_cost + edge_costs[i]
+                        id = (n.state.mode, n.state.q[r].tobytes())
+                        current_cost = costs.get(id, float('inf'))
+                        if cost < current_cost:
+                            costs[id] = cost
+                            if n.lb_cost_to_goal is None or n.lb_cost_to_goal < cost:
+                                n.lb_cost_to_goal = cost
+                                n.neighbors[0].lb_cost_to_goal = cost
+
+                            # parents[n] = node
+                        # if id not in costs or cost < costs[id]:
+                        #     costs[id] = cost
+                        #     n.lb_cost_to_goal = cost
+                        #     n.neighbors[0].lb_cost_to_goal = cost
+                        #     # parents[n] = node
+
+                            # queue.append(n)
+                            heapq.heappush(queue, (cost, n))
+
         else:
             pass
             # search that lumps modes to be faster: I do not think this works.
@@ -253,7 +314,7 @@ class Graph:
                     self.reverse_transition_nodes[next_mode] = [node_next_mode]
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def get_neighbors(self, node, k=20):
+    def get_neighbors(self, node, k=20, space_extent=None):
         key = node.state.mode
         if key in self.nodes:
             node_list = self.nodes[key]
@@ -326,29 +387,26 @@ class Graph:
             best_nodes = best_nodes + best_transition_nodes
         else:
             r = 3
-
+            
+            unit_n_ball_measure = ((np.pi**0.5) ** dim) / math.gamma(dim / 2 + 1)
+            informed_measure = 1
+            if space_extent is not None:
+                informed_measure = space_extent
+            
             best_nodes = []
             if key in self.nodes:
-                unit_n_ball_measure = ((np.pi**0.5) ** dim) / math.gamma(dim / 2 + 1)
-                informed_measure = 2 * 2 * 2 * 2 * 2 * 2
-                # informed_measure = 1
                 r_star = 2 * (
                     informed_measure
                     / unit_n_ball_measure
                     * (np.log(len(node_list)) / len(node_list))
                     * (1 + 1 / dim)
                 ) ** (1 / dim)
-                # print(r_star)
                 r = r_star
 
                 best_nodes = [n for i, n in enumerate(node_list) if dists[i] < r]
 
             best_transition_nodes = []
             if key in self.transition_nodes:
-                unit_n_ball_measure = ((np.pi**0.5) ** dim) / math.gamma(dim / 2 + 1)
-                # informed_measure = 4 * 4 * 6 * 4 * 4 * 6
-                informed_measure = 2 * 2 * 2 * 2 * 2 * 2
-                # informed_measure = 1
                 r_star = 2 * ((1 + 1 / dim)
                     * informed_measure / unit_n_ball_measure
                     * (np.log(len(transition_node_list)) / len(transition_node_list))
@@ -465,7 +523,7 @@ class Graph:
         gs = {start_node: 0}  # best cost to get to a node
 
         # populate open_queue and fs
-        start_edges = [(start_node, n) for n in self.get_neighbors(start_node)]
+        start_edges = [(start_node, n) for n in self.get_neighbors(start_node, space_extent=np.prod(np.diff(env.limits, axis=0)))]
 
         fs = {}  # total cost of a node (f = g + h)
         for e in start_edges:
@@ -528,7 +586,7 @@ class Graph:
                 break
 
             # get_neighbors
-            neighbors = self.get_neighbors(n1)
+            neighbors = self.get_neighbors(n1, space_extent=np.prod(np.diff(env.limits, axis=0)))
 
             if len(neighbors) != 0:
                 # add neighbors to open_queue
@@ -1010,17 +1068,18 @@ def joint_prm_planner(
                 g.add_states(somewhat_informed_samples)
 
             if try_sampling_around_path and current_best_path is not None:
-                # sample inde
-                states_near_path = []
+                # sample index
+                interpolated_path = interpolate_path(current_best_path)
+                # interpolated_path = current_best_path
                 for _ in range(200):
-                    idx = random.randint(0, len(current_best_path) - 2)
-                    state = current_best_path[idx]
+                    idx = random.randint(0, len(interpolated_path) - 2)
+                    state = interpolated_path[idx]
 
                     # this is a transition. we would need to figure out which robots are active and not sample those
                     q = []
-                    if state.mode != current_best_path[idx + 1].mode:
+                    if state.mode != interpolated_path[idx + 1].mode:
                         current_task_ids = state.mode.task_ids
-                        next_task_ids = current_best_path[idx + 1].mode.task_ids
+                        next_task_ids = interpolated_path[idx + 1].mode.task_ids
 
                         # print(current_task_ids, next_task_ids)
                         # print(hash(state.mode), hash(current_best_path[idx+1].mode))
@@ -1053,6 +1112,11 @@ def joint_prm_planner(
                                     qr = np.clip(qr, lims[0, :], lims[1, :])
 
                             q.append(qr)
+                        
+                        q = conf_type.from_list(q)
+
+                        if env.is_collision_free(q, state.mode):
+                            g.add_transition_nodes([(q, state.mode, interpolated_path[idx+1].mode)])
 
                     else:
                         for i in range(len(env.robots)):
@@ -1071,13 +1135,12 @@ def joint_prm_planner(
 
                             q.append(qr)
 
-                    q = conf_type.from_list(q)
+                        q = conf_type.from_list(q)
 
-                    if env.is_collision_free(q, state.mode):
-                        rnd_state = State(q, state.mode)
-                        states_near_path.append(rnd_state)
+                        if env.is_collision_free(q, state.mode):
+                            rnd_state = State(q, state.mode)
 
-                g.add_states(states_near_path)
+                            g.add_states([rnd_state])
 
             # add new batch of nodes to
             print("Sampling uniform")
