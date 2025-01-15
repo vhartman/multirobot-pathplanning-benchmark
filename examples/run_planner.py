@@ -5,7 +5,13 @@ import numpy as np
 import random
 
 from typing import List
-
+import os
+import sys
+current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
+project_root = os.path.abspath(os.path.join(current_file_dir, ".."))
+src_path = os.path.abspath(os.path.join(project_root, "../src"))
+sys.path.append(project_root)
+sys.path.append(os.path.join(project_root, "src"))
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 from multi_robot_multi_goal_planning.problems.rai_envs import display_path, rai_env
 from multi_robot_multi_goal_planning.problems.planning_env import State

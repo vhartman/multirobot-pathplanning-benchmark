@@ -1,6 +1,12 @@
 import argparse
 import dill
 import os
+import sys
+current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
+project_root = os.path.abspath(os.path.join(current_file_dir, ".."))
+src_path = os.path.abspath(os.path.join(project_root, "../src"))
+sys.path.append(project_root)
+sys.path.append(os.path.join(project_root, "src"))
 from multi_robot_multi_goal_planning.problems.rai_envs import *
 from multi_robot_multi_goal_planning.problems.planning_env import *
 from multi_robot_multi_goal_planning.problems.util import *
@@ -10,7 +16,7 @@ from analysis_util import *
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import *
 import multi_robot_multi_goal_planning.problems as problems
 
-def init_discretization(path, costs, modes, indices, transition, resolution=0.1):
+def init_discretization(path, costs, modes, indices, transition, resolution=0.01):
     discretized_path, discretized_modes, discretized_costs, discretized_transition = [], [], [], []
     for i in range(len(path) - 1):
         start = np.array(path[i])
@@ -471,6 +477,18 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
         overall_costs = [total_cost]
         time_list = [0]
         start = time.time()
+        # discretized_path, discretized_modes, discretized_costs, discretized_transition =init_discretization(path_, intermediate_tot, modes, indices, transition,None)  
+        # total_costs = [0]
+        # for i, node in enumerate(discretized_path):
+        #     if i == 0:
+        #         previous_node = node
+        #         continue
+        #     new_cost = config_cost(previous_node.q, node.q, "euclidean")
+        #     total_costs.append(total_costs[-1] + new_cost)
+        #     previous_node = node
+
+        # if not np.equal(discretized_costs, total_costs).all():
+        #     print("Something went wrong")
         discretized_path, discretized_modes, discretized_costs, discretized_transition =init_discretization(path_, intermediate_tot, modes, indices, transition)  
         termination_cost = discretized_costs[-1]
         termination_iter = 0
@@ -482,7 +500,7 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
 
         if not deterministic:
             range1 = 1
-            range2 = 100000
+            range2 = 1000000
         else:
             range1 = len(discretized_path)
             range2 = range1
@@ -515,7 +533,8 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
                             random.shuffle(all_indices)
                             dim.append(all_indices[:num_indices])
                 else:
-                    robot = np.random.choice(len(env.robots))
+                    robot = np.random.choice(len(env.robots)) 
+                    #robot just needs to pursue the same task across the modes
                     if len(m1) > 1:
                         task_agent = m1[1][robot]
                     else:
@@ -538,10 +557,9 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
                 edge, edge_cost =  interpolate(discretized_path[idx1:idx2], 
                                                             discretized_costs[idx1], discretized_modes, indices, dim, version, robot, env.robots)
                 c_new = edge_cost[-1] + config_cost(edge[-1].q, state2.q, "euclidean") - edge_cost[0]
-                if c_new < (discretized_costs[idx2]- discretized_costs[idx1]) and env.is_edge_collision_free(state1.q, state2.q, m1): #what when two different modes??? (possible for one task) 
+                if c_new < (discretized_costs[idx2]- discretized_costs[idx1]) and env.is_edge_collision_free(state1.q, state2.q, m1[0]): #what when two different modes??? (possible for one task) 
                     discretized_path[idx1:idx2] = edge
                     discretized_costs[idx1:idx2] = edge_cost
-                    # discretized_modes[idx1:idx2] = edge_modes
                     update(discretized_path, discretized_costs, idx2)
                     all_frame_traces.append(path_traces(colors, mode_sequence, discretized_path))
                     overall_costs.append(discretized_costs[-1])
@@ -561,6 +579,18 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
         #     log_file.write(f"Before: {json.dumps(total_cost.item(), indent=4)}\n")
         #     log_file.write(f"After: {json.dumps(discretized_costs[-1].item(), indent=4)}\n")
         print("Before: ", total_cost.item(), "After " ,   discretized_costs[-1].item())
+        #check:
+        total_costs = [0]
+        for i, node in enumerate(discretized_path):
+            if i == 0:
+                previous_node = node
+                continue
+            new_cost = config_cost(previous_node.q, node.q, "euclidean")
+            total_costs.append(total_costs[-1] + new_cost)
+            previous_node = node
+
+        if not np.equal(discretized_costs, total_costs).all():
+            print("Something went wrong")
         if not deterministic:
             frames_directory = os.path.join(config["output_dir"], f'Post_{version+3*choice}')
         else:
@@ -602,10 +632,8 @@ if __name__ == "__main__":
     home_dir = os.path.expanduser("~")
     directory = os.path.join(home_dir, 'output')
     path = get_latest_folder(directory)
-    # path = "/home/tirza/output/091224_083733"
-    # path = '/home/tirza/output/091224_083733'
-    # path = '/home/tirza/output/151224_105746'
-    # path = '/home/tirza/output/151224_101608'
+    # path = '/home/tirza/output/130125_072438'
+    # path = '/home/tirza/output/simple_2d_120125_124504/0'
     env_name, config_params, _, _ = get_config(path)
     env = problems.get_env_by_name(env_name)  
     pkl_folder = os.path.join(path, 'FramesData')

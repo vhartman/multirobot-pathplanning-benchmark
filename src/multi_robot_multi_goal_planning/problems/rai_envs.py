@@ -692,10 +692,10 @@ class rai_dual_ur10_arm_env(rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
+        # for f in self.C_coll.frames():
+        #     info = f.info()
+        #     if "shape" in info and info["shape"] == "mesh":
+        #         self.C_coll.delFrame(f.name)
 
         # self.C_coll.view(True)
         # self.C.view(True)

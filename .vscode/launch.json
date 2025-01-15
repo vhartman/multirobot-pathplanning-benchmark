@@ -2,18 +2,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "main.py -triple_waypoints --planner rrtstar",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/examples/main.py",
-            "args": [
-                "triple_waypoints",
-                "--planner",
-                "rrtstar"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
             "name": "main.py - simple_2d --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
@@ -22,6 +10,38 @@
                 "simple_2d",
                 "--planner",
                 "rrtstar"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "main.py - one_agent_many_goals --planner rrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main.py",
+            "args": [
+                "one_agent_many_goals",
+                "--planner",
+                "rrtstar"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "main.py - simple_2d --planner rrtstar_par",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "rrtstar_par"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
@@ -170,13 +190,24 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py --do cost",
+            "name": "postprocessing.py --do cost_single",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
                 "--do",
-                "cost"
+                "cost_single"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "postprocessing.py --do cost_multiple",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
+            "args": [
+                "--do",
+                "cost_multiple"
             ],
             "console": "integratedTerminal"
         },
@@ -203,13 +234,13 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "postprocessing.py --do development",
+            "name": "postprocessing.py --do dev",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/analysis/postprocessing.py",
             "args": [
                 "--do",
-                "development"
+                "dev"
             ],
             "console": "integratedTerminal"
         },
