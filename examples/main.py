@@ -12,6 +12,7 @@ sys.path.append(os.path.join(project_root, "src"))
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import *
 from multi_robot_multi_goal_planning.planners.planner_bi_rrtstar import *
 from multi_robot_multi_goal_planning.planners.planner_bi_rrtstar_parallelized import *
+from multi_robot_multi_goal_planning.planners.planner_rrtstar_parallelized import *
 from multi_robot_multi_goal_planning.planners.planner_q_rrtstar import *
 from multi_robot_multi_goal_planning.problems.rai_envs import *
 from multi_robot_multi_goal_planning.problems import get_env_by_name
@@ -21,6 +22,10 @@ from multi_robot_multi_goal_planning.problems import get_env_by_name
 def execute_planner(env, args, config_manager):
     if args.planner == "rrtstar":
         rrt_star = RRTstar(env, config_manager)
+        path = rrt_star.Plan()
+    
+    if args.planner == "rrtstar_par":
+        rrt_star = ParallelizedRRTstar(env, config_manager)
         path = rrt_star.Plan()
     
     if args.planner == "q_rrtstar":
@@ -44,18 +49,23 @@ def execute_planner(env, args, config_manager):
 def main():
     parser = argparse.ArgumentParser(description="Environment Viewer")
     parser.add_argument("env_name", nargs="?", default="default", help="Environment to show")
-    parser.add_argument("--planner", choices=["rrtstar", "bi_rrtstar", "bi_rrtstar_par", "q_rrtstar"], required=True, help="Planner type")
+    parser.add_argument("--planner", choices=["rrtstar", "bi_rrtstar", "bi_rrtstar_par", "q_rrtstar", "rrtstar_par"], required=True, help="Planner type")
     args = parser.parse_args()
 
     config_manager = ConfigManager('config.yaml')
-    if config_manager.use_seed:
-        np.random.seed(3)
-        random.seed(3)
+    if config_manager.use_seed and config_manager.amount_of_runs == 1:
+        np.random.seed(config_manager.seed)
+        random.seed(config_manager.seed)
+    config_manager.planner = args.planner
     if config_manager.amount_of_runs == 1 and not config_manager.debug_mode:
         config_manager.log_params(args)
     env = get_env_by_name(args.env_name)
     for run in range(config_manager.amount_of_runs):
         if config_manager.amount_of_runs > 1 and not config_manager.debug_mode:
+            seed = random.randint(0, 2**32 - 1)
+            np.random.seed(seed)
+            random.seed(seed)
+            config_manager.seed = seed
             config_manager.output_dir = os.path.join(os.path.expanduser("~"), f'output/{args.env_name}_{config_manager.timestamp}/{run}')
             config_manager.log_params(args)
         if config_manager.cprofiler:

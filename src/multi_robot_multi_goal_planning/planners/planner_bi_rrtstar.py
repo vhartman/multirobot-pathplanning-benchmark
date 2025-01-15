@@ -7,8 +7,6 @@ and version 2 is inspired by the paper 'RRT-Connect: An Efficient Approach to Si
 by the paper 'RRT*-Connect: Faster, Asymptotically Optimal Motion Planning' by S. Klemm et al. 
 """
 
-
-
 class BidirectionalRRTstar(BaseRRTstar):
     def __init__(self, env, config: ConfigManager):
         super().__init__(env, config)
@@ -20,10 +18,8 @@ class BidirectionalRRTstar(BaseRRTstar):
             if connection:
                 #add node to main subtree and delte it from subtree_b
                 if current_node.state.mode == self.operation.active_mode.label:
-                    if current_node.idx not in self.operation.active_mode.node_idx_subtree:
-                        self.operation.active_mode.subtree.append(current_node)
-                        self.operation.active_mode.batch_subtree = torch.cat((self.operation.active_mode.batch_subtree, current_node.q_tensor.unsqueeze(0)), dim=0)
-                        self.operation.active_mode.node_idx_subtree = torch.cat((self.operation.active_mode.node_idx_subtree, torch.tensor([current_node.idx], device='cuda')),dim=0)
+                    if current_node.idx in self.operation.active_mode.node_idx_subtree_b:
+                        self.UpdateMode(self.operation.active_mode, current_node, 'A')
                         self.operation.active_mode.node_idx_subtree_b = self.operation.active_mode.node_idx_subtree_b[self.operation.active_mode.node_idx_subtree_b != current_node.idx]
                         self.operation.active_mode.batch_subtree_b = self.operation.active_mode.batch_subtree_b[~torch.all(self.operation.active_mode.batch_subtree_b == current_node.q_tensor.unsqueeze(0), dim=1)]
                         self.operation.active_mode.subtree_b.remove(current_node)
@@ -37,7 +33,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 stack.extend(children)
     
     def ManageTransition(self, n_new:Node, iter:int) -> None:
-        if self.env.get_active_task(self.operation.active_mode.label).goal.satisfies_constraints(n_new.state.q.state()[self.operation.active_mode.indices], self.config.goal_radius):
+        if self.env.get_active_task(self.operation.active_mode.label).goal.satisfies_constraints(n_new.state.q.state()[self.operation.active_mode.indices], self.env.tolerance):
             self.operation.active_mode.transition_nodes.append(n_new)
             n_new.transition = True
             self.AddTransitionNode(n_new)
@@ -46,7 +42,8 @@ class BidirectionalRRTstar(BaseRRTstar):
     def UpdateTree(self, n: Node, n_parent:Node , cost_to_parent:torch.Tensor, dists:torch.Tensor) -> None: #TODO need to update it
         while True:
             n.cost = n_parent.cost +  cost_to_parent
-            n.agent_dists = n_parent.agent_dists + dists
+            dist_cpu= dists.clone().to(dtype=torch.float16).cpu()
+            n.agent_dists = n_parent.agent_dists + dist_cpu
             self.UpdateCost(n, True)
             n_parent_inter = n.parent
             cost_to_parent_inter = n.cost_to_parent
@@ -54,7 +51,7 @@ class BidirectionalRRTstar(BaseRRTstar):
 
             n.parent = n_parent
             n.cost_to_parent = cost_to_parent
-            n.agent_dists_to_parent = dists
+            n.agent_dists_to_parent = dist_cpu
             n_parent.children.append(n) #Set child
             
             cost_to_parent = cost_to_parent_inter
@@ -77,12 +74,12 @@ class BidirectionalRRTstar(BaseRRTstar):
     def Connect(self, n_new:Node, iter:int) -> None:
         if self.operation.active_mode.subtree_b == []:
             return
-        n_nearest_b=  self.Nearest(n_new.state.q, self.operation.active_mode.subtree_b, self.operation.active_mode.batch_subtree_b)
+        n_nearest_b=  self.Nearest(n_new.state.q, self.operation.active_mode.subtree_b, self.operation.active_mode.batch_subtree_b[:len(self.operation.active_mode.subtree_b)])
         if self.config.birrtstar_version == 1 or self.config.birrtstar_version == 2 and self.operation.active_mode.connected: #Based on paper Bi-RRT* by B. Wang 
             #TODO rewire everything?
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
           
-            cost, dists = batch_config_torch(n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), "euclidean")
+            cost, dists = batch_config_torch(n_new.q_tensor, n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), "euclidean")
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
             #     if r in constrained_robots:
@@ -101,7 +98,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             n_nearest_b = self.Extend(n_nearest_b, n_new.state.q)
             if not n_nearest_b:
                 return
-            cost, dists = batch_config_torch(n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), "euclidean")
+            cost, dists = batch_config_torch(n_new.q_tensor, n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), "euclidean")
  
         if self.operation.active_mode.order == -1: #Switch such that subtree is beginning from start and subtree_b from goal
             self.SWAP() 
@@ -113,9 +110,9 @@ class BidirectionalRRTstar(BaseRRTstar):
         
         if not self.operation.active_mode.connected: #initial sol of this mode hasn't been found yet
             self.operation.active_mode.connected = True
-            self.InitializationMode(self.operation.modes[-1])
             if self.env.terminal_mode != self.operation.modes[-1].label:
                 self.operation.modes.append(Mode(self.env.get_next_mode(n_new.state.q,self.operation.active_mode.label), self.env))
+                self.ModeInitialization(self.operation.modes[-1])
                 # Initialization of new goal tree T_b
                 if self.operation.modes[-1].label == self.env.terminal_mode:
                     nr = 1
@@ -124,13 +121,16 @@ class BidirectionalRRTstar(BaseRRTstar):
                 for _ in range(nr):
                     end_q = self.sampling.get_goal_config_of_mode(self.operation.modes[-1])
                     end_state = State(type(self.env.get_start_pos())(end_q, n_new.state.q.slice), self.operation.modes[-1].label)
-                    end_node = Node(end_state, self.operation.tree, self.operation)
-                    self.operation.tree += 1
+                    end_node = Node(end_state,self.operation)
+                    end_node.cost_to_parent = torch.tensor(0, device=device, dtype=torch.float32)
                     end_node.transition = True
-                    self.operation.modes[-1].batch_subtree_b = torch.cat((self.operation.modes[-1].batch_subtree_b, end_node.q_tensor.unsqueeze(0)), dim=0)
-                    self.operation.modes[-1].subtree_b.append(end_node)
-                    self.operation.costs = torch.cat((self.operation.costs, torch.tensor([0], device='cuda')), dim=0)
-                    self.operation.modes[-1].node_idx_subtree_b = torch.cat((self.operation.modes[-1].node_idx_subtree_b, torch.tensor([end_node.idx], device='cuda')),dim=0)
+                    self.UpdateMode(self.operation.modes[-1], end_node, 'B')
+                    # self.operation.modes[-1].batch_subtree_b = torch.cat((self.operation.modes[-1].batch_subtree_b, end_node.q_tensor.unsqueeze(0)), dim=0)
+                    # self.operation.modes[-1].subtree_b.append(end_node)
+                    self.operation.costs = self.operation.active_mode.ensure_capacity(self.operation.costs, end_node.idx) 
+                    n_new.cost = np.inf
+                    # self.operation.costs = torch.cat((self.operation.costs, torch.tensor([0], device=device, dtype = torch.float32)), dim=0)
+                    # self.operation.modes[-1].node_idx_subtree_b = torch.cat((self.operation.modes[-1].node_idx_subtree_b, torch.tensor([end_node.idx], device=device)),dim=0)
             elif self.operation.active_mode.label == self.env.terminal_mode:
                 self.operation.ptc_iter = iter
                 self.operation.ptc_cost = self.operation.cost
@@ -147,26 +147,31 @@ class BidirectionalRRTstar(BaseRRTstar):
     def Extend(self, n_nearest_b:Node, q:Configuration )-> Optional[Node]:
         #RRT not RRT*
         while True:
-            n_new = self.Steer(n_nearest_b, q, self.operation.active_mode.label)
-            if not n_new or np.equal(n_new.state.q.state(), q.state()).all(): # Reached
+            state_new = self.Steer(n_nearest_b, q, self.operation.active_mode.label)
+            if not state_new or np.equal(state_new.q.state(), q.state()).all(): # Reached
                 # self.SaveData(time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = n_new.state.q.state())
                 return n_nearest_b
             # self.SaveData(time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = n_new.state.q.state())
-            if self.env.is_collision_free(n_new.state.q.state(), self.operation.active_mode.label) and self.env.is_edge_collision_free(n_nearest_b.state.q, n_new.state.q, self.operation.active_mode.label):
+            if self.env.is_collision_free(state_new.q.state(), self.operation.active_mode.label) and self.env.is_edge_collision_free(n_nearest_b.state.q, state_new.q, self.operation.active_mode.label):
                 # Add n_new to tree
-                cost, dists = batch_config_torch(n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), "euclidean")
+                n_new = Node(state_new,self.operation)
+                cost, dists = batch_config_torch(n_new.q_tensor, n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), "euclidean")
                 c_min = n_nearest_b.cost + cost.view(1)[0]
 
                 n_new.parent = n_nearest_b
                 n_new.cost_to_parent = cost.view(1)[0]
                 n_nearest_b.children.append(n_new) #Set child
-                n_new.agent_dists = n_new.parent.agent_dists + dists
-                n_new.agent_dists_to_parent = dists   
-                self.operation.tree +=1
-                self.operation.active_mode.subtree_b.append(n_new)
-                self.operation.active_mode.batch_subtree_b = torch.cat((self.operation.active_mode.batch_subtree_b, n_new.q_tensor.unsqueeze(0)), dim=0)
-                self.operation.costs = torch.cat((self.operation.costs, c_min.unsqueeze(0)), dim=0) #set cost of n_new
-                self.operation.active_mode.node_idx_subtree_b = torch.cat((self.operation.active_mode.node_idx_subtree_b, torch.tensor([n_new.idx], device='cuda')),dim=0)
+                agents = dists.to(dtype=torch.float16).cpu()
+                n_new.agent_dists = n_new.parent.agent_dists + agents
+                n_new.agent_dists_to_parent = agents   
+                self.UpdateMode(self.operation.active_mode, n_new, 'B')
+                # self.operation.active_mode.subtree_b.append(n_new)
+                # self.operation.active_mode.batch_subtree_b = torch.cat((self.operation.active_mode.batch_subtree_b, n_new.q_tensor.unsqueeze(0)), dim=0)
+                # self.operation.active_mode.node_idx_subtree_b = torch.cat((self.operation.active_mode.node_idx_subtree_b, torch.tensor([n_new.idx], device=device)),dim=0)
+                self.operation.costs = self.operation.active_mode.ensure_capacity(self.operation.costs, n_new.idx) 
+                n_new.cost = c_min
+                # self.operation.costs = torch.cat((self.operation.costs, c_min.unsqueeze(0)), dim=0) #set cost of n_new
+               
                 # self.SaveData(time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = n_new.state.q.state())
                 n_nearest_b = n_new
             else:
@@ -174,21 +179,29 @@ class BidirectionalRRTstar(BaseRRTstar):
 
     def PlannerInitialization(self) -> None:
         active_mode = self.operation.modes[0]
+        self.ModeInitialization(self.operation.modes[0])
         start_state = State(self.env.start_pos, active_mode.label)
-        start_node = Node(start_state, (self.operation.tree -1), self.operation)
-        active_mode.batch_subtree = torch.cat((active_mode.batch_subtree, start_node.q_tensor.unsqueeze(0)), dim=0)
+        start_node = Node(start_state, self.operation)
         active_mode.subtree.append(start_node)
-        active_mode.node_idx_subtree = torch.cat((active_mode.node_idx_subtree, torch.tensor([start_node.idx], device='cuda')),dim=0)
+        active_mode.batch_subtree[len(active_mode.subtree)-1, :] = start_node.q_tensor
+        active_mode.node_idx_subtree[len(active_mode.subtree)-1] =start_node.idx
+        start_node.cost = 0
+        num_agents = start_node.state.q.num_agents()
+        start_node.cost_to_parent = torch.tensor(0, device=device, dtype=torch.float32)
+        # active_mode.batch_subtree = torch.cat((active_mode.batch_subtree, start_node.q_tensor.unsqueeze(0)), dim=0)
+        # active_mode.node_idx_subtree = torch.cat((active_mode.node_idx_subtree, torch.tensor([start_node.idx], device=device)),dim=0)
+
         for _ in range(self.config.transition_nodes): 
             end_q = self.sampling.get_goal_config_of_mode(active_mode)
             end_state = State(type(self.env.get_start_pos())(end_q, start_node.state.q.slice), active_mode.label)
-            end_node = Node(end_state, self.operation.tree, self.operation)
-            self.operation.tree += 1
+            end_node = Node(end_state, self.operation)
+            end_node.cost_to_parent = torch.tensor(0, device=device, dtype=torch.float32)
+
             end_node.transition = True
-            active_mode.batch_subtree_b = torch.cat((active_mode.batch_subtree_b, end_node.q_tensor.unsqueeze(0)), dim=0)
-            active_mode.subtree_b.append(end_node)
-            active_mode.node_idx_subtree_b = torch.cat((active_mode.node_idx_subtree_b, torch.tensor([end_node.idx], device='cuda')),dim=0)
-            self.operation.costs = torch.cat((self.operation.costs, torch.tensor([0], device='cuda')), dim=0)
+            self.UpdateMode(active_mode, end_node, 'B')
+            self.operation.costs = active_mode.ensure_capacity(self.operation.costs, end_node.idx) 
+            end_node.cost = np.inf
+            # self.operation.costs = torch.cat((self.operation.costs, torch.tensor([0], device=device, dtype = torch.float32)), dim=0)
                   
     def Plan(self) -> dict:
         i = 0
@@ -200,17 +213,18 @@ class BidirectionalRRTstar(BaseRRTstar):
             # Bi-RRT* core
             q_rand = self.SampleNodeManifold(self.operation)
             
-            n_nearest= self.Nearest(q_rand, self.operation.active_mode.subtree, self.operation.active_mode.batch_subtree)    
-            n_new = self.Steer(n_nearest, q_rand, self.operation.active_mode.label)
-            if not n_new: # meaning n_new is exact the same as one of the nodes in the tree
+            n_nearest= self.Nearest(q_rand, self.operation.active_mode.subtree, self.operation.active_mode.batch_subtree[:len(self.operation.active_mode.subtree)])    
+            state_new = self.Steer(n_nearest, q_rand, self.operation.active_mode.label)
+            if not state_new: # meaning n_new is exact the same as one of the nodes in the tree
                 continue
             
-            if self.env.is_collision_free(n_new.state.q.state(), self.operation.active_mode.label) and self.env.is_edge_collision_free(n_nearest.state.q, n_new.state.q, self.operation.active_mode.label):
-                N_near_indices, N_near_batch, n_near_costs, node_indices = self.Near(n_new, self.operation.active_mode.batch_subtree)
+            if self.env.is_collision_free(state_new.q.state(), self.operation.active_mode.label) and self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, self.operation.active_mode.label):
+                n_new = Node(state_new,  self.operation)
+                N_near_indices, N_near_batch, n_near_costs, node_indices = self.Near(n_new, self.operation.active_mode.batch_subtree[:len(self.operation.active_mode.subtree)])
                 if n_nearest.idx not in node_indices:
                     continue
                 n_nearest_index = torch.where(node_indices == n_nearest.idx)[0].item() 
-                batch_cost, batch_dist =  batch_config_torch(n_new.state.q, N_near_batch, metric = self.config.cost_type)
+                batch_cost, batch_dist =  batch_config_torch(n_new.q_tensor, n_new.state.q, N_near_batch, metric = self.config.cost_type)
                 self.FindParent(N_near_indices, n_nearest_index, n_new, n_nearest, batch_cost, batch_dist, n_near_costs)
                 if self.Rewire(N_near_indices, n_new, batch_cost, batch_dist, n_near_costs, n_rand = q_rand.state(), n_nearest = n_nearest.state.q.state() ):
                     self.UpdateCost(n_new)

@@ -7,7 +7,7 @@ import pickle
 
 from multi_robot_multi_goal_planning.problems.configuration import *
 from multi_robot_multi_goal_planning.problems.planning_env import *
-
+from multi_robot_multi_goal_planning.problems.memory_util import *
 import argparse
 import copy
 import time as time
@@ -26,13 +26,13 @@ class ConfigManager:
         
         # Set defaults and dynamically assign attributes
         defaults = {
-            'goal_radius': 0.1, 'p_goal': 0.95, 'general_goal_sampling': True, 
+            'planner': None, 'p_goal': 0.95, 'p_stay' : 0.95,'general_goal_sampling': True, 
             'step_size': 0.3, 'ptc_threshold': 0.1, 
             'ptc_max_iter': 3000, 'mode_probability': 0.4, 
             'informed_sampling': True, 'informed_sampling_version': 0, 
             'cprofiler': False, 'cost_type': 'euclidean', 'dist_type': 'euclidean', 
             'debug_mode': False, 'transition_nodes': 100, 'birrtstar_version' :1, 
-            'amount_of_runs' : 1, 'use_seed' : True, 'seed': 1, 'depth': 1
+            'amount_of_runs' : 1, 'use_seed' : True, 'seed': 1, 'depth': 1,  
         }
         for key, value in defaults.items():
             setattr(self, key, config.get(key, value))
@@ -71,16 +71,67 @@ class Mode:
         self.transition_nodes = []
         robot_dims = sum(env.robot_dims.values())
         self.subtree = []
-        self.batch_subtree = torch.empty((0, robot_dims), device='cuda')
-        self.node_idx_subtree = torch.empty(0, device='cuda', dtype=torch.long)
-        self.subtree_b = []
-        self.batch_subtree_b = torch.empty((0, robot_dims), device='cuda')
-        self.node_idx_subtree_b =  torch.empty(0, device='cuda', dtype=torch.long)
+        self.initial_capacity = 100000
+        self.batch_subtree = torch.empty(
+            (self.initial_capacity, robot_dims), device=device, dtype=torch.float32
+        )
+        self.node_idx_subtree = torch.empty(
+            self.initial_capacity, device=device, dtype=torch.long
+        )
+        self.subtree_b = []  # This remains the same
+        self.batch_subtree_b = torch.empty(
+            (self.initial_capacity, robot_dims), device=device, dtype=torch.float32
+        )
+        self.node_idx_subtree_b = torch.empty(
+            self.initial_capacity, device=device, dtype=torch.long
+        )
         self.informed = Informed()
         self.order = 1
         self.connected = False
         self.constrained_robots = env.get_active_task(self.label).robots
         self.indices = [idx for r in self.constrained_robots for idx in env.robot_idx[r]]
+        self.starts = {}
+
+    def _resize_tensor(self, tensor: torch.Tensor, current_capacity: int, new_capacity: int) -> None:
+        """
+        Dynamically resizes the given tensor to the specified new capacity.
+
+        Args:
+            tensor (torch.Tensor): The tensor to resize.
+            current_capacity (int): The current capacity of the tensor.
+            new_capacity (int): The new capacity to allocate.
+
+        Returns:
+            torch.Tensor: The resized tensor.
+        """
+        new_tensor = torch.empty(
+            (new_capacity, *tensor.shape[1:]),
+            device=tensor.device,
+            dtype=tensor.dtype,
+        )
+        new_tensor[:current_capacity] = tensor
+        del tensor  # Free old tensor memory
+        torch.cuda.empty_cache() 
+        return new_tensor
+
+    def ensure_capacity(self, tensor: torch.Tensor, required_capacity:int) -> None:
+        """
+        Ensures that the tensor has enough capacity to add new elements. Resizes if necessary.
+
+        Args:
+            tensor (torch.Tensor): The tensor to check and potentially resize.
+            capacity_attr (str): The name of the capacity attribute associated with the tensor.
+            new_elements (int): The number of new elements to accommodate.
+
+        Returns:
+            torch.Tensor: The tensor with ensured capacity.
+        """
+        current_size = tensor.shape[0]
+
+        if required_capacity == current_size:
+            required_capacity
+            return self._resize_tensor(tensor, current_size, required_capacity*2)
+        return tensor
 
 class Operation:
     """ Planner operation variables"""
@@ -90,11 +141,13 @@ class Operation:
         self.path = []
         self.path_nodes = None
         self.cost = np.inf
-        self.tree = 1
         self.ptc_cost = 0 # needed for termination
         self.ptc_iter = None # needed for termination
         self.init_sol = False
-        self.costs = torch.tensor([0], device='cuda')
+        self.costs = torch.empty(
+            1000000, device=device, dtype=torch.float32
+        )
+        # self.costs = torch.tensor([0], device=device, dtype=torch.float32)
         self.limits = {robot: env.limits[:, env.robot_idx[robot]] for robot in env.robots}
         self.paths_inter = []
         self.start_node = None
@@ -106,18 +159,21 @@ class Operation:
         return self.costs[idx]
     
 class Node:
-    def __init__(self, state:State, idx: int, operation: Operation):
-        self.idx = idx
+    id_counter = 0
+
+    def __init__(self, state:State, operation: Operation):
         self.state = state   
-        self.q_tensor = torch.tensor(state.q.state(), device='cuda')
+        self.q_tensor = torch.tensor(state.q.state(), device=device, dtype=torch.float32)
         self.parent = None  
         self.children = []    
         self.transition = False
-        num_agents = state.q.num_agents()
-        self.agent_dists = torch.zeros(1, num_agents, device = 'cuda')
-        self.cost_to_parent = torch.tensor(0, device='cuda')
-        self.agent_dists_to_parent = torch.zeros(1, num_agents, device = 'cuda')
+        self.num_agents = state.q.num_agents()
+        self.agent_dists = torch.zeros(1, self.num_agents, device = 'cpu', dtype=torch.float32)
+        self.cost_to_parent = None
+        self.agent_dists_to_parent = torch.zeros(1, self.num_agents, device = 'cpu', dtype=torch.float32)
         self.operation = operation
+        self.idx = Node.id_counter
+        Node.id_counter += 1
 
     @property
     def cost(self):
@@ -127,7 +183,6 @@ class Node:
     def cost(self, value):
         """Set the cost in the shared operation costs tensor."""
         self.operation.costs[self.idx] = value
-
 
     def __repr__(self):
         return f"<N- {self.state.q.state()}, c: {self.cost}>"
@@ -146,14 +201,20 @@ class Sampling:
                 lims = self.operation.limits[robot]
                 q[indices] = np.random.uniform(lims[0], lims[1])
         q[mode.indices] = self.env.get_active_task(mode.label).goal.goal 
-        return q     
-
+        return q   
+    
     def sample_state(self, mode: Mode, sampling_type: int) -> Configuration:
         m = mode.label
         is_goal_sampling = sampling_type == 2
         is_informed_sampling = sampling_type == 1
-
+        is_home_pose_sampling = sampling_type == 3
+          
         while True:
+            if is_goal_sampling and not self.operation.init_sol and self.config.planner == "rrtstar_par":
+                transition_nodes = self.operation.active_mode.transition_nodes
+                node = np.random.choice(transition_nodes)
+                return node.state.q
+
             if is_goal_sampling and mode.order == -1:
                 mode_idx = self.operation.modes.index(self.operation.active_mode)
                 if mode_idx == 0:
@@ -172,9 +233,10 @@ class Sampling:
                 for i, robot in enumerate(self.env.robots):
                     informed_goal = mode.informed.goal.get(i)
                     informed_start = mode.informed.start.get(i)
-
-
-                    if informed_goal is not None and np.array_equal(informed_goal, informed_start):
+                    if is_home_pose_sampling and robot not in mode.constrained_robots:
+                        q.append(mode.starts[i])
+                        continue
+                    if is_home_pose_sampling and informed_goal is not None and np.array_equal(informed_goal, informed_start): #mode restriction 
                         q.append(informed_goal)
                         continue
 
@@ -189,7 +251,7 @@ class Sampling:
                             continue
 
                     if is_informed_sampling:  # Informed sampling
-                        qr = self.sample_informed(i, self.config.goal_radius)
+                        qr = self.sample_informed(i, self.env.tolerance)
                         if qr is not None:
                             q.append(qr)
                         else:
@@ -315,9 +377,9 @@ class Sampling:
 
     def sample_unit_n_ball(self, n:int) -> torch.tensor:
         """Returns uniform sample from the volume of an n-ball of unit radius centred at origin"""
-        x_ball = torch.randn(n, device='cuda', dtype=torch.float64)
+        x_ball = torch.randn(n, device=device, dtype=torch.float64)
         x_ball /= torch.linalg.norm(x_ball, ord=2)
-        radius = torch.rand(1, device='cuda', dtype=torch.float64).pow(1 / n)
+        radius = torch.rand(1, device=device, dtype=torch.float64).pow(1 / n)
         return x_ball * radius 
 
     def fit_to_informed_subset(self, N_near_indices: torch.Tensor, N_near_batch: torch.Tensor, n_near_costs: torch.Tensor, node_indices:torch.Tensor) -> List[Node]:
@@ -429,8 +491,14 @@ class BaseRRTstar(ABC):
         if self.operation.path_nodes:
             transition_node = self.operation.path_nodes[-1]
             path_data = [state.q.state() for state in self.operation.path]
-            intermediate_tot = torch.cat([node.cost.unsqueeze(0) for node in self.operation.path_nodes])
-            intermediate_agent_dists = torch.cat([node.agent_dists for node in self.operation.path_nodes])
+
+            intermediate_tot = torch.tensor(
+                [node.cost for node in self.operation.path_nodes],
+                device=device,
+                dtype=torch.float32
+            )
+            # intermediate_agent_dists = torch.cat([node.agent_dists for node in self.operation.path_nodes])
+            intermediate_agent_dists =[node.agent_dists for node in self.operation.path_nodes]
             result = {
                 "path": path_data,
                 "total": transition_node.cost,
@@ -521,61 +589,77 @@ class BaseRRTstar(ABC):
         with open(filename, 'wb') as file:
             pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def Nearest(self, q_rand: Configuration, subtree: List[Node], subtree_set: torch.tensor) -> Node: 
-        set_dists = batch_config_dist_torch(q_rand, subtree_set, self.config.dist_type)
+    def Nearest(self, q_rand: Configuration, subtree: List[Node], subtree_set: torch.tensor) -> Node:
+        q_tensor = torch.as_tensor(q_rand.state(), device=device, dtype=torch.float32).unsqueeze(0)
+        set_dists = batch_config_dist_torch(q_tensor, q_rand, subtree_set, self.config.dist_type)
         idx = torch.argmin(set_dists).item()
         return  subtree[idx]
 
-    def Steer(self, n_nearest: Node, q_rand: Configuration, m_label: List[int]) -> Node: 
+    def Steer(self, n_nearest: Node, q_rand: Configuration, m_label: List[int]) -> State: 
         if np.equal(n_nearest.state.q.state(), q_rand.state()).all():
             return None
         dists = config_dists(n_nearest.state.q, q_rand, self.config.dist_type)
-        if np.max(dists) < self.config.step_size:
-            state_new = State(q_rand, m_label)
-            n_new = Node(state_new, self.operation.tree, self.operation)
-        q_new = []
         q_nearest = n_nearest.state.q.state()
         q_rand = q_rand.state()
         direction = q_rand - q_nearest
+
+        q_new = np.empty_like(q_nearest)
         for idx, robot in enumerate(self.env.robots):
             indices = self.env.robot_idx[robot]
             robot_dist = dists[idx]
             if robot_dist < self.config.step_size:
-                q_new.append(q_rand[indices])
+                q_new[indices] = q_rand[indices]
             else:
-                if robot_dist == 0:
-                    t = 0
-                else:
-                    t = min(1, self.config.step_size / robot_dist) 
-                q_new.append(q_nearest[indices] + t * direction[indices])
-        q_new = np.concatenate(q_new, axis=0)
+                t = min(1, self.config.step_size / robot_dist) if robot_dist != 0 else 0
+                q_new[indices] = q_nearest[indices] + t * direction[indices]
+
         q_new = np.clip(q_new, self.env.limits[0], self.env.limits[1]) 
         state_new = State(type(self.env.get_start_pos())(q_new, n_nearest.state.q.slice), m_label)
-        n_new = Node(state_new, self.operation.tree, self.operation)
-        return n_new
+        return state_new
   
     def Near(self, n_new: Node, subtree_set: torch.tensor) -> Tuple[List[Node], torch.tensor]:
         #TODO generalize rewiring radius
         # n_nodes = sum(1 for _ in self.operation.current_mode.subtree.inorder()) + 1
         # r = min((7)*self.step_size, 3 + self.gamma * ((math.log(n_nodes) / n_nodes) ** (1 / self.dim)))
-        set_dists = batch_config_dist_torch(n_new.state.q, subtree_set, self.config.dist_type)
+        set_dists = batch_config_dist_torch(n_new.q_tensor, n_new.state.q, subtree_set, self.config.dist_type)
         indices = torch.where(set_dists < self.r)[0] # indices of batch_subtree
-        N_near_batch = self.operation.active_mode.batch_subtree[indices, :]
-        node_indices = self.operation.active_mode.node_idx_subtree[indices] # actual node indices (node.idx)
-        n_near_costs = self.operation.costs[node_indices]
+        # N_near_batch = self.operation.active_mode.batch_subtree[indices, :]
+        N_near_batch = self.operation.active_mode.batch_subtree.index_select(0, indices)
+        # node_indices = self.operation.active_mode.node_idx_subtree[indices] # actual node indices (node.idx)
+        node_indices = self.operation.active_mode.node_idx_subtree.index_select(0,indices) # actual node indices (node.idx)
+        if indices.size(0)== 1:
+            self.operation.active_mode.node_idx_subtree[indices]
+        n_near_costs = self.operation.costs.index_select(0,node_indices)
         if not self.config.informed_sampling:
             return indices, N_near_batch, n_near_costs, node_indices
         return self.sampling.fit_to_informed_subset(indices, N_near_batch, n_near_costs, node_indices)
-                
+    
+    def UpdateMode(self, mode:Mode, n:Node, tree:str) -> None:
+        if tree == 'A':
+            mode.subtree.append(n)                
+            position = len(mode.subtree) -1
+            mode.batch_subtree = mode.ensure_capacity(mode.batch_subtree, position)
+            mode.batch_subtree[position,:] = n.q_tensor
+            mode.node_idx_subtree = mode.ensure_capacity(mode.node_idx_subtree, position)
+            mode.node_idx_subtree[position] = n.idx
+        if tree == 'B':
+            mode.subtree_b.append(n)
+            position = len(mode.subtree_b) -1
+            mode.batch_subtree_b = mode.ensure_capacity(mode.batch_subtree_b, position)
+            mode.batch_subtree_b[position,:] = n.q_tensor
+            mode.node_idx_subtree_b = mode.ensure_capacity(mode.node_idx_subtree_b, position)
+            mode.node_idx_subtree_b[position] = n.idx
+
     def FindParent(self, N_near_indices: torch.tensor, idx:int, n_new: Node, n_nearest: Node, batch_cost: torch.tensor, batch_dist: torch.tensor, n_near_costs: torch.tensor) -> None:
-        c_min = n_near_costs[idx] + batch_cost[idx]
+        c_min = n_nearest.cost + batch_cost[idx]
         c_min_to_parent = batch_cost[idx]
         n_min = n_nearest
         c_new_tensor = n_near_costs + batch_cost
-        valid_indices = torch.nonzero(c_new_tensor < c_min, as_tuple=False).view(-1)
-
-        if valid_indices.numel():
-            sorted_indices = valid_indices[c_new_tensor[valid_indices].argsort()]
+        valid_mask = c_new_tensor < c_min
+        if torch.any(valid_mask):
+            # valid_indices = torch.arange(c_new_tensor.size(0), device=device)[valid_mask]
+            # sorted_indices = valid_indices[c_new_tensor[valid_indices].argsort()]
+            sorted_indices = torch.arange(c_new_tensor.size(0), device=device)[valid_mask][c_new_tensor[valid_mask].argsort()]
             for idx in sorted_indices:
                 node = self.operation.active_mode.subtree[N_near_indices[idx]]
                 if self.env.is_edge_collision_free(
@@ -588,13 +672,15 @@ class BaseRRTstar(ABC):
         n_new.parent = n_min
         n_new.cost_to_parent = c_min_to_parent
         n_min.children.append(n_new) #Set child
-        n_new.agent_dists = n_new.parent.agent_dists + batch_dist[idx].unsqueeze(0) 
-        n_new.agent_dists_to_parent = batch_dist[idx].unsqueeze(0)
-        self.operation.tree +=1
-        self.operation.active_mode.subtree.append(n_new)
-        self.operation.active_mode.batch_subtree = torch.cat((self.operation.active_mode.batch_subtree, n_new.q_tensor.unsqueeze(0)), dim=0)
-        self.operation.costs = torch.cat((self.operation.costs, c_min.unsqueeze(0)), dim=0) #set cost of n_new
-        self.operation.active_mode.node_idx_subtree = torch.cat((self.operation.active_mode.node_idx_subtree, torch.tensor([n_new.idx], device='cuda')),dim=0)
+        agent_dist = batch_dist[idx].unsqueeze(0).to(dtype=torch.float16).cpu()
+        n_new.agent_dists = n_new.parent.agent_dists + agent_dist
+        n_new.agent_dists_to_parent = agent_dist
+        # self.operation.costs = torch.cat((self.operation.costs, c_min.unsqueeze(0)), dim=0) 
+        # self.operation.costs.append(c_min.unsqueeze(0))
+        self.operation.costs = self.operation.active_mode.ensure_capacity(self.operation.costs, n_new.idx) 
+        n_new.cost = c_min
+        
+        self.UpdateMode(self.operation.active_mode, n_new, 'A') 
 
     def UnitBallVolume(self) -> float:
         return math.pi ** (self.dim / 2) / math.gamma((self.dim / 2) + 1)
@@ -603,32 +689,32 @@ class BaseRRTstar(ABC):
                batch_dist: torch.tensor, n_near_costs: torch.tensor, n_rand = None, n_nearest = None) -> bool:
         rewired = False
         c_potential_tensor = n_new.cost + batch_cost
-        c_agent_tensor = batch_dist + n_new.agent_dists
+        # c_agent_tensor = batch_dist + n_new.agent_dists
 
         improvement_mask = c_potential_tensor < n_near_costs
-        improved_indices = torch.nonzero(improvement_mask, as_tuple=False).view(-1)
-        if improved_indices.numel():
+        
+        if torch.any(improvement_mask):
             # self.SaveData(time.time()-self.start, n_new = n_new.state.q.state(), N_near = N_near, 
             #                   r =self.r, n_rand = n_rand, n_nearest = n_nearest) 
+            improved_indices = torch.arange(c_potential_tensor.size(0), device=device)[improvement_mask]
             for idx in improved_indices:
                 n_near = self.operation.active_mode.subtree[N_near_indices[idx].item()]
                 # n_near = N_near[idx]
-                if n_near == n_new.parent or n_near.cost == np.inf:
+                if n_near == n_new.parent or n_near.cost == np.inf or n_near == n_new:
                     continue
 
                 if self.env.is_edge_collision_free(n_near.state.q, n_new.state.q, self.operation.active_mode.label):
                     if n_near.parent is not None:
                         n_near.parent.children.remove(n_near)
-                    if n_near == n_new: 
-                        continue
                     n_near.parent = n_new                    
-                    if n_new != n_near:
-                        n_new.children.append(n_near)
+                    n_new.children.append(n_near)
 
                     n_near.cost = c_potential_tensor[idx].item()
-                    n_near.agent_dists = c_agent_tensor[idx].unsqueeze(0) 
+                    # n_near.agent_dists = c_agent_tensor[idx].unsqueeze(0) 
+                    agents = batch_dist[idx].unsqueeze(0).to(dtype=torch.float16).cpu()
+                    n_near.agent_dists =  agents + n_new.agent_dists
                     n_near.cost_to_parent = batch_cost[idx]
-                    n_near.agent_dists_to_parent = batch_dist[idx].unsqueeze(0)
+                    n_near.agent_dists_to_parent = agents
                     # self.SaveData(time.time()-self.start, n_new = n_new.state.q.state(), 
                     #               r =self.r, n_rand = n_near.state.q.state())
                     rewired = True
@@ -643,7 +729,7 @@ class BaseRRTstar(ABC):
         path_in_order = path[::-1]
         self.operation.path = path_in_order  
         self.operation.path_nodes = path_nodes[::-1]
-        self.operation.cost = self.operation.path_nodes[-1].cost
+        self.operation.cost = self.operation.path_nodes[-1].cost.clone()
         # if not self.env.is_path_collision_free(self.operation.path):
         #     print('hallo')
         self.SaveData(time.time()-self.start)
@@ -652,14 +738,22 @@ class BaseRRTstar(ABC):
             """Need to add transition node n as a start node in the next mode"""
             idx = self.operation.modes.index(self.operation.active_mode)
             if idx != len(self.operation.modes) - 1:
+                mode = self.operation.modes[idx + 1]
                 if self.operation.modes[idx + 1].order == 1:
-                    self.operation.modes[idx + 1].subtree.append(n)
-                    self.operation.modes[idx + 1].batch_subtree = torch.cat((self.operation.modes[idx + 1].batch_subtree, n.q_tensor.unsqueeze(0)), dim=0)
-                    self.operation.modes[idx + 1].node_idx_subtree = torch.cat((self.operation.modes[idx + 1].node_idx_subtree, torch.tensor([n.idx], device='cuda')),dim=0)
+                    mode.subtree.append(n)                
+                    position = len(mode.subtree) -1
+                    mode.batch_subtree = mode.ensure_capacity(mode.batch_subtree, position)
+                    mode.batch_subtree[position,:] = n.q_tensor
+                    mode.node_idx_subtree = mode.ensure_capacity(mode.node_idx_subtree, position)
+                    mode.node_idx_subtree[position] = n.idx
+
                 else:
-                    self.operation.modes[idx + 1].subtree_b.append(n)
-                    self.operation.modes[idx + 1].batch_subtree_b = torch.cat((self.operation.modes[idx + 1].batch_subtree_b, n.q_tensor.unsqueeze(0)), dim=0)
-                    self.operation.modes[idx + 1].node_idx_subtree_b = torch.cat((self.operation.modes[idx + 1].node_idx_subtree_b, torch.tensor([n.idx], device='cuda')),dim=0)
+                    mode.subtree_b.append(n)
+                    position = len(mode.subtree_b) -1
+                    mode.batch_subtree_b = mode.ensure_capacity(mode.batch_subtree_b, position)
+                    mode.batch_subtree_b[position,:] = n.q_tensor
+                    mode.node_idx_subtree_b = mode.ensure_capacity(mode.node_idx_subtree_b, position)
+                    mode.node_idx_subtree_b[position] = n.idx
 
     def SetModePorbability(self) -> List[float]:
         num_modes = len(self.operation.modes)
@@ -682,7 +776,7 @@ class BaseRRTstar(ABC):
         elif self.config.mode_probability == 0:
             # Uniformly
             total_transition_nodes = sum(len(mode.transition_nodes) for mode in self.operation.modes)
-            total_nodes = self.operation.tree + total_transition_nodes
+            total_nodes = Node.id_counter -1 + total_transition_nodes
             # Calculate probabilities inversely proportional to node counts
             inverse_probabilities = [
                 1 - (len(mode.subtree) / total_nodes)
@@ -697,7 +791,7 @@ class BaseRRTstar(ABC):
         else:
             # manually set
             total_transition_nodes = sum(len(mode.transition_nodes) for mode in self.operation.modes)
-            total_nodes = self.operation.tree_size + total_transition_nodes
+            total_nodes = Node.id_counter -1 + total_transition_nodes
             # Calculate probabilities inversely proportional to node counts
             inverse_probabilities = [
                 1 - (len(mode.subtree) / total_nodes)
@@ -712,51 +806,62 @@ class BaseRRTstar(ABC):
                 for inv_prob in inverse_probabilities
             ] + [self.config.mode_probability]
 
-    def InitializationMode(self, added_mode: Mode) -> None:
+    def ModeInitialization(self,new_mode: Mode) -> None: #TODO imporve?
         mode = self.env.start_mode
+        previous_mode = mode
         robots = []
         goal = {}
         state_start = {}
         while True:
             task = self.env.get_active_task(mode)
             constrained_robtos = task.robots
-            for robot in constrained_robtos:
+            for robot in self.env.robots: #only for constrained robots
                 indices = self.env.robot_idx[robot]
                 r = self.env.robots.index(robot)
                 if r not in robots: 
-                    robots.append(r)
+                    if robot in constrained_robtos:
+                        robots.append(r)
                     state_start[r] = self.env.start_pos.q[indices]
                 else:
-                    state_start[r] = goal[r]
-                if len(constrained_robtos) > 1:
-                    goal[r] = task.goal.sample()[indices]
-                else:
-                    goal[r] = task.goal.sample()
-                
-                if added_mode.label == mode:
-                    added_mode.informed.start[r] = state_start[r]
-                    added_mode.informed.goal[r] = goal[r]
-                    if self.config.informed_sampling and not np.equal(added_mode.informed.goal[r], added_mode.informed.start[r]).all():
-                        cmin, C = self.sampling.rotation_to_world_frame(state_start[r], goal[r] ,robot)
-                        C = torch.tensor(C, device = 'cuda')
-                        added_mode.informed.C[r] = C
-                        added_mode.informed.inv_C[r] = torch.linalg.inv(C)
-                        added_mode.informed.cmin[r] = torch.tensor(cmin-2*self.config.goal_radius, device= 'cuda')
-                        added_mode.informed.state_centre[r] = torch.tensor(((state_start[r] + goal[r])/2), device='cuda')
-
-                    if robot == constrained_robtos[-1]:
+                    if previous_mode[r] != mode[r]:
+                        state_start[r] = goal[r]
+                if robot in constrained_robtos:
+                    if len(constrained_robtos) > 1:
+                        goal[r] = task.goal.sample()[indices]
+                    else:
+                        goal[r] = task.goal.sample()
+                if new_mode.label == mode:
+                    if robot in constrained_robtos:
+                        new_mode.informed.start[r] = state_start[r]
+                        new_mode.informed.goal[r] = goal[r]
+                        if self.config.informed_sampling and not np.equal(goal[r], state_start[r]).all():
+                            cmin, C = self.sampling.rotation_to_world_frame(state_start[r], goal[r] ,robot)
+                            C = torch.tensor(C, device = device, dtype=torch.float32)
+                            new_mode.informed.C[r] = C
+                            new_mode.informed.inv_C[r] = torch.linalg.inv(C)
+                            new_mode.informed.cmin[r] = torch.tensor(cmin-2*self.env.tolerance, device= device, dtype=torch.float32)
+                            new_mode.informed.state_centre[r] = torch.tensor(((state_start[r] + goal[r])/2), device=device, dtype=torch.float32)
+                    if robot == self.env.robots[-1]:
+                        new_mode.starts = state_start
                         return
+            if mode != previous_mode:
+                previous_mode = mode
             mode = self.env.get_next_mode(None,mode)
 
     def SampleNodeManifold(self, operation: Operation) -> Configuration:
         if np.random.uniform(0, 1) <= self.config.p_goal:
-            if self.env.terminal_mode != operation.modes[-1].label and operation.active_mode.label == operation.modes[-1].label:
+            if self.config.p_stay != 1 and np.random.uniform(0, 1) > self.config.p_stay: # sample pose of task before?
+                if self.operation.init_sol:
+                    return self.sampling.sample_state(operation.active_mode, 3)
+                return self.sampling.sample_state(operation.active_mode, 0)
+                
+            elif self.env.terminal_mode != operation.modes[-1].label and operation.active_mode.label == operation.modes[-1].label:
                 return self.sampling.sample_state(operation.active_mode, 0)
             else:  
-                if self.config.informed_sampling: 
+                if self.config.informed_sampling: #have found initial sol for informed smapling
                     return self.sampling.sample_state(operation.active_mode, 1)
                 return self.sampling.sample_state(operation.active_mode, 0)
-        return self.sampling.sample_state(operation.active_mode, 2)
+        return self.sampling.sample_state(operation.active_mode, 2) #goal sampling
     
     def FindOptimalTransitionNode(self, iter: int, mode_init_sol: bool = False) -> None:
         if len(self.operation.modes) < 2:
@@ -766,7 +871,7 @@ class BaseRRTstar(ABC):
         else:
             transition_nodes = self.operation.modes[-2].transition_nodes 
         if len(transition_nodes) > 1:
-            costs = torch.cat([node.cost.unsqueeze(0) for node in transition_nodes])
+            costs = torch.tensor([node.cost for node in transition_nodes], device=device, dtype=torch.float32)
         else:
             costs = transition_nodes[0].cost.view(-1)
         if mode_init_sol:
