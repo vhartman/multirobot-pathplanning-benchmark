@@ -123,7 +123,7 @@ def main():
             max_iter=args.num_iters,
             distance_metric=args.distance_metric,
             try_sampling_around_path=args.prm_sample_near_path,
-            use_k_nearest=args.prm_k_nearest
+            use_k_nearest=args.prm_k_nearest,
         )
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
@@ -144,7 +144,26 @@ def main():
     print("comp_time", info["times"])
 
     plt.figure()
-    plt.plot(info["times"], info["costs"], "o")
+    plt.plot(info["times"], info["costs"], "-o", drawstyle="steps-post")
+
+    mode_switch_indices = []
+    for i in range(len(interpolated_path) - 1):
+        if interpolated_path[i].mode != interpolated_path[i + 1].mode:
+            mode_switch_indices.append(i)
+
+    plt.figure("Path cost")
+    plt.plot(
+        env.batch_config_cost(interpolated_path[:-1], interpolated_path[1:]),
+        label="Original",
+    )
+    plt.plot(mode_switch_indices, [0.1] * len(mode_switch_indices), "o")
+
+    plt.figure("Cumulative path cost")
+    plt.plot(
+        np.cumsum(env.batch_config_cost(interpolated_path[:-1], interpolated_path[1:])),
+        label="Original",
+    )
+    plt.plot(mode_switch_indices, [0.1] * len(mode_switch_indices), "o")
 
     plt.show()
 
