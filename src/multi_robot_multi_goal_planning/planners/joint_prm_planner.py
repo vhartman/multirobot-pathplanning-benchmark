@@ -509,6 +509,9 @@ class Graph:
                 cost = gs[start_node.id] + edge_cost + h(e[1])
                 # fs[(e[0].id, e[1].id)] = cost
                 heapq.heappush(open_queue, (cost, edge_cost, e))
+                # open_queue.append((cost, edge_cost, e))
+
+        # open_queue.sort(reverse=True)
 
         num_iter = 0
         while len(open_queue) > 0:
@@ -518,6 +521,9 @@ class Graph:
                 print(len(open_queue))
 
             f_pred, edge_cost, edge = heapq.heappop(open_queue)
+            # print(open_queue[-1])
+            # print(open_queue[-2])
+            # f_pred, edge_cost, edge = open_queue.pop()
             n0, n1 = edge
 
             g_tentative = gs[n0.id] + edge_cost
@@ -530,10 +536,10 @@ class Graph:
             collision_free = False
             # et = edge_tuple(n0, n1)
 
-            if n0 in n1.whitelist:
+            if n0.id in n1.whitelist:
                 collision_free = True
             else:
-                if n1 in n0.blacklist:
+                if n1.id in n0.blacklist:
                     continue
 
                 q0 = n0.state.q
@@ -543,12 +549,12 @@ class Graph:
                 )
 
                 if not collision_free:
-                    n1.blacklist.add(n0)
-                    n0.blacklist.add(n1)
+                    n1.blacklist.add(n0.id)
+                    n0.blacklist.add(n1.id)
                     continue
                 else:
-                    n1.whitelist.add(n0)
-                    n0.whitelist.add(n1)
+                    n1.whitelist.add(n0.id)
+                    n0.whitelist.add(n1.id)
 
             # remove all other edges with this goal from the queue
 
@@ -572,14 +578,17 @@ class Graph:
 
             if len(neighbors) != 0:
                 # add neighbors to open_queue
+                # edge_costs = env.batch_config_cost(
+                #     [n1.state] * len(neighbors), [n.state for n in neighbors]
+                # )
                 edge_costs = env.batch_config_cost(
-                    [n1.state] * len(neighbors), [n.state for n in neighbors]
+                    n1.state.q, np.array([n.state.q.state() for n in neighbors])
                 )
                 for i, n in enumerate(neighbors):
                     # if n == n0:
                     #     continue
 
-                    if n in n1.blacklist:
+                    if n.id in n1.blacklist:
                         continue
 
                     edge_cost = edge_costs[i]
@@ -597,10 +606,11 @@ class Graph:
                         if best_cost is not None and f_node > best_cost:
                             continue
 
-                        if n not in closed_list:
-                            heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
-                            # open_queue.append((f_node, edge_cost, (n1, n)))
+                        # if n not in closed_list:
+                        heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
+                        # open_queue.append((f_node, edge_cost, (n1, n)))
                 # heapq.heapify(open_queue)
+                # open_queue.sort(reverse=True)
 
         path = []
 
@@ -697,14 +707,14 @@ class Graph:
             )
 
             edge_costs = env.batch_config_cost(
-                [node.state] * len(neighbors), [n.state for n in neighbors]
+                node.state.q, np.array([n.state.q.state() for n in neighbors])
             )
             # add neighbors to open_queue
             for i, n in enumerate(neighbors):
                 if n == node:
                     continue
 
-                if node in n.blacklist:
+                if node.id in n.blacklist:
                     continue
 
                 g_new = gs[node] + edge_costs[i]
@@ -713,28 +723,34 @@ class Graph:
                     # collision check
 
                     collision_free = False
-                    if n in node.whitelist:
+                    if n.id in node.whitelist:
                         collision_free = True
                     else:
+                        if n.id in node.blacklist:
+                            continue
+
                         collision_free = env.is_edge_collision_free(
                             node.state.q, n.state.q, n.state.mode
                         )
 
                         if not collision_free:
-                            node.blacklist.add(n)
-                            n.blacklist.add(node)
+                            node.blacklist.add(n.id)
+                            n.blacklist.add(node.id)
                             continue
                         else:
-                            node.whitelist.add(n)
-                            n.whitelist.add(node)
+                            node.whitelist.add(n.id)
+                            n.whitelist.add(node.id)
 
                     # cost to get to neighbor:
                     gs[n] = g_new
                     cost = g_new + h(n)
                     parents[n] = node
 
-                    if n not in open_queue:
-                        heapq.heappush(open_queue, (cost, n))
+                    if best_cost is not None and cost > best_cost:
+                        continue
+
+                    # if n not in open_queue:
+                    heapq.heappush(open_queue, (cost, n))
 
         path = []
 
@@ -946,8 +962,9 @@ def joint_prm_planner(
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
+            # if current_best_path is not None:
+            # if cnt > 5000 and current_best_path is not None:
             if False and current_best_path is not None:
-                # if cnt > 7000 and current_best_path is not None:
                 def cost_to_mode_on_path(mode, path):
                     for i in range(len(path)):
                         curr_state = path[i]
@@ -989,21 +1006,21 @@ def joint_prm_planner(
                         mode, current_best_path
                     )
 
-                    print("next mode cost:", next_mode_cost)
-                    print("path_cost", current_best_cost)
+                    # print("next mode cost:", next_mode_cost)
+                    # print("path_cost", current_best_cost)
 
                     if cost_to_reach_mode is None:
                         continue
 
                     this_mode_cost = next_mode_cost - cost_to_reach_mode
-                    print("this mode cost:", this_mode_cost)
+                    # print("this mode cost:", this_mode_cost)
 
-                    print(mode_start_config.state())
-                    print(mode_end_config.state())
+                    # print(mode_start_config.state())
+                    # print(mode_end_config.state())
 
-                    print(
-                        "min cost", env.config_cost(mode_start_config, mode_end_config)
-                    )
+                    # print(
+                    #     "min cost", env.config_cost(mode_start_config, mode_end_config)
+                    # )
 
                     assert (
                         this_mode_cost
@@ -1017,44 +1034,44 @@ def joint_prm_planner(
                     ):
                         continue
 
-                    tmp = []
-                    for _ in range(1000):
-                        for _ in range(500):
-                            q = []
-                            for i in range(len(env.robots)):
-                                r = env.robots[i]
+                    # tmp = []
+                    # for _ in range(1000):
+                    for _ in range(10):
+                        q = []
+                        for i in range(len(env.robots)):
+                            r = env.robots[i]
 
-                                lims = env.limits[:, env.robot_idx[r]]
-                                if lims[0, 0] < lims[1, 0]:
-                                    qr = (
-                                        np.random.rand(env.robot_dims[r])
-                                        * (lims[1, :] - lims[0, :])
-                                        + lims[0, :]
-                                    )
-                                else:
-                                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+                            lims = env.limits[:, env.robot_idx[r]]
+                            if lims[0, 0] < lims[1, 0]:
+                                qr = (
+                                    np.random.rand(env.robot_dims[r])
+                                    * (lims[1, :] - lims[0, :])
+                                    + lims[0, :]
+                                )
+                            else:
+                                qr = np.random.rand(env.robot_dims[r]) * 6 - 3
 
-                                q.append(qr)
+                            q.append(qr)
 
-                            q = conf_type.from_list(q)
-                            heuristic_cost = env.config_cost(
-                                mode_start_config, q
-                            ) + env.config_cost(mode_end_config, q)
-                            # print(heuristic_cost)
-                            if heuristic_cost < this_mode_cost:
-                                break
+                        q = conf_type.from_list(q)
+                        heuristic_cost = env.config_cost(
+                            mode_start_config, q
+                        ) + env.config_cost(mode_end_config, q)
+                        # print(heuristic_cost)
+                        if heuristic_cost < this_mode_cost:
+                            break
 
-                            q = None
+                        q = None
 
-                        if q is None:
-                            continue
+                    if q is None:
+                        continue
 
-                        tmp.append(q)
+                    # tmp.append(q)
 
-                    plt.figure()
-                    plt.scatter([a[0][0] for a in tmp], [a[0][1] for a in tmp])
-                    plt.scatter([a[1][0] for a in tmp], [a[1][1] for a in tmp])
-                    plt.show()
+                    # plt.figure()
+                    # plt.scatter([a[0][0] for a in tmp], [a[0][1] for a in tmp])
+                    # plt.scatter([a[1][0] for a in tmp], [a[1][1] for a in tmp])
+                    # plt.show()
 
                     if env.is_collision_free(q, mode):
                         rnd_state = State(q, mode)
@@ -1075,21 +1092,6 @@ def joint_prm_planner(
                     if state.mode != interpolated_path[idx + 1].mode:
                         current_task_ids = state.mode.task_ids
                         next_task_ids = interpolated_path[idx + 1].mode.task_ids
-
-                        # print(current_task_ids, next_task_ids)
-                        # print(hash(state.mode), hash(current_best_path[idx+1].mode))
-                        # print(state.mode.sg)
-                        # print(current_best_path[idx+1].mode.sg)
-                        # print(idx, len(current_best_path))
-
-                        # print("prev mode task ids", state.mode.prev_mode.task_ids)
-                        # print("prev mode task ids", current_best_path[idx+1].mode.prev_mode.task_ids)
-
-                        # env.set_to_mode(state.mode)
-                        # env.show_config(state.q)
-
-                        # env.set_to_mode(current_best_path[idx+1].mode)
-                        # env.show_config(current_best_path[idx+1].q)
 
                         task = env.get_active_task(state.mode, next_task_ids)
                         involved_robots = task.robots
@@ -1167,12 +1169,12 @@ def joint_prm_planner(
             continue
 
         while True:
-            # sparsely_checked_path = g.search(
-            #     g.root, g.goal_nodes, env, current_best_cost, resolution
-            # )
-            sparsely_checked_path = g.search_with_vertex_queue(
+            sparsely_checked_path = g.search(
                 g.root, g.goal_nodes, env, current_best_cost, resolution
             )
+            # sparsely_checked_path = g.search_with_vertex_queue(
+            #     g.root, g.goal_nodes, env, current_best_cost, resolution
+            # )
 
             # 2. in case this found a path, search with dense check from the other side
             if len(sparsely_checked_path) > 0:
@@ -1190,19 +1192,19 @@ def joint_prm_planner(
                     if s0.mode != s1.mode:
                         continue
 
-                    if n0 in n1.whitelist:
+                    if n0.id in n1.whitelist:
                         continue
 
                     if not env.is_edge_collision_free(s0.q, s1.q, s0.mode, resolution):
                         print("Path is in collision")
                         is_valid_path = False
                         # env.show(True)
-                        n0.blacklist.add(n1)
-                        n1.blacklist.add(n0)
+                        n0.blacklist.add(n1.id)
+                        n1.blacklist.add(n0.id)
                         break
                     else:
-                        n1.whitelist.add(n0)
-                        n0.whitelist.add(n1)
+                        n1.whitelist.add(n0.id)
+                        n0.whitelist.add(n1.id)
 
                 if is_valid_path:
                     path = [node.state for node in sparsely_checked_path]
