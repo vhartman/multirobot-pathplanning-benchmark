@@ -8,6 +8,7 @@ from typing import List
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 from multi_robot_multi_goal_planning.problems.rai_envs import display_path, rai_env
+
 # from multi_robot_multi_goal_planning.problems.planning_env import State
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
@@ -129,6 +130,14 @@ def main():
         label="Original",
     )
     plt.plot(mode_switch_indices, [0.1] * len(mode_switch_indices), "o")
+
+    # plt.figure()
+
+    # plt.plot([pt.q.state()[0] for pt in interpolated_path], [pt.q.state()[1] for pt in interpolated_path], 'o-')
+    # plt.plot([pt.q.state()[3] for pt in interpolated_path], [pt.q.state()[4] for pt in interpolated_path], 'o-')
+
+    # plt.plot([pt.q.state()[0] for pt in shortcut_discretized_path], [pt.q.state()[1] for pt in shortcut_discretized_path], 'o--')
+    # plt.plot([pt.q.state()[3] for pt in shortcut_discretized_path], [pt.q.state()[4] for pt in shortcut_discretized_path], 'o--')
 
     plt.show()
 

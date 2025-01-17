@@ -400,34 +400,51 @@ class Graph:
 
             best_nodes = []
             if key in self.nodes:
-                r_star = 2 * (
-                    informed_measure
-                    / unit_n_ball_measure
-                    * (np.log(len(node_list)) / len(node_list))
-                    * (1 + 1 / dim)
-                ) ** (1 / dim)
+                r_star = (
+                    1.001
+                    * 2
+                    * (
+                        informed_measure
+                        / unit_n_ball_measure
+                        * (np.log(len(node_list)) / len(node_list))
+                        * (1 + 1 / dim)
+                    )
+                    ** (1 / dim)
+                )
                 r = r_star
 
-                best_nodes = [n for i, n in enumerate(node_list) if dists[i] < r]
+                # best_nodes = [n for n, d in zip(node_list, dists) if d < r]
+                best_nodes = [node_list[i] for i in np.where(dists < r)[0]]
 
             best_transition_nodes = []
             if key in self.transition_nodes:
-                r_star = 2 * (
-                    (1 + 1 / dim)
-                    * informed_measure
-                    / unit_n_ball_measure
-                    * (np.log(len(transition_node_list)) / len(transition_node_list))
-                ) ** (1 / dim)
+                r_star = (
+                    1.001
+                    * 2
+                    * (
+                        (1 + 1 / dim)
+                        * informed_measure
+                        / unit_n_ball_measure
+                        * (
+                            np.log(len(transition_node_list))
+                            / len(transition_node_list)
+                        )
+                    )
+                    ** (1 / dim)
+                )
                 # print(node.state.mode, r_star)
                 r = r_star
 
                 if len(transition_node_list) == 1:
                     r = 1e6
 
+                # best_transition_nodes = [
+                #     n
+                #     for i, n in enumerate(transition_node_list)
+                #     if transition_dists[i] < r
+                # ]
                 best_transition_nodes = [
-                    n
-                    for i, n in enumerate(transition_node_list)
-                    if transition_dists[i] < r
+                    transition_node_list[i] for i in np.where(transition_dists < r)[0]
                 ]
 
             best_nodes = best_nodes + best_transition_nodes
@@ -845,6 +862,28 @@ def joint_prm_planner(
 
                 if env.is_collision_free(q, m):
                     new_samples.append(State(q, m))
+        elif True:
+            # grid sampling
+
+            m = sample_mode("weighted", cost is not None)
+            q = []
+            for i in range(len(env.robots)):
+                r = env.robots[i]
+                lims = env.limits[:, env.robot_idx[r]]
+                if lims[0, 0] < lims[1, 0]:
+                    qr = (
+                        np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
+                        + lims[0, :]
+                    )
+                else:
+                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+
+                q.append(qr)
+
+            q = conf_type.from_list(q)
+
+            if env.is_collision_free(q, m):
+                new_samples.append(State(q, m))
         else:
             # we found a solution, and can do informed sampling:
             # cost = (cost to get to mode) + cost in mode + (cost_to_goal)
@@ -965,6 +1004,7 @@ def joint_prm_planner(
             # if current_best_path is not None:
             # if cnt > 5000 and current_best_path is not None:
             if False and current_best_path is not None:
+
                 def cost_to_mode_on_path(mode, path):
                     for i in range(len(path)):
                         curr_state = path[i]
@@ -997,7 +1037,7 @@ def joint_prm_planner(
                 somewhat_informed_samples = []
                 for _ in range(200):
                     mode = sample_mode("uniform_reached", None)
-                    print(mode.task_ids)
+                    # print(mode.task_ids)
 
                     cost_to_reach_mode, mode_start_config = cost_to_mode_on_path(
                         mode, current_best_path
@@ -1034,44 +1074,44 @@ def joint_prm_planner(
                     ):
                         continue
 
-                    # tmp = []
-                    # for _ in range(1000):
-                    for _ in range(10):
-                        q = []
-                        for i in range(len(env.robots)):
-                            r = env.robots[i]
+                    tmp = []
+                    for _ in range(1000):
+                        for _ in range(10):
+                            q = []
+                            for i in range(len(env.robots)):
+                                r = env.robots[i]
 
-                            lims = env.limits[:, env.robot_idx[r]]
-                            if lims[0, 0] < lims[1, 0]:
-                                qr = (
-                                    np.random.rand(env.robot_dims[r])
-                                    * (lims[1, :] - lims[0, :])
-                                    + lims[0, :]
-                                )
-                            else:
-                                qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+                                lims = env.limits[:, env.robot_idx[r]]
+                                if lims[0, 0] < lims[1, 0]:
+                                    qr = (
+                                        np.random.rand(env.robot_dims[r])
+                                        * (lims[1, :] - lims[0, :])
+                                        + lims[0, :]
+                                    )
+                                else:
+                                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
 
-                            q.append(qr)
+                                q.append(qr)
 
-                        q = conf_type.from_list(q)
-                        heuristic_cost = env.config_cost(
-                            mode_start_config, q
-                        ) + env.config_cost(mode_end_config, q)
-                        # print(heuristic_cost)
-                        if heuristic_cost < this_mode_cost:
-                            break
+                            q = conf_type.from_list(q)
+                            heuristic_cost = env.config_cost(
+                                mode_start_config, q
+                            ) + env.config_cost(mode_end_config, q)
+                            # print(heuristic_cost)
+                            if heuristic_cost < this_mode_cost:
+                                break
 
-                        q = None
+                            q = None
 
-                    if q is None:
-                        continue
+                        if q is None:
+                            continue
 
-                    # tmp.append(q)
+                        tmp.append(q)
 
-                    # plt.figure()
-                    # plt.scatter([a[0][0] for a in tmp], [a[0][1] for a in tmp])
-                    # plt.scatter([a[1][0] for a in tmp], [a[1][1] for a in tmp])
-                    # plt.show()
+                    plt.figure()
+                    plt.scatter([a[0][0] for a in tmp], [a[0][1] for a in tmp])
+                    plt.scatter([a[1][0] for a in tmp], [a[1][1] for a in tmp])
+                    plt.show()
 
                     if env.is_collision_free(q, mode):
                         rnd_state = State(q, mode)
@@ -1083,7 +1123,7 @@ def joint_prm_planner(
                 # sample index
                 interpolated_path = interpolate_path(current_best_path)
                 # interpolated_path = current_best_path
-                for _ in range(200):
+                for _ in range(500):
                     idx = random.randint(0, len(interpolated_path) - 2)
                     state = interpolated_path[idx]
 
@@ -1168,6 +1208,31 @@ def joint_prm_planner(
         if not reached_terminal_mode:
             continue
 
+        # print(reached_modes)
+
+        # for m in reached_modes:
+        #     plt.figure()
+        #     plt.scatter([a.state.q.state()[0] for a in g.nodes[m]], [a.state.q.state()[1] for a in g.nodes[m]])
+        #     plt.scatter([a.state.q.state()[2] for a in g.nodes[m]], [a.state.q.state()[3] for a in g.nodes[m]])
+        #     # plt.scatter()
+
+        # plt.show()
+
+        # pts_per_mode = []
+        # for m in reached_modes:
+        #     num_pts = 0
+        #     if m in g.transition_nodes:
+        #         num_pts += len(g.transition_nodes[m])
+
+        #     if m in g.nodes:
+        #         num_pts += len(g.nodes[m])
+
+        #     pts_per_mode.append(num_pts)
+
+        # plt.figure()
+        # plt.bar([str(mode) for mode in reached_modes], pts_per_mode)
+        # plt.show()
+
         while True:
             sparsely_checked_path = g.search(
                 g.root, g.goal_nodes, env, current_best_cost, resolution
@@ -1218,6 +1283,14 @@ def joint_prm_planner(
                         times.append(time.time() - start_time)
 
                     add_new_batch = True
+
+                    # plt.figure()
+
+                    # plt.plot([pt.q.state()[0] for pt in current_best_path], [pt.q.state()[1] for pt in current_best_path], 'o-')
+                    # plt.plot([pt.q.state()[2] for pt in current_best_path], [pt.q.state()[3] for pt in current_best_path], 'o-')
+
+                    # plt.show()
+
                     break
 
             else:
