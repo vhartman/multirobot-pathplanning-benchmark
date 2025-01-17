@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 from typing import List, Dict, Tuple, Optional
 from numpy.typing import NDArray
 import heapq
+# import _heapq as heapq
 
 import time
 import math
@@ -83,6 +84,7 @@ class Graph:
 
         self.node_array_cache = {}
         self.transition_node_array_cache = {}
+        self.transition_node_lb_cache = {}
 
         self.reverse_transition_node_array_cache = {}
 
@@ -96,7 +98,7 @@ class Graph:
             for g in self.goal_nodes:
                 heapq.heappush(queue, (0, g))
 
-                costs[hash(g)] = 0
+                costs[g.id] = 0
                 # parents[hash(g)] = None
 
             while len(queue) > 0:
@@ -108,39 +110,47 @@ class Graph:
                 if node.state.mode == self.root.state.mode:
                     continue
 
-                neighbors = [
-                    n.neighbors[0] for n in self.reverse_transition_nodes[node.state.mode]
+                neighbors_next_mode = [
+                    n.neighbors[0]
+                    for n in self.reverse_transition_nodes[node.state.mode]
                 ]
+
+                neighbors_this_mode = [
+                    n for n in self.reverse_transition_nodes[node.state.mode]
+                ]
+
+                neighbors = neighbors_this_mode + neighbors_next_mode
 
                 if len(neighbors) == 0:
                     continue
 
                 if node.state.mode not in self.reverse_transition_node_array_cache:
-                    self.reverse_transition_node_array_cache[node.state.mode] = np.array(
-                        [n.state.q.state() for n in neighbors]
+                    self.reverse_transition_node_array_cache[node.state.mode] = (
+                        np.array([n.state.q.state() for n in neighbors])
                     )
 
                 # add neighbors to open_queue
                 edge_costs = batch_cost(
-                    node.state.q, self.reverse_transition_node_array_cache[node.state.mode]
+                    node.state.q,
+                    self.reverse_transition_node_array_cache[node.state.mode],
                 )
-                parent_cost = costs[hash(node)]
-                for i, n in enumerate(neighbors):
-                    cost = parent_cost + edge_costs[i]
-                    id = hash(n)
-                    current_cost = costs.get(id, float('inf'))
-                    if cost < current_cost:
-                        costs[id] = cost
-                        n.lb_cost_to_goal = cost
-                        n.neighbors[0].lb_cost_to_goal = cost
-
-                        print(cost)
-                        # parents[n] = node
-                    # if id not in costs or cost < costs[id]:
+                parent_cost = costs[node.id]
+                for edge_cost, n in zip(edge_costs, neighbors):
+                    cost = parent_cost + edge_cost
+                    id = n.id
+                    # current_cost = costs.get(id, float('inf'))
+                    # if cost < current_cost:
                     #     costs[id] = cost
                     #     n.lb_cost_to_goal = cost
                     #     n.neighbors[0].lb_cost_to_goal = cost
-                    #     # parents[n] = node
+
+                    # print(cost)
+                    # parents[n] = node
+                    if id not in costs or cost < costs[id]:
+                        costs[id] = cost
+                        n.lb_cost_to_goal = cost
+                        n.neighbors[0].lb_cost_to_goal = cost
+                        #     # parents[n] = node
 
                         # queue.append(n)
                         heapq.heappush(queue, (cost, n))
@@ -170,31 +180,28 @@ class Graph:
                         continue
 
                     neighbors = [
-                        n.neighbors[0] for n in self.reverse_transition_nodes[node.state.mode]
+                        n.neighbors[0]
+                        for n in self.reverse_transition_nodes[node.state.mode]
                     ]
 
                     if len(neighbors) == 0:
                         continue
 
                     # if node.state.mode not in self.reverse_transition_node_array_cache:
-                        # self.reverse_transition_node_array_cache[node.state.mode] = np.array(
-                        #     [n.state.q.state() for n in neighbors]
-                        # )
-                    tmp = np.array(
-                        [n.state.q[r] for n in neighbors]
-                    )
+                    # self.reverse_transition_node_array_cache[node.state.mode] = np.array(
+                    #     [n.state.q.state() for n in neighbors]
+                    # )
+                    tmp = np.array([n.state.q[r] for n in neighbors])
 
                     tmp_config = NpConfiguration.from_list([node.state.q[r]])
 
                     # add neighbors to open_queue
-                    edge_costs = batch_cost(
-                        tmp_config, tmp
-                    )
+                    edge_costs = batch_cost(tmp_config, tmp)
                     parent_cost = costs[(node.state.mode, node.state.q[r].tobytes())]
                     for i, n in enumerate(neighbors):
                         cost = parent_cost + edge_costs[i]
                         id = (n.state.mode, n.state.q[r].tobytes())
-                        current_cost = costs.get(id, float('inf'))
+                        current_cost = costs.get(id, float("inf"))
                         if cost < current_cost:
                             costs[id] = cost
                             if n.lb_cost_to_goal is None or n.lb_cost_to_goal < cost:
@@ -202,11 +209,11 @@ class Graph:
                                 n.neighbors[0].lb_cost_to_goal = cost
 
                             # parents[n] = node
-                        # if id not in costs or cost < costs[id]:
-                        #     costs[id] = cost
-                        #     n.lb_cost_to_goal = cost
-                        #     n.neighbors[0].lb_cost_to_goal = cost
-                        #     # parents[n] = node
+                            # if id not in costs or cost < costs[id]:
+                            #     costs[id] = cost
+                            #     n.lb_cost_to_goal = cost
+                            #     n.neighbors[0].lb_cost_to_goal = cost
+                            #     # parents[n] = node
 
                             # queue.append(n)
                             heapq.heappush(queue, (cost, n))
@@ -222,7 +229,7 @@ class Graph:
             # -> would need to maintain multiple q's per mode: would be possible, but makes complexity bigger again
             # costs = {}
             # queue = []
-    
+
             # for g in self.goal_nodes:
             #     heapq.heappush(queue, (0, g.state.mode, g.state.q))
             #     costs[(g.state.mode, g.state.q.state().tobytes())] = 0
@@ -245,10 +252,7 @@ class Graph:
             #     for n in neighbors:
             #         active_task = env.get_active_task(n.mode, mode.task_ids)
             #         active_robots = active_task.robots
-            #         cost = 
-        
-
-                    
+            #         cost =
 
     def add_node(self, new_node: Node) -> None:
         self.node_array_cache = {}
@@ -270,6 +274,7 @@ class Graph:
     def add_transition_nodes(self, transitions):
         self.transition_node_array_cache = {}
         self.reverse_transition_node_array_cache = {}
+        self.transition_node_lb_cache = {}
 
         for q, this_mode, next_mode in transitions:
             node_this_mode = Node(State(q, this_mode), True)
@@ -387,12 +392,12 @@ class Graph:
             best_nodes = best_nodes + best_transition_nodes
         else:
             r = 3
-            
+
             unit_n_ball_measure = ((np.pi**0.5) ** dim) / math.gamma(dim / 2 + 1)
             informed_measure = 1
             if space_extent is not None:
                 informed_measure = space_extent
-            
+
             best_nodes = []
             if key in self.nodes:
                 r_star = 2 * (
@@ -407,8 +412,10 @@ class Graph:
 
             best_transition_nodes = []
             if key in self.transition_nodes:
-                r_star = 2 * ((1 + 1 / dim)
-                    * informed_measure / unit_n_ball_measure
+                r_star = 2 * (
+                    (1 + 1 / dim)
+                    * informed_measure
+                    / unit_n_ball_measure
                     * (np.log(len(transition_node_list)) / len(transition_node_list))
                 ) ** (1 / dim)
                 # print(node.state.mode, r_star)
@@ -450,12 +457,7 @@ class Graph:
         h_cache = {}
 
         def h(node):
-            return 0
-            # costs_to_goal = env.batch_config_cost(
-            #     node.state.q,
-            #     np.array([n.state.q.state() for n in self.goal_nodes]),
-            # )
-            # return min(costs_to_goal)
+            # return 0
             if node in h_cache:
                 return h_cache[node]
 
@@ -464,57 +466,22 @@ class Graph:
                     [n.state.q.q for n in self.transition_nodes[node.state.mode]]
                 )
 
+            if node.state.mode not in self.transition_node_lb_cache:
+                self.transition_node_lb_cache[node.state.mode] = np.array(
+                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]]
+                )
+
             costs_to_transitions = env.batch_config_cost(
                 node.state.q,
                 self.transition_node_array_cache[node.state.mode],
             )
 
-            mode_cost_idx = np.argmin(costs_to_transitions)
-
-            mode_cost = costs_to_transitions[mode_cost_idx]
-            cost_to_go = self.transition_nodes[node.state.mode][
-                mode_cost_idx
-            ].lb_cost_to_goal
-
-            h_cache[node] = mode_cost + cost_to_go
-            return mode_cost + cost_to_go
-
-            lb_to_goal_through_rest_of_modes = 0
-            if len(self.mode_to_goal_lb_cost) > 0:
-                lb_to_goal_through_rest_of_modes = self.mode_to_goal_lb_cost[
-                    node.state.mode
-                ]
-
-            # return lb_to_goal_through_rest_of_modes
-
-            # compute lowest cost to get to the goal:
-            current_mode = node.state.mode
-            if env.is_terminal_mode(current_mode):
-                mode_cost = min(
-                    env.batch_config_cost(
-                        [node.state] * len(self.goal_nodes),
-                        [g.state for g in self.goal_nodes],
-                    )
-                )
-                # mode_cost = None
-                # for g in self.goal_nodes:
-
-                #     cost_to_transition = env.config_cost(node.state.q, g.state.q)
-                #     if mode_cost is None or cost_to_transition < mode_cost:
-                #         mode_cost = cost_to_transition
-
-                h_cache[node] = mode_cost
-                return mode_cost
-
-            mode_cost = min(
-                env.batch_config_cost(
-                    [node.state] * len(self.transition_nodes[node.state.mode]),
-                    [n.state for n in self.transition_nodes[node.state.mode]],
-                )
+            min_cost = np.min(
+                self.transition_node_lb_cache[node.state.mode] - costs_to_transitions
             )
 
-            h_cache[node] = mode_cost + lb_to_goal_through_rest_of_modes
-            return mode_cost + lb_to_goal_through_rest_of_modes
+            h_cache[node] = min_cost
+            return min_cost
 
         def d(n0, n1):
             # return 1.0
@@ -527,7 +494,12 @@ class Graph:
         gs = {start_node.id: 0}  # best cost to get to a node
 
         # populate open_queue and fs
-        start_edges = [(start_node, n) for n in self.get_neighbors(start_node, space_extent=np.prod(np.diff(env.limits, axis=0)))]
+        start_edges = [
+            (start_node, n)
+            for n in self.get_neighbors(
+                start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
+            )
+        ]
 
         # fs = {}  # total cost of a node (f = g + h)
         for e in start_edges:
@@ -577,12 +549,15 @@ class Graph:
                 else:
                     n1.whitelist.add(n0)
                     n0.whitelist.add(n1)
-                    
+
+            # remove all other edges with this goal from the queue
+
             # if n0.state.mode not in reached_modes:
             #     reached_modes.append(n0.state.mode)
 
             # print('reached modes', reached_modes)
 
+            # print('adding', n1.id)
             gs[n1.id] = g_tentative
             parents[n1] = n0
 
@@ -591,7 +566,9 @@ class Graph:
                 break
 
             # get_neighbors
-            neighbors = self.get_neighbors(n1, space_extent=np.prod(np.diff(env.limits, axis=0)))
+            neighbors = self.get_neighbors(
+                n1, space_extent=np.prod(np.diff(env.limits, axis=0))
+            )
 
             if len(neighbors) != 0:
                 # add neighbors to open_queue
@@ -602,12 +579,14 @@ class Graph:
                     # if n == n0:
                     #     continue
 
-                    # 5.4 % -> move the node-based blacklist
                     if n in n1.blacklist:
                         continue
 
                     edge_cost = edge_costs[i]
                     g_new = g_tentative + edge_cost
+
+                    # if n.id in gs:
+                    #     print(n.id)
 
                     if n.id not in gs or g_new < gs[n.id]:
                         # sparsely check only when expanding
@@ -620,6 +599,142 @@ class Graph:
 
                         if n not in closed_list:
                             heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
+                            # open_queue.append((f_node, edge_cost, (n1, n)))
+                # heapq.heapify(open_queue)
+
+        path = []
+
+        if goal is not None:
+            path.append(goal)
+
+            n = goal
+
+            while parents[n] is not None:
+                path.append(parents[n])
+                n = parents[n]
+
+            path.append(n)
+            path = path[::-1]
+
+        return path
+
+    def search_with_vertex_queue(
+        self,
+        start_node,
+        goal_nodes: List,
+        env: BaseProblem,
+        best_cost=None,
+        resolution=0.1,
+    ):
+        open_queue = []
+
+        goal = None
+
+        h_cache = {}
+
+        def h(node):
+            # return 0
+            if node in h_cache:
+                return h_cache[node]
+
+            if node.state.mode not in self.transition_node_array_cache:
+                self.transition_node_array_cache[node.state.mode] = np.array(
+                    [n.state.q.q for n in self.transition_nodes[node.state.mode]]
+                )
+
+            if node.state.mode not in self.transition_node_lb_cache:
+                self.transition_node_lb_cache[node.state.mode] = np.array(
+                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]]
+                )
+
+            costs_to_transitions = env.batch_config_cost(
+                node.state.q,
+                self.transition_node_array_cache[node.state.mode],
+            )
+
+            min_cost = np.min(
+                self.transition_node_lb_cache[node.state.mode] - costs_to_transitions
+            )
+
+            h_cache[node] = min_cost
+            return min_cost
+
+        def d(n0, n1):
+            # return 1.0
+            cost = env.config_cost(n0.state.q, n1.state.q)
+            return cost
+
+        parents = {start_node: None}
+        gs = {start_node: 0}  # best cost to get to a node
+
+        # populate open_queue and fs
+
+        # fs = {start_node: h(start_node)}  # total cost of a node (f = g + h)
+        heapq.heappush(open_queue, (0, start_node))
+
+        num_iter = 0
+        while len(open_queue) > 0:
+            num_iter += 1
+
+            if num_iter % 1000 == 0:
+                print(len(open_queue))
+
+            f_val, node = heapq.heappop(open_queue)
+            # print('g:', v)
+
+            # print(num_iter, len(open_queue))
+
+            # if n0.state.mode == [0, 3]:
+            #     env.show(True)
+
+            if node in goal_nodes:
+                goal = node
+                break
+
+            # get_neighbors
+            neighbors = self.get_neighbors(
+                node, space_extent=np.prod(np.diff(env.limits, axis=0))
+            )
+
+            edge_costs = env.batch_config_cost(
+                [node.state] * len(neighbors), [n.state for n in neighbors]
+            )
+            # add neighbors to open_queue
+            for i, n in enumerate(neighbors):
+                if n == node:
+                    continue
+
+                if node in n.blacklist:
+                    continue
+
+                g_new = gs[node] + edge_costs[i]
+
+                if n not in gs or g_new < gs[n]:
+                    # collision check
+
+                    collision_free = False
+                    if n in node.whitelist:
+                        collision_free = True
+                    else:
+                        collision_free = env.is_edge_collision_free(
+                            node.state.q, n.state.q, n.state.mode
+                        )
+
+                        if not collision_free:
+                            node.blacklist.add(n)
+                            n.blacklist.add(node)
+                            continue
+                        else:
+                            node.whitelist.add(n)
+                            n.whitelist.add(node)
+
+                    # cost to get to neighbor:
+                    gs[n] = g_new
+                    cost = g_new + h(n)
+                    parents[n] = node
+
+                    if n not in open_queue:
+                        heapq.heappush(open_queue, (cost, n))
 
         path = []
 
@@ -637,135 +752,6 @@ class Graph:
             path = path[::-1]
 
         return path
-
-    # def search_with_vertex_queue(self, start_node, goal_nodes: List, env: BaseProblem):
-    #     open_queue = []
-
-    #     goal = None
-
-    #     def h(node):
-    #         # return 0
-    #         # compute lowest cost to get to the next mode:
-    #         total_cost = 0
-
-    #         current_mode = node.state.mode
-    #         next_mode = None
-    #         if env.is_terminal_mode(current_mode):
-    #             mode_cost = None
-    #             for g in self.goal_nodes:
-    #                 cost_to_transition = batch_config_dist(node.state.q, [g.state.q])
-    #                 if mode_cost is None or cost_to_transition < mode_cost:
-    #                     mode_cost = cost_to_transition
-
-    #             return mode_cost
-    #         else:
-    #             next_mode = env.get_next_mode(None, current_mode)
-
-    #         mode_cost = None
-    #         for transition in self.transition_nodes:
-    #             if next_mode == transition.state.mode:
-    #                 cost_to_transition = batch_config_dist(
-    #                     node.state.q, [transition.state.q]
-    #                 )
-    #                 if mode_cost is None or cost_to_transition < mode_cost:
-    #                     mode_cost = cost_to_transition
-
-    #         # print(mode_cost)
-
-    #         return mode_cost
-
-    #     def d(n0, n1):
-    #         # return 1.0
-    #         dist = batch_config_dist(n0.state.q, [n1.state.q])[0]
-    #         return dist
-
-    #     parents = {start_node: None}
-    #     gs = {start_node: 0}  # best cost to get to a node
-
-    #     # populate open_queue and fs
-
-    #     fs = {start_node: h(start_node)}  # total cost of a node (f = g + h)
-    #     heapq.heappush(open_queue, (fs[start_node], start_node))
-
-    #     num_iter = 0
-    #     while len(open_queue) > 0:
-    #         num_iter += 1
-
-    #         if num_iter % 1000 == 0:
-    #             print(len(open_queue))
-
-    #         f_val, node = heapq.heappop(open_queue)
-    #         # print('g:', v)
-
-    #         # print(num_iter, len(open_queue))
-
-    #         # if n0.state.mode == [0, 3]:
-    #         #     env.show(True)
-
-    #         if node in goal_nodes:
-    #             goal = node
-    #             break
-
-    #         print('blacklist',len(self.blacklist))
-    #         print('whitelist',len(self.whitelist))
-
-    #         # get_neighbors
-    #         neighbors = self.get_neighbors(node)
-
-    #         edge_costs = env.batch_config_cost(
-    #             [node.state] * len(neighbors), [n.state for n in neighbors]
-    #         )
-    #         # add neighbors to open_queue
-    #         for i, n in enumerate(neighbors):
-    #             if n == node:
-    #                 continue
-
-    #             if (node, n) in self.blacklist or (n, node) in self.blacklist:
-    #                 continue
-
-    #             g_new = gs[node] + edge_costs[i]
-
-    #             if n not in gs or g_new < gs[n]:
-    #                 # collision check
-
-    #                 collision_free = False
-    #                 if (node, n) in self.whitelist or (n, node) in self.whitelist:
-    #                     collision_free = True
-    #                 else:
-    #                     collision_free = env.is_edge_collision_free(
-    #                         node.state.q, n.state.q, n.state.mode
-    #                     )
-
-    #                     if not collision_free:
-    #                         self.blacklist.add((node, n))
-    #                         continue
-    #                     else:
-    #                         self.whitelist.add((node, n))
-
-    #                 # cost to get to neighbor:
-    #                 gs[n] = g_new
-    #                 fs[n] = g_new + h(n)
-    #                 parents[n] = node
-
-    #                 if n not in open_queue:
-    #                     heapq.heappush(open_queue, (fs[n], n))
-
-    #     path = []
-
-    #     if goal is not None:
-    #         path.append(goal)
-
-    #         n = goal
-
-    #         while parents[n] is not None:
-    #             path.append(parents[n])
-    #             n = parents[n]
-
-    #         path.append(n)
-
-    #         path = path[::-1]
-
-    #     return path
 
 
 def joint_prm_planner(
@@ -925,7 +911,11 @@ def joint_prm_planner(
 
         return transitions
 
-    g = Graph(State(q0, m0), lambda a, b: batch_config_dist(a, b, distance_metric), use_k_nearest=use_k_nearest)
+    g = Graph(
+        State(q0, m0),
+        lambda a, b: batch_config_dist(a, b, distance_metric),
+        use_k_nearest=use_k_nearest,
+    )
 
     current_best_cost = None
     current_best_path = None
@@ -1117,11 +1107,13 @@ def joint_prm_planner(
                                     qr = np.clip(qr, lims[0, :], lims[1, :])
 
                             q.append(qr)
-                        
+
                         q = conf_type.from_list(q)
 
                         if env.is_collision_free(q, state.mode):
-                            g.add_transition_nodes([(q, state.mode, interpolated_path[idx+1].mode)])
+                            g.add_transition_nodes(
+                                [(q, state.mode, interpolated_path[idx + 1].mode)]
+                            )
 
                     else:
                         for i in range(len(env.robots)):
@@ -1162,7 +1154,7 @@ def joint_prm_planner(
             g.add_transition_nodes(new_transitions)
             print("Done adding transitions")
 
-            # g.compute_lb_mode_transisitons(env.batch_config_cost)
+            g.compute_lb_mode_transisitons(env.batch_config_cost)
 
         # search over nodes:
         # 1. search from goal state with sparse check
@@ -1175,7 +1167,10 @@ def joint_prm_planner(
             continue
 
         while True:
-            sparsely_checked_path = g.search(
+            # sparsely_checked_path = g.search(
+            #     g.root, g.goal_nodes, env, current_best_cost, resolution
+            # )
+            sparsely_checked_path = g.search_with_vertex_queue(
                 g.root, g.goal_nodes, env, current_best_cost, resolution
             )
 
