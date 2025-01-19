@@ -776,8 +776,7 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
         self.sequence = [0, 1, 2]
 
-        self.start_mode = self._make_start_mode_from_sequence()
-        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
+        BaseModeLogic.__init__(self)
 
         self.tolerance = 0.05
 
