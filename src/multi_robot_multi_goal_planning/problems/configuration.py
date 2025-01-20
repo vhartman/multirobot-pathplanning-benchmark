@@ -288,11 +288,20 @@ def batch_config_cost(
 
     # return np.linalg.norm(diff, axis=1)
 
-    for i, (s, e) in enumerate(agent_slices):
-        if metric == "euclidean":
-            all_robot_dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
-        else:
+    if metric == "euclidean":
+        squared_diff = diff * diff
+        all_robot_dists = compute_sliced_dists(squared_diff, np.array(agent_slices))
+    else:
+        for i, (s, e) in enumerate(agent_slices):
             all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
+
+    # for i, (s, e) in enumerate(agent_slices):
+    #     if metric == "euclidean":
+    #         all_robot_dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
+    #     else:
+    #         all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
+
+    # print(tmp - all_robot_dists)
 
         # print(all_robot_dists)
 
