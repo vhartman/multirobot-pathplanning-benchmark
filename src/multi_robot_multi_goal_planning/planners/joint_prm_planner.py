@@ -139,6 +139,7 @@ class BucketIndexHeap:
     def __len__(self):
         return self.len
 
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def heappush(self, item):
         self.len += 1
         priority = int(item[0] * self.granularity)
@@ -154,7 +155,6 @@ class BucketIndexHeap:
 
     def heappop(self):
         self.len -= 1
-
         min_priority = self.priority_lookup[0]
         _, idx = heapq.heappop(self.queues[min_priority])
 
@@ -163,6 +163,56 @@ class BucketIndexHeap:
             heapq.heappop(self.priority_lookup)
 
         value = self.items[idx]
+
+        return value
+
+
+class DiscreteBucketIndexHeap:
+    def __init__(self, granularity=1000):
+        self.granularity = granularity
+
+        self.queues = {}
+        self.priority_lookup = []
+
+        self.items = []
+
+        self.len = 0
+
+    def __len__(self):
+        # num_elements = 0
+        # for k, v in self.queues.items():
+        #     num_elements += len(v)
+
+        # return num_elements
+        return self.len
+
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def heappush(self, item):
+        self.len += 1
+        priority = int(item[0] * self.granularity)
+
+        idx = len(self.items)
+        self.items.append(item)
+
+        if priority not in self.queues:
+            self.queues[priority] = []
+            heapq.heappush(self.priority_lookup, priority)
+
+        self.queues[priority].append((item[0], idx))
+
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def heappop(self):
+        self.len -= 1
+
+        min_priority = self.priority_lookup[0]
+        _, idx = self.queues[min_priority].pop()
+
+        if not self.queues[min_priority]:
+            del self.queues[min_priority]
+            heapq.heappop(self.priority_lookup)
+
+        value = self.items[idx]
+
         return value
 
 
@@ -230,20 +280,10 @@ class Graph:
                 if node.state.mode == self.root.state.mode:
                     continue
 
-                neighbors_next_mode = [
+                neighbors = [
                     n.neighbors[0]
                     for n in self.reverse_transition_nodes[node.state.mode]
                 ]
-
-                # for n in neighbors_next_mode:
-                #     print(n.state.q.state())
-
-                # neighbors_this_mode = [
-                #     n for n in self.reverse_transition_nodes[node.state.mode]
-                # ]
-                neighbors_this_mode = []
-
-                neighbors = neighbors_this_mode + neighbors_next_mode
 
                 if len(neighbors) == 0:
                     continue
@@ -661,6 +701,7 @@ class Graph:
         # queue = HeapQueue()
         # queue = BucketHeapQueue()
         queue = BucketIndexHeap()
+        # queue = DiscreteBucketIndexHeap()
         # queue = IndexHeap()
 
         # fs = {}  # total cost of a node (f = g + h)
@@ -680,6 +721,8 @@ class Graph:
         #     for n in v:
         #         if len(n.neighbors) > 0:
         #             assert(n.lb_cost_to_goal == n.neighbors[0].lb_cost_to_goal)
+
+        wasted_pops = 0
 
         num_iter = 0
         while len(queue) > 0:
@@ -729,6 +772,7 @@ class Graph:
 
             # if n1.id in gs and g_tentative >= gs[n1.id]:
             if n1.id in gs:
+                wasted_pops += 1
                 continue
 
             # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
@@ -799,6 +843,14 @@ class Graph:
                         # if n.id not in gs or g_new < gs[n.id]:
                         # sparsely check only when expanding
                         # cost to get to neighbor:
+                        # q0 = n1.state.q
+                        # q1 = n.state.q
+                        # collision_free = env.is_edge_collision_free(
+                        #     q0, q1, n1.state.mode, 5
+                        # )
+                        # if not collision_free:
+                        #     n.blacklist.add(n1.id)
+                        #     n1.blacklist.add(n.id)
 
                         g_new = g_tentative + edge_cost
                         f_node = g_new + h(n)
@@ -810,6 +862,7 @@ class Graph:
                         # if n not in closed_list:
                         # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
                         queue.heappush((f_node, edge_cost, (n1, n)))
+
                         # open_queue.append((f_node, edge_cost, (n1, n)))
                 # heapq.heapify(open_queue)
                 # open_queue.sort(reverse=True)
@@ -831,6 +884,8 @@ class Graph:
             path.append(n)
             path = path[::-1]
 
+        print("Wasted pops", wasted_pops)
+
         return path
 
     def search_with_vertex_queue(
@@ -849,8 +904,8 @@ class Graph:
 
         def h(node):
             # return 0
-            if node in h_cache:
-                return h_cache[node]
+            if node.id in h_cache:
+                return h_cache[node.id]
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
@@ -871,7 +926,7 @@ class Graph:
                 self.transition_node_lb_cache[node.state.mode] - costs_to_transitions
             )
 
-            h_cache[node] = min_cost
+            h_cache[node.id] = min_cost
             return min_cost
 
         def d(n0, n1):
@@ -1187,6 +1242,8 @@ def joint_prm_planner(
     cnt = 0
     while True:
         cnt = g.get_num_samples()
+
+        print()
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
@@ -1492,7 +1549,6 @@ def joint_prm_planner(
 
         if cnt >= max_iter:
             break
-
 
     costs.append(costs[-1])
     times.append(time.time() - start_time)
