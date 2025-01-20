@@ -57,6 +57,115 @@ class Node:
         return self.id
 
 
+class HeapQueue:
+    def __init__(self):
+        self.queue = []
+        heapq.heapify(self.queue)
+
+    def __len__(self):
+        return len(self.queue)
+
+    def heappush(self, item):
+        heapq.heappush(self.queue, item)
+
+    def heappop(self):
+        return heapq.heappop(self.queue)
+
+
+class BucketHeapQueue:
+    def __init__(self):
+        self.queues = {}
+        self.priority_lookup = []
+
+        self.len = 0
+
+    def __len__(self):
+        return self.len
+
+    def heappush(self, item):
+        self.len += 1
+        priority = int(item[0] * 10000)
+
+        if priority not in self.queues:
+            self.queues[priority] = []
+            heapq.heappush(self.priority_lookup, priority)
+
+        heapq.heappush(self.queues[priority], item)
+
+    def heappop(self):
+        self.len -= 1
+
+        min_priority = self.priority_lookup[0]
+        value = heapq.heappop(self.queues[min_priority])
+
+        if not self.queues[min_priority]:
+            del self.queues[min_priority]
+            heapq.heappop(self.priority_lookup)
+
+        return value
+
+
+class IndexHeap:
+    def __init__(self):
+        self.queue = []
+        self.items = []
+        heapq.heapify(self.queue)
+
+    def __len__(self):
+        return len(self.queue)
+
+    def heappush(self, item):
+        idx = len(self.items)
+        self.items.append(item)
+
+        heapq.heappush(self.queue, (item[0], idx))
+
+    def heappop(self):
+        _, idx = heapq.heappop(self.queue)
+        return self.items[idx]
+
+
+class BucketIndexHeap:
+    def __init__(self, granularity=100):
+        self.granularity = granularity
+
+        self.queues = {}
+        self.priority_lookup = []
+
+        self.items = []
+
+        self.len = 0
+
+    def __len__(self):
+        return self.len
+
+    def heappush(self, item):
+        self.len += 1
+        priority = int(item[0] * self.granularity)
+
+        idx = len(self.items)
+        self.items.append(item)
+
+        if priority not in self.queues:
+            self.queues[priority] = []
+            heapq.heappush(self.priority_lookup, priority)
+
+        heapq.heappush(self.queues[priority], (item[0], idx))
+
+    def heappop(self):
+        self.len -= 1
+
+        min_priority = self.priority_lookup[0]
+        _, idx = heapq.heappop(self.queues[min_priority])
+
+        if not self.queues[min_priority]:
+            del self.queues[min_priority]
+            heapq.heappop(self.priority_lookup)
+
+        value = self.items[idx]
+        return value
+
+
 class Graph:
     root: State
     nodes: Dict
@@ -88,6 +197,17 @@ class Graph:
 
         self.reverse_transition_node_array_cache = {}
 
+    def get_num_samples(self):
+        num_samples = 0
+        for k, v in self.nodes.items():
+            num_samples += len(v)
+
+        num_transition_samples = 0
+        for k, v in self.transition_nodes.items():
+            num_transition_samples += len(v)
+
+        return num_samples + num_transition_samples
+
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def compute_lb_mode_transisitons(self, batch_cost):
         if True:
@@ -115,9 +235,13 @@ class Graph:
                     for n in self.reverse_transition_nodes[node.state.mode]
                 ]
 
-                neighbors_this_mode = [
-                    n for n in self.reverse_transition_nodes[node.state.mode]
-                ]
+                # for n in neighbors_next_mode:
+                #     print(n.state.q.state())
+
+                # neighbors_this_mode = [
+                #     n for n in self.reverse_transition_nodes[node.state.mode]
+                # ]
+                neighbors_this_mode = []
 
                 neighbors = neighbors_this_mode + neighbors_next_mode
 
@@ -134,6 +258,7 @@ class Graph:
                     node.state.q,
                     self.reverse_transition_node_array_cache[node.state.mode],
                 )
+
                 parent_cost = costs[node.id]
                 for edge_cost, n in zip(edge_costs, neighbors):
                     cost = parent_cost + edge_cost
@@ -147,9 +272,18 @@ class Graph:
                     # print(cost)
                     # parents[n] = node
                     if id not in costs or cost < costs[id]:
+                        # if n.neighbors[0].lb_cost_to_goal is not None:
+                        #     print(n.neighbors[0].lb_cost_to_goal)
+                        #     print(cost)
+                        #     print()
+
                         costs[id] = cost
                         n.lb_cost_to_goal = cost
-                        n.neighbors[0].lb_cost_to_goal = cost
+
+                        # if n.neighbors[0].lb_cost_to_goal is not None and n.neighbors[0].lb_cost_to_goal > cost:
+                        #     print("AAAA")
+                        #     n.neighbors[0].lb_cost_to_goal = cost
+
                         #     # parents[n] = node
 
                         # queue.append(n)
@@ -327,12 +461,6 @@ class Graph:
             if key not in self.node_array_cache:
                 self.node_array_cache[key] = np.array([n.state.q.q for n in node_list])
 
-            # with ThreadPoolExecutor() as executor:
-            #     result = list(executor.map(lambda node: node.state.q, node_list))
-
-            # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
-            # result = list(map(lambda n: n.state.q, node_list))
-            # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
             dists = self.batch_dist_fun(
                 node.state.q, self.node_array_cache[key]
             )  # this, and the list copm below are the slowest parts
@@ -354,6 +482,9 @@ class Graph:
 
         dim = len(node.state.q.state())
 
+        best_nodes_arr = np.zeros((0, dim))
+        best_transitions_arr = np.zeros((0, dim))
+
         if self.use_k_nearest:
             best_nodes = []
             if key in self.nodes:
@@ -367,6 +498,7 @@ class Graph:
                 topk = topk[np.argsort(dists[topk])]
 
                 best_nodes = [node_list[i] for i in topk]
+                best_nodes_arr = self.node_array_cache[key][topk, :]
 
             best_transition_nodes = []
             if key in self.transition_nodes:
@@ -388,8 +520,12 @@ class Graph:
                 best_transition_nodes = [
                     transition_node_list[i] for i in transition_topk
                 ]
+                best_transitions_arr = self.transition_node_array_cache[key][
+                    transition_topk
+                ]
 
             best_nodes = best_nodes + best_transition_nodes
+
         else:
             r = 3
 
@@ -413,8 +549,8 @@ class Graph:
                 )
                 r = r_star
 
-                # best_nodes = [n for n, d in zip(node_list, dists) if d < r]
                 best_nodes = [node_list[i] for i in np.where(dists < r)[0]]
+                best_nodes_arr = self.node_array_cache[key][np.where(dists < r)[0], :]
 
             best_transition_nodes = []
             if key in self.transition_nodes:
@@ -438,24 +574,23 @@ class Graph:
                 if len(transition_node_list) == 1:
                     r = 1e6
 
-                # best_transition_nodes = [
-                #     n
-                #     for i, n in enumerate(transition_node_list)
-                #     if transition_dists[i] < r
-                # ]
                 best_transition_nodes = [
                     transition_node_list[i] for i in np.where(transition_dists < r)[0]
+                ]
+                best_transitions_arr = self.transition_node_array_cache[key][
+                    np.where(transition_dists < r)[0]
                 ]
 
             best_nodes = best_nodes + best_transition_nodes
 
+        arr = np.vstack([best_nodes_arr, best_transitions_arr])
+
         if node.is_transition:
-            # we do not want to have other transition nodes as neigbors
-            # filtered_neighbors = [n for n in best_nodes if not n.is_transition]
+            tmp = np.vstack([n.state.q.state() for n in node.neighbors])
+            arr = np.vstack([arr, tmp])
+            return best_nodes + node.neighbors, arr
 
-            return best_nodes + node.neighbors
-
-        return best_nodes[1:]
+        return best_nodes, arr
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def search(
@@ -480,12 +615,12 @@ class Graph:
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.q for n in self.transition_nodes[node.state.mode]]
+                    [o.state.q.q for o in self.transition_nodes[node.state.mode]]
                 )
 
             if node.state.mode not in self.transition_node_lb_cache:
                 self.transition_node_lb_cache[node.state.mode] = np.array(
-                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]]
+                    [o.lb_cost_to_goal for o in self.transition_nodes[node.state.mode]]
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -494,7 +629,7 @@ class Graph:
             )
 
             min_cost = np.min(
-                self.transition_node_lb_cache[node.state.mode] - costs_to_transitions
+                self.transition_node_lb_cache[node.state.mode] + costs_to_transitions
             )
 
             h_cache[node] = min_cost
@@ -510,13 +645,23 @@ class Graph:
         parents = {start_node: None}
         gs = {start_node.id: 0}  # best cost to get to a node
 
+        start_neighbors, _ = self.get_neighbors(
+            start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
+        )
+
         # populate open_queue and fs
-        start_edges = [
-            (start_node, n)
-            for n in self.get_neighbors(
-                start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
-            )
-        ]
+        start_edges = [(start_node, n) for n in start_neighbors]
+        # start_edges = [
+        #     (start_node, n)
+        #     for n, _ in self.get_neighbors(
+        #         start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
+        #     )
+        # ]
+
+        # queue = HeapQueue()
+        # queue = BucketHeapQueue()
+        queue = BucketIndexHeap()
+        # queue = IndexHeap()
 
         # fs = {}  # total cost of a node (f = g + h)
         for e in start_edges:
@@ -525,28 +670,65 @@ class Graph:
                 edge_cost = d(e[0], e[1])
                 cost = gs[start_node.id] + edge_cost + h(e[1])
                 # fs[(e[0].id, e[1].id)] = cost
-                heapq.heappush(open_queue, (cost, edge_cost, e))
+                # heapq.heappush(open_queue, (cost, edge_cost, e))
+                queue.heappush((cost, edge_cost, e))
                 # open_queue.append((cost, edge_cost, e))
 
         # open_queue.sort(reverse=True)
 
+        # for k, v in self.transition_nodes.items():
+        #     for n in v:
+        #         if len(n.neighbors) > 0:
+        #             assert(n.lb_cost_to_goal == n.neighbors[0].lb_cost_to_goal)
+
         num_iter = 0
-        while len(open_queue) > 0:
+        while len(queue) > 0:
+            # while len(open_queue) > 0:
             num_iter += 1
 
-            if num_iter % 10000 == 0:
-                print(len(open_queue))
+            if num_iter % 100000 == 0:
+                # print(len(open_queue))
+                print(len(queue))
 
-            f_pred, edge_cost, edge = heapq.heappop(open_queue)
+            # f_pred, edge_cost, (n0, n1) = heapq.heappop(open_queue)
+            f_pred, edge_cost, (n0, n1) = queue.heappop()
             # print(open_queue[-1])
             # print(open_queue[-2])
             # f_pred, edge_cost, edge = open_queue.pop()
-            n0, n1 = edge
+            # n0, n1 = edge
 
-            g_tentative = gs[n0.id] + edge_cost
+            # g_tentative = gs[n0.id] + edge_cost
 
             # if we found a better way to get there before, do not expand this edge
-            if n1.id in gs and g_tentative >= gs[n1.id]:
+            # if n1.id in gs:
+            #     print(f_pred)
+            #     print(gs[n0.id])
+            #     print('new_cost/oldcost', g_tentative, gs[n1.id])
+            #     print('n0id/n1id', n0.id, n1.id)
+            #     print('n0mode/n1mode', n0.state.mode, n1.state.mode)
+            #     print('n0trans/n1trans', n0.is_transition, n1.is_transition)
+
+            #     print("root", self.root.state.q.state())
+
+            #     if (n1.is_transition):
+            #         print('n1 is transition')
+            #         print(n1.neighbors[0].id)
+            #         print(n1.neighbors[0].state.mode)
+            #         print(n1.neighbors[0].state.q.state())
+
+            #     if (n0.is_transition):
+            #         print('n0 is transition')
+            #         print(n0.neighbors[0].id)
+
+            #     print(edge_cost)
+
+            #     print(gs[n0.id] + h(n0))
+            #     print(gs[n1.id] + h(n1))
+
+            #     assert(g_tentative >= gs[n1.id])
+
+            # if n1.id in gs and g_tentative >= gs[n1.id]:
+            if n1.id in gs:
                 continue
 
             # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
@@ -581,6 +763,7 @@ class Graph:
             # print('reached modes', reached_modes)
 
             # print('adding', n1.id)
+            g_tentative = gs[n0.id] + edge_cost
             gs[n1.id] = g_tentative
             parents[n1] = n0
 
@@ -589,34 +772,35 @@ class Graph:
                 break
 
             # get_neighbors
-            neighbors = self.get_neighbors(
+            neighbors, tmp = self.get_neighbors(
                 n1, space_extent=np.prod(np.diff(env.limits, axis=0))
             )
 
             if len(neighbors) != 0:
                 # add neighbors to open_queue
                 # edge_costs = env.batch_config_cost(
-                #     [n1.state] * len(neighbors), [n.state for n in neighbors]
+                #     n1.state.q, np.array([n.state.q.state() for n in neighbors])
                 # )
-                edge_costs = env.batch_config_cost(
-                    n1.state.q, np.array([n.state.q.state() for n in neighbors])
-                )
-                for i, n in enumerate(neighbors):
+                edge_costs = env.batch_config_cost(n1.state.q, tmp)
+                for n, edge_cost in zip(neighbors, edge_costs):
                     # if n == n0:
                     #     continue
 
                     if n.id in n1.blacklist:
                         continue
 
-                    edge_cost = edge_costs[i]
-                    g_new = g_tentative + edge_cost
+                    # edge_cost = edge_costs[i]
+                    # g_new = g_tentative + edge_cost
 
                     # if n.id in gs:
                     #     print(n.id)
 
-                    if n.id not in gs or g_new < gs[n.id]:
+                    if n.id not in gs:
+                        # if n.id not in gs or g_new < gs[n.id]:
                         # sparsely check only when expanding
                         # cost to get to neighbor:
+
+                        g_new = g_tentative + edge_cost
                         f_node = g_new + h(n)
                         # fs[(n1, n)] = f_node
 
@@ -624,7 +808,8 @@ class Graph:
                             continue
 
                         # if n not in closed_list:
-                        heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
+                        # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
+                        queue.heappush((f_node, edge_cost, (n1, n)))
                         # open_queue.append((f_node, edge_cost, (n1, n)))
                 # heapq.heapify(open_queue)
                 # open_queue.sort(reverse=True)
@@ -639,6 +824,9 @@ class Graph:
             while parents[n] is not None:
                 path.append(parents[n])
                 n = parents[n]
+
+                # print(gs[n.id] + h(n))
+                # print('\t\t', h(n))
 
             path.append(n)
             path = path[::-1]
@@ -998,6 +1186,7 @@ def joint_prm_planner(
 
     cnt = 0
     while True:
+        cnt = g.get_num_samples()
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
@@ -1304,7 +1493,6 @@ def joint_prm_planner(
         if cnt >= max_iter:
             break
 
-        cnt += batch_size + transition_batch_size
 
     costs.append(costs[-1])
     times.append(time.time() - start_time)
