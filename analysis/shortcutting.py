@@ -12,11 +12,15 @@ from multi_robot_multi_goal_planning.problems.planning_env import *
 from multi_robot_multi_goal_planning.problems.util import *
 from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import *
-from analysis_util import *
+from analysis.analysis_util import *
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import *
 import multi_robot_multi_goal_planning.problems as problems
 
-def init_discretization(path, costs, modes, indices, transition, resolution=0.01):
+
+np.random.seed(1)
+random.seed(1)
+
+def init_discretization(path, costs, modes, indices, transition, resolution=0.1):
     discretized_path, discretized_modes, discretized_costs, discretized_transition = [], [], [], []
     for i in range(len(path) - 1):
         start = np.array(path[i])
@@ -84,55 +88,56 @@ def interpolate(path, cost, modes, indices, dim, version, r = None, robots =None
     edge_cost = [cost]
     segment_vector = q1 - q0
     # dim_indices = [indices[i][dim] for i in range(len(indices))]
-
+    N = len(path) -1
     for i in range(len(path)):
-        mode = modes[i]
-        if len(mode) > 1:
-            if i == 0:
-                mode = mode[1]
-            else:
-                mode = mode[0]
-            
+        mode = modes[i][0]
+        # if len(mode) > 1:
+        #     if i == 0:
+        #         mode = mode[1]
+        #     else:
+        #         mode = mode[0]
+        # else:
+        #     mode = mode[0]
         if version == 0 :
-            q = q0 +  (segment_vector * (i / len(path)))
+            q = q0 +  (segment_vector * (i / N))
 
         elif version == 3: #shortcutting agent
             q = path[i].q.state()
             for robot in range(len(robots)):
                 if r is not None and r == robot:
-                    q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i / len(path)))
+                    q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i /N))
                     break
                 if r is None:
-                    q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i / len(path)))
+                    q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i / N))
                 
         elif version == 1:
             q = path[i].q.state()
-            q[dim] = q0[dim] + ((q1[dim] - q0[dim])* (i / len(path)))
+            q[dim] = q0[dim] + ((q1[dim] - q0[dim])* (i / N))
 
         elif version == 4: #partial shortcutting agent single dim 
             q = path[i].q.state()
             for robot in range(len(robots)):
                 if r is not None and r == robot:
-                    q[dim] = q0[dim] +  (segment_vector[dim] * (i / len(path)))
+                    q[dim] = q0[dim] +  (segment_vector[dim] * (i / N))
                     break
                 if r is None:
-                    q[dim[robot]] = q0[dim[robot]] +  (segment_vector[dim[robot]] * (i / len(path)))
+                    q[dim[robot]] = q0[dim[robot]] +  (segment_vector[dim[robot]] * (i / N))
 
         elif version == 2:
             q = path[i].q.state()
             for idx in dim:
-                q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / len(path)))
+                q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
         
         elif version == 5: #partial shortcutting agent random set of dim 
             q = path[i].q.state()
             for robot in range(len(robots)):
                 if r is not None and r == robot:
                     for idx in dim:
-                        q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / len(path)))
+                        q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
                     break
                 if r is None:
                     for idx in dim[robot]:
-                        q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / len(path)))
+                        q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
 
         q_list = [q[indices[i]] for i in range(len(indices))]
         if i == 0:
@@ -500,7 +505,7 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
 
         if not deterministic:
             range1 = 1
-            range2 = 1000000
+            range2 = 1000
         else:
             range1 = len(discretized_path)
             range2 = range1
@@ -552,14 +557,14 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
                         random.shuffle(all_indices)
                         dim = all_indices[:num_indices]
 
-                state1 = discretized_path[idx1]
-                state2 = discretized_path[idx2]
-                edge, edge_cost =  interpolate(discretized_path[idx1:idx2], 
-                                                            discretized_costs[idx1], discretized_modes, indices, dim, version, robot, env.robots)
-                c_new = edge_cost[-1] + config_cost(edge[-1].q, state2.q, "euclidean") - edge_cost[0]
-                if c_new < (discretized_costs[idx2]- discretized_costs[idx1]) and env.is_edge_collision_free(state1.q, state2.q, m1[0]): #what when two different modes??? (possible for one task) 
-                    discretized_path[idx1:idx2] = edge
-                    discretized_costs[idx1:idx2] = edge_cost
+
+                edge, edge_cost =  interpolate(discretized_path[idx1:idx2+1].copy(), 
+                                                            discretized_costs[idx1], discretized_modes[idx1:idx2+1], indices, dim, version, robot, env.robots)
+               
+                if edge_cost[-1] < discretized_costs[idx2] and env.is_path_collision_free(edge): #what when two different modes??? (possible for one task) 
+                    print(j)
+                    discretized_path[idx1:idx2+1] = edge
+                    discretized_costs[idx1:idx2+1] = edge_cost
                     update(discretized_path, discretized_costs, idx2)
                     all_frame_traces.append(path_traces(colors, mode_sequence, discretized_path))
                     overall_costs.append(discretized_costs[-1])
@@ -578,6 +583,7 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
         #     log_file.write(f"Path shortcut: {json.dumps(path_dict, indent=4)}\n")
         #     log_file.write(f"Before: {json.dumps(total_cost.item(), indent=4)}\n")
         #     log_file.write(f"After: {json.dumps(discretized_costs[-1].item(), indent=4)}\n")
+        
         print("Before: ", total_cost.item(), "After " ,   discretized_costs[-1].item())
         #check:
         total_costs = [0]
@@ -633,7 +639,7 @@ if __name__ == "__main__":
     directory = os.path.join(home_dir, 'output')
     path = get_latest_folder(directory)
     # path = '/home/tirza/output/130125_072438'
-    # path = '/home/tirza/output/simple_2d_120125_124504/0'
+    path = '/home/tirza/output/210125_081536'
     env_name, config_params, _, _ = get_config(path)
     env = problems.get_env_by_name(env_name)  
     pkl_folder = os.path.join(path, 'FramesData')

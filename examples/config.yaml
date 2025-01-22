@@ -4,15 +4,15 @@ description: |
 
 step_size: 0.25                             # Max allowable distance that newly generated node can be from the nearest node in the tree                    
 ptc_threshold: 0.01 #!!float 1e-10          # Converge Threshold
-ptc_max_iter: 10000                    # Max iteration with no change before stopping
+ptc_max_iter: 15000                         # Max iteration with no change before stopping
 amount_of_runs: 1                           # Amount of runs executed 
-debug_mode: true                           # True: Data isn't stored, as in debug modus
+debug_mode: false                           # True: Data isn't stored, as in debug modus
 use_seed: true                              # True: Use a seed for the algorithm
-seed:  1                                    # User defined seed
-cprofiler: false                             # Use cprofiler to run the 
+seed:  2258816130                                    # User defined seed
+cprofiler: true                             # Use cprofiler to run the 
 cost_type: euclidean                        # Type of cost function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
 dist_type: euclidean                        # Type of dist function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
-
+shortcutting: true                          # Include Shortcutting after solution found
 
 description: |
   Sampling strategy
@@ -28,7 +28,7 @@ informed_sampling_version: 2                # If 'informed_sampling: true', the 
 description: |
   Bi-RRT*
 
-transition_nodes: 10                        # Number of generated transition nodes during mode initialization (only used in bi-rrt*)
+transition_nodes: 100                        # Number of generated transition nodes during mode initialization (only used in bi-rrt*)
 birrtstar_version: 2                        # Version of Bi-RRT*: 1: Inspired by Bi-RRT* by b. Wang 2: Inspired by RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
 
 
@@ -36,14 +36,16 @@ birrtstar_version: 2                        # Version of Bi-RRT*: 1: Inspired by
 description: |
   Q-RRT*
 
-depth: 0                                    # User-defined depth parameter for the Quick-RRT* (0: Results in the same ouput as RRT*)
+depth: 2                                    # User-defined depth parameter for the Quick-RRT* (0: Results in the same ouput as RRT*)
 
 
+description: |
+  dRRT*
 
+batch_size: 20000                            # Batch size for explicit grapths Gi to create implicit graph G
+expand_iter: 50                            # Amount of iterations done in the expand funciton (grow the tree)
 
-
-
-
+ 
 
 
 
