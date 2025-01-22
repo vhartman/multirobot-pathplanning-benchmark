@@ -129,7 +129,7 @@ class QRRTstar(RRTstar):
                 if n_near == parent or (n_near.parent is not None and n_near == n_near.parent) or n_near.cost == float("inf"):
                     continue
 
-                if not self.env.is_edge_collision_free(n_near.state.q, parent.state.q, self.operation.active_mode.label):
+                if not self.env.is_edge_collision_free(parent.state.q, n_near.state.q,  self.operation.active_mode.label):
                     continue
                 if n_near.parent is not None:
                     n_near.parent.children.remove(n_near)
@@ -153,6 +153,7 @@ class QRRTstar(RRTstar):
         i = 0
         self.PlannerInitialization()
         while True:
+            i += 1
             # Mode selection
             self.operation.active_mode  = (np.random.choice(self.operation.modes, p= self.SetModePorbability()))
             # RRT* core
@@ -194,7 +195,7 @@ class QRRTstar(RRTstar):
                 print(i)
         
             
-            i += 1
+            
          
 
         self.SaveData(time.time()-self.start)

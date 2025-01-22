@@ -143,7 +143,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
             self.SaveData(time.time()-self.start)
             return 
         
-        self.FindOptimalTransitionNode(iter)
+        self.FindLBTransitionNode(iter)
     
     def UpdateTree(self, n: Node, n_parent:Node , cost_to_parent:torch.Tensor, dists:torch.Tensor) -> None: #TODO need to update it
         while True:
@@ -250,9 +250,9 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                     self.operation.active_mode.subtree_b.remove(n_new) 
                     self.UpdateTree(n_new_parent, n_new, cost, dists)
                     
-        self.FindOptimalTransitionNode(iter)
+        self.FindLBTransitionNode(iter)
             
-    def FindOptimalTransitionNode(self, iter: int) -> None:
+    def FindLBTransitionNode(self, iter: int) -> None:
         transition_nodes = self.operation.modes[-1].transition_nodes #transition nodes only of last mode
         if transition_nodes == []:
             return
@@ -282,6 +282,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
         i = 0
         self.PlannerInitialization()
         while True:
+            i += 1
             # Mode selection
             self.operation.active_mode  = (np.random.choice(self.operation.modes, p= self.SetModePorbability()))
             
@@ -315,8 +316,11 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                 if diff < self.config.ptc_threshold:
                     break
             self.SWAP()
-            i += 1
-            if i % 1000 == 0:
+            
+            if i% 1000 == 0:
+                if check_gpu_memory_usage():
+                    break
+            if i% 100000 == 0:
                 print(i)
             
 

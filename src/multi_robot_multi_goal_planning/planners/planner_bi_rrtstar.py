@@ -37,7 +37,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             self.operation.active_mode.transition_nodes.append(n_new)
             n_new.transition = True
             self.AddTransitionNode(n_new)
-        self.FindOptimalTransitionNode(iter)
+        self.FindLBTransitionNode(iter)
  
     def UpdateTree(self, n: Node, n_parent:Node , cost_to_parent:torch.Tensor, dists:torch.Tensor) -> None: #TODO need to update it
         while True:
@@ -137,12 +137,11 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.operation.init_sol = True
                 print(time.time()-self.start)
             print(f"{iter}: {self.operation.active_mode.constrained_robots} found T{self.env.get_current_seq_index(self.operation.active_mode.label)}")
-            self.SaveData(time.time()-self.start)
-            self.FindOptimalTransitionNode(iter, True)
+            self.FindLBTransitionNode(iter, True)
             self.AddTransitionNode(self.operation.active_mode.transition_nodes[-1])
             return 
         
-        self.FindOptimalTransitionNode(iter)
+        self.FindLBTransitionNode(iter)
        
     def Extend(self, n_nearest_b:Node, q:Configuration )-> Optional[Node]:
         #RRT not RRT*
@@ -207,6 +206,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         i = 0
         self.PlannerInitialization()
         while True:
+            i += 1
             # Mode selection
             self.operation.active_mode  = (np.random.choice(self.operation.modes, p= self.SetModePorbability()))
             
@@ -236,7 +236,13 @@ class BidirectionalRRTstar(BaseRRTstar):
                 if diff < self.config.ptc_threshold:
                     break
             self.SWAP()
-            i += 1
+
+            if i% 1000 == 0:
+                if check_gpu_memory_usage():
+                    break
+            if i% 100000 == 0:
+                print(i)
+            
             
 
         self.SaveData(time.time()-self.start, n_new = n_new.state.q)

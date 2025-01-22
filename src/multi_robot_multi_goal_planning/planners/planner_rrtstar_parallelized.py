@@ -56,12 +56,13 @@ class ParallelizedRRTstar(ParallelizedBidirectionalRRTstar):
             if mode_idx != len(self.operation.modes)-1:
                 next_mode = self.operation.modes[mode_idx +1]
                 self.UpdateMode(next_mode, n_new, 'A')
-        self.FindOptimalTransitionNode(iter)
+        self.FindLBTransitionNode(iter)
 
     def Plan(self) -> dict:
         i = 0
         self.PlannerInitialization()
         while True:
+            i += 1
             # Mode selection
             self.operation.active_mode  = (np.random.choice(self.operation.modes, p= self.SetModePorbability()))
             
@@ -88,7 +89,7 @@ class ParallelizedRRTstar(ParallelizedBidirectionalRRTstar):
                 self.operation.ptc_cost = self.operation.cost
                 if diff < self.config.ptc_threshold:
                     break
-            i += 1
+            
             if i%1000 == 0:
                 print(i)
 

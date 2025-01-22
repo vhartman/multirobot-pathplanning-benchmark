@@ -33,12 +33,11 @@ class RRTstar(BaseRRTstar):
                     self.operation.ptc_cost = n_new.cost
                     self.operation.init_sol = True
                     print(time.time()-self.start)
-                self.SaveData(time.time()-self.start)
-                self.FindOptimalTransitionNode(iter, True)
+                self.FindLBTransitionNode(iter, True)
                 self.AddTransitionNode(n_new)
                 return
             self.AddTransitionNode(n_new)
-        self.FindOptimalTransitionNode(iter)
+        self.FindLBTransitionNode(iter)
  
     def PlannerInitialization(self) -> None:
         active_mode = self.operation.modes[0]
@@ -58,6 +57,7 @@ class RRTstar(BaseRRTstar):
         i = 0
         self.PlannerInitialization()
         while True:
+            i += 1
             # Mode selection
             self.operation.active_mode  = (np.random.choice(self.operation.modes, p= self.SetModePorbability()))
             # RRT* core
@@ -93,7 +93,7 @@ class RRTstar(BaseRRTstar):
                 if diff < self.config.ptc_threshold:
                     break
             
-            i += 1
+            
             # if i >= 50000:
             #     print('i', i)
             #     print('tree', self.operation.tree)
