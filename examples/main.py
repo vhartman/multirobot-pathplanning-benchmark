@@ -14,42 +14,50 @@ from multi_robot_multi_goal_planning.planners.planner_bi_rrtstar import *
 from multi_robot_multi_goal_planning.planners.planner_bi_rrtstar_parallelized import *
 from multi_robot_multi_goal_planning.planners.planner_rrtstar_parallelized import *
 from multi_robot_multi_goal_planning.planners.planner_q_rrtstar import *
+from multi_robot_multi_goal_planning.planners.planner_drrtstar import *
 from multi_robot_multi_goal_planning.problems.rai_envs import *
 from multi_robot_multi_goal_planning.problems import get_env_by_name
+from analysis.postprocessing import cost_single
 
-
+torch.cuda.manual_seed_all(10)
 
 def execute_planner(env, args, config_manager):
     if args.planner == "rrtstar":
-        rrt_star = RRTstar(env, config_manager)
-        path = rrt_star.Plan()
+        planner = RRTstar(env, config_manager)
     
     if args.planner == "rrtstar_par":
-        rrt_star = ParallelizedRRTstar(env, config_manager)
-        path = rrt_star.Plan()
+        planner = ParallelizedRRTstar(env, config_manager)
     
     if args.planner == "q_rrtstar":
-        bi_rrt_star = QRRTstar(env, config_manager)
-        path = bi_rrt_star.Plan()
+        planner = QRRTstar(env, config_manager)
 
     if args.planner == "bi_rrtstar":
-        bi_rrt_star = BidirectionalRRTstar(env, config_manager)
-        path = bi_rrt_star.Plan()
+        planner = BidirectionalRRTstar(env, config_manager)
 
     if args.planner == "bi_rrtstar_par":
-        bi_rrt_star = ParallelizedBidirectionalRRTstar(env, config_manager)
-        path = bi_rrt_star.Plan()
+        planner = ParallelizedBidirectionalRRTstar(env, config_manager)
+    
+    if args.planner == "drrt":
+        planner = dRRTstar(env, config_manager)
+    
+    path = planner.Plan()
+    if path is None:
+        print('No path was found')
+        return
 
     print('Path is collision free:', env.is_path_collision_free(path))
     if config_manager.debug_mode:
         return
     path_dict = {f"{i}": state.q.state().tolist() for i, state in enumerate(path)}
     config_manager.logger.info("Path: %s", json.dumps(path_dict, indent=4))
-    
+    pkl_folder = os.path.join(config_manager.output_dir, 'FramesData')
+    output_dir = os.path.join(config_manager.output_dir, 'Cost.png')
+    cost_single(env, pkl_folder, output_dir, False)
+
 def main():
     parser = argparse.ArgumentParser(description="Environment Viewer")
     parser.add_argument("env_name", nargs="?", default="default", help="Environment to show")
-    parser.add_argument("--planner", choices=["rrtstar", "bi_rrtstar", "bi_rrtstar_par", "q_rrtstar", "rrtstar_par"], required=True, help="Planner type")
+    parser.add_argument("--planner", choices=["rrtstar", "bi_rrtstar", "bi_rrtstar_par", "q_rrtstar", "rrtstar_par", "drrt"], required=True, help="Planner type")
     args = parser.parse_args()
 
     config_manager = ConfigManager('config.yaml')
