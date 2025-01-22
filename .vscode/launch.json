@@ -2,6 +2,22 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "main.py - simple_2d --planner drrt",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "drrt"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
             "name": "main.py - simple_2d --planner rrtstar",
             "type": "debugpy",
             "request": "launch",
@@ -274,6 +290,17 @@
             "args": [
                 "--do",
                 "tree"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "postprocessing.py --check graph",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
+            "args": [
+                "--do",
+                "graph"
             ],
             "console": "integratedTerminal"
         }

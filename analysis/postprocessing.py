@@ -4,7 +4,7 @@ import dill
 import plotly.graph_objects as go
 import os
 import webbrowser
-from analysis_util import *
+
 
 current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
 project_root = os.path.abspath(os.path.join(current_file_dir, ".."))
@@ -12,6 +12,7 @@ src_path = os.path.abspath(os.path.join(project_root, "../src"))
 sys.path.append(project_root)
 sys.path.append(os.path.join(project_root, "src"))
 # sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+from analysis.analysis_util import *
 from multi_robot_multi_goal_planning.problems.rai_envs import *
 from multi_robot_multi_goal_planning.problems.planning_env import *
 from multi_robot_multi_goal_planning.problems.util import *
@@ -21,7 +22,7 @@ from analysis.shortcutting import *
 import subprocess
 import re
 import multi_robot_multi_goal_planning.problems as problems
-from check import *
+from analysis.check import *
 
 
 def get_cost_label(cost_function, number_agents):
@@ -39,7 +40,7 @@ def get_cost_label(cost_function, number_agents):
                
     return cost_label
 
-def cost_single(env, config, pkl_folder, output_filename, fix_axis):
+def cost_single(env, pkl_folder, output_filename, fix_axis):
     """Plot cost of single run"""
     # Get the list of .pkl files
     pkl_files = sorted(
@@ -134,8 +135,8 @@ def cost_single(env, config, pkl_folder, output_filename, fix_axis):
    
     fig.update_layout(
         title="Cost vs Time",
-        xaxis=dict(title="Time [s]", range=[0, max_time+5], autorange=False ),
-        yaxis=dict(title="Cost [m]", range=[0, max_cost+5], autorange=False ), 
+        xaxis=dict(title="Time [s]", range=[0, max_time+1], autorange=False ),
+        yaxis=dict(title="Cost [m]", range=[0, max_cost+1], autorange=False ), 
          margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
         legend=dict(
             orientation="v",
@@ -153,26 +154,31 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
     fig = go.Figure() 
     colors = colors_plotly()
     max_cost_average = []
+    min_cost_average = []
     max_time_average = []
+    min_time_average = []
     for planner, parent_folder in enumerate(parent_folders):
         planner_costs = []
         planner_times = []
         planner_init_times = []
         max_init_times = 0
         sum_terminal_times = 0
+        first = True
+        runs = 0
         for folder_name in os.listdir(parent_folder):
+            runs += 1
+            
             print(folder_name)
-            if folder_name == '3':
-                print('hallo')
+
             folder_path = os.path.join(parent_folder, folder_name)
+            if first:
+                _, config, _, _ = get_config(folder_path)
+                first = False
             pkl_folder =  os.path.join(folder_path, 'FramesData')
             pkl_files = sorted(
                 [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
                 key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
                 )
-            for pkl_file in pkl_files:
-                with open(pkl_file, 'rb') as file:
-                    data = dill.load(file)
 
             print(f"Found {len(pkl_files)} .pkl files.")
             num_agents = len(env.robots)
@@ -186,7 +192,6 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
                     data = dill.load(file)
                 result = data["result"]
                 time.append(data["time"])
-                
                 
                 all_init_path = data["all_init_path"]
                 if all_init_path and not init_sol:
@@ -210,8 +215,8 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
             planner_times.append(time)
             sum_terminal_times += time[-1]
     
-        average_cost, average_time, min_costs, max_costs = discretization(max_init_times, sum_terminal_times, len(pkl_files), planner_times, planner_costs)
-        average_time = [t+1 for t in average_time]
+        average_cost, average_time, min_costs, max_costs = discretization(max_init_times, sum_terminal_times, runs, planner_times, planner_costs)
+        # average_time = [t+1 for t in average_time]
         fig.add_trace(go.Scatter(
             x=[0],
             y=[0],
@@ -231,7 +236,9 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
         ))
         # max_cost = np.nanmax(costs)
         max_time_average.append(average_time[-1])
+        min_time_average.append(average_time[0])
         max_cost_average.append(np.max(max_costs))
+        min_cost_average.append(np.min(min_costs))
         # Update layout with titles, axis labels, and legend
 
         fig.add_trace(go.Scatter(
@@ -278,12 +285,14 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
         showlegend=True  # Ensures this entry appears in the legend
     ))
     max_time = np.max(max_time_average)
+    min_time = np.min(min_time_average)
     max_cost = np.max(max_cost_average)
+    min_cost = np.min(min_cost_average)
 
     fig.update_layout(
         title="Cost vs Time",
-        xaxis=dict(title="Time [s]", range=[0, max_time+2], autorange=False ),
-        yaxis=dict(title="Cost [m]", range=[0, max_cost+0.5], autorange=False ), 
+        xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(min_time), np.log10(max_time)], autorange=False ),
+        yaxis=dict(title="Cost [m]", range=[min_cost-0.1, 5.5], autorange=False ), 
         margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
         legend=dict(
             orientation="v",
@@ -1031,7 +1040,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument(
         "--do",
-        choices=["dev", "cost_single", "cost_multiple", "shortcutting_cost", "path", "sum", "interpolation", "nn", "tree"],
+        choices=["dev", "cost_single", "cost_multiple", "shortcutting_cost", "path", "sum", "interpolation", "nn", "tree", "graph"],
         required=True,
         help="Select the mode of operation",
     )
@@ -1072,11 +1081,11 @@ if __name__ == "__main__":
     if args.do == "cost_single":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'Cost.png')
-        cost_single(env, config_params, pkl_folder, output_filename_cost, fix_axis)
+        cost_single(env, pkl_folder, output_filename_cost, fix_axis)
 
     if args.do == "cost_multiple":
         output_filename_cost = os.path.join(os.path.dirname(dir), f'Cost_{datetime.now().strftime("%d%m%y_%H%M%S")}.png')
-        dir = ['/home/tirza/output/simple_2d_120125_171604', '/home/tirza/output/simple_2d_120125_195145' ]
+        dir = ['/home/tirza/output/one_agent_many_goals_190125_150455', '/home/tirza/output/one_agent_many_goals_190125_162240', '/home/tirza/output/one_agent_many_goals_190125_172440' ]
         if not isinstance(dir, list):
             dir = [dir]
         cost_multiple(env, config_params, pkl_folder,single_folder ,dir ,output_filename_cost)
@@ -1114,6 +1123,11 @@ if __name__ == "__main__":
             reducer = 400
         nearest_neighbor(config_params, env, env_path, pkl_folder, output_html, with_tree, reducer)    
     if args.do == "tree":
-        tree(config_params, env, env_path, pkl_folder)   
+        tree(config_params, env, env_path, pkl_folder)  
+    if args.do == "graph":
+        output_html = os.path.join(path, 'graph.html')
+        graph(env, env_path, pkl_folder, output_html)    
+        webbrowser.open('file://' + os.path.realpath(output_html))
+ 
 
 

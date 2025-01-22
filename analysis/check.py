@@ -3,14 +3,22 @@ import sys
 import dill
 import plotly.graph_objects as go
 import os
-from analysis_util import *
+from analysis.analysis_util import *
 
 def interpolation_check(env):
     array = np.array
     colors = colors_plotly()
 
-    interpolated_states = [[np.float64(0.0), np.float64(-0.5), np.float64(0.0), np.float64(0.0), np.float64(0.5), np.float64(0.0)],
-     [np.float64(0.05345929397051017), np.float64(-0.3004784469845553), np.float64(-0.0018751925479464583), np.float64(-0.06115630099314496), np.float64(0.37734730327991645), np.float64(0.18179254140105117)]]
+    interpolated_states = [array([0.50973078, 0.08875066, 0.39892376, 0.5       , 0.5       ,
+       0.        ]), array([0.39538828, 0.15265072, 0.30783377, 0.5       , 0.38888889,
+       0.        ]), array([0.28104578, 0.21655078, 0.21674377, 0.5       , 0.27777778,
+       0.        ]), array([0.16670327, 0.28045083, 0.12565378, 0.5       , 0.16666667,
+       0.        ]), array([0.05236077, 0.34435089, 0.03456378, 0.5       , 0.05555556,
+       0.        ]), array([-0.06198173,  0.40825095, -0.05652621,  0.5       , -0.05555556,
+        0.        ]), array([-0.17632423,  0.472151  , -0.1476162 ,  0.5       , -0.16666667,
+        0.        ]), array([-0.29066674,  0.53605106, -0.2387062 ,  0.5       , -0.27777778,
+        0.        ]), array([-0.40500924,  0.59995112, -0.32979619,  0.5       , -0.38888889,
+        0.        ])]
     # interpolated_states = [[np.float64(-0.0872441810838756), np.float64(-0.5424920511404258), np.float64(-0.16872908700385802), np.float64(-0.08130792508826995), np.float64(0.5142211315673857), np.float64(-0.21907653166446994)], 
     #                        [np.float64(-0.1081872806631973), np.float64(-0.451645997510291), np.float64(-0.39542301053911505), np.float64(-0.09125921142967884), np.float64(0.3668265669203842), np.float64(-0.03970304664302826)]]
     fig = go.Figure()
@@ -18,8 +26,8 @@ def interpolation_check(env):
 
     for r, robot in enumerate(env.robots):
         legend = True
+        indices = env.robot_idx[robot]
         for i, state in enumerate(interpolated_states):
-            indices = env.robot_idx[robot]
             state = np.array(state)
             states = state[indices]
             static_traces.append(go.Scatter3d(
@@ -251,6 +259,7 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
             transition = results["is_transition"]
             N_near = data["N_near"]
             N_parent = data["N_parent"]
+            print(N_near)
             rewire_radius = data["rewire_r"]
             n_new = data["n_new"]
             n_nearest = data["n_nearest"]
@@ -346,9 +355,7 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                             showlegend=False
                         )
                         )
-
-
-            
+ 
         if with_tree:
             for robot_idx, robot in enumerate(env.robots):
                 indices = env.robot_idx[robot]
@@ -455,11 +462,18 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                 )
             if N_near is not None and N_near != []:
                 for _, state in enumerate(N_near):
-                    states = np.array(state.cpu().numpy())[indices]
+                    try:
+                        states = np.array(state.cpu().numpy())[indices]
+                        x_state = [states[0]]
+                        y_state = [states[1]]
+                    except:
+                        x_state = [state[0]]
+                        y_state = [state[1]] 
+
 
                     frame_traces.append(go.Scatter3d(
-                        x=[states[0]],
-                        y=[states[1]],
+                        x=x_state,
+                        y=y_state,
                         z = [1],
                         mode='markers',
                         name=robot,
@@ -484,6 +498,56 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
                     ))
                     n_parent_bool = False
             legend_bool = False
+        #graph
+        try:
+
+            graph = data["graph"]
+            graph_transition = data["graph_transition"]
+
+            graph_x = [g[0] for g in graph]
+            graph_y = [g[1] for g in graph]
+            graph_z = [1 for g in graph]
+
+            frame_traces.append(
+                go.Scatter3d(
+                    x=graph_x, 
+                    y=graph_y,
+                    z=graph_z,
+                    mode="markers",
+                    marker=dict(
+                        size=8,  # Very small markers
+                        color='black',  # Match marker color with line
+                        opacity=1
+                    ),
+                    opacity=0.5,
+                    name='Graph Nodes',
+                    showlegend=True
+                )
+            )
+
+            graph_x = [g[0] for g in graph_transition]
+            graph_y = [g[1] for g in graph_transition]
+            graph_z = [1 for g in graph_transition]
+
+            frame_traces.append(
+                go.Scatter3d(
+                    x=graph_x, 
+                    y=graph_y,
+                    z=graph_z,
+                    mode="markers",
+                    marker=dict(
+                        size=8,  # Very small markers
+                        color='black',  # Match marker color with line
+                        opacity=1
+                    ),
+                    opacity=1,
+                    name='Graph Transitions',
+                    showlegend=True
+                )
+            )
+
+        except:
+            pass
           
 
 
@@ -933,4 +997,193 @@ def tree(config, env, env_path, pkl_folder, divider = None):
     # fig.write_html(output_html)
     # print(f"Animation saved to {output_html}")
 
+def graph(env, env_path, pkl_folder, output_html, divider = None):
 
+    # Print the parsed task sequence
+    try:
+        task_sequence_text = "Task sequence: " + ", ".join(
+        [env.tasks[idx].name for idx in env.sequence]   
+    )
+    except:
+         task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
+
+
+    count = count_files_in_folder(pkl_folder)
+    if count > 150 and divider is not None:
+        frame = int(count / divider)
+    else:
+        frame = 1
+    print(f'Take every {frame}th frame')
+    pkl_files = sorted(
+        [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
+        key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+    )[::frame]
+    pkl_files.append(os.path.join(pkl_folder, sorted(
+        [os.path.basename(f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
+        key=lambda x: int(os.path.splitext(x)[0])
+    )[-1]))
+    print(f'Take {len(pkl_files)} .pkl files')
+
+    # Initialize figure and static elements
+    fig = go.Figure()
+    frames = []
+    all_frame_traces = []
+    # static traces
+    static_traces = mesh_traces_env(env_path)
+    static_traces.append(
+            go.Mesh3d(
+                x=[0],  # Position outside the visible grid
+                y=[0],  # Position outside the visible grid
+                z=[0],
+                color = "white",
+                name='',
+                legendgroup='',
+                showlegend=True  # This will create a single legend entry for each mode
+            )
+        )
+   
+    # dynamic_traces
+    for idx, pkl_file in enumerate(pkl_files):
+        with open(pkl_file, 'rb') as file:
+            data = dill.load(file)
+
+        frame_traces = []
+
+        graph = data["graph"]
+        graph_transition = data["graph_transition"]
+
+        graph_x = [g[0] for g in graph]
+        graph_y = [g[1] for g in graph]
+        graph_z = [1 for g in graph]
+
+        frame_traces.append(
+            go.Scatter3d(
+                x=graph_x, 
+                y=graph_y,
+                z=graph_z,
+                mode="markers",
+                marker=dict(
+                    size=8,  # Very small markers
+                    color='black',  # Match marker color with line
+                    opacity=1
+                ),
+                opacity=1,
+                name='Graph Nodes',
+                showlegend=True
+            )
+        )
+
+        graph_x = [g[0] for g in graph_transition]
+        graph_y = [g[1] for g in graph_transition]
+        graph_z = [1 for g in graph_transition]
+
+        frame_traces.append(
+            go.Scatter3d(
+                x=graph_x, 
+                y=graph_y,
+                z=graph_z,
+                mode="markers",
+                marker=dict(
+                    size=8,  # Very small markers
+                    color='black',  # Match marker color with line
+                    opacity=1
+                ),
+                opacity=1,
+                name='Graph Transitions',
+                showlegend=True
+            )
+        )
+
+
+
+
+
+
+
+        all_frame_traces.append(frame_traces)
+
+    # Determine the maximum number of dynamic traces needed
+    max_dynamic_traces = max(len(frame_traces) for frame_traces in all_frame_traces)
+
+    fig.add_traces(static_traces)
+
+    for _ in range(max_dynamic_traces):
+        fig.add_trace(go.Mesh3d(x=[], y=[], z =[]))
+
+    frames = []
+    for idx, frame_traces in enumerate(all_frame_traces):
+        while len(frame_traces) < max_dynamic_traces:
+            frame_traces.append(go.Mesh3d(x=[], y=[], z= []))
+        
+        frame = go.Frame(
+            data=frame_traces,
+            traces=list(range(len(static_traces), len(static_traces) + max_dynamic_traces)),
+            name=f"frame_{idx}"
+        )
+        frames.append(frame)
+
+    fig.frames = frames
+
+    # Animation settings
+    animation_settings = dict(
+        frame=dict(duration=100, redraw=True),  # Sets duration only for when Play is pressed
+        fromcurrent=True,
+        transition=dict(duration=0)
+    )
+
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=20),
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        updatemenus=[dict(
+            type="buttons",
+            buttons=[
+                dict(
+                    label="Play",
+                    method="animate",
+                    args=[None, animation_settings]  # Starts animation only on button press
+                ),
+                dict(
+                    label="Stop",
+                    method="animate",
+                    args=[
+                        [None],  # Stops the animation
+                        dict(frame=dict(duration=0, redraw=True), mode="immediate")
+                    ]
+                )
+            ],
+            direction="left",
+            pad={"t": 10},
+            showactive=False, #set auto-activation to false
+            x=0.1,
+            xanchor="right",
+            y=0,
+            yanchor="top"
+        )],
+        sliders=[dict(
+            active=0,
+            currentvalue=dict(prefix="Frame: "),
+            pad=dict(t=60),
+            steps=[dict(
+                method="animate",
+                args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True), transition=dict(duration=0))],
+                label=str(i)
+            ) for i, f in enumerate(fig.frames)]
+        )],
+        showlegend=True, 
+        annotations=[
+        dict(
+            x=1,  # Centered horizontally
+            y=-0.03,  # Adjusted position below the slider
+            xref="paper",
+            yref="paper",
+            text=task_sequence_text,
+            showarrow=False,
+            font=dict(size=14),
+            align="center",
+        )
+    ]
+    )
+    # fig.show()
+    fig.write_html(output_html)
+    print(f"Animation saved to {output_html}")
