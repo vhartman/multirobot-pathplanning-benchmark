@@ -14,7 +14,6 @@ import time as time
 import math as math
 from typing import Tuple, Optional
 
-torch.cuda.manual_seed_all(10)
 
 class ConfigManager:
     def __init__(self, config_file:str):
@@ -32,7 +31,7 @@ class ConfigManager:
             'informed_sampling': True, 'informed_sampling_version': 0, 
             'cprofiler': False, 'cost_type': 'euclidean', 'dist_type': 'euclidean', 
             'debug_mode': False, 'transition_nodes': 100, 'birrtstar_version' :1, 
-            'amount_of_runs' : 1, 'use_seed' : True, 'seed': 1, 'depth': 1,  
+            'amount_of_runs' : 1, 'use_seed' : True, 'seed': 1, 'depth': 1, 'batch_size': 2000, 'expand_iter': 10, 'shortcutting': True
         }
         for key, value in defaults.items():
             setattr(self, key, config.get(key, value))
@@ -263,10 +262,8 @@ class Sampling:
                     lims = self.operation.limits[robot]
                     q.append(np.random.uniform(lims[0], lims[1]))
 
-                q_config = type(self.env.get_start_pos()).from_list(q)
-
-            if self.env.is_collision_free(q_config.state(), m):
-                return q_config
+            if self.env.is_collision_free(q, m):
+                return type(self.env.get_start_pos()).from_list(q)
 
     def mode_selection(self, r_idx:int) -> Optional[Mode]:
         if self.operation.active_mode.label == self.env.terminal_mode:
@@ -458,7 +455,7 @@ class BaseRRTstar(ABC):
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
 
     def SaveData(self, passed_time: time, n_new:NDArray=None, 
-                 N_near:torch.tensor=None, r:float=None, n_rand:NDArray=None, n_nearest:NDArray = None, N_parent:torch.tensor=None) -> None:
+                 N_near:torch.tensor=None, r:float=None, n_rand:NDArray=None, n_nearest:NDArray = None, N_parent:torch.tensor=None, N_near_:List[NDArray]=None) -> None:
         if self.config.debug_mode:
             return
         tree_data = []
@@ -485,6 +482,15 @@ class BaseRRTstar(ABC):
                 for node in mode.subtree_b
             ]
             tree_data.extend(subtree_data)
+        
+        try:
+            graph_data_robot = [q.q for lst in self.g.robot_nodes.values() for q in lst]
+            # graph_data_robot = [q.q for q in self.g.robot_nodes['a1_0']]
+            graph_data_transition = [q.q for lst in self.g.transition_nodes.values() for q in lst]
+        except:
+            graph_data_robot = None
+            graph_data_transition = None
+
 
 
         # Path and Cost Data
@@ -550,6 +556,12 @@ class BaseRRTstar(ABC):
         else:
             N_near_list = [N for N in N_near] if N_near.size(0) > 0 else []
 
+        # Nearby Nodes
+        if N_near_ is None:
+            N_near_list = []
+        else:
+            N_near_list = [N.q for N in N_near_] if len(N_near_) > 0 else []
+
         if N_parent is None:
             N_parent_list = []
         else:
@@ -571,6 +583,8 @@ class BaseRRTstar(ABC):
             "n_new": n_new,
             "n_nearest": n_nearest,
             "active_mode": self.operation.active_mode.label,
+            "graph": graph_data_robot,
+            "graph_transition": graph_data_transition
         }
 
         # Directory Handling: Ensure directory exists
@@ -703,24 +717,21 @@ class BaseRRTstar(ABC):
                 if n_near == n_new.parent or n_near.cost == np.inf or n_near == n_new:
                     continue
 
-                if self.env.is_edge_collision_free(n_near.state.q, n_new.state.q, self.operation.active_mode.label):
+                if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, self.operation.active_mode.label):
                     if n_near.parent is not None:
                         n_near.parent.children.remove(n_near)
                     n_near.parent = n_new                    
                     n_new.children.append(n_near)
 
                     n_near.cost = c_potential_tensor[idx].item()
-                    # n_near.agent_dists = c_agent_tensor[idx].unsqueeze(0) 
                     agents = batch_dist[idx].unsqueeze(0).to(dtype=torch.float16).cpu()
                     n_near.agent_dists =  agents + n_new.agent_dists
                     n_near.cost_to_parent = batch_cost[idx]
                     n_near.agent_dists_to_parent = agents
-                    # self.SaveData(time.time()-self.start, n_new = n_new.state.q.state(), 
-                    #               r =self.r, n_rand = n_near.state.q.state())
                     rewired = True
         return rewired
       
-    def GeneratePath(self, n: Node) -> None:
+    def GeneratePath(self, n: Node, shortcutting:bool = True) -> None:
         path_nodes, path = [], []
         while n:
             path_nodes.append(n)
@@ -730,8 +741,9 @@ class BaseRRTstar(ABC):
         self.operation.path = path_in_order  
         self.operation.path_nodes = path_nodes[::-1]
         self.operation.cost = self.operation.path_nodes[-1].cost.clone()
-        # if not self.env.is_path_collision_free(self.operation.path):
-        #     print('hallo')
+        if self.operation.init_sol and self.config.shortcutting and  shortcutting:
+            self.SaveData(time.time()-self.start)
+            self.Shortcutting()
         self.SaveData(time.time()-self.start)
 
     def AddTransitionNode(self, n: Node) -> None:
@@ -863,7 +875,239 @@ class BaseRRTstar(ABC):
                 return self.sampling.sample_state(operation.active_mode, 0)
         return self.sampling.sample_state(operation.active_mode, 2) #goal sampling
     
-    def FindOptimalTransitionNode(self, iter: int, mode_init_sol: bool = False) -> None:
+    def Update(self, path , cost, idx):
+        while True:
+            cost[idx] = cost[idx -1] + config_cost(path[idx-1].q, path[idx].q, "euclidean")
+            # agent_dists[idx] = agent_dists[idx -1] + config_agent_dist(path[idx-1].q, path[idx].q, "euclidean")
+            if idx == len(path)-1:
+                break
+            idx+=1
+
+    def Shortcutting(self,version = 4, choice = 1, deterministic = False):
+        indices  = [self.env.robot_idx[r] for r in self.env.robots]
+
+        discretized_path, discretized_modes, discretized_costs = self.Discretization(self.operation.path_nodes, indices)  
+
+        termination_cost = discretized_costs[-1]
+        termination_iter = 0
+        dim = None
+
+        if not deterministic:
+            range1 = 1
+            range2 = 1000
+        else:
+            range1 = len(discretized_path)
+            range2 = range1
+
+        for i in range(range1):
+            for j in range(range2):
+                if not deterministic:
+                    i1 = np.random.choice(len(discretized_path)-1)
+                    i2 = np.random.choice(len(discretized_path)-1)
+                else:
+                    i1 = i
+                    i2 = j
+                    # dim = np.random.choice(range(env.robot_dims[env.robots[0]]))# TODO only feasible for same dimension across all robots
+                if np.abs(i1-i2) < 2:
+                    continue
+                idx1 = min(i1, i2)
+                idx2 = max(i1, i2)
+                m1 = discretized_modes[idx1]    
+                m2 = discretized_modes[idx2]    
+                if m1 == m2 and choice == 0: #take all possible robots
+                    robot = None
+                    if version == 4:
+                        dim = [np.random.choice(indices[r_idx]) for r_idx in range(len(self.env.robots))]
+                    
+                    if version == 5:
+                        dim = []
+                        for r_idx in range(len(self.env.robots)):
+                            all_indices = [i for i in indices[r_idx]]
+                            num_indices = np.random.choice(range(len(indices[r_idx])))
+                            random.shuffle(all_indices)
+                            dim.append(all_indices[:num_indices])
+                else:
+                    robot = np.random.choice(len(self.env.robots)) 
+                    #robot just needs to pursue the same task across the modes
+                    if len(m1) > 1:
+                        task_agent = m1[1][robot]
+                    else:
+                        task_agent = m1[0][robot]
+
+                    if m2[0][robot] != task_agent:
+                        continue
+
+                    if version == 4:
+                        dim = [np.random.choice(indices[robot])]
+                    if version == 5:
+                        all_indices = [i for i in indices[robot]]
+                        num_indices = np.random.choice(range(len(indices[robot])))
+
+                        random.shuffle(all_indices)
+                        dim = all_indices[:num_indices]
+
+
+                edge, edge_cost =  self.EdgeInterpolation(discretized_path[idx1:idx2+1].copy(), 
+                                                            discretized_costs[idx1], discretized_modes[idx1:idx2+1], indices, dim, version, robot, self.env.robots)
+
+                if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge): #what when two different modes??? (possible for one task) 
+                    discretized_path[idx1:idx2+1] = edge
+                    discretized_costs[idx1:idx2+1] = edge_cost
+                    self.Update(discretized_path, discretized_costs, idx2)
+
+                    if not deterministic:
+                        if np.abs(discretized_costs[-1] - termination_cost) > 0.001:
+                            termination_cost = discretized_costs[-1]
+                            termination_iter = j
+                        elif np.abs(termination_iter -j) > 25000:
+                            break
+                    
+        print("Before: ", self.operation.cost.item(), "After " ,   discretized_costs[-1].item())
+        self.TreeExtension(discretized_path, discretized_costs, discretized_modes)
+
+    def TreeExtension(self, discretized_path, discretized_costs, discretized_modes):
+        mode_idx = 0
+
+        parent = self.operation.path_nodes[0]
+        for i in range(1, len(discretized_path) - 1):
+            state = discretized_path[i]
+            node = Node(state, self.operation)
+            node.parent = parent
+            self.operation.costs = self.operation.active_mode.ensure_capacity(self.operation.costs, node.idx)
+            node.cost = discretized_costs[i]
+            batch_cost, batch_dist =  batch_config_torch(node.q_tensor, node.state.q, node.parent.q_tensor.unsqueeze(0), metric = self.config.cost_type)
+            node.cost_to_parent = batch_cost[0]
+            agent_dist = batch_dist.to(dtype=torch.float16).cpu()
+            node.agent_dists = node.parent.agent_dists + agent_dist
+            node.agent_dists_to_parent = agent_dist
+            parent.children.append(node)
+            self.UpdateMode(self.operation.modes[mode_idx], node, 'A')
+            if len(discretized_modes[i]) > 1:
+                node.transition = True
+                self.operation.modes[mode_idx].transition_nodes.append(node)
+                mode_idx += 1
+                self.UpdateMode(self.operation.modes[mode_idx], node, 'A')
+            parent = node
+        #Don't want to add a new terminal node
+        self.operation.path_nodes[-1].parent.children.remove(self.operation.path_nodes[-1])
+        parent.children.append(self.operation.path_nodes[-1])
+        self.operation.path_nodes[-1].parent = parent
+        batch_cost, batch_dist =  batch_config_torch(parent.q_tensor, parent.state.q, self.operation.path_nodes[-1].q_tensor.unsqueeze(0), metric = self.config.cost_type)
+        # cost_to_parent = config_cost(parent.state.q, self.operation.path_nodes[-1].state.q, "euclidean") 
+        agent_dist = batch_dist.to(dtype=torch.float16).cpu()
+        self.operation.path_nodes[-1].agent_dists = self.operation.path_nodes[-1].parent.agent_dists + agent_dist
+        self.operation.path_nodes[-1].agent_dists_to_parent = agent_dist
+        self.operation.path_nodes[-1].cost_to_parent = batch_cost[0]
+        self.operation.path_nodes[-1].cost = discretized_costs[-1]
+        self.GeneratePath(self.operation.path_nodes[-1], False)
+
+    def EdgeInterpolation(self, path, cost, modes, indices, dim, version, r = None, robots =None):
+        q0 = path[0].q.state()
+        q1 = path[-1].q.state()
+        edge  = []
+        edge_cost = [cost]
+        segment_vector = q1 - q0
+        # dim_indices = [indices[i][dim] for i in range(len(indices))]
+        N = len(path) -1
+        for i in range(len(path)):
+            mode = modes[i][0]
+            if version == 0 :
+                q = q0 +  (segment_vector * (i / N))
+
+            elif version == 3: #shortcutting agent
+                q = path[i].q.state()
+                for robot in range(len(robots)):
+                    if r is not None and r == robot:
+                        q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i /N))
+                        break
+                    if r is None:
+                        q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i / N))
+                    
+            elif version == 1:
+                q = path[i].q.state()
+                q[dim] = q0[dim] + ((q1[dim] - q0[dim])* (i / N))
+
+            elif version == 4: #partial shortcutting agent single dim 
+                q = path[i].q.state().copy()
+                for robot in range(len(robots)):
+                    if r is not None and r == robot:
+                        q[dim] = q0[dim] +  (segment_vector[dim] * (i / N))
+                        break
+                    if r is None:
+                        q[dim[robot]] = q0[dim[robot]] +  (segment_vector[dim[robot]] * (i / N))
+
+            elif version == 2:
+                q = path[i].q.state()
+                for idx in dim:
+                    q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
+            
+            elif version == 5: #partial shortcutting agent random set of dim 
+                q = path[i].q.state()
+                for robot in range(len(robots)):
+                    if r is not None and r == robot:
+                        for idx in dim:
+                            q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
+                        break
+                    if r is None:
+                        for idx in dim[robot]:
+                            q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
+
+            q_list = [q[indices[i]] for i in range(len(indices))]
+            edge.append(State(NpConfiguration.from_list(q_list),mode))
+            if i == 0:
+                continue
+            edge_cost.append(edge_cost[-1] + config_cost(edge[-2].q, edge[-1].q, "euclidean"))
+
+        return edge, edge_cost
+
+    def Discretization(self, path, indices, resolution=0.1):
+        discretized_path, discretized_modes, discretized_costs = [], [], []
+        discretized_costs.append(path[0].cost)
+        for i in range(len(path) - 1):
+            start = path[i].state.q
+            end = path[i+1].state.q
+
+            # Calculate the vector difference and the length of the segment
+            segment_vector = end.state() - start.state()
+            # Determine the number of points needed for the current segment
+            if resolution is None: 
+                num_points = 2 
+            else:
+                N = config_dist(start, end) / resolution
+                N = max(2, N)
+                num_points = int(N)            # num_points = 
+            
+            # Create the points along the segment
+            s = None
+            mode = [path[i].state.mode]
+            for j in range(num_points):
+                if path[i].transition and j == 0:
+                    if mode[0] != path[i+1].state.mode:
+                        mode.append(path[i+1].state.mode)
+                if j == 0:
+                    original_mode = mode[0]
+                    discretized_modes.append(mode)
+                    discretized_path.append(path[i].state)
+                    s = len(discretized_path) -1
+                    if i == 0:
+                        continue
+                    discretized_costs.append(discretized_costs[-1] + config_cost(discretized_path[-2].q, discretized_path[-1].q, "euclidean"))
+                else:
+                    original_mode = mode[-1]
+                    if j != num_points-1:
+                        interpolated_point = start.state() + (segment_vector * (j / (num_points -1)))
+                        q_list = [interpolated_point[indices[i]] for i in range(len(indices))]
+                        discretized_path.append(State(NpConfiguration.from_list(q_list), original_mode))
+                        discretized_modes.append([original_mode])
+                        discretized_costs.append(discretized_costs[-1] + config_cost(discretized_path[-2].q, discretized_path[-1].q, "euclidean"))
+                
+        discretized_modes.append([path[-1].state.mode])
+        discretized_path.append(path[-1].state)
+        discretized_costs.append(discretized_costs[-1] + config_cost(discretized_path[-2].q, discretized_path[-1].q, "euclidean"))
+        
+        return discretized_path, discretized_modes, discretized_costs
+     
+    def FindLBTransitionNode(self, iter: int, mode_init_sol: bool = False) -> None:
         if len(self.operation.modes) < 2:
             return
         if self.operation.init_sol:
@@ -890,7 +1134,8 @@ class BaseRRTstar(ABC):
             if (self.operation.ptc_cost - self.operation.cost) > self.config.ptc_threshold:
                 self.operation.ptc_cost = self.operation.cost
                 self.operation.ptc_iter = iter
-
+    
+    
     @abstractmethod
     def UpdateCost(self, n: Node)-> None:
         pass
