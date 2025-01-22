@@ -873,6 +873,113 @@ def make_two_dim_handover(view: bool = False):
     return C, np.concatenate([handover_keyframes, place_keyframes])
 
 
+def make_single_agent_mover_env(num_goals=30, view: bool = False):
+    C = make_table_with_walls(2, 2)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.075]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+    ).setJointState([0.0, -0.5, 0.0])
+
+    C.addFrame("obj1").setParent(table).setShape(
+        ry.ST.box, size=[0.4, 0.4, 0.06, 0.005]
+    ).setColor([1, 0.5, 0, 1]).setContact(1).setRelativePosition(
+        [+0.5, +0.5, 0.07]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-0.5, -0.5, 0.07])
+
+    C.addFrame("obs1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.7, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.6, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [-0.7, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.6, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    if view:
+        C.view(True)
+
+    qHome = C.getJointState()
+
+    komo = ry.KOMO(C, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.1])
+    komo.addControlObjective([], 0, 1e-1)
+    # komo.addControlObjective([], 1, 1e0)
+    # komo.addControlObjective([], 2, 1e0)
+
+    komo.addModeSwitch([1, 2], ry.SY.stable, ["a1", "obj1"])
+    komo.addObjective([1, 2], ry.FS.distance, ["a1", "obj1"], ry.OT.eq, [1e1])
+    komo.addModeSwitch([2, -1], ry.SY.stable, ["table", "obj1"])
+
+    komo.addObjective([2, -1], ry.FS.positionDiff, ["obj1", "goal1"], ry.OT.eq, [1e1])
+
+    komo.addObjective(
+        times=[3],
+        feature=ry.FS.jointState,
+        frames=[],
+        type=ry.OT.eq,
+        scale=[1e0],
+        target=qHome,
+    )
+
+    # komo.addObjective([2], ry.FS.poseDiff, ["a2", "goal2"], ry.OT.eq, [1e1])
+
+    # komo.addObjective([3, -1], ry.FS.poseDiff, ['a1', 'goal2'], ry.OT.eq, [1e1])
+    # komo.addObjective(
+    #     [3, -1], ry.FS.poseDiff, ["a2", "pre_agent_2_frame"], ry.OT.eq, [1e1]
+    # )
+
+    # we try to produce a couple different solutions
+    sols = []
+    for _ in range(num_goals):
+        dim = len(C.getJointState())
+        x_init = np.random.rand(dim) * 2 - 1.0
+        komo.initWithConstant(x_init)
+
+        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+        # options.nonStrictSteps = 50;
+
+        # solver.setOptions(damping=0.01, wolfe=0.001)
+        # solver.setOptions(damping=0.001)
+        retval = solver.solve()
+        retval = retval.dict()
+
+        # print(bottle, retval)
+
+        if view:
+            komo.view(True, "IK solution")
+
+        keyframes = komo.getPath()
+
+        # print(retval)
+
+        if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+            sols.append(keyframes)
+
+    # # print(keyframes)
+
+    return C, sols
+
+
 def make_piano_mover_env(view: bool = False):
     C = make_table_with_walls(2, 2)
     table = C.getFrame("table")
@@ -1051,8 +1158,17 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
             ry.JT.transXY, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
         ).setJointState([-1.5, -0.0])
 
-    g1_state = np.array([-1.5, -0.5, 0])
-    g2_state = np.array([0.5, +0.8, 0])
+    if agents_can_rotate[0]:
+        g1_state = np.array([-1.5, 0.5, 0])
+        # g1_state = np.array([-1.5, -0.5, 0])
+    else:
+        g1_state = np.array([-1.5, 0.5])
+        # g1_state = np.array([-1.5, -0.5, 0])
+    
+    if agents_can_rotate[1]:
+        g2_state = np.array([0.5, +0.8, 0])
+    else:
+        g2_state = np.array([0.5, +0.8])
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
@@ -1095,8 +1211,8 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
 
     keyframes = [g1_state, g2_state, C.getJointState()]
 
-    if not agents_can_rotate:
-        keyframes = [g1_state[:2], g2_state[:2], C.getJointState()]
+    print(keyframes)
+    print(agents_can_rotate)
 
     return C, keyframes
 
@@ -2635,7 +2751,7 @@ def make_panda_single_joint_goal_env(
     C.addFrame("way5").setShape(ry.ST.marker, [0.1]).setPosition([-0.3, 0.0, 0.6])
     C.addFrame("way6").setShape(ry.ST.marker, [0.1]).setPosition([0.3, 0.0, 0.6])
 
-    waypoints = [f"way{i}" for i in range(1,7)]
+    waypoints = [f"way{i}" for i in range(1, 7)]
 
     q_init = C.getJointState()
     q_init[1] -= 0.5
@@ -2693,13 +2809,14 @@ def make_panda_single_joint_goal_env(
         ees.append("a2_gripper")
 
     goals = ["way3", "way1", "way5"]
-    goals = goals[:len(ees)]
+    goals = goals[: len(ees)]
 
     print(goals)
 
     keyframes = compute_pose_for_robot(ees, goals)
 
     return C, keyframes
+
 
 def quaternion_from_z_rotation(angle):
     half_angle = angle / 2
@@ -2995,6 +3112,439 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
     return C, np.concatenate(
         [a0_b1_keyframes, a0_b2_keyframes, a1_b3_keyframes, a1_b5_keyframes]
     )
+
+
+def generate_rnd_axis_quaternion():
+    def align_x_with_target(target_vector):
+        # Default vector to align from (1, 0, 0)
+        source_vector = np.array([0.0, 0.0, 1.0])
+
+        # Compute the cross product and dot product
+        v = np.cross(source_vector, target_vector)
+        c = np.dot(source_vector, target_vector)
+
+        # Handle the edge case where the vectors are opposite
+        if np.isclose(c, -1.0, atol=1e-6):
+            # Rotate 180 degrees around any perpendicular axis (e.g., Y-axis)
+            return (0.0, 0.0, 1.0, 0.0)  # 180° rotation about Y-axis
+
+        # Compute the quaternion
+        s = np.sqrt((1 + c) * 2)
+        q = (s * 0.5, v[0] / s, v[1] / s, v[2] / s)
+
+        return q
+    
+    def quaternion_multiply(q1, q2):
+        w1, x1, y1, z1 = q1
+        w2, x2, y2, z2 = q2
+        
+        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+        
+        return np.array([w, x, y, z])
+    
+    def axis_to_quaternion(axis, angle):
+        axis = np.array(axis, dtype=float)
+        norm = np.linalg.norm(axis)
+        if norm == 0:
+            raise ValueError("Axis vector must not be zero.")
+        
+        axis = axis / norm  # Normalize the axis
+        half_angle = angle / 2
+        w = np.cos(half_angle)
+        x, y, z = axis * np.sin(half_angle)
+        
+        return np.array([w, x, y, z])
+
+    # Randomly select one of the major axes (±X, ±Y, ±Z)
+    axes = [
+        (1, 0, 0),  # +X
+        (-1, 0, 0),  # -X
+        (0, 1, 0),  # +Y
+        (0, -1, 0),  # -Y
+        (0, 0, 1),  # +Z
+        (0, 0, -1),  # -Z
+    ]
+
+    # Choose one axis randomly
+    chosen_axis = random.choice(axes)
+
+    print(chosen_axis)
+
+    # Compute the quaternion to align the X-axis with the selected axis
+    quat = align_x_with_target(chosen_axis)
+
+    angle = np.random.random() * np.pi * 2 - np.pi
+    rotate_around_axis_quat = axis_to_quaternion(chosen_axis, angle)
+
+    result = quaternion_multiply(quat, rotate_around_axis_quat)
+
+    return result
+
+
+def is_z_axis_up(quaternion):
+    w, x, y, z = quaternion
+
+    # Rotation matrix from quaternion
+    r20 = 2 * (x * z - w * y)
+    r21 = 2 * (y * z + w * x)
+    r22 = 1 - 2 * (x**2 + y**2)
+
+    # The Z-axis vector in the rotated frame
+    z_axis = np.array([r20, r21, r22])
+
+    # Check if Z-axis points up (dot product with (0, 0, 1) is close to 1)
+    return np.isclose(np.dot(z_axis, np.array([0, 0, 1])), 1.0, atol=1e-6)
+
+
+def make_box_pile_env(num_boxes=6, view: bool = False):
+    assert(num_boxes >= 9)
+
+    C = ry.Config()
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.3, 0.3, 0.3])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_vacuum.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([-0.5, 0.5, 0.0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-2)
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([+0.5, 0.5, 0.0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("tray").setParent(C.getFrame("table")).setShape(
+        ry.ST.box, [0.5, 0.5, 0.025, 0.005]
+    ).setPosition([0, 0, 0.25]).setMass(0.1).setColor((1, 0, 0, 1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("back_wall").setParent(C.getFrame("table")).setShape(
+        ry.ST.box, [2, 0.1, 1, 0.005]
+    ).setPosition([0, 1.5, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.01)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("side_wall_r").setParent(C.getFrame("table")).setShape(
+        ry.ST.box, [0.1, 2.8, 1, 0.005]
+    ).setPosition([-1, 0, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.01)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("side_wall_l").setParent(C.getFrame("table")).setShape(
+        ry.ST.box, [0.1, 2.8, 1, 0.005]
+    ).setPosition([1, 0, 0.8]).setMass(0.1).setColor((0, 0, 0, 0.01)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    size = np.array([0.1, 0.1, 0.1])
+
+    added_boxes = 0
+    while added_boxes < num_boxes:
+        c_coll_tmp = ry.Config()
+        c_coll_tmp.addConfigurationCopy(C)
+
+        pos = np.array(
+            [
+                (random.random() - 0.5) * 1.2,
+                (random.random() - 0.7) * 0.6,
+                0.3,
+            ]
+        )
+
+        # goal position
+        if pos[0] > -0.3 and pos[0] < 0.3 and pos[1] < 0.3 and pos[1] > -0.3:
+            continue
+
+        quat = generate_rnd_axis_quaternion()
+
+        box = (
+            c_coll_tmp.addFrame("box" + str(added_boxes))
+            .setParent(c_coll_tmp.getFrame("table"))
+            .setShape(ry.ST.box, [size[0], size[1], size[2], 0.005])
+            .setPosition([pos[0], pos[1], pos[2]])
+            .setMass(0.1)
+            .setColor((0.1, 1, 0.1, 0.8))
+            .setContact(1)
+            .setQuaternion(quat)
+            .setJoint(ry.JT.rigid)
+        )
+
+        c_coll_tmp.addFrame("marker_box" + str(added_boxes)).setParent(box).setShape(
+            ry.ST.marker, [0.1]
+        ).setContact(0).setJoint(ry.JT.rigid)
+
+        binary_collision_free = c_coll_tmp.getCollisionFree()
+        if binary_collision_free:
+            added_boxes += 1
+
+            C.clear()
+            C.addConfigurationCopy(c_coll_tmp)
+
+    # add goal positions
+    for i in range(num_boxes):
+        x_ind = i % 3
+        y_ind = int(i / 3)
+        pos = np.array(
+            [
+                x_ind * 0.15 - 0.15,
+                y_ind * 0.15 - 0.15,
+                0.07,
+            ]
+        )
+
+        box = (
+            C.addFrame("goal" + str(i))
+            .setParent(c_coll_tmp.getFrame("tray"))
+            .setShape(ry.ST.box, [size[0], size[1], size[2], 0.005])
+            .setRelativePosition([pos[0], pos[1], pos[2]])
+            .setMass(0.1)
+            .setColor((0.1, 0.1, 0.1, 0.5))
+            .setContact(0)
+            .setJoint(ry.JT.rigid)
+        )
+
+    if view:
+        C.view(True)
+
+    keyframes = []
+
+    def handover(r1, r2, box_num):
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        box = "box" + str(box_num)
+        goal = "goal" + str(box_num)
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=4, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [r1 + "ur_vacuum", box])
+        komo.addObjective(
+            [1, 2],
+            ry.FS.distance,
+            [r1 + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e0],
+            [0.07],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [r1 + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [r1 + "ur_ee_marker", "table"],
+            ry.OT.sos,
+            [2e1],
+            [-1]
+        )
+
+        komo.addModeSwitch([2, 3], ry.SY.stable, [r2 + "ur_vacuum", box])
+        komo.addObjective(
+            [2, 3],
+            ry.FS.distance,
+            [r2 + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e0],
+            [0.07],
+        )
+        komo.addObjective(
+            [2, 3],
+            ry.FS.positionDiff,
+            [r2 + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 1],
+        )
+        komo.addObjective(
+            [2, 3],
+            ry.FS.scalarProductXZ,
+            [r2 + "ur_ee_marker", box],
+            ry.OT.sos,
+            [2e1],
+            [-1]
+        )
+
+        komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([3, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[4, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        for i in range(5):
+            if i > 0:
+                komo.initRandom()
+            #     # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
+            #     x_init = np.random.rand(len(q_home)) * 4 - 2.0
+            #     komo.initWithConstant(x_init)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            print(retval)
+
+            if view:
+                komo.view(True, "IK solution")
+            # komo.view(True, "IK solution")
+
+            keyframes = komo.getPath()
+
+            # print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+
+                return keyframes[:-1,:]
+
+        return None
+
+    def pick_and_place(robot_prefix, box_num):
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        box = "box" + str(box_num)
+        goal = "goal" + str(box_num)
+
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+        komo.addObjective(
+            [1, 2],
+            ry.FS.distance,
+            [robot_prefix + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e0],
+            [0.05],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [robot_prefix + "ur_ee_marker", box],
+            ry.OT.sos,
+            [2e1],
+            [-1]
+        )
+
+        # for pick and place directly
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        solver = ry.NLP_Solver(komo.nlp(), verbose=10)
+        solver.setOptions(damping=0.1, wolfe=0.001)
+        retval = solver.solve()
+
+        print(retval.dict())
+
+        if view:
+            komo.view(True, "IK solution")
+
+        sol = komo.getPath()[:-1, :]
+
+        return sol
+
+    for i in range(num_boxes):
+        # check how the object is oriented, and if we can grasp and place it directly
+        quat = C.getFrame("box" + str(i)).getQuaternion()
+        z_up = is_z_axis_up(quat)
+        if z_up:
+            for r in ["a1_", "a2_"]:
+                keyframe = pick_and_place(r, i)
+                print(keyframe)
+                if keyframe is None:
+                    continue
+                keyframes.append(("pick", [r], i, keyframe))
+                break
+        else:
+            # otherwise a handover/regrasp is required
+            found_sol = False
+            for r1 in ["a1_", "a2_"]:
+                for r2 in ["a1_", "a2_"]:
+                    if r1 == r2:
+                        continue
+
+                    keyframe = handover(r1, r2, i)
+
+                    if keyframe is None:
+                        continue
+
+                    print(keyframe)
+
+                    keyframes.append(("handover", [r1, r2], i, keyframe))
+                    found_sol = True
+                if found_sol:
+                    break
+
+    return C, keyframes
 
 
 def make_mobile_manip_env(view: bool = False):

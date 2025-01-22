@@ -1,7 +1,10 @@
-import os, sys; sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+import os, sys
+
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 import src.multi_robot_multi_goal_planning.problems.rai_envs as re
 import src.multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
+
 
 def get_env_by_name(name):
     # fmt: off
@@ -16,6 +19,9 @@ def get_env_by_name(name):
         "random_2d_no_rot": lambda: re.rai_random_two_dim(agents_can_rotate=False),
         "2d_handover": lambda: re.rai_two_dim_handover(),
         "three_agents": lambda: re.rai_two_dim_three_agent_env(),
+
+        # 2D with neighborhood
+        "single_agent_mover": lambda: re.rai_two_dim_single_agent_neighbourhood(),
         
         # Envs without obstacles, used to test optimality convergence
         "one_agent_many_goals": lambda: re.rai_two_dim_env_no_obs(),
@@ -33,6 +39,7 @@ def get_env_by_name(name):
         "welding": lambda: re.rai_quadruple_ur10_arm_spot_welding_env(),
         "simplified_welding": lambda: re.rai_quadruple_ur10_arm_spot_welding_env(num_robots=2, num_pts=2),
         "box_stacking": lambda: re.rai_ur10_arm_box_stack_env(),
+        "box_reorientation": lambda: re.rai_ur10_box_pile_cleanup_env(),
 
         "box_rearrangement": lambda: re.rai_ur10_arm_box_rearrangement_env(), # 2 robots, 9 boxes
         "box_rearrangement_only_five": lambda: re.rai_ur10_arm_box_rearrangement_env(num_boxes=5),
@@ -46,9 +53,22 @@ def get_env_by_name(name):
         "hallway_single_goal": lambda: rsge.rai_hallway_two_dim(),
         "hallway_single_goal_no_rot": lambda: rsge.rai_hallway_two_dim(agents_can_rotate=False),
 
+        # single robot, single goal: debugging
+        "two_dim_single_robot_single_goal": lambda: rsge.rai_random_two_dim_single_agent(),
+        "single_panda_arm_single_goal": lambda: rsge.rai_single_panda_arm_single_goal_env(),
+        "single_agent_box_stacking": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=1, num_boxes=2),
+
         # 3d single goal envs
         "multi_agent_panda_single_goal": lambda: rsge.rai_multi_panda_arm_single_goal_env(),
-        "handover_single_goal": lambda: rsge.rai_ur10_handover_env()
+        "handover_single_goal": lambda: rsge.rai_ur10_handover_env(),
+
+        ##### DEPENDENCY GRAPHS
+        "hallway_dep": lambda: re.rai_hallway_two_dim_dependency_graph(),
+        "piano_dep": lambda: re.rai_two_dim_simple_manip_dependency_graph(),
+        "2d_handover_dep": lambda: re.rai_two_dim_handover_dependency_graph(),
+        "two_agents_many_goals_dep": lambda: re.rai_two_dim_env_no_obs_dep_graph(),
+        "two_agents_many_goals_dep_no_rot": lambda: re.rai_two_dim_env_no_obs_dep_graph(agents_can_rotate=False),
+        "three_agent_many_goals_dep": lambda: re.rai_two_dim_three_agent_env_dependency_graph(),
     }
     # fmt: on
 
