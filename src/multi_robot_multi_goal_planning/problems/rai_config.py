@@ -1195,14 +1195,14 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("obs3").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0.0, -0.9, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 0.8, 0.06, 0.005]).setContact(1).setColor(
+        C.getFrame("table").getPosition() + [0.0, -0.86, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 0.9, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("obs4").setParent(table).setPosition(
-        C.getFrame("table").getPosition() + [0.0, 1.15, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 1.4, 0.06, 0.005]).setContact(1).setColor(
+        C.getFrame("table").getPosition() + [0.0, 1.2, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 1.55, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
@@ -1837,7 +1837,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
                 ]
             )
             C.addFrame("box" + str(j) + str(k)).setParent(table).setShape(
-                ry.ST.box, [size[0], size[1], size[2], 0.005]
+                ry.ST.box, [size[0], size[1], size[2], 0.5]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 np.random.rand(3)
             ).setContact(1).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
