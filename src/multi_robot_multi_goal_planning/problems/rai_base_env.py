@@ -23,6 +23,184 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
 
 
+import os
+import sys
+import io
+from contextlib import contextmanager
+from functools import wraps
+import tempfile
+
+DEVNULL = os.open(os.devnull, os.O_WRONLY)
+
+
+def close_devnull():
+    """Closes the global /dev/null file descriptor."""
+    global DEVNULL
+    if DEVNULL is not None:
+        os.close(DEVNULL)
+        DEVNULL = None
+
+
+@contextmanager
+def silence_output():
+    """
+    Context manager to silence all output (stdout and stderr) using a persistent /dev/null.
+    """
+    # Backup original file descriptors
+    stdout_fd = sys.stdout.fileno()
+    stderr_fd = sys.stderr.fileno()
+    saved_stdout_fd = os.dup(stdout_fd)
+    saved_stderr_fd = os.dup(stderr_fd)
+
+    # Redirect stdout and stderr to the persistent /dev/null
+    os.dup2(DEVNULL, stdout_fd)
+    os.dup2(DEVNULL, stderr_fd)
+
+    try:
+        yield
+    finally:
+        # Restore original file descriptors
+        os.dup2(saved_stdout_fd, stdout_fd)
+        os.dup2(saved_stderr_fd, stderr_fd)
+        os.close(saved_stdout_fd)
+        os.close(saved_stderr_fd)
+
+
+# Decorator version
+def silence_function(func):
+    """
+    Decorator to silence all output from a function.
+    """
+
+    def wrapper(*args, **kwargs):
+        with silence_output():
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
+class FilterManager:
+    def __init__(self, filter_func):
+        self.filter_func = filter_func
+        self.read_fd = None
+        self.write_fd = None
+        self.saved_stdout_fd = None
+        self.saved_stderr_fd = None
+
+    def start(self):
+        if self.read_fd is None or self.write_fd is None:
+            self.read_fd, self.write_fd = os.pipe()
+        self.saved_stdout_fd = os.dup(sys.stdout.fileno())
+        self.saved_stderr_fd = os.dup(sys.stderr.fileno())
+        os.dup2(self.write_fd, sys.stdout.fileno())
+        os.dup2(self.write_fd, sys.stderr.fileno())
+
+    def stop(self):
+        if self.saved_stdout_fd is None or self.saved_stderr_fd is None:
+            return  # Avoid double stopping
+        os.dup2(self.saved_stdout_fd, sys.stdout.fileno())
+        os.dup2(self.saved_stderr_fd, sys.stderr.fileno())
+        os.close(self.saved_stdout_fd)
+        os.close(self.saved_stderr_fd)
+        self.saved_stdout_fd = None
+        self.saved_stderr_fd = None
+
+        if self.write_fd is not None:
+            os.close(self.write_fd)
+            self.write_fd = None
+
+        # Read from the pipe and apply the filter
+        if self.read_fd is not None:
+            with os.fdopen(self.read_fd, 'r') as pipe:
+                for line in pipe:
+                    if self.filter_func(line):
+                        sys.stdout.write(line)
+                        sys.stdout.flush()
+            self.read_fd = None
+
+# Decorator version
+def reusable_filter_output(filter_func):
+    """
+    Decorator to filter output using a reusable FilterManager.
+    """
+    manager = FilterManager(filter_func)
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            manager.start()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                manager.stop()
+        return wrapper
+    return decorator
+
+@contextmanager
+def fast_capture_and_filter_output(filter_func):
+    """
+    Captures and filters output directly from file descriptors, bypassing os.fdopen.
+    """
+    # Backup original file descriptors
+    stdout_fd = sys.stdout.fileno()
+    stderr_fd = sys.stderr.fileno()
+    saved_stdout_fd = os.dup(stdout_fd)
+    saved_stderr_fd = os.dup(stderr_fd)
+
+    # Create a pipe for capturing output
+    read_fd, write_fd = os.pipe()
+
+    # Redirect stdout and stderr to the write end of the pipe
+    os.dup2(write_fd, stdout_fd)
+    os.dup2(write_fd, stderr_fd)
+
+    try:
+        yield
+    finally:
+        # Close the write end to signal EOF
+        os.close(write_fd)
+
+        # Restore original file descriptors
+        os.dup2(saved_stdout_fd, stdout_fd)
+        os.dup2(saved_stderr_fd, stderr_fd)
+        os.close(saved_stdout_fd)
+        os.close(saved_stderr_fd)
+
+        # Read directly from the pipe and filter the output
+        while True:
+            chunk = os.read(read_fd, 4096)  # Read in chunks
+            if not chunk:
+                break
+            for line in chunk.decode().splitlines():
+                if filter_func(line):
+                    sys.stdout.write(line + "\n")
+                    sys.stdout.flush()
+
+        os.close(read_fd)
+
+
+def filter_output(filter_func):
+    """
+    Decorator that filters output based on the provided function
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with fast_capture_and_filter_output(filter_func):
+                return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+# Example filter functions
+def hide_pair_collision(line):
+    """Filter out lines containing 'debug'"""
+    return "pairCollision.cpp:libccd:" not in line
+
+
 def get_joint_indices(C: ry.Config, prefix: str) -> List[int]:
     all_joints_weird = C.getJointNames()
 
@@ -101,6 +279,9 @@ class rai_env(BaseProblem):
         self.C.view(blocking)
 
     # Environment functions: collision checking
+    # @filter_output(hide_pair_collision)
+    # @silence_function
+    # @reusable_filter_output(hide_pair_collision)
     def is_collision_free(
         self,
         q: Optional[Configuration],
@@ -138,7 +319,7 @@ class rai_env(BaseProblem):
             offset = 0
             for robot in r:
                 dim = self.robot_dims[robot]
-                self.C.setJointState(q[offset:offset+dim], self.robot_joints[robot])
+                self.C.setJointState(q[offset : offset + dim], self.robot_joints[robot])
                 offset += dim
 
         binary_collision_free = self.C.getCollisionFree()
@@ -184,6 +365,7 @@ class rai_env(BaseProblem):
 
         return True
 
+    # @silence_function
     def is_edge_collision_free(
         self,
         q1: Configuration,
@@ -234,7 +416,7 @@ class rai_env(BaseProblem):
     def get_scenegraph_info_for_mode(self, mode: Mode):
         if not self.manipulating_env:
             return {}
-        
+
         self.set_to_mode(mode)
 
         # TODO: should we simply list the movable objects manually?
@@ -245,7 +427,10 @@ class rai_env(BaseProblem):
         for frame in self.C.frames():
             if "obj" in frame.name:
                 movable_objects.append(frame.name)
-                sg[frame.name] = (frame.getParent().name, np.round(frame.getRelativeTransform(), 3).tobytes())
+                sg[frame.name] = (
+                    frame.getParent().name,
+                    np.round(frame.getRelativeTransform(), 3).tobytes(),
+                )
 
         return sg
 
@@ -277,14 +462,14 @@ class rai_env(BaseProblem):
 
             mode_sequence.append(current_mode)
             current_mode = current_mode.prev_mode
-        
+
         mode_sequence.append(current_mode)
         mode_sequence = mode_sequence[::-1]
 
         # print(mode_sequence)
 
         for i, mode in enumerate(mode_sequence[:-1]):
-            next_mode = mode_sequence[i+1]
+            next_mode = mode_sequence[i + 1]
 
             active_task = self.get_active_task(mode, next_mode.task_ids)
 
@@ -301,8 +486,8 @@ class rai_env(BaseProblem):
                 joint_names.extend(self.robot_joints[r])
                 q_new.append(next_mode.entry_configuration[self.robots.index(r)])
 
-            assert(mode is not None)
-            assert(mode.entry_configuration is not None)
+            assert mode is not None
+            assert mode.entry_configuration is not None
 
             q = np.concat(q_new)
             self.C.setJointState(q, joint_names)
@@ -315,7 +500,9 @@ class rai_env(BaseProblem):
                         self.tasks[prev_mode_index].frames[0],
                         self.tasks[prev_mode_index].frames[1],
                     )
-                    self.C.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
+                    self.C.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(
+                        -1
+                    )
 
                 # postcondition
                 if self.tasks[prev_mode_index].side_effect is not None:
