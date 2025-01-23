@@ -706,7 +706,7 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 
 
 class rai_random_two_dim(SequenceMixin, rai_env):
-    def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=False):
+    def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=True):
         self.C, keyframes = make_random_two_dim(
             num_agents=num_robots,
             num_goals=num_goals,
@@ -776,8 +776,7 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
         self.sequence = [0, 1, 2]
 
-        self.start_mode = self._make_start_mode_from_sequence()
-        self._terminal_task_ids = self._make_terminal_mode_from_sequence()
+        BaseModeLogic.__init__(self)
 
         self.tolerance = 0.05
 

@@ -57,6 +57,165 @@ class Node:
         return self.id
 
 
+class HeapQueue:
+    def __init__(self):
+        self.queue = []
+        heapq.heapify(self.queue)
+
+    def __len__(self):
+        return len(self.queue)
+
+    def heappush(self, item):
+        heapq.heappush(self.queue, item)
+
+    def heappop(self):
+        return heapq.heappop(self.queue)
+
+
+class BucketHeapQueue:
+    def __init__(self):
+        self.queues = {}
+        self.priority_lookup = []
+
+        self.len = 0
+
+    def __len__(self):
+        return self.len
+
+    def heappush(self, item):
+        self.len += 1
+        priority = int(item[0] * 10000)
+
+        if priority not in self.queues:
+            self.queues[priority] = []
+            heapq.heappush(self.priority_lookup, priority)
+
+        heapq.heappush(self.queues[priority], item)
+
+    def heappop(self):
+        self.len -= 1
+
+        min_priority = self.priority_lookup[0]
+        value = heapq.heappop(self.queues[min_priority])
+
+        if not self.queues[min_priority]:
+            del self.queues[min_priority]
+            heapq.heappop(self.priority_lookup)
+
+        return value
+
+
+class IndexHeap:
+    def __init__(self):
+        self.queue = []
+        self.items = []
+        heapq.heapify(self.queue)
+
+    def __len__(self):
+        return len(self.queue)
+
+    def heappush(self, item):
+        idx = len(self.items)
+        self.items.append(item)
+
+        heapq.heappush(self.queue, (item[0], idx))
+
+    def heappop(self):
+        _, idx = heapq.heappop(self.queue)
+        return self.items[idx]
+
+
+class BucketIndexHeap:
+    def __init__(self, granularity=100):
+        self.granularity = granularity
+
+        self.queues = {}
+        self.priority_lookup = []
+
+        self.items = []
+
+        self.len = 0
+
+    def __len__(self):
+        return self.len
+
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def heappush(self, item):
+        self.len += 1
+        priority = int(item[0] * self.granularity)
+
+        idx = len(self.items)
+        self.items.append(item)
+
+        if priority not in self.queues:
+            self.queues[priority] = []
+            heapq.heappush(self.priority_lookup, priority)
+
+        heapq.heappush(self.queues[priority], (item[0], idx))
+
+    def heappop(self):
+        self.len -= 1
+        min_priority = self.priority_lookup[0]
+        _, idx = heapq.heappop(self.queues[min_priority])
+
+        if not self.queues[min_priority]:
+            del self.queues[min_priority]
+            heapq.heappop(self.priority_lookup)
+
+        value = self.items[idx]
+
+        return value
+
+
+class DiscreteBucketIndexHeap:
+    def __init__(self, granularity=1000):
+        self.granularity = granularity
+
+        self.queues = {}
+        self.priority_lookup = []
+
+        self.items = []
+
+        self.len = 0
+
+    def __len__(self):
+        # num_elements = 0
+        # for k, v in self.queues.items():
+        #     num_elements += len(v)
+
+        # return num_elements
+        return self.len
+
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def heappush(self, item):
+        self.len += 1
+        priority = int(item[0] * self.granularity)
+
+        idx = len(self.items)
+        self.items.append(item)
+
+        if priority not in self.queues:
+            self.queues[priority] = []
+            heapq.heappush(self.priority_lookup, priority)
+
+        self.queues[priority].append((item[0], idx))
+
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def heappop(self):
+        self.len -= 1
+
+        min_priority = self.priority_lookup[0]
+        _, idx = self.queues[min_priority].pop()
+
+        if not self.queues[min_priority]:
+            del self.queues[min_priority]
+            heapq.heappop(self.priority_lookup)
+
+        value = self.items[idx]
+
+        return value
+
+
 class Graph:
     root: State
     nodes: Dict
@@ -88,6 +247,17 @@ class Graph:
 
         self.reverse_transition_node_array_cache = {}
 
+    def get_num_samples(self):
+        num_samples = 0
+        for k, v in self.nodes.items():
+            num_samples += len(v)
+
+        num_transition_samples = 0
+        for k, v in self.transition_nodes.items():
+            num_transition_samples += len(v)
+
+        return num_samples + num_transition_samples
+
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def compute_lb_mode_transisitons(self, batch_cost):
         if True:
@@ -110,16 +280,10 @@ class Graph:
                 if node.state.mode == self.root.state.mode:
                     continue
 
-                neighbors_next_mode = [
+                neighbors = [
                     n.neighbors[0]
                     for n in self.reverse_transition_nodes[node.state.mode]
                 ]
-
-                neighbors_this_mode = [
-                    n for n in self.reverse_transition_nodes[node.state.mode]
-                ]
-
-                neighbors = neighbors_this_mode + neighbors_next_mode
 
                 if len(neighbors) == 0:
                     continue
@@ -134,6 +298,7 @@ class Graph:
                     node.state.q,
                     self.reverse_transition_node_array_cache[node.state.mode],
                 )
+
                 parent_cost = costs[node.id]
                 for edge_cost, n in zip(edge_costs, neighbors):
                     cost = parent_cost + edge_cost
@@ -147,9 +312,18 @@ class Graph:
                     # print(cost)
                     # parents[n] = node
                     if id not in costs or cost < costs[id]:
+                        # if n.neighbors[0].lb_cost_to_goal is not None:
+                        #     print(n.neighbors[0].lb_cost_to_goal)
+                        #     print(cost)
+                        #     print()
+
                         costs[id] = cost
                         n.lb_cost_to_goal = cost
-                        n.neighbors[0].lb_cost_to_goal = cost
+
+                        # if n.neighbors[0].lb_cost_to_goal is not None and n.neighbors[0].lb_cost_to_goal > cost:
+                        #     print("AAAA")
+                        #     n.neighbors[0].lb_cost_to_goal = cost
+
                         #     # parents[n] = node
 
                         # queue.append(n)
@@ -327,12 +501,6 @@ class Graph:
             if key not in self.node_array_cache:
                 self.node_array_cache[key] = np.array([n.state.q.q for n in node_list])
 
-            # with ThreadPoolExecutor() as executor:
-            #     result = list(executor.map(lambda node: node.state.q, node_list))
-
-            # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
-            # result = list(map(lambda n: n.state.q, node_list))
-            # dists = self.batch_dist_fun(node.state.q, result) # this, and the list copm below are the slowest parts
             dists = self.batch_dist_fun(
                 node.state.q, self.node_array_cache[key]
             )  # this, and the list copm below are the slowest parts
@@ -354,6 +522,9 @@ class Graph:
 
         dim = len(node.state.q.state())
 
+        best_nodes_arr = np.zeros((0, dim))
+        best_transitions_arr = np.zeros((0, dim))
+
         if self.use_k_nearest:
             best_nodes = []
             if key in self.nodes:
@@ -367,6 +538,7 @@ class Graph:
                 topk = topk[np.argsort(dists[topk])]
 
                 best_nodes = [node_list[i] for i in topk]
+                best_nodes_arr = self.node_array_cache[key][topk, :]
 
             best_transition_nodes = []
             if key in self.transition_nodes:
@@ -388,8 +560,12 @@ class Graph:
                 best_transition_nodes = [
                     transition_node_list[i] for i in transition_topk
                 ]
+                best_transitions_arr = self.transition_node_array_cache[key][
+                    transition_topk
+                ]
 
             best_nodes = best_nodes + best_transition_nodes
+
         else:
             r = 3
 
@@ -400,24 +576,38 @@ class Graph:
 
             best_nodes = []
             if key in self.nodes:
-                r_star = 2 * (
-                    informed_measure
-                    / unit_n_ball_measure
-                    * (np.log(len(node_list)) / len(node_list))
-                    * (1 + 1 / dim)
-                ) ** (1 / dim)
+                r_star = (
+                    1.001
+                    * 2
+                    * (
+                        informed_measure
+                        / unit_n_ball_measure
+                        * (np.log(len(node_list)) / len(node_list))
+                        * (1 + 1 / dim)
+                    )
+                    ** (1 / dim)
+                )
                 r = r_star
 
-                best_nodes = [n for i, n in enumerate(node_list) if dists[i] < r]
+                best_nodes = [node_list[i] for i in np.where(dists < r)[0]]
+                best_nodes_arr = self.node_array_cache[key][np.where(dists < r)[0], :]
 
             best_transition_nodes = []
             if key in self.transition_nodes:
-                r_star = 2 * (
-                    (1 + 1 / dim)
-                    * informed_measure
-                    / unit_n_ball_measure
-                    * (np.log(len(transition_node_list)) / len(transition_node_list))
-                ) ** (1 / dim)
+                r_star = (
+                    1.001
+                    * 2
+                    * (
+                        (1 + 1 / dim)
+                        * informed_measure
+                        / unit_n_ball_measure
+                        * (
+                            np.log(len(transition_node_list))
+                            / len(transition_node_list)
+                        )
+                    )
+                    ** (1 / dim)
+                )
                 # print(node.state.mode, r_star)
                 r = r_star
 
@@ -425,20 +615,22 @@ class Graph:
                     r = 1e6
 
                 best_transition_nodes = [
-                    n
-                    for i, n in enumerate(transition_node_list)
-                    if transition_dists[i] < r
+                    transition_node_list[i] for i in np.where(transition_dists < r)[0]
+                ]
+                best_transitions_arr = self.transition_node_array_cache[key][
+                    np.where(transition_dists < r)[0]
                 ]
 
             best_nodes = best_nodes + best_transition_nodes
 
+        arr = np.vstack([best_nodes_arr, best_transitions_arr])
+
         if node.is_transition:
-            # we do not want to have other transition nodes as neigbors
-            # filtered_neighbors = [n for n in best_nodes if not n.is_transition]
+            tmp = np.vstack([n.state.q.state() for n in node.neighbors])
+            arr = np.vstack([arr, tmp])
+            return best_nodes + node.neighbors, arr
 
-            return best_nodes + node.neighbors
-
-        return best_nodes[1:]
+        return best_nodes, arr
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def search(
@@ -464,12 +656,12 @@ class Graph:
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.q for n in self.transition_nodes[node.state.mode]]
+                    [o.state.q.q for o in self.transition_nodes[node.state.mode]]
                 )
 
             if node.state.mode not in self.transition_node_lb_cache:
                 self.transition_node_lb_cache[node.state.mode] = np.array(
-                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]]
+                    [o.lb_cost_to_goal for o in self.transition_nodes[node.state.mode]]
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -478,7 +670,7 @@ class Graph:
             )
 
             min_cost = np.min(
-                self.transition_node_lb_cache[node.state.mode] - costs_to_transitions
+                self.transition_node_lb_cache[node.state.mode] + costs_to_transitions
             )
 
             h_cache[node] = min_cost
@@ -494,13 +686,24 @@ class Graph:
         parents = {start_node: None}
         gs = {start_node.id: 0}  # best cost to get to a node
 
+        start_neighbors, _ = self.get_neighbors(
+            start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
+        )
+
         # populate open_queue and fs
-        start_edges = [
-            (start_node, n)
-            for n in self.get_neighbors(
-                start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
-            )
-        ]
+        start_edges = [(start_node, n) for n in start_neighbors]
+        # start_edges = [
+        #     (start_node, n)
+        #     for n, _ in self.get_neighbors(
+        #         start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
+        #     )
+        # ]
+
+        # queue = HeapQueue()
+        # queue = BucketHeapQueue()
+        queue = BucketIndexHeap()
+        # queue = DiscreteBucketIndexHeap()
+        # queue = IndexHeap()
 
         # fs = {}  # total cost of a node (f = g + h)
         for e in start_edges:
@@ -509,28 +712,68 @@ class Graph:
                 edge_cost = d(e[0], e[1])
                 cost = gs[start_node.id] + edge_cost + h(e[1])
                 # fs[(e[0].id, e[1].id)] = cost
-                heapq.heappush(open_queue, (cost, edge_cost, e))
+                # heapq.heappush(open_queue, (cost, edge_cost, e))
+                queue.heappush((cost, edge_cost, e))
                 # open_queue.append((cost, edge_cost, e))
 
         # open_queue.sort(reverse=True)
 
+        # for k, v in self.transition_nodes.items():
+        #     for n in v:
+        #         if len(n.neighbors) > 0:
+        #             assert(n.lb_cost_to_goal == n.neighbors[0].lb_cost_to_goal)
+
+        wasted_pops = 0
+
         num_iter = 0
-        while len(open_queue) > 0:
+        while len(queue) > 0:
+            # while len(open_queue) > 0:
             num_iter += 1
 
-            if num_iter % 10000 == 0:
-                print(len(open_queue))
+            if num_iter % 100000 == 0:
+                # print(len(open_queue))
+                print(len(queue))
 
-            f_pred, edge_cost, edge = heapq.heappop(open_queue)
+            # f_pred, edge_cost, (n0, n1) = heapq.heappop(open_queue)
+            f_pred, edge_cost, (n0, n1) = queue.heappop()
             # print(open_queue[-1])
             # print(open_queue[-2])
             # f_pred, edge_cost, edge = open_queue.pop()
-            n0, n1 = edge
+            # n0, n1 = edge
 
-            g_tentative = gs[n0.id] + edge_cost
+            # g_tentative = gs[n0.id] + edge_cost
 
             # if we found a better way to get there before, do not expand this edge
-            if n1.id in gs and g_tentative >= gs[n1.id]:
+            # if n1.id in gs:
+            #     print(f_pred)
+            #     print(gs[n0.id])
+            #     print('new_cost/oldcost', g_tentative, gs[n1.id])
+            #     print('n0id/n1id', n0.id, n1.id)
+            #     print('n0mode/n1mode', n0.state.mode, n1.state.mode)
+            #     print('n0trans/n1trans', n0.is_transition, n1.is_transition)
+
+            #     print("root", self.root.state.q.state())
+
+            #     if (n1.is_transition):
+            #         print('n1 is transition')
+            #         print(n1.neighbors[0].id)
+            #         print(n1.neighbors[0].state.mode)
+            #         print(n1.neighbors[0].state.q.state())
+
+            #     if (n0.is_transition):
+            #         print('n0 is transition')
+            #         print(n0.neighbors[0].id)
+
+            #     print(edge_cost)
+
+            #     print(gs[n0.id] + h(n0))
+            #     print(gs[n1.id] + h(n1))
+
+            #     assert(g_tentative >= gs[n1.id])
+
+            # if n1.id in gs and g_tentative >= gs[n1.id]:
+            if n1.id in gs:
+                wasted_pops += 1
                 continue
 
             # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
@@ -565,6 +808,7 @@ class Graph:
             # print('reached modes', reached_modes)
 
             # print('adding', n1.id)
+            g_tentative = gs[n0.id] + edge_cost
             gs[n1.id] = g_tentative
             parents[n1] = n0
 
@@ -573,34 +817,43 @@ class Graph:
                 break
 
             # get_neighbors
-            neighbors = self.get_neighbors(
+            neighbors, tmp = self.get_neighbors(
                 n1, space_extent=np.prod(np.diff(env.limits, axis=0))
             )
 
             if len(neighbors) != 0:
                 # add neighbors to open_queue
                 # edge_costs = env.batch_config_cost(
-                #     [n1.state] * len(neighbors), [n.state for n in neighbors]
+                #     n1.state.q, np.array([n.state.q.state() for n in neighbors])
                 # )
-                edge_costs = env.batch_config_cost(
-                    n1.state.q, np.array([n.state.q.state() for n in neighbors])
-                )
-                for i, n in enumerate(neighbors):
+                edge_costs = env.batch_config_cost(n1.state.q, tmp)
+                for n, edge_cost in zip(neighbors, edge_costs):
                     # if n == n0:
                     #     continue
 
                     if n.id in n1.blacklist:
                         continue
 
-                    edge_cost = edge_costs[i]
-                    g_new = g_tentative + edge_cost
+                    # edge_cost = edge_costs[i]
+                    # g_new = g_tentative + edge_cost
 
                     # if n.id in gs:
                     #     print(n.id)
 
-                    if n.id not in gs or g_new < gs[n.id]:
+                    if n.id not in gs:
+                        # if n.id not in gs or g_new < gs[n.id]:
                         # sparsely check only when expanding
                         # cost to get to neighbor:
+                        # q0 = n1.state.q
+                        # q1 = n.state.q
+                        # collision_free = env.is_edge_collision_free(
+                        #     q0, q1, n1.state.mode, 5
+                        # )
+                        # if not collision_free:
+                        #     n.blacklist.add(n1.id)
+                        #     n1.blacklist.add(n.id)
+
+                        g_new = g_tentative + edge_cost
                         f_node = g_new + h(n)
                         # fs[(n1, n)] = f_node
 
@@ -608,7 +861,9 @@ class Graph:
                             continue
 
                         # if n not in closed_list:
-                        heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
+                        # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
+                        queue.heappush((f_node, edge_cost, (n1, n)))
+
                         # open_queue.append((f_node, edge_cost, (n1, n)))
                 # heapq.heapify(open_queue)
                 # open_queue.sort(reverse=True)
@@ -624,8 +879,13 @@ class Graph:
                 path.append(parents[n])
                 n = parents[n]
 
+                # print(gs[n.id] + h(n))
+                # print('\t\t', h(n))
+
             path.append(n)
             path = path[::-1]
+
+        print("Wasted pops", wasted_pops)
 
         return path
 
@@ -645,8 +905,8 @@ class Graph:
 
         def h(node):
             # return 0
-            if node in h_cache:
-                return h_cache[node]
+            if node.id in h_cache:
+                return h_cache[node.id]
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
@@ -667,7 +927,7 @@ class Graph:
                 self.transition_node_lb_cache[node.state.mode] - costs_to_transitions
             )
 
-            h_cache[node] = min_cost
+            h_cache[node.id] = min_cost
             return min_cost
 
         def d(n0, n1):
@@ -846,6 +1106,28 @@ def joint_prm_planner(
 
                 if env.is_collision_free(q, m):
                     new_samples.append(State(q, m))
+        elif True:
+            # grid sampling
+
+            m = sample_mode("weighted", cost is not None)
+            q = []
+            for i in range(len(env.robots)):
+                r = env.robots[i]
+                lims = env.limits[:, env.robot_idx[r]]
+                if lims[0, 0] < lims[1, 0]:
+                    qr = (
+                        np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
+                        + lims[0, :]
+                    )
+                else:
+                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+
+                q.append(qr)
+
+            q = conf_type.from_list(q)
+
+            if env.is_collision_free(q, m):
+                new_samples.append(State(q, m))
         else:
             # we found a solution, and can do informed sampling:
             # cost = (cost to get to mode) + cost in mode + (cost_to_goal)
@@ -960,12 +1242,16 @@ def joint_prm_planner(
 
     cnt = 0
     while True:
+        cnt = g.get_num_samples()
+
+        print()
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
             # if current_best_path is not None:
             # if cnt > 5000 and current_best_path is not None:
             if False and current_best_path is not None:
+
                 def cost_to_mode_on_path(mode, path):
                     for i in range(len(path)):
                         curr_state = path[i]
@@ -998,7 +1284,7 @@ def joint_prm_planner(
                 somewhat_informed_samples = []
                 for _ in range(200):
                     mode = sample_mode("uniform_reached", None)
-                    print(mode.task_ids)
+                    # print(mode.task_ids)
 
                     cost_to_reach_mode, mode_start_config = cost_to_mode_on_path(
                         mode, current_best_path
@@ -1035,44 +1321,44 @@ def joint_prm_planner(
                     ):
                         continue
 
-                    # tmp = []
-                    # for _ in range(1000):
-                    for _ in range(10):
-                        q = []
-                        for i in range(len(env.robots)):
-                            r = env.robots[i]
+                    tmp = []
+                    for _ in range(1000):
+                        for _ in range(10):
+                            q = []
+                            for i in range(len(env.robots)):
+                                r = env.robots[i]
 
-                            lims = env.limits[:, env.robot_idx[r]]
-                            if lims[0, 0] < lims[1, 0]:
-                                qr = (
-                                    np.random.rand(env.robot_dims[r])
-                                    * (lims[1, :] - lims[0, :])
-                                    + lims[0, :]
-                                )
-                            else:
-                                qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+                                lims = env.limits[:, env.robot_idx[r]]
+                                if lims[0, 0] < lims[1, 0]:
+                                    qr = (
+                                        np.random.rand(env.robot_dims[r])
+                                        * (lims[1, :] - lims[0, :])
+                                        + lims[0, :]
+                                    )
+                                else:
+                                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
 
-                            q.append(qr)
+                                q.append(qr)
 
-                        q = conf_type.from_list(q)
-                        heuristic_cost = env.config_cost(
-                            mode_start_config, q
-                        ) + env.config_cost(mode_end_config, q)
-                        # print(heuristic_cost)
-                        if heuristic_cost < this_mode_cost:
-                            break
+                            q = conf_type.from_list(q)
+                            heuristic_cost = env.config_cost(
+                                mode_start_config, q
+                            ) + env.config_cost(mode_end_config, q)
+                            # print(heuristic_cost)
+                            if heuristic_cost < this_mode_cost:
+                                break
 
-                        q = None
+                            q = None
 
-                    if q is None:
-                        continue
+                        if q is None:
+                            continue
 
-                    # tmp.append(q)
+                        tmp.append(q)
 
-                    # plt.figure()
-                    # plt.scatter([a[0][0] for a in tmp], [a[0][1] for a in tmp])
-                    # plt.scatter([a[1][0] for a in tmp], [a[1][1] for a in tmp])
-                    # plt.show()
+                    plt.figure()
+                    plt.scatter([a[0][0] for a in tmp], [a[0][1] for a in tmp])
+                    plt.scatter([a[1][0] for a in tmp], [a[1][1] for a in tmp])
+                    plt.show()
 
                     if env.is_collision_free(q, mode):
                         rnd_state = State(q, mode)
@@ -1084,7 +1370,7 @@ def joint_prm_planner(
                 # sample index
                 interpolated_path = interpolate_path(current_best_path)
                 # interpolated_path = current_best_path
-                for _ in range(200):
+                for _ in range(500):
                     idx = random.randint(0, len(interpolated_path) - 2)
                     state = interpolated_path[idx]
 
@@ -1169,6 +1455,31 @@ def joint_prm_planner(
         if not reached_terminal_mode:
             continue
 
+        # print(reached_modes)
+
+        # for m in reached_modes:
+        #     plt.figure()
+        #     plt.scatter([a.state.q.state()[0] for a in g.nodes[m]], [a.state.q.state()[1] for a in g.nodes[m]])
+        #     plt.scatter([a.state.q.state()[2] for a in g.nodes[m]], [a.state.q.state()[3] for a in g.nodes[m]])
+        #     # plt.scatter()
+
+        # plt.show()
+
+        # pts_per_mode = []
+        # for m in reached_modes:
+        #     num_pts = 0
+        #     if m in g.transition_nodes:
+        #         num_pts += len(g.transition_nodes[m])
+
+        #     if m in g.nodes:
+        #         num_pts += len(g.nodes[m])
+
+        #     pts_per_mode.append(num_pts)
+
+        # plt.figure()
+        # plt.bar([str(mode) for mode in reached_modes], pts_per_mode)
+        # plt.show()
+
         while True:
             sparsely_checked_path = g.search(
                 g.root, g.goal_nodes, env, current_best_cost, resolution
@@ -1219,6 +1530,14 @@ def joint_prm_planner(
                         times.append(time.time() - start_time)
 
                     add_new_batch = True
+
+                    # plt.figure()
+
+                    # plt.plot([pt.q.state()[0] for pt in current_best_path], [pt.q.state()[1] for pt in current_best_path], 'o-')
+                    # plt.plot([pt.q.state()[2] for pt in current_best_path], [pt.q.state()[3] for pt in current_best_path], 'o-')
+
+                    # plt.show()
+
                     break
 
             else:
@@ -1231,8 +1550,6 @@ def joint_prm_planner(
 
         if cnt >= max_iter:
             break
-
-        cnt += batch_size + transition_batch_size
 
     costs.append(costs[-1])
     times.append(time.time() - start_time)

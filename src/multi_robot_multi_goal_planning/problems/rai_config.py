@@ -1158,8 +1158,17 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
             ry.JT.transXY, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
         ).setJointState([-1.5, -0.0])
 
-    g1_state = np.array([-1.5, -0.5, 0])
-    g2_state = np.array([0.5, +0.8, 0])
+    if agents_can_rotate[0]:
+        g1_state = np.array([-1.5, 0.5, 0])
+        # g1_state = np.array([-1.5, -0.5, 0])
+    else:
+        g1_state = np.array([-1.5, 0.5])
+        # g1_state = np.array([-1.5, -0.5, 0])
+    
+    if agents_can_rotate[1]:
+        g2_state = np.array([0.5, +0.8, 0])
+    else:
+        g2_state = np.array([0.5, +0.8])
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
@@ -1202,8 +1211,8 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
 
     keyframes = [g1_state, g2_state, C.getJointState()]
 
-    if not agents_can_rotate:
-        keyframes = [g1_state[:2], g2_state[:2], C.getJointState()]
+    print(keyframes)
+    print(agents_can_rotate)
 
     return C, keyframes
 
