@@ -111,12 +111,13 @@ class FilterManager:
 
         # Read from the pipe and apply the filter
         if self.read_fd is not None:
-            with os.fdopen(self.read_fd, 'r') as pipe:
+            with os.fdopen(self.read_fd, "r") as pipe:
                 for line in pipe:
                     if self.filter_func(line):
                         sys.stdout.write(line)
                         sys.stdout.flush()
             self.read_fd = None
+
 
 # Decorator version
 def reusable_filter_output(filter_func):
@@ -133,8 +134,11 @@ def reusable_filter_output(filter_func):
                 return func(*args, **kwargs)
             finally:
                 manager.stop()
+
         return wrapper
+
     return decorator
+
 
 @contextmanager
 def fast_capture_and_filter_output(filter_func):
@@ -373,42 +377,49 @@ class rai_env(BaseProblem):
         m: Mode,
         resolution=0.1,
         randomize_order=True,
+        tolerance=0.01,
     ) -> bool:
         # print('q1', q1)
         # print('q2', q2)
-        N = config_dist(q1, q2) / resolution
-        N = max(2, N)
+        N = int(config_dist(q1, q2) / resolution)
+        # N = max(2, N)
 
-        idx = list(range(int(N)))
+        # for a distance < resolution * 2, we do not do collision checking
+        if N <= 2:
+            return True
+
+        idx = list(range(N))
         if randomize_order:
             # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(int(N)).copy()
+            idx = generate_binary_search_indices(N).copy()
 
         for i in idx:
             # print(i / (N-1))
             q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
             q_conf = NpConfiguration(q, q1.slice)
-            if not self.is_collision_free(q_conf, m):
+            if not self.is_collision_free(q_conf, m, collision_tolerance=tolerance):
                 # print('coll')
                 return False
 
         return True
 
-    def is_path_collision_free(self, path: List[State], randomize_order=True) -> bool:
+    def is_path_collision_free(
+        self, path: List[State], randomize_order=True, resolution=0.1, tolerance=0.01
+    ) -> bool:
         idx = list(range(len(path) - 1))
         if randomize_order:
             np.random.shuffle(idx)
 
         for i in idx:
             # skip transition nodes
-            if path[i].mode != path[i + 1].mode:
-                continue
+            # if path[i].mode != path[i + 1].mode:
+            #     continue
 
             q1 = path[i].q
             q2 = path[i + 1].q
             mode = path[i].mode
 
-            if not self.is_edge_collision_free(q1, q2, mode):
+            if not self.is_edge_collision_free(q1, q2, mode, resolution=resolution, tolerance=tolerance):
                 return False
 
         return True
