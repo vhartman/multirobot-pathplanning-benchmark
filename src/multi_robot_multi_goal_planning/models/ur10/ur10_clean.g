@@ -6,7 +6,7 @@ shoulder_pan_joint(shoulder_pan_joint_origin): { joint: hingeZ, limits: [-3.1415
 shoulder_link(shoulder_pan_joint): { mass: 7.778, inertia: [0.0314743, 0.0314743, 0.0218756] }
 shoulder_link_0(shoulder_link): { shape: mesh, mesh: <ur_description/meshes/ur10/visual/Shoulder.ply>, visual: True }
 shoulder_lift_joint_origin(shoulder_link): { rel: [0, 0.220941, 0, 0.707107, 0, 0.707107, 0] }
-shoulder_lift_joint(shoulder_lift_joint_origin): { joint: hingeY, limits: [-3.1415, 3.1415, 2.16, -1, 330], ctrl_limits: [2.16, -1, 330] }
+shoulder_lift_joint(shoulder_lift_joint_origin): { joint: hingeY, limits: [-2.1415, 2.1415, 2.16, -1, 330], ctrl_limits: [2.16, -1, 330] }
 upper_arm_link(shoulder_lift_joint): { mass: 12.93, inertia: [0.421754, 0.421754, 0.0363656] }
 upper_arm_link_0(upper_arm_link): { shape: mesh, mesh: <ur_description/meshes/ur10/visual/UpperArm.ply>, visual: True }
 elbow_joint_origin(upper_arm_link): { rel: [0, -0.1719, 0.612, 1, 0, 0, 0] }
