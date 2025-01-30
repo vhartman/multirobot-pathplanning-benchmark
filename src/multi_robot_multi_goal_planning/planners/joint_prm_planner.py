@@ -20,7 +20,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 )
 from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate_path
 
-from concurrent.futures import ThreadPoolExecutor
+from multi_robot_multi_goal_planning.planners import shortcutting
 
 
 def edge_tuple(n0, n1):
@@ -71,6 +71,105 @@ class HeapQueue:
 
     def heappop(self):
         return heapq.heappop(self.queue)
+
+    def remove(self, node):
+        # (cost, edge_cost, e)
+        pass
+
+
+from sortedcontainers import SortedList
+
+
+class SortedQueue:
+    """
+    Edge queue implementation using SortedList for efficient removal operations.
+    """
+
+    def __init__(self):
+        # SortedList maintains elements in sorted order
+        # Elements are tuples: (cost, edge_cost, (node1, node2))
+        self.queue = SortedList()
+
+    def heappush(self, item):
+        """Add new edge to queue"""
+        self.queue.add(item)
+
+    def heappop(self):
+        """Remove and return lowest cost edge"""
+        if self.queue:
+            return self.queue.pop(0)
+        return None
+
+    # def remove_by_node(self, node):
+    #     """Remove all edges where node2 == node"""
+    #     # Create list of indices to remove (in reverse order)
+    #     to_remove = [
+    #         i for i, (_, _, (_, node2)) in enumerate(self.queue)
+    #         if node2 == node
+    #     ]
+
+    #     # Remove from highest index to lowest to maintain valid indices
+    #     for idx in reversed(to_remove):
+    #         del self.queue[idx]
+    def remove_by_node(self, node):
+        """Remove all edges where node2 == node"""
+        i = 0
+        while i < len(self.queue):
+            _, _, (_, node2) = self.queue[i]
+            if node2 == node:
+                del self.queue[
+                    i
+                ]  # Deleting an item shifts elements left, so don't increment i
+            else:
+                i += 1  # Only increment if an element was not removed
+
+    def __len__(self):
+        return len(self.queue)
+
+
+from collections import defaultdict
+
+
+class EfficientEdgeQueue:
+    """
+    Edge queue using a min-heap for efficient pops and a dictionary for fast removals.
+    """
+
+    def __init__(self):
+        # Min-heap of (cost, edge_cost, (node1, node2))
+        self.heap = []
+        # Dictionary mapping node2 to a set of edges for quick removal
+        self.edges_by_node = defaultdict(set)
+
+    def heappush(self, item):
+        """Add a new edge to the queue."""
+        cost, edge_cost, nodes = item
+
+        heapq.heappush(self.heap, item)
+        self.edges_by_node[nodes[1]].add(item)
+
+    def heappop(self):
+        """Remove and return the lowest cost edge."""
+        while self.heap:
+            item = heapq.heappop(self.heap)
+            nodes = item[2]
+            if item in self.edges_by_node[nodes[1]]:  # Ensure the edge is still valid
+                self.edges_by_node[nodes[1]].remove(item)
+                return item
+
+        return None
+
+    def remove_by_node(self, node):
+        """Remove all edges where node2 == node."""
+        if node in self.edges_by_node:
+            for item in self.edges_by_node[node]:
+                # Lazy deletion: mark edge as removed by excluding it from the dict
+                self.heap.remove(item)  # O(n), but happens rarely
+            heapq.heapify(self.heap)  # Restore heap property, O(n)
+            del self.edges_by_node[node]  # Remove the entry
+
+    def __len__(self):
+        return len(self.heap)
 
 
 class BucketHeapQueue:
@@ -266,6 +365,7 @@ class Graph:
     def compute_lower_bound_to_goal(self, batch_cost):
         # run a reverse search on the transition nodes without any collision checking
         costs = {}
+        closed_set = set()
 
         queue = []
         for g in self.goal_nodes:
@@ -283,6 +383,9 @@ class Graph:
             if node.state.mode == self.root.state.mode:
                 continue
 
+            if node.id in closed_set:
+                continue
+
             neighbors = [
                 n.neighbors[0] for n in self.reverse_transition_nodes[node.state.mode]
             ]
@@ -294,6 +397,8 @@ class Graph:
                 self.reverse_transition_node_array_cache[node.state.mode] = np.array(
                     [n.state.q.state() for n in neighbors]
                 )
+
+            closed_set.add(node.id)
 
             # add neighbors to open_queue
             edge_costs = batch_cost(
@@ -336,6 +441,8 @@ class Graph:
         # run a reverse search on the transition nodes without any collision checking
         costs = {}
 
+        closed_set = set()
+
         queue = []
         heapq.heappush(queue, (0, self.root))
         costs[self.root.id] = 0
@@ -344,6 +451,12 @@ class Graph:
             # node = queue.pop(0)
             _, node = heapq.heappop(queue)
             # print(node)
+
+            # if node.id in costs and:
+            # continue
+
+            if node.id in closed_set:
+                continue
 
             if node.state.mode.task_ids == self.goal_nodes[0].state.mode.task_ids:
                 continue
@@ -357,6 +470,8 @@ class Graph:
                 self.transition_node_array_cache[node.state.mode] = np.array(
                     [n.state.q.state() for n in neighbors]
                 )
+
+            closed_set.add(node.id)
 
             # add neighbors to open_queue
             edge_costs = batch_cost(
@@ -428,6 +543,27 @@ class Graph:
 
                 assert this_mode.task_ids != next_mode.task_ids
 
+            if this_mode in self.transition_nodes:
+                is_in_transition_nodes_already = False
+                dists = self.batch_dist_fun(
+                    node_this_mode.state.q,
+                    [n.state.q for n in self.transition_nodes[this_mode]],
+                )
+                if min(dists) < 1e-6:
+                    is_in_goal_nodes_already = True
+                # for n in self.transition_nodes[this_mode]:
+                #     if (
+                #         np.linalg.norm(
+                #             n.state.q.state() - node_this_mode.state.q.state()
+                #         )
+                #         < 1e-3
+                #     ):
+                #         is_in_transition_nodes_already = True
+                #         break
+
+                if is_in_transition_nodes_already:
+                    continue
+
             if next_mode is not None:
                 if this_mode in self.transition_nodes:
                     self.transition_nodes[this_mode].append(node_this_mode)
@@ -443,6 +579,7 @@ class Graph:
                         < 1e-3
                     ):
                         is_in_goal_nodes_already = True
+                        break
 
                 if not is_in_goal_nodes_already:
                     self.goal_nodes.append(node_this_mode)
@@ -545,6 +682,7 @@ class Graph:
 
             best_nodes = []
             if key in self.nodes:
+                # r_star = 2 * 1 / (len(node_list)**(1/dim))
                 r_star = (
                     1.001
                     * 2
@@ -561,8 +699,12 @@ class Graph:
                 best_nodes = [node_list[i] for i in np.where(dists < r)[0]]
                 best_nodes_arr = self.node_array_cache[key][np.where(dists < r)[0], :]
 
+                # print("fraction of nodes in mode", len(best_nodes)/len(dists))
+
             best_transition_nodes = []
             if key in self.transition_nodes:
+                # r_star = 2 * 1 / (len(node_list)**(1/dim))
+
                 r_star = (
                     1.001
                     * 2
@@ -673,6 +815,8 @@ class Graph:
         queue = BucketIndexHeap()
         # queue = DiscreteBucketIndexHeap()
         # queue = IndexHeap()
+        # queue = SortedQueue()
+        # queue = EfficientEdgeQueue()
 
         # fs = {}  # total cost of a node (f = g + h)
         for e in start_edges:
@@ -698,6 +842,8 @@ class Graph:
         while len(queue) > 0:
             # while len(open_queue) > 0:
             num_iter += 1
+
+            # print(len(queue))
 
             if num_iter % 100000 == 0:
                 # print(len(open_queue))
@@ -781,6 +927,8 @@ class Graph:
             gs[n1.id] = g_tentative
             parents[n1] = n0
 
+            # queue.remove_by_node(n1)
+
             if n1 in goal_nodes:
                 goal = n1
                 break
@@ -790,52 +938,56 @@ class Graph:
                 n1, space_extent=np.prod(np.diff(env.limits, axis=0))
             )
 
-            if len(neighbors) != 0:
-                # add neighbors to open_queue
-                # edge_costs = env.batch_config_cost(
-                #     n1.state.q, np.array([n.state.q.state() for n in neighbors])
-                # )
-                edge_costs = env.batch_config_cost(n1.state.q, tmp)
-                for n, edge_cost in zip(neighbors, edge_costs):
-                    # if n == n0:
+            if len(neighbors) == 0:
+                continue
+
+            # add neighbors to open_queue
+            # edge_costs = env.batch_config_cost(
+            #     n1.state.q, np.array([n.state.q.state() for n in neighbors])
+            # )
+            edge_costs = env.batch_config_cost(n1.state.q, tmp)
+            for n, edge_cost in zip(neighbors, edge_costs):
+                if n == n0:
+                    continue
+
+                if n.id in n1.blacklist:
+                    continue
+
+                # edge_cost = edge_costs[i]
+                # g_new = g_tentative + edge_cost
+
+                # if n.id in gs:
+                #     print(n.id)
+
+                if n.id not in gs:
+                    # if n.id not in gs or g_new < gs[n.id]:
+                    # sparsely check only when expanding
+                    # cost to get to neighbor:
+                    # q0 = n1.state.q
+                    # q1 = n.state.q
+                    # collision_free = env.is_edge_collision_free(
+                    #     q0, q1, n1.state.mode, 5
+                    # )
+                    # if not collision_free:
+                    #     n.blacklist.add(n1.id)
+                    #     n1.blacklist.add(n.id)
+
                     #     continue
 
-                    if n.id in n1.blacklist:
+                    g_new = g_tentative + edge_cost
+                    f_node = g_new + h(n)
+                    # fs[(n1, n)] = f_node
+
+                    if best_cost is not None and f_node > best_cost:
                         continue
 
-                    # edge_cost = edge_costs[i]
-                    # g_new = g_tentative + edge_cost
+                    # if n not in closed_list:
+                    # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
+                    queue.heappush((f_node, edge_cost, (n1, n)))
 
-                    # if n.id in gs:
-                    #     print(n.id)
-
-                    if n.id not in gs:
-                        # if n.id not in gs or g_new < gs[n.id]:
-                        # sparsely check only when expanding
-                        # cost to get to neighbor:
-                        # q0 = n1.state.q
-                        # q1 = n.state.q
-                        # collision_free = env.is_edge_collision_free(
-                        #     q0, q1, n1.state.mode, 5
-                        # )
-                        # if not collision_free:
-                        #     n.blacklist.add(n1.id)
-                        #     n1.blacklist.add(n.id)
-
-                        g_new = g_tentative + edge_cost
-                        f_node = g_new + h(n)
-                        # fs[(n1, n)] = f_node
-
-                        if best_cost is not None and f_node > best_cost:
-                            continue
-
-                        # if n not in closed_list:
-                        # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
-                        queue.heappush((f_node, edge_cost, (n1, n)))
-
-                        # open_queue.append((f_node, edge_cost, (n1, n)))
-                # heapq.heapify(open_queue)
-                # open_queue.sort(reverse=True)
+                    # open_queue.append((f_node, edge_cost, (n1, n)))
+            # heapq.heapify(open_queue)
+            # open_queue.sort(reverse=True)
 
         path = []
 
@@ -1008,7 +1160,15 @@ def joint_prm_planner(
     distance_metric="euclidean",
     try_sampling_around_path=True,
     use_k_nearest=True,
-    try_informed_sampling=True
+    try_informed_sampling=True,
+    uniform_batch_size=200,
+    uniform_transition_batch_size=500,
+    informed_batch_size=1000,
+    informed_transition_batch_size=1000,
+    path_batch_size=500,
+    locally_informed_sampling=False,
+    try_informed_transitions=True,
+    try_shortcutting=True,
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
@@ -1018,6 +1178,7 @@ def joint_prm_planner(
     conf_type = type(env.get_start_pos())
 
     def sample_mode(mode_sampling_type="weighted", found_solution=False):
+        return random.choice(reached_modes)
         if mode_sampling_type == "uniform_reached":
             m_rnd = random.choice(reached_modes)
         elif mode_sampling_type == "weighted":
@@ -1063,6 +1224,8 @@ def joint_prm_planner(
         path_cost_from_index_to_index = (
             path_cost - path_cost_from_goal_to_index - path_cost_from_start_to_index
         )
+
+        # print(path_cost_from_index_to_index)
 
         def lb_cost_from_start(state):
             if state.mode not in g.reverse_transition_node_array_cache:
@@ -1111,30 +1274,36 @@ def joint_prm_planner(
 
             return min_cost
 
-        start_state = path[start_index]
-        lb_cost_from_start_to_state = lb_cost_from_start(rnd_state)
-        lb_cost_from_start_to_index = lb_cost_from_start(start_state)
+        lb_cost_from_start_index_to_state = env.config_cost(
+            rnd_state.q, path[start_index].q
+        )
+        if path[start_index].mode != rnd_state.mode:
+            start_state = path[start_index]
+            lb_cost_from_start_to_state = lb_cost_from_start(rnd_state)
+            lb_cost_from_start_to_index = lb_cost_from_start(start_state)
 
-        goal_state = path[end_index]
-        lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state)
-        lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
-
-        if path[start_index].mode == rnd_state.mode:
-            lb_cost_from_start_index_to_state = env.config_cost(rnd_state.q, path[start_index].q)
-        else:
-            lb_cost_from_start_index_to_state = (
-                lb_cost_from_start_to_state - lb_cost_from_start_to_index
+            lb_cost_from_start_index_to_state = max(
+                (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+                lb_cost_from_start_index_to_state,
             )
 
-        if path[end_index].mode == rnd_state.mode:
-            lb_cost_from_state_to_end_index = env.config_cost(rnd_state.q, path[end_index].q)
-        else:
-            lb_cost_from_state_to_end_index = (
-                lb_cost_from_goal_to_state - lb_cost_from_goal_to_index
+        lb_cost_from_state_to_end_index = env.config_cost(
+            rnd_state.q, path[end_index].q
+        )
+        if path[end_index].mode != rnd_state.mode:
+            goal_state = path[end_index]
+            lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state)
+            lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
+
+            lb_cost_from_state_to_end_index = max(
+                (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+                lb_cost_from_state_to_end_index,
             )
 
-        # print('start', lb_cost_from_start_index_to_state)
-        # print('end', lb_cost_from_state_to_end_index)
+        # print("can_imrpove")
+
+        # print("start", lb_cost_from_start_index_to_state)
+        # print("end", lb_cost_from_state_to_end_index)
 
         # print('start index', start_index)
         # print('end_index', end_index)
@@ -1142,8 +1311,11 @@ def joint_prm_planner(
         # assert(lb_cost_from_start_index_to_state >= 0)
         # assert(lb_cost_from_state_to_end_index >= 0)
 
-        # print(path_cost_from_index_to_index)
-        # print(lb_cost_from_start_index_to_state + lb_cost_from_state_to_end_index)
+        # print("segment cost", path_cost_from_index_to_index)
+        # print(
+        #     "lb cost",
+        #     lb_cost_from_start_index_to_state + lb_cost_from_state_to_end_index,
+        # )
 
         if (
             path_cost_from_index_to_index
@@ -1153,25 +1325,87 @@ def joint_prm_planner(
 
         return False
 
-    def generate_informed_samples(batch_size, path):
+    # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
+    def sample_unit_ball(dim) -> np.array:
+        """Samples a point uniformly from the unit ball. This is used to sample points from the Prolate HyperSpheroid (PHS).
+
+        Returns:
+            Sampled Point (np.array): The sampled point from the unit ball.
+        """
+        u = np.random.uniform(-1, 1, dim)
+        norm = np.linalg.norm(u)
+        r = np.random.random() ** (1.0 / dim)
+        return r * u / norm
+
+    def samplePHS(a, b, c) -> np.array:
+        """Samples a point from the Prolate HyperSpheroid (PHS) defined by the start and goal nodes.
+
+        Returns:
+            Node: The sampled node from the PHS.
+        """
+        dim = len(a)
+        # Calculate the center of the PHS.
+        center = (a + b) / 2
+        # The transverse axis in the world frame.
+        c_min = np.linalg.norm(a - b)
+        a1 = (b - a) / c_min
+        # The first column of the identity matrix.
+        one_1 = np.eye(a1.shape[0])[:, 0]
+        U, S, Vt = np.linalg.svd(np.outer(a1, one_1.T))
+        Sigma = np.diag(S)
+        lam = np.eye(Sigma.shape[0])
+        lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
+        # Calculate the rotation matrix.
+        cwe = np.matmul(U, np.matmul(lam, Vt))
+        # Get the radius of the first axis of the PHS.
+        r1 = c / 2
+        # Get the radius of the other axes of the PHS.
+        rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
+        # Create a vector of the radii of the PHS.
+        r = np.diag(np.array([r1] + rn))
+
+        # Sample a point from the PHS.
+        # Sample a point from the unit ball.
+        x_ball = sample_unit_ball(dim)
+        # Transform the point from the unit ball to the PHS.
+        op = np.matmul(np.matmul(cwe, r), x_ball) + center
+        # Round the point to 7 decimal places.
+        op = np.around(op, 7)
+        # Check if the point is in the PHS.
+
+        return op
+
+    def rejection_sample_from_ellipsoid(a, b, c):
+        m = (a + b) / 2
+        n = len(a)
+        cnt = 0
+        while True:
+            cnt += 1
+            x = np.random.uniform(m - c / 2, m + c / 2, n)
+            if np.linalg.norm(x - a) + np.linalg.norm(x - b) < c:
+                return x
+
+    def generate_informed_samples(
+        batch_size, path, max_attempts_per_sample=200, locally_informed_sampling=True
+    ):
         new_samples = []
-
-        num_attempts = 0
-
         path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
 
+        num_attempts = 0
         while len(new_samples) < batch_size:
+            if num_attempts > batch_size:
+                break
+
             num_attempts += 1
             # print(len(new_samples))
             # sample mode
-            if True:
-                while True:
+            if locally_informed_sampling:
+                for _ in range(500):
                     start_ind = random.randint(0, len(path) - 1)
                     end_ind = random.randint(0, len(path) - 1)
 
-
                     if end_ind - start_ind > 2:
-                    # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+                        # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
                         current_cost = sum(path_segment_costs[start_ind:end_ind])
                         lb_cost = env.config_cost(path[start_ind].q, path[end_ind].q)
 
@@ -1182,28 +1416,115 @@ def joint_prm_planner(
                 m = path[k].mode
             else:
                 start_ind = 0
-                end_ind = len(path)-1
+                end_ind = len(path) - 1
                 m = sample_mode("weighted", True)
 
             # print(m)
 
-            for _ in range(100):
-                # sample configuration
-                q = []
-                for i in range(len(env.robots)):
-                    r = env.robots[i]
-                    lims = env.limits[:, env.robot_idx[r]]
-                    if lims[0, 0] < lims[1, 0]:
-                        qr = (
-                            np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
-                            + lims[0, :]
-                        )
-                    else:
-                        qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+            current_cost = sum(path_segment_costs[start_ind:end_ind])
 
-                    q.append(qr)
+            # tmp = 0
+            # for i in range(start_ind, end_ind):
+            #     tmp += env.config_cost(path[i].q, path[i+1].q)
+
+            # print(current_cost, tmp)
+
+            # plt.figure()
+            # samples = []
+            # for _ in range(200):
+            #     sample = samplePHS(np.array([-1, 0]), np.array([1, 0]), 3)
+            #     # sample = samplePHS(np.array([[-1], [0]]), np.array([[1], [0]]), 3)
+            #     samples.append(sample)
+            #     print("sample", sample)
+
+            # plt.scatter([a[0] for a in samples], [a[1] for a in samples])
+            # plt.show()
+
+            focal_points = np.array(
+                [path[start_ind].q.state(), path[end_ind].q.state()]
+            )
+            try_direct_sampling = False
+            for k in range(max_attempts_per_sample):
+                if not try_direct_sampling or env.cost_metric != "euclidean":
+                    # completely random sample configuration from the (valid) domain robot by robot
+                    q = []
+                    for i in range(len(env.robots)):
+                        r = env.robots[i]
+                        lims = env.limits[:, env.robot_idx[r]]
+                        if lims[0, 0] < lims[1, 0]:
+                            qr = (
+                                np.random.rand(env.robot_dims[r])
+                                * (lims[1, :] - lims[0, :])
+                                + lims[0, :]
+                            )
+                        else:
+                            qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+
+                        q.append(qr)
+                else:
+                    # sample by sampling each agent separately
+                    q = []
+                    for i in range(len(env.robots)):
+                        r = env.robots[i]
+                        lims = env.limits[:, env.robot_idx[r]]
+                        if lims[0, 0] < lims[1, 0]:
+                            if env.cost_reduction == "sum":
+                                c_robot_bound = current_cost - sum(
+                                    [
+                                        np.linalg.norm(
+                                            path[start_ind].q[j] - path[end_ind].q[j]
+                                        )
+                                        for j in range(len(env.robots))
+                                        if j != i
+                                    ]
+                                )
+                            else:
+                                c_robot_bound = current_cost
+
+                            if np.linalg.norm(
+                                    path[start_ind].q[i] - path[end_ind].q[i]
+                                ) < 1e-3:
+                                qr = (
+                                    np.random.rand(env.robot_dims[r])
+                                    * (lims[1, :] - lims[0, :])
+                                    + lims[0, :]
+                                )
+                            else:
+
+                                # print("cost", current_cost)
+                                # print("robot cst", c_robot_bound)
+                                # print(
+                                #     np.linalg.norm(
+                                #         path[start_ind].q[i] - path[end_ind].q[i]
+                                #     )
+                                # )
+
+                                qr = samplePHS(path[start_ind].q[i], path[end_ind].q[i], c_robot_bound)
+                                # qr = rejection_sample_from_ellipsoid(
+                                #     path[start_ind].q[i], path[end_ind].q[i], c_robot_bound
+                                # )
+
+                                # if np.linalg.norm(path[start_ind].q[i] - qr) + np.linalg.norm(path[end_ind].q[i] - qr) > c_robot_bound:
+                                #     print("AAAAAAAAA")
+                                #     print(np.linalg.norm(path[start_ind].q[i] - qr) + np.linalg.norm(path[end_ind].q[i] - qr), c_robot_bound)
+
+                                qr = np.clip(qr, lims[0, :], lims[1, :])
+
+                        q.append(qr)
 
                 q = conf_type.from_list(q)
+
+                if sum(env.batch_config_cost(q, focal_points)) > current_cost:
+                    # print(path[start_ind].mode, path[end_ind].mode, m)
+                    # print(
+                    #     current_cost,
+                    #     env.config_cost(path[start_ind].q, q)
+                    #     + env.config_cost(path[end_ind].q, q),
+                    # )
+                    # if can_improve(State(q, m), path, start_ind, end_ind):
+                    #     assert False
+
+                    continue
 
                 # if can_improve(State(q, m), path, 0, len(path)-1):
                 # if can_improve(State(q, m), path, start_ind, end_ind):
@@ -1213,9 +1534,6 @@ def joint_prm_planner(
                     # if env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
                     new_samples.append(State(q, m))
                     break
-
-            if num_attempts > batch_size:
-                break
 
         print(len(new_samples) / num_attempts)
 
@@ -1231,84 +1549,201 @@ def joint_prm_planner(
         # ax.scatter([a.q[1][0] for a in new_samples], [a.q[1][1] for a in new_samples])
         # plt.show()
 
-
         return new_samples
 
-    def generate_somewhat_informed_samples(batch_size, path):
-        def cost_to_mode_on_path(mode, path):
-            for i in range(len(path)):
-                curr_state = path[i]
+    def can_transition_improve(transition, path, start_index, end_index):
+        path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
 
-                if curr_state.mode == mode:
-                    if i == 0:
-                        return 0, curr_state.q
+        # compute the local cost
+        path_cost_from_start_to_index = np.sum(path_segment_costs[:start_index])
+        path_cost_from_goal_to_index = np.sum(path_segment_costs[end_index:])
+        path_cost = np.sum(path_segment_costs)
 
-                    cost = path_cost(path[: i + 1], env.batch_config_cost)
-                    # env.show_config(curr_state.q)
+        if start_index == 0:
+            assert path_cost_from_start_to_index == 0
+        if end_index == len(path) - 1:
+            assert path_cost_from_goal_to_index == 0
 
-                    return cost, curr_state.q
+        path_cost_from_index_to_index = (
+            path_cost - path_cost_from_goal_to_index - path_cost_from_start_to_index
+        )
 
-            return None, None
+        # print(path_cost_from_index_to_index)
 
-        def cost_to_next_mode_on_path(mode, path):
-            for i in range(1, len(path)):
-                curr_state = path[i - 1]
-                next_state = path[i]
+        def lb_cost_from_start(state):
+            if state.mode not in g.reverse_transition_node_array_cache:
+                g.reverse_transition_node_array_cache[state.mode] = np.array(
+                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]]
+                )
 
-                if curr_state.mode == mode and (
-                    curr_state.mode != next_state.mode or i == len(path) - 1
-                ):
-                    cost = path_cost(path[: i + 1], env.batch_config_cost)
-                    # env.show_config(next_state.q)
-                    return cost, next_state.q
+            if state.mode not in g.rev_transition_node_lb_cache:
+                g.rev_transition_node_lb_cache[state.mode] = np.array(
+                    [
+                        o.lb_cost_from_start
+                        for o in g.reverse_transition_nodes[state.mode]
+                    ]
+                )
 
-            return None, None
-
-        somewhat_informed_samples = []
-        for _ in range(batch_size):
-            mode = sample_mode("uniform_reached", None)
-            # print(mode.task_ids)
-
-            cost_to_reach_mode, mode_start_config = cost_to_mode_on_path(
-                mode, current_best_path
-            )
-            next_mode_cost, mode_end_config = cost_to_next_mode_on_path(
-                mode, current_best_path
+            costs_to_transitions = env.batch_config_cost(
+                state.q,
+                g.reverse_transition_node_array_cache[state.mode],
             )
 
-            # print("next mode cost:", next_mode_cost)
-            # print("path_cost", current_best_cost)
+            min_cost = np.min(
+                g.rev_transition_node_lb_cache[state.mode] + costs_to_transitions
+            )
 
-            if cost_to_reach_mode is None:
+            return min_cost
+
+        def lb_cost_from_goal(state):
+            if state.mode not in g.transition_node_array_cache:
+                g.transition_node_array_cache[state.mode] = np.array(
+                    [o.state.q.q for o in g.transition_nodes[state.mode]]
+                )
+
+            if state.mode not in g.transition_node_lb_cache:
+                g.transition_node_lb_cache[state.mode] = np.array(
+                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]]
+                )
+
+            costs_to_transitions = env.batch_config_cost(
+                state.q,
+                g.transition_node_array_cache[state.mode],
+            )
+
+            min_cost = np.min(
+                g.transition_node_lb_cache[state.mode] + costs_to_transitions
+            )
+
+            return min_cost
+
+        rnd_state_mode_1 = State(transition[0], transition[1])
+        rnd_state_mode_2 = State(transition[0], transition[2])
+
+        lb_cost_from_start_index_to_state = env.config_cost(
+            rnd_state_mode_1.q, path[start_index].q
+        )
+        if path[start_index].mode != rnd_state_mode_1.mode:
+            start_state = path[start_index]
+            lb_cost_from_start_to_state = lb_cost_from_start(rnd_state_mode_1)
+            lb_cost_from_start_to_index = lb_cost_from_start(start_state)
+
+            lb_cost_from_start_index_to_state = max(
+                (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+                lb_cost_from_start_index_to_state,
+            )
+
+        lb_cost_from_state_to_end_index = env.config_cost(
+            rnd_state_mode_2.q, path[end_index].q
+        )
+        if path[end_index].mode != rnd_state_mode_2.mode:
+            goal_state = path[end_index]
+            lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state_mode_2)
+            lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
+
+            lb_cost_from_state_to_end_index = max(
+                (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+                lb_cost_from_state_to_end_index,
+            )
+
+        # print("can_imrpove")
+
+        # print("start", lb_cost_from_start_index_to_state)
+        # print("end", lb_cost_from_state_to_end_index)
+
+        # print('start index', start_index)
+        # print('end_index', end_index)
+
+        # assert(lb_cost_from_start_index_to_state >= 0)
+        # assert(lb_cost_from_state_to_end_index >= 0)
+
+        # print("segment cost", path_cost_from_index_to_index)
+        # print(
+        #     "lb cost",
+        #     lb_cost_from_start_index_to_state + lb_cost_from_state_to_end_index,
+        # )
+
+        if (
+            path_cost_from_index_to_index
+            > lb_cost_from_start_index_to_state + lb_cost_from_state_to_end_index
+        ):
+            return True
+
+        return False
+
+    def generate_informed_transitions(
+        batch_size, path, naive_informed_sampling=False, max_attempts_per_sample=100
+    ):
+        new_transitions = []
+        num_attempts = 0
+        path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
+
+        while len(new_transitions) < batch_size:
+            num_attempts += 1
+
+            if num_attempts > batch_size:
+                break
+
+            # print(len(new_samples))
+            # sample mode
+            if naive_informed_sampling:
+                start_ind = 0
+                end_ind = len(path) - 1
+                mode = sample_mode("weighted", True)
+            else:
+                while True:
+                    start_ind = random.randint(0, len(path) - 1)
+                    end_ind = random.randint(0, len(path) - 1)
+
+                    if (
+                        path[end_ind].mode != path[start_ind].mode
+                        and end_ind - start_ind > 2  # and end_ind - start_ind < 50
+                    ):
+                        # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+                        current_cost = sum(path_segment_costs[start_ind:end_ind])
+                        lb_cost = env.config_cost(path[start_ind].q, path[end_ind].q)
+
+                        if lb_cost < current_cost:
+                            break
+
+                k = random.randint(start_ind, end_ind)
+                mode = path[k].mode
+
+            # print(m)
+
+            current_cost = sum(path_segment_costs[start_ind:end_ind])
+
+            # sample transition at the end of this mode
+            possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
+            if len(possible_next_task_combinations) > 0:
+                ind = random.randint(0, len(possible_next_task_combinations) - 1)
+                active_task = env.get_active_task(
+                    mode, possible_next_task_combinations[ind]
+                )
+            else:
                 continue
 
-            this_mode_cost = next_mode_cost - cost_to_reach_mode
-            # print("this mode cost:", this_mode_cost)
+            goals_to_sample = active_task.robots
 
-            # print(mode_start_config.state())
-            # print(mode_end_config.state())
+            goal_sample = active_task.goal.sample(mode)
 
-            # print(
-            #     "min cost", env.config_cost(mode_start_config, mode_end_config)
-            # )
-
-            assert (
-                this_mode_cost - env.config_cost(mode_start_config, mode_end_config)
-                > -1e-3
-            )
-            if (
-                this_mode_cost - env.config_cost(mode_start_config, mode_end_config)
-                < 1e-3
-            ):
-                continue
-
-            tmp = []
-            for _ in range(1000):
-                for _ in range(10):
-                    q = []
-                    for i in range(len(env.robots)):
-                        r = env.robots[i]
-
+            for k in range(max_attempts_per_sample):
+                # completely random sample configuration from the (valid) domain robot by robot
+                q = []
+                for i in range(len(env.robots)):
+                    r = env.robots[i]
+                    if r in goals_to_sample:
+                        offset = 0
+                        for _, task_robot in enumerate(active_task.robots):
+                            if task_robot == r:
+                                q.append(
+                                    goal_sample[
+                                        offset : offset + env.robot_dims[task_robot]
+                                    ]
+                                )
+                                break
+                            offset += env.robot_dims[task_robot]
+                    else:  # uniform sample
                         lims = env.limits[:, env.robot_idx[r]]
                         if lims[0, 0] < lims[1, 0]:
                             qr = (
@@ -1321,31 +1756,41 @@ def joint_prm_planner(
 
                         q.append(qr)
 
-                    q = conf_type.from_list(q)
-                    heuristic_cost = env.config_cost(
-                        mode_start_config, q
-                    ) + env.config_cost(mode_end_config, q)
-                    # print(heuristic_cost)
-                    if heuristic_cost < this_mode_cost:
-                        break
+                q = conf_type.from_list(q)
 
-                    q = None
-
-                if q is None:
+                if (
+                    env.config_cost(path[start_ind].q, q)
+                    + env.config_cost(path[end_ind].q, q)
+                    > current_cost
+                ):
                     continue
 
-                tmp.append(q)
+                if env.is_terminal_mode(mode):
+                    assert False
+                else:
+                    next_mode = env.get_next_mode(q, mode)
 
-            plt.figure()
-            plt.scatter([a[0][0] for a in tmp], [a[0][1] for a in tmp])
-            plt.scatter([a[1][0] for a in tmp], [a[1][1] for a in tmp])
-            plt.show()
+                if can_transition_improve(
+                    (q, mode, next_mode), path, start_ind, end_ind
+                ) and env.is_collision_free(q, mode):
+                    new_transitions.append((q, mode, next_mode))
+                    break
 
-            if env.is_collision_free(q, mode):
-                rnd_state = State(q, mode)
-                somewhat_informed_samples.append(rnd_state)
+        print(len(new_transitions) / num_attempts)
 
-        g.add_states(somewhat_informed_samples)
+        # fig = plt.figure()
+        # ax = fig.add_subplot(projection='3d')
+        # ax.scatter([a.q[0][0] for a in new_samples], [a.q[0][1] for a in new_samples], [a.q[0][2] for a in new_samples])
+        # ax.scatter([a.q[1][0] for a in new_samples], [a.q[1][1] for a in new_samples], [a.q[1][2] for a in new_samples])
+        # plt.show()
+
+        # fig = plt.figure()
+        # ax = fig.add_subplot()
+        # ax.scatter([a[0][0][0] for a in new_transitions], [a[0][0][1] for a in new_transitions])
+        # ax.scatter([a[0][1][0] for a in new_transitions], [a[0][1][1] for a in new_transitions])
+        # plt.show()
+
+        return new_transitions
 
     def sample_valid_uniform_batch(batch_size, cost):
         new_samples = []
@@ -1496,9 +1941,6 @@ def joint_prm_planner(
     current_best_cost = None
     current_best_path = None
 
-    batch_size = 200
-    transition_batch_size = 500
-
     costs = []
     times = []
 
@@ -1506,16 +1948,9 @@ def joint_prm_planner(
 
     start_time = time.time()
 
-    # TODO: add this again
-    # mode_sequence = [m0]
-    # while True:
-    #     if env.is_terminal_mode(mode_sequence[-1]):
-    #         break
+    resolution = 0.02
 
-    #     mode_sequence.append(env.get_next_mode(None, mode_sequence[-1]))
-
-    # resolution 0.2 is too big
-    resolution = 0.1
+    all_paths = []
 
     cnt = 0
     while True:
@@ -1525,16 +1960,12 @@ def joint_prm_planner(
         print("Count:", cnt, "max_iter:", max_iter)
 
         if add_new_batch:
-            sample_locally_informed = False
-            if sample_locally_informed and current_best_path is not None:
-                generate_somewhat_informed_samples(current_best_path)
-
             if try_sampling_around_path and current_best_path is not None:
                 # sample index
                 interpolated_path = interpolate_path(current_best_path)
                 # interpolated_path = current_best_path
                 new_states_from_path_sampling = []
-                for _ in range(500):
+                for _ in range(path_batch_size):
                     idx = random.randint(0, len(interpolated_path) - 2)
                     state = interpolated_path[idx]
 
@@ -1547,7 +1978,6 @@ def joint_prm_planner(
                         )
                         < 1e-5
                     ):
-                        print("AAAAA")
                         current_task_ids = state.mode.task_ids
                         next_task_ids = interpolated_path[idx + 1].mode.task_ids
 
@@ -1608,34 +2038,85 @@ def joint_prm_planner(
                 # ax.scatter([a.q[2][0] for a in new_states_from_path_sampling], [a.q[2][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
                 # plt.show()
 
-            # add new batch of nodes to
+            # add new batch of nodes
+            effective_uniform_batch_size = (
+                uniform_batch_size if current_best_cost is not None else 500
+            )
+            effective_uniform_transition_batch_size = (
+                uniform_transition_batch_size if current_best_cost is not None else 500
+            )
+
             print("Sampling uniform")
             new_states = sample_valid_uniform_batch(
-                batch_size=batch_size, cost=current_best_cost
+                batch_size=effective_uniform_batch_size, cost=current_best_cost
             )
             g.add_states(new_states)
+            print(f"Adding {len(new_states)} new states")
+
+            # nodes_per_state = []
+            # for m in reached_modes:
+            #     num_nodes = 0
+            #     for n in new_states:
+            #         if n.mode == m:
+            #             num_nodes += 1
+
+            #     nodes_per_state.append(num_nodes)
+
+            # plt.figure("Uniform states")
+            # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
 
             # if env.terminal_mode not in reached_modes:
             print("Sampling transitions")
             new_transitions = sample_valid_uniform_transitions(
-                transistion_batch_size=transition_batch_size
+                transistion_batch_size=effective_uniform_transition_batch_size
             )
             g.add_transition_nodes(new_transitions)
-            print("Done adding transitions")
+            print(f"Adding {len(new_transitions)} transitions")
 
             g.compute_lower_bound_to_goal(env.batch_config_cost)
             g.compute_lower_bound_from_start(env.batch_config_cost)
 
-            if try_informed_sampling and current_best_cost is not None:
-                print("Visualizing informed samples")
+            if current_best_cost is not None and (
+                try_informed_sampling or try_informed_transitions
+            ):
                 interpolated_path = interpolate_path(current_best_path)
                 # interpolated_path = current_best_path
 
-                # for _ in range(5):
-                #     generate_informed_samples(1000, interpolated_path)
-                new_informed_states = generate_informed_samples(500, interpolated_path)
+                if try_informed_sampling:
+                    print("Generating informed samples")
+                    new_informed_states = generate_informed_samples(
+                        informed_batch_size,
+                        interpolated_path,
+                        locally_informed_sampling=locally_informed_sampling,
+                    )
+                    g.add_states(new_informed_states)
 
-                g.add_states(new_informed_states)
+                    # nodes_per_state = []
+                    # for m in reached_modes:
+                    #     num_nodes = 0
+                    #     for n in new_informed_states:
+                    #         if n.mode == m:
+                    #             num_nodes += 1
+
+                    #     nodes_per_state.append(num_nodes)
+
+                    # plt.figure("Informed states")
+                    # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
+
+                    print(f"Adding {len(new_informed_states)} informed samples")
+
+                if try_informed_transitions:
+                    print("Generating informed transitions")
+                    new_informed_transitions = generate_informed_transitions(
+                        informed_transition_batch_size, interpolated_path
+                    )
+                    g.add_transition_nodes(new_informed_transitions)
+                    print(
+                        f"Adding {len(new_informed_transitions)} informed transitions"
+                    )
+
+                    g.compute_lower_bound_to_goal(env.batch_config_cost)
+                    g.compute_lower_bound_from_start(env.batch_config_cost)
 
         # search over nodes:
         # 1. search from goal state with sparse check
@@ -1657,19 +2138,27 @@ def joint_prm_planner(
 
         # plt.show()
 
-        # pts_per_mode = []
-        # for m in reached_modes:
-        #     num_pts = 0
-        #     if m in g.transition_nodes:
-        #         num_pts += len(g.transition_nodes[m])
+        pts_per_mode = []
+        transitions_per_mode = []
+        for m in reached_modes:
+            num_transitions = 0
+            if m in g.transition_nodes:
+                num_transitions += len(g.transition_nodes[m])
 
-        #     if m in g.nodes:
-        #         num_pts += len(g.nodes[m])
+            num_pts = 0
 
-        #     pts_per_mode.append(num_pts)
+            if m in g.nodes:
+                num_pts += len(g.nodes[m])
+
+            pts_per_mode.append(num_pts)
+            transitions_per_mode.append(num_transitions)
 
         # plt.figure()
         # plt.bar([str(mode) for mode in reached_modes], pts_per_mode)
+
+        # plt.figure()
+        # plt.bar([str(mode) for mode in reached_modes], transitions_per_mode)
+
         # plt.show()
 
         while True:
@@ -1693,13 +2182,15 @@ def joint_prm_planner(
                     s1 = n1.state
 
                     # this is a transition, we do not need to collision check this
-                    if s0.mode != s1.mode:
-                        continue
+                    # if s0.mode != s1.mode:
+                    #     continue
 
                     if n0.id in n1.whitelist:
                         continue
 
-                    if not env.is_edge_collision_free(s0.q, s1.q, s0.mode, resolution):
+                    if not env.is_edge_collision_free(
+                        s0.q, s1.q, s0.mode, resolution=0.001
+                    ):
                         print("Path is in collision")
                         is_valid_path = False
                         # env.show(True)
@@ -1720,6 +2211,56 @@ def joint_prm_planner(
                         print("New cost: ", new_path_cost)
                         costs.append(new_path_cost)
                         times.append(time.time() - start_time)
+
+                        all_paths.append(path)
+
+                        if try_shortcutting:
+                            print("Shortcutting path")
+                            shortcut_path, _ = shortcutting.robot_mode_shortcut(
+                                env, path, 500
+                            )
+                            # path = [node.state for node in sparsely_checked_path]
+
+                            shortcut_path_cost = path_cost(
+                                shortcut_path, env.batch_config_cost
+                            )
+
+                            if shortcut_path_cost < current_best_cost:
+                                print("New cost: ", shortcut_path_cost)
+                                costs.append(shortcut_path_cost)
+                                times.append(time.time() - start_time)
+
+                                all_paths.append(shortcut_path)
+
+                                current_best_path = shortcut_path
+                                current_best_cost = shortcut_path_cost
+
+                                # interpolated_path = interpolate_path(shortcut_path)
+                                interpolated_path = shortcut_path
+
+                                for i in range(len(interpolated_path)):
+                                    s = interpolated_path[i]
+                                    if not env.is_collision_free(s.q, s.mode):
+                                        continue
+
+                                    if (
+                                        i < len(interpolated_path) - 1
+                                        and interpolated_path[i].mode
+                                        != interpolated_path[i + 1].mode
+                                    ):
+                                        # add as transition
+                                        g.add_transition_nodes(
+                                            [
+                                                (
+                                                    s.q,
+                                                    s.mode,
+                                                    interpolated_path[i + 1].mode,
+                                                )
+                                            ]
+                                        )
+                                        pass
+                                    else:
+                                        g.add_states([s])
 
                     add_new_batch = True
 
@@ -1746,5 +2287,5 @@ def joint_prm_planner(
     costs.append(costs[-1])
     times.append(time.time() - start_time)
 
-    info = {"costs": costs, "times": times}
+    info = {"costs": costs, "times": times, "paths": all_paths}
     return current_best_path, info
