@@ -191,6 +191,12 @@ class State:
         self.q = q
         self.mode = m
 
+    def to_dict(self):
+        return {
+            "q": self.q.state().tolist(),
+            "mode": self.mode.task_ids
+        }        
+
 
 def state_dist(start: State, end: State) -> float:
     if start.mode != end.mode:
@@ -734,6 +740,7 @@ class BaseProblem(ABC):
         q2: Configuration,
         mode: Mode,
         resolution: float = 0.1,
+        tolerance: float = 0.01
     ) -> bool:
         pass
 
@@ -747,21 +754,23 @@ class BaseProblem(ABC):
         mode = self.start_mode
         collision = False
         for i in range(len(path)):
+            mode = path[i].mode
+
             # check if the state is collision free
             if not self.is_collision_free(path[i].q, mode):
                 print(f"There is a collision at index {i}")
                 # col = self.C.getCollisionsTotalPenetration()
                 # print(col)
-                self.show()
+                # self.show()
                 collision = True
 
             # if the next mode is a transition, check where to go
-            if i < len(path) - 1 and self.is_transition(path[i].q, mode):
-                # TODO: this does not work if multiple switches are possible at the same time
-                next_mode = self.get_next_mode(path[i].q, mode)
+            # if i < len(path) - 1 and self.is_transition(path[i].q, mode):
+            #     # TODO: this does not work if multiple switches are possible at the same time
+            #     next_mode = self.get_next_mode(path[i].q, mode)
 
-                if path[i + 1].mode == next_mode:
-                    mode = next_mode
+            #     if path[i + 1].mode == next_mode:
+            #         mode = next_mode
 
         if not self.done(path[-1].q, path[-1].mode):
             print("Final mode not reached")
