@@ -191,7 +191,11 @@ class NpConfiguration(Configuration):
             diff = pt.q - np.array([other.q for other in batch_other])
 
         if metric == "euclidean":
-            return np.linalg.norm(diff, axis=1)
+            squared_diff = diff * diff
+            return compute_sliced_dists(
+                squared_diff, np.array([[0, pt.slice[-1][-1]]])
+            )[0]
+            # return np.linalg.norm(diff, axis=1)
         elif metric == "sum_euclidean" or metric == "max_euclidean":
             squared_diff = diff * diff
             # dists = np.zeros((pt._num_agents, diff.shape[0]))
@@ -244,7 +248,8 @@ def config_cost(
     metric: str = "max",
     reduction: str = "max",
 ) -> float:
-    # return batch_config_cost([q_start], [q_end], metric, reduction)
+    # return batch_config_cost(q_start, np.array([q_end.state()]), metric, reduction)[0]
+    # return batch_config_cost([q_start], [q_end], metric, reduction)[0]
     num_agents = q_start.num_agents()
     dists = np.zeros(num_agents)
 
@@ -255,10 +260,10 @@ def config_cost(
         # d = np.linalg.norm(q_start[robot_index] - q_end[robot_index])
         diff = q_start.robot_state(robot_index) - q_end.robot_state(robot_index)
         if metric == "euclidean":
-            d = 0
-            for j in range(len(diff)):
-                d += (diff[j]) ** 2
-            dists[robot_index] = d**0.5
+            s = 0
+            for d in diff:
+                s += d** 2
+            dists[robot_index] = s**0.5
         else:
             dists[robot_index] = np.max(np.abs(diff))
 
@@ -303,7 +308,7 @@ def batch_config_cost(
 
     # print(tmp - all_robot_dists)
 
-        # print(all_robot_dists)
+    # print(all_robot_dists)
 
     if reduction == "max":
         return np.max(all_robot_dists, axis=0) + 0.01 * np.sum(all_robot_dists, axis=0)
