@@ -1,14 +1,13 @@
 import numpy as np
 import random
-
 from matplotlib import pyplot as plt
 
-from typing import List, Dict, Tuple, Optional, Set, ClassVar
-
+from typing import List, Dict, Tuple, Optional, Set, ClassVar, Any
 from numpy.typing import NDArray
-import heapq
-# import _heapq as heapq
 
+import heapq
+from sortedcontainers import SortedList
+from collections import defaultdict
 import time
 import math
 
@@ -22,13 +21,6 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate_path
 
 from multi_robot_multi_goal_planning.planners import shortcutting
-
-
-def edge_tuple(n0, n1):
-    if n0.id < n1.id:
-        return (n0, n1)
-    else:
-        return (n1, n0)
 
 
 class Node:
@@ -56,7 +48,7 @@ class Node:
     blacklist: Set[int]
     id: int
 
-    def __init__(self, state: "State", is_transition: bool = False) -> None:
+    def __init__(self, state: State, is_transition: bool = False) -> None:
         self.state = state
         self.lb_cost_to_goal = None
         self.lb_cost_from_start = None
@@ -79,25 +71,37 @@ class Node:
 
 
 class HeapQueue:
-    def __init__(self):
+    __slots__ = ["queue"]
+
+    # Class attribute type hints
+    queue: List[Any]
+
+    def __init__(self) -> None:
         self.queue = []
         heapq.heapify(self.queue)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.queue)
 
-    def heappush(self, item):
+    def heappush(self, item: Any) -> None:
         heapq.heappush(self.queue, item)
 
-    def heappop(self):
+    def heappop(self) -> Any:
+        # if len(self.queue) == 0:
+        #     raise IndexError("pop from an empty heap")
         return heapq.heappop(self.queue)
 
-    def remove(self, node):
+    def remove(self, node: Any) -> None:
+        """
+        Removes a node from the heap.
+        Note: This is a placeholder implementation.
+        """
         # (cost, edge_cost, e)
+        # To implement removal, you would need to:
+        # 1. Find the node in the heap.
+        # 2. Mark it as removed (e.g., using a flag or a separate set).
+        # 3. Re-heapify the queue if necessary.
         pass
-
-
-from sortedcontainers import SortedList
 
 
 class SortedQueue:
@@ -146,9 +150,6 @@ class SortedQueue:
 
     def __len__(self):
         return len(self.queue)
-
-
-from collections import defaultdict
 
 
 class EfficientEdgeQueue:
@@ -227,54 +228,109 @@ class BucketHeapQueue:
 
 
 class IndexHeap:
-    def __init__(self):
+    __slots__ = ["queue", "items"]
+
+    # Class attribute type hints
+    queue: List[Tuple[float, int]]  # (priority, index)
+    items: List[Any]  # The actual items
+
+    def __init__(self) -> None:
         self.queue = []
         self.items = []
         heapq.heapify(self.queue)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.queue)
 
-    def heappush_list(self, items):
+    def heappush_list(self, items: List[Tuple[float, Any]]) -> None:
         for item in items:
             idx = len(self.items)
             self.items.append(item)
-
             self.queue.append((item[0], idx))
 
         heapq.heapify(self.queue)
 
-    def heappush(self, item):
+    def heappush(self, item: Tuple[float, Any]) -> None:
         idx = len(self.items)
         self.items.append(item)
-
         heapq.heappush(self.queue, (item[0], idx))
 
-    def heappop(self):
+    def heappop(self) -> Any:
+        # if len(self.queue) == 0:
+        #     raise IndexError("pop from an empty heap")
+
         _, idx = heapq.heappop(self.queue)
         return self.items[idx]
+    
+class DictIndexHeap:
+    __slots__ = ['queue', 'items']
+
+    queue: List[Tuple[float, int]]  # (priority, index)
+    items: Dict[int, Any]  # Dictionary for storing active items
+
+    idx = 0
+
+    def __init__(self) -> None:
+        self.queue = []
+        self.items = {}
+        heapq.heapify(self.queue)
+
+    def __len__(self) -> int:
+        return len(self.queue)
+
+    # def heappush_list(self, items: List[Tuple[float, Any]]) -> None:
+    #     """Push a list of items into the heap."""
+    #     for priority, value in items:
+    #         idx = len(self.items)
+    #         self.items[idx] = value  # Store only valid items
+    #         self.queue.append((priority, idx))
+
+    #     heapq.heapify(self.queue)
+
+    def heappush(self, item: Tuple[float, Any]) -> None:
+        """Push a single item into the heap."""
+        # idx = len(self.items)
+        self.items[DictIndexHeap.idx] = item  # Store only valid items
+        heapq.heappush(self.queue, (item[0], DictIndexHeap.idx))
+        DictIndexHeap.idx += 1
+
+    def heappop(self) -> Any:
+        """Pop the item with the smallest priority from the heap."""
+        if not self.queue:
+            raise IndexError("pop from an empty heap")
+
+        _, idx = heapq.heappop(self.queue)
+        value = self.items.pop(idx)  # Remove from dictionary
+        return value
 
 
 class BucketIndexHeap:
-    def __init__(self, granularity=100):
+    __slots__ = ["granularity", "queues", "priority_lookup", "items", "len"]
+
+    # Class attribute type hints
+    granularity: int
+    queues: Dict[int, List[Tuple[float, int]]]
+    priority_lookup: List[int]
+    items: List[Any]
+    len: int
+
+    def __init__(self, granularity: int = 100) -> None:
         self.granularity = granularity
+        self.len = 0
 
         self.queues = {}
         self.priority_lookup = []
-
         self.items = []
 
-        self.len = 0
-
-    def __len__(self):
+    def __len__(self) -> int:
         return self.len
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def heappush(self, item):
+    def heappush(self, item: Tuple[float, Any]) -> None:
         self.len += 1
-        priority = int(item[0] * self.granularity)
+        priority: int = int(item[0] * self.granularity)
 
-        idx = len(self.items)
+        idx: int = len(self.items)
         self.items.append(item)
 
         if priority not in self.queues:
@@ -283,48 +339,101 @@ class BucketIndexHeap:
 
         heapq.heappush(self.queues[priority], (item[0], idx))
 
-    def heappush_list(self, items):
-        pass
+    # def heappush_list(self, items: List[Tuple[float, Any]]) -> None:
+    #     for item in items:
+    #         self.heappush(item)
 
-    def heappop(self):
+    def heappop(self) -> Any:
+        # I do not want the possible performance penalty
+        # if self.len == 0:
+        #     raise IndexError("pop from an empty heap")
+
         self.len -= 1
-        min_priority = self.priority_lookup[0]
+        min_priority: int = self.priority_lookup[0]
         _, idx = heapq.heappop(self.queues[min_priority])
 
         if not self.queues[min_priority]:
             del self.queues[min_priority]
             heapq.heappop(self.priority_lookup)
 
-        value = self.items[idx]
-
+        value: Any = self.items[idx]
         return value
 
 
-class DiscreteBucketIndexHeap:
-    def __init__(self, granularity=1000):
-        self.granularity = granularity
+# class DiscreteBucketIndexHeap:
+#     def __init__(self, granularity=1000):
+#         self.granularity = granularity
 
+#         self.queues = {}
+#         self.priority_lookup = []
+
+#         self.items = []
+
+#         self.len = 0
+
+#     def __len__(self):
+#         # num_elements = 0
+#         # for k, v in self.queues.items():
+#         #     num_elements += len(v)
+
+#         # return num_elements
+#         return self.len
+
+#     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+#     def heappush(self, item):
+#         self.len += 1
+#         priority = int(item[0] * self.granularity)
+
+#         idx = len(self.items)
+#         self.items.append(item)
+
+#         if priority not in self.queues:
+#             self.queues[priority] = []
+#             heapq.heappush(self.priority_lookup, priority)
+
+#         self.queues[priority].append((item[0], idx))
+
+#     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+#     def heappop(self):
+#         self.len -= 1
+
+#         min_priority = self.priority_lookup[0]
+#         _, idx = self.queues[min_priority].pop()
+
+#         if not self.queues[min_priority]:
+#             del self.queues[min_priority]
+#             heapq.heappop(self.priority_lookup)
+
+#         value = self.items[idx]
+
+#         return value
+
+
+class DiscreteBucketIndexHeap:
+    __slots__ = ["granularity", "queues", "priority_lookup", "items", "len"]
+
+    # Class attribute type hints
+    granularity: int
+    queues: Dict[int, List[Tuple[float, int]]]
+    priority_lookup: List[int]
+    items: List[Any]
+    len: int
+
+    def __init__(self, granularity: int = 1000) -> None:
+        self.granularity = granularity
         self.queues = {}
         self.priority_lookup = []
-
         self.items = []
-
         self.len = 0
 
-    def __len__(self):
-        # num_elements = 0
-        # for k, v in self.queues.items():
-        #     num_elements += len(v)
-
-        # return num_elements
+    def __len__(self) -> int:
         return self.len
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def heappush(self, item):
+    def heappush(self, item: Tuple[float, Any]) -> None:
         self.len += 1
-        priority = int(item[0] * self.granularity)
+        priority: int = int(item[0] * self.granularity)
 
-        idx = len(self.items)
+        idx: int = len(self.items)
         self.items.append(item)
 
         if priority not in self.queues:
@@ -333,19 +442,20 @@ class DiscreteBucketIndexHeap:
 
         self.queues[priority].append((item[0], idx))
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def heappop(self):
+    def heappop(self) -> Any:
+        if self.len == 0:
+            raise IndexError("pop from an empty heap")
+
         self.len -= 1
 
-        min_priority = self.priority_lookup[0]
+        min_priority: int = self.priority_lookup[0]
         _, idx = self.queues[min_priority].pop()
 
         if not self.queues[min_priority]:
             del self.queues[min_priority]
             heapq.heappop(self.priority_lookup)
 
-        value = self.items[idx]
-
+        value: Any = self.items[idx]
         return value
 
 
@@ -710,7 +820,7 @@ class Graph:
             unit_n_ball_measure = ((np.pi**0.5) ** dim) / math.gamma(dim / 2 + 1)
             informed_measure = 1
             if space_extent is not None:
-                informed_measure = space_extent * 0.4
+                informed_measure = space_extent
                 # informed_measure = space_extent / 2
 
             best_nodes = []
@@ -786,15 +896,14 @@ class Graph:
         env: BaseProblem,
         best_cost=None,
         resolution=0.1,
+        approximate_space_extent=None
     ):
-        open_queue = []
-        closed_list = set()
+        if approximate_space_extent is None:
+            approximate_space_extent = np.prod(np.diff(env.limits, axis=0))
 
         goal = None
-
         h_cache = {}
 
-        # TODO: decent heuristic makes everything better but is computationally not amazing
         def h(node):
             # return 0
             if node in h_cache:
@@ -833,7 +942,7 @@ class Graph:
         gs = {start_node.id: 0}  # best cost to get to a node
 
         start_neighbors, _ = self.get_neighbors(
-            start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
+            start_node, space_extent=approximate_space_extent
         )
 
         # populate open_queue and fs
@@ -847,9 +956,10 @@ class Graph:
 
         # queue = HeapQueue()
         # queue = BucketHeapQueue()
-        queue = BucketIndexHeap()
+        # queue = BucketIndexHeap()
         # queue = DiscreteBucketIndexHeap()
         # queue = IndexHeap()
+        queue = DictIndexHeap()
         # queue = SortedQueue()
         # queue = EfficientEdgeQueue()
 
@@ -929,7 +1039,6 @@ class Graph:
 
             # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
             collision_free = False
-            # et = edge_tuple(n0, n1)
 
             if n0.id in n1.whitelist:
                 collision_free = True
@@ -975,7 +1084,7 @@ class Graph:
 
             # get_neighbors
             neighbors, tmp = self.get_neighbors(
-                n1, space_extent=np.prod(np.diff(env.limits, axis=0))
+                n1, space_extent=approximate_space_extent
             )
 
             if len(neighbors) == 0:
@@ -986,8 +1095,6 @@ class Graph:
             #     n1.state.q, np.array([n.state.q.state() for n in neighbors])
             # )
             edge_costs = env.batch_config_cost(n1.state.q, tmp)
-            # added_edge = False
-            new_edges = []
             for n, edge_cost in zip(neighbors, edge_costs):
                 # if n == n0:
                 #     continue
@@ -1910,53 +2017,33 @@ def joint_prm_planner(
 
         return new_transitions
 
-    def sample_valid_uniform_batch(batch_size, cost):
+    def sample_valid_uniform_batch(batch_size: int, cost: float) -> List[State]:
         new_samples = []
         num_attempts = 0
         num_valid = 0
-        if True:
-            while len(new_samples) < batch_size:
-                num_attempts += 1
-                # print(len(new_samples))
-                # sample mode
-                m = sample_mode("weighted", cost is not None)
 
-                # print(m)
+        if len(g.goal_nodes) > 0:
+            focal_points = np.array(
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+            )
 
-                # sample configuration
-                q = []
-                for i in range(len(env.robots)):
-                    r = env.robots[i]
-                    lims = env.limits[:, env.robot_idx[r]]
-                    if lims[0, 0] < lims[1, 0]:
-                        qr = (
-                            np.random.rand(env.robot_dims[r])
-                            * (lims[1, :] - lims[0, :])
-                            + lims[0, :]
-                        )
-                    else:
-                        qr = np.random.rand(env.robot_dims[r]) * 6 - 3
-
-                    q.append(qr)
-
-                q = conf_type.from_list(q)
-
-                if env.is_collision_free(q, m):
-                    new_samples.append(State(q, m))
-                    num_valid += 1
-
-            print(num_valid / num_attempts)
-        elif True:
-            # grid sampling
-
+        while len(new_samples) < batch_size:
+            num_attempts += 1
+            # print(len(new_samples))
+            # sample mode
             m = sample_mode("weighted", cost is not None)
+
+            # print(m)
+
+            # sample configuration
             q = []
             for i in range(len(env.robots)):
                 r = env.robots[i]
                 lims = env.limits[:, env.robot_idx[r]]
                 if lims[0, 0] < lims[1, 0]:
                     qr = (
-                        np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
+                        np.random.rand(env.robot_dims[r])
+                        * (lims[1, :] - lims[0, :])
                         + lims[0, :]
                     )
                 else:
@@ -1965,30 +2052,26 @@ def joint_prm_planner(
                 q.append(qr)
 
             q = conf_type.from_list(q)
+            
+            if cost is not None:
+                if sum(env.batch_config_cost(q, focal_points)) > cost:
+                    continue
 
             if env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
-        else:
-            # we found a solution, and can do informed sampling:
-            # cost = (cost to get to mode) + cost in mode + (cost_to_goal)
-            # maybe better formulation:
-            # cost =
+                num_valid += 1
 
-            # NOTES:
-            # minimum cost to reach a mode is the lower bound of all the mode transitions we have so far
-            # admissible possibilities to compute the minimum cost:
-            # - lb through each mode, sum them up?
-            # -- disregards continuity, might underestimate massively
-            # - use dependency graph and compute lb per task?
-            #####
-            # inadmissible possibilities:
-            # - take only cost in current mode
-            pass
+        print("Percentage of succ. attempts", num_valid / num_attempts)
+      
+        return new_samples, num_attempts
 
-        return new_samples
-
-    def sample_valid_uniform_transitions(transistion_batch_size):
+    def sample_valid_uniform_transitions(transistion_batch_size, cost):
         transitions = []
+
+        if len(g.goal_nodes) > 0:
+            focal_points = np.array(
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+            )
 
         while len(transitions) < transistion_batch_size:
             # sample mode
@@ -2037,6 +2120,10 @@ def joint_prm_planner(
 
             q = conf_type.from_list(q)
 
+            if cost is not None:
+                if sum(env.batch_config_cost(q, focal_points)) > cost:
+                    continue
+
             if env.is_collision_free(q, mode):
                 if env.is_terminal_mode(mode):
                     next_mode = None
@@ -2069,6 +2156,8 @@ def joint_prm_planner(
     resolution = 0.02
 
     all_paths = []
+
+    approximate_space_extent = np.prod(np.diff(env.limits, axis=0))
 
     cnt = 0
     while True:
@@ -2204,11 +2293,13 @@ def joint_prm_planner(
             )
 
             print("Sampling uniform")
-            new_states = sample_valid_uniform_batch(
+            new_states, required_attempts_this_batch = sample_valid_uniform_batch(
                 batch_size=effective_uniform_batch_size, cost=current_best_cost
             )
             g.add_states(new_states)
             print(f"Adding {len(new_states)} new states")
+
+            approximate_space_extent = np.prod(np.diff(env.limits, axis=0)) * len(new_states) / required_attempts_this_batch
 
             # nodes_per_state = []
             # for m in reached_modes:
@@ -2225,7 +2316,7 @@ def joint_prm_planner(
             # if env.terminal_mode not in reached_modes:
             print("Sampling transitions")
             new_transitions = sample_valid_uniform_transitions(
-                transistion_batch_size=effective_uniform_transition_batch_size
+                transistion_batch_size=effective_uniform_transition_batch_size, cost=current_best_cost
             )
             g.add_transition_nodes(new_transitions)
             print(f"Adding {len(new_transitions)} transitions")
@@ -2324,7 +2415,7 @@ def joint_prm_planner(
 
         while True:
             sparsely_checked_path = g.search(
-                g.root, g.goal_nodes, env, current_best_cost, resolution
+                g.root, g.goal_nodes, env, current_best_cost, resolution, approximate_space_extent
             )
             # sparsely_checked_path = g.search_with_vertex_queue(
             #     g.root, g.goal_nodes, env, current_best_cost, resolution
@@ -2369,7 +2460,7 @@ def joint_prm_planner(
                         current_best_path = path
                         current_best_cost = new_path_cost
 
-                        print("New cost: ", new_path_cost)
+                        print(f"New cost: {new_path_cost} at time {time.time() - start_time}")
                         costs.append(new_path_cost)
                         times.append(time.time() - start_time)
 
