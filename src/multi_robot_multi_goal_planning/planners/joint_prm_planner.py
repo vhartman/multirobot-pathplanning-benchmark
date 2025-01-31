@@ -3,7 +3,8 @@ import random
 
 from matplotlib import pyplot as plt
 
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Set, ClassVar
+
 from numpy.typing import NDArray
 import heapq
 # import _heapq as heapq
@@ -31,12 +32,31 @@ def edge_tuple(n0, n1):
 
 
 class Node:
-    # __slots__ = 'id'
+    __slots__ = [
+        "state",
+        "lb_cost_to_goal",
+        "lb_cost_from_start",
+        "is_transition",
+        "neighbors",
+        "whitelist",
+        "blacklist",
+        "id",
+    ]
 
+    # Class attribute
+    id_counter: ClassVar[int] = 0
+
+    # Instance attributes
     state: State
-    id_counter = 0
+    lb_cost_to_goal: Optional[float]
+    lb_cost_from_start: Optional[float]
+    is_transition: bool
+    neighbors: List[int]
+    whitelist: Set[int]
+    blacklist: Set[int]
+    id: int
 
-    def __init__(self, state, is_transition=False):
+    def __init__(self, state: "State", is_transition: bool = False) -> None:
         self.state = state
         self.lb_cost_to_goal = None
         self.lb_cost_from_start = None
@@ -51,10 +71,10 @@ class Node:
         self.id = Node.id_counter
         Node.id_counter += 1
 
-    def __lt__(self, other):
+    def __lt__(self, other: "Node") -> bool:
         return self.id < other.id
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return self.id
 
 
@@ -111,6 +131,7 @@ class SortedQueue:
     #     # Remove from highest index to lowest to maintain valid indices
     #     for idx in reversed(to_remove):
     #         del self.queue[idx]
+
     def remove_by_node(self, node):
         """Remove all edges where node2 == node"""
         i = 0
@@ -214,6 +235,15 @@ class IndexHeap:
     def __len__(self):
         return len(self.queue)
 
+    def heappush_list(self, items):
+        for item in items:
+            idx = len(self.items)
+            self.items.append(item)
+
+            self.queue.append((item[0], idx))
+
+        heapq.heapify(self.queue)
+
     def heappush(self, item):
         idx = len(self.items)
         self.items.append(item)
@@ -252,6 +282,9 @@ class BucketIndexHeap:
             heapq.heappush(self.priority_lookup, priority)
 
         heapq.heappush(self.queues[priority], (item[0], idx))
+
+    def heappush_list(self, items):
+        pass
 
     def heappop(self):
         self.len -= 1
@@ -677,7 +710,7 @@ class Graph:
             unit_n_ball_measure = ((np.pi**0.5) ** dim) / math.gamma(dim / 2 + 1)
             informed_measure = 1
             if space_extent is not None:
-                informed_measure = space_extent
+                informed_measure = space_extent * 0.4
                 # informed_measure = space_extent / 2
 
             best_nodes = []
@@ -700,6 +733,8 @@ class Graph:
                 best_nodes_arr = self.node_array_cache[key][np.where(dists < r)[0], :]
 
                 # print("fraction of nodes in mode", len(best_nodes)/len(dists))
+                # print(r_star)
+                # print(len(best_nodes))
 
             best_transition_nodes = []
             if key in self.transition_nodes:
@@ -837,6 +872,7 @@ class Graph:
         #             assert(n.lb_cost_to_goal == n.neighbors[0].lb_cost_to_goal)
 
         wasted_pops = 0
+        processed_edges = 0
 
         num_iter = 0
         while len(queue) > 0:
@@ -915,6 +951,8 @@ class Graph:
                     n1.whitelist.add(n0.id)
                     n0.whitelist.add(n1.id)
 
+            processed_edges += 1
+
             # remove all other edges with this goal from the queue
 
             # if n0.state.mode not in reached_modes:
@@ -927,7 +965,9 @@ class Graph:
             gs[n1.id] = g_tentative
             parents[n1] = n0
 
-            # queue.remove_by_node(n1)
+            # if len(queue) > 1e6:
+            #     for node in parents:
+            #         queue.remove_by_node(n1)
 
             if n1 in goal_nodes:
                 goal = n1
@@ -946,9 +986,11 @@ class Graph:
             #     n1.state.q, np.array([n.state.q.state() for n in neighbors])
             # )
             edge_costs = env.batch_config_cost(n1.state.q, tmp)
+            # added_edge = False
+            new_edges = []
             for n, edge_cost in zip(neighbors, edge_costs):
-                if n == n0:
-                    continue
+                # if n == n0:
+                #     continue
 
                 if n.id in n1.blacklist:
                     continue
@@ -984,10 +1026,15 @@ class Graph:
                     # if n not in closed_list:
                     # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
                     queue.heappush((f_node, edge_cost, (n1, n)))
+                    # new_edges.append((f_node, edge_cost, (n1, n)))
 
-                    # open_queue.append((f_node, edge_cost, (n1, n)))
+                    # added_edge = True
+                    # queue.append((f_node, edge_cost, (n1, n)))
             # heapq.heapify(open_queue)
             # open_queue.sort(reverse=True)
+
+            # if len(new_edges) > 0:
+            #     queue.heappush_list(new_edges)
 
         path = []
 
@@ -1007,6 +1054,7 @@ class Graph:
             path = path[::-1]
 
         print("Wasted pops", wasted_pops)
+        print("Processed edges", processed_edges)
 
         return path
 
@@ -1163,10 +1211,10 @@ def joint_prm_planner(
     try_informed_sampling=True,
     uniform_batch_size=200,
     uniform_transition_batch_size=500,
-    informed_batch_size=1000,
-    informed_transition_batch_size=1000,
+    informed_batch_size=500,
+    informed_transition_batch_size=500,
     path_batch_size=500,
-    locally_informed_sampling=False,
+    locally_informed_sampling=True,
     try_informed_transitions=True,
     try_shortcutting=True,
 ) -> Optional[Tuple[List[State], List]]:
@@ -1208,8 +1256,8 @@ def joint_prm_planner(
 
     # we are checking here if a sample can imrpove a part of the path
     # the condition to do so is that the
-    def can_improve(rnd_state, path, start_index, end_index):
-        path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
+    def can_improve(rnd_state, path, start_index, end_index, path_segment_costs):
+        # path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
 
         # compute the local cost
         path_cost_from_start_to_index = np.sum(path_segment_costs[:start_index])
@@ -1326,54 +1374,109 @@ def joint_prm_planner(
         return False
 
     # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
+    # needed adaption to work.
     def sample_unit_ball(dim) -> np.array:
         """Samples a point uniformly from the unit ball. This is used to sample points from the Prolate HyperSpheroid (PHS).
 
         Returns:
             Sampled Point (np.array): The sampled point from the unit ball.
         """
-        u = np.random.uniform(-1, 1, dim)
+        # u = np.random.uniform(-1, 1, dim)
+        # norm = np.linalg.norm(u)
+        # r = np.random.random() ** (1.0 / dim)
+        # return r * u / norm
+        u = np.random.normal(0, 1, dim)
         norm = np.linalg.norm(u)
+        # Generate radius with correct distribution
         r = np.random.random() ** (1.0 / dim)
-        return r * u / norm
+        return (r / norm) * u
 
-    def samplePHS(a, b, c) -> np.array:
-        """Samples a point from the Prolate HyperSpheroid (PHS) defined by the start and goal nodes.
-
-        Returns:
-            Node: The sampled node from the PHS.
-        """
+    def samplePHS(a: np.ndarray, b: np.ndarray, c: float) -> np.ndarray:
+        """Samples a point from the Prolate HyperSpheroid (PHS) with vectorized operations."""
         dim = len(a)
+        diff = b - a
+
         # Calculate the center of the PHS.
         center = (a + b) / 2
         # The transverse axis in the world frame.
-        c_min = np.linalg.norm(a - b)
-        a1 = (b - a) / c_min
+        c_min = np.linalg.norm(diff)
+
+        if c_min == 0:
+            x_ball = sample_unit_ball(dim) * c / 2
+            return x_ball + center  # Avoid division by zero if a == b
+
         # The first column of the identity matrix.
-        one_1 = np.eye(a1.shape[0])[:, 0]
-        U, S, Vt = np.linalg.svd(np.outer(a1, one_1.T))
-        Sigma = np.diag(S)
-        lam = np.eye(Sigma.shape[0])
+        # one_1 = np.eye(a1.shape[0])[:, 0]
+        a1 = diff / c_min
+        e1 = np.zeros(dim)
+        e1[0] = 1.0
+
+        # Optimized rotation matrix calculation
+        U, S, Vt = np.linalg.svd(np.outer(a1, e1))
+        # Sigma = np.diag(S)
+        # lam = np.eye(Sigma.shape[0])
+        lam = np.eye(dim)
         lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
         # Calculate the rotation matrix.
-        cwe = np.matmul(U, np.matmul(lam, Vt))
+        # cwe = np.matmul(U, np.matmul(lam, Vt))
+        cwe = U @ lam @ Vt
         # Get the radius of the first axis of the PHS.
-        r1 = c / 2
+        # r1 = c / 2
         # Get the radius of the other axes of the PHS.
-        rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
+        # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
         # Create a vector of the radii of the PHS.
-        r = np.diag(np.array([r1] + rn))
+        # r = np.diag(np.array([r1] + rn))
+        r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
 
         # Sample a point from the PHS.
         # Sample a point from the unit ball.
         x_ball = sample_unit_ball(dim)
         # Transform the point from the unit ball to the PHS.
-        op = np.matmul(np.matmul(cwe, r), x_ball) + center
-        # Round the point to 7 decimal places.
-        op = np.around(op, 7)
-        # Check if the point is in the PHS.
+        # op = np.matmul(np.matmul(cwe, r), x_ball) + center
+        op = cwe @ r @ x_ball + center
 
         return op
+
+    def compute_PHS_matrices(a, b, c):
+        dim = len(a)
+        diff = b - a
+
+        # Calculate the center of the PHS.
+        center = (a + b) / 2
+        # The transverse axis in the world frame.
+        c_min = np.linalg.norm(diff)
+
+        # The first column of the identity matrix.
+        # one_1 = np.eye(a1.shape[0])[:, 0]
+        a1 = diff / c_min
+        e1 = np.zeros(dim)
+        e1[0] = 1.0
+
+        # Optimized rotation matrix calculation
+        U, S, Vt = np.linalg.svd(np.outer(a1, e1))
+        # Sigma = np.diag(S)
+        # lam = np.eye(Sigma.shape[0])
+        lam = np.eye(dim)
+        lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
+        # Calculate the rotation matrix.
+        # cwe = np.matmul(U, np.matmul(lam, Vt))
+        cwe = U @ lam @ Vt
+        # Get the radius of the first axis of the PHS.
+        # r1 = c / 2
+        # Get the radius of the other axes of the PHS.
+        # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
+        # Create a vector of the radii of the PHS.
+        # r = np.diag(np.array([r1] + rn))
+        r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
+
+        return cwe @ r, center
+
+    def sample_phs_with_given_matrices(rot, center):
+        dim = len(center)
+        x_ball = sample_unit_ball(dim)
+        # Transform the point from the unit ball to the PHS.
+        # op = np.matmul(np.matmul(cwe, r), x_ball) + center
+        return rot @ x_ball + center
 
     def rejection_sample_from_ellipsoid(a, b, c):
         m = (a + b) / 2
@@ -1443,7 +1546,9 @@ def joint_prm_planner(
             focal_points = np.array(
                 [path[start_ind].q.state(), path[end_ind].q.state()]
             )
-            try_direct_sampling = False
+            try_direct_sampling = True
+            precomputed_phs_matrices = {}
+
             for k in range(max_attempts_per_sample):
                 if not try_direct_sampling or env.cost_metric != "euclidean":
                     # completely random sample configuration from the (valid) domain robot by robot
@@ -1481,16 +1586,18 @@ def joint_prm_planner(
                             else:
                                 c_robot_bound = current_cost
 
-                            if np.linalg.norm(
+                            if (
+                                np.linalg.norm(
                                     path[start_ind].q[i] - path[end_ind].q[i]
-                                ) < 1e-3:
+                                )
+                                < 1e-3
+                            ):
                                 qr = (
                                     np.random.rand(env.robot_dims[r])
                                     * (lims[1, :] - lims[0, :])
                                     + lims[0, :]
                                 )
                             else:
-
                                 # print("cost", current_cost)
                                 # print("robot cst", c_robot_bound)
                                 # print(
@@ -1499,7 +1606,18 @@ def joint_prm_planner(
                                 #     )
                                 # )
 
-                                qr = samplePHS(path[start_ind].q[i], path[end_ind].q[i], c_robot_bound)
+                                if i not in precomputed_phs_matrices:
+                                    precomputed_phs_matrices[i] = compute_PHS_matrices(
+                                        path[start_ind].q[i],
+                                        path[end_ind].q[i],
+                                        c_robot_bound,
+                                    )
+
+                                qr = sample_phs_with_given_matrices(
+                                    *precomputed_phs_matrices[i]
+                                )
+
+                                # qr = samplePHS(path[start_ind].q[i], path[end_ind].q[i], c_robot_bound)
                                 # qr = rejection_sample_from_ellipsoid(
                                 #     path[start_ind].q[i], path[end_ind].q[i], c_robot_bound
                                 # )
@@ -1529,7 +1647,7 @@ def joint_prm_planner(
                 # if can_improve(State(q, m), path, 0, len(path)-1):
                 # if can_improve(State(q, m), path, start_ind, end_ind):
                 if can_improve(
-                    State(q, m), path, start_ind, end_ind
+                    State(q, m), path, start_ind, end_ind, path_segment_costs
                 ) and env.is_collision_free(q, m):
                     # if env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
                     new_samples.append(State(q, m))
@@ -1697,7 +1815,7 @@ def joint_prm_planner(
 
                     if (
                         path[end_ind].mode != path[start_ind].mode
-                        and end_ind - start_ind > 2  # and end_ind - start_ind < 50
+                        and end_ind - start_ind > 2
                     ):
                         # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
                         current_cost = sum(path_segment_costs[start_ind:end_ind])
@@ -1954,10 +2072,49 @@ def joint_prm_planner(
 
     cnt = 0
     while True:
-        cnt = g.get_num_samples()
+        if current_best_path is not None:
+            # prune
+            num_pts_for_removal = 0
+            focal_points = np.array(
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+            )
+            # for mode, nodes in g.nodes.items():
+            #     for n in nodes:
+            #         if sum(env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
+            #             num_pts_for_removal += 1
+
+            # for mode, nodes in g.transition_nodes.items():
+            #     for n in nodes:
+            #         if sum(env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
+            #             num_pts_for_removal += 1
+            # Remove elements from g.nodes
+            for mode in list(g.nodes.keys()):  # Avoid modifying dict while iterating
+                original_count = len(g.nodes[mode])
+                g.nodes[mode] = [
+                    n
+                    for n in g.nodes[mode]
+                    if sum(env.batch_config_cost(n.state.q, focal_points))
+                    <= current_best_cost
+                ]
+                num_pts_for_removal += original_count - len(g.nodes[mode])
+
+            # Remove elements from g.transition_nodes
+            for mode in list(g.transition_nodes.keys()):
+                original_count = len(g.transition_nodes[mode])
+                g.transition_nodes[mode] = [
+                    n
+                    for n in g.transition_nodes[mode]
+                    if sum(env.batch_config_cost(n.state.q, focal_points))
+                    <= current_best_cost
+                ]
+                num_pts_for_removal += original_count - len(g.transition_nodes[mode])
+
+            print(f"Removed {num_pts_for_removal} nodes")
 
         print()
         print("Count:", cnt, "max_iter:", max_iter)
+
+        samples_in_graph_before = g.get_num_samples()
 
         if add_new_batch:
             if try_sampling_around_path and current_best_path is not None:
@@ -2117,6 +2274,10 @@ def joint_prm_planner(
 
                     g.compute_lower_bound_to_goal(env.batch_config_cost)
                     g.compute_lower_bound_from_start(env.batch_config_cost)
+
+        samples_in_graph_after = g.get_num_samples()
+
+        cnt += samples_in_graph_after - samples_in_graph_before
 
         # search over nodes:
         # 1. search from goal state with sparse check
