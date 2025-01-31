@@ -148,6 +148,7 @@ class Mode:
 
     id: int
     prev_mode: "Mode"
+    next_modes: List["Mode"]
 
     id_counter = 0
 
@@ -158,6 +159,7 @@ class Mode:
         # TODO: set in constructor?
         self.prev_mode = None
         self.sg = {}
+        self.next_modes = []
 
         self.id = Mode.id_counter
         Mode.id_counter += 1
@@ -406,9 +408,9 @@ class SequenceMixin(BaseModeLogic):
     def get_next_mode(self, q: Optional[Configuration], mode: Mode) -> Mode:
         next_task_ids = self.get_valid_next_task_combinations(mode)[0]
 
-
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
         next_mode.prev_mode = mode
+        mode.next_modes.append(next_mode)
 
         sg = self.get_scenegraph_info_for_mode(next_mode)
         next_mode.sg = sg
