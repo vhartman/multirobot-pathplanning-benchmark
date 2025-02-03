@@ -8,6 +8,9 @@ import os
 import numpy as np
 import random
 
+import sys
+import multiprocessing
+
 from typing import Dict, Any
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
@@ -128,9 +131,119 @@ def setup_planner(planner_config, optimize=True):
 
     return name, planner
 
-
 def setup_env(env_config):
     pass
+
+
+def run_experiment(env, planners, config, experiment_folder):
+    seed = config["seed"]
+
+    all_experiment_data = {}
+    for planner_name, _ in planners:
+        all_experiment_data[planner_name] = []
+
+    for run_id in range(config["num_runs"]):
+        for planner_name, planner in planners:
+            np.random.seed(seed + run_id)
+            random.seed(seed + run_id)
+
+            res = run_single_planner(env, planner)
+
+            planner_folder = experiment_folder + f"{planner_name}/"
+            if not os.path.isdir(planner_folder):
+                os.makedirs(planner_folder)
+
+            all_experiment_data[planner_name].append(res)
+
+            # export planner data
+            export_planner_data(planner_folder, run_id, res)
+
+    return all_experiment_data
+
+
+def run_planner_process(run_id, planner_name, planner, seed, env, experiment_folder, queue, semaphore):
+    """Runs a planner, captures all output live, and stores results in a queue."""
+    with semaphore:  # Limit parallel execution
+        planner_folder = experiment_folder + f"{planner_name}/"
+        os.makedirs(planner_folder, exist_ok=True)
+
+        log_file = f"{planner_folder}run_{run_id}.log"
+
+        with open(log_file, "w", buffering=1) as f:  # Line-buffered writing
+            class Tee:
+                """Custom stream to write to both stdout and a file."""
+                def __init__(self, file):
+                    self.file = file
+                    # self.stdout = sys.stdout
+
+                def write(self, data):
+                    self.file.write(data)
+                    self.file.flush()  # Ensure immediate writing
+                    # self.stdout.write(data)
+                    # self.stdout.flush()
+
+                def flush(self):
+                    self.file.flush()
+                    # self.stdout.flush()
+
+            # Redirect stdout and stderr
+            sys.stdout = Tee(f)
+            sys.stderr = Tee(f)
+
+            try:
+                np.random.seed(seed + run_id)
+                random.seed(seed + run_id)
+
+                res = run_single_planner(env, planner)
+
+                planner_folder = experiment_folder + f"{planner_name}/"
+                os.makedirs(planner_folder, exist_ok=True)
+
+                # Export planner data
+                export_planner_data(planner_folder, run_id, res)
+
+                # Store result in queue
+                queue.put((planner_name, res))
+
+            except Exception as e:
+                print(f"Error in {planner_name} run {run_id}: {e}")
+
+            finally:
+                # Restore stdout and stderr
+                sys.stdout = sys.__stdout__
+                sys.stderr = sys.__stderr__
+
+
+
+def run_experiment_in_parallel(env, planners, config, experiment_folder, max_parallel=4):
+    """Runs experiments in parallel with a fixed number of processes."""
+    all_experiment_data = {planner_name: [] for planner_name, _ in planners}
+    seed = config["seed"]
+
+    processes = []
+    queue = multiprocessing.Queue()
+    semaphore = multiprocessing.Semaphore(max_parallel)  # Limit max parallel processes
+
+    # Launch separate processes
+    for run_id in range(config["num_runs"]):
+        for planner_name, planner in planners:
+            p = multiprocessing.Process(
+                target=run_planner_process,
+                args=(run_id, planner_name, planner, seed, env, experiment_folder, queue, semaphore)
+            )
+            p.start()
+            processes.append(p)
+
+    # Wait for all processes to finish
+    for p in processes:
+        p.join()
+
+    # Collect results from the queue
+    while not queue.empty():
+        planner_name, res = queue.get()
+        all_experiment_data[planner_name].append(res)
+
+    return all_experiment_data
 
 
 def main():
@@ -164,27 +277,8 @@ def main():
 
     export_config(experiment_folder, config)
 
-    seed = config["seed"]
-
-    all_experiment_data = {}
-    for planner_name, _ in planners:
-        all_experiment_data[planner_name] = []
-
-    for run_id in range(config["num_runs"]):
-        for planner_name, planner in planners:
-            np.random.seed(seed + run_id)
-            random.seed(seed + run_id)
-
-            res = run_single_planner(env, planner)
-
-            planner_folder = experiment_folder + f"{planner_name}/"
-            if not os.path.isdir(planner_folder):
-                os.makedirs(planner_folder)
-
-            all_experiment_data[planner_name].append(res)
-
-            # export planner data
-            export_planner_data(planner_folder, run_id, res)
+    all_experiment_data = run_experiment_in_parallel(env, planners, config, experiment_folder, max_parallel=4)
+    # all_experiment_data = run_experiment(env, planners, config, experiment_folder)
 
     make_cost_plots(all_experiment_data, config)
 
