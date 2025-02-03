@@ -1214,6 +1214,11 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
     print(keyframes)
     print(agents_can_rotate)
 
+    # print(C.getJointLimits())
+
+    # komo = ry.KOMO(C, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    # print(komo.nlp().getBounds())
+
     return C, keyframes
 
 

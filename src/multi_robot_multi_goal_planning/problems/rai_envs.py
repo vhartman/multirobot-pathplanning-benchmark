@@ -356,7 +356,8 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
-
+# best max-cost sol: 3.41
+# best sum-cost sol: 5.922
 class rai_two_dim_simple_manip(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_piano_mover_env()
@@ -505,7 +506,8 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
-
+# best cost found for max-cost is 17.64
+# best cost found for sum-cost is xx.xx
 class rai_two_dim_handover(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_two_dim_handover()
@@ -751,7 +753,8 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
-
+# best solution found with sum-cost: 14.08 (independent of rotation)
+# best solution found with max-cost: 9.7 (independent of rotation)
 class rai_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
@@ -823,7 +826,8 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
 class rai_two_dim_piano_mover(SequenceMixin, rai_env):
     pass
 
-
+# best sum-cost: 12.9
+# best max-cost: 6.56
 class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_2d_rai_env_3_agents()
@@ -969,7 +973,7 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1040,7 +1044,7 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1099,7 +1103,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1157,7 +1161,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1323,7 +1327,7 @@ class rai_ur10_arm_shelf_env:
 class rai_ur10_arm_conveyor_env:
     pass
 
-
+# best max cost: 9.24
 class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_handover_env()
@@ -1335,7 +1339,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1410,7 +1414,7 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1542,7 +1546,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1706,7 +1710,7 @@ class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1808,7 +1812,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1884,7 +1888,7 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)

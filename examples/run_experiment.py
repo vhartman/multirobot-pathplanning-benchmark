@@ -1,7 +1,6 @@
 import argparse
 from matplotlib import pyplot as plt
 
-import time
 import datetime
 import json
 import os
@@ -9,14 +8,12 @@ import os
 import numpy as np
 import random
 
-from typing import List
+from typing import Dict, Any
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
-from multi_robot_multi_goal_planning.problems.rai_envs import display_path, rai_env
 
-# from multi_robot_multi_goal_planning.problems.planning_env import State
+from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
-from multi_robot_multi_goal_planning.problems.util import interpolate_path
 
 # planners
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
@@ -32,7 +29,7 @@ from examples.make_plots import make_cost_plots
 # np.random.seed(100)
 
 
-def load_experiment_config(filepath: str):
+def load_experiment_config(filepath: str) -> Dict[str, Any]:
     with open(filepath) as f:
         config = json.load(f)
 
@@ -48,12 +45,12 @@ def load_experiment_config(filepath: str):
     return config
 
 
-def run_single_planner(env, planner):
-    path, data = planner(env)
+def run_single_planner(env: BaseProblem, planner):
+    _, data = planner(env)
     return data
 
 
-def export_planner_data(planner_folder, run_id, planner_data):
+def export_planner_data(planner_folder: str, run_id: int, planner_data: Dict):
     # we expect data from multiple runs
     #
     # resulting folderstructure:
@@ -93,7 +90,7 @@ def export_planner_data(planner_folder, run_id, planner_data):
         f.write(b"\n")
 
 
-def export_config(path, config):
+def export_config(path: str, config: Dict):
     with open(path + "config.json", "w") as f:
         json.dump(config, f)
 
@@ -108,7 +105,7 @@ def setup_planner(planner_config, optimize=True):
             return joint_prm_planner(
                 env,
                 optimize=optimize,
-                max_iter=20000,
+                max_iter=15000,
                 distance_metric=options["distance_function"],
                 try_sampling_around_path=options["sample_near_path"],
                 use_k_nearest=options["connection_strategy"] == "k_nearest",
@@ -122,6 +119,7 @@ def setup_planner(planner_config, optimize=True):
                 ],
                 path_batch_size=options["path_batch_size"],
                 locally_informed_sampling=options["locally_informed_sampling"],
+                try_shortcutting=options["shortcutting"],
             )
     elif planner_config["type"] == "rrt":
         pass

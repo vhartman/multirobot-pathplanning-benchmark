@@ -50,13 +50,13 @@ class Configuration(ABC):
 
 
 class ListConfiguration(Configuration):
-    def __init__(self, q_list):
+    def __init__(self, q_list: List[NDArray]):
         self.q = q_list
 
-    def __getitem__(self, ind):
+    def __getitem__(self, ind: int) -> NDArray:
         return self.robot_state(ind)
 
-    def __setitem__(self, ind, data):
+    def __setitem__(self, ind: int, data: NDArray):
         self.q[ind] = data
 
     @classmethod
@@ -69,12 +69,14 @@ class ListConfiguration(Configuration):
     def state(self) -> NDArray:
         return np.concatenate(self.q)
 
-    def num_agents(self):
+    def num_agents(self) -> int:
         return len(self.q)
 
 
 @numba.jit(nopython=True, parallel=True)
-def numba_parallelized_sum(squared_diff, slices, num_agents):
+def numba_parallelized_sum(
+    squared_diff: NDArray, slices: NDArray, num_agents: int
+) -> NDArray:
     dists = np.zeros((num_agents, squared_diff.shape[0]))
 
     for i in numba.prange(num_agents):
@@ -88,7 +90,7 @@ def numba_parallelized_sum(squared_diff, slices, num_agents):
 
 
 @numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True)
-def compute_sliced_dists(squared_diff, slices):
+def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
     num_slices = len(slices)
     num_samples = squared_diff.shape[0]
     dists = np.empty((num_slices, num_samples), dtype=np.float32)
@@ -101,7 +103,7 @@ def compute_sliced_dists(squared_diff, slices):
 
 
 @numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True)
-def compute_sliced_dists_transpose(squared_diff, slices):
+def compute_sliced_dists_transpose(squared_diff: NDArray, slices: NDArray) -> NDArray:
     num_slices = len(slices)
     num_samples = squared_diff.shape[1]
     dists = np.empty((num_slices, num_samples), dtype=np.float32)
@@ -115,6 +117,10 @@ def compute_sliced_dists_transpose(squared_diff, slices):
 
 class NpConfiguration(Configuration):
     __slots__ = "slice", "q", "_num_agents"
+
+    slice: List[Tuple[int, int]]
+    q: NDArray
+    _num_agents: int
 
     def __init__(self, q: NDArray, slice: List[Tuple[int, int]]):
         self.slice = slice
@@ -182,7 +188,7 @@ class NpConfiguration(Configuration):
 
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
-    def _batch_dist(cls, pt, batch_other, metric: str = "max") -> NDArray:
+    def _batch_dist(cls, pt: "NpConfiguration", batch_other, metric: str = "max") -> NDArray:
         if isinstance(batch_other, np.ndarray):
             diff = pt.q - batch_other
             # print(pt.q.shape)
@@ -262,7 +268,7 @@ def config_cost(
         if metric == "euclidean":
             s = 0
             for d in diff:
-                s += d** 2
+                s += d**2
             dists[robot_index] = s**0.5
         else:
             dists[robot_index] = np.max(np.abs(diff))

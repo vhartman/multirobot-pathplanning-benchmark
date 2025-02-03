@@ -11,7 +11,11 @@ from collections import defaultdict
 import time
 import math
 
-from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    State,
+    BaseProblem,
+    Mode,
+)
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
@@ -261,9 +265,10 @@ class IndexHeap:
 
         _, idx = heapq.heappop(self.queue)
         return self.items[idx]
-    
+
+
 class DictIndexHeap:
-    __slots__ = ['queue', 'items']
+    __slots__ = ["queue", "items"]
 
     queue: List[Tuple[float, int]]  # (priority, index)
     items: Dict[int, Any]  # Dictionary for storing active items
@@ -465,7 +470,7 @@ class Graph:
 
     # batch_dist_fun
 
-    def __init__(self, start: State, batch_dist_fun, use_k_nearest=True):
+    def __init__(self, start: State, batch_dist_fun, use_k_nearest: bool = True):
         self.root = Node(start)
         self.root.lb_cost_from_start = 0
         # self.nodes = [self.root]
@@ -493,7 +498,7 @@ class Graph:
         self.transition_node_lb_cache = {}
         self.rev_transition_node_lb_cache = {}
 
-    def get_num_samples(self):
+    def get_num_samples(self) -> int:
         num_samples = 0
         for k, v in self.nodes.items():
             num_samples += len(v)
@@ -661,15 +666,15 @@ class Graph:
         node_list = self.nodes[key]
         node_list.append(new_node)
 
-    def add_states(self, states):
+    def add_states(self, states: List[State]):
         for s in states:
             self.add_node(Node(s))
 
-    def add_nodes(self, nodes):
+    def add_nodes(self, nodes: List[Node]):
         for n in nodes:
             self.add_node(n)
 
-    def add_transition_nodes(self, transitions):
+    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, Mode]):
         self.transition_node_array_cache = {}
         self.reverse_transition_node_array_cache = {}
 
@@ -741,7 +746,9 @@ class Graph:
                     self.reverse_transition_nodes[next_mode] = [node_next_mode]
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def get_neighbors(self, node, k=20, space_extent=None):
+    def get_neighbors(
+        self, node: Node, k=20, space_extent: float = None
+    ) -> Tuple[List[Node], NDArray]:
         key = node.state.mode
         if key in self.nodes:
             node_list = self.nodes[key]
@@ -891,13 +898,13 @@ class Graph:
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def search(
         self,
-        start_node,
-        goal_nodes: List,
+        start_node: Node,
+        goal_nodes: List[Node],
         env: BaseProblem,
-        best_cost=None,
-        resolution=0.1,
-        approximate_space_extent=None
-    ):
+        best_cost: Optional[float] = None,
+        resolution: float = 0.1,
+        approximate_space_extent: float = None,
+    ) -> List[Node]:
         if approximate_space_extent is None:
             approximate_space_extent = np.prod(np.diff(env.limits, axis=0))
 
@@ -1167,12 +1174,12 @@ class Graph:
 
     def search_with_vertex_queue(
         self,
-        start_node,
-        goal_nodes: List,
+        start_node: Node,
+        goal_nodes: List[Node],
         env: BaseProblem,
-        best_cost=None,
-        resolution=0.1,
-    ):
+        best_cost: Optional[float] = None,
+        resolution: float = 0.1,
+    ) -> List[Node]:
         open_queue = []
 
         goal = None
@@ -1312,18 +1319,18 @@ def joint_prm_planner(
     optimize: bool = True,
     mode_sampling_type: str = "greedy",
     max_iter: int = 2000,
-    distance_metric="euclidean",
-    try_sampling_around_path=True,
-    use_k_nearest=True,
-    try_informed_sampling=True,
-    uniform_batch_size=200,
-    uniform_transition_batch_size=500,
-    informed_batch_size=500,
-    informed_transition_batch_size=500,
-    path_batch_size=500,
-    locally_informed_sampling=True,
-    try_informed_transitions=True,
-    try_shortcutting=True,
+    distance_metric: str = "euclidean",
+    try_sampling_around_path: bool = True,
+    use_k_nearest: bool = True,
+    try_informed_sampling: bool = True,
+    uniform_batch_size: int = 200,
+    uniform_transition_batch_size: int = 500,
+    informed_batch_size: int = 500,
+    informed_transition_batch_size: int = 500,
+    path_batch_size: int = 500,
+    locally_informed_sampling: bool = True,
+    try_informed_transitions: bool = True,
+    try_shortcutting: bool = True,
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
@@ -1332,7 +1339,7 @@ def joint_prm_planner(
 
     conf_type = type(env.get_start_pos())
 
-    def sample_mode(mode_sampling_type="weighted", found_solution=False):
+    def sample_mode(mode_sampling_type:str="weighted", found_solution:bool=False) -> Mode:
         return random.choice(reached_modes)
         if mode_sampling_type == "uniform_reached":
             m_rnd = random.choice(reached_modes)
@@ -1363,7 +1370,7 @@ def joint_prm_planner(
 
     # we are checking here if a sample can imrpove a part of the path
     # the condition to do so is that the
-    def can_improve(rnd_state, path, start_index, end_index, path_segment_costs):
+    def can_improve(rnd_state: State, path: List[State], start_index, end_index, path_segment_costs) -> bool:
         # path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
 
         # compute the local cost
@@ -2042,8 +2049,7 @@ def joint_prm_planner(
                 lims = env.limits[:, env.robot_idx[r]]
                 if lims[0, 0] < lims[1, 0]:
                     qr = (
-                        np.random.rand(env.robot_dims[r])
-                        * (lims[1, :] - lims[0, :])
+                        np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
                         + lims[0, :]
                     )
                 else:
@@ -2052,7 +2058,7 @@ def joint_prm_planner(
                 q.append(qr)
 
             q = conf_type.from_list(q)
-            
+
             if cost is not None:
                 if sum(env.batch_config_cost(q, focal_points)) > cost:
                     continue
@@ -2062,7 +2068,7 @@ def joint_prm_planner(
                 num_valid += 1
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
-      
+
         return new_samples, num_attempts
 
     def sample_valid_uniform_transitions(transistion_batch_size, cost):
@@ -2299,7 +2305,11 @@ def joint_prm_planner(
             g.add_states(new_states)
             print(f"Adding {len(new_states)} new states")
 
-            approximate_space_extent = np.prod(np.diff(env.limits, axis=0)) * len(new_states) / required_attempts_this_batch
+            approximate_space_extent = (
+                np.prod(np.diff(env.limits, axis=0))
+                * len(new_states)
+                / required_attempts_this_batch
+            )
 
             # nodes_per_state = []
             # for m in reached_modes:
@@ -2316,7 +2326,8 @@ def joint_prm_planner(
             # if env.terminal_mode not in reached_modes:
             print("Sampling transitions")
             new_transitions = sample_valid_uniform_transitions(
-                transistion_batch_size=effective_uniform_transition_batch_size, cost=current_best_cost
+                transistion_batch_size=effective_uniform_transition_batch_size,
+                cost=current_best_cost,
             )
             g.add_transition_nodes(new_transitions)
             print(f"Adding {len(new_transitions)} transitions")
@@ -2338,18 +2349,6 @@ def joint_prm_planner(
                         locally_informed_sampling=locally_informed_sampling,
                     )
                     g.add_states(new_informed_states)
-
-                    # nodes_per_state = []
-                    # for m in reached_modes:
-                    #     num_nodes = 0
-                    #     for n in new_informed_states:
-                    #         if n.mode == m:
-                    #             num_nodes += 1
-
-                    #     nodes_per_state.append(num_nodes)
-
-                    # plt.figure("Informed states")
-                    # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
 
                     print(f"Adding {len(new_informed_states)} informed samples")
 
@@ -2415,7 +2414,12 @@ def joint_prm_planner(
 
         while True:
             sparsely_checked_path = g.search(
-                g.root, g.goal_nodes, env, current_best_cost, resolution, approximate_space_extent
+                g.root,
+                g.goal_nodes,
+                env,
+                current_best_cost,
+                resolution,
+                approximate_space_extent,
             )
             # sparsely_checked_path = g.search_with_vertex_queue(
             #     g.root, g.goal_nodes, env, current_best_cost, resolution
@@ -2460,7 +2464,9 @@ def joint_prm_planner(
                         current_best_path = path
                         current_best_cost = new_path_cost
 
-                        print(f"New cost: {new_path_cost} at time {time.time() - start_time}")
+                        print(
+                            f"New cost: {new_path_cost} at time {time.time() - start_time}"
+                        )
                         costs.append(new_path_cost)
                         times.append(time.time() - start_time)
 

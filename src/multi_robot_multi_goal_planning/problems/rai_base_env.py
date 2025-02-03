@@ -435,7 +435,7 @@ class rai_env(BaseProblem):
         movable_objects = []
 
         sg = {}
-        for frame in self.C.frames():
+        for frame in self.C.getFrames():
             if "obj" in frame.name:
                 movable_objects.append(frame.name)
                 sg[frame.name] = (

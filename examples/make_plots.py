@@ -5,19 +5,20 @@ import time
 import datetime
 import json
 import os
+import pathlib
 
 import numpy as np
 import random
 
-from typing import List
-
-# plt.style.use('./examples/paper_2.mplstyle')
+from typing import List, Dict, Optional, Any
 
 
-def load_data_from_folder(folder):
-    planner_names = [
+def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
+    all_subfolders = [
         name for name in os.listdir(folder) if os.path.isdir(os.path.join(folder, name))
     ]
+
+    planner_names = [f for f in all_subfolders if "plots" not in f]
 
     all_experiment_data = {}
 
@@ -91,7 +92,7 @@ def load_data_from_folder(folder):
     return all_experiment_data
 
 
-def load_config_from_folder(filepath: str):
+def load_config_from_folder(filepath: str) -> Dict:
     with open(filepath + "config.json") as f:
         config = json.load(f)
 
@@ -107,6 +108,7 @@ def load_config_from_folder(filepath: str):
     return config
 
 
+# TODO: move this to config? Add dome default behaviour
 planner_name_to_color = {
     "informed_prm": "tab:orange",
     "uniform_prm": "tab:blue",
@@ -124,11 +126,18 @@ planner_name_to_color = {
     "locally_informed_path_prm": "tab:purple",
     "globally_informed_path_prm": "tab:brown",
     "locally_informed_prm": "darkgreen",
-    "globally_informed_prm": "magenta"
+    "globally_informed_prm": "magenta",
+    "locally_informed_prm_shortcutting": "tab:blue",
+    "globally_informed_prm_shortcutting": "tab:green",
 }
 
 
-def make_cost_plots(all_experiment_data, config, save=False):
+def make_cost_plots(
+    all_experiment_data: Dict,
+    config: Dict,
+    save: bool = False,
+    foldername: Optional[str] = None,
+):
     plt.figure("Cost plot")
 
     max_time = 0
@@ -248,13 +257,19 @@ def make_cost_plots(all_experiment_data, config, save=False):
         ub_solution_cost[~np.isfinite(ub_solution_cost)] = 1e6
 
         plt.semilogx(
-            interpolated_solution_times[interpolated_solution_times < max_planner_solution_time],
-            median_solution_cost[interpolated_solution_times < max_planner_solution_time],
+            interpolated_solution_times[
+                interpolated_solution_times < max_planner_solution_time
+            ],
+            median_solution_cost[
+                interpolated_solution_times < max_planner_solution_time
+            ],
             label=planner_name,
             color=planner_name_to_color[planner_name],
         )
         plt.fill_between(
-            interpolated_solution_times[interpolated_solution_times < max_planner_solution_time],
+            interpolated_solution_times[
+                interpolated_solution_times < max_planner_solution_time
+            ],
             lb_solution_cost[interpolated_solution_times < max_planner_solution_time],
             ub_solution_cost[interpolated_solution_times < max_planner_solution_time],
             alpha=0.5,
@@ -273,13 +288,20 @@ def make_cost_plots(all_experiment_data, config, save=False):
     plt.legend()
 
     if save:
-        pass
-        # plt.savefig(
-        #     f"./out/plots/{tmp}.pdf", format="pdf", dpi=300, bbox_inches="tight"
-        # )
+        if foldername is None:
+            raise ValueError("No path specified")
+
+        pathlib.Path(f"{foldername}plots/").mkdir(parents=True, exist_ok=True)
+
+        plt.savefig(
+            f"{foldername}plots/cost_plot.pdf",
+            format="pdf",
+            dpi=300,
+            bbox_inches="tight",
+        )
 
 
-def make_success_plot(all_experiment_data, config):
+def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
     time_discretization = 1e-2
     interpolated_solution_times = np.arange(
         0, config["max_planning_time"], time_discretization
@@ -346,12 +368,21 @@ def main():
         default=False,
         help="Save the generated plot (default: False)",
     )
+    parser.add_argument(
+        "--use_paper_style",
+        type=lambda x: x.lower() in ["true", "1", "yes"],
+        default=False,
+        help="Use the paper style (default: False)",
+    )
     args = parser.parse_args()
+
+    if args.use_paper_style:
+        plt.style.use("./examples/paper_2.mplstyle")
 
     all_experiment_data = load_data_from_folder(args.foldername)
     config = load_config_from_folder(args.foldername)
 
-    make_cost_plots(all_experiment_data, config, args.save)
+    make_cost_plots(all_experiment_data, config, args.save, args.foldername)
     # make_success_plot(all_experiment_data, config)
 
     plt.show()
