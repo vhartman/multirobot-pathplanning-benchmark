@@ -747,7 +747,7 @@ class Graph:
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_neighbors(
-        self, node: Node, k=20, space_extent: float = None
+        self, node: Node, space_extent: float = None
     ) -> Tuple[List[Node], NDArray]:
         key = node.state.mode
         if key in self.nodes:
@@ -822,8 +822,6 @@ class Graph:
             best_nodes = best_nodes + best_transition_nodes
 
         else:
-            r = 3
-
             unit_n_ball_measure = ((np.pi**0.5) ** dim) / math.gamma(dim / 2 + 1)
             informed_measure = 1
             if space_extent is not None:
@@ -844,10 +842,9 @@ class Graph:
                     )
                     ** (1 / dim)
                 )
-                r = r_star
 
-                best_nodes = [node_list[i] for i in np.where(dists < r)[0]]
-                best_nodes_arr = self.node_array_cache[key][np.where(dists < r)[0], :]
+                best_nodes = [node_list[i] for i in np.where(dists < r_star)[0]]
+                best_nodes_arr = self.node_array_cache[key][np.where(dists < r_star)[0], :]
 
                 # print("fraction of nodes in mode", len(best_nodes)/len(dists))
                 # print(r_star)
@@ -872,16 +869,15 @@ class Graph:
                     ** (1 / dim)
                 )
                 # print(node.state.mode, r_star)
-                r = r_star
 
                 if len(transition_node_list) == 1:
-                    r = 1e6
+                    r_star = 1e6
 
                 best_transition_nodes = [
-                    transition_node_list[i] for i in np.where(transition_dists < r)[0]
+                    transition_node_list[i] for i in np.where(transition_dists < r_star)[0]
                 ]
                 best_transitions_arr = self.transition_node_array_cache[key][
-                    np.where(transition_dists < r)[0]
+                    np.where(transition_dists < r_star)[0]
                 ]
 
             best_nodes = best_nodes + best_transition_nodes
@@ -913,8 +909,8 @@ class Graph:
 
         def h(node):
             # return 0
-            if node in h_cache:
-                return h_cache[node]
+            if node.id in h_cache:
+                return h_cache[node.id]
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
@@ -935,7 +931,7 @@ class Graph:
                 self.transition_node_lb_cache[node.state.mode] + costs_to_transitions
             )
 
-            h_cache[node] = min_cost
+            h_cache[node.id] = min_cost
             return min_cost
 
         def d(n0, n1):
@@ -954,12 +950,6 @@ class Graph:
 
         # populate open_queue and fs
         start_edges = [(start_node, n) for n in start_neighbors]
-        # start_edges = [
-        #     (start_node, n)
-        #     for n, _ in self.get_neighbors(
-        #         start_node, space_extent=np.prod(np.diff(env.limits, axis=0))
-        #     )
-        # ]
 
         # queue = HeapQueue()
         # queue = BucketHeapQueue()
@@ -1098,9 +1088,6 @@ class Graph:
                 continue
 
             # add neighbors to open_queue
-            # edge_costs = env.batch_config_cost(
-            #     n1.state.q, np.array([n.state.q.state() for n in neighbors])
-            # )
             edge_costs = env.batch_config_cost(n1.state.q, tmp)
             for n, edge_cost in zip(neighbors, edge_costs):
                 # if n == n0:
@@ -1179,6 +1166,7 @@ class Graph:
         env: BaseProblem,
         best_cost: Optional[float] = None,
         resolution: float = 0.1,
+        approximate_space_extent: float = None,
     ) -> List[Node]:
         open_queue = []
 
@@ -1246,13 +1234,11 @@ class Graph:
                 break
 
             # get_neighbors
-            neighbors = self.get_neighbors(
-                node, space_extent=np.prod(np.diff(env.limits, axis=0))
+            neighbors, tmp = self.get_neighbors(
+                node, space_extent=approximate_space_extent
             )
 
-            edge_costs = env.batch_config_cost(
-                node.state.q, np.array([n.state.q.state() for n in neighbors])
-            )
+            edge_costs = env.batch_config_cost(node.state.q, tmp)
             # add neighbors to open_queue
             for i, n in enumerate(neighbors):
                 if n == node:
@@ -1274,16 +1260,16 @@ class Graph:
                             continue
 
                         collision_free = env.is_edge_collision_free(
-                            node.state.q, n.state.q, n.state.mode
+                            node.state.q, n.state.q, n.state.mode, resolution=0.1
                         )
 
                         if not collision_free:
                             node.blacklist.add(n.id)
                             n.blacklist.add(node.id)
                             continue
-                        else:
-                            node.whitelist.add(n.id)
-                            n.whitelist.add(node.id)
+                        # else:
+                        #     node.whitelist.add(n.id)
+                        #     n.whitelist.add(node.id)
 
                     # cost to get to neighbor:
                     gs[n] = g_new
@@ -1314,6 +1300,115 @@ class Graph:
         return path
 
 
+# taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
+# needed adaption to work.
+def sample_unit_ball(dim) -> np.array:
+    """Samples a point uniformly from the unit ball. This is used to sample points from the Prolate HyperSpheroid (PHS).
+
+    Returns:
+        Sampled Point (np.array): The sampled point from the unit ball.
+    """
+    # u = np.random.uniform(-1, 1, dim)
+    # norm = np.linalg.norm(u)
+    # r = np.random.random() ** (1.0 / dim)
+    # return r * u / norm
+    u = np.random.normal(0, 1, dim)
+    norm = np.linalg.norm(u)
+    # Generate radius with correct distribution
+    r = np.random.random() ** (1.0 / dim)
+    return (r / norm) * u
+
+
+def samplePHS(a: np.ndarray, b: np.ndarray, c: float) -> np.ndarray:
+    """Samples a point from the Prolate HyperSpheroid (PHS) with vectorized operations."""
+    dim = len(a)
+    diff = b - a
+
+    # Calculate the center of the PHS.
+    center = (a + b) / 2
+    # The transverse axis in the world frame.
+    c_min = np.linalg.norm(diff)
+
+    if c_min == 0:
+        x_ball = sample_unit_ball(dim) * c / 2
+        return x_ball + center  # Avoid division by zero if a == b
+
+    # The first column of the identity matrix.
+    # one_1 = np.eye(a1.shape[0])[:, 0]
+    a1 = diff / c_min
+    e1 = np.zeros(dim)
+    e1[0] = 1.0
+
+    # Optimized rotation matrix calculation
+    U, S, Vt = np.linalg.svd(np.outer(a1, e1))
+    # Sigma = np.diag(S)
+    # lam = np.eye(Sigma.shape[0])
+    lam = np.eye(dim)
+    lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
+    # Calculate the rotation matrix.
+    # cwe = np.matmul(U, np.matmul(lam, Vt))
+    cwe = U @ lam @ Vt
+    # Get the radius of the first axis of the PHS.
+    # r1 = c / 2
+    # Get the radius of the other axes of the PHS.
+    # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
+    # Create a vector of the radii of the PHS.
+    # r = np.diag(np.array([r1] + rn))
+    r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
+
+    # Sample a point from the PHS.
+    # Sample a point from the unit ball.
+    x_ball = sample_unit_ball(dim)
+    # Transform the point from the unit ball to the PHS.
+    # op = np.matmul(np.matmul(cwe, r), x_ball) + center
+    op = cwe @ r @ x_ball + center
+
+    return op
+
+
+def compute_PHS_matrices(a, b, c):
+    dim = len(a)
+    diff = b - a
+
+    # Calculate the center of the PHS.
+    center = (a + b) / 2
+    # The transverse axis in the world frame.
+    c_min = np.linalg.norm(diff)
+
+    # The first column of the identity matrix.
+    # one_1 = np.eye(a1.shape[0])[:, 0]
+    a1 = diff / c_min
+    e1 = np.zeros(dim)
+    e1[0] = 1.0
+
+    # Optimized rotation matrix calculation
+    U, S, Vt = np.linalg.svd(np.outer(a1, e1))
+    # Sigma = np.diag(S)
+    # lam = np.eye(Sigma.shape[0])
+    lam = np.eye(dim)
+    lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
+    # Calculate the rotation matrix.
+    # cwe = np.matmul(U, np.matmul(lam, Vt))
+    cwe = U @ lam @ Vt
+    # Get the radius of the first axis of the PHS.
+    # r1 = c / 2
+    # Get the radius of the other axes of the PHS.
+    # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
+    # Create a vector of the radii of the PHS.
+    # r = np.diag(np.array([r1] + rn))
+    r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
+
+    return cwe @ r, center
+
+
+def sample_phs_with_given_matrices(rot, center):
+    dim = len(center)
+    x_ball = sample_unit_ball(dim)
+    # Transform the point from the unit ball to the PHS.
+    # op = np.matmul(np.matmul(cwe, r), x_ball) + center
+    return rot @ x_ball + center
+
+
 def joint_prm_planner(
     env: BaseProblem,
     optimize: bool = True,
@@ -1339,7 +1434,9 @@ def joint_prm_planner(
 
     conf_type = type(env.get_start_pos())
 
-    def sample_mode(mode_sampling_type:str="weighted", found_solution:bool=False) -> Mode:
+    def sample_mode(
+        mode_sampling_type: str = "weighted", found_solution: bool = False
+    ) -> Mode:
         return random.choice(reached_modes)
         if mode_sampling_type == "uniform_reached":
             m_rnd = random.choice(reached_modes)
@@ -1370,7 +1467,9 @@ def joint_prm_planner(
 
     # we are checking here if a sample can imrpove a part of the path
     # the condition to do so is that the
-    def can_improve(rnd_state: State, path: List[State], start_index, end_index, path_segment_costs) -> bool:
+    def can_improve(
+        rnd_state: State, path: List[State], start_index, end_index, path_segment_costs
+    ) -> bool:
         # path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
 
         # compute the local cost
@@ -1486,121 +1585,6 @@ def joint_prm_planner(
             return True
 
         return False
-
-    # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
-    # needed adaption to work.
-    def sample_unit_ball(dim) -> np.array:
-        """Samples a point uniformly from the unit ball. This is used to sample points from the Prolate HyperSpheroid (PHS).
-
-        Returns:
-            Sampled Point (np.array): The sampled point from the unit ball.
-        """
-        # u = np.random.uniform(-1, 1, dim)
-        # norm = np.linalg.norm(u)
-        # r = np.random.random() ** (1.0 / dim)
-        # return r * u / norm
-        u = np.random.normal(0, 1, dim)
-        norm = np.linalg.norm(u)
-        # Generate radius with correct distribution
-        r = np.random.random() ** (1.0 / dim)
-        return (r / norm) * u
-
-    def samplePHS(a: np.ndarray, b: np.ndarray, c: float) -> np.ndarray:
-        """Samples a point from the Prolate HyperSpheroid (PHS) with vectorized operations."""
-        dim = len(a)
-        diff = b - a
-
-        # Calculate the center of the PHS.
-        center = (a + b) / 2
-        # The transverse axis in the world frame.
-        c_min = np.linalg.norm(diff)
-
-        if c_min == 0:
-            x_ball = sample_unit_ball(dim) * c / 2
-            return x_ball + center  # Avoid division by zero if a == b
-
-        # The first column of the identity matrix.
-        # one_1 = np.eye(a1.shape[0])[:, 0]
-        a1 = diff / c_min
-        e1 = np.zeros(dim)
-        e1[0] = 1.0
-
-        # Optimized rotation matrix calculation
-        U, S, Vt = np.linalg.svd(np.outer(a1, e1))
-        # Sigma = np.diag(S)
-        # lam = np.eye(Sigma.shape[0])
-        lam = np.eye(dim)
-        lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
-        # Calculate the rotation matrix.
-        # cwe = np.matmul(U, np.matmul(lam, Vt))
-        cwe = U @ lam @ Vt
-        # Get the radius of the first axis of the PHS.
-        # r1 = c / 2
-        # Get the radius of the other axes of the PHS.
-        # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
-        # Create a vector of the radii of the PHS.
-        # r = np.diag(np.array([r1] + rn))
-        r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
-
-        # Sample a point from the PHS.
-        # Sample a point from the unit ball.
-        x_ball = sample_unit_ball(dim)
-        # Transform the point from the unit ball to the PHS.
-        # op = np.matmul(np.matmul(cwe, r), x_ball) + center
-        op = cwe @ r @ x_ball + center
-
-        return op
-
-    def compute_PHS_matrices(a, b, c):
-        dim = len(a)
-        diff = b - a
-
-        # Calculate the center of the PHS.
-        center = (a + b) / 2
-        # The transverse axis in the world frame.
-        c_min = np.linalg.norm(diff)
-
-        # The first column of the identity matrix.
-        # one_1 = np.eye(a1.shape[0])[:, 0]
-        a1 = diff / c_min
-        e1 = np.zeros(dim)
-        e1[0] = 1.0
-
-        # Optimized rotation matrix calculation
-        U, S, Vt = np.linalg.svd(np.outer(a1, e1))
-        # Sigma = np.diag(S)
-        # lam = np.eye(Sigma.shape[0])
-        lam = np.eye(dim)
-        lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
-        # Calculate the rotation matrix.
-        # cwe = np.matmul(U, np.matmul(lam, Vt))
-        cwe = U @ lam @ Vt
-        # Get the radius of the first axis of the PHS.
-        # r1 = c / 2
-        # Get the radius of the other axes of the PHS.
-        # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
-        # Create a vector of the radii of the PHS.
-        # r = np.diag(np.array([r1] + rn))
-        r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
-
-        return cwe @ r, center
-
-    def sample_phs_with_given_matrices(rot, center):
-        dim = len(center)
-        x_ball = sample_unit_ball(dim)
-        # Transform the point from the unit ball to the PHS.
-        # op = np.matmul(np.matmul(cwe, r), x_ball) + center
-        return rot @ x_ball + center
-
-    def rejection_sample_from_ellipsoid(a, b, c):
-        m = (a + b) / 2
-        n = len(a)
-        cnt = 0
-        while True:
-            cnt += 1
-            x = np.random.uniform(m - c / 2, m + c / 2, n)
-            if np.linalg.norm(x - a) + np.linalg.norm(x - b) < c:
-                return x
 
     def generate_informed_samples(
         batch_size, path, max_attempts_per_sample=200, locally_informed_sampling=True
@@ -2024,6 +2008,80 @@ def joint_prm_planner(
 
         return new_transitions
 
+    def sample_around_path(path):
+        # sample index
+        interpolated_path = interpolate_path(path)
+        # interpolated_path = current_best_path
+        new_states_from_path_sampling = []
+        new_transitions_from_path_sampling = []
+        for _ in range(path_batch_size):
+            idx = random.randint(0, len(interpolated_path) - 2)
+            state = interpolated_path[idx]
+
+            # this is a transition. we would need to figure out which robots are active and not sample those
+            q = []
+            if (
+                state.mode != interpolated_path[idx + 1].mode
+                and np.linalg.norm(
+                    state.q.state() - interpolated_path[idx + 1].q.state()
+                )
+                < 1e-5
+            ):
+                next_task_ids = interpolated_path[idx + 1].mode.task_ids
+
+                # TODO: this seems to move transitions around
+                task = env.get_active_task(state.mode, next_task_ids)
+                involved_robots = task.robots
+                for i in range(len(env.robots)):
+                    r = env.robots[i]
+                    if r in involved_robots:
+                        qr = state.q[i] * 1.0
+                    else:
+                        qr_mean = state.q[i] * 1.0
+
+                        qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+
+                        lims = env.limits[:, env.robot_idx[r]]
+                        if lims[0, 0] < lims[1, 0]:
+                            qr = np.clip(qr, lims[0, :], lims[1, :])
+
+                    q.append(qr)
+
+                q = conf_type.from_list(q)
+
+                if env.is_collision_free(q, state.mode):
+                    new_transitions_from_path_sampling.append(
+                        (q, state.mode, interpolated_path[idx + 1].mode)
+                    )
+
+            else:
+                for i in range(len(env.robots)):
+                    r = env.robots[i]
+                    qr_mean = state.q[i]
+
+                    qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+
+                    lims = env.limits[:, env.robot_idx[r]]
+                    if lims[0, 0] < lims[1, 0]:
+                        qr = np.clip(qr, lims[0, :], lims[1, :])
+
+                    q.append(qr)
+
+                q = conf_type.from_list(q)
+
+                if env.is_collision_free(q, state.mode):
+                    rnd_state = State(q, state.mode)
+                    new_states_from_path_sampling.append(rnd_state)
+
+        # fig = plt.figure()
+        # ax = fig.add_subplot(projection='3d')
+        # ax.scatter([a.q[0][0] for a in new_states_from_path_sampling], [a.q[0][1] for a in new_states_from_path_sampling], [a.q[0][2] for a in new_states_from_path_sampling])
+        # ax.scatter([a.q[1][0] for a in new_states_from_path_sampling], [a.q[1][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
+        # ax.scatter([a.q[2][0] for a in new_states_from_path_sampling], [a.q[2][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
+        # plt.show()
+
+        return new_states_from_path_sampling, new_transitions_from_path_sampling
+
     def sample_valid_uniform_batch(batch_size: int, cost: float) -> List[State]:
         new_samples = []
         num_attempts = 0
@@ -2159,6 +2217,7 @@ def joint_prm_planner(
 
     start_time = time.time()
 
+    # TODO: Make this problem specific
     resolution = 0.02
 
     all_paths = []
@@ -2212,84 +2271,6 @@ def joint_prm_planner(
         samples_in_graph_before = g.get_num_samples()
 
         if add_new_batch:
-            if try_sampling_around_path and current_best_path is not None:
-                # sample index
-                interpolated_path = interpolate_path(current_best_path)
-                # interpolated_path = current_best_path
-                new_states_from_path_sampling = []
-                for _ in range(path_batch_size):
-                    idx = random.randint(0, len(interpolated_path) - 2)
-                    state = interpolated_path[idx]
-
-                    # this is a transition. we would need to figure out which robots are active and not sample those
-                    q = []
-                    if (
-                        state.mode != interpolated_path[idx + 1].mode
-                        and np.linalg.norm(
-                            state.q.state() - interpolated_path[idx + 1].q.state()
-                        )
-                        < 1e-5
-                    ):
-                        current_task_ids = state.mode.task_ids
-                        next_task_ids = interpolated_path[idx + 1].mode.task_ids
-
-                        # TODO: this seems to move transitions around
-                        task = env.get_active_task(state.mode, next_task_ids)
-                        involved_robots = task.robots
-                        for i in range(len(env.robots)):
-                            r = env.robots[i]
-                            if r in involved_robots:
-                                qr = state.q[i] * 1.0
-                            else:
-                                qr_mean = state.q[i] * 1.0
-
-                                qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
-
-                                lims = env.limits[:, env.robot_idx[r]]
-                                if lims[0, 0] < lims[1, 0]:
-                                    qr = np.clip(qr, lims[0, :], lims[1, :])
-
-                            q.append(qr)
-
-                        q = conf_type.from_list(q)
-
-                        if env.is_collision_free(q, state.mode):
-                            g.add_transition_nodes(
-                                [(q, state.mode, interpolated_path[idx + 1].mode)]
-                            )
-
-                    else:
-                        for i in range(len(env.robots)):
-                            r = env.robots[i]
-                            qr_mean = state.q[i]
-
-                            qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
-
-                            lims = env.limits[:, env.robot_idx[r]]
-                            if lims[0, 0] < lims[1, 0]:
-                                qr = np.clip(qr, lims[0, :], lims[1, :])
-                                # qr = (
-                                #     np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
-                                #     + lims[0, :]
-                                # )
-
-                            q.append(qr)
-
-                        q = conf_type.from_list(q)
-
-                        if env.is_collision_free(q, state.mode):
-                            rnd_state = State(q, state.mode)
-                            new_states_from_path_sampling.append(rnd_state)
-
-                            g.add_states([rnd_state])
-
-                # fig = plt.figure()
-                # ax = fig.add_subplot(projection='3d')
-                # ax.scatter([a.q[0][0] for a in new_states_from_path_sampling], [a.q[0][1] for a in new_states_from_path_sampling], [a.q[0][2] for a in new_states_from_path_sampling])
-                # ax.scatter([a.q[1][0] for a in new_states_from_path_sampling], [a.q[1][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
-                # ax.scatter([a.q[2][0] for a in new_states_from_path_sampling], [a.q[2][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
-                # plt.show()
-
             # add new batch of nodes
             effective_uniform_batch_size = (
                 uniform_batch_size if current_best_cost is not None else 500
@@ -2365,8 +2346,17 @@ def joint_prm_planner(
                     g.compute_lower_bound_to_goal(env.batch_config_cost)
                     g.compute_lower_bound_from_start(env.batch_config_cost)
 
-        samples_in_graph_after = g.get_num_samples()
+            if try_sampling_around_path and current_best_path is not None:
+                print("Sampling around path")
+                path_samples, path_transitions = sample_around_path()
 
+                g.add_states(path_samples)
+                print(f"Adding {len(path_samples)} path samples")
+
+                g.add_transition_nodes(path_transitions)
+                print(f"Adding {len(path_transitions)} path transitions")
+
+        samples_in_graph_after = g.get_num_samples()
         cnt += samples_in_graph_after - samples_in_graph_before
 
         # search over nodes:
@@ -2422,7 +2412,7 @@ def joint_prm_planner(
                 approximate_space_extent,
             )
             # sparsely_checked_path = g.search_with_vertex_queue(
-            #     g.root, g.goal_nodes, env, current_best_cost, resolution
+            #     g.root, g.goal_nodes, env, current_best_cost, resolution, approximate_space_extent
             # )
 
             # 2. in case this found a path, search with dense check from the other side
@@ -2436,10 +2426,6 @@ def joint_prm_planner(
 
                     s0 = n0.state
                     s1 = n1.state
-
-                    # this is a transition, we do not need to collision check this
-                    # if s0.mode != s1.mode:
-                    #     continue
 
                     if n0.id in n1.whitelist:
                         continue
@@ -2477,7 +2463,6 @@ def joint_prm_planner(
                             shortcut_path, _ = shortcutting.robot_mode_shortcut(
                                 env, path, 500
                             )
-                            # path = [node.state for node in sparsely_checked_path]
 
                             shortcut_path_cost = path_cost(
                                 shortcut_path, env.batch_config_cost
@@ -2493,7 +2478,6 @@ def joint_prm_planner(
                                 current_best_path = shortcut_path
                                 current_best_cost = shortcut_path_cost
 
-                                # interpolated_path = interpolate_path(shortcut_path)
                                 interpolated_path = shortcut_path
 
                                 for i in range(len(interpolated_path)):

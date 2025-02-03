@@ -116,23 +116,25 @@ def compute_sliced_dists_transpose(squared_diff: NDArray, slices: NDArray) -> ND
 
 
 class NpConfiguration(Configuration):
-    __slots__ = "slice", "q", "_num_agents"
+    __slots__ = "array_slice", "q", "_num_agents"
 
+    array_slice: NDArray
     slice: List[Tuple[int, int]]
     q: NDArray
     _num_agents: int
 
-    def __init__(self, q: NDArray, slice: List[Tuple[int, int]]):
-        self.slice = slice
+    def __init__(self, q: NDArray, _slice: List[Tuple[int, int]]):
+        self.array_slice = np.array(_slice)
         self.q = q
 
-        self._num_agents = len(slice)
+        self._num_agents = len(self.array_slice)
 
     def num_agents(self):
         return self._num_agents
 
     def __setitem__(self, ind, data):
-        self.q[self.slice[ind][0] : self.slice[ind][1]] = data
+        s, e = self.array_slice[ind]
+        self.q[s : e] = data
 
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
@@ -157,7 +159,7 @@ class NpConfiguration(Configuration):
         if self._num_agents == 1:
             return self.q
 
-        start, end = self.slice[ind]
+        start, end = self.array_slice[ind]
         return self.q[start:end]
 
     def state(self) -> NDArray:
@@ -199,7 +201,7 @@ class NpConfiguration(Configuration):
         if metric == "euclidean":
             squared_diff = diff * diff
             return compute_sliced_dists(
-                squared_diff, np.array([[0, pt.slice[-1][-1]]])
+                squared_diff, np.array([[0, pt.array_slice[-1][-1]]])
             )[0]
             # return np.linalg.norm(diff, axis=1)
         elif metric == "sum_euclidean" or metric == "max_euclidean":
@@ -220,7 +222,7 @@ class NpConfiguration(Configuration):
             #     )
             # )
 
-            dists = compute_sliced_dists(squared_diff, np.array(pt.slice))
+            dists = compute_sliced_dists(squared_diff, pt.array_slice)
             # dists = compute_sliced_dists_transpose(squared_diff.T, np.array(pt.slice))
 
             # print(tmp - dists)
@@ -289,19 +291,19 @@ def batch_config_cost(
     if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
         diff = starts.state() - batch_other
         all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
-        agent_slices = starts.slice
+        agent_slices = starts.array_slice
     else:
         diff = np.array([start.q.state() for start in starts]) - np.array(
             [other.q.state() for other in batch_other]
         )
         all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
-        agent_slices = starts[0].q.slice
+        agent_slices = starts[0].q.array_slice
 
     # return np.linalg.norm(diff, axis=1)
 
     if metric == "euclidean":
         squared_diff = diff * diff
-        all_robot_dists = compute_sliced_dists(squared_diff, np.array(agent_slices))
+        all_robot_dists = compute_sliced_dists(squared_diff, agent_slices)
     else:
         for i, (s, e) in enumerate(agent_slices):
             all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)

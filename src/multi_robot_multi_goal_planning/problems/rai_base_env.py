@@ -199,7 +199,6 @@ def filter_output(filter_func):
     return decorator
 
 
-# Example filter functions
 def hide_pair_collision(line):
     """Filter out lines containing 'debug'"""
     return "pairCollision.cpp:libccd:" not in line
@@ -396,7 +395,7 @@ class rai_env(BaseProblem):
         for i in idx:
             # print(i / (N-1))
             q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
-            q_conf = NpConfiguration(q, q1.slice)
+            q_conf = NpConfiguration(q, q1.array_slice)
             if not self.is_collision_free(q_conf, m, collision_tolerance=tolerance):
                 # print('coll')
                 return False
@@ -419,7 +418,9 @@ class rai_env(BaseProblem):
             q2 = path[i + 1].q
             mode = path[i].mode
 
-            if not self.is_edge_collision_free(q1, q2, mode, resolution=resolution, tolerance=tolerance):
+            if not self.is_edge_collision_free(
+                q1, q2, mode, resolution=resolution, tolerance=tolerance
+            ):
                 return False
 
         return True
@@ -431,7 +432,7 @@ class rai_env(BaseProblem):
         self.set_to_mode(mode)
 
         # TODO: should we simply list the movable objects manually?
-        # collect all movable objects and colect parents and relative transformations
+        # collect all movable objects and collect parents and relative transformations
         movable_objects = []
 
         sg = {}
@@ -460,7 +461,6 @@ class rai_env(BaseProblem):
             self.C.addConfigurationCopy(self.C_cache[m])
             return
 
-        # TODO: we might want to cache different modes
         self.C.clear()
         self.C.addConfigurationCopy(self.C_base)
 

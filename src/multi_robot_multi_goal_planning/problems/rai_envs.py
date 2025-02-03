@@ -508,7 +508,7 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
         self.prev_mode = self.start_mode
 
 # best cost found for max-cost is 17.64
-# best cost found for sum-cost is xx.xx
+# best cost found for sum-cost is 25.28
 class rai_two_dim_handover(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_two_dim_handover()
@@ -736,7 +736,6 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
                 cnt += 1
 
-        # TODO: there seems to be a bug somewhere if we do not have a terminal mode!
         q_home = self.C.getJointState()
         # self.tasks.append(Task(self.robots, GoalRegion(self.limits)))
         self.tasks.append(Task(self.robots, SingleGoal(q_home)))
@@ -1150,7 +1149,6 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
         self.tolerance = 0.1
 
 
-# TODO: enable making this a simpler environment where one can set the number of boxes
 class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes: int = 9):
         self.C, keyframes = rai_config.make_egg_carton_env(num_boxes)

@@ -176,9 +176,6 @@ class Mode:
         if self.cached_hash is None:
             entry_hash = 0
             sg_hash = hash(frozenset(self.sg.items()))
-            # entry_hash = hash(
-            #     self.entry_configuration.state().tobytes()
-            # )  # TODO: this is too restrictive at the moment - we need to check if the scene graph is the same as in another setting
             task_hash = hash(tuple(self.task_ids))
             self.cached_hash = hash((entry_hash, sg_hash, task_hash))
         
@@ -216,7 +213,6 @@ class BaseModeLogic(ABC):
         self.start_mode = self.make_start_mode()
         self._terminal_task_ids = self.make_symbolic_end()
 
-    # TODO: cache name -> task in a dict
     def _get_task_by_name(self, name):
         for t in self.tasks:
             if t.name == name:
@@ -346,7 +342,6 @@ class SequenceMixin(BaseModeLogic):
         if not self.is_terminal_mode(m):
             return False
 
-        # TODO: this is not necessarily true!
         terminal_task_idx = self.sequence[-1]
         terminal_task = self.tasks[terminal_task_idx]
         involved_robots = terminal_task.robots
@@ -493,7 +488,6 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return self._make_terminal_mode_from_sequence(possible_id_sequence)
 
-    # TODO: this can be cached
     def _get_finished_tasks_from_mode(self, mode: Mode) -> List[str]:
         completed_tasks = []
         for i, task_id in enumerate(mode.task_ids):
@@ -584,7 +578,6 @@ class DependencyGraphMixin(BaseModeLogic):
 
         raise ValueError("This does not fulfill the constraints to reach a new mode.")
 
-    # TODO: this should probably also return the next_state
     def is_transition(self, q: Configuration, m: Mode) -> bool:
         if self.is_terminal_mode(m):
             return False
@@ -635,8 +628,6 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return False
 
-    # TODO: this is the same as for the sequence, is this always the same?
-    # (it is not in the general TAMP problem)
     def is_terminal_mode(self, mode: Mode):
         if mode.task_ids == self._terminal_task_ids:
             return True
