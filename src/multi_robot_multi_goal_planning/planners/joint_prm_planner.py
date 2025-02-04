@@ -2217,8 +2217,7 @@ def joint_prm_planner(
 
     start_time = time.time()
 
-    # TODO: Make this problem specific
-    resolution = 0.02
+    resolution = env.collision_resolution
 
     all_paths = []
 

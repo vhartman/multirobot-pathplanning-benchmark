@@ -239,7 +239,8 @@ class rai_env(BaseProblem):
     _terminal_task_ids: List[int]
 
     # misc
-    tolerance: float
+    collision_tolerance: float
+    collision_resolution: float
 
     def __init__(self):
         self.robot_idx = {}
@@ -259,7 +260,8 @@ class rai_env(BaseProblem):
 
         self.limits = self.C.getJointLimits()
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
+        self.collision_resolution = 0.05
 
         self.cost_metric = "max"
         self.cost_reduction = "max"

@@ -110,7 +110,7 @@ class rai_two_dim_env(SequenceMixin, rai_env):
             ["a2_goal", "a1_goal", "terminal"]
         )
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         BaseModeLogic.__init__(self)
 
@@ -167,7 +167,7 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
             ["a2_goal_0", "a2_goal_1", "a2_goal_2", "a2_goal_3", "a1_goal", "terminal"]
         )
 
-        self.tolerance = 0.001
+        self.collision_tolerance = 0.001
 
         BaseModeLogic.__init__(self)
 
@@ -227,7 +227,7 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
 
         print(self.graph)
 
-        self.tolerance = 0.001
+        self.collision_tolerance = 0.001
 
         BaseModeLogic.__init__(self)
 
@@ -302,7 +302,7 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
             ]
         )
 
-        self.tolerance = 0.01
+        self.collision_tolerance = 0.01
         BaseModeLogic.__init__(self)
 
 
@@ -348,7 +348,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
             ["a1_pick", "a1_place", "terminal"]
         )
 
-        self.tolerance = 0.01
+        self.collision_tolerance = 0.01
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -422,7 +422,7 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
         )
         # self.sequence = [2, 0, 3, 1, 4]
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -500,7 +500,7 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -601,7 +601,7 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -700,7 +700,7 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -746,7 +746,7 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -781,7 +781,7 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -817,7 +817,7 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -881,7 +881,7 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env):
@@ -938,7 +938,7 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env
         print(self.start_mode)
         print(self._terminal_task_ids)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 ##############################
@@ -1021,7 +1021,7 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 # goals are poses, more complex sequencing
@@ -1087,7 +1087,7 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 # goals are poses
@@ -1146,7 +1146,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
@@ -1232,7 +1232,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         # q = self.C_base.getJointState()
         # print(self.is_collision_free(q, [0, 0]))
@@ -1396,7 +1396,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1526,7 +1526,7 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1688,7 +1688,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1790,7 +1790,7 @@ class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1873,7 +1873,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.tolerance = 0.01
+        self.collision_tolerance = 0.01
 
 
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
@@ -1934,7 +1934,7 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.tolerance = 0.01
+        self.collision_tolerance = 0.01
 
 
 # mobile manip
