@@ -56,7 +56,7 @@ def single_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
             robots_to_shortcut = robots_to_shortcut[:num_robots]
 
         # this is wrong for partial shortcuts atm.
-        if env.is_edge_collision_free(q0, q1, mode):
+        if env.is_edge_collision_free(q0, q1, mode, resolution= 0.001):
             for k in range(j - i):
                 for r in robots_to_shortcut:
                     q = q0[r] + (q1[r] - q0[r]) / (j - i) * k

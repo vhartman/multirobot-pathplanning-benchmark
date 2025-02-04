@@ -26,6 +26,8 @@ from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate
 
 from multi_robot_multi_goal_planning.planners import shortcutting
 
+from multi_robot_multi_goal_planning.planners.termination_conditions import PlannerTerminationCondition
+
 
 class Node:
     __slots__ = [
@@ -1411,9 +1413,9 @@ def sample_phs_with_given_matrices(rot, center):
 
 def joint_prm_planner(
     env: BaseProblem,
+    ptc: PlannerTerminationCondition,
     optimize: bool = True,
     mode_sampling_type: str = "greedy",
-    max_iter: int = 2000,
     distance_metric: str = "euclidean",
     try_sampling_around_path: bool = True,
     use_k_nearest: bool = True,
@@ -2265,7 +2267,7 @@ def joint_prm_planner(
             print(f"Removed {num_pts_for_removal} nodes")
 
         print()
-        print("Count:", cnt, "max_iter:", max_iter)
+        print(f"Samples: {cnt}; {ptc}")
 
         samples_in_graph_before = g.get_num_samples()
 
@@ -2522,7 +2524,7 @@ def joint_prm_planner(
         if not optimize and current_best_cost is not None:
             break
 
-        if cnt >= max_iter:
+        if ptc.should_terminate(cnt, time.time() - start_time):
             break
 
     costs.append(costs[-1])

@@ -300,6 +300,8 @@ class rai_env(BaseProblem):
             self.set_to_mode(m)
             self.C.setJointState(q.state())
 
+        # self.C.view()
+
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
             return True
@@ -448,7 +450,7 @@ class rai_env(BaseProblem):
 
         return sg
 
-    def set_to_mode(self, m: Mode):
+    def set_to_mode(self, m: Mode, config=None):
         if not self.manipulating_env:
             return
 
@@ -459,12 +461,24 @@ class rai_env(BaseProblem):
         self.prev_mode = m
 
         if m in self.C_cache:
-            self.C.clear()
-            self.C.addConfigurationCopy(self.C_cache[m])
+            if config is not None:
+                config.clear()
+                config.addConfigurationCopy(self.C_cache[m])
+            else:
+                # for k, v in self.C_cache.items():
+                #     print(k)
+                #     v.setJointState(v.getJointState()*0)
+                #     # v.view(False)
+
+                self.C = self.C_cache[m]
+
+            # self.C.view(True)
             return
 
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_base)
+        tmp = ry.Config()
+
+        # self.C.clear()
+        tmp.addConfigurationCopy(self.C_base)
 
         mode_sequence = []
 
@@ -503,24 +517,27 @@ class rai_env(BaseProblem):
             assert mode.entry_configuration is not None
 
             q = np.concat(q_new)
-            self.C.setJointState(q, joint_names)
+            tmp.setJointState(q, joint_names)
 
             if self.tasks[prev_mode_index].type is not None:
                 if self.tasks[prev_mode_index].type == "goto":
                     pass
                 else:
-                    self.C.attach(
+                    tmp.attach(
                         self.tasks[prev_mode_index].frames[0],
                         self.tasks[prev_mode_index].frames[1],
                     )
-                    self.C.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(
-                        -1
-                    )
+                    tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
 
                 # postcondition
                 if self.tasks[prev_mode_index].side_effect is not None:
                     box = self.tasks[prev_mode_index].frames[1]
-                    self.C.delFrame(box)
+                    tmp.delFrame(box)
 
         self.C_cache[m] = ry.Config()
-        self.C_cache[m].addConfigurationCopy(self.C)
+        self.C_cache[m].addConfigurationCopy(tmp)
+
+        # self.C = None
+        viewer = self.C.get_viewer()
+        self.C_cache[m].set_viewer(viewer)
+        self.C = self.C_cache[m]

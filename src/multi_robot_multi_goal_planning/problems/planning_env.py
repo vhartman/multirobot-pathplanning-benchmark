@@ -354,7 +354,7 @@ class SequenceMixin(BaseModeLogic):
         q_concat = np.concatenate(q_concat)
 
         if terminal_task.goal.satisfies_constraints(
-            q_concat, mode=m, tolerance=self.tolerance
+            q_concat, mode=m, tolerance=self.collision_tolerance
         ):
             return True
 
@@ -373,7 +373,7 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.tolerance):
+        if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.collision_tolerance):
             return True
 
         return False
@@ -566,7 +566,7 @@ class DependencyGraphMixin(BaseModeLogic):
                     q_concat = np.concatenate(q_concat)
 
                     if task.goal.satisfies_constraints(
-                        q_concat, mode=mode, tolerance=self.tolerance
+                        q_concat, mode=mode, tolerance=self.collision_tolerance
                     ):
                         tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
@@ -597,7 +597,7 @@ class DependencyGraphMixin(BaseModeLogic):
                     q_concat = np.concatenate(q_concat)
 
                     if task.goal.satisfies_constraints(
-                        q_concat, mode=m, tolerance=self.tolerance
+                        q_concat, mode=m, tolerance=self.collision_tolerance
                     ):
                         return True
 
@@ -622,7 +622,7 @@ class DependencyGraphMixin(BaseModeLogic):
         q_concat = np.concatenate(q_concat)
 
         if terminal_task.goal.satisfies_constraints(
-            q_concat, mode=mode, tolerance=self.tolerance
+            q_concat, mode=mode, tolerance=self.collision_tolerance
         ):
             return True
 
