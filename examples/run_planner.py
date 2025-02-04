@@ -9,6 +9,8 @@ from multi_robot_multi_goal_planning.problems.rai_envs import display_path
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
 
 # planners
+from multi_robot_multi_goal_planning.planners.termination_conditions import IterationTerminationCondition, RuntimeTerminationCondition
+
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
     prioritized_planning,
 )
@@ -91,9 +93,9 @@ def main():
     if args.planner == "joint_prm":
         path, info = joint_prm_planner(
             env,
+            IterationTerminationCondition(args.num_iters),
             optimize=args.optimize,
             mode_sampling_type=None,
-            max_iter=args.num_iters,
             distance_metric=args.distance_metric,
             try_sampling_around_path=args.prm_sample_near_path,
             use_k_nearest=args.prm_k_nearest,

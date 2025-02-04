@@ -19,6 +19,10 @@ from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 # planners
+from multi_robot_multi_goal_planning.planners.termination_conditions import (
+    RuntimeTerminationCondition,
+    IterationTerminationCondition,
+)
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
     prioritized_planning,
 )
@@ -98,7 +102,7 @@ def export_config(path: str, config: Dict):
         json.dump(config, f)
 
 
-def setup_planner(planner_config, optimize=True):
+def setup_planner(planner_config, runtime, optimize=True):
     name = planner_config["name"]
 
     if planner_config["type"] == "prm":
@@ -107,8 +111,8 @@ def setup_planner(planner_config, optimize=True):
             options = planner_config["options"]
             return joint_prm_planner(
                 env,
+                ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
-                max_iter=15000,
                 distance_metric=options["distance_function"],
                 try_sampling_around_path=options["sample_near_path"],
                 use_k_nearest=options["connection_strategy"] == "k_nearest",
@@ -131,11 +135,14 @@ def setup_planner(planner_config, optimize=True):
 
     return name, planner
 
+
 def setup_env(env_config):
     pass
 
+
 class Tee:
     """Custom stream to write to both stdout and a file."""
+
     def __init__(self, file, print_to_file_and_stdout):
         self.file = file
         self.print_to_file_and_stdout = print_to_file_and_stdout
@@ -173,12 +180,13 @@ def run_experiment(env, planners, config, experiment_folder):
             log_file = f"{planner_folder}run_{run_id}.log"
 
             with open(log_file, "w", buffering=1) as f:  # Line-buffered writing
-
                 # Redirect stdout and stderr
                 sys.stdout = Tee(f, True)
                 sys.stderr = Tee(f, True)
 
                 try:
+                    print(f"Run #{run_id} for {planner_name}")
+                    print("Seed {seed + run_id}")
 
                     np.random.seed(seed + run_id)
                     random.seed(seed + run_id)
@@ -187,7 +195,7 @@ def run_experiment(env, planners, config, experiment_folder):
 
                     # planner_folder = experiment_folder + f"{planner_name}/"
                     # if not os.path.isdir(planner_folder):
-                        # os.makedirs(planner_folder)
+                    # os.makedirs(planner_folder)
 
                     all_experiment_data[planner_name].append(res)
 
@@ -204,7 +212,17 @@ def run_experiment(env, planners, config, experiment_folder):
     return all_experiment_data
 
 
-def run_planner_process(run_id, planner_name, planner, seed, env, experiment_folder, queue, semaphore, print_to_file_and_stdout=False):
+def run_planner_process(
+    run_id,
+    planner_name,
+    planner,
+    seed,
+    env,
+    experiment_folder,
+    queue,
+    semaphore,
+    print_to_file_and_stdout=False,
+):
     """Runs a planner, captures all output live, and stores results in a queue."""
     with semaphore:  # Limit parallel execution
         planner_folder = experiment_folder + f"{planner_name}/"
@@ -213,7 +231,6 @@ def run_planner_process(run_id, planner_name, planner, seed, env, experiment_fol
         log_file = f"{planner_folder}run_{run_id}.log"
 
         with open(log_file, "w", buffering=1) as f:  # Line-buffered writing
-
             # Redirect stdout and stderr
             sys.stdout = Tee(f, print_to_file_and_stdout)
             sys.stderr = Tee(f, print_to_file_and_stdout)
@@ -242,8 +259,9 @@ def run_planner_process(run_id, planner_name, planner, seed, env, experiment_fol
                 sys.stderr = sys.__stderr__
 
 
-
-def run_experiment_in_parallel(env, planners, config, experiment_folder, max_parallel=4):
+def run_experiment_in_parallel(
+    env, planners, config, experiment_folder, max_parallel=4
+):
     """Runs experiments in parallel with a fixed number of processes."""
     all_experiment_data = {planner_name: [] for planner_name, _ in planners}
     seed = config["seed"]
@@ -257,7 +275,16 @@ def run_experiment_in_parallel(env, planners, config, experiment_folder, max_par
         for planner_name, planner in planners:
             p = multiprocessing.Process(
                 target=run_planner_process,
-                args=(run_id, planner_name, planner, seed, env, experiment_folder, queue, semaphore)
+                args=(
+                    run_id,
+                    planner_name,
+                    planner,
+                    seed,
+                    env,
+                    experiment_folder,
+                    queue,
+                    semaphore,
+                ),
             )
             p.start()
             processes.append(p)
@@ -297,7 +324,11 @@ def main():
 
     planners = []
     for planner_config in config["planners"]:
-        planners.append(setup_planner(planner_config, config["optimize"]))
+        planners.append(
+            setup_planner(
+                planner_config, config["max_planning_time"], config["optimize"]
+            )
+        )
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -312,7 +343,9 @@ def main():
     export_config(experiment_folder, config)
 
     if args.parallel_execution:
-        all_experiment_data = run_experiment_in_parallel(env, planners, config, experiment_folder, max_parallel=4)
+        all_experiment_data = run_experiment_in_parallel(
+            env, planners, config, experiment_folder, max_parallel=4
+        )
     else:
         all_experiment_data = run_experiment(env, planners, config, experiment_folder)
 
