@@ -234,7 +234,7 @@ class rai_env(BaseProblem):
         q1: Configuration,
         q2: Configuration,
         m: Mode,
-        resolution=0.1,
+        resolution=0.01,
         randomize_order=True,
     ) -> bool:
         # print('q1', q1)
