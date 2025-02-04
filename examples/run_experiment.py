@@ -186,7 +186,7 @@ def run_experiment(env, planners, config, experiment_folder):
 
                 try:
                     print(f"Run #{run_id} for {planner_name}")
-                    print("Seed {seed + run_id}")
+                    print(f"Seed {seed + run_id}")
 
                     np.random.seed(seed + run_id)
                     random.seed(seed + run_id)
@@ -310,6 +310,12 @@ def main():
         default=False,
         help="Run the experiments in parallel. (default: False)",
     )
+    parser.add_argument(
+        "--num_processes",
+        type=int,
+        default=2,
+        help="Number of processes to run in parallel. (default: 2)",
+    )
 
     args = parser.parse_args()
 
@@ -344,7 +350,7 @@ def main():
 
     if args.parallel_execution:
         all_experiment_data = run_experiment_in_parallel(
-            env, planners, config, experiment_folder, max_parallel=4
+            env, planners, config, experiment_folder, max_parallel=args.num_processes
         )
     else:
         all_experiment_data = run_experiment(env, planners, config, experiment_folder)
