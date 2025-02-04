@@ -134,6 +134,29 @@ def setup_planner(planner_config, optimize=True):
 def setup_env(env_config):
     pass
 
+class Tee:
+    """Custom stream to write to both stdout and a file."""
+    def __init__(self, file, print_to_file_and_stdout):
+        self.file = file
+        self.print_to_file_and_stdout = print_to_file_and_stdout
+
+        if self.print_to_file_and_stdout:
+            self.stdout = sys.stdout
+
+    def write(self, data):
+        self.file.write(data)
+        self.file.flush()  # Ensure immediate writing
+
+        if self.print_to_file_and_stdout:
+            self.stdout.write(data)
+            self.stdout.flush()
+
+    def flush(self):
+        self.file.flush()
+
+        if self.print_to_file_and_stdout:
+            self.stdout.flush()
+
 
 def run_experiment(env, planners, config, experiment_folder):
     seed = config["seed"]
@@ -144,24 +167,44 @@ def run_experiment(env, planners, config, experiment_folder):
 
     for run_id in range(config["num_runs"]):
         for planner_name, planner in planners:
-            np.random.seed(seed + run_id)
-            random.seed(seed + run_id)
-
-            res = run_single_planner(env, planner)
-
             planner_folder = experiment_folder + f"{planner_name}/"
-            if not os.path.isdir(planner_folder):
-                os.makedirs(planner_folder)
+            os.makedirs(planner_folder, exist_ok=True)
 
-            all_experiment_data[planner_name].append(res)
+            log_file = f"{planner_folder}run_{run_id}.log"
 
-            # export planner data
-            export_planner_data(planner_folder, run_id, res)
+            with open(log_file, "w", buffering=1) as f:  # Line-buffered writing
+
+                # Redirect stdout and stderr
+                sys.stdout = Tee(f, True)
+                sys.stderr = Tee(f, True)
+
+                try:
+
+                    np.random.seed(seed + run_id)
+                    random.seed(seed + run_id)
+
+                    res = run_single_planner(env, planner)
+
+                    # planner_folder = experiment_folder + f"{planner_name}/"
+                    # if not os.path.isdir(planner_folder):
+                        # os.makedirs(planner_folder)
+
+                    all_experiment_data[planner_name].append(res)
+
+                    # export planner data
+                    export_planner_data(planner_folder, run_id, res)
+                except Exception as e:
+                    print(f"Error in {planner_name} run {run_id}: {e}")
+
+                finally:
+                    # Restore stdout and stderr
+                    sys.stdout = sys.__stdout__
+                    sys.stderr = sys.__stderr__
 
     return all_experiment_data
 
 
-def run_planner_process(run_id, planner_name, planner, seed, env, experiment_folder, queue, semaphore):
+def run_planner_process(run_id, planner_name, planner, seed, env, experiment_folder, queue, semaphore, print_to_file_and_stdout=False):
     """Runs a planner, captures all output live, and stores results in a queue."""
     with semaphore:  # Limit parallel execution
         planner_folder = experiment_folder + f"{planner_name}/"
@@ -170,25 +213,10 @@ def run_planner_process(run_id, planner_name, planner, seed, env, experiment_fol
         log_file = f"{planner_folder}run_{run_id}.log"
 
         with open(log_file, "w", buffering=1) as f:  # Line-buffered writing
-            class Tee:
-                """Custom stream to write to both stdout and a file."""
-                def __init__(self, file):
-                    self.file = file
-                    # self.stdout = sys.stdout
-
-                def write(self, data):
-                    self.file.write(data)
-                    self.file.flush()  # Ensure immediate writing
-                    # self.stdout.write(data)
-                    # self.stdout.flush()
-
-                def flush(self):
-                    self.file.flush()
-                    # self.stdout.flush()
 
             # Redirect stdout and stderr
-            sys.stdout = Tee(f)
-            sys.stderr = Tee(f)
+            sys.stdout = Tee(f, print_to_file_and_stdout)
+            sys.stderr = Tee(f, print_to_file_and_stdout)
 
             try:
                 np.random.seed(seed + run_id)
@@ -249,6 +277,12 @@ def run_experiment_in_parallel(env, planners, config, experiment_folder, max_par
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("filepath", nargs="?", default="default", help="filepath")
+    parser.add_argument(
+        "--parallel_execution",
+        type=lambda x: x.lower() in ["true", "1", "yes"],
+        default=False,
+        help="Run the experiments in parallel. (default: False)",
+    )
 
     args = parser.parse_args()
 
@@ -277,8 +311,10 @@ def main():
 
     export_config(experiment_folder, config)
 
-    all_experiment_data = run_experiment_in_parallel(env, planners, config, experiment_folder, max_parallel=4)
-    # all_experiment_data = run_experiment(env, planners, config, experiment_folder)
+    if args.parallel_execution:
+        all_experiment_data = run_experiment_in_parallel(env, planners, config, experiment_folder, max_parallel=4)
+    else:
+        all_experiment_data = run_experiment(env, planners, config, experiment_folder)
 
     make_cost_plots(all_experiment_data, config)
 
