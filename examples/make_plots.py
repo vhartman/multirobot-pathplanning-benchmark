@@ -27,16 +27,19 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
         subfolder_path = folder + planner_name + "/"
 
         timestamps = []
-        with open(subfolder_path + "timestamps.txt") as file:
-            for line in file:
-                timestamps_this_run = []
-                if len(line) <= 1:
-                    continue
+        try:
+            with open(subfolder_path + "timestamps.txt") as file:
+                for line in file:
+                    timestamps_this_run = []
+                    if len(line) <= 1:
+                        continue
 
-                for num in line.rstrip()[:-1].split(","):
-                    timestamps_this_run.append(float(num))
+                    for num in line.rstrip()[:-1].split(","):
+                        timestamps_this_run.append(float(num))
 
-                timestamps.append(timestamps_this_run)
+                    timestamps.append(timestamps_this_run)
+        except FileNotFoundError:
+            continue
 
         costs = []
         with open(subfolder_path + "costs.txt") as file:
@@ -282,7 +285,7 @@ def make_cost_plots(
     # plt.grid()
     plt.grid(which="major", ls="--")
 
-    plt.ylabel("Cost")
+    plt.ylabel(f"Cost ({config['cost_reduction']})")
     plt.xlabel("T [s]")
 
     plt.legend()
