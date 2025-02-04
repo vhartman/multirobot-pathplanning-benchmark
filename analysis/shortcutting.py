@@ -224,7 +224,7 @@ def path_visualization(all_frame_traces, env_path, modes_legend, original_path, 
     mode = env.start_mode
     while True:     
             modes.append(mode)
-            if mode == env.terminal_mode:
+            if env.is_terminal_mode(mode):
                 break
             mode = env.get_next_mode(None, mode)
     for robot_idx, robot in enumerate(env.robots):
@@ -685,8 +685,6 @@ if __name__ == "__main__":
         for _ in range(iteration):
             output_html = os.path.join(path, f'partial_shortcutting_random_agent_{choice_name}_{name}.html')
             shortcutting_agent(path, env, env_path, pkl_folder, config_params, output_html, 5, choice, deterministic)
-
-    # webbrowser.open('file://' + os.path.realpath(output_html))
 
 
 

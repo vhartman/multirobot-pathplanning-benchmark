@@ -66,8 +66,167 @@ class Configuration(ABC):
     @classmethod
     def _batch_dist(cls, pt, batch_other, metric: str = "euclidean") -> NDArray:
         return np.array([cls._dist(pt, o, metric) for o in batch_other])
+    
+    @classmethod
+    def _batch_dist_torch(cls, q_tensor, pt, batch_other, metric: str = "max_euclidean", batch_size: int = 32768) -> torch.Tensor:
+        # Dynamically initialize shared tensors for the fixed batch size
+        if not hasattr(cls, 'diff_batch_dist') or cls.diff_batch_dist.shape[0] < batch_size:
+            cls.diff_batch_dist = torch.empty(
+                (batch_size, *batch_other.shape[1:]),
+                device=device,
+                dtype=torch.float64,
+            )
 
+        num_slices = len(pt.slice)
+        if not hasattr(cls, 'dists_batch_dist') or cls.dists_batch_dist.shape[0] < batch_size or cls.dists_batch_dist.shape[1] != num_slices:
+            cls.dists_batch_dist = torch.empty(
+                (batch_size, num_slices),
+                device=device,
+                dtype=torch.float64,
+            )
+        # print(batch_other.size())
+        # Dynamically initialize or resize result tensor for the entire dataset
+        if not hasattr(cls, 'result_dists') or batch_other.shape[0] > cls.result_dists.shape[0]:
+            cls.result_dists = torch.empty(
+                (int(batch_other.shape[0]),),
+                device=device,
+                dtype=torch.float32,
+            )
 
+        with torch.no_grad():
+            num_batches = (batch_other.shape[0] + batch_size - 1) // batch_size
+
+            for batch_idx in range(num_batches):
+                start_idx = batch_idx * batch_size
+                end_idx = min((batch_idx + 1) * batch_size, batch_other.shape[0])
+
+                # Determine the actual size of the current batch
+                current_batch_size = end_idx - start_idx
+
+                # Slice preallocated tensors for current batch
+                current_diff = cls.diff_batch_dist[:current_batch_size]
+                current_dists = cls.dists_batch_dist[:current_batch_size]
+
+                # Compute differences
+                torch.sub(q_tensor, batch_other[start_idx:end_idx], out=current_diff)
+                if metric == "euclidean":
+                    # Compute Euclidean norms
+                    torch.linalg.norm(current_diff.to(torch.float32), dim=1, out=cls.result_dists[start_idx:end_idx] )
+                elif metric == "max_euclidean":
+                    # Compute Euclidean norms for each slice and find max distance for the batch
+                    for i, (s, e) in enumerate(pt.slice):
+                        torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
+                    cls.result_dists[start_idx:end_idx] = current_dists.to(torch.float32).max(dim=1).values + 0.01 * current_dists.to(torch.float32).sum(dim=1)
+                elif metric == "sum_euclidean":
+                    # Compute Euclidean norms for each slice and find max distance for the batch
+                    for i, (s, e) in enumerate(pt.slice):
+                        torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
+                    cls.result_dists[start_idx:end_idx] = current_dists.to(torch.float32).sum(dim=1) 
+                else:
+                    # Compute Chebyshev distances for the batch
+                    cls.result_dists[start_idx:end_idx] = torch.max(torch.abs(current_diff), dim=1).values
+
+        return cls.result_dists[:batch_other.shape[0]]
+
+    @classmethod
+    def _batch_cost_torch(cls, q_tensor, pt, batch_other, metric: str = "max_euclidean", batch_size: int = 32768) -> torch.Tensor:
+        # Dynamically initialize shared tensors for the fixed batch size
+        if not hasattr(cls, 'diff_batch_cost') or cls.diff_batch_cost.shape[0] < batch_size:
+            cls.diff_batch_cost = torch.empty(
+                (batch_size, *batch_other.shape[1:]),
+                device=device,
+                dtype=torch.float64,
+            )
+
+        num_slices = len(pt.slice)
+        if not hasattr(cls, 'dists_batch_cost') or cls.dists_batch_cost.shape[0] < batch_size or cls.dists_batch_cost.shape[1] != num_slices:
+            cls.dists_batch_cost = torch.empty(
+                (batch_size, num_slices),
+                device=device,
+                dtype=torch.float64,
+            )
+        # print(batch_other.size())
+        # Dynamically initialize or resize result tensor for the entire dataset
+        if not hasattr(cls, 'result_cost') or batch_other.shape[0] > cls.result_cost.shape[0]:
+            cls.result_cost = torch.empty(
+                (int(batch_other.shape[0]),),
+                device=device,
+                dtype=torch.float32,
+            )
+
+        with torch.no_grad():
+            num_batches = (batch_other.shape[0] + batch_size - 1) // batch_size
+
+            for batch_idx in range(num_batches):
+                start_idx = batch_idx * batch_size
+                end_idx = min((batch_idx + 1) * batch_size, batch_other.shape[0])
+
+                # Determine the actual size of the current batch
+                current_batch_size = end_idx - start_idx
+
+                # Slice preallocated tensors for current batch
+                current_diff = cls.diff_batch_cost[:current_batch_size]
+                current_dists = cls.dists_batch_cost[:current_batch_size]
+
+                # Compute differences
+                torch.sub(q_tensor, batch_other[start_idx:end_idx], out=current_diff)
+                if metric == "euclidean":
+                    # Compute Euclidean norms
+                    torch.linalg.norm(current_diff, dim=1, out=cls.result_cost[start_idx:end_idx])
+                elif metric == "max_euclidean":
+                    # Compute Euclidean norms for each slice and find max distance for the batch
+                    for i, (s, e) in enumerate(pt.slice):
+                        torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
+                    cls.result_cost[start_idx:end_idx] = current_dists.to(torch.float32).max(dim=1).values + 0.01 * current_dists.to(torch.float32).sum(dim=1)
+                elif metric == "sum_euclidean":
+                    # Compute Euclidean norms for each slice and find max distance for the batch
+                    for i, (s, e) in enumerate(pt.slice):
+                        torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
+                    cls.result_cost[start_idx:end_idx] = current_dists.to(torch.float32).sum(dim=1) 
+
+                else:
+                    # Compute Chebyshev distances for the batch
+                    cls.result_cost[start_idx:end_idx] = torch.max(torch.abs(current_diff), dim=1).values
+
+        return cls.result_cost[:batch_other.shape[0]]
+
+    @classmethod
+    def _batches_torch(cls, q_tensor, pt, batch_other, metric: str = "max_euclidean") -> Tuple[torch.Tensor, torch.Tensor]:
+        # Ensure q_tensor is 2D.
+        if q_tensor.dim() == 1:
+            q_tensor = q_tensor.unsqueeze(0)  # Now shape becomes (1, D)
+
+        B, D = q_tensor.shape
+        N = batch_other.shape[0]
+        num_slices = len(pt.slice)
+        device = batch_other.device
+
+        # Preallocate (or reuse) the differences buffer.
+        if (not hasattr(cls, 'diff_batches_torch') or 
+            cls.diff_batches_torch.shape[0] < B or 
+            cls.diff_batches_torch.shape[1] < N or 
+            cls.diff_batches_torch.shape[2] < D):
+            cls.diff_batches_torch = torch.empty((B, N, D), device=device, dtype=torch.float32)
+        current_diff = cls.diff_batches_torch[:B, :N, :D]
+
+        if (not hasattr(cls, 'dists_batches_torch') or 
+            cls.dists_batches_torch.shape[0] < B or 
+            cls.dists_batches_torch.shape[1] < N or 
+            cls.dists_batches_torch.shape[2] < num_slices):
+            cls.dists_batches_torch = torch.empty((B, N, num_slices), device=device, dtype=torch.float32)
+        current_dists = cls.dists_batches_torch[:B, :N, :num_slices]
+
+        with torch.no_grad():
+            torch.sub(batch_other.unsqueeze(0), q_tensor.unsqueeze(1), out=current_diff)
+
+            if metric == "max_euclidean":
+                for i, (s, e) in enumerate(pt.slice):
+                    torch.linalg.norm(current_diff[..., s:e], dim=2, out=current_dists[..., i])
+                return current_dists.to(torch.float32).max(dim=2).values + 0.01 * current_dists.to(torch.float32).sum(dim=2)
+            elif metric == "sum_euclidean":
+                for i, (s, e) in enumerate(pt.slice):
+                    torch.linalg.norm(current_diff[..., s:e], dim=2, out=current_dists[..., i])
+                return current_dists.to(torch.float32).sum(dim=2) 
 class ListConfiguration(Configuration):
     def __init__(self, q_list):
         self.q = q_list
@@ -244,148 +403,6 @@ class NpConfiguration(Configuration):
         else:
             return np.max(np.abs(diff), axis=1)
 
-    @classmethod
-    def _batch_dist_torch(cls, q_tensor, pt, batch_other, metric: str = "euclidean", batch_size: int = 32768) -> torch.Tensor:
-        # Dynamically initialize shared tensors for the fixed batch size
-        if not hasattr(cls, 'diff_batch_dist') or cls.diff_batch_dist.shape[0] < batch_size:
-            cls.diff_batch_dist = torch.empty(
-                (batch_size, *batch_other.shape[1:]),
-                device=device,
-                dtype=torch.float32,
-            )
-
-        num_slices = len(pt.slice)
-        if not hasattr(cls, 'dists_batch_dist') or cls.dists_batch_dist.shape[0] < batch_size or cls.dists_batch_dist.shape[1] != num_slices:
-            cls.dists_batch_dist = torch.empty(
-                (batch_size, num_slices),
-                device=device,
-                dtype=torch.float32,
-            )
-        # print(batch_other.size())
-        # Dynamically initialize or resize result tensor for the entire dataset
-        if not hasattr(cls, 'result_dists') or batch_other.shape[0] > cls.result_dists.shape[0]:
-            cls.result_dists = torch.empty(
-                (int(batch_other.shape[0]),),
-                device=device,
-                dtype=torch.float32,
-            )
-
-        with torch.no_grad():
-            num_batches = (batch_other.shape[0] + batch_size - 1) // batch_size
-
-            for batch_idx in range(num_batches):
-                start_idx = batch_idx * batch_size
-                end_idx = min((batch_idx + 1) * batch_size, batch_other.shape[0])
-
-                # Determine the actual size of the current batch
-                current_batch_size = end_idx - start_idx
-
-                # Slice preallocated tensors for current batch
-                current_diff = cls.diff_batch_dist[:current_batch_size]
-                current_dists = cls.dists_batch_dist[:current_batch_size]
-
-                # Compute differences
-                torch.sub(q_tensor, batch_other[start_idx:end_idx], out=current_diff)
-
-                if metric == "euclidean":
-                    # Compute Euclidean norms for each slice and find max distance for the batch
-                    for i, (s, e) in enumerate(pt.slice):
-                        torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
-
-                    cls.result_dists[start_idx:end_idx] = current_dists.max(dim=1).values
-
-                elif metric == "chebyshev":
-                    # Compute Chebyshev distances for the batch
-                    cls.result_dists[start_idx:end_idx] = torch.max(torch.abs(current_diff), dim=1).values
-
-        return cls.result_dists[:batch_other.shape[0]]
-
-    @classmethod
-    def _batch_torch(cls, q_tensor, pt, batch_other, metric: str = "euclidean") -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute costs and distances efficiently for _batch_torch."""
-        # Dynamically check and initialize or resize shared tensors for _batch_torch
-        if not hasattr(cls, 'diff_batch_torch') or batch_other.shape[0] > cls.diff_batch_torch.shape[0]:
-            cls.diff_batch_torch = torch.empty(
-                (batch_other.shape[0], *batch_other.shape[1:]),
-                device=device,
-                dtype=torch.float32,
-            )
-
-        num_slices = len(pt.slice)
-        if not hasattr(cls, 'dists_batch_torch') or batch_other.shape[0] > cls.dists_batch_torch.shape[0]:
-            cls.dists_batch_torch = torch.empty(
-                (batch_other.shape[0], num_slices),
-                device=device,
-                dtype=torch.float32,
-            )
-
-        # Current slices for active computation
-        current_diff = cls.diff_batch_torch[:batch_other.shape[0]]
-        current_dists = cls.dists_batch_torch[:batch_other.shape[0], :]
-
-        with torch.no_grad():
-            # Compute differences
-            torch.sub(q_tensor, batch_other, out=current_diff)
-
-            # Iterate through slices and compute distances
-            for i, (s, e) in enumerate(pt.slice):
-                if metric == "euclidean":
-                    torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
-                elif metric == "chebyshev":
-                    current_dists[:, i] = torch.max(torch.abs(current_diff[:, s:e]), dim=1).values
-                else:
-                    raise ValueError(f"Unsupported metric: {metric}")
-
-            # Compute costs
-            max_dists = current_dists.max(dim=1).values  # Max distances
-            sum_dists = current_dists.sum(dim=1)         # Sum of distances
-            costs = max_dists + 0.01 * sum_dists         # Combine max and sum distances
-
-            return costs, current_dists
-
-    @classmethod
-    def _batches_torch(cls, q_tensor, pt, batch_other, metric: str = "euclidean") -> Tuple[torch.Tensor, torch.Tensor]:
-        # Ensure q_tensor is 2D.
-        if q_tensor.dim() == 1:
-            q_tensor = q_tensor.unsqueeze(0)  # Now shape becomes (1, D)
-
-        B, D = q_tensor.shape
-        N = batch_other.shape[0]
-        num_slices = len(pt.slice)
-        device = batch_other.device
-
-        # Preallocate (or reuse) the differences buffer.
-        if (not hasattr(cls, 'diff_batches_torch') or 
-            cls.diff_batches_torch.shape[0] < B or 
-            cls.diff_batches_torch.shape[1] < N or 
-            cls.diff_batches_torch.shape[2] < D):
-            cls.diff_batches_torch = torch.empty((B, N, D), device=device, dtype=torch.float32)
-        current_diff = cls.diff_batches_torch[:B, :N, :D]
-
-        if (not hasattr(cls, 'dists_batches_torch') or 
-            cls.dists_batches_torch.shape[0] < B or 
-            cls.dists_batches_torch.shape[1] < N or 
-            cls.dists_batches_torch.shape[2] < num_slices):
-            cls.dists_batches_torch = torch.empty((B, N, num_slices), device=device, dtype=torch.float32)
-        current_dists = cls.dists_batches_torch[:B, :N, :num_slices]
-
-        with torch.no_grad():
-            torch.sub(batch_other.unsqueeze(0), q_tensor.unsqueeze(1), out=current_diff)
-            for i, (s, e) in enumerate(pt.slice):
-                if metric == "euclidean":
-                    torch.linalg.norm(current_diff[..., s:e], dim=2, out=current_dists[..., i])
-                elif metric == "chebyshev":
-                    current_dists[..., i].copy_(torch.amax(torch.abs(current_diff[..., s:e]), dim=2))
-                else:
-                    raise ValueError(f"Unsupported metric: {metric}")
-
-            # Compute cost as: cost = max(distance slices) + 0.01 * sum(distance slices)
-            max_dists = current_dists.max(dim=2).values  # shape: (B, N)
-            sum_dists = current_dists.sum(dim=2)           # shape: (B, N)
-            costs = max_dists + 0.01 * sum_dists
-
-        return costs, current_dists
-
 def config_dist(
     q_start: Configuration, q_end: Configuration, metric: str = "max"
 ) -> float:
@@ -400,18 +417,18 @@ def batch_config_dist(
 ) -> NDArray:
     return type(pt)._batch_dist(pt, batch_pts, metric)
 
-def batch_config_dist_torch(q_tensor:torch.tensor,
-    pt: Configuration, batch_pts: torch.tensor, metric: str = "euclidean"
+def batch_dist_torch(q_tensor:torch.tensor,
+    pt: Configuration, batch_pts: torch.tensor, metric: str = "max_euclidean"
 ) -> NDArray:
     return type(pt)._batch_dist_torch(q_tensor, pt, batch_pts, metric)
 
-def batch_config_torch(q_tensor:torch.tensor,
-    pt: Configuration, batch_pts: torch.tensor,metric: str = "euclidean"
+def batch_cost_torch(q_tensor:torch.tensor,
+    pt: Configuration, batch_pts: torch.tensor,metric: str = "max_euclidean"
 ) -> torch.Tensor:
-    return type(pt)._batch_torch(q_tensor, pt, batch_pts, metric)
+    return type(pt)._batch_cost_torch(q_tensor, pt, batch_pts, metric)
 
 def batches_config_torch(q_tensor:torch.tensor,
-    pt: Configuration, batch_pts: torch.tensor,metric: str = "euclidean"
+    pt: Configuration, batch_pts: torch.tensor,metric: str = "max_euclidean"
 ) -> torch.Tensor:
     return type(pt)._batches_torch(q_tensor, pt, batch_pts, metric)
 

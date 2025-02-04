@@ -2,14 +2,30 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "main.py - simple_2d --planner drrt",
+            "name": "main.py - one_agent_many_goals --planner drrtstar",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/examples/main.py",
             "args": [
-                "simple_2d",
+                "one_agent_many_goals",
                 "--planner",
-                "drrt"
+                "drrtstar"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "main.py - one_agent_many_goals --planner drrtstar numba",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main_numba.py",
+            "args": [
+                "one_agent_many_goals",
+                "--planner",
+                "drrtstar"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
@@ -24,6 +40,38 @@
             "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "simple_2d",
+                "--planner",
+                "rrtstar"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "main.py - simple_2d --planner rrtstar numba",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main_numba.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "rrtstar"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "main.py - one_agent_many_goals --planner rrtstar numba",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main_numba.py",
+            "args": [
+                "one_agent_many_goals",
                 "--planner",
                 "rrtstar"
             ],
@@ -102,6 +150,18 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "main.py -simple_2d --planner bi_rrtstar numba",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main_numba.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "bi_rrtstar"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "main.py -simple_2d --planner bi_rrtstar_par",
             "type": "debugpy",
             "request": "launch",
@@ -112,6 +172,34 @@
                 "bi_rrtstar_par"
             ],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "main.py -simple_2d --planner bi_rrtstar_par numba",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main_numba.py",
+            "args": [
+                "simple_2d",
+                "--planner",
+                "bi_rrtstar_par"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "main.py - one_agent_many_goals --planner bi_rrtstar_par",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main.py",
+            "args": [
+                "one_agent_many_goals",
+                "--planner",
+                "bi_rrtstar_par"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         },
         {
             "name": "main.py -hallway --planner rrtstar",
@@ -257,6 +345,17 @@
             "args": [
                 "--do",
                 "dev"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "postprocessing.py --do final_path_animation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
+            "args": [
+                "--do",
+                "final_path_animation"
             ],
             "console": "integratedTerminal"
         },

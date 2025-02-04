@@ -212,8 +212,8 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
     modes = []
     mode = env.start_mode
     while True:     
-            modes.append(mode)
-            if mode == env.terminal_mode:
+            modes.append(mode.task_ids)
+            if env.is_terminal_mode(mode):
                 break
             mode = env.get_next_mode(None, mode)
     for robot_idx, robot in enumerate(env.robots):
@@ -259,7 +259,7 @@ def nearest_neighbor(config, env, env_path, pkl_folder, output_html, with_tree, 
             transition = results["is_transition"]
             N_near = data["N_near"]
             N_parent = data["N_parent"]
-            print(N_near)
+            # print(N_near)
             rewire_radius = data["rewire_r"]
             n_new = data["n_new"]
             n_nearest = data["n_nearest"]
@@ -718,8 +718,8 @@ def tree(config, env, env_path, pkl_folder, divider = None):
     modes = []
     mode = env.start_mode
     while True:     
-            modes.append(mode)
-            if mode == env.terminal_mode:
+            modes.append(mode.task_ids)
+            if env.is_terminal_mode(mode):
                 break
             mode = env.get_next_mode(None, mode)
     for robot_idx, robot in enumerate(env.robots):
