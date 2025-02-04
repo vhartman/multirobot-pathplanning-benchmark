@@ -869,7 +869,7 @@ class BaseRRTstar(ABC):
             q_new = q_rand
         else:
             q_new = q_nearest + (direction * (i /N))
-        state_new = State(type(self.env.get_start_pos())(q_new, n_nearest.state.q.slice), mode)
+        state_new = State(type(self.env.get_start_pos())(q_new, n_nearest.state.q.array_slice), mode)
         # print(dist.item())
         # print([float(s) for s in state_new.q.state()])
         return state_new

@@ -483,9 +483,7 @@ class rai_env(BaseProblem):
             q1 = path[i].q
             q2 = path[i + 1].q
 
-            if not self.is_edge_collision_free(
-                q1, q2, mode, resolution=resolution, tolerance=tolerance
-            ):
+            if not self.is_edge_collision_free(q1, q2, mode):
                 return False
 
         return True

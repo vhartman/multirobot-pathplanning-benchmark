@@ -77,7 +77,7 @@ class Configuration(ABC):
                 dtype=torch.float64,
             )
 
-        num_slices = len(pt.slice)
+        num_slices = len(pt.array_slice)
         if not hasattr(cls, 'dists_batch_dist') or cls.dists_batch_dist.shape[0] < batch_size or cls.dists_batch_dist.shape[1] != num_slices:
             cls.dists_batch_dist = torch.empty(
                 (batch_size, num_slices),
@@ -114,12 +114,12 @@ class Configuration(ABC):
                     torch.linalg.norm(current_diff.to(torch.float32), dim=1, out=cls.result_dists[start_idx:end_idx] )
                 elif metric == "max_euclidean":
                     # Compute Euclidean norms for each slice and find max distance for the batch
-                    for i, (s, e) in enumerate(pt.slice):
+                    for i, (s, e) in enumerate(pt.array_slice):
                         torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
                     cls.result_dists[start_idx:end_idx] = current_dists.to(torch.float32).max(dim=1).values + 0.01 * current_dists.to(torch.float32).sum(dim=1)
                 elif metric == "sum_euclidean":
                     # Compute Euclidean norms for each slice and find max distance for the batch
-                    for i, (s, e) in enumerate(pt.slice):
+                    for i, (s, e) in enumerate(pt.array_slice):
                         torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
                     cls.result_dists[start_idx:end_idx] = current_dists.to(torch.float32).sum(dim=1) 
                 else:
@@ -138,7 +138,7 @@ class Configuration(ABC):
                 dtype=torch.float64,
             )
 
-        num_slices = len(pt.slice)
+        num_slices = len(pt.array_slice)
         if not hasattr(cls, 'dists_batch_cost') or cls.dists_batch_cost.shape[0] < batch_size or cls.dists_batch_cost.shape[1] != num_slices:
             cls.dists_batch_cost = torch.empty(
                 (batch_size, num_slices),
@@ -175,12 +175,12 @@ class Configuration(ABC):
                     torch.linalg.norm(current_diff, dim=1, out=cls.result_cost[start_idx:end_idx])
                 elif metric == "max_euclidean":
                     # Compute Euclidean norms for each slice and find max distance for the batch
-                    for i, (s, e) in enumerate(pt.slice):
+                    for i, (s, e) in enumerate(pt.array_slice):
                         torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
                     cls.result_cost[start_idx:end_idx] = current_dists.to(torch.float32).max(dim=1).values + 0.01 * current_dists.to(torch.float32).sum(dim=1)
                 elif metric == "sum_euclidean":
                     # Compute Euclidean norms for each slice and find max distance for the batch
-                    for i, (s, e) in enumerate(pt.slice):
+                    for i, (s, e) in enumerate(pt.array_slice):
                         torch.linalg.norm(current_diff[:, s:e], dim=1, out=current_dists[:, i])
                     cls.result_cost[start_idx:end_idx] = current_dists.to(torch.float32).sum(dim=1) 
 
@@ -198,7 +198,7 @@ class Configuration(ABC):
 
         B, D = q_tensor.shape
         N = batch_other.shape[0]
-        num_slices = len(pt.slice)
+        num_slices = len(pt.array_slice)
         device = batch_other.device
 
         # Preallocate (or reuse) the differences buffer.
@@ -220,11 +220,11 @@ class Configuration(ABC):
             torch.sub(batch_other.unsqueeze(0), q_tensor.unsqueeze(1), out=current_diff)
 
             if metric == "max_euclidean":
-                for i, (s, e) in enumerate(pt.slice):
+                for i, (s, e) in enumerate(pt.array_slice):
                     torch.linalg.norm(current_diff[..., s:e], dim=2, out=current_dists[..., i])
                 return current_dists.to(torch.float32).max(dim=2).values + 0.01 * current_dists.to(torch.float32).sum(dim=2)
             elif metric == "sum_euclidean":
-                for i, (s, e) in enumerate(pt.slice):
+                for i, (s, e) in enumerate(pt.array_slice):
                     torch.linalg.norm(current_diff[..., s:e], dim=2, out=current_dists[..., i])
                 return current_dists.to(torch.float32).sum(dim=2) 
 class ListConfiguration(Configuration):
@@ -351,7 +351,7 @@ class NpConfiguration(Configuration):
         diff = pt.q - other.q
 
         if metric == "euclidean":
-            for i, (s, e) in enumerate(pt.slice):
+            for i, (s, e) in enumerate(pt.array_slice):
                 d = 0
                 for j in range(s, e):
                     d += (diff[j]) ** 2
@@ -386,28 +386,28 @@ class NpConfiguration(Configuration):
             squared_diff = diff * diff
             # dists = np.zeros((pt._num_agents, diff.shape[0]))
 
-            # dists = numba_parallelized_sum(squared_diff, pt.slice, pt._num_agents)
+            # dists = numba_parallelized_sum(squared_diff, pt.array_slice, pt._num_agents)
 
-            # for i, (s, e) in enumerate(pt.slice):
+            # for i, (s, e) in enumerate(pt.array_slice):
             #     # Use sqrt(sum(x^2)) instead of np.linalg.norm
             #     # and pre-computed squared differences
             #     dists[i, :] = np.sqrt(np.sum(squared_diff[:, s:e], axis=1))
 
-            # print([e for _, e in pt.slice[:-1]])
+            # print([e for _, e in pt.array_slice[:-1]])
             # dists = np.sqrt(
             #     np.add.reduceat(
-            #         squared_diff.T, [0] + [e for _, e in pt.slice[:-1]], axis=0
+            #         squared_diff.T, [0] + [e for _, e in pt.array_slice[:-1]], axis=0
             #     )
             # )
 
             dists = compute_sliced_dists(squared_diff, pt.array_slice)
-            # dists = compute_sliced_dists_transpose(squared_diff.T, np.array(pt.slice))
+            # dists = compute_sliced_dists_transpose(squared_diff.T, np.array(pt.array_slice))
 
             # print(tmp - dists)
 
-            # for i, (s, e) in enumerate(pt.slice):
+            # for i, (s, e) in enumerate(pt.array_slice):
             #     dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
-            # dists = np.array([np.linalg.norm(diff[:, s:e], axis=1) for s, e in pt.slice])
+            # dists = np.array([np.linalg.norm(diff[:, s:e], axis=1) for s, e in pt.array_slice])
             if metric == "sum_euclidean":
                 return np.sum(dists, axis=0)
             elif metric == "max_euclidean":
