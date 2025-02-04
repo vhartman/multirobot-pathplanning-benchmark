@@ -148,6 +148,7 @@ class Mode:
 
     id: int
     prev_mode: "Mode"
+    next_modes: List["Mode"]
 
     id_counter = 0
 
@@ -158,6 +159,7 @@ class Mode:
         # TODO: set in constructor?
         self.prev_mode = None
         self.sg = {}
+        self.next_modes = []
 
         self.id = Mode.id_counter
         Mode.id_counter += 1
@@ -174,9 +176,6 @@ class Mode:
         if self.cached_hash is None:
             entry_hash = 0
             sg_hash = hash(frozenset(self.sg.items()))
-            # entry_hash = hash(
-            #     self.entry_configuration.state().tobytes()
-            # )  # TODO: this is too restrictive at the moment - we need to check if the scene graph is the same as in another setting
             task_hash = hash(tuple(self.task_ids))
             self.cached_hash = hash((entry_hash, sg_hash, task_hash))
         
@@ -190,6 +189,12 @@ class State:
     def __init__(self, q: Configuration, m: Mode):
         self.q = q
         self.mode = m
+
+    def to_dict(self):
+        return {
+            "q": self.q.state().tolist(),
+            "mode": self.mode.task_ids
+        }        
 
 
 def state_dist(start: State, end: State) -> float:
@@ -208,7 +213,6 @@ class BaseModeLogic(ABC):
         self.start_mode = self.make_start_mode()
         self._terminal_task_ids = self.make_symbolic_end()
 
-    # TODO: cache name -> task in a dict
     def _get_task_by_name(self, name):
         for t in self.tasks:
             if t.name == name:
@@ -338,7 +342,6 @@ class SequenceMixin(BaseModeLogic):
         if not self.is_terminal_mode(m):
             return False
 
-        # TODO: this is not necessarily true!
         terminal_task_idx = self.sequence[-1]
         terminal_task = self.tasks[terminal_task_idx]
         involved_robots = terminal_task.robots
@@ -351,7 +354,7 @@ class SequenceMixin(BaseModeLogic):
         q_concat = np.concatenate(q_concat)
 
         if terminal_task.goal.satisfies_constraints(
-            q_concat, mode=m, tolerance=self.tolerance
+            q_concat, mode=m, tolerance=self.collision_tolerance
         ):
             return True
 
@@ -370,7 +373,7 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.tolerance):
+        if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.collision_tolerance):
             return True
 
         return False
@@ -400,9 +403,9 @@ class SequenceMixin(BaseModeLogic):
     def get_next_mode(self, q: Optional[Configuration], mode: Mode) -> Mode:
         next_task_ids = self.get_valid_next_task_combinations(mode)[0]
 
-
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
         next_mode.prev_mode = mode
+        mode.next_modes.append(next_mode)
 
         sg = self.get_scenegraph_info_for_mode(next_mode)
         next_mode.sg = sg
@@ -485,7 +488,6 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return self._make_terminal_mode_from_sequence(possible_id_sequence)
 
-    # TODO: this can be cached
     def _get_finished_tasks_from_mode(self, mode: Mode) -> List[str]:
         completed_tasks = []
         for i, task_id in enumerate(mode.task_ids):
@@ -564,7 +566,7 @@ class DependencyGraphMixin(BaseModeLogic):
                     q_concat = np.concatenate(q_concat)
 
                     if task.goal.satisfies_constraints(
-                        q_concat, mode=mode, tolerance=self.tolerance
+                        q_concat, mode=mode, tolerance=self.collision_tolerance
                     ):
                         tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
@@ -576,7 +578,6 @@ class DependencyGraphMixin(BaseModeLogic):
 
         raise ValueError("This does not fulfill the constraints to reach a new mode.")
 
-    # TODO: this should probably also return the next_state
     def is_transition(self, q: Configuration, m: Mode) -> bool:
         if self.is_terminal_mode(m):
             return False
@@ -596,7 +597,7 @@ class DependencyGraphMixin(BaseModeLogic):
                     q_concat = np.concatenate(q_concat)
 
                     if task.goal.satisfies_constraints(
-                        q_concat, mode=m, tolerance=self.tolerance
+                        q_concat, mode=m, tolerance=self.collision_tolerance
                     ):
                         return True
 
@@ -621,14 +622,12 @@ class DependencyGraphMixin(BaseModeLogic):
         q_concat = np.concatenate(q_concat)
 
         if terminal_task.goal.satisfies_constraints(
-            q_concat, mode=mode, tolerance=self.tolerance
+            q_concat, mode=mode, tolerance=self.collision_tolerance
         ):
             return True
 
         return False
 
-    # TODO: this is the same as for the sequence, is this always the same?
-    # (it is not in the general TAMP problem)
     def is_terminal_mode(self, mode: Mode):
         if mode.task_ids == self._terminal_task_ids:
             return True
@@ -734,6 +733,7 @@ class BaseProblem(ABC):
         q2: Configuration,
         mode: Mode,
         resolution: float = 0.1,
+        tolerance: float = 0.01
     ) -> bool:
         pass
 
@@ -747,21 +747,23 @@ class BaseProblem(ABC):
         mode = self.start_mode
         collision = False
         for i in range(len(path)):
+            mode = path[i].mode
+
             # check if the state is collision free
             if not self.is_collision_free(path[i].q, mode):
                 print(f"There is a collision at index {i}")
                 # col = self.C.getCollisionsTotalPenetration()
                 # print(col)
-                self.show()
+                # self.show()
                 collision = True
 
             # if the next mode is a transition, check where to go
-            if i < len(path) - 1 and self.is_transition(path[i].q, mode):
-                # TODO: this does not work if multiple switches are possible at the same time
-                next_mode = self.get_next_mode(path[i].q, mode)
+            # if i < len(path) - 1 and self.is_transition(path[i].q, mode):
+            #     # TODO: this does not work if multiple switches are possible at the same time
+            #     next_mode = self.get_next_mode(path[i].q, mode)
 
-                if path[i + 1].mode == next_mode:
-                    mode = next_mode
+            #     if path[i + 1].mode == next_mode:
+            #         mode = next_mode
 
         if not self.done(path[-1].q, path[-1].mode):
             print("Final mode not reached")

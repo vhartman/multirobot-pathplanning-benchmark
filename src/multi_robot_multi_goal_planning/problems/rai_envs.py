@@ -8,7 +8,8 @@ from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
 
-from multi_robot_multi_goal_planning.problems.rai_config import *
+import multi_robot_multi_goal_planning.problems.rai_config as rai_config
+# from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseModeLogic,
     SequenceMixin,
@@ -75,7 +76,7 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
 class rai_two_dim_env(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C, keyframes = make_2d_rai_env(agents_can_rotate=agents_can_rotate)
+        self.C, keyframes = rai_config.make_2d_rai_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -109,7 +110,7 @@ class rai_two_dim_env(SequenceMixin, rai_env):
             ["a2_goal", "a1_goal", "terminal"]
         )
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         BaseModeLogic.__init__(self)
 
@@ -120,7 +121,7 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 # Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
 class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
+        self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -166,7 +167,7 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
             ["a2_goal_0", "a2_goal_1", "a2_goal_2", "a2_goal_3", "a1_goal", "terminal"]
         )
 
-        self.tolerance = 0.001
+        self.collision_tolerance = 0.001
 
         BaseModeLogic.__init__(self)
 
@@ -174,7 +175,7 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
 # for the case of the dependency graph, the optimal solution should be 4.1
 class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
+        self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -226,7 +227,7 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
 
         print(self.graph)
 
-        self.tolerance = 0.001
+        self.collision_tolerance = 0.001
 
         BaseModeLogic.__init__(self)
 
@@ -236,7 +237,7 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
 # optimal solution is 5.15 (independent of rotation or not)
 class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C = make_2d_rai_env_no_obs_three_agents(
+        self.C = rai_config.make_2d_rai_env_no_obs_three_agents(
             agents_can_rotate=agents_can_rotate
         )
         # self.C.view(True)
@@ -301,13 +302,13 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
             ]
         )
 
-        self.tolerance = 0.01
+        self.collision_tolerance = 0.01
         BaseModeLogic.__init__(self)
 
 
 class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_single_agent_mover_env(num_goals=50, view=False)
+        self.C, keyframes = rai_config.make_single_agent_mover_env(num_goals=50, view=False)
         # self.C.view(True)
 
         self.robots = ["a1"]
@@ -347,7 +348,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
             ["a1_pick", "a1_place", "terminal"]
         )
 
-        self.tolerance = 0.01
+        self.collision_tolerance = 0.01
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -356,10 +357,11 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
-
+# best max-cost sol: 3.41
+# best sum-cost sol: 5.922
 class rai_two_dim_simple_manip(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_piano_mover_env()
+        self.C, keyframes = rai_config.make_piano_mover_env()
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -420,7 +422,7 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
         )
         # self.sequence = [2, 0, 3, 1, 4]
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -431,7 +433,7 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
 
 class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_piano_mover_env()
+        self.C, keyframes = rai_config.make_piano_mover_env()
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -498,17 +500,18 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
         self.prev_mode = self.start_mode
 
-
+# best cost found for max-cost is 17.64
+# best cost found for sum-cost is 25.28
 class rai_two_dim_handover(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_two_dim_handover()
+        self.C, keyframes = rai_config.make_two_dim_handover()
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -598,7 +601,7 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -608,7 +611,7 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
 
 class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_two_dim_handover()
+        self.C, keyframes = rai_config.make_two_dim_handover()
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -697,7 +700,7 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -706,8 +709,8 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 
 
 class rai_random_two_dim(SequenceMixin, rai_env):
-    def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=False):
-        self.C, keyframes = make_random_two_dim(
+    def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=True):
+        self.C, keyframes = rai_config.make_random_two_dim(
             num_agents=num_robots,
             num_goals=num_goals,
             num_obstacles=10,
@@ -733,7 +736,6 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
                 cnt += 1
 
-        # TODO: there seems to be a bug somewhere if we do not have a terminal mode!
         q_home = self.C.getJointState()
         # self.tasks.append(Task(self.robots, GoalRegion(self.limits)))
         self.tasks.append(Task(self.robots, SingleGoal(q_home)))
@@ -744,17 +746,18 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
         self.prev_mode = self.start_mode
 
-
+# best solution found with sum-cost: 14.08 (independent of rotation)
+# best solution found with max-cost: 9.7 (independent of rotation)
 class rai_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C, keyframes = make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
+        self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -778,7 +781,7 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -786,7 +789,7 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
 class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_two_dim_tunnel_env()
+        self.C, keyframes = rai_config.make_two_dim_tunnel_env()
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -814,7 +817,7 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -823,10 +826,11 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
 class rai_two_dim_piano_mover(SequenceMixin, rai_env):
     pass
 
-
+# best sum-cost: 12.9
+# best max-cost: 6.56
 class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_2d_rai_env_3_agents()
+        self.C, keyframes = rai_config.make_2d_rai_env_3_agents()
         # self.C.view(True)
 
         self.robots = ["a1", "a2", "a3"]
@@ -877,12 +881,12 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_2d_rai_env_3_agents()
+        self.C, keyframes = rai_config.make_2d_rai_env_3_agents()
         # self.C.view(True)
 
         self.robots = ["a1", "a2", "a3"]
@@ -934,7 +938,7 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env
         print(self.start_mode)
         print(self._terminal_task_ids)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 ##############################
@@ -960,7 +964,7 @@ class rai_dual_ur10_arm_inspection_env:
 # TODO: this is messy (currrently pick/place without actual manip)
 class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, self.keyframes = make_box_sorting_env()
+        self.C, self.keyframes = rai_config.make_box_sorting_env()
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -969,10 +973,10 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        # for f in self.C_coll.frames():
-        #     info = f.info()
-        #     if "shape" in info and info["shape"] == "mesh":
-        #         self.C_coll.delFrame(f.name)
+        for f in self.C_coll.getFrames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
 
         # self.C_coll.view(True)
         # self.C.view(True)
@@ -1017,7 +1021,7 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 # goals are poses, more complex sequencing
@@ -1029,7 +1033,7 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
     def __init__(
         self, num_robots: int = 3, num_waypoints: int = 6, shuffle_goals: bool = False
     ):
-        self.C, keyframes = make_panda_waypoint_env(
+        self.C, keyframes = rai_config.make_panda_waypoint_env(
             num_robots=num_robots, num_waypoints=num_waypoints
         )
 
@@ -1040,7 +1044,7 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1083,13 +1087,13 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 # goals are poses
 class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_pts: int = 6, shuffle_goals: bool = False):
-        self.C, keyframes = make_welding_env(
+        self.C, keyframes = rai_config.make_welding_env(
             num_robots=num_robots, view=False, num_pts=num_pts
         )
 
@@ -1099,7 +1103,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1142,13 +1146,12 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
-# TODO: enable making this a simpler environment where one can set the number of boxes
 class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes: int = 9):
-        self.C, keyframes = make_egg_carton_env(num_boxes)
+        self.C, keyframes = rai_config.make_egg_carton_env(num_boxes)
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -1157,7 +1160,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1229,7 +1232,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         # q = self.C_base.getJointState()
         # print(self.is_collision_free(q, [0, 0]))
@@ -1323,10 +1326,10 @@ class rai_ur10_arm_shelf_env:
 class rai_ur10_arm_conveyor_env:
     pass
 
-
+# best max cost: 9.24
 class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_handover_env()
+        self.C, keyframes = rai_config.make_handover_env()
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -1335,7 +1338,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1393,7 +1396,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1401,7 +1404,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
 
 class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = make_bottle_insertion()
+        self.C, keyframes = rai_config.make_bottle_insertion()
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -1410,7 +1413,7 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1523,7 +1526,7 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1531,7 +1534,7 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
 
 class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=2, num_boxes=9):
-        self.C, actions, self.robots = make_box_rearrangement_env(
+        self.C, actions, self.robots = rai_config.make_box_rearrangement_env(
             num_boxes=num_boxes, num_robots=num_robots
         )
 
@@ -1542,7 +1545,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1685,7 +1688,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1695,7 +1698,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
 # TODO: make the decoupling a bit nicer?
 class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
     def __init__(self, num_robots=2, num_boxes=9):
-        self.C, actions, self.robots = make_box_rearrangement_env(
+        self.C, actions, self.robots = rai_config.make_box_rearrangement_env(
             num_boxes=num_boxes, num_robots=num_robots
         )
 
@@ -1706,7 +1709,7 @@ class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1787,7 +1790,7 @@ class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -1795,7 +1798,7 @@ class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
 
 class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes=9):
-        self.C, keyframes = make_box_pile_env(
+        self.C, keyframes = rai_config.make_box_pile_env(
             num_boxes=num_boxes
         )
 
@@ -1808,7 +1811,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1870,12 +1873,12 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.tolerance = 0.01
+        self.collision_tolerance = 0.01
 
 
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 8):
-        self.C, keyframes, self.robots = make_box_stacking_env(num_robots, num_boxes)
+        self.C, keyframes, self.robots = rai_config.make_box_stacking_env(num_robots, num_boxes)
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -1884,7 +1887,7 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -1931,7 +1934,7 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.tolerance = 0.01
+        self.collision_tolerance = 0.01
 
 
 # mobile manip
@@ -1951,7 +1954,7 @@ def display_path(
         env.set_to_mode(path[i].mode)
         for k in range(len(env.robots)):
             q = path[i].q[k]
-            env.C.setJointState(q, get_robot_joints(env.C, env.robots[k]))
+            env.C.setJointState(q, rai_config.get_robot_joints(env.C, env.robots[k]))
 
         env.C.view(stop)
 
@@ -1978,7 +1981,7 @@ def check_all_modes():
 
     for env_name in all_envs:
         print(env_name)
-        env = get_env_by_name(env_name)
+        env = rai_config.get_env_by_name(env_name)
         q_home = env.start_pos
         m = env.start_mode
         for i in range(len(env.sequence)):

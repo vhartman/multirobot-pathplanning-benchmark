@@ -32,8 +32,8 @@ Edit ur_wrist_2_joint: { q: 1.0 }
 Edit ur_wrist_3_joint: { q: 0.0 }
 
 Edit ur_shoulder_pan_joint: {limits: [-3.28319, 3.28319, 2.16, -1, 330]}
-Edit ur_shoulder_lift_joint: {limits: [-3.28319, 3.28319, 2.16, -1, 330]}
-Edit ur_elbow_joint: {limits: [-3.28319, 3.28319, 3.15, -1, 150]}
+Edit ur_shoulder_lift_joint: {limits: [-3.28319, 0.28319, 2.16, -1, 330]}
+Edit ur_elbow_joint: {limits: [-2.68319, 2.68319, 3.15, -1, 150]}
 Edit ur_wrist_1_joint: {limits: [-3.28319, 3.28319, 3.2, -1, 54]}
 Edit ur_wrist_2_joint: {limits: [-3.28319, 3.28319, 3.2, -1, 54]}
 Edit ur_wrist_3_joint: {limits: [-3.28319, 3.28319, 3.2, -1, 54]}

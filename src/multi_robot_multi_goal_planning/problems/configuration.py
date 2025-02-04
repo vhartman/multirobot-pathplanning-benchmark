@@ -228,13 +228,13 @@ class Configuration(ABC):
                     torch.linalg.norm(current_diff[..., s:e], dim=2, out=current_dists[..., i])
                 return current_dists.to(torch.float32).sum(dim=2) 
 class ListConfiguration(Configuration):
-    def __init__(self, q_list):
+    def __init__(self, q_list: List[NDArray]):
         self.q = q_list
 
-    def __getitem__(self, ind):
+    def __getitem__(self, ind: int) -> NDArray:
         return self.robot_state(ind)
 
-    def __setitem__(self, ind, data):
+    def __setitem__(self, ind: int, data: NDArray):
         self.q[ind] = data
 
     @classmethod
@@ -247,12 +247,14 @@ class ListConfiguration(Configuration):
     def state(self) -> NDArray:
         return np.concatenate(self.q)
 
-    def num_agents(self):
+    def num_agents(self) -> int:
         return len(self.q)
 
 
 @numba.jit(nopython=True, parallel=True)
-def numba_parallelized_sum(squared_diff, slices, num_agents):
+def numba_parallelized_sum(
+    squared_diff: NDArray, slices: NDArray, num_agents: int
+) -> NDArray:
     dists = np.zeros((num_agents, squared_diff.shape[0]))
 
     for i in numba.prange(num_agents):
@@ -266,7 +268,7 @@ def numba_parallelized_sum(squared_diff, slices, num_agents):
 
 
 @numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True)
-def compute_sliced_dists(squared_diff, slices):
+def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
     num_slices = len(slices)
     num_samples = squared_diff.shape[0]
     dists = np.empty((num_slices, num_samples), dtype=np.float32)
@@ -279,7 +281,7 @@ def compute_sliced_dists(squared_diff, slices):
 
 
 @numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True)
-def compute_sliced_dists_transpose(squared_diff, slices):
+def compute_sliced_dists_transpose(squared_diff: NDArray, slices: NDArray) -> NDArray:
     num_slices = len(slices)
     num_samples = squared_diff.shape[1]
     dists = np.empty((num_slices, num_samples), dtype=np.float32)
@@ -292,19 +294,25 @@ def compute_sliced_dists_transpose(squared_diff, slices):
 
 
 class NpConfiguration(Configuration):
-    __slots__ = "slice", "q", "_num_agents"
+    __slots__ = "array_slice", "q", "_num_agents"
 
-    def __init__(self, q: NDArray, slice: List[Tuple[int, int]]):
-        self.slice = slice
+    array_slice: NDArray
+    slice: List[Tuple[int, int]]
+    q: NDArray
+    _num_agents: int
+
+    def __init__(self, q: NDArray, _slice: List[Tuple[int, int]]):
+        self.array_slice = np.array(_slice)
         self.q = q
 
-        self._num_agents = len(slice)
+        self._num_agents = len(self.array_slice)
 
     def num_agents(self):
         return self._num_agents
 
     def __setitem__(self, ind, data):
-        self.q[self.slice[ind][0] : self.slice[ind][1]] = data
+        s, e = self.array_slice[ind]
+        self.q[s : e] = data
 
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
@@ -329,7 +337,7 @@ class NpConfiguration(Configuration):
         if self._num_agents == 1:
             return self.q
 
-        start, end = self.slice[ind]
+        start, end = self.array_slice[ind]
         return self.q[start:end]
 
     def state(self) -> NDArray:
@@ -360,7 +368,7 @@ class NpConfiguration(Configuration):
 
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
-    def _batch_dist(cls, pt, batch_other, metric: str = "max") -> NDArray:
+    def _batch_dist(cls, pt: "NpConfiguration", batch_other, metric: str = "max") -> NDArray:
         if isinstance(batch_other, np.ndarray):
             diff = pt.q - batch_other
             # print(pt.q.shape)
@@ -369,7 +377,11 @@ class NpConfiguration(Configuration):
             diff = pt.q - np.array([other.q for other in batch_other])
 
         if metric == "euclidean":
-            return np.linalg.norm(diff, axis=1)
+            squared_diff = diff * diff
+            return compute_sliced_dists(
+                squared_diff, np.array([[0, pt.array_slice[-1][-1]]])
+            )[0]
+            # return np.linalg.norm(diff, axis=1)
         elif metric == "sum_euclidean" or metric == "max_euclidean":
             squared_diff = diff * diff
             # dists = np.zeros((pt._num_agents, diff.shape[0]))
@@ -388,7 +400,7 @@ class NpConfiguration(Configuration):
             #     )
             # )
 
-            dists = compute_sliced_dists(squared_diff, np.array(pt.slice))
+            dists = compute_sliced_dists(squared_diff, pt.array_slice)
             # dists = compute_sliced_dists_transpose(squared_diff.T, np.array(pt.slice))
 
             # print(tmp - dists)
@@ -438,7 +450,8 @@ def config_cost(
     metric: str = "max",
     reduction: str = "max",
 ) -> float:
-    # return batch_config_cost([q_start], [q_end], metric, reduction)
+    # return batch_config_cost(q_start, np.array([q_end.state()]), metric, reduction)[0]
+    # return batch_config_cost([q_start], [q_end], metric, reduction)[0]
     num_agents = q_start.num_agents()
     dists = np.zeros(num_agents)
 
@@ -449,10 +462,10 @@ def config_cost(
         # d = np.linalg.norm(q_start[robot_index] - q_end[robot_index])
         diff = q_start.robot_state(robot_index) - q_end.robot_state(robot_index)
         if metric == "euclidean":
-            d = 0
-            for j in range(len(diff)):
-                d += (diff[j]) ** 2
-            dists[robot_index] = d**0.5
+            s = 0
+            for d in diff:
+                s += d**2
+            dists[robot_index] = s**0.5
         else:
             dists[robot_index] = np.max(np.abs(diff))
 
@@ -472,19 +485,19 @@ def batch_config_cost(
     if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
         diff = starts.state() - batch_other
         all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
-        agent_slices = starts.slice
+        agent_slices = starts.array_slice
     else:
         diff = np.array([start.q.state() for start in starts]) - np.array(
             [other.q.state() for other in batch_other]
         )
         all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
-        agent_slices = starts[0].q.slice
+        agent_slices = starts[0].q.array_slice
 
     # return np.linalg.norm(diff, axis=1)
 
     if metric == "euclidean":
         squared_diff = diff * diff
-        all_robot_dists = compute_sliced_dists(squared_diff, np.array(agent_slices))
+        all_robot_dists = compute_sliced_dists(squared_diff, agent_slices)
     else:
         for i, (s, e) in enumerate(agent_slices):
             all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
@@ -497,7 +510,7 @@ def batch_config_cost(
 
     # print(tmp - all_robot_dists)
 
-        # print(all_robot_dists)
+    # print(all_robot_dists)
 
     if reduction == "max":
         return np.max(all_robot_dists, axis=0) + 0.01 * np.sum(all_robot_dists, axis=0)

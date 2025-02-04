@@ -50,7 +50,7 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 class rai_random_two_dim(SequenceMixin, rai_env):
@@ -75,7 +75,7 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -104,7 +104,7 @@ class rai_random_two_dim_single_agent(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -135,7 +135,7 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.05
+        self.collision_tolerance = 0.05
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -152,7 +152,7 @@ class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -173,7 +173,7 @@ class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 
 class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
@@ -187,7 +187,7 @@ class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -207,7 +207,7 @@ class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
 class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
@@ -220,7 +220,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         # go through all frames, and delete the ones that are only visual
         # that is, the frames that do not have a child, and are not
         # contact frames
-        for f in self.C_coll.frames():
+        for f in self.C_coll.getFrames():
             info = f.info()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
@@ -259,7 +259,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode.copy()
 
-        self.tolerance = 0.1
+        self.collision_tolerance = 0.1
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)

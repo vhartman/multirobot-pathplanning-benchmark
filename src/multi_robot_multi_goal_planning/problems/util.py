@@ -22,8 +22,9 @@ def interpolate_path(path: List[State], resolution: float = 0.1):
         q0 = path[i].q
         q1 = path[i + 1].q
 
-        if path[i].mode != path[i + 1].mode:
-            continue
+        # if path[i].mode != path[i + 1].mode:
+        #     new_path.append(State(config_type.from_list(q), path[i].mode))
+        #     continue
 
         dist = config_dist(q0, q1)
         N = int(dist / resolution)

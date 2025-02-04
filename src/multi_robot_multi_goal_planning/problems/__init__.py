@@ -2,8 +2,8 @@ import os, sys
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
-import src.multi_robot_multi_goal_planning.problems.rai_envs as re
-import src.multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
+import multi_robot_multi_goal_planning.problems.rai_envs as re
+import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 
 
 def get_env_by_name(name):
