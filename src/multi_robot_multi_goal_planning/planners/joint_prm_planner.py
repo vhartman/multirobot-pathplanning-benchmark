@@ -26,7 +26,9 @@ from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate
 
 from multi_robot_multi_goal_planning.planners import shortcutting
 
-from multi_robot_multi_goal_planning.planners.termination_conditions import PlannerTerminationCondition
+from multi_robot_multi_goal_planning.planners.termination_conditions import (
+    PlannerTerminationCondition,
+)
 
 
 class Node:
@@ -846,7 +848,9 @@ class Graph:
                 )
 
                 best_nodes = [node_list[i] for i in np.where(dists < r_star)[0]]
-                best_nodes_arr = self.node_array_cache[key][np.where(dists < r_star)[0], :]
+                best_nodes_arr = self.node_array_cache[key][
+                    np.where(dists < r_star)[0], :
+                ]
 
                 # print("fraction of nodes in mode", len(best_nodes)/len(dists))
                 # print(r_star)
@@ -876,7 +880,8 @@ class Graph:
                     r_star = 1e6
 
                 best_transition_nodes = [
-                    transition_node_list[i] for i in np.where(transition_dists < r_star)[0]
+                    transition_node_list[i]
+                    for i in np.where(transition_dists < r_star)[0]
                 ]
                 best_transitions_arr = self.transition_node_array_cache[key][
                     np.where(transition_dists < r_star)[0]
@@ -1428,6 +1433,7 @@ def joint_prm_planner(
     locally_informed_sampling: bool = True,
     try_informed_transitions: bool = True,
     try_shortcutting: bool = True,
+    try_direct_informed_sampling: bool = True,
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
@@ -1589,7 +1595,11 @@ def joint_prm_planner(
         return False
 
     def generate_informed_samples(
-        batch_size, path, max_attempts_per_sample=200, locally_informed_sampling=True
+        batch_size,
+        path,
+        max_attempts_per_sample=200,
+        locally_informed_sampling=True,
+        try_direct_sampling=True,
     ):
         new_samples = []
         path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
@@ -1634,10 +1644,10 @@ def joint_prm_planner(
 
             # plt.figure()
             # samples = []
-            # for _ in range(200):
-            #     sample = samplePHS(np.array([-1, 0]), np.array([1, 0]), 3)
+            # for _ in range(500):
+            #     sample = samplePHS(np.array([-1, 1, 0]), np.array([1, -1, 0]), 3)
             #     # sample = samplePHS(np.array([[-1], [0]]), np.array([[1], [0]]), 3)
-            #     samples.append(sample)
+            #     samples.append(sample[:2])
             #     print("sample", sample)
 
             # plt.scatter([a[0] for a in samples], [a[1] for a in samples])
@@ -1646,8 +1656,14 @@ def joint_prm_planner(
             focal_points = np.array(
                 [path[start_ind].q.state(), path[end_ind].q.state()]
             )
-            try_direct_sampling = True
+
             precomputed_phs_matrices = {}
+            precomputed_robot_cost_bounds = {}
+
+            obv_inv_attempts = 0
+            sample_in_collision = 0
+
+            had_to_be_clipped = False
 
             for k in range(max_attempts_per_sample):
                 if not try_direct_sampling or env.cost_metric != "euclidean":
@@ -1673,18 +1689,23 @@ def joint_prm_planner(
                         r = env.robots[i]
                         lims = env.limits[:, env.robot_idx[r]]
                         if lims[0, 0] < lims[1, 0]:
-                            if env.cost_reduction == "sum":
-                                c_robot_bound = current_cost - sum(
-                                    [
-                                        np.linalg.norm(
-                                            path[start_ind].q[j] - path[end_ind].q[j]
+                            if i not in precomputed_robot_cost_bounds:
+                                if env.cost_reduction == "sum":
+                                    precomputed_robot_cost_bounds[i] = (
+                                        current_cost
+                                        - sum(
+                                            [
+                                                np.linalg.norm(
+                                                    path[start_ind].q[j]
+                                                    - path[end_ind].q[j]
+                                                )
+                                                for j in range(len(env.robots))
+                                                if j != i
+                                            ]
                                         )
-                                        for j in range(len(env.robots))
-                                        if j != i
-                                    ]
-                                )
-                            else:
-                                c_robot_bound = current_cost
+                                    )
+                                else:
+                                    precomputed_robot_cost_bounds[i] = current_cost
 
                             if (
                                 np.linalg.norm(
@@ -1710,7 +1731,7 @@ def joint_prm_planner(
                                     precomputed_phs_matrices[i] = compute_PHS_matrices(
                                         path[start_ind].q[i],
                                         path[end_ind].q[i],
-                                        c_robot_bound,
+                                        precomputed_robot_cost_bounds[i],
                                     )
 
                                 qr = sample_phs_with_given_matrices(
@@ -1726,9 +1747,15 @@ def joint_prm_planner(
                                 #     print("AAAAAAAAA")
                                 #     print(np.linalg.norm(path[start_ind].q[i] - qr) + np.linalg.norm(path[end_ind].q[i] - qr), c_robot_bound)
 
-                                qr = np.clip(qr, lims[0, :], lims[1, :])
+                                clipped = np.clip(qr, lims[0, :], lims[1, :])
+                                if not np.array_equal(clipped, qr):
+                                    had_to_be_clipped = True
+                                    # print("AAA")
 
                         q.append(qr)
+                        
+                if had_to_be_clipped:
+                    continue
 
                 q = conf_type.from_list(q)
 
@@ -1742,16 +1769,25 @@ def joint_prm_planner(
                     # if can_improve(State(q, m), path, start_ind, end_ind):
                     #     assert False
 
+                    obv_inv_attempts += 1
+
                     continue
 
                 # if can_improve(State(q, m), path, 0, len(path)-1):
                 # if can_improve(State(q, m), path, start_ind, end_ind):
+                if not env.is_collision_free(q, m):
+                    sample_in_collision += 1
+                    continue
+
                 if can_improve(
                     State(q, m), path, start_ind, end_ind, path_segment_costs
-                ) and env.is_collision_free(q, m):
+                ):
                     # if env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
                     new_samples.append(State(q, m))
                     break
+
+            # print("inv attempt", obv_inv_attempts)
+            # print("coll", sample_in_collision)
 
         print(len(new_samples) / num_attempts)
 
@@ -2329,6 +2365,7 @@ def joint_prm_planner(
                         informed_batch_size,
                         interpolated_path,
                         locally_informed_sampling=locally_informed_sampling,
+                        try_direct_sampling=try_direct_informed_sampling,
                     )
                     g.add_states(new_informed_states)
 
@@ -2349,7 +2386,7 @@ def joint_prm_planner(
 
             if try_sampling_around_path and current_best_path is not None:
                 print("Sampling around path")
-                path_samples, path_transitions = sample_around_path()
+                path_samples, path_transitions = sample_around_path(current_best_path)
 
                 g.add_states(path_samples)
                 print(f"Adding {len(path_samples)} path samples")
