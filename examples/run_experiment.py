@@ -11,7 +11,7 @@ import random
 import sys
 import multiprocessing
 
-from typing import Dict, Any
+from typing import Dict, Any, Callable, Tuple, List
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
@@ -31,7 +31,7 @@ from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
 
-from examples.make_plots import make_cost_plots
+from make_plots import make_cost_plots
 
 # np.random.seed(100)
 
@@ -52,7 +52,9 @@ def load_experiment_config(filepath: str) -> Dict[str, Any]:
     return config
 
 
-def run_single_planner(env: BaseProblem, planner):
+def run_single_planner(
+    env: BaseProblem, planner: Callable[[BaseProblem], Tuple[Any, Dict]]
+) -> Dict:
     _, data = planner(env)
     return data
 
@@ -102,7 +104,9 @@ def export_config(path: str, config: Dict):
         json.dump(config, f)
 
 
-def setup_planner(planner_config, runtime, optimize=True):
+def setup_planner(
+    planner_config, runtime: int, optimize: bool = True
+) -> Callable[[BaseProblem], Tuple[Any, Dict]]:
     name = planner_config["name"]
 
     if planner_config["type"] == "prm":
@@ -127,6 +131,7 @@ def setup_planner(planner_config, runtime, optimize=True):
                 path_batch_size=options["path_batch_size"],
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
+                try_direct_informed_sampling=options["direct_informed_sampling"],
             )
     elif planner_config["type"] == "rrt":
         pass
@@ -143,7 +148,7 @@ def setup_env(env_config):
 class Tee:
     """Custom stream to write to both stdout and a file."""
 
-    def __init__(self, file, print_to_file_and_stdout):
+    def __init__(self, file, print_to_file_and_stdout: bool):
         self.file = file
         self.print_to_file_and_stdout = print_to_file_and_stdout
 
@@ -165,7 +170,12 @@ class Tee:
             self.stdout.flush()
 
 
-def run_experiment(env, planners, config, experiment_folder):
+def run_experiment(
+    env: BaseProblem,
+    planners: List[Tuple[str, Callable[[BaseProblem], Tuple[Any, Dict]]]],
+    config: Dict,
+    experiment_folder: str,
+):
     seed = config["seed"]
 
     all_experiment_data = {}
@@ -213,15 +223,15 @@ def run_experiment(env, planners, config, experiment_folder):
 
 
 def run_planner_process(
-    run_id,
-    planner_name,
-    planner,
-    seed,
-    env,
-    experiment_folder,
-    queue,
+    run_id: int,
+    planner_name: str,
+    planner: Callable[[BaseProblem], Tuple[Any, Dict]],
+    seed: int,
+    env: BaseProblem,
+    experiment_folder: str,
+    queue: List,
     semaphore,
-    print_to_file_and_stdout=False,
+    print_to_file_and_stdout: bool = False,
 ):
     """Runs a planner, captures all output live, and stores results in a queue."""
     with semaphore:  # Limit parallel execution
@@ -260,7 +270,11 @@ def run_planner_process(
 
 
 def run_experiment_in_parallel(
-    env, planners, config, experiment_folder, max_parallel=4
+    env: BaseProblem,
+    planners,
+    config: Dict,
+    experiment_folder: str,
+    max_parallel: int = 4,
 ):
     """Runs experiments in parallel with a fixed number of processes."""
     all_experiment_data = {planner_name: [] for planner_name, _ in planners}
