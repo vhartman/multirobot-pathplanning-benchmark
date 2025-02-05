@@ -1,5 +1,5 @@
 import numpy as np
-from src.multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
+from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
 import time
 import random
