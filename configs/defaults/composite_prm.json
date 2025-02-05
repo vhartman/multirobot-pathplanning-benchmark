@@ -1,0 +1,18 @@
+{
+  "type": "prm",
+  "options": {
+    "batch_size": 200,
+    "transition_batch_size": 250,
+    "informed_batch_size": 300,
+    "informed_transition_batch_size": 250,
+    "path_batch_size": 0,
+    "distance_function": "euclidean",
+    "connection_strategy": "radius",
+    "locally_informed_sampling": true,
+    "informed_sampling": true,
+    "informed_transition_sampling": true,
+    "sample_near_path": false,
+    "shortcutting": false,
+    "direct_informed_sampling": true
+  }
+}

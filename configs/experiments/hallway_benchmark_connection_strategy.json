@@ -1,9 +1,9 @@
 {
-  "experiment_name": "test",
+  "experiment_name": "connection_strategy",
   "environment": "hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 200,
+  "max_planning_time": 300,
   "optimize": true,
   "num_runs": 10,
   "seed": 0,
@@ -22,7 +22,8 @@
         "locally_informed_sampling": true,
         "informed_sampling": true,
         "informed_transition_sampling": false,
-        "sample_near_path": false
+        "sample_near_path": false,
+        "shortcutting": false
       }
     },
     {
@@ -39,7 +40,8 @@
         "locally_informed_sampling": true,
         "informed_sampling": true,
         "informed_transition_sampling": false,
-        "sample_near_path": false
+        "sample_near_path": false,
+        "shortcutting": false
       }
     }
   ]
