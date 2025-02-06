@@ -2,6 +2,9 @@ import argparse
 from matplotlib import pyplot as plt
 import numpy as np
 
+import datetime
+import os
+
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 from multi_robot_multi_goal_planning.problems.rai_envs import display_path
 
@@ -9,18 +12,28 @@ from multi_robot_multi_goal_planning.problems.rai_envs import display_path
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
 
 # planners
-from multi_robot_multi_goal_planning.planners.termination_conditions import IterationTerminationCondition, RuntimeTerminationCondition
+from multi_robot_multi_goal_planning.planners.termination_conditions import (
+    IterationTerminationCondition,
+    RuntimeTerminationCondition,
+)
 
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
     prioritized_planning,
 )
 from multi_robot_multi_goal_planning.planners.joint_prm_planner import joint_prm_planner
-from multi_robot_multi_goal_planning.planners.shortcutting import single_mode_shortcut, robot_mode_shortcut
+from multi_robot_multi_goal_planning.planners.shortcutting import (
+    single_mode_shortcut,
+    robot_mode_shortcut,
+)
 from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
 
+from run_experiment import export_planner_data
+
+
 # np.random.seed(100)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Planner runner")
@@ -43,13 +56,13 @@ def main():
     parser.add_argument(
         "--distance_metric",
         choices=["euclidean", "sum_euclidean", "max", "max_euclidean"],
-        default="max",
+        default="euclidean",
         help="Distance metric to use (default: max)",
     )
     parser.add_argument(
         "--per_agent_cost_function",
         choices=["euclidean", "max"],
-        default="max",
+        default="euclidean",
         help="Per agent cost function to use (default: max)",
     )
     parser.add_argument(
@@ -60,26 +73,39 @@ def main():
     )
     parser.add_argument(
         "--prm_k_nearest",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=True,
-        help="Use k-nearest (default: True)",
+        action="store_true",
+        help="Use k-nearest (default: False)",
     )
     parser.add_argument(
         "--prm_sample_near_path",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=False,
+        action="store_true",
         help="Generate samples near a previously found path (default: False)",
     )
     parser.add_argument(
         "--prm_informed_sampling",
         type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=False,
+        default=True,
         help="Generate samples near a previously found path (default: False)",
     )
     parser.add_argument(
         "--prm_shortcutting",
+        action="store_true",
+        help="Try shortcutting the solution.",
+    )
+    parser.add_argument(
+        "--prm_locally_informed_sampling",
+        action="store_true",
+        help="Try shortcutting the solution.",
+    )
+    parser.add_argument(
+        "--prm_direct_sampling",
         type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=False,
+        default=True,
+        help="Generate samples near a previously found path (default: False)",
+    )
+    parser.add_argument(
+        "--save",
+        action="store_true",
         help="Try shortcutting the solution.",
     )
     args = parser.parse_args()
@@ -100,8 +126,27 @@ def main():
             try_sampling_around_path=args.prm_sample_near_path,
             use_k_nearest=args.prm_k_nearest,
             try_informed_sampling=args.prm_informed_sampling,
-            try_shortcutting=args.prm_shortcutting
+            try_shortcutting=args.prm_shortcutting,
+            try_direct_informed_sampling=args.prm_direct_sampling,
+            locally_informed_sampling=args.prm_locally_informed_sampling,
         )
+
+        if args.save:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # convention: alsways use "/" as trailing character
+            experiment_folder = (
+                f"./out/{timestamp}_{args.env}/"
+            )
+
+            # export_config(experiment_folder, config)
+
+            if not os.path.isdir(experiment_folder):
+                os.makedirs(experiment_folder)
+            
+            planner_folder = experiment_folder + args.planner + "/"
+            export_planner_data(planner_folder, 0, info)
+
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
             env,
@@ -114,9 +159,11 @@ def main():
 
     print("robot-mode-shortcut")
     shortcut_path, info_shortcut = robot_mode_shortcut(env, path, 10000)
-    
+
     print("task-shortcut")
-    single_mode_shortcut_path, info_single_mode_shortcut = single_mode_shortcut(env, path, 10000)
+    single_mode_shortcut_path, info_single_mode_shortcut = single_mode_shortcut(
+        env, path, 10000
+    )
 
     interpolated_path = interpolate_path(path, 0.05)
 
@@ -136,7 +183,9 @@ def main():
     plt.plot(info["times"], info["costs"], "-o", drawstyle="steps-post")
 
     plt.figure()
-    for name, info in zip(["task-shortcut", 'mode-shortcut'], [info_shortcut, info_single_mode_shortcut]):
+    for name, info in zip(
+        ["task-shortcut", "mode-shortcut"], [info_shortcut, info_single_mode_shortcut]
+    ):
         plt.plot(info[1], info[0], drawstyle="steps-post", label=name)
 
     plt.xlabel("time")
@@ -175,11 +224,27 @@ def main():
 
     plt.figure()
 
-    plt.plot([pt.q[0][0] for pt in interpolated_path], [pt.q[0][1] for pt in interpolated_path], 'o-')
-    plt.plot([pt.q[1][0] for pt in interpolated_path], [pt.q[1][1] for pt in interpolated_path], 'o-')
+    plt.plot(
+        [pt.q[0][0] for pt in interpolated_path],
+        [pt.q[0][1] for pt in interpolated_path],
+        "o-",
+    )
+    plt.plot(
+        [pt.q[1][0] for pt in interpolated_path],
+        [pt.q[1][1] for pt in interpolated_path],
+        "o-",
+    )
 
-    plt.plot([pt.q[0][0] for pt in shortcut_discretized_path], [pt.q[0][1] for pt in shortcut_discretized_path], 'o--')
-    plt.plot([pt.q[1][0] for pt in shortcut_discretized_path], [pt.q[1][1] for pt in shortcut_discretized_path], 'o--')
+    plt.plot(
+        [pt.q[0][0] for pt in shortcut_discretized_path],
+        [pt.q[0][1] for pt in shortcut_discretized_path],
+        "o--",
+    )
+    plt.plot(
+        [pt.q[1][0] for pt in shortcut_discretized_path],
+        [pt.q[1][1] for pt in shortcut_discretized_path],
+        "o--",
+    )
 
     plt.show()
 
