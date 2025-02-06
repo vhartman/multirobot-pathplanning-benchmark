@@ -36,18 +36,49 @@ from make_plots import make_cost_plots
 # np.random.seed(100)
 
 
+def merge_config(
+    user_config: Dict[str, Any], default_config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Merge user_config with default_config while preserving the order of user_config keys."""
+    if not isinstance(user_config, dict):
+        return user_config  # Base case for non-dict values
+
+    for key, default_value in default_config.items():
+        if key in user_config:
+            if isinstance(user_config[key], dict) and isinstance(default_value, dict):
+                merge_config(user_config[key], default_value)  # Recursive merge
+        else:
+            user_config[key] = default_value  # Add missing default keys at the end
+
+    return user_config
+
+
+def validate_config(config: Dict[str, Any]) -> None:
+    pass
+
+
 def load_experiment_config(filepath: str) -> Dict[str, Any]:
     with open(filepath) as f:
         config = json.load(f)
 
+    planner_default_configs = {}
+    planner_default_config_paths = {"prm": "configs/defaults/composite_prm.json"}
+
+    for planner_type, default_config_path in planner_default_config_paths.items():
+        with open(default_config_path) as f:
+            planner_default_configs[planner_type] = json.load(f)
+
+    for i, planner in enumerate(config["planners"]):
+        planner_type = planner["type"]
+
+        if planner_type in planner_default_configs:
+            merged_planner = merge_config(
+                planner, planner_default_configs[planner_type]
+            )
+            config["planners"][i] = merged_planner
+
     # TODO: sanity checks
-
-    # config["planners"] = {}
-    # config["planners"]["name"] = []
-    # config["planners"]["type"] = []
-    # config["planners"]["options"] = {}
-
-    # config["environment_name"] = []
+    validate_config(config)
 
     return config
 
@@ -134,7 +165,7 @@ def setup_planner(
                 try_direct_informed_sampling=options["direct_informed_sampling"],
             )
     elif planner_config["type"] == "rrt":
-        pass
+        raise ValueError(f"Planner type {planner_config['type']} not implemented")
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
 

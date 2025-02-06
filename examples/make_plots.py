@@ -132,6 +132,9 @@ planner_name_to_color = {
     "globally_informed_prm": "magenta",
     "locally_informed_prm_shortcutting": "tab:blue",
     "globally_informed_prm_shortcutting": "tab:green",
+    "locally_informed_prm_rejection": "tab:orange",
+    "locally_informed_prm_shortcutting_rejection": "tab:red",
+    "globally_informed_prm_shortcutting_rejection": "tab:brown",
 }
 
 
@@ -382,10 +385,14 @@ def main():
     if args.use_paper_style:
         plt.style.use("./examples/paper_2.mplstyle")
 
-    all_experiment_data = load_data_from_folder(args.foldername)
-    config = load_config_from_folder(args.foldername)
+    foldername = args.foldername
+    if foldername[-1] != '/':
+        foldername += '/'
 
-    make_cost_plots(all_experiment_data, config, args.save, args.foldername)
+    all_experiment_data = load_data_from_folder(foldername)
+    config = load_config_from_folder(foldername)
+
+    make_cost_plots(all_experiment_data, config, args.save, foldername)
     # make_success_plot(all_experiment_data, config)
 
     plt.show()
