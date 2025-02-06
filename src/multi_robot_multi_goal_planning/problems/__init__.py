@@ -15,6 +15,8 @@ def get_env_by_name(name):
         "simple_2d_no_rot": lambda: re.rai_two_dim_env(agents_can_rotate=False),
         "hallway": lambda: re.rai_hallway_two_dim(),
         "hallway_no_rot": lambda: re.rai_hallway_two_dim(agents_can_rotate=False),
+        "other_hallway": lambda: re.rai_alternative_hallway_two_dim(),
+        "other_hallway_no_rot": lambda: re.rai_alternative_hallway_two_dim(),
         "random_2d": lambda: re.rai_random_two_dim(),
         "random_2d_no_rot": lambda: re.rai_random_two_dim(agents_can_rotate=False),
         "2d_handover": lambda: re.rai_two_dim_handover(),
