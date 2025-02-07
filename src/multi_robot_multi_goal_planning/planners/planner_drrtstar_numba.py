@@ -114,7 +114,7 @@ class dRRTstar(BaseRRTstar):
                     self.add_new_mode(mode, SingleTree)
                     if new_node:
                         self.convert_node_to_transition_node(mode, n_new)
-                    self.ModeInitialization(self.modes[-1])
+                    self.InformedInitialization(self.modes[-1])
                     return
             if new_node:
                 self.convert_node_to_transition_node(mode, n_new)
@@ -250,7 +250,7 @@ class dRRTstar(BaseRRTstar):
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
         active_mode = self.modes[-1]
-        self.ModeInitialization(active_mode)
+        self.InformedInitialization(active_mode)
         # Create start node
         start_state = State(self.env.get_start_pos(), active_mode)
         start_node = Node(start_state, self.operation)

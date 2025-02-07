@@ -19,7 +19,7 @@ class ParallelizedRRTstar(ParallelizedBidirectionalRRTstar):
         start_node.cost_to_parent = torch.tensor(0, device=device, dtype=torch.float32)
         #Initialize other modes:
         while True:
-            self.ModeInitialization(mode)
+            self.InformedInitialization(mode)
             if not self.env.is_terminal_mode(mode): 
                 self.add_new_mode(mode=mode, tree_instance=SingleTree) 
             for _ in range(self.config.transition_nodes):                 

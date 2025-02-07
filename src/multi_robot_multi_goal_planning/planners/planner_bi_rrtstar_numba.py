@@ -124,7 +124,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             #check if terminal mode was already reached
             if not self.env.is_terminal_mode(mode):
                 self.add_new_mode(transition_node.state.q, mode, BidirectionalTree)
-                self.ModeInitialization(self.modes[-1])
+                self.InformedInitialization(self.modes[-1])
                 # Initialization of new goal tree T_b
                 if self.env.is_terminal_mode(self.modes[-1]):
                     N = 1

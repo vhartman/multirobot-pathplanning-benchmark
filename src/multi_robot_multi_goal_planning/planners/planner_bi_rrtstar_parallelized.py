@@ -24,7 +24,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
         start_node.cost_to_parent = torch.tensor(0, device=device, dtype=torch.float32)
         #Initialize other modes:
         while True:
-            self.ModeInitialization(mode)
+            self.InformedInitialization(mode)
             if not self.env.is_terminal_mode(mode): 
                 self.add_new_mode(mode=mode, tree_instance=BidirectionalTree) 
             for _ in range(self.config.transition_nodes):                 
@@ -97,7 +97,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
             
         #check if terminal node has been reached
 
-        if shortcutting and self.start_single_goal.satisfies_constraints(self.operation.path_nodes[0].state.q.state(), mode, self.env.tolerance):
+        if shortcutting and self.start_single_goal.satisfies_constraints(self.operation.path_nodes[0].state.q.state(), mode, self.env.collision_tolerance):
             if not self.operation.init_sol:
                 print(time.time()-self.start)
                 self.operation.init_sol = True
@@ -144,7 +144,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                 else:
                     self.trees[mode.prev_mode].add_node(n_new, 'A')
             #need to handle first mode separately
-            elif self.start_single_goal.satisfies_constraints(n_new.state.q.state(),mode, self.env.tolerance):
+            elif self.start_single_goal.satisfies_constraints(n_new.state.q.state(),mode, self.env.collision_tolerance):
                     n_new_parent = n_new.parent
                     n_new.parent.children.remove(n_new)
                     cost = n_new.cost_to_parent

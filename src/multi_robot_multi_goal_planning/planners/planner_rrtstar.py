@@ -21,7 +21,7 @@ class RRTstar(BaseRRTstar):
         if self.env.is_transition(n_new.state.q, mode):
             if not self.operation.init_sol and mode.__eq__(self.modes[-1]):
                     self.add_new_mode(n_new.state.q, mode, SingleTree)
-                    self.ModeInitialization(self.modes[-1])
+                    self.InformedInitialization(self.modes[-1])
             self.convert_node_to_transition_node(mode, n_new)
         #check if termination is reached
         if self.env.done(n_new.state.q, mode):
@@ -35,7 +35,7 @@ class RRTstar(BaseRRTstar):
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
         active_mode = self.modes[-1]
-        self.ModeInitialization(active_mode)
+        self.InformedInitialization(active_mode)
         # Create start node
         start_state = State(self.env.start_pos, active_mode)
         start_node = Node(start_state, self.operation)
@@ -53,7 +53,6 @@ class RRTstar(BaseRRTstar):
             
             # RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
-            
             # print(i, active_mode,  [s for s in q_rand.state()])
             n_nearest, dist = self.Nearest(active_mode, q_rand)   
             state_new = self.Steer(active_mode, n_nearest, q_rand, dist)

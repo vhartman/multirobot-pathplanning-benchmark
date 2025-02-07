@@ -530,7 +530,7 @@ class BaseRRTstar(ABC):
                     #informed sampling
                     if is_informed_sampling: 
                         r_idx = self.env.robots.index(robot)
-                        qr = self.sample_informed(r_idx, self.env.tolerance)
+                        qr = self.sample_informed(r_idx, self.env.collision_tolerance)
                         if qr is not None:
                             q.append(qr)
                         else:
@@ -1010,7 +1010,7 @@ class BaseRRTstar(ABC):
 
         return np.random.choice(self.modes, p = p)
 
-    def ModeInitialization(self, new_mode: Mode) -> None:
+    def InformedInitialization(self, new_mode: Mode) -> None:
         if not self.config.informed_sampling:
             return
         task = self.env.get_active_task(new_mode, None)
@@ -1024,7 +1024,7 @@ class BaseRRTstar(ABC):
                 C = torch.tensor(C, device = device, dtype=torch.float32)
                 self.informed[new_mode].C[r] = C
                 self.informed[new_mode].inv_C[r] = torch.linalg.inv(C)
-                self.informed[new_mode].cmin[r] = torch.tensor(cmin-2*self.env.tolerance, device= device, dtype=torch.float32)
+                self.informed[new_mode].cmin[r] = torch.tensor(cmin-2*self.env.collision_tolerance, device= device, dtype=torch.float32)
                 self.informed[new_mode].state_centre[r] = torch.tensor(((q_home[r] + goal)/2), device=device, dtype=torch.float32)
 
     def SampleNodeManifold(self, mode:Mode) -> Configuration:
