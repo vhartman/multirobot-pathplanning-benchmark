@@ -3671,17 +3671,204 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
     return C, keyframes
 
 
-def make_mobile_manip_env(view: bool = False):
+def make_mobile_manip_env(num_robots=5, view: bool = False):
     C = ry.Config()
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, -0.05])
+        .setShape(ry.ST.box, size=[10, 10, 0.06, 0.005])
+        .setColor([0.3, 0.3, 0.3])
+        .setContact(1)
+    )
 
     mobile_robot_path = os.path.join(
         os.path.dirname(__file__), "../models/mobile-manipulator-restricted.g"
     )
 
-    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([1, 0, 0.2])
-    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([-1, 0, 0.2])
+    robots = []
+    for i in range(num_robots):
+        prefix = f"a{i}_"
+        C.addFile(mobile_robot_path, namePrefix=prefix).setPosition([0, 0, 0.2])
+        C.getFrame(prefix+"base").setColor(np.random.rand(3))
+        robots.append(prefix)
 
-    C.view(True)
+    # C.addFile(mobile_robot_path, namePrefix="a0_").setPosition([0, 0, 0.2])
+    # C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([0, 0, 0.2])
+    # C.addFile(mobile_robot_path, namePrefix="a2_").setPosition([0, 0, 0.2])
+    # C.addFile(mobile_robot_path, namePrefix="a3_").setPosition([0, 0, 0.2])
+    # C.addFile(mobile_robot_path, namePrefix="a4_").setPosition([0, 0, 0.2])
+
+    q = C.getJointState()
+
+    base_pos = np.array([[3, -2 + i, -np.pi/2] for i in range(num_robots)])
+
+    for i in range(num_robots):
+        q[6*i] = base_pos[i, 0]
+        q[6*i+1] = base_pos[i, 1]
+        q[6*i+2] = base_pos[i, 2]
+
+        print(base_pos[i, 0])
+
+    C.setJointState(q)
+
+    # build a wall in the middle
+
+    w = num_robots
+    h = 2
+    size = np.array([0.5, 0.25, 0.15])
+
+    all_boxes = []
+
+    for i in range(h):
+        for j in range(w):
+
+            pos = np.array(
+                [
+                    j * size[0] * 1.05 - w / 2 * size[0] + size[0] / 2,
+                    -1,
+                    i * size[2] * 1.05 + 0.05 + 0.1,
+                ]
+            )
+
+            color = np.random.rand(3)
+            box_name = "box_" + str(i) + str(j)
+            all_boxes.append(box_name)
+            C.addFrame(box_name).setParent(table).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
+                color
+            ).setContact(1).setJoint(
+                ry.JT.rigid
+            )
+
+            goal_pos = np.array(
+                [
+                    j * size[0] * 1.01 - w / 2 * size[0] + size[0] / 2,
+                    1,
+                    (1-i) * size[2] * 1.01 + 0.05 + 0.1,
+                ]
+            )
+            box_name = "box_goal_" + str(i) + str(j)
+            C.addFrame(box_name).setParent(table).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition(goal_pos).setMass(0.1).setColor(
+                [color[0], color[1], color[2], 0.5]
+            ).setContact(0).setJoint(
+                ry.JT.rigid
+            )
+
+    if view:
+        C.view(True)
+
+    def compute_pick_and_place(c_tmp, box, goal, robot_prefix):
+        ee = "gripper"
+
+        robot_base = robot_prefix + "base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1], [-0.0])
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + ee, box])
+        komo.addObjective(
+            [1, 2], ry.FS.distance, [robot_prefix + ee, box], ry.OT.sos, [1e1], [-0.0]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + ee, box],
+            ry.OT.sos,
+            [1e1, 1e1, 1e0],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductZZ,
+            [robot_prefix + ee, box],
+            ry.OT.sos,
+            [1e1],
+            [1],
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     ["a1_" + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, ["a2"], ry.OT.sos, [1e0, 1e1, 0], [1., -0.5, 0]
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, [box], ry.OT.sos, [1e0, 1e0, 0], [1, -1, 0]
+        # )
+
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[0, 3],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e-1],
+            target=q_home,
+        )
+
+        for _ in range(100):
+            # komo.initRandom()
+            # komo.initWithConstant(np.random.rand(6) * 2)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            print(retval)
+            if view:
+                komo.view(True, "IK solution")
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                keyframes = komo.getPath()
+                return keyframes
+
+    c_tmp = ry.Config()
+    c_tmp.addConfigurationCopy(C)
+
+    keyframes = {}
+
+    for i in range(num_robots):
+        robot_prefix = f"a{i}_"
+        keyframes[robot_prefix] = []
+
+        for j in [1, 0]:
+            c_tmp_2 = ry.Config()
+            c_tmp_2.addConfigurationCopy(c_tmp)
+            # c_tmp_2.computeCollisions()
+
+            box = f"box_{j}{i}"
+            box_goal = f"box_goal_{j}{i}"
+
+            res = compute_pick_and_place(c_tmp_2, box, box_goal, robot_prefix)
+
+            keyframes[robot_prefix].append((box, res[:-1])) 
+
+            c_tmp.getFrame(box).setRelativePosition(
+                c_tmp.getFrame(box_goal).getRelativePosition()
+            )
+
+    return C, keyframes
 
 
 def make_depalletizing_env():

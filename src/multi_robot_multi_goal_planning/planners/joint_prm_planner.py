@@ -58,8 +58,8 @@ class Node:
 
     def __init__(self, state: State, is_transition: bool = False) -> None:
         self.state = state
-        self.lb_cost_to_goal = None
-        self.lb_cost_from_start = None
+        self.lb_cost_to_goal = np.inf
+        self.lb_cost_from_start = np.inf
 
         self.is_transition = is_transition
 
@@ -613,6 +613,14 @@ class Graph:
             if node.state.mode.task_ids == self.goal_nodes[0].state.mode.task_ids:
                 continue
 
+            # print(node.state.mode)
+            # # print(node.neighbors[0].state.mode)
+            # print(len(self.goal_nodes))
+            # print(self.goal_nodes[0].state.mode.task_ids)
+
+            if node.state.mode not in self.transition_nodes:
+                continue
+
             neighbors = [n.neighbors[0] for n in self.transition_nodes[node.state.mode]]
 
             if len(neighbors) == 0:
@@ -918,6 +926,9 @@ class Graph:
             # return 0
             if node.id in h_cache:
                 return h_cache[node.id]
+
+            if node.state.mode not in self.transition_nodes:
+                return np.inf
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
@@ -1522,6 +1533,9 @@ def joint_prm_planner(
             return min_cost
 
         def lb_cost_from_goal(state):
+            if state.mode not in g.transition_nodes:
+                return np.inf 
+            
             if state.mode not in g.transition_node_array_cache:
                 g.transition_node_array_cache[state.mode] = np.array(
                     [o.state.q.q for o in g.transition_nodes[state.mode]]
@@ -1625,6 +1639,8 @@ def joint_prm_planner(
                         if lb_cost < current_cost:
                             break
 
+                # TODO: we need to sample from the set of all reachable modes here
+                # not only from the modes on the path
                 k = random.randint(start_ind, end_ind)
                 m = path[k].mode
             else:
@@ -2236,6 +2252,8 @@ def joint_prm_planner(
 
                 if next_mode not in reached_modes and next_mode is not None:
                     reached_modes.append(next_mode)
+            # else:
+            #     env.show(True)
 
         return transitions
 
@@ -2350,6 +2368,9 @@ def joint_prm_planner(
             g.add_transition_nodes(new_transitions)
             print(f"Adding {len(new_transitions)} transitions")
 
+            if len(g.goal_nodes) == 0:
+                continue
+
             g.compute_lower_bound_to_goal(env.batch_config_cost)
             g.compute_lower_bound_from_start(env.batch_config_cost)
 
@@ -2417,20 +2438,20 @@ def joint_prm_planner(
 
         # plt.show()
 
-        pts_per_mode = []
-        transitions_per_mode = []
-        for m in reached_modes:
-            num_transitions = 0
-            if m in g.transition_nodes:
-                num_transitions += len(g.transition_nodes[m])
+        # pts_per_mode = []
+        # transitions_per_mode = []
+        # for m in reached_modes:
+        #     num_transitions = 0
+        #     if m in g.transition_nodes:
+        #         num_transitions += len(g.transition_nodes[m])
 
-            num_pts = 0
+        #     num_pts = 0
 
-            if m in g.nodes:
-                num_pts += len(g.nodes[m])
+        #     if m in g.nodes:
+        #         num_pts += len(g.nodes[m])
 
-            pts_per_mode.append(num_pts)
-            transitions_per_mode.append(num_transitions)
+        #     pts_per_mode.append(num_pts)
+        #     transitions_per_mode.append(num_transitions)
 
         # plt.figure()
         # plt.bar([str(mode) for mode in reached_modes], pts_per_mode)

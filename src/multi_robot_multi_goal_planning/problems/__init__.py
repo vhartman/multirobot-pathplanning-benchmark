@@ -48,6 +48,9 @@ def get_env_by_name(name):
         "box_rearrangement_only_five": lambda: re.rai_ur10_arm_box_rearrangement_env(num_boxes=5),
         "box_rearrangement_four_robots": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=4),
     
+        # mobile
+        "mobile_wall": lambda: re.rai_mobile_manip_wall(),
+
         # single goal envs
         "two_dim_single_goal": lambda: rsge.rai_two_dim_env(),
         "two_dim_single_goal_no_rot": lambda: rsge.rai_two_dim_env(agents_can_rotate=False),
@@ -73,6 +76,7 @@ def get_env_by_name(name):
         "two_agents_many_goals_dep": lambda: re.rai_two_dim_env_no_obs_dep_graph(),
         "two_agents_many_goals_dep_no_rot": lambda: re.rai_two_dim_env_no_obs_dep_graph(agents_can_rotate=False),
         "three_agent_many_goals_dep": lambda: re.rai_two_dim_three_agent_env_dependency_graph(),
+        "mobile_dep": lambda: re.rai_mobile_manip_wall_dep()
     }
     # fmt: on
 

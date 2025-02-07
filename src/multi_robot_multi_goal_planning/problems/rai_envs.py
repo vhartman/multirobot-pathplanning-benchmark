@@ -2055,8 +2055,147 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
 
 
 # mobile manip
-class rai_mobile_manip_wall:
-    pass
+class rai_mobile_manip_wall(SequenceMixin, rai_env):
+    def __init__(self, num_robots=3):
+        self.C, keyframes = rai_config.make_mobile_manip_env(num_robots)
+
+        self.robots = [k for k in keyframes]
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.getFrames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for robot_prefix, robot_tasks in keyframes.items():
+            for box, poses in robot_tasks:
+                cnt = 0
+                for t, k in zip(task_names, poses):
+                    if t == "pick":
+                        ee_name = robot_prefix + "gripper"
+                        self.tasks.append(Task([robot_prefix], SingleGoal(k), t, frames=[ee_name, box]))
+                    else:
+                        self.tasks.append(Task([robot_prefix], SingleGoal(k), t, frames=["table", box]))
+
+                    self.tasks[-1].name = robot_prefix + t + "_" + box + "_" + str(cnt)
+                    cnt += 1
+
+                    # if b in action_names:
+                    #     action_names[b].append(self.tasks[-1].name)
+                    # else:
+                    #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.1
+
+class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
+    def __init__(self, num_robots=3):
+        self.C, keyframes = rai_config.make_mobile_manip_env(num_robots)
+
+        self.robots = [k for k in keyframes]
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.getFrames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.graph = DependencyGraph()
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for robot_prefix, robot_tasks in keyframes.items():
+            prev_task_name = None
+            for box, poses in robot_tasks:
+                cnt = 0
+                for t, k in zip(task_names, poses):
+                    task_name = robot_prefix + t + "_" + box + "_" + str(cnt)
+
+                    if t == "pick":
+                        ee_name = robot_prefix + "gripper"
+                        self.tasks.append(Task([robot_prefix], SingleGoal(k), t, frames=[ee_name, box]))
+                    else:
+                        self.tasks.append(Task([robot_prefix], SingleGoal(k), t, frames=["table", box]))
+                    
+                    if prev_task_name is not None:
+                        self.graph.add_dependency(task_name, prev_task_name)
+                    
+                    self.tasks[-1].name = task_name
+                    prev_task_name = task_name
+                    cnt += 1
+
+                    # if b in action_names:
+                    #     action_names[b].append(self.tasks[-1].name)
+                    # else:
+                    #     action_names[b] = [self.tasks[-1].name]
+            
+            self.graph.add_dependency("terminal", prev_task_name)
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        print(self.graph)
+
+        for t in self.tasks:
+            print(t.name)
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.01
 
 
 def display_path(
