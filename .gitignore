@@ -1,0 +1,80 @@
+# Ignore node modules
+node_modules/
+
+# Ignore the results of benchmarking
+*.prof
+*.lprof
+
+# Ignore logs
+logs/
+*.log
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore build outputs
+dist/
+build/
+out/
+
+# Ignore temporary files
+*.tmp
+*.swp
+*.swo
+*.bak
+*.orig
+
+# Ignore dependency directories
+vendor/
+.bower_components/
+.idea/
+
+# Ignore IDE specific files
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Python specific ignores
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+env/
+*.egg-info/
+
+# Ignore environment files
+.env
+.env.*
+
+# Ignore compiled files
+*.o
+*.so
+*.dll
+*.exe
+*.a
+*.dylib
+
+# Ignore coverage reports
+coverage/
+*.lcov
+
+# Ignore databases
+*.sqlite3
+*.db
+
+# Ignore test files
+*.test.*
+
+# Ignore lock files
+*.lock
+
+# Ignore compressed files
+*.zip
+*.tar.gz
+*.rar
+
+# Ignore custom folders
+*.bak/
+temp/
+cache/
