@@ -256,7 +256,7 @@ def config_cost(
     metric: str = "max",
     reduction: str = "max",
 ) -> float:
-    # return batch_config_cost(q_start, np.array([q_end.state()]), metric, reduction)[0]
+    return batch_config_cost(q_start, np.array([q_end.state()]), metric, reduction)[0]
     # return batch_config_cost([q_start], [q_end], metric, reduction)[0]
     num_agents = q_start.num_agents()
     dists = np.zeros(num_agents)
@@ -298,6 +298,9 @@ def batch_config_cost(
         )
         all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
         agent_slices = starts[0].q.array_slice
+
+        # for i, (s, e) in enumerate(agent_slices):
+        #     diff[:, e-1] *= 0.01
 
     # return np.linalg.norm(diff, axis=1)
 

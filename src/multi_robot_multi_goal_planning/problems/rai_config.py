@@ -1243,13 +1243,13 @@ def make_two_dim_short_tunnel_env(view: bool = False, agents_can_rotate=True):
 
     if agents_can_rotate[0]:
         C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
-            ry.ST.cylinder, size=[0.06, 0.15]
+            ry.ST.box, size=[0.1, 0.5, 0.06, 0.005]
         ).setColor([1, 0.5, 0]).setContact(1).setJoint(
             ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
         ).setJointState([1.5, -0.0, 0])
     else:
         C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
-            ry.ST.cylinder, size=[0.06, 0.15]
+            ry.ST.box, size=[0.1, 0.5, 0.06, 0.005]
         ).setColor([1, 0.5, 0]).setContact(1).setJoint(
             ry.JT.transXY, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
         ).setJointState([1.5, -0.0])
@@ -1278,7 +1278,7 @@ def make_two_dim_short_tunnel_env(view: bool = False, agents_can_rotate=True):
         ).setJointState([-1.5, -0.0])
 
     if agents_can_rotate[0]:
-        g1_state = np.array([-1.5, 1, 0])
+        g1_state = np.array([-1.5, 1, np.pi/2])
         # g1_state = np.array([-1.5, -0.5, 0])
     else:
         g1_state = np.array([-1.5, 1])

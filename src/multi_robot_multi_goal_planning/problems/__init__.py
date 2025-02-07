@@ -67,6 +67,7 @@ def get_env_by_name(name):
 
         ##### DEPENDENCY GRAPHS
         "hallway_dep": lambda: re.rai_hallway_two_dim_dependency_graph(),
+        "other_hallway_dep": lambda: re.rai_alternative_hallway_two_dim_dependency_graph(),
         "piano_dep": lambda: re.rai_two_dim_simple_manip_dependency_graph(),
         "2d_handover_dep": lambda: re.rai_two_dim_handover_dependency_graph(),
         "two_agents_many_goals_dep": lambda: re.rai_two_dim_env_no_obs_dep_graph(),

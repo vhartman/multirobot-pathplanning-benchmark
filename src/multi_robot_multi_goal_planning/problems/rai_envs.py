@@ -804,7 +804,7 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
         self.C, keyframes = rai_config.make_two_dim_short_tunnel_env(
             agents_can_rotate=agents_can_rotate
         )
-        self.C.view(True)
+        # self.C.view(True)
 
         self.robots = ["a1", "a2"]
 
@@ -834,8 +834,46 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
 
 
 class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
-    def __init__(self):
-        self.C, keyframes = rai_config.make_two_dim_tunnel_env()
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate)
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        self.tasks = []
+        self.sequence = []
+
+        self.tasks = [
+            Task(["a1"], SingleGoal(keyframes[0])),
+            Task(["a2"], SingleGoal(keyframes[1])),
+            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+        ]
+
+        self.tasks[0].name = "a1_goal_1"
+        self.tasks[1].name = "a2_goal_1"
+        self.tasks[2].name = "terminal"
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("terminal", "a1_goal_1")
+        self.graph.add_dependency("terminal", "a2_goal_1")
+
+        print(self.graph)
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+
+class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = rai_config.make_two_dim_short_tunnel_env(
+            agents_can_rotate=agents_can_rotate
+        )
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
