@@ -48,7 +48,7 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
-        },
+        }, 
         {
             "name": "main.py - simple_2d --planner rrtstar numba",
             "type": "debugpy",
@@ -56,6 +56,22 @@
             "program": "${workspaceFolder}/examples/main_numba.py",
             "args": [
                 "simple_2d",
+                "--planner",
+                "rrtstar"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+         {
+            "name": "main.py - hallway --planner rrtstar numba",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main_numba.py",
+            "args": [
+                "hallway",
                 "--planner",
                 "rrtstar"
             ],
@@ -334,6 +350,17 @@
             "args": [
                 "--do",
                 "path"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "postprocessing.py --do ellipse",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/analysis/postprocessing.py",
+            "args": [
+                "--do",
+                "ellipse"
             ],
             "console": "integratedTerminal"
         },
