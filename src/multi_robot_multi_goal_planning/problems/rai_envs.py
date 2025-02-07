@@ -791,7 +791,8 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.collision_tolerance = 0.05
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -2049,7 +2050,8 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.collision_tolerance = 0.01
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.005
 
 
 # mobile manip

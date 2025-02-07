@@ -1753,7 +1753,7 @@ def joint_prm_planner(
                                     # print("AAA")
 
                         q.append(qr)
-                        
+
                 if had_to_be_clipped:
                     continue
 
@@ -2499,7 +2499,11 @@ def joint_prm_planner(
                         if try_shortcutting:
                             print("Shortcutting path")
                             shortcut_path, _ = shortcutting.robot_mode_shortcut(
-                                env, path, 500
+                                env,
+                                path,
+                                500,
+                                resolution=env.collision_resolution,
+                                tolerance=env.collision_tolerance,
                             )
 
                             shortcut_path_cost = path_cost(
