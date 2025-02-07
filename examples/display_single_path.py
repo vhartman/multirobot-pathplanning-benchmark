@@ -14,6 +14,8 @@ from multi_robot_multi_goal_planning.problems.rai_envs import display_path
 
 from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
+from multi_robot_multi_goal_planning.planners.shortcutting import single_mode_shortcut, robot_mode_shortcut
+
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 
@@ -58,6 +60,12 @@ def main():
         type=lambda x: x.lower() in ["true", "1", "yes"],
         default=True,
         help="Interpolate the path that is loaded. (default: True)",
+    )    
+    parser.add_argument(
+        "--shortcut",
+        type=lambda x: x.lower() in ["true", "1", "yes"],
+        default=False,
+        help="Shortcut the path. (default: False)",
     )
     parser.add_argument(
         "--plot",
@@ -72,21 +80,27 @@ def main():
 
     path = convert_to_path(env, path_data)
 
-    plt.figure()
-    for i in range(path[0].q.num_agents()):
-      plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], 'o-')
-    
-    # plt.show(block=False)
-    plt.show()
+    if args.plot:
+        plt.figure()
+        for i in range(path[0].q.num_agents()):
+            plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], 'o-')
+        
+        # plt.show(block=False)
+        plt.show()
 
     if args.interpolate:
         path = interpolate_path(path)
+
+    if args.shortcut:
+        env.cost_reduction = "max"
+        env.cost_metric = "euclidean"
+        path, _ = robot_mode_shortcut(env, path, 10000)
 
     print("Attempting to display path")
     env.show()
     # display_path(env, real_path, True, True)
 
-    display_path(env, path, False, export=False, stop_at_end=True)
+    display_path(env, path, False, export=False, pause_time=0.05, stop_at_end=True)
 
 
 if __name__ == "__main__":
