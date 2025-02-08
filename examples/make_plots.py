@@ -116,6 +116,7 @@ planner_name_to_color = {
     "informed_prm": "tab:orange",
     "uniform_prm": "tab:blue",
     "path_prm": "tab:green",
+    "joint_prm": "tab:blue",
     "informed_path_prm": "tab:red",
     "informed_prm_k_nearest": "orange",
     "uniform_prm_k_nearest": "blue",
@@ -386,8 +387,8 @@ def main():
         plt.style.use("./examples/paper_2.mplstyle")
 
     foldername = args.foldername
-    if foldername[-1] != '/':
-        foldername += '/'
+    if foldername[-1] != "/":
+        foldername += "/"
 
     all_experiment_data = load_data_from_folder(foldername)
     config = load_config_from_folder(foldername)

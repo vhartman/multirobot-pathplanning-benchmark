@@ -10,6 +10,7 @@ import random
 
 import sys
 import multiprocessing
+import copy
 
 from typing import Dict, Any, Callable, Tuple, List
 

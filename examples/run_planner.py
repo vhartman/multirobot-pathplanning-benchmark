@@ -40,8 +40,7 @@ def main():
     parser.add_argument("env", nargs="?", default="default", help="env to show")
     parser.add_argument(
         "--optimize",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=True,
+        action="store_true",
         help="Enable optimization (default: True)",
     )
     parser.add_argument(
@@ -135,15 +134,13 @@ def main():
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
             # convention: alsways use "/" as trailing character
-            experiment_folder = (
-                f"./out/{timestamp}_{args.env}/"
-            )
+            experiment_folder = f"./out/{timestamp}_{args.env}/"
 
             # export_config(experiment_folder, config)
 
             if not os.path.isdir(experiment_folder):
                 os.makedirs(experiment_folder)
-            
+
             planner_folder = experiment_folder + args.planner + "/"
             export_planner_data(planner_folder, 0, info)
 
@@ -158,7 +155,13 @@ def main():
         path, info = prioritized_planning(env)
 
     print("robot-mode-shortcut")
-    shortcut_path, info_shortcut = robot_mode_shortcut(env, path, 10000)
+    shortcut_path, info_shortcut = robot_mode_shortcut(
+        env,
+        path,
+        10000,
+        tolerance=env.collision_tolerance,
+        resolution=env.collision_resolution,
+    )
 
     print("task-shortcut")
     single_mode_shortcut_path, info_single_mode_shortcut = single_mode_shortcut(

@@ -2197,6 +2197,8 @@ def joint_prm_planner(
 
             # sample transition at the end of this mode
             possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
+            # print(mode, possible_next_task_combinations)
+
             if len(possible_next_task_combinations) > 0:
                 ind = random.randint(0, len(possible_next_task_combinations) - 1)
                 active_task = env.get_active_task(
@@ -2208,6 +2210,9 @@ def joint_prm_planner(
             goals_to_sample = active_task.robots
 
             goal_sample = active_task.goal.sample(mode)
+
+            # if mode.task_ids == [3, 8]:
+            #     print(active_task.name)
 
             q = []
             for i in range(len(env.robots)):
@@ -2250,10 +2255,13 @@ def joint_prm_planner(
 
                 transitions.append((q, mode, next_mode))
 
+                # print(mode, mode.next_modes)
+
                 if next_mode not in reached_modes and next_mode is not None:
                     reached_modes.append(next_mode)
             # else:
-            #     env.show(True)
+            #     if mode.task_ids == [3, 8]:
+            #         env.show(True)
 
         return transitions
 
@@ -2462,6 +2470,9 @@ def joint_prm_planner(
         # plt.show()
 
         while True:
+            # print([node.neighbors[0].state.mode for node in g.reverse_transition_nodes[g.goal_nodes[0].state.mode]])
+            # print([node.neighbors[0].state.mode for node in g.transition_nodes[g.root.state.mode]])
+
             sparsely_checked_path = g.search(
                 g.root,
                 g.goal_nodes,
@@ -2508,6 +2519,15 @@ def joint_prm_planner(
                     if current_best_cost is None or new_path_cost < current_best_cost:
                         current_best_path = path
                         current_best_cost = new_path_cost
+
+                        # extract modes
+                        modes = [path[0].mode]
+                        for p in path:
+                            if p.mode != modes[-1]:
+                                modes.append(p.mode)
+
+                        print("Modes of new path")
+                        print([m.task_ids for m in modes])
 
                         print(
                             f"New cost: {new_path_cost} at time {time.time() - start_time}"
