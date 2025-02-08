@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
+from multi_robot_multi_goal_planning.problems.configuration import config_dist 
 
 # from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import (
@@ -2091,9 +2092,17 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
                 for t, k in zip(task_names, poses):
                     if t == "pick":
                         ee_name = robot_prefix + "gripper"
-                        self.tasks.append(Task([robot_prefix], SingleGoal(k), t, frames=[ee_name, box]))
+                        self.tasks.append(
+                            Task(
+                                [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
+                            )
+                        )
                     else:
-                        self.tasks.append(Task([robot_prefix], SingleGoal(k), t, frames=["table", box]))
+                        self.tasks.append(
+                            Task(
+                                [robot_prefix], SingleGoal(k), t, frames=["table", box]
+                            )
+                        )
 
                     self.tasks[-1].name = robot_prefix + t + "_" + box + "_" + str(cnt)
                     cnt += 1
@@ -2118,6 +2127,7 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.1
+
 
 class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
     def __init__(self, num_robots=3):
@@ -2151,40 +2161,45 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
 
         self.tasks = []
         task_names = ["pick", "place"]
+        cnt = 0
         for robot_prefix, robot_tasks in keyframes.items():
             prev_task_name = None
             for box, poses in robot_tasks:
-                cnt = 0
                 for t, k in zip(task_names, poses):
                     task_name = robot_prefix + t + "_" + box + "_" + str(cnt)
 
                     if t == "pick":
                         ee_name = robot_prefix + "gripper"
-                        self.tasks.append(Task([robot_prefix], SingleGoal(k), t, frames=[ee_name, box]))
+                        self.tasks.append(
+                            Task(
+                                [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
+                            )
+                        )
                     else:
-                        self.tasks.append(Task([robot_prefix], SingleGoal(k), t, frames=["table", box]))
-                    
+                        self.tasks.append(
+                            Task(
+                                [robot_prefix], SingleGoal(k), t, frames=["table", box]
+                            )
+                        )
+
                     if prev_task_name is not None:
                         self.graph.add_dependency(task_name, prev_task_name)
-                    
+
                     self.tasks[-1].name = task_name
                     prev_task_name = task_name
                     cnt += 1
 
-                    # if b in action_names:
-                    #     action_names[b].append(self.tasks[-1].name)
-                    # else:
-                    #     action_names[b] = [self.tasks[-1].name]
-            
             self.graph.add_dependency("terminal", prev_task_name)
 
         self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
         self.tasks[-1].name = "terminal"
 
+        # random.shuffle(self.tasks)
+
         print(self.graph)
 
-        for t in self.tasks:
-            print(t.name)
+        # for t in self.tasks:
+        #     print(t.name)
 
         BaseModeLogic.__init__(self)
 
@@ -2205,6 +2220,7 @@ def display_path(
     export: bool = False,
     pause_time: float = 0.01,
     stop_at_end=False,
+    adapt_to_max_distance: bool = False,
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
@@ -2217,7 +2233,14 @@ def display_path(
         if export:
             env.C.view_savePng("./z.vid/")
 
-        time.sleep(pause_time)
+        dt = pause_time
+        if adapt_to_max_distance:
+            if i > 0:
+                v = 10
+                diff = config_dist(path[i].q, path[i-1].q, "max")
+                dt = diff / v
+            
+        time.sleep(dt)
 
     if stop_at_end:
         env.C.view(True)

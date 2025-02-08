@@ -3720,6 +3720,8 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
 
     all_boxes = []
 
+    bottom_goal_names = []
+
     for i in range(h):
         for j in range(w):
 
@@ -3749,14 +3751,17 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
                     (1-i) * size[2] * 1.01 + 0.05 + 0.1,
                 ]
             )
-            box_name = "box_goal_" + str(i) + str(j)
-            C.addFrame(box_name).setParent(table).setShape(
+            goal_name = "box_goal_" + str(i) + str(j)
+            C.addFrame(goal_name).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition(goal_pos).setMass(0.1).setColor(
                 [color[0], color[1], color[2], 0.5]
             ).setContact(0).setJoint(
                 ry.JT.rigid
             )
+
+            if i == 1:
+                bottom_goal_names.append(goal_name)
 
     if view:
         C.view(True)
@@ -3815,11 +3820,11 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
         komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
 
         komo.addObjective(
-            times=[0, 3],
+            times=[3],
             feature=ry.FS.jointState,
             frames=[],
             type=ry.OT.sos,
-            scale=[1e-1],
+            scale=[1e0],
             target=q_home,
         )
 
@@ -3838,6 +3843,7 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
             print(retval)
             if view:
                 komo.view(True, "IK solution")
+            komo.view(True, "IK solution")
 
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                 keyframes = komo.getPath()
@@ -3860,13 +3866,17 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
             box = f"box_{j}{i}"
             box_goal = f"box_goal_{j}{i}"
 
+            for g in bottom_goal_names:
+                if g != box_goal:
+                    c_tmp_2.getFrame(g).setContact(1)
+
             res = compute_pick_and_place(c_tmp_2, box, box_goal, robot_prefix)
 
             keyframes[robot_prefix].append((box, res[:-1])) 
 
             c_tmp.getFrame(box).setRelativePosition(
                 c_tmp.getFrame(box_goal).getRelativePosition()
-            )
+            ).setContact(0)
 
     return C, keyframes
 
