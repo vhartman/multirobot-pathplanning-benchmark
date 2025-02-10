@@ -260,10 +260,10 @@ class rai_env(BaseProblem):
 
         self.limits = self.C.getJointLimits()
 
-        self.collision_tolerance = 0.1
+        self.collision_tolerance = 0.01
         self.collision_resolution = 0.05
 
-        self.cost_metric = "max"
+        self.cost_metric = "euclidean"
         self.cost_reduction = "max"
 
         self.C_cache = {}
@@ -291,8 +291,11 @@ class rai_env(BaseProblem):
         self,
         q: Optional[Configuration],
         m: Mode,
-        collision_tolerance: float = 0.01,
+        collision_tolerance: float = None,
     ) -> bool:
+        if collision_tolerance is None:
+            collision_tolerance = self.collision_tolerance
+
         # print(q)
         # self.C.setJointState(q)
 
@@ -316,8 +319,11 @@ class rai_env(BaseProblem):
         return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode, collision_tolerance=0.01
+        self, r: str, q: NDArray, m: Mode, collision_tolerance: float=None
     ) -> bool:
+        if collision_tolerance is None:
+            collision_tolerance = self.collision_tolerance
+
         if isinstance(r, str):
             r = [r]
 
@@ -378,10 +384,16 @@ class rai_env(BaseProblem):
         q1: Configuration,
         q2: Configuration,
         m: Mode,
-        resolution=0.1,
-        randomize_order=True,
-        tolerance=0.01,
+        resolution:float=None,
+        randomize_order:bool=True,
+        tolerance:float=None,
     ) -> bool:
+        if resolution is None:
+            resolution = self.collision_resolution
+
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+
         # print('q1', q1)
         # print('q2', q2)
         N = int(config_dist(q1, q2) / resolution)
@@ -407,8 +419,14 @@ class rai_env(BaseProblem):
         return True
 
     def is_path_collision_free(
-        self, path: List[State], randomize_order=True, resolution=0.1, tolerance=0.01
+        self, path: List[State], randomize_order=True, resolution=None, tolerance=None
     ) -> bool:
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+        
+        if resolution is None:
+            resolution = self.collision_resolution
+
         idx = list(range(len(path) - 1))
         if randomize_order:
             np.random.shuffle(idx)

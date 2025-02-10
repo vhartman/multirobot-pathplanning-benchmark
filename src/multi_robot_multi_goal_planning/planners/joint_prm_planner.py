@@ -547,7 +547,7 @@ class Graph:
 
             if node.state.mode not in self.reverse_transition_node_array_cache:
                 self.reverse_transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.state() for n in neighbors]
+                    [n.state.q.state() for n in neighbors], dtype=np.float64
                 )
 
             closed_set.add(node.id)
@@ -628,7 +628,7 @@ class Graph:
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.state() for n in neighbors]
+                    [n.state.q.state() for n in neighbors], dtype=np.float64
                 )
 
             closed_set.add(node.id)
@@ -766,7 +766,7 @@ class Graph:
             node_list = self.nodes[key]
 
             if key not in self.node_array_cache:
-                self.node_array_cache[key] = np.array([n.state.q.q for n in node_list])
+                self.node_array_cache[key] = np.array([n.state.q.q for n in node_list], dtype=np.float64)
 
             dists = self.batch_dist_fun(
                 node.state.q, self.node_array_cache[key]
@@ -777,7 +777,7 @@ class Graph:
 
             if key not in self.transition_node_array_cache:
                 self.transition_node_array_cache[key] = np.array(
-                    [n.state.q.q for n in transition_node_list]
+                    [n.state.q.q for n in transition_node_list], dtype=np.float64
                 )
 
             transition_dists = self.batch_dist_fun(
@@ -897,7 +897,7 @@ class Graph:
 
             best_nodes = best_nodes + best_transition_nodes
 
-        arr = np.vstack([best_nodes_arr, best_transitions_arr])
+        arr = np.vstack([best_nodes_arr, best_transitions_arr], dtype=np.float64)
 
         if node.is_transition:
             tmp = np.vstack([n.state.q.state() for n in node.neighbors])
@@ -932,12 +932,12 @@ class Graph:
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
-                    [o.state.q.q for o in self.transition_nodes[node.state.mode]]
+                    [o.state.q.q for o in self.transition_nodes[node.state.mode]], dtype=np.float64
                 )
 
             if node.state.mode not in self.transition_node_lb_cache:
                 self.transition_node_lb_cache[node.state.mode] = np.array(
-                    [o.lb_cost_to_goal for o in self.transition_nodes[node.state.mode]]
+                    [o.lb_cost_to_goal for o in self.transition_nodes[node.state.mode]], dtype=np.float64
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1199,12 +1199,14 @@ class Graph:
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.q for n in self.transition_nodes[node.state.mode]]
+                    [n.state.q.q for n in self.transition_nodes[node.state.mode]],
+                    dtype=np.float64,
                 )
 
             if node.state.mode not in self.transition_node_lb_cache:
                 self.transition_node_lb_cache[node.state.mode] = np.array(
-                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]]
+                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]],
+                    dtype=np.float64,
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1426,7 +1428,7 @@ def sample_phs_with_given_matrices(rot, center):
     # op = np.matmul(np.matmul(cwe, r), x_ball) + center
     return rot @ x_ball + center
 
-
+# @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
 def joint_prm_planner(
     env: BaseProblem,
     ptc: PlannerTerminationCondition,
@@ -1510,7 +1512,7 @@ def joint_prm_planner(
         def lb_cost_from_start(state):
             if state.mode not in g.reverse_transition_node_array_cache:
                 g.reverse_transition_node_array_cache[state.mode] = np.array(
-                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]]
+                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]], dtype=np.float64
                 )
 
             if state.mode not in g.rev_transition_node_lb_cache:
@@ -1518,7 +1520,7 @@ def joint_prm_planner(
                     [
                         o.lb_cost_from_start
                         for o in g.reverse_transition_nodes[state.mode]
-                    ]
+                    ], dtype=np.float64
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1534,16 +1536,16 @@ def joint_prm_planner(
 
         def lb_cost_from_goal(state):
             if state.mode not in g.transition_nodes:
-                return np.inf 
-            
+                return np.inf
+
             if state.mode not in g.transition_node_array_cache:
                 g.transition_node_array_cache[state.mode] = np.array(
-                    [o.state.q.q for o in g.transition_nodes[state.mode]]
+                    [o.state.q.q for o in g.transition_nodes[state.mode]], dtype=np.float64
                 )
 
             if state.mode not in g.transition_node_lb_cache:
                 g.transition_node_lb_cache[state.mode] = np.array(
-                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]]
+                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]], dtype=np.float64
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1670,7 +1672,7 @@ def joint_prm_planner(
             # plt.show()
 
             focal_points = np.array(
-                [path[start_ind].q.state(), path[end_ind].q.state()]
+                [path[start_ind].q.state(), path[end_ind].q.state()], dtype=np.float64
             )
 
             precomputed_phs_matrices = {}
@@ -1843,7 +1845,7 @@ def joint_prm_planner(
         def lb_cost_from_start(state):
             if state.mode not in g.reverse_transition_node_array_cache:
                 g.reverse_transition_node_array_cache[state.mode] = np.array(
-                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]]
+                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]], dtype=np.float64
                 )
 
             if state.mode not in g.rev_transition_node_lb_cache:
@@ -1851,7 +1853,7 @@ def joint_prm_planner(
                     [
                         o.lb_cost_from_start
                         for o in g.reverse_transition_nodes[state.mode]
-                    ]
+                    ], dtype=np.float64
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1868,12 +1870,12 @@ def joint_prm_planner(
         def lb_cost_from_goal(state):
             if state.mode not in g.transition_node_array_cache:
                 g.transition_node_array_cache[state.mode] = np.array(
-                    [o.state.q.q for o in g.transition_nodes[state.mode]]
+                    [o.state.q.q for o in g.transition_nodes[state.mode]], dtype=np.float64
                 )
 
             if state.mode not in g.transition_node_lb_cache:
                 g.transition_node_lb_cache[state.mode] = np.array(
-                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]]
+                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]], dtype=np.float64
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -2143,7 +2145,7 @@ def joint_prm_planner(
 
         if len(g.goal_nodes) > 0:
             focal_points = np.array(
-                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()], dtype=np.float64
             )
 
         while len(new_samples) < batch_size:
@@ -2188,7 +2190,7 @@ def joint_prm_planner(
 
         if len(g.goal_nodes) > 0:
             focal_points = np.array(
-                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()], dtype=np.float64
             )
 
         while len(transitions) < transistion_batch_size:
@@ -2293,7 +2295,7 @@ def joint_prm_planner(
             # prune
             num_pts_for_removal = 0
             focal_points = np.array(
-                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()], dtype=np.float64
             )
             # for mode, nodes in g.nodes.items():
             #     for n in nodes:
