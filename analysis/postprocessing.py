@@ -343,24 +343,10 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
     max_cost = np.max(max_cost_average)
     min_cost = np.min(min_cost_average)
 
-    fig.update_layout(
-        title="Cost vs Time",
-        xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(min_time/2), np.log10(max_time+100)], autorange=False ),
-        yaxis=dict(title="Cost [m]", range=[min_cost-0.1, max_cost +5], autorange=False ), 
-        margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
-        legend=dict(
-            orientation="v",
-            yanchor="top",
-            y=1,
-            xanchor="left",
-            x=1,
-            traceorder="normal"  # Position legend outside the plot area on the right
-        ) 
-    )
     # fig.update_layout(
     #     title="Cost vs Time",
-    #     xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(20), np.log10(200)], autorange=False ),
-    #     yaxis=dict(title="Cost [m]", range=[min_cost-0.1, 5.5], autorange=False ), 
+    #     xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(min_time/2), np.log10(max_time+100)], autorange=False ),
+    #     yaxis=dict(title="Cost [m]", range=[min_cost-0.1, max_cost +5], autorange=False ), 
     #     margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
     #     legend=dict(
     #         orientation="v",
@@ -371,6 +357,20 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
     #         traceorder="normal"  # Position legend outside the plot area on the right
     #     ) 
     # )
+    fig.update_layout(
+        title="Cost vs Time",
+        xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(600), np.log10(910)], autorange=False ),
+        yaxis=dict(title="Cost [m]", range=[min_cost-0.1, 13], autorange=False ), 
+        margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1,
+            traceorder="normal"  # Position legend outside the plot area on the right
+        ) 
+    )
 
     fig.write_image(output_filename)
 
@@ -827,27 +827,30 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
                     )
                 )
                 if path:
-                    transition_x = [state[indices][0] for idx, state in enumerate(path) if transition[idx]]
-                    transition_y = [state[indices][1] for idx, state in enumerate(path) if transition[idx]]
-                    transition_z = [1] * len(path_x)
+                    try:
+                        transition_x = [state[indices][0] for idx, state in enumerate(path) if transition[idx]]
+                        transition_y = [state[indices][1] for idx, state in enumerate(path) if transition[idx]]
+                        transition_z = [1] * len(path_x)
 
-                    frame_traces.append(
-                        go.Scatter3d(
-                            x=transition_x, 
-                            y=transition_y,
-                            z=transition_z,
-                            mode="markers",
-                            marker=dict(
-                                size=5,  
-                                color="red", 
-                                opacity=1
-                            ),
-                            opacity=1,
-                            name="Transitions",
-                            legendgroup="Transitions",
-                            showlegend=False
+                        frame_traces.append(
+                            go.Scatter3d(
+                                x=transition_x, 
+                                y=transition_y,
+                                z=transition_z,
+                                mode="markers",
+                                marker=dict(
+                                    size=5,  
+                                    color="red", 
+                                    opacity=1
+                                ),
+                                opacity=1,
+                                name="Transitions",
+                                legendgroup="Transitions",
+                                showlegend=False
+                            )
                         )
-                    )
+                    except:
+                        pass
         else:
             for robot_idx, robot in enumerate(env.robots):
                 indices = env.robot_idx[robot]
@@ -1456,7 +1459,10 @@ def ellipse(env, env_path, pkl_folder):
             try:
                 q_rand_ellipse = data["ellipse"]
                 mode = data["mode"]
-                mode_idx = modes.index(mode)
+                if mode is None:
+                    mode_idx = 0
+                else:
+                    mode_idx = modes.index(mode)
                 for q in q_rand_ellipse:
                     for robot_idx, robot in enumerate(env.robots):
                         legend_group = robot
@@ -1593,9 +1599,8 @@ if __name__ == "__main__":
     env_name, config_params, _, _ = get_config(path)
     env = problems.get_env_by_name(env_name)      
     pkl_folder = os.path.join(path, 'FramesData')
-    
-    env_path = os.path.join(home_dir, f'env/{env_name}')
-    save_env_as_mesh(env, env_path)
+    env_path = os.path.join(home_dir, f'env/{env_name}')  
+    save_env_as_mesh(env, env_path) 
     print(dir)
     print(path)
     if args.do == "dev":
@@ -1610,6 +1615,7 @@ if __name__ == "__main__":
         developement_animation(config_params, env, env_path, pkl_folder, output_html, with_tree, reducer)    
         webbrowser.open('file://' + os.path.realpath(output_html))
     if args.do == 'final_path_animation':
+        save_env_as_mesh(env, env_path)
         pkl_folder = os.path.join(path, 'FramesFinalData')
         output_html = os.path.join(path, 'final_path_animation_3d.html')
         final_path_animation(env, env_path, pkl_folder, output_html)    
@@ -1624,7 +1630,9 @@ if __name__ == "__main__":
         with_inital_confidence_interval = False
         pkl_folder = os.path.join(path, 'FramesFinalData')
         output_filename_cost = os.path.join(os.path.dirname(dir), f'Cost_{datetime.now().strftime("%d%m%y_%H%M%S")}.png')
-        dir = ['/home/tirza/output/one_agent_many_goals_030225_101947', '/home/tirza/output/one_agent_many_goals_030225_102011' ]
+        dir = ['/home/tirza/output/hallway_080225_180715', '/home/tirza/output/hallway_090225_162423', '/home/tirza/output/hallway_090225_172649' , 
+               '/home/tirza/output/hallway_090225_182800', '/home/tirza/output/hallway_090225_205002', '/home/tirza/output/hallway_090225_230738' ,
+               '/home/tirza/output/hallway_100225_083444']
         if not isinstance(dir, list):
             dir = [dir]
         cost_multiple(env, config_params, pkl_folder,single_folder ,dir ,output_filename_cost, with_inital_confidence_interval)
@@ -1638,6 +1646,7 @@ if __name__ == "__main__":
         shortcutting_cost(env, config_params, path, output_filename_cost)
     
     if args.do == "path":
+        pkl_folder = os.path.join(path, 'FramesFinalData')
         path_original = False
         generate_png = True
         if path_original:
