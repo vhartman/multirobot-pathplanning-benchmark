@@ -89,7 +89,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
           
            
-            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = "euclidean", reduction="max")
+            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
             #     if r in constrained_robots:
@@ -97,7 +97,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             # if np.max(relevant_dists) > self.config.step_size:
             #     return
 
-            if np.max(dist) > self.config.step_size:
+            if np.max(dist) > self.eta:
                 return
 
             if not self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, mode): #ORder rigth? TODO
@@ -109,7 +109,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not n_nearest_b:
                 return
            
-            cost =  batch_config_cost([n_new.state],  [n_nearest_b.state], metric = "euclidean", reduction="max")
+            cost =  batch_config_cost([n_new.state],  [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
         if self.trees[mode].order == -1:
             #switch such that subtree is beginning from start and subtree_b from goal
             self.trees[mode].swap()
@@ -161,7 +161,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         
                 n_new = Node(state_new,self.operation)
                
-                cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = "euclidean", reduction="max")
+                cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 c_min = n_nearest_b.cost + cost
 
                 n_new.parent = n_nearest_b
@@ -219,7 +219,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 if n_nearest.id not in node_indices:
                     continue
               
-                batch_cost =  batch_config_cost(n_new.state.q, N_near_batch, metric = "euclidean", reduction="max")
+                batch_cost =  batch_config_cost(n_new.state.q, N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
                     self.UpdateCost(active_mode,n_new)

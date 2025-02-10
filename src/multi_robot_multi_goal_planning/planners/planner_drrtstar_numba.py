@@ -293,7 +293,7 @@ class dRRTstar(BaseRRTstar):
         
                 n_new = Node(state_new,self.operation)
                 
-                cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = "euclidean", reduction="max")
+                cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 c_min = n_nearest_b.cost + cost
 
                 n_new.parent = n_nearest_b
@@ -348,29 +348,30 @@ class dRRTstar(BaseRRTstar):
             if not existing_node:        
                 if not self.env.is_edge_collision_free(n_near.state.q, candidate, mode):
                     return
-                batch_cost = batch_config_cost([n_candidate.state], [n_near.state], metric = "euclidean", reduction="max")
+                batch_cost = batch_config_cost([n_candidate.state], [n_near.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 n_candidate.parent = n_near
                 n_candidate.cost_to_parent = batch_cost
                 n_near.children.append(n_candidate)
                 self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, n_candidate.id) 
                 n_candidate.cost = n_near.cost + batch_cost
                 self.trees[mode].add_node(n_candidate)
+                N_near_batch, n_near_costs, node_indices = self.Near(mode, n_candidate)
+                batch_cost = batch_config_cost([n_candidate.state], N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
+                if self.Rewire(mode, node_indices, n_candidate, batch_cost, n_near_costs):
+                    self.UpdateCost(n_candidate)
                 self.ManageTransition(mode, n_candidate, iter) #Check if we have reached a goal
             else:
                 #reuse existing node
                 # existing_node_ = self.CheckForExistingNode(mode, n_candidate)
-                batch_cost = batch_config_cost([existing_node.state], [n_near.state], metric = "euclidean", reduction="max")
+                batch_cost = batch_config_cost([existing_node.state], [n_near.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 if self.FindParent(mode, n_near, existing_node, batch_cost):
                     self.UpdateCost(existing_node)
-                # N_near_batch, n_near_costs, node_indices = self.Near(mode, existing_node)
-                # batch_cost, batch_dist =  batch_cost_torch(existing_node.q_tensor, existing_node.state.q, N_near_batch, metric = self.config.cost_type)
-                # if self.Rewire(mode, node_indices, existing_node, batch_cost, batch_dist, n_near_costs):
-                #     self.UpdateCost(existing_node)
-                # if self.Rewire(N_near_indices, existing_node, batch_cost, batch_dist, n_near_costs):
-                #     self.UpdateCost(existing_node)
-                #need to get trasntion node?
-                self.FindLBTransitionNode(iter)
-                # self.ManageTransition(mode, existing_node, iter, False) #Check if we have reached a goal
+                N_near_batch, n_near_costs, node_indices = self.Near(mode, existing_node)
+                batch_cost = batch_config_cost([existing_node.state], N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
+                if self.Rewire(mode, node_indices, existing_node, batch_cost, n_near_costs):
+                    self.UpdateCost(existing_node)
+            self.FindLBTransitionNode(iter)
+               
             
     def ConnectToTarget(self, mode:Mode, iter:int):
         """Local connector: Tries to connect to a termination node in mode"""
@@ -389,7 +390,7 @@ class dRRTstar(BaseRRTstar):
         
         # N_near_batch, n_near_costs, node_indices = self.KNearest(mode, terminal_q_tensor.unsqueeze(0), terminal_q) #TODO
         N_near_batch, n_near_costs, node_indices = self.Near(mode, termination_node)
-        batch_cost = batch_config_cost(termination_node.state.q, N_near_batch, metric = "euclidean", reduction="max")
+        batch_cost = batch_config_cost(termination_node.state.q, N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
         c_terminal_costs = n_near_costs + batch_cost       
         sorted_mask = np.argsort(c_terminal_costs)
         for idx in sorted_mask:
@@ -400,7 +401,7 @@ class dRRTstar(BaseRRTstar):
                 n_nearest = self.Extend(mode, node, termination_node, dist)
                 if n_nearest is not None:
                     if self.env.is_edge_collision_free(n_nearest.state.q, terminal_q,  mode):
-                        cost = batch_config_cost([n_nearest.state], [termination_node.state], metric = "euclidean", reduction="max")
+                        cost = batch_config_cost([n_nearest.state], [termination_node.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                         if termination_node.parent is not None:
                             termination_node.parent.children.remove(termination_node)
                         termination_node.parent = n_nearest

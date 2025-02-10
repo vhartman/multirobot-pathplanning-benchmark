@@ -49,7 +49,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
           
           
-            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = "euclidean", reduction="max")
+            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
             #     if r in constrained_robots:
@@ -68,7 +68,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
             n_nearest_b = self.Extend(mode, n_nearest_b, n_new, dist)
             if not n_nearest_b:
                 return
-            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = "euclidean", reduction="max")
+            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
             
  
         if self.trees[mode].order == -1:
@@ -195,7 +195,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                     continue
 
               
-                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = "euclidean", reduction="max")
+                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 # if self.operation.init_sol:
                 if self.operation.init_sol:

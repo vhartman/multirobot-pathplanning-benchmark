@@ -417,6 +417,32 @@ class rai_env(BaseProblem):
             return True
         return False
 
+    def is_collision_free_without_mode(
+        self,
+        q: Optional[Configuration],
+        collision_tolerance: float = 0.01,
+    ) -> bool:
+        # print(q)
+        # self.C.setJointState(q)
+
+        if q is not None:
+            self.C.setJointState(q.state())
+
+        # self.C.view()
+
+        binary_collision_free = self.C.getCollisionFree()
+        if binary_collision_free:
+            return True
+
+        col = self.C.getCollisionsTotalPenetration()
+        # print(col)
+        # self.C.view(False)
+        if col > collision_tolerance:
+            # self.C.view(False)
+            return False
+
+        return True
+
     def is_edge_collision_free(
         self,
         q1: Configuration,
@@ -450,44 +476,36 @@ class rai_env(BaseProblem):
 
         return True
 
-    # def is_path_collision_free(self, path: List[State], randomize_order=True) -> bool:
-    #     idx = list(range(len(path) - 1))
-    #     if randomize_order:
-    #         np.random.shuffle(idx)
-
-    #     for i in idx:
-    #         # skip transition nodes
-    #         if path[i].mode != path[i + 1].mode:
-    #             continue
-
-    #         q1 = path[i].q
-    #         q2 = path[i + 1].q
-    #         mode = path[i].mode
-
-    #         if not self.is_edge_collision_free(q1, q2, mode):
-    #             return False
-
-    #     return True
-    
-    def is_path_collision_free(self, path: List[State], randomize_order=True) -> bool:
+    def is_path_collision_free(
+        self, path: List[State], randomize_order=True, resolution=0.1, tolerance=0.01
+    ) -> bool:
         idx = list(range(len(path) - 1))
         if randomize_order:
             np.random.shuffle(idx)
 
         for i in idx:
-            if path[i].mode != path[i + 1].mode:
-                mode = path[i+1].mode
-            else:
-                mode = path[i].mode
+            # skip transition nodes
+            # if path[i].mode != path[i + 1].mode:
+            #     continue
 
             q1 = path[i].q
             q2 = path[i + 1].q
+            # mode = path[i].mode
+            for i in idx:
+                if path[i].mode != path[i + 1].mode:
+                    mode = path[i+1].mode
+                else:
+                    mode = path[i].mode
 
-            if not self.is_edge_collision_free(q1, q2, mode):
+
+
+            if not self.is_edge_collision_free(
+                q1, q2, mode, resolution=resolution, tolerance=tolerance
+            ):
                 return False
 
         return True
-
+    
     def get_scenegraph_info_for_mode(self, mode: Mode):
         if not self.manipulating_env:
             return {}

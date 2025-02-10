@@ -53,7 +53,9 @@ def execute_planner(env, args, config_manager):
     cost_single(env, pkl_folder, output_dir)
     output_html = os.path.join(config_manager.output_dir, 'final_path_animation_3d.html')
     env_path = os.path.join(os.path.expanduser("~"), f'env/{args.env_name}')
-    final_path_animation(env, env_path, pkl_folder, output_html)  
+    if len(path[0].q.state())/(len(env.robots)) <= 3: # Only applicable up to 2D env with orientation
+        final_path_animation(env, env_path, pkl_folder, output_html)  
+
 
 def single_run(run_id, args, config_manager):
     env = get_env_by_name(args.env_name)

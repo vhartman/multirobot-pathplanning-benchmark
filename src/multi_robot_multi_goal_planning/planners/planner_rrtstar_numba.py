@@ -23,6 +23,7 @@ class RRTstar(BaseRRTstar):
             if not self.operation.init_sol and mode.__eq__(self.modes[-1]):
                     self.add_new_mode(n_new.state.q, mode, SingleTree)
                     self.InformedInitialization(self.modes[-1])
+                    print('------------------')
             self.convert_node_to_transition_node(mode, n_new)
         #check if termination is reached
         if self.env.done(n_new.state.q, mode):
@@ -33,6 +34,7 @@ class RRTstar(BaseRRTstar):
         self.FindLBTransitionNode(iter)
  
     def PlannerInitialization(self) -> None:
+        self.set_gamma_rrtstar()
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
         active_mode = self.modes[-1]
@@ -54,7 +56,7 @@ class RRTstar(BaseRRTstar):
 
             # RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
-            n_nearest, dist = self.Nearest(active_mode, q_rand)    
+            n_nearest, dist, set_dists = self.Nearest(active_mode, q_rand)    
             state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
             # print([float(s) for s in state_new.q.state()]) 
             if self.operation.init_sol:
@@ -65,10 +67,13 @@ class RRTstar(BaseRRTstar):
             if self.env.is_collision_free(state_new.q, active_mode) and self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, active_mode):
                 n_new = Node(state_new, self.operation)
                 # print(i, [float(s) for s in n_new.state.q.state()])
-                N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new)
+                if np.equal(n_new.state.q.state(), q_rand.state()).all():
+                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, set_dists)
+                else:
+                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new)
                 if n_nearest.id not in node_indices:
                     continue
-                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = "euclidean", reduction="max")
+                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 # print(i, [float(s) for s in batch_cost])
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
