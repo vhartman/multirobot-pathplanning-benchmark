@@ -83,7 +83,7 @@ class BidirectionalRRTstar(BaseRRTstar):
     def Connect(self, mode:Mode, n_new:Node, iter:int) -> None:
         if not self.trees[mode].subtree_b:
             return
-        n_nearest_b, dist = self.Nearest(mode, n_new.state.q, 'B')
+        n_nearest_b, dist, _ = self.Nearest(mode, n_new.state.q, 'B')
 
         if self.config.birrtstar_version == 1 or self.config.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
@@ -180,6 +180,7 @@ class BidirectionalRRTstar(BaseRRTstar):
 
     def PlannerInitialization(self) -> None:
         # Initilaize first Mode
+        self.set_gamma_rrtstar()
         self.add_new_mode(tree_instance=BidirectionalTree)
         mode = self.modes[-1]
         # Create start node
@@ -207,7 +208,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             active_mode  = self.RandomMode(Mode.id_counter)
             # Bi RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
-            n_nearest, dist = self.Nearest(active_mode, q_rand)        
+            n_nearest, dist, set_dists = self.Nearest(active_mode, q_rand)        
             state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
             # q_rand == n_nearest
             if not state_new: 
@@ -215,7 +216,7 @@ class BidirectionalRRTstar(BaseRRTstar):
 
             if self.env.is_collision_free(state_new.q, active_mode) and self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, active_mode):
                 n_new = Node(state_new, self.operation)
-                N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new)
+                N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, set_dists)
                 if n_nearest.id not in node_indices:
                     continue
               

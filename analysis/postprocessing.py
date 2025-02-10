@@ -343,24 +343,10 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
     max_cost = np.max(max_cost_average)
     min_cost = np.min(min_cost_average)
 
-    # fig.update_layout(
-    #     title="Cost vs Time",
-    #     xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(min_time/2), np.log10(max_time+100)], autorange=False ),
-    #     yaxis=dict(title="Cost [m]", range=[min_cost-0.1, max_cost +5], autorange=False ), 
-    #     margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
-    #     legend=dict(
-    #         orientation="v",
-    #         yanchor="top",
-    #         y=1,
-    #         xanchor="left",
-    #         x=1,
-    #         traceorder="normal"  # Position legend outside the plot area on the right
-    #     ) 
-    # )
     fig.update_layout(
         title="Cost vs Time",
-        xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(600), np.log10(910)], autorange=False ),
-        yaxis=dict(title="Cost [m]", range=[min_cost-0.1, 13], autorange=False ), 
+        xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(min_time/2), np.log10(max_time+100)], autorange=False ),
+        yaxis=dict(title="Cost [m]", range=[min_cost-0.1, max_cost +5], autorange=False ), 
         margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
         legend=dict(
             orientation="v",
@@ -371,6 +357,20 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
             traceorder="normal"  # Position legend outside the plot area on the right
         ) 
     )
+    # fig.update_layout(
+    #     title="Cost vs Time",
+    #     xaxis=dict(type = 'log', title="Time [s]", range=[np.log10(600), np.log10(910)], autorange=False ),
+    #     yaxis=dict(title="Cost [m]", range=[min_cost-0.1, 13], autorange=False ), 
+    #     margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
+    #     legend=dict(
+    #         orientation="v",
+    #         yanchor="top",
+    #         y=1,
+    #         xanchor="left",
+    #         x=1,
+    #         traceorder="normal"  # Position legend outside the plot area on the right
+    #     ) 
+    # )
 
     fig.write_image(output_filename)
 
@@ -1630,9 +1630,7 @@ if __name__ == "__main__":
         with_inital_confidence_interval = False
         pkl_folder = os.path.join(path, 'FramesFinalData')
         output_filename_cost = os.path.join(os.path.dirname(dir), f'Cost_{datetime.now().strftime("%d%m%y_%H%M%S")}.png')
-        dir = ['/home/tirza/output/hallway_080225_180715', '/home/tirza/output/hallway_090225_162423', '/home/tirza/output/hallway_090225_172649' , 
-               '/home/tirza/output/hallway_090225_182800', '/home/tirza/output/hallway_090225_205002', '/home/tirza/output/hallway_090225_230738' ,
-               '/home/tirza/output/hallway_100225_083444']
+        dir = ['/home/tirza/output/100225_101628', '/home/tirza/output/100225_101856']
         if not isinstance(dir, list):
             dir = [dir]
         cost_multiple(env, config_params, pkl_folder,single_folder ,dir ,output_filename_cost, with_inital_confidence_interval)

@@ -248,6 +248,7 @@ class dRRTstar(BaseRRTstar):
         
         # Similar to RRT*
         # Initilaize first Mode
+        self.set_gamma_rrtstar()
         self.add_new_mode(tree_instance=SingleTree)
         active_mode = self.modes[-1]
         self.InformedInitialization(active_mode)
@@ -265,7 +266,7 @@ class dRRTstar(BaseRRTstar):
             active_mode  = self.RandomMode(Mode.id_counter)
             q_rand = self.sample_configuration(active_mode, 0)
             #get nearest node in tree8:
-            n_nearest, _ = self.Nearest(active_mode, q_rand)
+            n_nearest, _ , _= self.Nearest(active_mode, q_rand)
             self.DirectionOracle(active_mode, q_rand, n_nearest, iter) 
 
     def CheckForExistingNode(self, mode:Mode, n: Node, tree: str = ''):
@@ -356,7 +357,7 @@ class dRRTstar(BaseRRTstar):
                 n_candidate.cost = n_near.cost + batch_cost
                 self.trees[mode].add_node(n_candidate)
                 N_near_batch, n_near_costs, node_indices = self.Near(mode, n_candidate)
-                batch_cost = batch_config_cost([n_candidate.state], N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
+                batch_cost = batch_config_cost(n_candidate.state.q, N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 if self.Rewire(mode, node_indices, n_candidate, batch_cost, n_near_costs):
                     self.UpdateCost(n_candidate)
                 self.ManageTransition(mode, n_candidate, iter) #Check if we have reached a goal
@@ -367,7 +368,7 @@ class dRRTstar(BaseRRTstar):
                 if self.FindParent(mode, n_near, existing_node, batch_cost):
                     self.UpdateCost(existing_node)
                 N_near_batch, n_near_costs, node_indices = self.Near(mode, existing_node)
-                batch_cost = batch_config_cost([existing_node.state], N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
+                batch_cost = batch_config_cost(existing_node.state.q, N_near_batch, metric = self.config.cost_metric, reduction=self.config.cost_reduction)
                 if self.Rewire(mode, node_indices, existing_node, batch_cost, n_near_costs):
                     self.UpdateCost(existing_node)
             self.FindLBTransitionNode(iter)

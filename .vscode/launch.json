@@ -48,7 +48,23 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
-        }, 
+        },
+        {
+            "name": "main.py - hallway_dep --planner rrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/main_numba.py",
+            "args": [
+                "hallway_dep",
+                "--planner",
+                "rrtstar"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },  
         {
             "name": "main.py - simple_2d --planner rrtstar numba",
             "type": "debugpy",

@@ -4,7 +4,7 @@ description: |
 
 step_size: 0.5                             # Max allowable distance that newly generated node can be from the nearest node in the tree                    
 amount_of_runs: 1                           # Amount of runs executed 
-debug_mode: true                            # True: Data isn't stored, as in debug modus
+debug_mode: false                            # True: Data isn't stored, as in debug modus
 use_seed: true                              # True: Use a seed for the algorithm
 seed:  4                           # User defined seed
 cprofiler: true                            # Use cprofiler to run the                     # Type of cost function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
@@ -13,7 +13,7 @@ cost_metric: euclidean
 cost_reduction: max
 
 shortcutting: true                          # Include Shortcutting after solution found
-ptc_time : 600                              # Time for termination in sec
+ptc_time : 300                              # Time for termination in sec
 
 
 description: |
@@ -22,8 +22,8 @@ description: |
 p_goal: 0.9                                 # Probability of performing goal sampling
 p_stay: 0.3                                 # Probability that robot stays in its pose (home pose) (if 1: isn't included)
 general_goal_sampling: false                # True: For all tasks in mode goal sampling is done otherwise only for active task
-mode_probability: 1                         # Probability to choose new mode (0: uniformly, 1: greedy None: equally, else: manually set) 
-informed_sampling: true                    # True: Informed sampling is applied 
+mode_probability: None                         # Probability to choose new mode (0: uniformly, 1: greedy None: equally, else: manually set) 
+informed_sampling: false                    # True: Informed sampling is applied 
 informed_sampling_version: 0               # 0: mixture uniform and locally, 1: whole config, 2: = 1 but each agent separately 3: local 4: random local 5: by valentin 
 p_uniform: 0.8                              #only used for version 3 in informed sampling version
 gaussian: false
