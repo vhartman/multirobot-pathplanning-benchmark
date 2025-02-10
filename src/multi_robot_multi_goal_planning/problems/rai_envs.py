@@ -9,6 +9,8 @@ from numpy.typing import NDArray
 from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
+from multi_robot_multi_goal_planning.problems.configuration import config_dist 
+
 # from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseModeLogic,
@@ -76,7 +78,9 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
 class rai_two_dim_env(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C, keyframes = rai_config.make_2d_rai_env(agents_can_rotate=agents_can_rotate)
+        self.C, keyframes = rai_config.make_2d_rai_env(
+            agents_can_rotate=agents_can_rotate
+        )
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -308,7 +312,9 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
 
 class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, keyframes = rai_config.make_single_agent_mover_env(num_goals=50, view=False)
+        self.C, keyframes = rai_config.make_single_agent_mover_env(
+            num_goals=50, view=False
+        )
         # self.C.view(True)
 
         self.robots = ["a1"]
@@ -356,6 +362,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
+
 
 # best max-cost sol: 3.41
 # best sum-cost sol: 5.922
@@ -506,6 +513,7 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
         self.C_base.addConfigurationCopy(self.C)
 
         self.prev_mode = self.start_mode
+
 
 # best cost found for max-cost is 17.64
 # best cost found for sum-cost is 25.28
@@ -753,11 +761,51 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
+
 # best solution found with sum-cost: 14.08 (independent of rotation)
 # best solution found with max-cost: 9.7 (independent of rotation)
 class rai_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
+        self.C, keyframes = rai_config.make_two_dim_tunnel_env(
+            agents_can_rotate=agents_can_rotate
+        )
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        self.tasks = []
+        self.sequence = []
+
+        self.tasks = [
+            Task(["a1"], SingleGoal(keyframes[0])),
+            Task(["a2"], SingleGoal(keyframes[1])),
+            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+        ]
+
+        self.tasks[0].name = "a1_goal_1"
+        self.tasks[1].name = "a2_goal_1"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = [0, 1, 2]
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+
+# best solution found with sum-cost: xx (independent of rotation)
+# best solution found with max-cost: xx (independent of rotation)
+class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = rai_config.make_two_dim_short_tunnel_env(
+            agents_can_rotate=agents_can_rotate
+        )
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -788,8 +836,46 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
 
 class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
-    def __init__(self):
-        self.C, keyframes = rai_config.make_two_dim_tunnel_env()
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate)
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        self.tasks = []
+        self.sequence = []
+
+        self.tasks = [
+            Task(["a1"], SingleGoal(keyframes[0])),
+            Task(["a2"], SingleGoal(keyframes[1])),
+            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+        ]
+
+        self.tasks[0].name = "a1_goal_1"
+        self.tasks[1].name = "a2_goal_1"
+        self.tasks[2].name = "terminal"
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("terminal", "a1_goal_1")
+        self.graph.add_dependency("terminal", "a2_goal_1")
+
+        print(self.graph)
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.05
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+
+class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = rai_config.make_two_dim_short_tunnel_env(
+            agents_can_rotate=agents_can_rotate
+        )
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -825,6 +911,7 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
 
 class rai_two_dim_piano_mover(SequenceMixin, rai_env):
     pass
+
 
 # best sum-cost: 12.9
 # best max-cost: 6.56
@@ -1326,6 +1413,7 @@ class rai_ur10_arm_shelf_env:
 class rai_ur10_arm_conveyor_env:
     pass
 
+
 # best max cost: 9.24
 class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
@@ -1798,9 +1886,7 @@ class rai_ur10_arm_box_rearrangement_env_dep(DependencyGraphMixin, rai_env):
 
 class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes=9):
-        self.C, keyframes = rai_config.make_box_pile_env(
-            num_boxes=num_boxes
-        )
+        self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
 
         self.robots = ["a1_", "a2_"]
 
@@ -1840,24 +1926,53 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                     print(k)
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
-                        self.tasks.append(Task(robots, SingleGoal(k), t, frames=[ee_name, box_name]))
+                        self.tasks.append(
+                            Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
+                        )
                     else:
-                        self.tasks.append(Task(robots, SingleGoal(k), t, frames=["tray", box_name]))
+                        self.tasks.append(
+                            Task(robots, SingleGoal(k), t, frames=["tray", box_name])
+                        )
 
-                    self.tasks[-1].name = robots[0] + t + "_" + box_name + "_" + str(cnt)
+                    self.tasks[-1].name = (
+                        robots[0] + t + "_" + box_name + "_" + str(cnt)
+                    )
                     cnt += 1
             else:
                 for t, k in zip(handover_task_names, qs):
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
-                        self.tasks.append(Task([robots[0]], SingleGoal(k[self.robot_idx[robots[0]]]), t, frames=[ee_name, box_name]))
+                        self.tasks.append(
+                            Task(
+                                [robots[0]],
+                                SingleGoal(k[self.robot_idx[robots[0]]]),
+                                t,
+                                frames=[ee_name, box_name],
+                            )
+                        )
                     elif t == "handover":
                         ee_name = robots[1] + "ur_vacuum"
-                        self.tasks.append(Task(self.robots, SingleGoal(k), t, frames=[ee_name, box_name]))
+                        self.tasks.append(
+                            Task(
+                                self.robots,
+                                SingleGoal(k),
+                                t,
+                                frames=[ee_name, box_name],
+                            )
+                        )
                     else:
-                        self.tasks.append(Task([robots[1]], SingleGoal(k[self.robot_idx[robots[1]]]), t, frames=["tray", box_name]))
+                        self.tasks.append(
+                            Task(
+                                [robots[1]],
+                                SingleGoal(k[self.robot_idx[robots[1]]]),
+                                t,
+                                frames=["tray", box_name],
+                            )
+                        )
 
-                    self.tasks[-1].name = robots[0] + t + "_" + box_name + "_" + str(cnt)
+                    self.tasks[-1].name = (
+                        robots[0] + t + "_" + box_name + "_" + str(cnt)
+                    )
                     cnt += 1
 
         self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
@@ -1878,7 +1993,9 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
 
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 8):
-        self.C, keyframes, self.robots = rai_config.make_box_stacking_env(num_robots, num_boxes)
+        self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
+            num_robots, num_boxes
+        )
 
         # more efficient collision scene that only has the collidabe shapes (and the links)
         self.C_coll = ry.Config()
@@ -1934,12 +2051,166 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
-        self.collision_tolerance = 0.01
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.005
 
 
 # mobile manip
-class rai_mobile_manip_wall:
-    pass
+class rai_mobile_manip_wall(SequenceMixin, rai_env):
+    def __init__(self, num_robots=3):
+        self.C, keyframes = rai_config.make_mobile_manip_env(num_robots)
+
+        self.robots = [k for k in keyframes]
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.getFrames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for robot_prefix, robot_tasks in keyframes.items():
+            for box, poses in robot_tasks:
+                cnt = 0
+                for t, k in zip(task_names, poses):
+                    if t == "pick":
+                        ee_name = robot_prefix + "gripper"
+                        self.tasks.append(
+                            Task(
+                                [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
+                            )
+                        )
+                    else:
+                        self.tasks.append(
+                            Task(
+                                [robot_prefix], SingleGoal(k), t, frames=["table", box]
+                            )
+                        )
+
+                    self.tasks[-1].name = robot_prefix + t + "_" + box + "_" + str(cnt)
+                    cnt += 1
+
+                    # if b in action_names:
+                    #     action_names[b].append(self.tasks[-1].name)
+                    # else:
+                    #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.1
+
+
+class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
+    def __init__(self, num_robots=3):
+        self.C, keyframes = rai_config.make_mobile_manip_env(num_robots)
+
+        self.robots = [k for k in keyframes]
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.getFrames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.graph = DependencyGraph()
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        cnt = 0
+        for robot_prefix, robot_tasks in keyframes.items():
+            prev_task_name = None
+            for box, poses in robot_tasks:
+                for t, k in zip(task_names, poses):
+                    task_name = robot_prefix + t + "_" + box + "_" + str(cnt)
+
+                    if t == "pick":
+                        ee_name = robot_prefix + "gripper"
+                        self.tasks.append(
+                            Task(
+                                [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
+                            )
+                        )
+                    else:
+                        self.tasks.append(
+                            Task(
+                                [robot_prefix], SingleGoal(k), t, frames=["table", box]
+                            )
+                        )
+
+                    if prev_task_name is not None:
+                        self.graph.add_dependency(task_name, prev_task_name)
+
+                    self.tasks[-1].name = task_name
+                    prev_task_name = task_name
+                    cnt += 1
+
+            self.graph.add_dependency("terminal", prev_task_name)
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        # random.shuffle(self.tasks)
+
+        print(self.graph)
+
+        # for t in self.tasks:
+        #     print(t.name)
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.01
 
 
 def display_path(
@@ -1949,6 +2220,7 @@ def display_path(
     export: bool = False,
     pause_time: float = 0.01,
     stop_at_end=False,
+    adapt_to_max_distance: bool = False,
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
@@ -1961,7 +2233,14 @@ def display_path(
         if export:
             env.C.view_savePng("./z.vid/")
 
-        time.sleep(pause_time)
+        dt = pause_time
+        if adapt_to_max_distance:
+            if i > 0:
+                v = 10
+                diff = config_dist(path[i].q, path[i-1].q, "max")
+                dt = diff / v
+            
+        time.sleep(dt)
 
     if stop_at_end:
         env.C.view(True)

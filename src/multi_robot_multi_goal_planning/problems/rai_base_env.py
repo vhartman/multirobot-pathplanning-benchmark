@@ -455,11 +455,11 @@ class rai_env(BaseProblem):
         # print('q1', q1)
         # print('q2', q2)
         N = int(config_dist(q1, q2) / resolution)
-        # N = max(2, N)
+        N = max(2, N)
 
         # for a distance < resolution * 2, we do not do collision checking
-        if N <= 2:
-            return True
+        # if N == 0:
+        #     return True
 
         idx = list(range(N))
         if randomize_order:

@@ -1,5 +1,5 @@
 import numpy as np
-from src.multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
+from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
 import time
 import random
@@ -56,7 +56,7 @@ def single_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
             robots_to_shortcut = robots_to_shortcut[:num_robots]
 
         # this is wrong for partial shortcuts atm.
-        if env.is_edge_collision_free(q0, q1, mode, resolution= 0.001):
+        if env.is_edge_collision_free(q0, q1, mode, resolution=0.001):
             for k in range(j - i):
                 for r in robots_to_shortcut:
                     q = q0[r] + (q1[r] - q0[r]) / (j - i) * k
@@ -73,7 +73,13 @@ def single_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
     return new_path, [costs, times]
 
 
-def robot_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
+def robot_mode_shortcut(
+    env: rai_env,
+    path: List[State],
+    max_iter: int = 1000,
+    resolution=0.001,
+    tolerance=0.01,
+):
     new_path = interpolate_path(path, 0.05)
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
@@ -109,6 +115,10 @@ def robot_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
         if not can_shortcut_this:
             continue
 
+        # if not env.is_path_collision_free(new_path[i:j], resolution=0.01, tolerance=0.01):
+        #     print("path is not collision free")
+        #     env.show(True)
+
         cnt += 1
 
         q0 = new_path[i].q
@@ -133,15 +143,21 @@ def robot_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
         if path_cost(path_element, env.batch_config_cost) >= path_cost(
             new_path[i : j + 1], env.batch_config_cost
         ):
+            # print(f"{iter} does not improve cost")
             continue
 
         # this is wrong for partial shortcuts atm.
-        if env.is_path_collision_free(path_element, resolution=0.001, tolerance=0.001):
+        if env.is_path_collision_free(
+            path_element, resolution=resolution, tolerance=tolerance
+        ):
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
 
                 # if not np.array_equal(new_path[i+k].mode, path_element[k].mode):
                 # print('fucked up')
+        # else:
+        #     print("in colllision")
+        # env.show(True)
 
         current_time = time.time()
         times.append(current_time - start_time)

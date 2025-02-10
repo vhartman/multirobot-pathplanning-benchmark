@@ -405,10 +405,15 @@ class SequenceMixin(BaseModeLogic):
 
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
         next_mode.prev_mode = mode
-        mode.next_modes.append(next_mode)
 
         sg = self.get_scenegraph_info_for_mode(next_mode)
         next_mode.sg = sg
+
+        for nm in mode.next_modes:
+            if hash(nm) == hash(next_mode):
+                return nm
+
+        mode.next_modes.append(next_mode)
 
         return next_mode
 
@@ -570,9 +575,16 @@ class DependencyGraphMixin(BaseModeLogic):
                     ):
                         tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
-
+                        
                         sg = self.get_scenegraph_info_for_mode(tmp)
                         tmp.sg = sg
+                        
+                        for nm in mode.next_modes:
+                            if hash(nm) == hash(tmp):
+                                return nm
+
+                        mode.next_modes.append(tmp)
+                        # print(mode.next_modes)
 
                         return tmp
 

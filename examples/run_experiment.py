@@ -10,8 +10,9 @@ import random
 
 import sys
 import multiprocessing
+import copy
 
-from typing import Dict, Any
+from typing import Dict, Any, Callable, Tuple, List
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
@@ -31,28 +32,61 @@ from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
 
-from examples.make_plots import make_cost_plots
+from make_plots import make_cost_plots
 
 # np.random.seed(100)
+
+
+def merge_config(
+    user_config: Dict[str, Any], default_config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Merge user_config with default_config while preserving the order of user_config keys."""
+    if not isinstance(user_config, dict):
+        return user_config  # Base case for non-dict values
+
+    for key, default_value in default_config.items():
+        if key in user_config:
+            if isinstance(user_config[key], dict) and isinstance(default_value, dict):
+                merge_config(user_config[key], default_value)  # Recursive merge
+        else:
+            user_config[key] = default_value  # Add missing default keys at the end
+
+    return user_config
+
+
+def validate_config(config: Dict[str, Any]) -> None:
+    pass
 
 
 def load_experiment_config(filepath: str) -> Dict[str, Any]:
     with open(filepath) as f:
         config = json.load(f)
 
+    planner_default_configs = {}
+    planner_default_config_paths = {"prm": "configs/defaults/composite_prm.json"}
+
+    for planner_type, default_config_path in planner_default_config_paths.items():
+        with open(default_config_path) as f:
+            planner_default_configs[planner_type] = json.load(f)
+
+    for i, planner in enumerate(config["planners"]):
+        planner_type = planner["type"]
+
+        if planner_type in planner_default_configs:
+            merged_planner = merge_config(
+                planner, planner_default_configs[planner_type]
+            )
+            config["planners"][i] = merged_planner
+
     # TODO: sanity checks
-
-    # config["planners"] = {}
-    # config["planners"]["name"] = []
-    # config["planners"]["type"] = []
-    # config["planners"]["options"] = {}
-
-    # config["environment_name"] = []
+    validate_config(config)
 
     return config
 
 
-def run_single_planner(env: BaseProblem, planner):
+def run_single_planner(
+    env: BaseProblem, planner: Callable[[BaseProblem], Tuple[Any, Dict]]
+) -> Dict:
     _, data = planner(env)
     return data
 
@@ -102,7 +136,9 @@ def export_config(path: str, config: Dict):
         json.dump(config, f)
 
 
-def setup_planner(planner_config, runtime, optimize=True):
+def setup_planner(
+    planner_config, runtime: int, optimize: bool = True
+) -> Callable[[BaseProblem], Tuple[Any, Dict]]:
     name = planner_config["name"]
 
     if planner_config["type"] == "prm":
@@ -127,9 +163,10 @@ def setup_planner(planner_config, runtime, optimize=True):
                 path_batch_size=options["path_batch_size"],
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
+                try_direct_informed_sampling=options["direct_informed_sampling"],
             )
     elif planner_config["type"] == "rrt":
-        pass
+        raise ValueError(f"Planner type {planner_config['type']} not implemented")
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
 
@@ -143,7 +180,7 @@ def setup_env(env_config):
 class Tee:
     """Custom stream to write to both stdout and a file."""
 
-    def __init__(self, file, print_to_file_and_stdout):
+    def __init__(self, file, print_to_file_and_stdout: bool):
         self.file = file
         self.print_to_file_and_stdout = print_to_file_and_stdout
 
@@ -165,7 +202,12 @@ class Tee:
             self.stdout.flush()
 
 
-def run_experiment(env, planners, config, experiment_folder):
+def run_experiment(
+    env: BaseProblem,
+    planners: List[Tuple[str, Callable[[BaseProblem], Tuple[Any, Dict]]]],
+    config: Dict,
+    experiment_folder: str,
+):
     seed = config["seed"]
 
     all_experiment_data = {}
@@ -186,7 +228,7 @@ def run_experiment(env, planners, config, experiment_folder):
 
                 try:
                     print(f"Run #{run_id} for {planner_name}")
-                    print("Seed {seed + run_id}")
+                    print(f"Seed {seed + run_id}")
 
                     np.random.seed(seed + run_id)
                     random.seed(seed + run_id)
@@ -213,15 +255,15 @@ def run_experiment(env, planners, config, experiment_folder):
 
 
 def run_planner_process(
-    run_id,
-    planner_name,
-    planner,
-    seed,
-    env,
-    experiment_folder,
-    queue,
+    run_id: int,
+    planner_name: str,
+    planner: Callable[[BaseProblem], Tuple[Any, Dict]],
+    seed: int,
+    env: BaseProblem,
+    experiment_folder: str,
+    queue: List,
     semaphore,
-    print_to_file_and_stdout=False,
+    print_to_file_and_stdout: bool = False,
 ):
     """Runs a planner, captures all output live, and stores results in a queue."""
     with semaphore:  # Limit parallel execution
@@ -260,7 +302,11 @@ def run_planner_process(
 
 
 def run_experiment_in_parallel(
-    env, planners, config, experiment_folder, max_parallel=4
+    env: BaseProblem,
+    planners,
+    config: Dict,
+    experiment_folder: str,
+    max_parallel: int = 4,
 ):
     """Runs experiments in parallel with a fixed number of processes."""
     all_experiment_data = {planner_name: [] for planner_name, _ in planners}
@@ -310,6 +356,12 @@ def main():
         default=False,
         help="Run the experiments in parallel. (default: False)",
     )
+    parser.add_argument(
+        "--num_processes",
+        type=int,
+        default=2,
+        help="Number of processes to run in parallel. (default: 2)",
+    )
 
     args = parser.parse_args()
 
@@ -344,7 +396,7 @@ def main():
 
     if args.parallel_execution:
         all_experiment_data = run_experiment_in_parallel(
-            env, planners, config, experiment_folder, max_parallel=4
+            env, planners, config, experiment_folder, max_parallel=args.num_processes
         )
     else:
         all_experiment_data = run_experiment(env, planners, config, experiment_folder)

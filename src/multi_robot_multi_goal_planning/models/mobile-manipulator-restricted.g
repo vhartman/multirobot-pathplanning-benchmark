@@ -2,7 +2,7 @@
 
 world { X:"t (0 0 .2)" }
 
-base (world){ shape:ssBox size:[.35 .35 .4 .05], color:[1.0,0.5,0.5,1.0], joint:transXYPhi limits: [-5 5 -5 5 -4 4]}
+base (world){ shape:ssBox size:[.35 .35 .4 .05], color:[1.0,0.5,0.5,1.0], joint:transXYPhi limits: [-2 4 -2 2 -3.14 3.14]}
 base_coll(base){ shape:ssBox size:[.4 .4 .4 .05], color:[1.,1.,1.,0.1], contact:1 }
 
 #rot (base) {joint: hingeZ limits: [-4, 4]}
@@ -44,7 +44,7 @@ arm2_coll(arm2){ shape:capsule, color:[1.,1.,1.,.2], size:[.3 .06], contact:1 }
 joint2a(arm2) {
     A:"T t(0 0 .25)"
     joint:hingeZ q:0
-    limits:[-2 2]
+    limits:[-3.14 3.14]
 }
 
 #arm3(joint2c){
@@ -54,6 +54,12 @@ gripper (joint2a){
     shape:sphere, size:[.03]
     Q:"t(1.0 1. 1.0)"
     contact:1
+    color:[1.0,0.5,0.5,1.0]
+}
+
+gripper (gripper){
+    shape:marker, size:[.3]
+    contact:0
     color:[1.0,0.5,0.5,1.0]
 }
 
