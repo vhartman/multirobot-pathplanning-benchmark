@@ -8,7 +8,7 @@ debug_mode: true                            # True: Data isn't stored, as in deb
 use_seed: true                              # True: Use a seed for the algorithm
 seed:  1                                    # User defined seed
 cprofiler: true                             # Use cprofiler to run the                     # Type of cost function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
-dist_type: max                    # Type of dist function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
+distance_metric: max                    # Type of dist function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
 cost_metric: euclidean
 cost_reduction: max
 
@@ -63,4 +63,4 @@ description: |
 # adapt goal radius for more DOF -> make it dependent on DOF
 # TODO's in planner.py and env.py
 # Handle singularities properly!
-# ATTENTION: The assumption is made that dist_type and cost_type are the same for the batch_cost_torch function as it makes the algorithm more efficient -> would be easy changeable if necessary
+# ATTENTION: The assumption is made that distance_metric and cost_type are the same for the batch_cost_torch function as it makes the algorithm more efficient -> would be easy changeable if necessary

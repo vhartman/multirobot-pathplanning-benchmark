@@ -123,19 +123,19 @@ class dRRTstar(BaseRRTstar):
             if new_node:
                 self.convert_node_to_transition_node(mode, n_new)
             if not self.operation.init_sol:
-                print(time.time()-self.start)
+                print(time.time()-self.start_time)
                 self.operation.init_sol = True
         self.FindLBTransitionNode(iter)
 
     def KNearest(self, mode:Mode, n_new_q_tensor:torch.tensor, n_new: Configuration, k:int = 20) -> Tuple[List[Node], torch.tensor]:
         batch_subtree = self.trees[mode].get_batch_subtree()
-        set_dists = batch_dist_torch(n_new_q_tensor, n_new, self.trees[mode].get_batch_subtree(), self.config.dist_type).clone()
-        _, indices = torch.sort(set_dists)
+        set_dists = batch_config_dist(n_new.state.q, batch_subtree, self.distance_metric)
+        indices = np.argsort(set_dists)
         indices = indices[:k]
         N_near_batch = batch_subtree.index_select(0, indices)
         node_indices = self.trees[mode].node_idx_subtree.index_select(0,indices) # actual node indices (node.id)
         n_near_costs = self.operation.costs.index_select(0,node_indices)
-        return N_near_batch, n_near_costs, node_indices
+        return N_near_batch, n_near_costs, node_indices   
 
     def sample_transition_composition_node(self, mode)-> Configuration:
         """Returns transition node of mode"""
@@ -244,10 +244,11 @@ class dRRTstar(BaseRRTstar):
         #sample task goal
         sample_goal_for_active_robots()
         # sample uniform
-        sample_uniform_valid_per_robot(self.config.batch_size)
+        sample_uniform_valid_per_robot(self.batch_size)
         
         # Similar to RRT*
         # Initilaize first Mode
+        self.set_gamma_rrtstar()
         self.add_new_mode(tree_instance=SingleTree)
         active_mode = self.modes[-1]
         self.InformedInitialization(active_mode)
@@ -256,25 +257,26 @@ class dRRTstar(BaseRRTstar):
         start_node = Node(start_state, self.operation)
         self.trees[active_mode].add_node(start_node)
         start_node.cost = 0
-        start_node.cost_to_parent = torch.tensor(0, device=device, dtype=torch.float32)
+        start_node.cost_to_parent = np.float32(0)
         
     def Expand(self, iter:int):
         i = 0
-        while i < self.config.expand_iter:
+        while i < self.expand_iter:
             i += 1
             active_mode  = self.RandomMode(Mode.id_counter)
             q_rand = self.sample_configuration(active_mode, 0)
-            #get nearest node in tree
-            n_nearest, _ = self.Nearest(active_mode, q_rand)
+            #get nearest node in tree8:
+            n_nearest, _ , _= self.Nearest(active_mode, q_rand)
             self.DirectionOracle(active_mode, q_rand, n_nearest, iter) 
 
     def CheckForExistingNode(self, mode:Mode, n: Node, tree: str = ''):
         # q_tensor = torch.as_tensor(q_rand.state(), device=device, dtype=torch.float32).unsqueeze(0)
-        set_dists = batch_dist_torch(n.q_tensor.unsqueeze(0), n.state.q, self.trees[mode].get_batch_subtree(tree), 'euclidean').clone()
-        idx = torch.argmin(set_dists)
-        if set_dists[idx].item() < 1e-100:
+        set_dists = batch_config_dist(n.state.q, self.trees[mode].get_batch_subtree(tree), 'euclidean')
+        # set_dists = batch_dist_torch(n.q_tensor.unsqueeze(0), n.state.q, self.trees[mode].get_batch_subtree(tree), self.distance_metric)
+        idx = np.argmin(set_dists)
+        if set_dists[idx] < 1e-100:
             node_id = self.trees[mode].get_node_idx_subtree(tree)[idx]
-            return  self.trees[mode].get_node(node_id.item(), tree)
+            return  self.trees[mode].get_node(node_id, tree)
         return None
     
     def Extend(self, mode:Mode, n_nearest_b:Node, n_new:Node, dist )-> Optional[Node]:
@@ -284,14 +286,15 @@ class dRRTstar(BaseRRTstar):
         while True:
             state_new = self.Steer(mode, n_nearest_b, q, dist, i)
             if not state_new or np.equal(state_new.q.state(), q.state()).all(): # Reached
-                # self.SaveData(mode, time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = n_new.state.q.state())
+                # self.SaveData(mode, time.time()-self.start_time, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = n_new.state.q.state())
                 return n_nearest_b
-            # self.SaveData(mode, time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = state_new.q.state())
+            # self.SaveData(mode, time.time()-self.start_time, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = state_new.q.state())
             if self.env.is_collision_free(state_new.q, mode) and self.env.is_edge_collision_free(n_nearest_b.state.q, state_new.q, mode):
                 # Add n_new to tree
         
                 n_new = Node(state_new,self.operation)
-                cost = batch_cost_torch(n_new.q_tensor, n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), self.config.cost_type).clone()
+                
+                cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.cost_metric, reduction=self.cost_reduction)
                 c_min = n_nearest_b.cost + cost
 
                 n_new.parent = n_nearest_b
@@ -301,10 +304,10 @@ class dRRTstar(BaseRRTstar):
                 self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, n_new.id) 
                 n_new.cost = c_min
                 n_nearest_b = n_new
-                i+=1
+                i +=1
             else:
-                return
-    
+                return 
+             
     def DirectionOracle(self, mode:Mode, q_rand:Configuration, n_near:Node, iter:int) -> None:
             candidate = []
             for i, r in enumerate(self.env.robots):
@@ -332,9 +335,9 @@ class dRRTstar(BaseRRTstar):
                         min_angle = angle
                         best_neighbor = neighbor.q
                 candidate.append(best_neighbor)
-            # self.SaveData(time.time()-self.start, n_rand= q_rand.q, n_nearest=n_near.state.q.state(), N_near_ = n_near.neighbors[r]) 
+            # self.SaveData(time.time()-self.start_time, n_rand= q_rand.q, n_nearest=n_near.state.q.state(), N_near_ = n_near.neighbors[r]) 
             candidate = NpConfiguration.from_list(candidate)
-            # self.SaveData(time.time()-self.start, n_nearest = candidate.q) 
+            # self.SaveData(time.time()-self.start_time, n_nearest = candidate.q) 
             n_candidate = Node(State(candidate, mode), self.operation)
                 # if n_candidate not in self.g.blacklist: TODO
                 #     break
@@ -346,29 +349,30 @@ class dRRTstar(BaseRRTstar):
             if not existing_node:        
                 if not self.env.is_edge_collision_free(n_near.state.q, candidate, mode):
                     return
-                batch_cost =  batch_cost_torch(n_candidate.q_tensor, n_candidate.state.q, n_near.q_tensor.unsqueeze(0), metric = self.config.cost_type).clone()
+                batch_cost = batch_config_cost([n_candidate.state], [n_near.state], metric = self.cost_metric, reduction=self.cost_reduction)
                 n_candidate.parent = n_near
                 n_candidate.cost_to_parent = batch_cost
                 n_near.children.append(n_candidate)
                 self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, n_candidate.id) 
                 n_candidate.cost = n_near.cost + batch_cost
                 self.trees[mode].add_node(n_candidate)
+                N_near_batch, n_near_costs, node_indices = self.Near(mode, n_candidate)
+                batch_cost = batch_config_cost(n_candidate.state.q, N_near_batch, metric = self.cost_metric, reduction=self.cost_reduction)
+                if self.Rewire(mode, node_indices, n_candidate, batch_cost, n_near_costs):
+                    self.UpdateCost(n_candidate)
                 self.ManageTransition(mode, n_candidate, iter) #Check if we have reached a goal
             else:
                 #reuse existing node
                 # existing_node_ = self.CheckForExistingNode(mode, n_candidate)
-                batch_cost =  batch_cost_torch(existing_node.q_tensor, existing_node.state.q, n_near.q_tensor.unsqueeze(0), metric = self.config.cost_type).clone()
+                batch_cost = batch_config_cost([existing_node.state], [n_near.state], metric = self.cost_metric, reduction=self.cost_reduction)
                 if self.FindParent(mode, n_near, existing_node, batch_cost):
                     self.UpdateCost(existing_node)
-                # N_near_batch, n_near_costs, node_indices = self.Near(mode, existing_node)
-                # batch_cost, batch_dist =  batch_cost_torch(existing_node.q_tensor, existing_node.state.q, N_near_batch, metric = self.config.cost_type)
-                # if self.Rewire(mode, node_indices, existing_node, batch_cost, batch_dist, n_near_costs):
-                #     self.UpdateCost(existing_node)
-                # if self.Rewire(N_near_indices, existing_node, batch_cost, batch_dist, n_near_costs):
-                #     self.UpdateCost(existing_node)
-                #need to get trasntion node?
-                self.FindLBTransitionNode(iter)
-                # self.ManageTransition(mode, existing_node, iter, False) #Check if we have reached a goal
+                N_near_batch, n_near_costs, node_indices = self.Near(mode, existing_node)
+                batch_cost = batch_config_cost(existing_node.state.q, N_near_batch, metric = self.cost_metric, reduction=self.cost_reduction)
+                if self.Rewire(mode, node_indices, existing_node, batch_cost, n_near_costs):
+                    self.UpdateCost(existing_node)
+            self.FindLBTransitionNode(iter)
+               
             
     def ConnectToTarget(self, mode:Mode, iter:int):
         """Local connector: Tries to connect to a termination node in mode"""
@@ -387,17 +391,18 @@ class dRRTstar(BaseRRTstar):
         
         # N_near_batch, n_near_costs, node_indices = self.KNearest(mode, terminal_q_tensor.unsqueeze(0), terminal_q) #TODO
         N_near_batch, n_near_costs, node_indices = self.Near(mode, termination_node)
-        batch_cost =  batch_cost_torch(termination_node.q_tensor, terminal_q, N_near_batch, metric = self.config.cost_type).clone()
+        batch_cost = batch_config_cost(termination_node.state.q, N_near_batch, metric = self.cost_metric, reduction=self.cost_reduction)
         c_terminal_costs = n_near_costs + batch_cost       
-        _, sorted_mask = torch.sort(c_terminal_costs)
+        sorted_mask = np.argsort(c_terminal_costs)
         for idx in sorted_mask:
             if termination_node.parent is None or termination_node.cost > c_terminal_costs[idx]:
                 node = self.trees[mode].subtree.get(node_indices[idx].item())
-                dist = batch_dist_torch(node.q_tensor, node.state.q, termination_node.q_tensor.unsqueeze(0), self.config.dist_type).clone()
+                dist = batch_config_dist(node.state.q, [termination_node.state.q], self.distance_metric)
+                # dist = batch_dist_torch(node.q_tensor, node.state.q, termination_node.q_tensor.unsqueeze(0), self.distance_metric)
                 n_nearest = self.Extend(mode, node, termination_node, dist)
                 if n_nearest is not None:
                     if self.env.is_edge_collision_free(n_nearest.state.q, terminal_q,  mode):
-                        cost = batch_cost_torch(n_nearest.q_tensor, n_nearest.state.q, termination_node.q_tensor.unsqueeze(0), self.config.cost_type).clone()
+                        cost = batch_config_cost([n_nearest.state], [termination_node.state], metric = self.cost_metric, reduction=self.cost_reduction)
                         if termination_node.parent is not None:
                             termination_node.parent.children.remove(termination_node)
                         termination_node.parent = n_nearest
@@ -426,10 +431,12 @@ class dRRTstar(BaseRRTstar):
                 self.SaveFinalData()
                 break
 
+
+
             
          
 
-        self.SaveData(active_mode, time.time()-self.start)
-        print(time.time()-self.start)
+        self.SaveData(active_mode, time.time()-self.start_time)
+        print(time.time()-self.start_time)
         return self.operation.path    
 

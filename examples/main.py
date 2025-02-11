@@ -11,25 +11,26 @@ sys.path.append(os.path.join(project_root, "src"))
 
 from multi_robot_multi_goal_planning.planners.rrtstar_base import *
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
-from multi_robot_multi_goal_planning.planners.planner_bi_rrtstar import BidirectionalRRTstar
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import BidirectionalRRTstar
 from multi_robot_multi_goal_planning.planners.planner_bi_rrtstar_parallelized import ParallelizedBidirectionalRRTstar
-from multi_robot_multi_goal_planning.planners.planner_rrtstar_parallelized import ParallelizedRRTstar
-from multi_robot_multi_goal_planning.planners.planner_q_rrtstar import QRRTstar
+# from multi_robot_multi_goal_planning.planners.planner_rrtstar_parallelized import ParallelizedRRTstar
+# from multi_robot_multi_goal_planning.planners.planner_q_rrtstar import QRRTstar
 from multi_robot_multi_goal_planning.planners.planner_drrtstar import dRRTstar
 from multi_robot_multi_goal_planning.problems.rai_envs import *
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 from analysis.postprocessing import cost_single, final_path_animation
+from analysis.analysis_util import save_env_as_mesh
 import multiprocessing
 
 def execute_planner(env, args, config_manager):
     if args.planner == "rrtstar":
         planner = RRTstar(env, config_manager)
     
-    if args.planner == "rrtstar_par":
-        planner = ParallelizedRRTstar(env, config_manager)
+    # if args.planner == "rrtstar_par":
+    #     planner = ParallelizedRRTstar(env, config_manager)
     
-    if args.planner == "q_rrtstar":
-        planner = QRRTstar(env, config_manager)
+    # if args.planner == "q_rrtstar":
+    #     planner = QRRTstar(env, config_manager)
 
     if args.planner == "bi_rrtstar":
         planner = BidirectionalRRTstar(env, config_manager)
@@ -53,7 +54,10 @@ def execute_planner(env, args, config_manager):
     cost_single(env, pkl_folder, output_dir)
     output_html = os.path.join(config_manager.output_dir, 'final_path_animation_3d.html')
     env_path = os.path.join(os.path.expanduser("~"), f'env/{args.env_name}')
-    final_path_animation(env, env_path, pkl_folder, output_html)  
+    if len(path[0].q.state())/(len(env.robots)) <= 3: # Only applicable up to 2D env with orientation
+        save_env_as_mesh(env, env_path)
+        final_path_animation(env, env_path, pkl_folder, output_html)  
+
 
 def single_run(run_id, args, config_manager):
     env = get_env_by_name(args.env_name)
@@ -61,7 +65,7 @@ def single_run(run_id, args, config_manager):
     #logic for seeding and output directory setup
     if config_manager.use_seed and config_manager.amount_of_runs == 1:
         seed = config_manager.seed
-    elif config_manager.use_seed and config_manager.amount_of_runs < 10: 
+    elif config_manager.use_seed and config_manager.amount_of_runs < 20: 
         seed = run_id +1
     else:
         seed = int(time.time() * 1000000) % (2**32) + run_id

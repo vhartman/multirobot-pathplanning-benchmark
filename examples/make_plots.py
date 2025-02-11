@@ -136,6 +136,9 @@ planner_name_to_color = {
     "locally_informed_prm_rejection": "tab:orange",
     "locally_informed_prm_shortcutting_rejection": "tab:red",
     "globally_informed_prm_shortcutting_rejection": "tab:brown",
+    "birrtstar": "mediumvioletred", 
+    "rrtstar": "darkcyan"
+    
 }
 
 

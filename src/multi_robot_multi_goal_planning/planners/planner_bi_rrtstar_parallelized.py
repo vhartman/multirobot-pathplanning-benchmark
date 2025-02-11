@@ -1,4 +1,4 @@
-from multi_robot_multi_goal_planning.planners.planner_bi_rrtstar import *
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import *
 
 """
 This file contains the most important changes for the parallelized Bi-RRT* algorithm compared to the original RRT*. There are 2 versions possible: 
@@ -21,16 +21,16 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
         start_node = Node(start_state, self.operation)
         self.trees[mode].add_node(start_node)
         start_node.cost = 0
-        start_node.cost_to_parent = torch.tensor(0, device=device, dtype=torch.float32)
+        start_node.cost_to_parent = np.float32(0)
         #Initialize other modes:
         while True:
             self.InformedInitialization(mode)
             if not self.env.is_terminal_mode(mode): 
                 self.add_new_mode(mode=mode, tree_instance=BidirectionalTree) 
-            for _ in range(self.config.transition_nodes):                 
+            for _ in range(self.transition_nodes):                 
                 q = self.sample_transition_configuration(mode)
                 node = Node(State(q, mode), self.operation)
-                node.cost_to_parent = torch.tensor(0, device=device, dtype=torch.float32)
+                node.cost_to_parent = np.float32(0)
                 self.mark_node_as_transition(mode, node)
                 self.trees[mode].add_node(node, 'B')
                 self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, node.id) 
@@ -45,29 +45,31 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
             return
         n_nearest_b, dist = self.Nearest(mode, n_new.state.q, 'B')
 
-        if self.config.birrtstar_version == 1 or self.config.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
+        if self.birrtstar_version == 1 or self.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
           
-            cost = batch_cost_torch(n_new.q_tensor, n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0), self.config.cost_type).clone()
+          
+            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.cost_metric, reduction=self.cost_reduction)
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
             #     if r in constrained_robots:
             #         relevant_dists.append(dists[0][r_idx].item())
-            # if np.max(relevant_dists) > self.config.step_size:
+            # if np.max(relevant_dists) > self.step_size:
             #     return
 
-            if torch.max(dist).item() > self.config.step_size:
+            if np.max(dist) > self.step_size:
                 return
 
             if not self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, mode): #ORder rigth? TODO
                 return
           
 
-        elif self.config.birrtstar_version == 2 and not self.trees[mode].connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
+        elif self.birrtstar_version == 2 and not self.trees[mode].connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
             n_nearest_b = self.Extend(mode, n_nearest_b, n_new, dist)
             if not n_nearest_b:
                 return
-            cost = batch_cost_torch(n_new.q_tensor, n_new.state.q, n_nearest_b.q_tensor.unsqueeze(0),self.config.cost_type).clone()
+            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.cost_metric, reduction=self.cost_reduction)
+            
  
         if self.trees[mode].order == -1:
             #switch such that subtree is beginning from start and subtree_b from goal
@@ -99,21 +101,21 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
 
         if shortcutting and self.start_single_goal.satisfies_constraints(self.operation.path_nodes[0].state.q.state(), mode, self.env.collision_tolerance):
             if not self.operation.init_sol:
-                print(time.time()-self.start)
+                print(time.time()-self.start_time)
                 self.operation.init_sol = True
-            self.operation.cost = self.operation.path_nodes[-1].cost.clone()
-            self.SaveData(mode, time.time()-self.start)
+            self.operation.cost = self.operation.path_nodes[-1].cost
+            self.SaveData(mode, time.time()-self.start_time)
             self.costs.append(self.operation.cost)
-            self.times.append(time.time()-self.start)
-            if self.config.shortcutting:
+            self.times.append(time.time()-self.start_time)
+            if self.shortcutting:
                 print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost)
                 self.Shortcutting(mode)
             print(f"{iter} M", mode.task_ids, "Cost: ", self.operation.cost)
-        if self.config.shortcutting and not shortcutting:
-            self.operation.cost = self.operation.path_nodes[-1].cost.clone()
-            self.SaveData(mode, time.time()-self.start)
+        if self.shortcutting and not shortcutting:
+            self.operation.cost = self.operation.path_nodes[-1].cost
+            self.SaveData(mode, time.time()-self.start_time)
             self.costs.append(self.operation.cost)
-            self.times.append(time.time()-self.start)
+            self.times.append(time.time()-self.start_time)
                  
     def ManageTransition(self, mode:Mode, n_new:Node, iter:int) -> None:
         #if tree is in the right order
@@ -132,7 +134,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                 n_new.parent.children.remove(n_new)
                 cost = n_new.cost_to_parent
                 n_new.parent = None
-                n_new.cost_to_parent = torch.tensor(0, device=device, dtype = torch.float32)
+                n_new.cost_to_parent = np.float32(0)
                 n_new.cost = np.inf
                 self.trees[mode].swap()
                 self.convert_node_to_transition_node(mode.prev_mode, n_new)
@@ -149,7 +151,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                     n_new.parent.children.remove(n_new)
                     cost = n_new.cost_to_parent
                     n_new.parent = None
-                    n_new.cost_to_parent = torch.tensor(0, device=device,dtype = torch.float32)
+                    n_new.cost_to_parent = np.float32(0)
                     n_new.cost = 0
                     self.trees[mode].swap()
                     self.convert_node_to_transition_node(mode.prev_mode, n_new)
@@ -192,7 +194,8 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                 if n_nearest.id not in node_indices:
                     continue
 
-                batch_cost =  batch_cost_torch(n_new.q_tensor, n_new.state.q, N_near_batch, metric = self.config.cost_type).clone()
+              
+                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = self.cost_metric, reduction=self.cost_reduction)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 # if self.operation.init_sol:
                 if self.operation.init_sol:
@@ -208,8 +211,8 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                 break
             
 
-        self.SaveData(active_mode, time.time()-self.start, n_new = n_new.state.q)
-        print(time.time()-self.start)
+        self.SaveData(active_mode, time.time()-self.start_time, n_new = n_new.state.q)
+        print(time.time()-self.start_time)
         return self.operation.path    
 
 

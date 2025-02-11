@@ -1,8 +1,36 @@
 {
     "version": "0.2.0",
     "configurations": [
+         {
+            "name": "- simple_2d_rrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/run_experiment.py",
+            "args": [
+                "/home/tirza/multirobot-pathplanning-benchmark/configs/experiments/simple_2d_rrtstar.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
         {
-            "name": "main.py - one_agent_many_goals --planner drrtstar",
+            "name": "- simple_2d_birrtstar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/run_experiment.py",
+            "args": [
+                "/home/tirza/multirobot-pathplanning-benchmark/configs/experiments/simple_2d_birrtstar.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        {
+            "name": "main.py - one_agent_many_goals --planner drrtstar ",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/examples/main.py",
@@ -18,26 +46,10 @@
             }
         },
         {
-            "name": "main.py - one_agent_many_goals --planner drrtstar numba",
+            "name": "main.py - 2d_handover --planner rrtstar ",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main_numba.py",
-            "args": [
-                "one_agent_many_goals",
-                "--planner",
-                "drrtstar"
-            ],
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
-        },
-        {
-            "name": "main.py - 2d_handover --planner rrtstar numba",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/examples/main_numba.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "2d_handover",
                 "--planner",
@@ -50,10 +62,10 @@
             }
         },
         {
-            "name": "main.py - hallway_dep --planner rrtstar numba",
+            "name": "main.py - hallway_dep --planner rrtstar ",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main_numba.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "hallway_dep",
                 "--planner",
@@ -66,10 +78,10 @@
             }
         },  
         {
-            "name": "main.py - simple_2d --planner rrtstar numba",
+            "name": "main.py - simple_2d --planner rrtstar ",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main_numba.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "simple_2d",
                 "--planner",
@@ -82,10 +94,10 @@
             }
         },
          {
-            "name": "main.py - hallway --planner rrtstar numba",
+            "name": "main.py - hallway --planner rrtstar ",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main_numba.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "hallway",
                 "--planner",
@@ -98,10 +110,10 @@
             }
         },
         {
-            "name": "main.py - one_agent_many_goals --planner rrtstar numba",
+            "name": "main.py - one_agent_many_goals --planner rrtstar ",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main_numba.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "one_agent_many_goals",
                 "--planner",
@@ -182,10 +194,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "main.py -simple_2d --planner bi_rrtstar numba",
+            "name": "main.py -simple_2d --planner bi_rrtstar ",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main_numba.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "simple_2d",
                 "--planner",
@@ -206,10 +218,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "main.py -simple_2d --planner bi_rrtstar_par numba",
+            "name": "main.py -simple_2d --planner bi_rrtstar_par ",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main_numba.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "simple_2d",
                 "--planner",

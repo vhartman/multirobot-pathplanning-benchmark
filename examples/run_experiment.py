@@ -31,7 +31,8 @@ from multi_robot_multi_goal_planning.planners.joint_prm_planner import joint_prm
 from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
-
+from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import BidirectionalRRTstar
 from make_plots import make_cost_plots
 
 # np.random.seed(100)
@@ -165,8 +166,43 @@ def setup_planner(
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
             )
-    elif planner_config["type"] == "rrt":
-        raise ValueError(f"Planner type {planner_config['type']} not implemented")
+    elif planner_config["type"] == "rrtstar":
+        def planner(env):
+            options = planner_config["options"]
+            return RRTstar(
+                    env, 
+                    ptc=RuntimeTerminationCondition(runtime),
+                    general_goal_sampling=options["general_goal_sampling"],
+                    informed_sampling=options["informed_sampling"],
+                    informed_sampling_version=options["informed_sampling_version"],
+                    distance_metric=options["distance_metric"],
+                    p_goal=options["p_goal"],
+                    p_stay=options["p_stay"],
+                    p_uniform=options["p_uniform"],
+                    shortcutting=options["shortcutting"],
+                    mode_sampling=options["mode_sampling"], 
+                    gaussian=options["gaussian"]
+                ).Plan()
+    elif planner_config["type"] == "birrtstar":
+        def planner(env):
+            options = planner_config["options"]
+            return BidirectionalRRTstar(
+                    env, 
+                    ptc=RuntimeTerminationCondition(runtime),
+                    general_goal_sampling=options["general_goal_sampling"],
+                    informed_sampling=options["informed_sampling"],
+                    informed_sampling_version=options["informed_sampling_version"],
+                    distance_metric=options["distance_metric"],
+                    p_goal=options["p_goal"],
+                    p_stay=options["p_stay"],
+                    p_uniform=options["p_uniform"],
+                    shortcutting=options["shortcutting"],
+                    mode_sampling=options["mode_sampling"], 
+                    gaussian=options["gaussian"], 
+                    transition_nodes = options["transition_nodes"], 
+                    birrtstar_version= options["birrtstar_version"]
+                ).Plan()
+
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
 
@@ -245,6 +281,9 @@ def run_experiment(
                     export_planner_data(planner_folder, run_id, res)
                 except Exception as e:
                     print(f"Error in {planner_name} run {run_id}: {e}")
+                    import traceback
+                    tb = traceback.format_exc()  # Get the full traceback
+                    print(f"Error in {planner_name} run {run_id}: {e}\nTraceback:\n{tb}")
 
                 finally:
                     # Restore stdout and stderr
@@ -364,7 +403,6 @@ def main():
     )
 
     args = parser.parse_args()
-
     config = load_experiment_config(args.filepath)
 
     env = get_env_by_name(config["environment"])
