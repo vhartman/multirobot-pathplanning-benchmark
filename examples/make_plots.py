@@ -371,14 +371,12 @@ def main():
     parser.add_argument("foldername", nargs="?", default="default", help="filepath")
     parser.add_argument(
         "--save",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=False,
+        action="store_true",
         help="Save the generated plot (default: False)",
     )
     parser.add_argument(
         "--use_paper_style",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=False,
+        action="store_true",
         help="Use the paper style (default: False)",
     )
     args = parser.parse_args()
