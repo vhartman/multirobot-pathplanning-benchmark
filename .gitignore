@@ -77,3 +77,4 @@ coverage/
 # Ignore custom folders
 *.bak/
 temp/
+cache/
