@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/examples/run_experiment.py",
             "args": [
-                "/home/tirza/multirobot-pathplanning-benchmark/configs/experiments/simple_2d_rrtstar.json"
+                "/home/tirza/multirobot-pathplanning-benchmark/configs/experiments/simple_2d_sampling_based.json"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",

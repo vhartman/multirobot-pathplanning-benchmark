@@ -23,10 +23,10 @@ class BidirectionalRRTstar(BaseRRTstar):
                  p_goal: float = 0.9, 
                  p_stay: float = 0.3,
                  p_uniform: float = 0.8, 
-                 shortcutting: bool = True, 
+                 shortcutting: bool = False, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = True, 
-                 transition_nodes: int = 10, 
+                 gaussian: bool = False, 
+                 transition_nodes: int = 50, 
                  birrtstar_version: int = 2 
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,

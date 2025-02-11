@@ -172,7 +172,7 @@ def setup_planner(
             return RRTstar(
                     env, 
                     ptc=RuntimeTerminationCondition(runtime),
-                    general_goal_sampling=options["general_goal_sampling"],
+                    # general_goal_sampling=options["general_goal_sampling"],
                     informed_sampling=options["informed_sampling"],
                     informed_sampling_version=options["informed_sampling_version"],
                     distance_metric=options["distance_metric"],
@@ -181,7 +181,7 @@ def setup_planner(
                     p_uniform=options["p_uniform"],
                     shortcutting=options["shortcutting"],
                     mode_sampling=options["mode_sampling"], 
-                    gaussian=options["gaussian"]
+                    # gaussian=options["gaussian"]
                 ).Plan()
     elif planner_config["type"] == "birrtstar":
         def planner(env):
@@ -189,7 +189,7 @@ def setup_planner(
             return BidirectionalRRTstar(
                     env, 
                     ptc=RuntimeTerminationCondition(runtime),
-                    general_goal_sampling=options["general_goal_sampling"],
+                    # general_goal_sampling=options["general_goal_sampling"],
                     informed_sampling=options["informed_sampling"],
                     informed_sampling_version=options["informed_sampling_version"],
                     distance_metric=options["distance_metric"],
@@ -198,7 +198,7 @@ def setup_planner(
                     p_uniform=options["p_uniform"],
                     shortcutting=options["shortcutting"],
                     mode_sampling=options["mode_sampling"], 
-                    gaussian=options["gaussian"], 
+                    # gaussian=options["gaussian"], 
                     transition_nodes = options["transition_nodes"], 
                     birrtstar_version= options["birrtstar_version"]
                 ).Plan()

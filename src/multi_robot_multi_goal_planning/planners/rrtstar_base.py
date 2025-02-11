@@ -314,7 +314,7 @@ class InformedVersion0(Informed):
         self.mode_task_ids_task = {}
         self.cmin = {}
         self.C = {}
-        self.start_time = {}
+        self.start = {}
         self.goal = {}
         self.mode_task_ids_home_poses = {}
         self.center = {}
@@ -329,27 +329,27 @@ class InformedVersion0(Informed):
         cost = 0
         if self.mode_task_ids_home_poses[r_idx] == [-1]:
             start_cost = 0
-            self.start_time[r_idx] = n1
+            self.start[r_idx] = n1
         for node in path_nodes[1:]:
             n2 = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
             cost += self.cost_fct(n1, n2, self.env.cost_metric, self.env.cost_reduction)
             #need to work with task ids as same mode can have different configs
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
                 start_cost = cost
-                self.start_time[r_idx] = n2
+                self.start[r_idx] = n2
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]:
                 goal_cost = cost
                 self.goal[r_idx] = n2
                 break 
             n1 = n2
         try:
-            norm, self.C[r_idx] = self.rotation_to_world_frame(self.start_time[r_idx], self.goal[r_idx], self.n[r_idx])
+            norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
         except:
             pass
         if norm is None:
             return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start_time[r_idx].state())/2
+        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return goal_cost-start_cost    
 class InformedVersion1(Informed):
     """Global informed sampling: Considering whole configuration"""
@@ -359,7 +359,7 @@ class InformedVersion1(Informed):
         self.mode_task_ids_task = []
         self.cmin = None
         self.C = None
-        self.start_time = None
+        self.start = None
         self.goal = None
         self.mode_task_ids_home_poses = []
         self.center = None
@@ -379,19 +379,19 @@ class InformedVersion1(Informed):
         mode_task_ids_task = self.mode_task_ids_task[idx]
 
         if mode_task_ids_home_pose == [-1]:
-            self.start_time = path_nodes[0]
+            self.start = path_nodes[0]
 
         for node in path_nodes:
             if node.transition and node.state.mode.task_ids == mode_task_ids_home_pose:
-                self.start_time = node
+                self.start = node
             if node.transition and node.state.mode.task_ids == mode_task_ids_task:
                 self.goal = node
                 break 
         lb_goal = self.cost_fct(self.goal.state.q, path_nodes[-1].state.q, self.env.cost_metric, self.env.cost_reduction)
-        lb_start = self.cost_fct( path_nodes[0].state.q, self.start_time.state.q, self.env.cost_metric, self.env.cost_reduction)
-        norm, self.C = self.rotation_to_world_frame(self.start_time.state.q, self.goal.state.q, self.n)
+        lb_start = self.cost_fct( path_nodes[0].state.q, self.start.state.q, self.env.cost_metric, self.env.cost_reduction)
+        norm, self.C = self.rotation_to_world_frame(self.start.state.q, self.goal.state.q, self.n)
         self.cmin = norm-2*self.env.collision_tolerance
-        self.center = (self.goal.state.q.state() + self.start_time.state.q.state())/2
+        self.center = (self.goal.state.q.state() + self.start.state.q.state())/2
         return path_nodes[-1].cost - lb_goal - lb_start
     
     def initialize(self, mode:Mode, next_ids:List[int]): 
@@ -414,7 +414,7 @@ class InformedVersion2(Informed):
         self.mode_task_ids_task = {}
         self.cmin = {}
         self.C = {}
-        self.start_time = {}
+        self.start = {}
         self.goal = {}
         self.mode_task_ids_home_poses = {}
         self.center = {}
@@ -426,12 +426,12 @@ class InformedVersion2(Informed):
     def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
         if self.mode_task_ids_home_poses[r_idx] == [-1]:
             start_node = path_nodes[0]
-            self.start_time[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
+            self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
         for node in path_nodes[1:]:
             #need to work with task ids as same mode can have different configs
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
                 start_node = node
-                self.start_time[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
+                self.start[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]:
                 goal_node = node
                 self.goal[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
@@ -439,11 +439,11 @@ class InformedVersion2(Informed):
 
         lb_goal = self.cost_fct(goal_node.state.q, path_nodes[-1].state.q, self.env.cost_metric, self.env.cost_reduction)
         lb_start = self.cost_fct( path_nodes[0].state.q, start_node.state.q, self.env.cost_metric, self.env.cost_reduction)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start_time[r_idx], self.goal[r_idx], self.n[r_idx])
+        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
         if norm is None:
             return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start_time[r_idx].state())/2
+        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return path_nodes[-1].cost - lb_goal - lb_start    
 class InformedVersion3(Informed):
     """Local informed sampling: Each agent separately (Similar to version 1)"""
@@ -453,7 +453,7 @@ class InformedVersion3(Informed):
         self.mode_task_ids_task = {}
         self.cmin = {}
         self.C = {}
-        self.start_time = {}
+        self.start = {}
         self.goal = {}
         self.mode_task_ids_home_poses = {}
         self.center = {}
@@ -465,13 +465,13 @@ class InformedVersion3(Informed):
     def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
         if self.mode_task_ids_home_poses[r_idx] == [-1]:
             start_node = path_nodes[0]
-            self.start_time[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
+            self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
             start_idx = 0
         for idx , node in enumerate(path_nodes[1:]):
             #need to work with task ids as same mode can have different configs
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
                 start_node = node
-                self.start_time[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
+                self.start[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
                 start_idx = idx
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]:
                 goal_node = node
@@ -484,11 +484,11 @@ class InformedVersion3(Informed):
 
         lb_goal = self.cost_fct(goal_node.state.q, path_nodes[idx2].state.q, self.env.cost_metric, self.env.cost_reduction)
         lb_start = self.cost_fct( path_nodes[idx1].state.q, start_node.state.q, self.env.cost_metric, self.env.cost_reduction)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start_time[r_idx], self.goal[r_idx], self.n[r_idx])
+        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
         if norm is None:
             return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start_time[r_idx].state())/2
+        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         
         return path_nodes[idx2].cost - path_nodes[idx1].cost - lb_goal - lb_start   
 class InformedVersion4(Informed):
@@ -499,7 +499,7 @@ class InformedVersion4(Informed):
         self.mode_task_ids_task = {}
         self.cmin = {}
         self.C = {}
-        self.start_time = {}
+        self.start = {}
         self.goal = {}
         self.mode_task_ids_home_poses = {}
         self.center = {}
@@ -518,16 +518,16 @@ class InformedVersion4(Informed):
                 break
         goal = path_nodes[idx2]
         start = path_nodes[idx1]
-        self.start_time[r_idx] = NpConfiguration.from_numpy(start.state.q.state()[r_indices])
+        self.start[r_idx] = NpConfiguration.from_numpy(start.state.q.state()[r_indices])
         self.goal[r_idx] = NpConfiguration.from_numpy(goal.state.q.state()[r_indices])
 
         lb_goal = self.cost_fct(goal.state.q, path_nodes[-1].state.q, self.env.cost_metric, self.env.cost_reduction)
         lb_start = self.cost_fct( path_nodes[0].state.q, start.state.q, self.env.cost_metric, self.env.cost_reduction)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start_time[r_idx], self.goal[r_idx], self.n[r_idx])
+        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
         if norm is None:
             return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start_time[r_idx].state())/2
+        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return path_nodes[-1].cost - lb_goal - lb_start
 class InformedVersion5(Informed):
     """Global informed smapling: Each agent separately (Similar to version 1)"""
@@ -537,7 +537,7 @@ class InformedVersion5(Informed):
         self.mode_task_ids_task = {}
         self.cmin = {}
         self.C = {}
-        self.start_time = {}
+        self.start = {}
         self.goal = {}
         self.mode_task_ids_home_poses = {}
         self.center = {}
@@ -549,22 +549,22 @@ class InformedVersion5(Informed):
     def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
         if self.mode_task_ids_home_poses[r_idx] == [-1]:
             start_node = path_nodes[0]
-            self.start_time[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
+            self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
         for node in path_nodes[1:]:
             #need to work with task ids as same mode can have different configs
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
                 start_node = node
-                self.start_time[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
+                self.start[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]:
                 goal_node = node
                 self.goal[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
                 break 
 
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start_time[r_idx], self.goal[r_idx], self.n[r_idx])
+        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
         if norm is None:
             return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start_time[r_idx].state())/2
+        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return goal_node.cost - start_node.cost
 
 @njit(fastmath=True, cache=True)
@@ -1093,7 +1093,7 @@ class BaseRRTstar(ABC):
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
         if self.operation.init_sol and self.shortcutting and shortcutting:
-            # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
+            print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             self.Shortcutting(mode)
             
     def RandomMode(self) -> List[float]:
@@ -1199,7 +1199,7 @@ class BaseRRTstar(ABC):
             if valid_mask.any():
                 lb_transition_node = self.get_transition_node(mode, result[1])
                 self.GeneratePath(mode, lb_transition_node)
-                # print(f"{iter} M", mode.task_ids, "Cost: ", self.operation.cost.item())
+                print(f"{iter} M", mode.task_ids, "Cost: ", self.operation.cost.item())
 
     def UpdateDiscretizedCost(self, path , cost, idx):
         path_a, path_b = path[idx-1: -1], path[idx: ]

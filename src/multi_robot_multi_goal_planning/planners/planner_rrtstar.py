@@ -13,9 +13,9 @@ class RRTstar(BaseRRTstar):
                  p_goal: float = 0.9, 
                  p_stay: float = 0.3,
                  p_uniform: float = 0.8, 
-                 shortcutting: bool = True, 
+                 shortcutting: bool = False, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = True, 
+                 gaussian: bool = False, 
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
