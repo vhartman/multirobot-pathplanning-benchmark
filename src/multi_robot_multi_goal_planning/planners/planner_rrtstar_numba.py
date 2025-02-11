@@ -20,10 +20,7 @@ class RRTstar(BaseRRTstar):
     def ManageTransition(self, mode:Mode, n_new: Node, iter: int) -> None:
         #check if transition is reached
         if self.env.is_transition(n_new.state.q, mode):
-            if not self.operation.init_sol and mode.__eq__(self.modes[-1]):
-                    self.add_new_mode(n_new.state.q, mode, SingleTree)
-                    self.InformedInitialization(self.modes[-1])
-                    print('------------------')
+            self.add_new_mode(n_new.state.q, mode, SingleTree)
             self.convert_node_to_transition_node(mode, n_new)
         #check if termination is reached
         if self.env.done(n_new.state.q, mode):
@@ -38,13 +35,12 @@ class RRTstar(BaseRRTstar):
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
         active_mode = self.modes[-1]
-        self.InformedInitialization(active_mode)
         # Create start node
         start_state = State(self.env.start_pos, active_mode)
         start_node = Node(start_state, self.operation)
         self.trees[active_mode].add_node(start_node)
-        start_node.cost = 0
-        start_node.cost_to_parent = np.float32(0)
+        start_node.cost = 0.0
+        start_node.cost_to_parent = 0.0
     
     def Plan(self) -> List[State]:
         i = 0
@@ -52,7 +48,7 @@ class RRTstar(BaseRRTstar):
         while True:
             i += 1
             # Mode selectiom       
-            active_mode  = self.RandomMode(Mode.id_counter)
+            active_mode  = self.RandomMode()
 
             # RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
@@ -77,11 +73,16 @@ class RRTstar(BaseRRTstar):
                 # print(i, [float(s) for s in batch_cost])
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
-                    self.UpdateCost(n_new)
-
-                    
+                    self.UpdateCost(n_new) 
                 self.ManageTransition(active_mode, n_new, i)
 
+                # if i% 100 == 0:
+                #     q_hallo = []
+                #     for n in self.trees[active_mode].subtree.values():
+                #         q_hallo.append(n.state.q.state())
+                #     self.SaveData(active_mode, time.time()-self.start, ellipse = q_hallo)
+                #     print('AAAAAAAAAAAA')
+            
                 
 
             if self.PTC(i):

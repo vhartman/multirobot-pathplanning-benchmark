@@ -31,24 +31,49 @@ class BidirectionalRRTstar(BaseRRTstar):
             children = current_node.children
             if children:
                 for _, child in enumerate(children):
-                    child.cost = current_node.cost + child.cost_to_parent
-                    # child.agent_dists = current_node.agent_dists + child.agent_dists_to_parent
-                # cost_to_parents = np.array([child.cost_to_parent for child in children])
-                # new_costs = compute_child_costs(current_node.cost, cost_to_parents)
-                
-                # for i, child in enumerate(children):
-                #     child.cost = new_costs[i]
-                    
+                    child.cost = current_node.cost + child.cost_to_parent                    
                 stack.extend(children)
+
+    def add_new_mode(self, q:Optional[Configuration]=None, mode:Mode=None, tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None) -> None: #TODO entry_configuration needs to be specified
+        """Initializes a new mode"""
+        if mode is None: 
+            new_mode = self.env.make_start_mode()
+            new_mode.prev_mode = None
+        else:
+            new_mode = self.env.get_next_mode(q, mode)
+            new_mode.prev_mode = mode
+        if new_mode in self.modes:
+            return 
     
+        self.modes.append(new_mode)
+        self.add_tree(new_mode, tree_instance)
+        self.InformedInitialization(new_mode)
+        #Initialize transition nodes
+        if self.env.is_terminal_mode(new_mode):
+            N = 1
+        else:
+            N = self.config.transition_nodes
+
+        for _ in range(N):                 
+            q = self.sample_transition_configuration(new_mode)
+            node = Node(State(q, new_mode), self.operation)
+            node.cost_to_parent = 0.0
+            self.mark_node_as_transition(new_mode, node)
+            self.trees[new_mode].add_node(node, 'B')
+            self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
+            node.cost = np.inf
+
     def ManageTransition(self, mode:Mode, n_new: Node, iter: int) -> None:
-        #Check if transition is reached
-        if self.env.is_transition(n_new.state.q, mode):
-            self.mark_node_as_transition(mode, n_new)
-            self.trees[self.modes[mode.id +1]].add_transition_node_as_start_node(n_new)
-        #Check if termination is reached
-        if self.env.done(n_new.state.q, mode):
-            self.mark_node_as_transition(mode, n_new)
+        #check if transition is reached
+        if self.trees[mode].order == 1 and self.env.is_transition(n_new.state.q, mode):
+            self.add_new_mode(n_new.state.q, mode, BidirectionalTree)
+            self.convert_node_to_transition_node(mode, n_new)
+        #check if termination is reached
+        if self.trees[mode].order == 1 and self.env.done(n_new.state.q, mode):
+            self.convert_node_to_transition_node(mode, n_new)
+            if not self.operation.init_sol:
+                print(time.time()-self.start)
+                self.operation.init_sol = True
         self.FindLBTransitionNode(iter)
 
     def UpdateTree(self, mode:Mode ,n: Node, n_parent:Node , cost_to_parent:torch.Tensor) -> None: #TODO need to update it
@@ -87,9 +112,6 @@ class BidirectionalRRTstar(BaseRRTstar):
 
         if self.config.birrtstar_version == 1 or self.config.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
-          
-           
-            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
             #     if r in constrained_robots:
@@ -97,24 +119,28 @@ class BidirectionalRRTstar(BaseRRTstar):
             # if np.max(relevant_dists) > self.config.step_size:
             #     return
 
-            if np.max(dist) > self.eta:
+            if dist > self.eta:
                 return
 
             if not self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, mode): #ORder rigth? TODO
                 return
           
-
         elif self.config.birrtstar_version == 2 and not self.trees[mode].connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
             n_nearest_b = self.Extend(mode, n_nearest_b, n_new, dist)
             if not n_nearest_b:
                 return
            
-            cost =  batch_config_cost([n_new.state],  [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
+        cost =  batch_config_cost([n_new.state],  [n_nearest_b.state], metric = self.config.cost_metric, reduction=self.config.cost_reduction)
         if self.trees[mode].order == -1:
             #switch such that subtree is beginning from start and subtree_b from goal
             self.trees[mode].swap()
+            if not self.env.is_edge_collision_free(n_nearest_b.state.q, n_new.state.q, mode):
+                return
             self.UpdateTree(mode, n_new, n_nearest_b, cost[0]) 
+            
         else:
+            if not self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, mode):
+                return
             self.UpdateTree(mode, n_nearest_b, n_new, cost[0])
 
         transition_node = self.get_transition_node(mode, self.transition_node_ids[mode][-1]) 
@@ -124,22 +150,6 @@ class BidirectionalRRTstar(BaseRRTstar):
             #check if terminal mode was already reached
             if not self.env.is_terminal_mode(mode):
                 self.add_new_mode(transition_node.state.q, mode, BidirectionalTree)
-                self.InformedInitialization(self.modes[-1])
-                # Initialization of new goal tree T_b
-                if self.env.is_terminal_mode(self.modes[-1]):
-                    N = 1
-                else:
-                    N = self.config.transition_nodes
-
-                for _ in range(N):                 
-                    q = self.sample_transition_configuration(self.modes[-1])
-                    node = Node(State(q, self.modes[-1]), self.operation)
-                    node.cost_to_parent = np.float32(0)
-                    self.mark_node_as_transition(self.modes[-1], node)
-                    self.trees[self.modes[-1]].add_node(node, 'B')
-                    self.operation.costs = self.trees[self.modes[-1]].ensure_capacity(self.operation.costs, node.id) 
-                    node.cost = np.inf
-
             else:
                 self.operation.init_sol = True
                 print(time.time()-self.start)
@@ -153,9 +163,9 @@ class BidirectionalRRTstar(BaseRRTstar):
         while True:
             state_new = self.Steer(mode, n_nearest_b, q, dist, i)
             if not state_new or np.equal(state_new.q.state(), q.state()).all(): # Reached
-                # self.SaveData(mode, time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = n_new.state.q.state())
+                self.SaveData(mode, time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = n_new.state.q.state())
                 return n_nearest_b
-            # self.SaveData(mode, time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = state_new.q.state())
+            self.SaveData(mode, time.time()-self.start, n_nearest = n_nearest_b.state.q.state(), n_rand = q.state(), n_new = state_new.q.state())
             if self.env.is_collision_free(state_new.q, mode) and self.env.is_edge_collision_free(n_nearest_b.state.q, state_new.q, mode):
                 # Add n_new to tree
         
@@ -167,9 +177,6 @@ class BidirectionalRRTstar(BaseRRTstar):
                 n_new.parent = n_nearest_b
                 n_new.cost_to_parent = cost
                 n_nearest_b.children.append(n_new) #Set child
-                # agents = dists.to(dtype=torch.float16).cpu()
-                # n_new.agent_dists = n_new.parent.agent_dists + agents
-                # n_new.agent_dists_to_parent = agents  
                 self.trees[mode].add_node(n_new, 'B') 
                 self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, n_new.id) 
                 n_new.cost = c_min
@@ -187,17 +194,8 @@ class BidirectionalRRTstar(BaseRRTstar):
         start_state = State(self.env.start_pos, mode)
         start_node = Node(start_state, self.operation)
         self.trees[mode].add_node(start_node)
-        start_node.cost = 0
-        start_node.cost_to_parent = np.float32(0)
-        #Initialize subtree b
-        for _ in range(self.config.transition_nodes):                 
-            q = self.sample_transition_configuration(mode)
-            node = Node(State(q, mode), self.operation)
-            node.cost_to_parent = np.float32(0)
-            self.mark_node_as_transition(mode, node)
-            self.trees[mode].add_node(node, 'B')
-            self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, node.id) 
-            node.cost = np.inf
+        start_node.cost = 0.0
+        start_node.cost_to_parent = 0.0
 
     def Plan(self) -> dict:
         i = 0
@@ -205,7 +203,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         while True:
             i += 1
             # Mode selection
-            active_mode  = self.RandomMode(Mode.id_counter)
+            active_mode  = self.RandomMode()
             # Bi RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
             n_nearest, dist, set_dists = self.Nearest(active_mode, q_rand)        

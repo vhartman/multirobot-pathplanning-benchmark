@@ -28,7 +28,7 @@ class ConfigManager:
         defaults = {
             'planner': None, 'p_goal': 0.95, 'p_stay' : 0.95,'general_goal_sampling': True, 
             'step_size': 0.3, 
-            'ptc_time': 600, 'mode_probability': 0.4, 
+            'ptc_time': 600, 'mode_sampling': 0.4, 
             'informed_sampling': True, 'informed_sampling_version': 0, 
             'cprofiler': False, 'cost_type': 'euclidean', 'dist_type': 'euclidean', 
             'debug_mode': False, 'transition_nodes': 100, 'birrtstar_version' :1, 
@@ -961,21 +961,21 @@ class BaseRRTstar(ABC):
     def RandomMode(self, num_modes) -> List[float]:
         if num_modes == 1:
             return np.random.choice(self.modes)
-        # if self.operation.task_sequence == [] and self.config.mode_probability != 0:
-        elif self.operation.init_sol and self.config.mode_probability != 0:
+        # if self.operation.task_sequence == [] and self.config.mode_sampling != 0:
+        elif self.operation.init_sol and self.config.mode_sampling != 0:
                 p = [1/num_modes] * num_modes
         
-        elif self.config.mode_probability == 'None':
+        elif self.config.mode_sampling == 'None':
             # equally (= mode uniformly)
             return np.random.choice(self.modes)
 
-        elif self.config.mode_probability == 1:
+        elif self.config.mode_sampling == 1:
             # greedy (only latest mode is selected until all initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
             probability[-1] = 1
             p =  probability
 
-        elif self.config.mode_probability == 0:#TODO fix it for bidirectional
+        elif self.config.mode_sampling == 0:#TODO fix it for bidirectional
             # Uniformly
             total_transition_nodes = sum(len(mode) for mode in self.transition_node_ids.values())
             total_nodes = Node.id_counter -1 + total_transition_nodes
@@ -1001,12 +1001,12 @@ class BaseRRTstar(ABC):
             ]
 
             # Normalize the probabilities of all modes except the last one
-            remaining_probability = 1-self.config.mode_probability  
+            remaining_probability = 1-self.config.mode_sampling  
             total_inverse = sum(inverse_probabilities)
             p =  [
                 (inv_prob / total_inverse) * remaining_probability
                 for inv_prob in inverse_probabilities
-            ] + [self.config.mode_probability]
+            ] + [self.config.mode_sampling]
 
         return np.random.choice(self.modes, p = p)
 

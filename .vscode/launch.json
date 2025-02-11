@@ -34,12 +34,12 @@
             }
         },
         {
-            "name": "main.py - simple_2d --planner rrtstar",
+            "name": "main.py - 2d_handover --planner rrtstar numba",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main.py",
+            "program": "${workspaceFolder}/examples/main_numba.py",
             "args": [
-                "simple_2d",
+                "2d_handover",
                 "--planner",
                 "rrtstar"
             ],
@@ -50,7 +50,7 @@
             }
         },
         {
-            "name": "main.py - hallway_dep --planner rrtstar",
+            "name": "main.py - hallway_dep --planner rrtstar numba",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/examples/main_numba.py",

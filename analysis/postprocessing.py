@@ -931,171 +931,171 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
                     )
 
         #informed sampling 
-        try:
-            if config['informed_sampling'] != []:
-                informed = data["informed_sampling"]
-                for informed_sampling in informed:
-                    n_rand = data['n_rand']
-                    for robot_idx, robot in enumerate(env.robots):
-                        r_indices = env.robot_idx[robot] 
-                        if informed_sampling['L'] is not None:
-                            if len(env.robots) > 1:
-                                if robot_idx in informed_sampling['L'].keys():
-                                    color_informed = colors[len(modes)+robot_idx]
-                                    C = informed_sampling['C'][robot_idx]
-                                    L = informed_sampling['L'][robot_idx]
-                                    center = informed_sampling['center'][robot_idx]
-                                    focal_points = [informed_sampling['start'][robot_idx].state(), informed_sampling['goal'][robot_idx].state()]
-                                    mode = informed_sampling['mode']
-                                    mode_idx = modes.index(mode)
-                                    q_rand = n_rand[r_indices]
-                            else: 
+        # try:
+        #     if config['informed_sampling'] != []:
+        #         informed = data["informed_sampling"]
+        #         for informed_sampling in informed:
+        #             n_rand = data['n_rand']
+        #             for robot_idx, robot in enumerate(env.robots):
+        #                 r_indices = env.robot_idx[robot] 
+        #                 if informed_sampling['L'] is not None:
+        #                     if len(env.robots) > 1:
+        #                         if robot_idx in informed_sampling['L'].keys():
+        #                             color_informed = colors[len(modes)+robot_idx]
+        #                             C = informed_sampling['C'][robot_idx]
+        #                             L = informed_sampling['L'][robot_idx]
+        #                             center = informed_sampling['center'][robot_idx]
+        #                             focal_points = [informed_sampling['start'][robot_idx].state(), informed_sampling['goal'][robot_idx].state()]
+        #                             mode = informed_sampling['mode']
+        #                             mode_idx = modes.index(mode)
+        #                             q_rand = n_rand[r_indices]
+        #                     else: 
                                 
-                                color_informed = 'black'
-                                C = informed_sampling['C']
-                                L = informed_sampling['L']
-                                center = informed_sampling['center']
-                                focal_points = [informed_sampling['start'].state.q.state(), informed_sampling['goal'].state.q.state()]
-                                mode = informed_sampling['mode']
-                                mode_idx = modes.index(mode)
-                                q_rand = n_rand
+        #                         color_informed = 'black'
+        #                         C = informed_sampling['C']
+        #                         L = informed_sampling['L']
+        #                         center = informed_sampling['center']
+        #                         focal_points = [informed_sampling['start'].state.q.state(), informed_sampling['goal'].state.q.state()]
+        #                         mode = informed_sampling['mode']
+        #                         mode_idx = modes.index(mode)
+        #                         q_rand = n_rand
 
 
-                            if C.shape[0] == 3:  # 3D case
-                                theta = np.linspace(0, 2 * np.pi, 100)
-                                phi = np.linspace(0, np.pi, 50)
-                                theta, phi = np.meshgrid(theta, phi)
+        #                     if C.shape[0] == 3:  # 3D case
+        #                         theta = np.linspace(0, 2 * np.pi, 100)
+        #                         phi = np.linspace(0, np.pi, 50)
+        #                         theta, phi = np.meshgrid(theta, phi)
 
-                                # Generate unit sphere points
-                                x = np.sin(phi) * np.cos(theta)
-                                y = np.sin(phi) * np.sin(theta)
-                                z = np.cos(phi)
-                                
-
-                                # Transform the unit sphere into an ellipsoid
-                                unit_sphere = np.array([x.flatten(), y.flatten(), z.flatten()])
-                                ellipsoid_transformed = C @ L @ unit_sphere
+        #                         # Generate unit sphere points
+        #                         x = np.sin(phi) * np.cos(theta)
+        #                         y = np.sin(phi) * np.sin(theta)
+        #                         z = np.cos(phi)
                                 
 
-                                # Translate to center
-                                x_ellipsoid = ellipsoid_transformed[0, :] + center[0]
-                                y_ellipsoid = ellipsoid_transformed[1, :] + center[1]
-                                z_ellipsoid = ellipsoid_transformed[2, :] + center[2] + 1
-
-
-                                # Add 3D ellipsoid using Mesh3d
-                                frame_traces.append(
-                                    go.Mesh3d(
-                                        x=x_ellipsoid,
-                                        y=y_ellipsoid,
-                                        z=z_ellipsoid,
-                                        alphahull=0,  # Ensure it forms a hull
-                                        color=color_informed,  # Grey color for the surface
-                                        opacity=0.1,  # High transparency
-                                        name=legends[mode_idx],
-                                        legendgroup = legends[mode_idx],
-                                        showlegend = False,
-                                    )
-                                )
-                            if C.shape[0] == 2:  # 2D case
-                                theta = np.linspace(0, 2 * np.pi, 100)  # Generate angles for ellipse
+        #                         # Transform the unit sphere into an ellipsoid
+        #                         unit_sphere = np.array([x.flatten(), y.flatten(), z.flatten()])
+        #                         ellipsoid_transformed = C @ L @ unit_sphere
                                 
-                                # Generate unit circle points
-                                x = np.cos(theta)
-                                y = np.sin(theta)
-                                unit_circle = np.array([x, y])
+
+        #                         # Translate to center
+        #                         x_ellipsoid = ellipsoid_transformed[0, :] + center[0]
+        #                         y_ellipsoid = ellipsoid_transformed[1, :] + center[1]
+        #                         z_ellipsoid = ellipsoid_transformed[2, :] + center[2] + 1
+
+
+        #                         # Add 3D ellipsoid using Mesh3d
+        #                         frame_traces.append(
+        #                             go.Mesh3d(
+        #                                 x=x_ellipsoid,
+        #                                 y=y_ellipsoid,
+        #                                 z=z_ellipsoid,
+        #                                 alphahull=0,  # Ensure it forms a hull
+        #                                 color=color_informed,  # Grey color for the surface
+        #                                 opacity=0.1,  # High transparency
+        #                                 name=legends[mode_idx],
+        #                                 legendgroup = legends[mode_idx],
+        #                                 showlegend = False,
+        #                             )
+        #                         )
+        #                     if C.shape[0] == 2:  # 2D case
+        #                         theta = np.linspace(0, 2 * np.pi, 100)  # Generate angles for ellipse
                                 
-                                # Transform the unit circle into an ellipse
-                                ellipse_transformed = C @ L @ unit_circle
+        #                         # Generate unit circle points
+        #                         x = np.cos(theta)
+        #                         y = np.sin(theta)
+        #                         unit_circle = np.array([x, y])
                                 
-                                # Translate to center
-                                x_ellipse = ellipse_transformed[0, :] + center[0]
-                                y_ellipse = ellipse_transformed[1, :] + center[1]
-                                z_ellipse = np.ones_like(x_ellipse)  # Set z height to 1
+        #                         # Transform the unit circle into an ellipse
+        #                         ellipse_transformed = C @ L @ unit_circle
                                 
-                                # Add 2D ellipse using Scatter3d to position it at z = 1
-                                frame_traces.append(
-                                    go.Scatter3d(
-                                        x=x_ellipse,
-                                        y=y_ellipse,
-                                        z=z_ellipse,
-                                        mode='lines',
-                                        line=dict(color=color_informed, width=2),
-                                        name=legends[mode_idx],
-                                        legendgroup=legends[mode_idx],
-                                        showlegend=False,
-                                    )
-                                )
+        #                         # Translate to center
+        #                         x_ellipse = ellipse_transformed[0, :] + center[0]
+        #                         y_ellipse = ellipse_transformed[1, :] + center[1]
+        #                         z_ellipse = np.ones_like(x_ellipse)  # Set z height to 1
+                                
+        #                         # Add 2D ellipse using Scatter3d to position it at z = 1
+        #                         frame_traces.append(
+        #                             go.Scatter3d(
+        #                                 x=x_ellipse,
+        #                                 y=y_ellipse,
+        #                                 z=z_ellipse,
+        #                                 mode='lines',
+        #                                 line=dict(color=color_informed, width=2),
+        #                                 name=legends[mode_idx],
+        #                                 legendgroup=legends[mode_idx],
+        #                                 showlegend=False,
+        #                             )
+        #                         )
 
 
 
-                            # Add focal points (3D)
-                            for i, f in enumerate(focal_points):
-                                frame_traces.append(go.Scatter3d(
-                                    x=[f[0]],
-                                    y=[f[1]],
-                                    z = [1],
-                                    mode='markers',
-                                    name=f'Focal Point {i+1} (2D)',
-                                    marker=dict(size=8, color=color_informed),
-                                    legendgroup = legends[mode_idx],
-                                    showlegend = False,
-                                ))
+        #                     # Add focal points (3D)
+        #                     for i, f in enumerate(focal_points):
+        #                         frame_traces.append(go.Scatter3d(
+        #                             x=[f[0]],
+        #                             y=[f[1]],
+        #                             z = [1],
+        #                             mode='markers',
+        #                             name=f'Focal Point {i+1} (2D)',
+        #                             marker=dict(size=8, color=color_informed),
+        #                             legendgroup = legends[mode_idx],
+        #                             showlegend = False,
+        #                         ))
 
-                            # Add center (2D)
-                            frame_traces.append(go.Scatter3d(
-                                x=[center[0]],
-                                y=[center[1]],
-                                z = [1],
-                                mode='markers',
-                                name='Center (2D)',
-                                marker=dict(size=3, color=color_informed),
-                                legendgroup = legends[mode_idx],
-                                showlegend = False,
-                            ))
-                            frame_traces.append(go.Scatter3d(
-                                x=[q_rand[0]],
-                                y=[q_rand[1]],
-                                z = [1],
-                                mode='markers',
-                                name='Center (2D)',
-                                marker=dict(size=3, color='red'),
-                                legendgroup = legends[mode_idx],
-                                showlegend = False,
-                            ))
-        except:
-            if informed is not None:
-                if config['informed_sampling'] != []:
-                    mode = informed_sampling['mode']
-                    mode_idx = modes.index(mode)
-                    n_rand = data['n_rand']
-                    if len(env.robots) > 1:
-                        for robot_idx, robot in enumerate(env.robots):
-                            r_indices = env.robot_idx[robot] 
-                            q_rand = n_rand[r_indices]
-                            frame_traces.append(go.Scatter3d(
-                            x=[q_rand[0]],
-                            y=[q_rand[1]],
-                            z = [1],
-                            mode='markers',
-                            name='Center (2D)',
-                            marker=dict(size=3, color='red'),
-                            legendgroup = legends[mode_idx],
-                            showlegend = False,
-                        ))
-                    else:
-                        if n_rand is not None: 
-                            q_rand = n_rand
-                            frame_traces.append(go.Scatter3d(
-                            x=[q_rand[0]],
-                            y=[q_rand[1]],
-                            z = [1],
-                            mode='markers',
-                            name='Center (2D)',
-                            marker=dict(size=3, color='red'),
-                            legendgroup = legends[mode_idx],
-                            showlegend = False,
-                            ))
+        #                     # Add center (2D)
+        #                     frame_traces.append(go.Scatter3d(
+        #                         x=[center[0]],
+        #                         y=[center[1]],
+        #                         z = [1],
+        #                         mode='markers',
+        #                         name='Center (2D)',
+        #                         marker=dict(size=3, color=color_informed),
+        #                         legendgroup = legends[mode_idx],
+        #                         showlegend = False,
+        #                     ))
+        #                     frame_traces.append(go.Scatter3d(
+        #                         x=[q_rand[0]],
+        #                         y=[q_rand[1]],
+        #                         z = [1],
+        #                         mode='markers',
+        #                         name='Center (2D)',
+        #                         marker=dict(size=3, color='red'),
+        #                         legendgroup = legends[mode_idx],
+        #                         showlegend = False,
+        #                     ))
+        # except:
+        #     if informed is not None:
+        #         if config['informed_sampling'] != []:
+        #             mode = informed_sampling['mode']
+        #             mode_idx = modes.index(mode)
+        #             n_rand = data['n_rand']
+        #             if len(env.robots) > 1:
+        #                 for robot_idx, robot in enumerate(env.robots):
+        #                     r_indices = env.robot_idx[robot] 
+        #                     q_rand = n_rand[r_indices]
+        #                     frame_traces.append(go.Scatter3d(
+        #                     x=[q_rand[0]],
+        #                     y=[q_rand[1]],
+        #                     z = [1],
+        #                     mode='markers',
+        #                     name='Center (2D)',
+        #                     marker=dict(size=3, color='red'),
+        #                     legendgroup = legends[mode_idx],
+        #                     showlegend = False,
+        #                 ))
+        #             else:
+        #                 if n_rand is not None: 
+        #                     q_rand = n_rand
+        #                     frame_traces.append(go.Scatter3d(
+        #                     x=[q_rand[0]],
+        #                     y=[q_rand[1]],
+        #                     z = [1],
+        #                     mode='markers',
+        #                     name='Center (2D)',
+        #                     marker=dict(size=3, color='red'),
+        #                     legendgroup = legends[mode_idx],
+        #                     showlegend = False,
+        #                     ))
 
                 
 
@@ -1411,44 +1411,47 @@ def ellipse(env, env_path, pkl_folder):
                 showlegend=True  # This will create a single legend entry for each mode
             )
         )
-    
-    modes = []
-    mode = env.start_mode
-    while True:     
-            modes.append(mode.task_ids)
-            if env.is_terminal_mode(mode):
-                break
-            mode = env.get_next_mode(None, mode)
-    for robot_idx, robot in enumerate(env.robots):
-        legend_group = robot
-        static_traces.append(
-        go.Mesh3d(
-            x=[0],  # X-coordinates of the exterior points
-            y=[0],  # Y-coordinates of the exterior points
-            z=[0] ,  # Flat surface at z = 0
-            color=colors[len(modes)+robot_idx],  # Fill color from the agent's properties
-            opacity=1,  # Transparency level
-            name=legend_group,
-            legendgroup=legend_group,
-            showlegend=True
-        )
-    )
-        
-    legends = []
-    for idx in range(len(modes)):
-        name = f"Mode: {modes[idx]}"
-        legends.append(name)
-        static_traces.append(
+    try:
+        modes = []
+        mode = env.start_mode
+        while True:     
+                modes.append(mode.task_ids)
+                if env.is_terminal_mode(mode):
+                    break
+                mode = env.get_next_mode(None, mode)
+        for robot_idx, robot in enumerate(env.robots):
+            legend_group = robot
+            static_traces.append(
             go.Mesh3d(
-                x=[0],  # Position outside the visible grid
-                y=[0],  # Position outside the visible grid
-                z=[0],
-                name=name,
-                color = colors[idx],
-                legendgroup=name,  # Unique legend group for each mode
-                showlegend=True  # This will create a single legend entry for each mode
+                x=[0],  # X-coordinates of the exterior points
+                y=[0],  # Y-coordinates of the exterior points
+                z=[0] ,  # Flat surface at z = 0
+                color=colors[len(modes)+robot_idx],  # Fill color from the agent's properties
+                opacity=1,  # Transparency level
+                name=legend_group,
+                legendgroup=legend_group,
+                showlegend=True
             )
         )
+        
+        legends = []
+        for idx in range(len(modes)):
+            name = f"Mode: {modes[idx]}"
+            legends.append(name)
+            static_traces.append(
+                go.Mesh3d(
+                    x=[0],  # Position outside the visible grid
+                    y=[0],  # Position outside the visible grid
+                    z=[0],
+                    name=name,
+                    color = colors[idx],
+                    legendgroup=name,  # Unique legend group for each mode
+                    showlegend=True  # This will create a single legend entry for each mode
+                )
+            )
+    except:
+        modes = []
+        pass
         
     
     # dynamic_traces
@@ -1462,9 +1465,17 @@ def ellipse(env, env_path, pkl_folder):
                 if mode is None:
                     mode_idx = 0
                 else:
-                    mode_idx = modes.index(mode)
+                    try:
+                        mode_idx = modes.index(mode)
+                    except: 
+                        mode_idx = None
+                        
                 for q in q_rand_ellipse:
                     for robot_idx, robot in enumerate(env.robots):
+                        if mode_idx is None:
+                            color = colors[robot_idx]
+                        else:
+                            color = colors[mode_idx]
                         legend_group = robot
                         r_indices = env.robot_idx[robot] 
                         q_rand = q[r_indices]
@@ -1473,7 +1484,7 @@ def ellipse(env, env_path, pkl_folder):
                         y=[q_rand[1]],
                         z = [1],
                         mode='markers',
-                        marker=dict(size=3, color=colors[mode_idx]),
+                        marker=dict(size=3, color=color),
                         legendgroup = legend_group,
                         showlegend = False,
                     ))
@@ -1605,7 +1616,7 @@ if __name__ == "__main__":
     print(path)
     if args.do == "dev":
         print("Development")
-        with_tree = False
+        with_tree = True
         if with_tree:
             output_html = os.path.join(path, 'tree_animation_3d.html')
             reducer = 100

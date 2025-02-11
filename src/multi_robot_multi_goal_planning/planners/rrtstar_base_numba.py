@@ -28,7 +28,7 @@ class ConfigManager:
         defaults = {
             'planner': None, 'p_goal': 0.95, 'p_stay' : 0.95,'general_goal_sampling': True, 'gaussian' :True,
             'step_size': 0.3, 
-            'ptc_time': 600, 'mode_probability': 0.4, 'p_uniform': 0.3,
+            'ptc_time': 600, 'mode_sampling': 0.4, 'p_uniform': 0.3,
             'informed_sampling': True, 'informed_sampling_version': 0, 
             'cprofiler': False, 'dist_type': 'euclidean', 'cost_metric' : 'euclidean', 'cost_reduction' : 'max',
             'debug_mode': False, 'transition_nodes': 100, 'birrtstar_version' :1, 
@@ -69,11 +69,12 @@ class Operation:
     def __init__(self):
         
         self.path = []
+        self.path_modes = []
         self.path_nodes = None
         self.cost = np.inf
         self.cost_change = np.inf
         self.init_sol = False
-        self.costs = np.empty(10000000, dtype=np.float32)
+        self.costs = np.empty(10000000, dtype=np.float64)
         self.paths_inter = []
     
     def get_cost(self, idx):
@@ -185,7 +186,7 @@ class SingleTree(BaseTree):
         robot_dims = sum(env.robot_dims.values())
         self.subtree = {}
         self.initial_capacity = 100000
-        self.batch_subtree = np.empty((self.initial_capacity, robot_dims), dtype=np.float32)
+        self.batch_subtree = np.empty((self.initial_capacity, robot_dims), dtype=np.float64)
         self.node_idx_subtree = np.empty(self.initial_capacity, dtype=np.int64)
     def add_node(self, n:Node, tree:str = '') -> None:
         self.subtree[n.id] = n               
@@ -225,10 +226,10 @@ class BidirectionalTree(BaseTree):
         robot_dims = sum(env.robot_dims.values())
         self.subtree = {}
         self.initial_capacity = 100000
-        self.batch_subtree = np.empty((self.initial_capacity, robot_dims), dtype=np.float32)
+        self.batch_subtree = np.empty((self.initial_capacity, robot_dims), dtype=np.float64)
         self.node_idx_subtree = np.empty(self.initial_capacity, dtype=np.int64)
         self.subtree_b = {} 
-        self.batch_subtree_b = np.empty((self.initial_capacity, robot_dims), dtype=np.float32)
+        self.batch_subtree_b = np.empty((self.initial_capacity, robot_dims), dtype=np.float64)
         self.node_idx_subtree_b = np.empty(self.initial_capacity, dtype=np.int64)
         self.connected = False
     
@@ -314,6 +315,8 @@ class Informed(ABC):
                 Norm and rotation matrix C from the hyperellipsoid-aligned frame to the world frame."""
         diff = goal.state() - start.state()
         norm = np.linalg.norm(diff)
+        if norm < 1e-3 :
+            return None, None
         a1 = diff / norm 
 
         # Create first column of the identity matrix
@@ -330,18 +333,16 @@ class Informed(ABC):
 
         return norm, C
     
-    def initialize(self, start_config:Configuration, goal_config:Configuration, mode_task_ids_home_poses:List[List[int]] = None):
+    def initialize(self):
         for robot in self.env.robots:
             r_idx = self.env.robots.index(robot)
-            if np.equal(goal_config[r_idx].state(), start_config[r_idx].state()).all():
-                continue # because then the rotation_to_world frame is not possible
-            if mode_task_ids_home_poses is not None:
-                self.mode_task_ids_home_poses[r_idx] = mode_task_ids_home_poses[r_idx]
             self.n[r_idx] = self.env.robot_dims[robot]
             
     def cholesky_decomposition(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
         cmax = self.get_right_side_of_eq(r_indices, r_idx, path_nodes)
-        r1 = cmax / 2
+        if not cmax or self.cmin[r_idx] < 0:
+            return
+        r1 = cmax / 2 
         r2 = np.sqrt(cmax**2 - self.cmin[r_idx]**2) / 2
         return np.diag(np.concatenate([[r1], np.repeat(r2, self.n[r_idx] - 1)])) 
     
@@ -373,7 +374,7 @@ class InformedVersion0(Informed):
         #need to calculate the cost only cnsidering one agent (euclidean distance)
         n1 = NpConfiguration.from_numpy(path_nodes[0].state.q.state()[r_indices])
         cost = 0
-        if self.mode_task_ids_home_poses[r_idx] is None:
+        if self.mode_task_ids_home_poses[r_idx] == [-1]:
             start_cost = 0
             self.start[r_idx] = n1
         for node in path_nodes[1:]:
@@ -388,7 +389,12 @@ class InformedVersion0(Informed):
                 self.goal[r_idx] = n2
                 break 
             n1 = n2
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
+        try:
+            norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
+        except:
+            pass
+        if norm is None:
+            return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return goal_cost-start_cost    
@@ -421,7 +427,7 @@ class InformedVersion1(Informed):
         mode_task_ids_home_pose = self.mode_task_ids_home_poses[idx]
         mode_task_ids_task = self.mode_task_ids_task[idx]
 
-        if mode_task_ids_home_pose is None:
+        if mode_task_ids_home_pose == [-1]:
             self.start = path_nodes[0]
 
         for node in path_nodes:
@@ -437,12 +443,11 @@ class InformedVersion1(Informed):
         self.center = (self.goal.state.q.state() + self.start.state.q.state())/2
         return path_nodes[-1].cost - lb_goal - lb_start
     
-    def initialize(self, mode:Mode, mode_task_ids_home_poses:List[List[int]]):
-        active_robots = self.env.get_active_task(mode, None).robots
+    def initialize(self, mode:Mode, next_ids:List[int]): 
+        active_robots = self.env.get_active_task(mode, next_ids).robots 
         for robot in self.env.robots:
             if robot in active_robots:
                 self.active_robots_idx.append(self.env.robots.index(robot))
-        self.mode_task_ids_home_poses = mode_task_ids_home_poses
         self.n = sum(self.env.robot_dims.values())
 
     def cholesky_decomposition(self, path_nodes:List[Node]):
@@ -470,7 +475,7 @@ class InformedVersion2(Informed):
         self.cost = np.inf
     
     def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
-        if self.mode_task_ids_home_poses[r_idx] is None:
+        if self.mode_task_ids_home_poses[r_idx] == [-1]:
             start_node = path_nodes[0]
             self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
         for node in path_nodes[1:]:
@@ -486,6 +491,8 @@ class InformedVersion2(Informed):
         lb_goal = self.cost_fct(goal_node.state.q, path_nodes[-1].state.q,  self.cost_metric, self.cost_reduction)
         lb_start = self.cost_fct( path_nodes[0].state.q, start_node.state.q,  self.cost_metric, self.cost_reduction)
         norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
+        if norm is None:
+            return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return path_nodes[-1].cost - lb_goal - lb_start    
@@ -509,7 +516,7 @@ class InformedVersion3(Informed):
         self.cost = np.inf
     
     def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
-        if self.mode_task_ids_home_poses[r_idx] is None:
+        if self.mode_task_ids_home_poses[r_idx] == [-1]:
             start_node = path_nodes[0]
             self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
             start_idx = 0
@@ -531,8 +538,11 @@ class InformedVersion3(Informed):
         lb_goal = self.cost_fct(goal_node.state.q, path_nodes[idx2].state.q,  self.cost_metric, self.cost_reduction)
         lb_start = self.cost_fct( path_nodes[idx1].state.q, start_node.state.q,  self.cost_metric, self.cost_reduction)
         norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
+        if norm is None:
+            return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
+        
         return path_nodes[idx2].cost - path_nodes[idx1].cost - lb_goal - lb_start   
 class InformedVersion4(Informed):
     """Global informed sampling (random): Each agent separately (my version)"""
@@ -569,6 +579,8 @@ class InformedVersion4(Informed):
         lb_goal = self.cost_fct(goal.state.q, path_nodes[-1].state.q,  self.cost_metric, self.cost_reduction)
         lb_start = self.cost_fct( path_nodes[0].state.q, start.state.q,  self.cost_metric, self.cost_reduction)
         norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
+        if norm is None:
+            return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return path_nodes[-1].cost - lb_goal - lb_start
@@ -592,7 +604,7 @@ class InformedVersion5(Informed):
         self.cost = np.inf
     
     def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
-        if self.mode_task_ids_home_poses[r_idx] is None:
+        if self.mode_task_ids_home_poses[r_idx] == [-1]:
             start_node = path_nodes[0]
             self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
         for node in path_nodes[1:]:
@@ -606,6 +618,8 @@ class InformedVersion5(Informed):
                 break 
 
         norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
+        if norm is None:
+            return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return goal_node.cost - start_node.cost
@@ -613,14 +627,27 @@ class InformedVersion5(Informed):
 @njit(fastmath=True, cache=True)
 def find_nearest_indices(set_dists, r):
     return np.nonzero(set_dists <= r)[0]
-
 @njit
 def cumulative_sum(prev_cost, batch_cost):
-    cost = np.empty(len(batch_cost), dtype=np.float32) 
+    cost = np.empty(len(batch_cost), dtype=np.float64) 
     cost[0] = prev_cost + batch_cost[0]
     for idx in range(1, len(batch_cost)):
         cost[idx] = cost[idx - 1] + batch_cost[idx]
     return cost
+@njit
+def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:Task, r_idx:int):
+    last_index = 0 
+    for i in range(len(path_modes)):
+        if path_modes[i][r_idx] == task_id:  
+            last_index = i 
+    return path_modes[last_index]
+@njit
+def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:Task, r_idx:int):
+    for i in range(len(path_modes)):
+        if path_modes[i][r_idx] == task_id:  
+            if i == 0:
+                return np.array([-1])
+            return path_modes[i-1]
 
 
 class BaseRRTstar(ABC):
@@ -650,21 +677,20 @@ class BaseRRTstar(ABC):
             self.trees[mode] = BidirectionalTree(self.env)
         else:
             raise TypeError("tree_instance must be SingleTree or BidirectionalTree.")
-        
-    def get_tree(self, mode:Mode) -> None:
-        """Returns tree of mode"""
-        return self.trees.get(mode, None)
-    
+           
     def add_new_mode(self, q:Optional[Configuration]=None, mode:Mode=None, tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None) -> None: #TODO entry_configuration needs to be specified
         """Initializes a new mode"""
         if mode is None: 
-            new_mode = self.env.start_mode
+            new_mode = self.env.make_start_mode()
             new_mode.prev_mode = None
         else:
             new_mode = self.env.get_next_mode(q, mode)
             new_mode.prev_mode = mode
+        if new_mode in self.modes:
+            return 
         self.modes.append(new_mode)
         self.add_tree(new_mode, tree_instance)
+        self.InformedInitialization(new_mode)
 
     def mark_node_as_transition(self, mode:Mode, n:Node) -> None:
         """Mark node as potential transition node in mode"""
@@ -680,12 +706,17 @@ class BaseRRTstar(ABC):
         for next_mode in mode.next_modes:
             self.trees[next_mode].add_transition_node_as_start_node(n)
 
-    def get_lb_transition_node_id(self, mode:Mode) -> Tuple[float, int]:
+    def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[float, int]:
         """Returns lb cost and index of transition nodes of the mode"""
-        idx = np.argmin(self.operation.costs[self.transition_node_ids[mode]], axis=0) 
-        cost = self.operation.costs[self.transition_node_ids[mode]][idx]
-        node_id = self.transition_node_ids[mode][idx]
-        return (cost, node_id)
+        indices, costs = [], []
+        for mode in modes:
+            i = np.argmin(self.operation.costs[self.transition_node_ids[mode]], axis=0) 
+            indices.append(i)
+            costs.append(self.operation.costs[self.transition_node_ids[mode]][i])
+        idx = np.argmin(costs, axis=0) 
+        m = modes[idx]
+        node_id = self.transition_node_ids[m][indices[idx]]
+        return (costs[idx], node_id), m
         # sorted_indices = costs.argsort()
         # for idx in sorted_indices:       
             
@@ -743,18 +774,26 @@ class BaseRRTstar(ABC):
         unit_ball_volume = math.pi ** (self.d/ 2) / math.gamma((self.d / 2) + 1)
         self.get_lebesgue_measure_of_free_configuration_space()
         self.gamma_rrtstar = ((2 *(1 + 1/self.d))**(1/self.d) * (self.c_free/unit_ball_volume)**(1/self.d))*1.3 
+    
+    def get_next_ids(self, mode:Mode):
+        possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
+        if len(possible_next_task_combinations) == 0:
+            return None
+        return random.choice(possible_next_task_combinations)
+
     # @cache
     def get_home_poses(self, mode:Mode) -> List[NDArray]:
         """Returns home pose (most recent completed task) of agents in current mode """
         # Start mode
-        if mode.id == 0:
+        if mode.prev_mode is None: 
             q = self.env.start_pos
             q_new = []
             for r_idx in range(len(self.env.robots)):
                 q_new.append(q.robot_state(r_idx))
         # all other modes
         else:
-            previous_task = self.env.get_active_task(mode.prev_mode, None) 
+            
+            previous_task = self.env.get_active_task(mode.prev_mode, mode.task_ids) 
             q = self.get_home_poses(mode.prev_mode)
             q_new = []
             for r in self.env.robots:
@@ -772,60 +811,23 @@ class BaseRRTstar(ABC):
     # @cache
     def get_task_goal_of_agent(self, mode:Mode, r:str):
         """Returns task goal of agent in current mode"""
-        task = self.env.get_active_task(mode, None)
-        if r not in task.robots:
-            r_idx = self.env.robots.index(r)
-            goal = self.env.tasks[mode.task_ids[r_idx]].goal.sample(mode)
-            if len(goal) == self.env.robot_dims[r]:
-                return goal
-            else:
-                return goal[self.env.robot_idx[r]]
-        goal = task.goal.sample(mode)
+        # task = self.env.get_active_task(mode, self.get_next_ids(mode)) 
+        # if r not in task.robots:
+        r_idx = self.env.robots.index(r)
+        goal = self.env.tasks[mode.task_ids[r_idx]].goal.sample(mode)
         if len(goal) == self.env.robot_dims[r]:
-           return goal
+            return goal
         else:
             return goal[self.env.robot_idx[r]]
-    @cache
-    def get_mode_task_ids_of_home_pose_of_agent(self, mode:Mode):
-        # Start mode
-        if mode.id == 0:
-            return [None, None]
-        # all other modes
-        else:
-            previous_task = self.env.get_active_task(mode.prev_mode, None) 
-            modes = self.get_mode_task_ids_of_home_pose_of_agent(mode.prev_mode)
-            modes_new = []
-            for r in self.env.robots:
-                r_idx = self.env.robots.index(r)
-                if r in previous_task.robots:
-                    modes_new.append(mode.prev_mode.task_ids)
-                else:
-                    modes_new.append(modes[r_idx])
-        return modes_new
-    @cache
-    def get_start_and_goal_config(self, mode:Mode):
-        goal_config = []
-        for robot in self.env.robots:
-            goal_config.append(NpConfiguration.from_numpy(self.get_task_goal_of_agent(mode, robot)))
-        start = self.get_home_poses(mode)
-        start_config = []
-        for s in start:
-            start_config.append(NpConfiguration.from_numpy(s))
-        return start_config, goal_config, self.get_mode_task_ids_of_home_pose_of_agent(mode)
-    @cache
-    def get_mode_task_ids_of_active_task(self, mode:Mode, task:Task):
-        active_task = self.env.get_active_task(mode, None)
-        if active_task == task:
-            return mode.task_ids #as only task id is important and not conf as well
-        for mode in self.modes:
-            active_seq_idx = self.env.get_current_seq_index(mode)
-            active_task = self.env.tasks[self.env.sequence[active_seq_idx]]
-            if task == active_task:
-               return mode.task_ids 
-
+        # goal = task.goal.sample(mode)
+        # if len(goal) == self.env.robot_dims[r]:
+        #    return goal
+        # else:
+        #     return goal[self.env.robot_idx[r]]
+    # @cache
     def sample_transition_configuration(self, mode)-> Configuration:
         """Returns transition node of mode"""
-        constrained_robot = self.env.get_active_task(mode, None).robots
+        constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
         while True:
             q = []
             for robot in self.env.robots:
@@ -843,7 +845,7 @@ class BaseRRTstar(ABC):
         is_informed_sampling = sampling_type == 1
         is_home_pose_sampling = sampling_type == 3
         is_gaussian_sampling = sampling_type == 4
-        constrained_robots = self.env.get_active_task(mode, None).robots
+        constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
           
         while True:
             #goal sampling
@@ -856,7 +858,7 @@ class BaseRRTstar(ABC):
                 return node.state.q
             #goal sampling
             if is_goal_sampling and tree_order == -1:
-                if mode.id== 0:
+                if mode.prev_mode is None: 
                     return self.env.start_pos
                 else: 
                     transition_nodes_id = transition_node_ids[mode.prev_mode]
@@ -912,29 +914,32 @@ class BaseRRTstar(ABC):
         """Returns: 
                 Samples a point from the ellipsoidal subset defined by the start and goal positions and c_best.
         """
-        q_rand = []
-        update = False
-        if self.operation.cost != self.informed[mode].cost:
-            self.informed[mode].cost = self.operation.cost
-            update = True
         if not self.config.informed_sampling_version == 1:
+            q_rand = []
+            update = False
+            if self.operation.cost != self.informed[mode].cost:
+                self.informed[mode].cost = self.operation.cost
+                update = True
             for robot in self.env.robots:
                 r_idx = self.env.robots.index(robot)
                 r_indices = self.env.robot_idx[robot]
-                if r_idx not in self.informed[mode].mode_task_ids_home_poses:
-                    # if goal and start of task of robot is the same
+                if update:
+                    self.informed[mode].mode_task_ids_home_poses[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()
+                    self.informed[mode].mode_task_ids_task[r_idx] = get_mode_task_ids_of_active_task_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()  
+                    if not self.config.informed_sampling_version == 4 and not self.config.informed_sampling_version == 3:
+                        self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
+                if self.config.informed_sampling_version == 4 or self.config.informed_sampling_version == 3:
+                    self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
+                if self.informed[mode].L[r_idx] is None:
                     if np.random.uniform(0, 1) > self.config.p_goal:
-                        q_rand.append(self.get_task_goal_of_agent(mode, robot))
+                        q_rand.append(self.get_task_goal_of_agent(mode, robot)) 
+                        continue
                     else:
                         lims = self.env.limits[:, self.env.robot_idx[robot]]
                         q_rand.append(np.random.uniform(lims[0], lims[1]))
-                    continue
-                if update:
-                    if r_idx not in  self.informed[mode].mode_task_ids_task:
-                        task = self.env.tasks[mode.task_ids[r_idx]]
-                        self.informed[mode].mode_task_ids_task[r_idx] = self.get_mode_task_ids_of_active_task(mode, task)  
-                    self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
-                amount_of_failed_attemps = 0
+                        continue
+                    
+                # amount_of_failed_attemps = 0
                 while True:
                     x_ball = self.sample_unit_n_ball(self.informed[mode].n[r_idx])  
                     x_rand = self.informed[mode].C[r_idx] @ (self.informed[mode].L[r_idx] @ x_ball) + self.informed[mode].center[r_idx]
@@ -944,7 +949,7 @@ class BaseRRTstar(ABC):
                         q_rand.append(x_rand)
                         # print(amount_of_failed_attemps)
                         break
-                    # amount_of_failed_attemps += 1
+            #         # amount_of_failed_attemps += 1
             # i = 0
             # q_ellipse = []
             
@@ -964,12 +969,18 @@ class BaseRRTstar(ABC):
             # self.SaveData(mode, time.time()-self.start, ellipse=q_ellipse)
             return q_rand
         else: 
+            next_ids = self.get_next_ids(mode)
+            self.informed[mode].initialize(mode, next_ids)
+            q_rand = []
+            update = False
+            if self.operation.cost != self.informed[mode].cost:
+                self.informed[mode].cost = self.operation.cost
+                update = True
             if update:
-                if self.informed[mode].mode_task_ids_task == []:
-                    for robot in self.env.robots:
-                        r_idx = self.env.robots.index(robot)
-                        task = self.env.tasks[mode.task_ids[r_idx]]
-                        self.informed[mode].mode_task_ids_task.append(self.get_mode_task_ids_of_active_task(mode, task)) 
+                for robot in self.env.robots:
+                    r_idx = self.env.robots.index(robot)
+                    self.informed[mode].mode_task_ids_home_poses.append(get_mode_task_ids_of_home_pose_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist())
+                    self.informed[mode].mode_task_ids_task.append(get_mode_task_ids_of_active_task_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()) 
                 #repeat every time because of randomness 
                 self.informed[mode].L = self.informed[mode].cholesky_decomposition(self.operation.path_nodes)
             while True:
@@ -1004,6 +1015,13 @@ class BaseRRTstar(ABC):
         x_ball /= np.linalg.norm(x_ball, ord=2)     # Normalize with L2 norm
         radius = np.random.rand()**(1 / n)          # Generate a random radius and apply power
         return x_ball * radius
+    
+    def get_termination_modes(self) -> List[Mode]:
+        termination_modes = []
+        for mode in self.modes:
+            if self.env.is_terminal_mode(mode):
+                termination_modes.append(mode)
+        return termination_modes
 
     def Nearest(self, mode:Mode, q_rand: Configuration, tree: str = '') -> Node:
         set_dists = batch_config_dist(q_rand, self.trees[mode].get_batch_subtree(tree), self.config.dist_type)
@@ -1091,12 +1109,14 @@ class BaseRRTstar(ABC):
         return rewired
       
     def GeneratePath(self, mode:Mode, n: Node, shortcutting:bool = True) -> None:
-        path_nodes, path = [], []
+        path_nodes, path, path_modes = [], [], []
         while n:
             path_nodes.append(n)
+            path_modes.append(n.state.mode.task_ids)
             path.append(n.state)
             n = n.parent
         path_in_order = path[::-1]
+        self.operation.path_modes = path_modes[::-1]
         self.operation.path = path_in_order  
         self.operation.path_nodes = path_nodes[::-1]
         self.operation.cost = self.operation.path_nodes[-1].cost
@@ -1107,24 +1127,25 @@ class BaseRRTstar(ABC):
             print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             self.Shortcutting(mode)
             
-    def RandomMode(self, num_modes) -> List[float]:
+    def RandomMode(self) -> List[float]:
+        num_modes = len(self.modes)
         if num_modes == 1:
             return np.random.choice(self.modes)
-        # if self.operation.task_sequence == [] and self.config.mode_probability != 0:
-        elif self.operation.init_sol and self.config.mode_probability != 0:
+        # if self.operation.task_sequence == [] and self.config.mode_sampling != 0:
+        elif self.operation.init_sol and self.config.mode_sampling != 0:
                 p = [1/num_modes] * num_modes
         
-        elif self.config.mode_probability == 'None':
+        elif self.config.mode_sampling == 'None':
             # equally (= mode uniformly)
             return np.random.choice(self.modes)
 
-        elif self.config.mode_probability == 1:
+        elif self.config.mode_sampling == 1:
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
             probability[-1] = 1
             p =  probability
 
-        elif self.config.mode_probability == 0:#TODO not working properly for bidirectional
+        elif self.config.mode_sampling == 0:#TODO not working properly for bidirectional
             # Uniformly
             total_transition_nodes = sum(len(mode) for mode in self.transition_node_ids.values())
             total_nodes = Node.id_counter -1 + total_transition_nodes
@@ -1150,36 +1171,35 @@ class BaseRRTstar(ABC):
             ]
 
             # Normalize the probabilities of all modes except the last one
-            remaining_probability = 1-self.config.mode_probability  
+            remaining_probability = 1-self.config.mode_sampling  
             total_inverse = sum(inverse_probabilities)
             p =  [
                 (inv_prob / total_inverse) * remaining_probability
                 for inv_prob in inverse_probabilities
-            ] + [self.config.mode_probability]
+            ] + [self.config.mode_sampling]
 
         return np.random.choice(self.modes, p = p)
 
     def InformedInitialization(self, mode: Mode) -> None: 
         if not self.config.informed_sampling:
             return
-        if self.config.informed_sampling_version == 1:
-            self.informed[mode] = InformedVersion1(self.env, config_cost, self.config.cost_metric, self.config.cost_reduction)
-            mode_task_ids_home_poses = self.get_mode_task_ids_of_home_pose_of_agent(mode)
-            self.informed[mode].initialize(mode, mode_task_ids_home_poses)
-            return
         if self.config.informed_sampling_version == 0:
             self.informed[mode] = InformedVersion0(self.env, config_cost, self.config.cost_metric, self.config.cost_reduction)
+            self.informed[mode].initialize()
+        if self.config.informed_sampling_version == 1:
+            self.informed[mode] = InformedVersion1(self.env, config_cost, self.config.cost_metric, self.config.cost_reduction)
         if self.config.informed_sampling_version == 2:
             self.informed[mode] = InformedVersion2(self.env, config_cost, self.config.cost_metric, self.config.cost_reduction)
+            self.informed[mode].initialize()
         if self.config.informed_sampling_version == 3:
             self.informed[mode] = InformedVersion3(self.env, config_cost, self.config.cost_metric, self.config.cost_reduction)
+            self.informed[mode].initialize()
         if self.config.informed_sampling_version == 4:
             self.informed[mode] = InformedVersion4(self.env, config_cost, self.config.cost_metric, self.config.cost_reduction)
+            self.informed[mode].initialize()
         if self.config.informed_sampling_version == 5:
             self.informed[mode] = InformedVersion5(self.env, config_cost, self.config.cost_metric, self.config.cost_reduction)
-        
-        start_config, goal_config, mode_task_ids_home_poses = self.get_start_and_goal_config(mode)
-        self.informed[mode].initialize(start_config, goal_config, mode_task_ids_home_poses)
+            self.informed[mode].initialize()
 
     def SampleNodeManifold(self, mode:Mode) -> Configuration:
         if np.random.uniform(0, 1) <= self.config.p_goal:
@@ -1201,9 +1221,9 @@ class BaseRRTstar(ABC):
         return self.sample_configuration(mode, 2, self.transition_node_ids, self.trees[mode].order)
         
     def FindLBTransitionNode(self, iter: int) -> None:
-        if self.operation.init_sol:      
-            mode = self.modes[-1] #TODO need to find terminal node or all terminal nodes when several configurations are possible
-            result = self.get_lb_transition_node_id(mode) 
+        if self.operation.init_sol: 
+            modes = self.get_termination_modes()     
+            result, mode = self.get_lb_transition_node_id(modes) 
             if not result:
                 return
             valid_mask = result[0] < self.operation.cost
@@ -1314,9 +1334,6 @@ class BaseRRTstar(ABC):
             self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, node.id)
             node.cost = discretized_costs[i]
             node.cost_to_parent = node.cost - node.parent.cost
-            # agent_dist = batch_dist.to(dtype=torch.float16).cpu()
-            # node.agent_dists = node.parent.agent_dists + agent_dist
-            # node.agent_dists_to_parent = agent_dist
             parent.children.append(node)
             if self.trees[mode].order == 1:
                 self.trees[mode].add_node(node)

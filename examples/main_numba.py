@@ -19,6 +19,7 @@ from multi_robot_multi_goal_planning.planners.planner_drrtstar_numba import dRRT
 from multi_robot_multi_goal_planning.problems.rai_envs import *
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 from analysis.postprocessing import cost_single, final_path_animation
+from analysis.analysis_util import save_env_as_mesh
 import multiprocessing
 
 def execute_planner(env, args, config_manager):
@@ -54,6 +55,7 @@ def execute_planner(env, args, config_manager):
     output_html = os.path.join(config_manager.output_dir, 'final_path_animation_3d.html')
     env_path = os.path.join(os.path.expanduser("~"), f'env/{args.env_name}')
     if len(path[0].q.state())/(len(env.robots)) <= 3: # Only applicable up to 2D env with orientation
+        save_env_as_mesh(env, env_path)
         final_path_animation(env, env_path, pkl_folder, output_html)  
 
 

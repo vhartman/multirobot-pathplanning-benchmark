@@ -2,13 +2,13 @@
 description: |
   General
 
-step_size: 0.5                             # Max allowable distance that newly generated node can be from the nearest node in the tree                    
+step_size: 0.5                              # Max allowable distance that newly generated node can be from the nearest node in the tree                    
 amount_of_runs: 1                           # Amount of runs executed 
-debug_mode: false                            # True: Data isn't stored, as in debug modus
+debug_mode: true                            # True: Data isn't stored, as in debug modus
 use_seed: true                              # True: Use a seed for the algorithm
-seed:  4                           # User defined seed
-cprofiler: true                            # Use cprofiler to run the                     # Type of cost function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
-dist_type: max_euclidean                        # Type of dist function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
+seed:  1                                    # User defined seed
+cprofiler: true                             # Use cprofiler to run the                     # Type of cost function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
+dist_type: max                    # Type of dist function: 'euclidean' (Max euclidean norm),  '-' (Chebyshev (= greatest diff in any dimension))
 cost_metric: euclidean
 cost_reduction: max
 
@@ -22,8 +22,8 @@ description: |
 p_goal: 0.9                                 # Probability of performing goal sampling
 p_stay: 0.3                                 # Probability that robot stays in its pose (home pose) (if 1: isn't included)
 general_goal_sampling: false                # True: For all tasks in mode goal sampling is done otherwise only for active task
-mode_probability: None                         # Probability to choose new mode (0: uniformly, 1: greedy None: equally, else: manually set) 
-informed_sampling: false                    # True: Informed sampling is applied 
+mode_sampling: 1                         # Probability to choose new mode (0: uniformly, 1: greedy None: equally, else: manually set) 
+informed_sampling: true                    # True: Informed sampling is applied 
 informed_sampling_version: 0               # 0: mixture uniform and locally, 1: whole config, 2: = 1 but each agent separately 3: local 4: random local 5: by valentin 
 p_uniform: 0.8                              #only used for version 3 in informed sampling version
 gaussian: false
@@ -31,7 +31,7 @@ gaussian: false
 description: |
   Bi-RRT*
 
-transition_nodes: 1                        # Number of generated transition nodes during mode initialization (only used in bi-rrt*)
+transition_nodes: 50                        # Number of generated transition nodes during mode initialization (only used in bi-rrt*)
 birrtstar_version: 2                        # Version of Bi-RRT*: 1: Inspired by Bi-RRT* by b. Wang 2: Inspired by RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
 
 
