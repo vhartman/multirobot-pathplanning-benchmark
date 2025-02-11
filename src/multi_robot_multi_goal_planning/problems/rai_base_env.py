@@ -261,7 +261,7 @@ class rai_env(BaseProblem):
         self.limits = self.C.getJointLimits()
 
         self.collision_tolerance = 0.01
-        self.collision_resolution = 0.05
+        self.collision_resolution = 0.01
 
         self.cost_metric = "euclidean"
         self.cost_reduction = "max"
@@ -396,7 +396,7 @@ class rai_env(BaseProblem):
 
         # print('q1', q1)
         # print('q2', q2)
-        N = int(config_dist(q1, q2) / resolution)
+        N = int(config_dist(q1, q2, "max") / resolution)
         N = max(2, N)
 
         # for a distance < resolution * 2, we do not do collision checking
