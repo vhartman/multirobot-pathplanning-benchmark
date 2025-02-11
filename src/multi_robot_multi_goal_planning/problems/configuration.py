@@ -168,20 +168,21 @@ class NpConfiguration(Configuration):
 
     @classmethod
     def _dist(cls, pt, other, metric: str = "euclidean") -> float:
-        num_agents = pt._num_agents
-        dists = np.zeros(num_agents)
+        return cls._batch_dist(pt, [other], metric)[0]
+        # num_agents = pt._num_agents
+        # dists = np.zeros(num_agents)
 
-        diff = pt.q - other.q
+        # diff = pt.q - other.q
 
-        if metric == "euclidean":
-            for i, (s, e) in enumerate(pt.slice):
-                d = 0
-                for j in range(s, e):
-                    d += (diff[j]) ** 2
-                dists[i] = d**0.5
-            return float(np.max(dists))
-        else:
-            return float(np.max(np.abs(diff)))
+        # if metric == "euclidean":
+        #     for i, (s, e) in enumerate(pt.slice):
+        #         d = 0
+        #         for j in range(s, e):
+        #             d += (diff[j]) ** 2
+        #         dists[i] = d**0.5
+        #     return float(np.max(dists))
+        # else:
+        #     return float(np.max(np.abs(diff)))
 
     # _preallocated_q = None
     # @classmethod
@@ -192,7 +193,7 @@ class NpConfiguration(Configuration):
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
     def _batch_dist(
-        cls, pt: "NpConfiguration", batch_other, metric: str = "max"
+        cls, pt: "NpConfiguration", batch_other, metric: str = "euclidean"
     ) -> NDArray:
         if isinstance(batch_other, np.ndarray):
             diff = pt.q - batch_other
