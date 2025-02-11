@@ -78,5 +78,3 @@ coverage/
 *.bak/
 temp/
 cache/
-
-z.log.global

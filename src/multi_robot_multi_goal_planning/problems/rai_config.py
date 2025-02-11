@@ -9,8 +9,8 @@ import random
 import json
 
 # make everything predictable
-# np.random.seed(3)
-# random.seed(3)
+np.random.seed(2)
+random.seed(2)
 
 
 def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
