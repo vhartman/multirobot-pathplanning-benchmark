@@ -95,7 +95,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.operation.init_sol = True
         self.FindLBTransitionNode(iter)
 
-    def UpdateTree(self, mode:Mode ,n: Node, n_parent:Node , cost_to_parent:torch.Tensor) -> None: #TODO need to update it
+    def UpdateTree(self, mode:Mode ,n: Node, n_parent:Node , cost_to_parent:NDArray) -> None: #TODO need to update it
         while True:
             n.cost = n_parent.cost +  cost_to_parent
             # dist_cpu= dists.clone().to(dtype=torch.float16).cpu()

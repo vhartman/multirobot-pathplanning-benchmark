@@ -7,7 +7,6 @@ import pickle
 
 from multi_robot_multi_goal_planning.problems.configuration import *
 from multi_robot_multi_goal_planning.problems.planning_env import *
-from multi_robot_multi_goal_planning.problems.memory_util import *
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
@@ -976,7 +975,7 @@ class BaseRRTstar(ABC):
                     # self.SaveData(mode, time.time()-self.start_time, ellipse=q_ellipse)
                     return q_rand
              
-    def sample_unit_n_ball(self, n:int) -> torch.tensor:
+    def sample_unit_n_ball(self, n:int) -> NDArray:
         """Returns:
                 Uniform sample from the volume of an n-ball of unit radius centred at origin
         """
@@ -999,7 +998,7 @@ class BaseRRTstar(ABC):
         # print([float(set_dists[idx])])
         return  self.trees[mode].get_node(node_id, tree), set_dists[idx], set_dists
     
-    def Steer(self, mode:Mode, n_nearest: Node, q_rand: Configuration, dist: torch.Tensor, i=1) -> State: 
+    def Steer(self, mode:Mode, n_nearest: Node, q_rand: Configuration, dist: NDArray, i=1) -> State: 
         if np.equal(n_nearest.state.q.state(), q_rand.state()).all():
             return None
         q_nearest = n_nearest.state.q.state()
@@ -1028,7 +1027,7 @@ class BaseRRTstar(ABC):
         N_near_batch = batch_subtree[indices]
         return N_near_batch, n_near_costs, node_indices
     
-    def FindParent(self, mode:Mode, node_indices: NDArray, n_new: Node, n_nearest: Node, batch_cost: NDArray, n_near_costs: torch.tensor) -> None:
+    def FindParent(self, mode:Mode, node_indices: NDArray, n_new: Node, n_nearest: Node, batch_cost: NDArray, n_near_costs: NDArray) -> None:
         idx =  np.where(np.array(node_indices) == n_nearest.id)[0][0]
         c_new_tensor = n_near_costs + batch_cost
         c_min = c_new_tensor[idx]
@@ -1051,8 +1050,8 @@ class BaseRRTstar(ABC):
         n_new.cost = c_min
         self.trees[mode].add_node(n_new)
     
-    def Rewire(self, mode:Mode,  node_indices: torch.Tensor, n_new: Node, batch_cost: torch.tensor, 
-               n_near_costs: torch.tensor, n_rand = None, n_nearest = None) -> bool:
+    def Rewire(self, mode:Mode,  node_indices: NDArray, n_new: Node, batch_cost: NDArray, 
+               n_near_costs: NDArray, n_rand = None, n_nearest = None) -> bool:
         rewired = False
         c_potential_tensor = n_new.cost + batch_cost
 
