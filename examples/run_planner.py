@@ -32,9 +32,6 @@ from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
 from run_experiment import export_planner_data
 
 
-# np.random.seed(100)
-
-
 def main():
     parser = argparse.ArgumentParser(description="Planner runner")
     parser.add_argument("env", nargs="?", default="default", help="env to show")
@@ -42,6 +39,9 @@ def main():
         "--optimize",
         action="store_true",
         help="Enable optimization (default: True)",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=1, help="Seed"
     )
     parser.add_argument(
         "--num_iters", type=int, default=2000, help="Number of iterations"
@@ -114,6 +114,8 @@ def main():
     env.cost_metric = args.per_agent_cost_function
 
     env.show()
+
+    np.random.seed(args.seed)
 
     if args.planner == "joint_prm":
         path, info = joint_prm_planner(
@@ -252,10 +254,12 @@ def main():
     plt.show()
 
     print("displaying path from planner")
-    display_path(env, interpolated_path, stop=False, stop_at_end=True)
+    display_path(
+        env, interpolated_path, stop=False, stop_at_end=True, adapt_to_max_distance=True
+    )
 
     print("displaying path from shortcut path")
-    display_path(env, shortcut_discretized_path, stop=False)
+    display_path(env, shortcut_discretized_path, stop=False, adapt_to_max_distance=True)
 
 
 if __name__ == "__main__":
