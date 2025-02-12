@@ -1272,7 +1272,7 @@ class BaseRRTstar(ABC):
                 edge, edge_cost =  self.EdgeInterpolation(discretized_path[idx1:idx2+1].copy(), 
                                                             discretized_costs[idx1], indices, dim, version, robot, self.env.robots)
                 
-                if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge, resolution=0.001, tolerance=0.001): #need to make path_collision_free
+                if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge): #need to make path_collision_free
                     discretized_path[idx1:idx2+1] = edge
                     discretized_costs[idx1:idx2+1] = edge_cost
                     self.UpdateDiscretizedCost(discretized_path, discretized_costs, idx2)
