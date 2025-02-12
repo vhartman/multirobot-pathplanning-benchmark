@@ -1,26 +1,27 @@
 {
   "experiment_name": "test",
-  "environment": "simple_2d",
+  "environment": "handover",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "max",
+  "cost_reduction": "sum",
   "max_planning_time": 100,
-  "num_runs": 15,
+  "num_runs": 5,
   "seed": 1,
-  "optimize": false,
+  "optimize": true,
   "planners": [
     {
       "name": "rrtstar",
       "type": "rrtstar",
       "options": {
         "informed_sampling": true,
-        "informed_sampling_version": 0,  
+        "informed_sampling_version": 0,
         "distance_metric": "max_euclidean",
         "p_goal": 0.9,
         "p_stay": 0.3,
         "p_uniform": 0.8,
         "shortcutting": true,
-        "mode_sampling": 0.6
+        "mode_sampling": 1
       }
     }
+
   ]
 }

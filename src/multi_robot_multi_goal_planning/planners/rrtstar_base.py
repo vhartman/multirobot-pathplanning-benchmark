@@ -730,7 +730,7 @@ class BaseRRTstar(ABC):
             #     idx+=1
 
             # Check if sample is collision-free
-            if self.env.is_collision_free_without_mode(q):
+            if self.env.is_collision_free(q, self.env.get_start_mode()):
                 free_samples += 1
         # self.SaveData(None, time.time()-self.start_time, ellipse=q_ellipse)
         # Estimate C_free measure
@@ -785,7 +785,15 @@ class BaseRRTstar(ABC):
         if len(goal) == self.env.robot_dims[r]:
             return goal
         else:
-            return goal[self.env.robot_idx[r]]
+            constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+            end_idx = 0
+            for robot in constrained_robot:
+                dim = self.env.robot_dims[r]
+                if robot == r:
+                    indices = list(range(end_idx, end_idx + dim))
+                    return goal[indices]
+                end_idx += dim 
+
         # goal = task.goal.sample(mode)
         # if len(goal) == self.env.robot_dims[r]:
         #    return goal
@@ -1131,11 +1139,11 @@ class BaseRRTstar(ABC):
         else:
             # manually set
             total_transition_nodes = sum(len(mode) for mode in self.transition_node_ids.values())
-            total_nodes = Node.id_counter -1 + total_transition_nodes
+            total_nodes = sum(len(self.trees[mode].subtree) for mode in self.modes[:-1])
             # Calculate probabilities inversely proportional to node counts
             inverse_probabilities = [
-                1 - (len(mode.subtree) / total_nodes)
-                for mode in self.modes[:-1]  # Exclude the last mode
+                1 - (len(self.trees[mode].subtree) / total_nodes)
+                for mode in self.modes[:-1]
             ]
 
             # Normalize the probabilities of all modes except the last one
