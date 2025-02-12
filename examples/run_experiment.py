@@ -11,6 +11,7 @@ import random
 import sys
 import multiprocessing
 import copy
+import traceback
 
 from typing import Dict, Any, Callable, Tuple, List
 
@@ -281,7 +282,6 @@ def run_experiment(
                     export_planner_data(planner_folder, run_id, res)
                 except Exception as e:
                     print(f"Error in {planner_name} run {run_id}: {e}")
-                    import traceback
                     tb = traceback.format_exc()  # Get the full traceback
                     print(f"Error in {planner_name} run {run_id}: {e}\nTraceback:\n{tb}")
 
