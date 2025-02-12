@@ -78,7 +78,7 @@ class ConditionalGoal(Goal):
 
     def sample(self, mode: "Mode") -> NDArray:
         for c, g in zip(self.conditions, self.goals):
-            if np.linalg.norm(mode.entry_configuration[0] - c) < 1e-5:
+            if np.linalg.norm(mode.entry_configuration[0] - c) < 1e-8:
                 return g
 
         raise ValueError("No feasible goal in mode")
@@ -354,7 +354,7 @@ class SequenceMixin(BaseModeLogic):
         q_concat = np.concatenate(q_concat)
 
         if terminal_task.goal.satisfies_constraints(
-            q_concat, mode=m, tolerance=self.collision_tolerance
+            q_concat, mode=m, tolerance=1e-8
         ):
             return True
 
@@ -373,7 +373,7 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=self.collision_tolerance):
+        if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=1e-8):
             return True
 
         return False
@@ -571,7 +571,7 @@ class DependencyGraphMixin(BaseModeLogic):
                     q_concat = np.concatenate(q_concat)
 
                     if task.goal.satisfies_constraints(
-                        q_concat, mode=mode, tolerance=self.collision_tolerance
+                        q_concat, mode=mode, tolerance=1e-8
                     ):
                         tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
@@ -609,7 +609,7 @@ class DependencyGraphMixin(BaseModeLogic):
                     q_concat = np.concatenate(q_concat)
 
                     if task.goal.satisfies_constraints(
-                        q_concat, mode=m, tolerance=self.collision_tolerance
+                        q_concat, mode=m, tolerance=1e-8
                     ):
                         return True
 
@@ -634,7 +634,7 @@ class DependencyGraphMixin(BaseModeLogic):
         q_concat = np.concatenate(q_concat)
 
         if terminal_task.goal.satisfies_constraints(
-            q_concat, mode=mode, tolerance=self.collision_tolerance
+            q_concat, mode=mode, tolerance=1e-8
         ):
             return True
 
