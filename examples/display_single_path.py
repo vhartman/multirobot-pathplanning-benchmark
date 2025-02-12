@@ -92,12 +92,12 @@ def main():
         plt.show()
 
     if args.interpolate:
-        path = interpolate_path(path)
+        path = interpolate_path(path, 0.01)
 
     if args.shortcut:
         env.cost_reduction = "max"
         env.cost_metric = "euclidean"
-        path, _ = robot_mode_shortcut(env, path, 10000)
+        path, _ = robot_mode_shortcut(env, path, 10000, resolution=env.collision_resolution, tolerance=env.collision_tolerance)
 
     print("Attempting to display path")
     env.show()

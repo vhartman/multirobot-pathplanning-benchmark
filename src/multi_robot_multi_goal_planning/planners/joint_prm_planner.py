@@ -547,7 +547,7 @@ class Graph:
 
             if node.state.mode not in self.reverse_transition_node_array_cache:
                 self.reverse_transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.state() for n in neighbors]
+                    [n.state.q.state() for n in neighbors], dtype=np.float64
                 )
 
             closed_set.add(node.id)
@@ -628,7 +628,7 @@ class Graph:
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.state() for n in neighbors]
+                    [n.state.q.state() for n in neighbors], dtype=np.float64
                 )
 
             closed_set.add(node.id)
@@ -766,7 +766,9 @@ class Graph:
             node_list = self.nodes[key]
 
             if key not in self.node_array_cache:
-                self.node_array_cache[key] = np.array([n.state.q.q for n in node_list])
+                self.node_array_cache[key] = np.array(
+                    [n.state.q.q for n in node_list], dtype=np.float64
+                )
 
             dists = self.batch_dist_fun(
                 node.state.q, self.node_array_cache[key]
@@ -777,7 +779,7 @@ class Graph:
 
             if key not in self.transition_node_array_cache:
                 self.transition_node_array_cache[key] = np.array(
-                    [n.state.q.q for n in transition_node_list]
+                    [n.state.q.q for n in transition_node_list], dtype=np.float64
                 )
 
             transition_dists = self.batch_dist_fun(
@@ -897,7 +899,7 @@ class Graph:
 
             best_nodes = best_nodes + best_transition_nodes
 
-        arr = np.vstack([best_nodes_arr, best_transitions_arr])
+        arr = np.vstack([best_nodes_arr, best_transitions_arr], dtype=np.float64)
 
         if node.is_transition:
             tmp = np.vstack([n.state.q.state() for n in node.neighbors])
@@ -932,12 +934,14 @@ class Graph:
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
-                    [o.state.q.q for o in self.transition_nodes[node.state.mode]]
+                    [o.state.q.q for o in self.transition_nodes[node.state.mode]],
+                    dtype=np.float64,
                 )
 
             if node.state.mode not in self.transition_node_lb_cache:
                 self.transition_node_lb_cache[node.state.mode] = np.array(
-                    [o.lb_cost_to_goal for o in self.transition_nodes[node.state.mode]]
+                    [o.lb_cost_to_goal for o in self.transition_nodes[node.state.mode]],
+                    dtype=np.float64,
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1199,12 +1203,14 @@ class Graph:
 
             if node.state.mode not in self.transition_node_array_cache:
                 self.transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.q for n in self.transition_nodes[node.state.mode]]
+                    [n.state.q.q for n in self.transition_nodes[node.state.mode]],
+                    dtype=np.float64,
                 )
 
             if node.state.mode not in self.transition_node_lb_cache:
                 self.transition_node_lb_cache[node.state.mode] = np.array(
-                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]]
+                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]],
+                    dtype=np.float64,
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1427,6 +1433,7 @@ def sample_phs_with_given_matrices(rot, center):
     return rot @ x_ball + center
 
 
+# @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
 def joint_prm_planner(
     env: BaseProblem,
     ptc: PlannerTerminationCondition,
@@ -1454,9 +1461,8 @@ def joint_prm_planner(
     conf_type = type(env.get_start_pos())
 
     def sample_mode(
-        mode_sampling_type: str = "weighted", found_solution: bool = False
+        mode_sampling_type: str = "uniform_reached", found_solution: bool = False
     ) -> Mode:
-        return random.choice(reached_modes)
         if mode_sampling_type == "uniform_reached":
             m_rnd = random.choice(reached_modes)
         elif mode_sampling_type == "weighted":
@@ -1510,7 +1516,8 @@ def joint_prm_planner(
         def lb_cost_from_start(state):
             if state.mode not in g.reverse_transition_node_array_cache:
                 g.reverse_transition_node_array_cache[state.mode] = np.array(
-                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]]
+                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]],
+                    dtype=np.float64,
                 )
 
             if state.mode not in g.rev_transition_node_lb_cache:
@@ -1518,7 +1525,8 @@ def joint_prm_planner(
                     [
                         o.lb_cost_from_start
                         for o in g.reverse_transition_nodes[state.mode]
-                    ]
+                    ],
+                    dtype=np.float64,
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1534,16 +1542,18 @@ def joint_prm_planner(
 
         def lb_cost_from_goal(state):
             if state.mode not in g.transition_nodes:
-                return np.inf 
-            
+                return np.inf
+
             if state.mode not in g.transition_node_array_cache:
                 g.transition_node_array_cache[state.mode] = np.array(
-                    [o.state.q.q for o in g.transition_nodes[state.mode]]
+                    [o.state.q.q for o in g.transition_nodes[state.mode]],
+                    dtype=np.float64,
                 )
 
             if state.mode not in g.transition_node_lb_cache:
                 g.transition_node_lb_cache[state.mode] = np.array(
-                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]]
+                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]],
+                    dtype=np.float64,
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1646,7 +1656,7 @@ def joint_prm_planner(
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
-                m = sample_mode("weighted", True)
+                m = sample_mode("uniform_reached", True)
 
             # print(m)
 
@@ -1670,7 +1680,7 @@ def joint_prm_planner(
             # plt.show()
 
             focal_points = np.array(
-                [path[start_ind].q.state(), path[end_ind].q.state()]
+                [path[start_ind].q.state(), path[end_ind].q.state()], dtype=np.float64
             )
 
             precomputed_phs_matrices = {}
@@ -1679,9 +1689,8 @@ def joint_prm_planner(
             obv_inv_attempts = 0
             sample_in_collision = 0
 
-            had_to_be_clipped = False
-
             for k in range(max_attempts_per_sample):
+                had_to_be_clipped = False
                 if not try_direct_sampling or env.cost_metric != "euclidean":
                     # completely random sample configuration from the (valid) domain robot by robot
                     q = []
@@ -1754,6 +1763,21 @@ def joint_prm_planner(
                                     *precomputed_phs_matrices[i]
                                 )
 
+                                # plt.figure()
+                                # samples = []
+                                # for _ in range(500):
+                                #     sample = sample_phs_with_given_matrices(
+                                #         *precomputed_phs_matrices[i]
+                                #     )
+                                #     # sample = samplePHS(np.array([[-1], [0]]), np.array([[1], [0]]), 3)
+                                #     samples.append(sample[:2])
+                                #     print("sample", sample)
+
+                                # plt.scatter(
+                                #     [a[0] for a in samples], [a[1] for a in samples]
+                                # )
+                                # plt.show()
+
                                 # qr = samplePHS(path[start_ind].q[i], path[end_ind].q[i], c_robot_bound)
                                 # qr = rejection_sample_from_ellipsoid(
                                 #     path[start_ind].q[i], path[end_ind].q[i], c_robot_bound
@@ -1766,6 +1790,7 @@ def joint_prm_planner(
                                 clipped = np.clip(qr, lims[0, :], lims[1, :])
                                 if not np.array_equal(clipped, qr):
                                     had_to_be_clipped = True
+                                    break
                                     # print("AAA")
 
                         q.append(qr)
@@ -1843,7 +1868,8 @@ def joint_prm_planner(
         def lb_cost_from_start(state):
             if state.mode not in g.reverse_transition_node_array_cache:
                 g.reverse_transition_node_array_cache[state.mode] = np.array(
-                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]]
+                    [o.state.q.q for o in g.reverse_transition_nodes[state.mode]],
+                    dtype=np.float64,
                 )
 
             if state.mode not in g.rev_transition_node_lb_cache:
@@ -1851,7 +1877,8 @@ def joint_prm_planner(
                     [
                         o.lb_cost_from_start
                         for o in g.reverse_transition_nodes[state.mode]
-                    ]
+                    ],
+                    dtype=np.float64,
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1868,12 +1895,14 @@ def joint_prm_planner(
         def lb_cost_from_goal(state):
             if state.mode not in g.transition_node_array_cache:
                 g.transition_node_array_cache[state.mode] = np.array(
-                    [o.state.q.q for o in g.transition_nodes[state.mode]]
+                    [o.state.q.q for o in g.transition_nodes[state.mode]],
+                    dtype=np.float64,
                 )
 
             if state.mode not in g.transition_node_lb_cache:
                 g.transition_node_lb_cache[state.mode] = np.array(
-                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]]
+                    [o.lb_cost_to_goal for o in g.transition_nodes[state.mode]],
+                    dtype=np.float64,
                 )
 
             costs_to_transitions = env.batch_config_cost(
@@ -1942,8 +1971,11 @@ def joint_prm_planner(
         return False
 
     def generate_informed_transitions(
-        batch_size, path, naive_informed_sampling=False, max_attempts_per_sample=100
+        batch_size, path, locally_informed_sampling=False, max_attempts_per_sample=100
     ):
+        if len(env.tasks) == 1:
+            return []
+
         new_transitions = []
         num_attempts = 0
         path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
@@ -1956,11 +1988,7 @@ def joint_prm_planner(
 
             # print(len(new_samples))
             # sample mode
-            if naive_informed_sampling:
-                start_ind = 0
-                end_ind = len(path) - 1
-                mode = sample_mode("weighted", True)
-            else:
+            if locally_informed_sampling:
                 while True:
                     start_ind = random.randint(0, len(path) - 1)
                     end_ind = random.randint(0, len(path) - 1)
@@ -1978,6 +2006,10 @@ def joint_prm_planner(
 
                 k = random.randint(start_ind, end_ind)
                 mode = path[k].mode
+            else:
+                start_ind = 0
+                end_ind = len(path) - 1
+                mode = sample_mode("uniform_reached", True)
 
             # print(m)
 
@@ -2143,14 +2175,15 @@ def joint_prm_planner(
 
         if len(g.goal_nodes) > 0:
             focal_points = np.array(
-                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
+                dtype=np.float64,
             )
 
         while len(new_samples) < batch_size:
             num_attempts += 1
             # print(len(new_samples))
             # sample mode
-            m = sample_mode("weighted", cost is not None)
+            m = sample_mode("uniform_reached", cost is not None)
 
             # print(m)
 
@@ -2188,7 +2221,8 @@ def joint_prm_planner(
 
         if len(g.goal_nodes) > 0:
             focal_points = np.array(
-                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
+                dtype=np.float64,
             )
 
         while len(transitions) < transistion_batch_size:
@@ -2293,7 +2327,8 @@ def joint_prm_planner(
             # prune
             num_pts_for_removal = 0
             focal_points = np.array(
-                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()]
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
+                dtype=np.float64,
             )
             # for mode, nodes in g.nodes.items():
             #     for n in nodes:
@@ -2403,7 +2438,9 @@ def joint_prm_planner(
                 if try_informed_transitions:
                     print("Generating informed transitions")
                     new_informed_transitions = generate_informed_transitions(
-                        informed_transition_batch_size, interpolated_path
+                        informed_transition_batch_size,
+                        interpolated_path,
+                        locally_informed_sampling=locally_informed_sampling,
                     )
                     g.add_transition_nodes(new_informed_transitions)
                     print(

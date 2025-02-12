@@ -3843,7 +3843,6 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
             print(retval)
             if view:
                 komo.view(True, "IK solution")
-            komo.view(True, "IK solution")
 
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                 keyframes = komo.getPath()

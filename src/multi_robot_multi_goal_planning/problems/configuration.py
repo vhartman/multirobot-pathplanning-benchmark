@@ -93,7 +93,7 @@ def numba_parallelized_sum(
 def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
     num_slices = len(slices)
     num_samples = squared_diff.shape[0]
-    dists = np.empty((num_slices, num_samples), dtype=np.float32)
+    dists = np.empty((num_slices, num_samples), dtype=np.float64)
 
     for i in range(num_slices):
         s, e = slices[i]
@@ -106,7 +106,7 @@ def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
 def compute_sliced_dists_transpose(squared_diff: NDArray, slices: NDArray) -> NDArray:
     num_slices = len(slices)
     num_samples = squared_diff.shape[1]
-    dists = np.empty((num_slices, num_samples), dtype=np.float32)
+    dists = np.empty((num_slices, num_samples), dtype=np.float64)
 
     for i in range(num_slices):
         s, e = slices[i]
@@ -119,13 +119,14 @@ class NpConfiguration(Configuration):
     __slots__ = "array_slice", "q", "_num_agents"
 
     array_slice: NDArray
-    slice: List[Tuple[int, int]]
+    # slice: List[Tuple[int, int]]
     q: NDArray
     _num_agents: int
 
     def __init__(self, q: NDArray, _slice: List[Tuple[int, int]]):
         self.array_slice = np.array(_slice)
-        self.q = q
+        self.q = q.astype(np.float64)
+        # self.q = q
 
         self._num_agents = len(self.array_slice)
 
@@ -134,7 +135,7 @@ class NpConfiguration(Configuration):
 
     def __setitem__(self, ind, data):
         s, e = self.array_slice[ind]
-        self.q[s : e] = data
+        self.q[s:e] = data
 
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
@@ -167,20 +168,21 @@ class NpConfiguration(Configuration):
 
     @classmethod
     def _dist(cls, pt, other, metric: str = "euclidean") -> float:
-        num_agents = pt._num_agents
-        dists = np.zeros(num_agents)
+        return cls._batch_dist(pt, [other], metric)[0]
+        # num_agents = pt._num_agents
+        # dists = np.zeros(num_agents)
 
-        diff = pt.q - other.q
+        # diff = pt.q - other.q
 
-        if metric == "euclidean":
-            for i, (s, e) in enumerate(pt.slice):
-                d = 0
-                for j in range(s, e):
-                    d += (diff[j]) ** 2
-                dists[i] = d**0.5
-            return float(np.max(dists))
-        else:
-            return float(np.max(np.abs(diff)))
+        # if metric == "euclidean":
+        #     for i, (s, e) in enumerate(pt.slice):
+        #         d = 0
+        #         for j in range(s, e):
+        #             d += (diff[j]) ** 2
+        #         dists[i] = d**0.5
+        #     return float(np.max(dists))
+        # else:
+        #     return float(np.max(np.abs(diff)))
 
     # _preallocated_q = None
     # @classmethod
@@ -190,13 +192,15 @@ class NpConfiguration(Configuration):
 
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
-    def _batch_dist(cls, pt: "NpConfiguration", batch_other, metric: str = "max") -> NDArray:
+    def _batch_dist(
+        cls, pt: "NpConfiguration", batch_other, metric: str = "euclidean"
+    ) -> NDArray:
         if isinstance(batch_other, np.ndarray):
             diff = pt.q - batch_other
             # print(pt.q.shape)
             # print(batch_other.shape)
         else:
-            diff = pt.q - np.array([other.q for other in batch_other])
+            diff = pt.q - np.array([other.q for other in batch_other], dtype=np.float64)
 
         if metric == "euclidean":
             squared_diff = diff * diff
@@ -294,7 +298,7 @@ def batch_config_cost(
         agent_slices = starts.array_slice
     else:
         diff = np.array([start.q.state() for start in starts]) - np.array(
-            [other.q.state() for other in batch_other]
+            [other.q.state() for other in batch_other], dtype=np.float64
         )
         all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
         agent_slices = starts[0].q.array_slice
