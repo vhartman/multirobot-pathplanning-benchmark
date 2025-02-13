@@ -269,12 +269,17 @@ class rai_env(BaseProblem):
 
         self.C_cache = {}
 
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
     def __deepcopy__(self, memo):
         # Save the C attribute
         C = self.C
+        C_base = self.C_base
         
         # Temporarily remove C to allow deepcopy of other attributes
         self.C = None
+        self.C_base = None
         
         # Create a deep copy of self without C
         new_env = copy.deepcopy(super(), memo)
@@ -283,6 +288,10 @@ class rai_env(BaseProblem):
         self.C = C
         new_env.C = ry.Config()
         new_env.C.addConfigurationCopy(self.C)
+
+        self.C_base = C_base
+        new_env.C_base = ry.Config()
+        new_env.C_base.addConfigurationCopy(self.C_base)
 
         return new_env
 

@@ -2509,7 +2509,7 @@ def joint_prm_planner(
         while True:
             # print([node.neighbors[0].state.mode for node in g.reverse_transition_nodes[g.goal_nodes[0].state.mode]])
             # print([node.neighbors[0].state.mode for node in g.transition_nodes[g.root.state.mode]])
-
+    
             sparsely_checked_path = g.search(
                 g.root,
                 g.goal_nodes,
@@ -2518,6 +2518,7 @@ def joint_prm_planner(
                 resolution,
                 approximate_space_extent,
             )
+
             # sparsely_checked_path = g.search_with_vertex_queue(
             #     g.root, g.goal_nodes, env, current_best_cost, resolution, approximate_space_extent
             # )
