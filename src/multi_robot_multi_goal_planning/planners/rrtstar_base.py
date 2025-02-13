@@ -814,6 +814,8 @@ class BaseRRTstar(ABC):
         is_gaussian_sampling = sampling_type == 4
         constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
           
+        # print(is_goal_sampling, is_informed_sampling, is_home_pose_sampling, is_gaussian_sampling, constrained_robots)
+
         while True:
             #goal sampling
             #TODO only needed for parallized rrtstar
@@ -877,6 +879,8 @@ class BaseRRTstar(ABC):
             q = type(self.env.get_start_pos()).from_list(q)
             if self.env.is_collision_free(q, mode):
                 return q
+            # else:
+            #     self.env.show(False)
           
     def sample_informed(self, mode:Mode) -> None:
         """Returns: 

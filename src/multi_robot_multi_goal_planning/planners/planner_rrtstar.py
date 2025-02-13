@@ -64,6 +64,9 @@ class RRTstar(BaseRRTstar):
             # Mode selectiom       
             active_mode  = self.RandomMode()
 
+            # if i % 100 == 0:
+                # print(i)
+
             # RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
             n_nearest, dist, set_dists = self.Nearest(active_mode, q_rand)    
