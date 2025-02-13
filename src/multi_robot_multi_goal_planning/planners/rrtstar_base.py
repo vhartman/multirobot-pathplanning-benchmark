@@ -821,7 +821,7 @@ class BaseRRTstar(ABC):
         is_home_pose_sampling = sampling_type == 3
         is_gaussian_sampling = sampling_type == 4
         constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
-          
+        attemps = 0  # if home poses are in collision
         while True:
             #goal sampling
             #TODO only needed for parallized rrtstar
@@ -851,17 +851,19 @@ class BaseRRTstar(ABC):
             if not is_informed_sampling and not is_gaussian_sampling:
                 q = []
                 if is_home_pose_sampling:
+                    attemps += 1
                     q_home = self.get_home_poses(mode)
                 for robot in self.env.robots:
                     #home pose sampling
                     if is_home_pose_sampling:
                         r_idx = self.env.robots.index(robot)
-                        if robot not in constrained_robots:
+                        if robot not in constrained_robots: # can cause problems if several robots are not constrained and their home poses are in collision
                             q.append(q_home[r_idx])
                             continue
                         if np.array_equal(self.get_task_goal_of_agent(mode, robot), q_home[r_idx]):
-                            q.append(q_home[r_idx])
-                            continue
+                            if np.random.uniform(0, 1) <= self.p_goal: # goal sampling
+                                q.append(q_home[r_idx])
+                                continue
                     #goal sampling
                     if is_goal_sampling: 
                         if self.general_goal_sampling or robot in constrained_robots:
@@ -885,7 +887,9 @@ class BaseRRTstar(ABC):
             q = type(self.env.get_start_pos()).from_list(q)
             if self.env.is_collision_free(q, mode):
                 return q
-          
+            if attemps > 100: # if home pose causes failed attemps
+                is_home_pose_sampling = False
+                      
     def sample_informed(self, mode:Mode) -> None:
         """Returns: 
                 Samples a point from the ellipsoidal subset defined by the start and goal positions and c_best.
@@ -1115,7 +1119,7 @@ class BaseRRTstar(ABC):
             # equally (= mode uniformly)
             return np.random.choice(self.modes)
 
-        elif self.mode_sampling == 1:
+        elif self.mode_sampling == 1: #can cause some problem ...
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
             probability[-1] = 1
@@ -1139,7 +1143,7 @@ class BaseRRTstar(ABC):
         else:
             # manually set
             total_transition_nodes = sum(len(mode) for mode in self.transition_node_ids.values())
-            total_nodes = sum(len(self.trees[mode].subtree) for mode in self.modes[:-1])
+            total_nodes = sum(len(self.trees[mode].subtree) for mode in self.modes[:-1]) - total_transition_nodes
             # Calculate probabilities inversely proportional to node counts
             inverse_probabilities = [
                 1 - (len(self.trees[mode].subtree) / total_nodes)
