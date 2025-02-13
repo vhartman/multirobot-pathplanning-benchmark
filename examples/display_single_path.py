@@ -56,6 +56,68 @@ def convert_to_path(env, path_data):
     return real_path
 
 
+def make_mode_plot(path, env):
+    data = []
+
+    for p in path:
+        data.append(p.mode.task_ids)
+
+    data = np.array(data)
+    num_robots = data.shape[1]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    for robot_id in range(num_robots):
+        active_value = None
+        start_idx = None
+
+        for t in range(data.shape[0]):
+            if active_value is None or data[t, robot_id] != active_value:
+                if active_value is not None:
+                    # Draw a box from start_idx to t-1
+                    color = f"C{active_value}"
+
+                    if env.tasks[active_value].type is not None:
+                        if env.tasks[active_value].type == "pick":
+                            color = "tab:green"
+                        elif env.tasks[active_value].type == "place":
+                            color = "tab:orange"
+                        else:
+                            color = "tab:blue"
+
+                    ax.add_patch(
+                        plt.Rectangle(
+                            (start_idx, robot_id + 0.25),
+                            t - start_idx,
+                            0.5,
+                            color=color,
+                            alpha=0.8,
+                            edgecolor="black", linewidth=1.5
+                        )
+                    )
+                active_value = data[t, robot_id]
+                start_idx = t
+
+        # Final segment
+        if active_value is not None:
+            ax.add_patch(
+                plt.Rectangle(
+                    (start_idx, robot_id + 0.25),
+                    data.shape[0] - start_idx,
+                    0.5,
+                    color=f"C{active_value }",
+                    alpha=0.6,
+                )
+            )
+
+    ax.set_xlim(0, data.shape[0])
+    ax.set_ylim(0, num_robots)
+    ax.set_yticks(np.arange(num_robots) + 0.5)
+    ax.set_yticklabels([f"Robot {i}" for i in range(num_robots)])
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Robots")
+
+
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("path_filename", nargs="?", default="", help="filepath")
@@ -89,6 +151,8 @@ def main():
             plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
 
         # plt.show(block=False)
+
+        make_mode_plot(path, env)
         plt.show()
 
     if args.interpolate:
@@ -97,7 +161,13 @@ def main():
     if args.shortcut:
         env.cost_reduction = "max"
         env.cost_metric = "euclidean"
-        path, _ = robot_mode_shortcut(env, path, 10000, resolution=env.collision_resolution, tolerance=env.collision_tolerance)
+        path, _ = robot_mode_shortcut(
+            env,
+            path,
+            10000,
+            resolution=env.collision_resolution,
+            tolerance=env.collision_tolerance,
+        )
 
     print("Attempting to display path")
     env.show()

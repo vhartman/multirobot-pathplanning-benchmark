@@ -11,6 +11,7 @@ import numpy as np
 import random
 
 from typing import List, Dict, Optional, Any
+# from multi_robot_multi_goal_planning.problems.planning_env import State
 
 
 def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
@@ -81,8 +82,8 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
             paths = []
             for file in sorted_files:
                 with open(run_subfolder + file) as f:
-                    d = json.load(f)
-                    paths.append(d)
+                    path_data = json.load(f)
+                    paths.append(path_data)
 
             run_data["paths"] = paths
             run_data["costs"] = costs[i]
@@ -136,9 +137,8 @@ planner_name_to_color = {
     "locally_informed_prm_rejection": "tab:orange",
     "locally_informed_prm_shortcutting_rejection": "tab:red",
     "globally_informed_prm_shortcutting_rejection": "tab:brown",
-    "birrtstar": "mediumvioletred", 
-    "rrtstar": "darkcyan"
-    
+    "birrtstar": "mediumvioletred",
+    "rrtstar": "darkcyan",
 }
 
 
@@ -259,11 +259,13 @@ def make_cost_plots(
 
         if len(max_solution_cost[np.isfinite(max_solution_cost)]) > 0:
             max_non_inf_cost = max(
-                max_non_inf_cost, np.max(max_solution_cost[np.isfinite(max_solution_cost)])
+                max_non_inf_cost,
+                np.max(max_solution_cost[np.isfinite(max_solution_cost)]),
             )
         if len(min_solution_cost[np.isfinite(min_solution_cost)]) > 0:
             min_non_inf_cost = min(
-                min_non_inf_cost, np.min(min_solution_cost[np.isfinite(min_solution_cost)])
+                min_non_inf_cost,
+                np.min(min_solution_cost[np.isfinite(min_solution_cost)]),
             )
 
         ub_solution_cost[~np.isfinite(ub_solution_cost)] = 1e6
@@ -358,7 +360,7 @@ def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
             all_solution_costs.append(discretized_solution_costs)
 
         solution_found = np.isfinite(all_solution_costs)
-        percentage_solution_found = np.sum(solution_found, axis=0)
+        percentage_solution_found = np.sum(solution_found, axis=0) / len(results)
 
         plt.semilogx(
             interpolated_solution_times,
@@ -397,7 +399,7 @@ def main():
     config = load_config_from_folder(foldername)
 
     make_cost_plots(all_experiment_data, config, args.save, foldername)
-    # make_success_plot(all_experiment_data, config)
+    make_success_plot(all_experiment_data, config)
 
     plt.show()
 
