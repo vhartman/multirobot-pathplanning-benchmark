@@ -257,12 +257,14 @@ def make_cost_plots(
         min_solution_cost = np.min(all_solution_costs, axis=0)
         max_solution_cost = np.max(all_solution_costs, axis=0)
 
-        max_non_inf_cost = max(
-            max_non_inf_cost, np.max(max_solution_cost[np.isfinite(max_solution_cost)])
-        )
-        min_non_inf_cost = min(
-            min_non_inf_cost, np.min(min_solution_cost[np.isfinite(min_solution_cost)])
-        )
+        if len(max_solution_cost[np.isfinite(max_solution_cost)]) > 0:
+            max_non_inf_cost = max(
+                max_non_inf_cost, np.max(max_solution_cost[np.isfinite(max_solution_cost)])
+            )
+        if len(min_solution_cost[np.isfinite(min_solution_cost)]) > 0:
+            min_non_inf_cost = min(
+                min_non_inf_cost, np.min(min_solution_cost[np.isfinite(min_solution_cost)])
+            )
 
         ub_solution_cost[~np.isfinite(ub_solution_cost)] = 1e6
 

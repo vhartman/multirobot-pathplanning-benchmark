@@ -88,6 +88,7 @@ class RRTstar(BaseRRTstar):
                 break
             if self.operation.init_sol:
                 break
+
         self.costs.append(self.operation.cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)

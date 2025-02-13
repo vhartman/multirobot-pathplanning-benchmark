@@ -5,6 +5,7 @@
   "cost_reduction": "max",
   "max_planning_time": 100,
   "num_runs": 15,
+
   "seed": 1,
   "optimize": false,
   "planners": [
@@ -22,5 +23,6 @@
         "mode_sampling": 0.6
       }
     }
+
   ]
 }

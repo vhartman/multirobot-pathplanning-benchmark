@@ -730,7 +730,7 @@ class BaseRRTstar(ABC):
             #     idx+=1
 
             # Check if sample is collision-free
-            if self.env.is_collision_free(q, self.env.get_start_mode()):
+            if self.env.is_collision_free_without_mode(q):
                 free_samples += 1
         # self.SaveData(None, time.time()-self.start_time, ellipse=q_ellipse)
         # Estimate C_free measure
@@ -793,7 +793,6 @@ class BaseRRTstar(ABC):
                     indices = list(range(end_idx, end_idx + dim))
                     return goal[indices]
                 end_idx += dim 
-
         # goal = task.goal.sample(mode)
         # if len(goal) == self.env.robot_dims[r]:
         #    return goal
@@ -822,6 +821,7 @@ class BaseRRTstar(ABC):
         is_gaussian_sampling = sampling_type == 4
         constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
         attemps = 0  # if home poses are in collision
+
         while True:
             #goal sampling
             #TODO only needed for parallized rrtstar
@@ -852,6 +852,7 @@ class BaseRRTstar(ABC):
                 q = []
                 if is_home_pose_sampling:
                     attemps += 1
+
                     q_home = self.get_home_poses(mode)
                 for robot in self.env.robots:
                     #home pose sampling
@@ -889,7 +890,7 @@ class BaseRRTstar(ABC):
                 return q
             if attemps > 100: # if home pose causes failed attemps
                 is_home_pose_sampling = False
-                      
+
     def sample_informed(self, mode:Mode) -> None:
         """Returns: 
                 Samples a point from the ellipsoidal subset defined by the start and goal positions and c_best.
@@ -1283,7 +1284,7 @@ class BaseRRTstar(ABC):
 
                 edge, edge_cost =  self.EdgeInterpolation(discretized_path[idx1:idx2+1].copy(), 
                                                             discretized_costs[idx1], indices, dim, version, robot, self.env.robots)
-                
+        
                 if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge, resolution=0.001, tolerance=0.001): #need to make path_collision_free
                     discretized_path[idx1:idx2+1] = edge
                     discretized_costs[idx1:idx2+1] = edge_cost
