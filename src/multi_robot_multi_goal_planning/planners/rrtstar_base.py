@@ -18,7 +18,8 @@ from typing import Tuple, Optional, Union
 from functools import cache
 from numba import njit
 from scipy.stats.qmc import Halton
-
+import sys
+import shutil
 class Operation:
     """ Planner operation variables"""
     def __init__(self):
@@ -1424,66 +1425,11 @@ class BaseRRTstar(ABC):
     #     if time.time()-self.start_time >= self.ptc_time:
     #         print('Finished after ', np.round(time.time()-self.start_time, 1),'s' )
     #         return True
-
-    def SaveFinalData(self) -> None:
-        self.costs.append(self.operation.cost)
-        self.times.append(time.time()-self.start_time)
-        if self.operation.path == []:
-            return
-        #path and cost data
-        all_init_path = False
-        for idx, t in enumerate(self.times): 
-            cost = self.costs[idx]
-            if t == self.times[-1]:
-                path_data = [state.q.state() for state in self.operation.path]
-
-                intermediate_tot = [node.cost for node in self.operation.path_nodes]
-                # intermediate_agent_dists = torch.cat([node.agent_dists for node in self.operation.path_nodes])
-                result = {
-                    "path": path_data,
-                    "total": self.operation.path_nodes[-1].cost,
-                    "agent_dists": None,
-                    "intermediate_tot": intermediate_tot,
-                    "is_transition": [node.transition for node in self.operation.path_nodes],
-                    "modes": [node.state.mode.task_ids for node in self.operation.path_nodes],
-                }
-            else:
-                result = {
-                    "path": None,
-                    "total": cost,
-                    "agent_dists": None,
-                    "intermediate_tot": None,
-                    "is_transition": None,
-                    "modes": None,
-                }
-
-            # Data Assembly
-            data = {
-                "result": result,
-                "all_init_path": all_init_path,
-                "time": t,
-            }
-            all_init_path = True
-            # Directory Handling: Ensure directory exists
-            frames_directory = os.path.join(self.output_dir, 'FramesFinalData')
-            os.makedirs(frames_directory, exist_ok=True)
-
-            # Determine Next File Number: Use generator expressions for efficiency
-            next_file_number = max(
-                (int(file.split('.')[0]) for file in os.listdir(frames_directory)
-                if file.endswith('.pkl') and file.split('.')[0].isdigit()),
-                default=-1
-            ) + 1
-
-            # Save Data as Pickle File
-            filename = os.path.join(frames_directory, f"{next_file_number:04d}.pkl")
-            with open(filename, 'wb') as file:
-                pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
-
     def SaveData(self, mode:Mode, passed_time: time, n_new:NDArray=None, 
                  N_near:NDArray=None, r:float=None, n_rand:NDArray=None, 
                  n_nearest:NDArray = None, N_parent:NDArray=None, N_near_:List[NDArray]=None, ellipse:List[NDArray]=None) -> None:
-        if self.debug_mode:
+        #just needed for debugging
+        if sys.gettrace() is None:
             return
         #Tree data
         tree_data = []
@@ -1495,7 +1441,7 @@ class BaseRRTstar(ABC):
                     "parent": node.parent.state.q.state() if node.parent else None,
                     "mode": task_ids,
                 }
-                for node in self.trees[mode].subtree.values()
+                for node in self.trees[m].subtree.values()
             ]
             tree_data.extend(subtree_data)
         try: 
@@ -1508,7 +1454,7 @@ class BaseRRTstar(ABC):
                         "parent": node.parent.state.q.state() if node.parent else None,
                         "mode": task_ids,
                     }
-                    for node in self.trees[mode].subtree_b.values()
+                    for node in self.trees[m].subtree_b.values()
                 ]
                 tree_data.extend(subtree_data)
         except:
@@ -1623,8 +1569,8 @@ class BaseRRTstar(ABC):
         }
 
         # Directory Handling: Ensure directory exists
-        frames_directory = os.path.join(self.output_dir, 'FramesData')
-        os.makedirs(frames_directory, exist_ok=True)
+        output_dir =os.path.join(os.path.expanduser("~"), f'output/')
+        frames_directory = os.path.join(output_dir, 'FramesData')
 
         # Determine Next File Number: Use generator expressions for efficiency
         next_file_number = max(

@@ -19,6 +19,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import *
 from multi_robot_multi_goal_planning.problems.util import *
 from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import *
+from examples.run_experiment import load_experiment_config
 from analysis.shortcutting import *
 import subprocess
 import re
@@ -135,8 +136,6 @@ def step_function(start_time, sum_times, runs, times, costs, resolution = 0.01):
     Returns: Median and the nonparametric 99% confidence interval"""
     stop_time = sum_times/runs # get the average stop time (all have similar/same end time)
     max_len = int((stop_time - start_time) / resolution) + 1 # +1 to include endpoint
-    if runs == 1:
-        start_time = start_time - (1e-10)
     average_time = np.linspace(start_time, stop_time, max_len, endpoint = True)
     average_costs = []
     for idx, cost in enumerate(costs):
@@ -154,13 +153,13 @@ def step_function(start_time, sum_times, runs, times, costs, resolution = 0.01):
                     
         average_costs.append(cost_average)
     if runs == 1:
-        if average_costs[0][0] < 1e4:
-            average_costs[0][0] = 1e10
+        # if average_costs[0][0] < 1e4:
+        #     average_costs[0][0] = 1e10
         return average_costs[0], average_time, _, _
     #np.median calculates element-wise medians (so for each timestamp)
     return np.median(average_costs, axis=0).tolist(), average_time, np.percentile(average_costs, 1, axis=0).tolist(), np.percentile(average_costs, 99, axis=0).tolist()
 
-def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output_filename, with_inital_confidence_interval):
+def cost_multiple(env, config, pkl_folder, parent_folders, output_filename, with_inital_confidence_interval):
     """Plot cost of multiple runs with upper and lower bounds (= min/max values)""" # TODO for several different planners 
     fig = go.Figure() 
     colors = colors_plotly()
@@ -177,55 +176,29 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
         
         min_init_times = np.inf
         sum_terminal_times = 0
-        first = True
         runs = 0
-        for folder_name in os.listdir(parent_folder):
+        for number in range(config['num_runs']):
             runs += 1
-            
-            print(folder_name)
+            costs_path = os.path.join(parent_folder, 'costs.txt')
+            with open(costs_path, 'r', encoding='utf-8') as file:
+                for current_line, line in enumerate(file, start=0):
+                    if current_line == number:
+                        costs =[float(value) for value in line.strip().split(',') if value]
+            time_path = os.path.join(parent_folder, 'timestamps.txt')
+            with open(time_path, 'r', encoding='utf-8') as file:
+                for current_line, line in enumerate(file, start=0):
+                    if current_line == number:
+                        time = [float(value) for value in line.strip().split(',') if value]
+            if time[0] < min_init_times:
+                min_init_times = time[0]     
+            planner_init_times.append(time[0])
+            planner_init_costs.append(costs[0])  
+            costs.insert(0,1e6)
+            time.insert(0,0)
 
-            folder_path = os.path.join(parent_folder, folder_name)
-            if first:
-                _, config, _, _ = get_config(folder_path)
-                first = False
-            pkl_folder =  os.path.join(folder_path, 'FramesFinalData')
-            pkl_files = sorted(
-                [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
-                key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
-                )
-
-            print(f"Found {len(pkl_files)} .pkl files.")
             num_agents = len(env.robots)
             cost_function= 2 # TODO hardcoded
             cost_label = get_cost_label(cost_function, num_agents-1)
-            costs = []
-            time = []
-            init_sol = False
-            for pkl_file in pkl_files:
-                with open(pkl_file, 'rb') as file:
-                    data = dill.load(file)
-                result = data["result"]
-                time.append(data["time"])
-                
-                all_init_path = data["all_init_path"]
-                if all_init_path and not init_sol:
-                    init_sol = True # iteration where first iteration was found
-                    print(time[-1])
-                    init_path_time = time[-1]
-                    planner_init_times.append(init_path_time)
-                    planner_init_costs.append(result["total"].item())
-                    if init_path_time < min_init_times:
-                        min_init_times = init_path_time
-
-                if init_sol:
-                    cost = result["total"]
-                    if cost is None:
-                        costs.append(1e6)
-                    else:
-                        costs.append(cost.item())
-
-                else:
-                    costs.append(1e6)
             planner_costs.append(costs)
             planner_times.append(time)
             sum_terminal_times += time[-1]
@@ -242,7 +215,7 @@ def cost_multiple(env, config, pkl_folder, single_folder, parent_folders, output
             x=[0],
             y=[0],
             mode='lines',
-            name= f"{config['planner']}",
+            name= f"{config['planners'][planner]['name']}",
             line=dict(color=colors[planner]),
             showlegend=True  
         ))
@@ -659,7 +632,7 @@ def path_vis(env: BaseProblem, vid_path:str, framerate:int = 1, generate_png:boo
     subprocess.run(gif_command, check=True)
 
 # Only possible for env 2/3 DOFs
-def developement_animation(config, env, env_path, pkl_folder, output_html, with_tree, divider = None):
+def developement_animation(env, env_path, pkl_folder, output_html, with_tree, divider = None):
 
     # Print the parsed task sequence
     try:
@@ -721,24 +694,7 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
                     showlegend=True
                 )
             )
-    # try:
-    #     color_informed = 'black'
-    #     with open(pkl_files[-1], 'rb') as file:
-    #         data_informed = dill.load(file)
-    #         informed_sampling = data_informed['informed_sampling']
-    #         if informed_sampling != []:
-    #             static_traces.append(
-    #             go.Mesh3d(
-    #                 x=[0],  # Position outside the visible grid
-    #                 y=[0],  # Position outside the visible grid
-    #                 z=[0],
-    #                 color = color_informed,
-    #                 name='Informed Smapling - Ellipse/Ellipsoid',
-    #                 legendgroup='Informed Smapling - Ellipse/Ellipsoid',
-    #                 showlegend=True  # This will create a single legend entry for each mode
-    #             )
-    #         )
-    # except:pass
+    
     modes = []
     mode = env.start_mode
     while True:     
@@ -881,11 +837,6 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
                         )
                         )
 
-            
-
-            
-
-
         if with_tree:
             for robot_idx, robot in enumerate(env.robots):
                 indices = env.robot_idx[robot]
@@ -896,7 +847,7 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
                     parent_q = node["parent"]  # Get the parent node (or None)
                     mode = node["mode"]
                     mode_idx = modes.index(mode)
-                    mode = node["mode"]
+                    # mode = node["mode"]
                     color = colors[mode_idx]
                     x0 = q[indices][0]
                     y0 = q[indices][1]
@@ -1190,8 +1141,8 @@ def developement_animation(config, env, env_path, pkl_folder, output_html, with_
     fig.write_html(output_html)
     print(f"Animation saved to {output_html}")
 
-def final_path_animation(env, env_path, pkl_folder, output_html):
-
+def final_path_animation(env, env_path, path, output_html):
+    
     # Print the parsed task sequence
     try:
         task_sequence_text = "Task sequence: " + ", ".join(
@@ -1200,10 +1151,6 @@ def final_path_animation(env, env_path, pkl_folder, output_html):
     except:
          task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
 
-    pkl_files = sorted(
-        [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
-        key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
-    )
     # Initialize figure and static elements
     fig = go.Figure()
     frames = []
@@ -1243,15 +1190,6 @@ def final_path_animation(env, env_path, pkl_folder, output_html):
             showlegend=True
         )
     )
-    # dynamic_traces
-    pkl_file = pkl_files[-1]
-    with open(pkl_file, 'rb') as file:
-        data = dill.load(file)
-        
-        results = data["result"]
-        path = results["path"]
-        
-
     frame_traces = []
 
     for robot_idx, robot in enumerate(env.robots):
@@ -1594,26 +1532,28 @@ if __name__ == "__main__":
    
     args = parser.parse_args()
     home_dir = os.path.expanduser("~")
-    directory = os.path.join(home_dir, 'output')
+    directory = os.path.join(home_dir, 'multirobot-pathplanning-benchmark/out')
     dir = get_latest_folder(directory)
     # dir = '/home/tirza/output/simple_2d_120125_171604'
     # dir = '/home/tirza/output/one_agent_many_goals_260125_231109'
-    pattern = r'^\d{6}_\d{6}$'
-    last_part = os.path.basename(dir)
-    single_folder = False
-    if re.match(pattern, last_part):
-        path = dir
-        single_folder = True
-    else:
-        path = os.path.join(dir, '0')
+    # pattern = r'^\d{6}_\d{6}$'
+    # last_part = os.path.basename(dir)
+    # single_folder = False
+    # if re.match(pattern, last_part):
+    #     path = dir
+    #     single_folder = True
+    # else:
+    #     path = os.path.join(dir, '0')
     
-    env_name, config_params, _, _ = get_config(path)
-    env = problems.get_env_by_name(env_name)      
-    pkl_folder = os.path.join(path, 'FramesData')
-    env_path = os.path.join(home_dir, f'env/{env_name}')  
+    # env_name, config_params, _, _ = get_config(path)
+    config_dir = os.path.join(dir, 'config.json')
+    config = load_experiment_config(config_dir)
+    env = problems.get_env_by_name(config["environment"])    
+    path =   os.path.join(home_dir, 'output')
+    pkl_folder = get_latest_folder(path)
+    env_path = os.path.join(home_dir, f'env/{config["environment"]}')  
     save_env_as_mesh(env, env_path) 
-    print(dir)
-    print(path)
+
     if args.do == "dev":
         print("Development")
         with_tree = True
@@ -1623,7 +1563,7 @@ if __name__ == "__main__":
         else:
             output_html = os.path.join(path, 'path_animation_3d.html')
             reducer = 100
-        developement_animation(config_params, env, env_path, pkl_folder, output_html, with_tree, reducer)    
+        developement_animation(env, env_path, pkl_folder, output_html, with_tree, reducer)    
         webbrowser.open('file://' + os.path.realpath(output_html))
     if args.do == 'final_path_animation':
         save_env_as_mesh(env, env_path)
@@ -1638,16 +1578,16 @@ if __name__ == "__main__":
         cost_single(env, pkl_folder, output_filename_cost)
 
     if args.do == "cost_multiple":
+        dir_planner = []
+        for planner in config["planners"]:
+            dir_planner.append(os.path.join(dir, planner['name']))
         with_inital_confidence_interval = False
         pkl_folder = os.path.join(path, 'FramesFinalData')
         output_filename_cost = os.path.join(os.path.dirname(dir), f'Cost_{datetime.now().strftime("%d%m%y_%H%M%S")}.png')
-        dir = ['/home/tirza/output/100225_101628', '/home/tirza/output/100225_101856']
-        if not isinstance(dir, list):
-            dir = [dir]
-        cost_multiple(env, config_params, pkl_folder,single_folder ,dir ,output_filename_cost, with_inital_confidence_interval)
+        cost_multiple(env, config, pkl_folder ,dir_planner ,output_filename_cost, with_inital_confidence_interval)
     
     if args.do == "sum":
-        sum(dir, single_folder)
+        sum(dir, False)
     
     if args.do == "shortcutting_cost":
         fix_axis = False

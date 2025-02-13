@@ -89,7 +89,7 @@ class RRTstar(BaseRRTstar):
         self.costs.append(self.operation.cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
-        # self.SaveData(active_mode, time.time()-self.start_time)
+        self.SaveData(active_mode, time.time()-self.start_time)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
         return self.operation.path, info    
 

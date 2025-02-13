@@ -68,19 +68,16 @@ class BidirectionalRRTstar(BaseRRTstar):
         self.add_tree(new_mode, tree_instance)
         self.InformedInitialization(new_mode)
         #Initialize transition nodes
-        if self.env.is_terminal_mode(new_mode):
-            N = 1
-        else:
-            N = self.transition_nodes
-
-        for _ in range(N):                 
+        for _ in range(self.transition_nodes):                 
             q = self.sample_transition_configuration(new_mode)
             node = Node(State(q, new_mode), self.operation)
+            if node in self.trees[new_mode].subtree.values():
+                continue
             node.cost_to_parent = 0.0
             self.mark_node_as_transition(new_mode, node)
             self.trees[new_mode].add_node(node, 'B')
             self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
-            node.cost = np.inf
+            node.cost = 0.0
 
     def ManageTransition(self, mode:Mode, n_new: Node, iter: int) -> None:
         #check if transition is reached

@@ -5,7 +5,7 @@
             "name": "- simple_2d_rrtstar",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/run_experiment.py",
+            "program": "${workspaceFolder}/examples/main.py",
             "args": [
                 "/home/tirza/multirobot-pathplanning-benchmark/configs/experiments/simple_2d_sampling_based.json"
             ],

@@ -9,8 +9,57 @@ by the paper 'RRT*-Connect: Faster, Asymptotically Optimal Motion Planning' by S
 
 
 class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
-    def __init__(self, env, config: ConfigManager):
-        super().__init__(env, config)
+    def __init__(self, 
+                 env:BaseProblem, 
+                 ptc: PlannerTerminationCondition,
+                 general_goal_sampling: bool = False, 
+                 informed_sampling: bool = False, 
+                 informed_sampling_version: int = 0, 
+                 distance_metric: str = 'max_euclidean',
+                 p_goal: float = 0.9, 
+                 p_stay: float = 0.3,
+                 p_uniform: float = 0.8, 
+                 shortcutting: bool = False, 
+                 mode_sampling: Optional[Union[int, float]] = None, 
+                 gaussian: bool = False, 
+                 transition_nodes: int = 50, 
+                 birrtstar_version: int = 2 
+                ):
+        super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
+                    p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
+                    gaussian)
+        self.transition_nodes = transition_nodes 
+        self.birrtstar_version = birrtstar_version
+
+    def add_new_mode(self, q:Optional[Configuration]=None, mode:Mode=None, tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None) -> None: 
+        if mode is None: 
+            new_mode = self.env.make_start_mode()
+            new_mode.prev_mode = None
+            self.modes.append(new_mode)
+            self.add_tree(new_mode, tree_instance)
+            self.InformedInitialization(new_mode)
+            return
+        else:
+            new_mode = self.env.get_next_mode(q, mode)
+            new_mode.prev_mode = mode
+        if new_mode in self.modes:
+            return 
+        self.modes.append(new_mode)
+        self.add_tree(new_mode, tree_instance)
+        self.InformedInitialization(new_mode)
+        i = 0
+        while i < self.transition_nodes:               
+            q = self.sample_transition_configuration(mode)
+            node = Node(State(q, mode), self.operation)
+            if node in self.trees[mode].subtree.values(): #prevent to have several similar nodes
+                continue
+            node.cost_to_parent = 0.0
+            self.convert_node_to_transition_node(mode, node)
+            self.trees[mode].add_node(node, 'B')
+            self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, node.id) 
+            node.cost = np.inf
+            i += 1
+
 
     def PlannerInitialization(self) -> None:
         # Initilaize first Mode
@@ -21,24 +70,14 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
         start_node = Node(start_state, self.operation)
         self.trees[mode].add_node(start_node)
         start_node.cost = 0
-        start_node.cost_to_parent = np.float32(0)
+        start_node.cost_to_parent = 0.0
         #Initialize other modes:
         while True:
             self.InformedInitialization(mode)
             if not self.env.is_terminal_mode(mode): 
                 self.add_new_mode(mode=mode, tree_instance=BidirectionalTree) 
-            for _ in range(self.transition_nodes):                 
-                q = self.sample_transition_configuration(mode)
-                node = Node(State(q, mode), self.operation)
-                node.cost_to_parent = np.float32(0)
-                self.mark_node_as_transition(mode, node)
-                self.trees[mode].add_node(node, 'B')
-                self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, node.id) 
-                node.cost = np.inf
-                if self.env.is_terminal_mode(mode): 
-                    return
-                self.trees[self.modes[-1]].add_transition_node_as_start_node(node)
-            mode = self.modes[-1]
+            else:
+                break 
           
     def Connect(self, mode:Mode, n_new:Node, iter:int) -> None:
         if not self.trees[mode].subtree_b:
@@ -134,7 +173,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                 n_new.parent.children.remove(n_new)
                 cost = n_new.cost_to_parent
                 n_new.parent = None
-                n_new.cost_to_parent = np.float32(0)
+                n_new.cost_to_parent = 0.0
                 n_new.cost = np.inf
                 self.trees[mode].swap()
                 self.convert_node_to_transition_node(mode.prev_mode, n_new)
@@ -151,7 +190,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                     n_new.parent.children.remove(n_new)
                     cost = n_new.cost_to_parent
                     n_new.parent = None
-                    n_new.cost_to_parent = np.float32(0)
+                    n_new.cost_to_parent = 0.0
                     n_new.cost = 0
                     self.trees[mode].swap()
                     self.convert_node_to_transition_node(mode.prev_mode, n_new)

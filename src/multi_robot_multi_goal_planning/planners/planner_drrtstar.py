@@ -257,13 +257,13 @@ class dRRTstar(BaseRRTstar):
         start_node = Node(start_state, self.operation)
         self.trees[active_mode].add_node(start_node)
         start_node.cost = 0
-        start_node.cost_to_parent = np.float32(0)
+        start_node.cost_to_parent = 0.0
         
     def Expand(self, iter:int):
         i = 0
         while i < self.expand_iter:
             i += 1
-            active_mode  = self.RandomMode(Mode.id_counter)
+            active_mode  = self.RandomMode()
             q_rand = self.sample_configuration(active_mode, 0)
             #get nearest node in tree8:
             n_nearest, _ , _= self.Nearest(active_mode, q_rand)
@@ -423,7 +423,7 @@ class dRRTstar(BaseRRTstar):
         while True:
             i += 1
             self.Expand(i)
-            active_mode  = self.RandomMode(Mode.id_counter)
+            active_mode  = self.RandomMode()
             self.ConnectToTarget(active_mode, i)
             
             if self.PTC(i):

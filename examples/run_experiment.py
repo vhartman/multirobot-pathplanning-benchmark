@@ -33,7 +33,7 @@ from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
 )
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
 from multi_robot_multi_goal_planning.planners.planner_birrtstar import BidirectionalRRTstar
-from make_plots import make_cost_plots
+from examples.make_plots import make_cost_plots
 
 # np.random.seed(100)
 
