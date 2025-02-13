@@ -33,7 +33,9 @@ from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
-from multi_robot_multi_goal_planning.planners.planner_birrtstar import BidirectionalRRTstar
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BidirectionalRRTstar,
+)
 from make_plots import make_cost_plots
 
 # np.random.seed(100)
@@ -168,41 +170,43 @@ def setup_planner(
                 try_direct_informed_sampling=options["direct_informed_sampling"],
             )
     elif planner_config["type"] == "rrtstar":
+
         def planner(env):
             options = planner_config["options"]
             return RRTstar(
-                    env, 
-                    ptc=RuntimeTerminationCondition(runtime),
-                    # general_goal_sampling=options["general_goal_sampling"],
-                    informed_sampling=options["informed_sampling"],
-                    informed_sampling_version=options["informed_sampling_version"],
-                    distance_metric=options["distance_metric"],
-                    p_goal=options["p_goal"],
-                    p_stay=options["p_stay"],
-                    p_uniform=options["p_uniform"],
-                    shortcutting=options["shortcutting"],
-                    mode_sampling=options["mode_sampling"], 
-                    # gaussian=options["gaussian"]
-                ).Plan()
+                env,
+                ptc=RuntimeTerminationCondition(runtime),
+                # general_goal_sampling=options["general_goal_sampling"],
+                informed_sampling=options["informed_sampling"],
+                informed_sampling_version=options["informed_sampling_version"],
+                distance_metric=options["distance_metric"],
+                p_goal=options["p_goal"],
+                p_stay=options["p_stay"],
+                p_uniform=options["p_uniform"],
+                shortcutting=options["shortcutting"],
+                mode_sampling=options["mode_sampling"],
+                # gaussian=options["gaussian"]
+            ).Plan()
     elif planner_config["type"] == "birrtstar":
+
         def planner(env):
             options = planner_config["options"]
             return BidirectionalRRTstar(
-                    env, 
-                    ptc=RuntimeTerminationCondition(runtime),
-                    # general_goal_sampling=options["general_goal_sampling"],
-                    informed_sampling=options["informed_sampling"],
-                    informed_sampling_version=options["informed_sampling_version"],
-                    distance_metric=options["distance_metric"],
-                    p_goal=options["p_goal"],
-                    p_stay=options["p_stay"],
-                    p_uniform=options["p_uniform"],
-                    shortcutting=options["shortcutting"],
-                    mode_sampling=options["mode_sampling"], 
-                    # gaussian=options["gaussian"], 
-                    transition_nodes = options["transition_nodes"], 
-                    birrtstar_version= options["birrtstar_version"]
-                ).Plan()
+                env,
+                ptc=RuntimeTerminationCondition(runtime),
+                # general_goal_sampling=options["general_goal_sampling"],
+                informed_sampling=options["informed_sampling"],
+                informed_sampling_version=options["informed_sampling_version"],
+                distance_metric=options["distance_metric"],
+                p_goal=options["p_goal"],
+                p_stay=options["p_stay"],
+                p_uniform=options["p_uniform"],
+                shortcutting=options["shortcutting"],
+                mode_sampling=options["mode_sampling"],
+                # gaussian=options["gaussian"],
+                transition_nodes=options["transition_nodes"],
+                birrtstar_version=options["birrtstar_version"],
+            ).Plan()
 
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
@@ -270,7 +274,8 @@ def run_experiment(
                     np.random.seed(seed + run_id)
                     random.seed(seed + run_id)
 
-                    res = run_single_planner(env, planner)
+                    env_copy = copy.deepcopy(env)
+                    res = run_single_planner(env_copy, planner)
 
                     # planner_folder = experiment_folder + f"{planner_name}/"
                     # if not os.path.isdir(planner_folder):
@@ -283,7 +288,9 @@ def run_experiment(
                 except Exception as e:
                     print(f"Error in {planner_name} run {run_id}: {e}")
                     tb = traceback.format_exc()  # Get the full traceback
-                    print(f"Error in {planner_name} run {run_id}: {e}\nTraceback:\n{tb}")
+                    print(
+                        f"Error in {planner_name} run {run_id}: {e}\nTraceback:\n{tb}"
+                    )
 
                 finally:
                     # Restore stdout and stderr
@@ -358,6 +365,7 @@ def run_experiment_in_parallel(
     # Launch separate processes
     for run_id in range(config["num_runs"]):
         for planner_name, planner in planners:
+            env_copy = copy.deepcopy(env)
             p = multiprocessing.Process(
                 target=run_planner_process,
                 args=(
@@ -365,7 +373,7 @@ def run_experiment_in_parallel(
                     planner_name,
                     planner,
                     seed,
-                    env,
+                    env_copy,
                     experiment_folder,
                     queue,
                     semaphore,
@@ -391,8 +399,7 @@ def main():
     parser.add_argument("filepath", nargs="?", default="default", help="filepath")
     parser.add_argument(
         "--parallel_execution",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=False,
+        action="store_true",
         help="Run the experiments in parallel. (default: False)",
     )
     parser.add_argument(

@@ -29,6 +29,7 @@ import io
 from contextlib import contextmanager
 from functools import wraps
 import tempfile
+import copy
 
 DEVNULL = os.open(os.devnull, os.O_WRONLY)
 
@@ -267,6 +268,23 @@ class rai_env(BaseProblem):
         self.cost_reduction = "max"
 
         self.C_cache = {}
+
+    def __deepcopy__(self, memo):
+        # Save the C attribute
+        C = self.C
+        
+        # Temporarily remove C to allow deepcopy of other attributes
+        self.C = None
+        
+        # Create a deep copy of self without C
+        new_env = copy.deepcopy(super(), memo)
+        
+        # Restore C in both objects
+        self.C = C
+        new_env.C = ry.Config()
+        new_env.C.addConfigurationCopy(self.C)
+
+        return new_env
 
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
