@@ -10,7 +10,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import *
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners import shortcutting
+import multi_robot_multi_goal_planning.planners as mrmgp
 import time as time
 import math as math
 from typing import Tuple, Optional, Union
@@ -622,7 +622,7 @@ class BaseRRTstar(ABC):
         self.p_stay = p_stay
         self.shortcutting_dim_version = shortcutting_dim_version
         self.shortcutting_robot_version = shortcutting_robot_version
-        self.eta = np.sqrt(sum(self.env.robot_dims.values())/len(self.env.robots))
+        self.eta = np.sqrt(sum(self.env.robot_dims.values()))
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
         self.modes = [] 
@@ -1127,7 +1127,7 @@ class BaseRRTstar(ABC):
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
             path_shortcutting_in_order = path_shortcutting[::-1]
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path, _ = shortcutting.robot_mode_shortcut(
+            shortcut_path, _ = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
                                 path_shortcutting_in_order,
                                 500,
@@ -1216,10 +1216,10 @@ class BaseRRTstar(ABC):
             self.informed[mode].initialize()
 
     def SampleNodeManifold(self, mode:Mode) -> Configuration:
-        if np.random.uniform(0, 1) <= self.p_goal:
+        if np.random.uniform(0, 1) > self.p_goal:
             #informed_sampling
             if self.informed_sampling and self.operation.init_sol: 
-                if self.informed_sampling_version == 0 and np.random.uniform(0, 1) > self.p_uniform or self.informed_sampling_version == 5 and np.random.uniform(0, 1) > self.p_uniform:
+                if self.informed_sampling_version == 0 and np.random.uniform(0, 1) <= self.p_uniform or self.informed_sampling_version == 5 and np.random.uniform(0, 1) <= self.p_uniform:
                     #uniform sampling
                     return self.sample_configuration(mode, 0)
                 return self.sample_configuration(mode, 1)
