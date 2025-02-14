@@ -5,23 +5,48 @@ This repository provides some multi-robot-multi-goal motion planning problems, a
 The corresponding paper can be found at ~~not available yet~~.
 
 # Installation
-The problems we propose here are built on top of [rai](https://marctoussaint.github.io/robotic/index.html) ([github](https://github.com/MarcToussaint/robotic)), which therefore needs to be installed as prerequisite using
+The problems we propose here are built on top of [rai](https://marctoussaint.github.io/robotic/index.html) ([github](https://github.com/MarcToussaint/robotic)). We would recommend using the virtual environment of your choice to make sure nothing break with rai.
+
+After cloning, and setting up the virtual env, the installation of all the required dependencies can be done with
 
 ```
-pip install robotic
+python3 -m pip install -e .
 ```
 
-I would recommend using the virtual environment of your choice to make sure nothing break with rai.
-Other than that, this module should work out of the box after cloning/forking.
+which also installs this module
 
 # Overview and Usage
 
 We formulate some multi robot multi goal motion planning problems, and try to provide some baselines and base-classes to formulate your own problems.
-At the moment, all of thi sis in python, with collision checks and other performance critical parts happening in cpp.
+At the moment, all of this is in python, with collision checks and other performance critical parts happening in rai (or in the backend of your choice).
 
 ## Examples
 
-...
+A planner can be run with 
+
+```
+python3 examples/run_planner.py [env] [options]
+```
+
+A concrete example would for example be
+
+```
+python3 examples/run_planner.py 2d_handover --optimize --num_iters=10000 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max --prm_informed_sampling=True --save --prm_locally_informed_sampling --prm_shortcutting
+```
+
+An experiment (i.e., multiple runs of multiple planners or of the same planer with multiple options) can be run with 
+
+```
+python3 ./examples/run_experiment.py [path to config]
+```
+
+as a demo how such a config file can look, we suggest the files in confg/demo.
+
+An environment and its modes can be inspected with
+
+```
+python3 examples/show_problems.py [environment name] --mode modes
+```
 
 ## Problem description
 
