@@ -12,6 +12,7 @@ import random
 
 from typing import List, Dict, Optional, Any
 # from multi_robot_multi_goal_planning.problems.planning_env import State
+from compute_confidence_intervals import computeConfidenceInterval
 
 
 def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
@@ -112,7 +113,7 @@ def load_config_from_folder(filepath: str) -> Dict:
     return config
 
 
-# TODO: move this to config? Add dome default behaviour
+# TODO: move this to config? Add some default behaviour
 planner_name_to_color = {
     "informed_prm": "tab:orange",
     "uniform_prm": "tab:blue",
@@ -140,6 +141,37 @@ planner_name_to_color = {
     "birrtstar": "mediumvioletred",
     "rrtstar": "darkcyan",
 }
+
+def interpolate_costs(new_timesteps, times, costs):
+    # if not times or not costs or len(times) != len(costs) or not new_timesteps:
+    #     return []
+    new_timesteps = np.asarray(new_timesteps)
+    times = np.asarray(times)
+    costs = np.asarray(costs)
+    
+    # Verify times are monotonically increasing
+    if np.any(np.diff(times) <= 0):
+        raise ValueError("times must be monotonically increasing")
+    
+    # Find insertion points for all new_timesteps at once
+    indices = np.searchsorted(times, new_timesteps, side='right') - 1
+    
+    # Create the output array
+    result = np.empty_like(new_timesteps, dtype=float)
+    
+    # Handle cases before first time
+    before_start = indices < 0
+    result[before_start] = np.inf
+    
+    # Handle cases after or at last time
+    after_end = indices >= len(times) - 1
+    result[after_end] = costs[-1]
+    
+    # Handle cases within the time range
+    within_range = ~(before_start | after_end)
+    result[within_range] = costs[indices[within_range]]
+    
+    return result
 
 
 def make_cost_plots(
@@ -201,29 +233,6 @@ def make_cost_plots(
     time_discretization = 1e-2
     interpolated_solution_times = np.arange(0, max_time, time_discretization)
 
-    def interpolate_costs(new_timesteps, times, costs):
-        # if not times or not costs or len(times) != len(costs) or not new_timesteps:
-        #     return []
-
-        if any(times[i] >= times[i + 1] for i in range(len(times) - 1)):
-            raise ValueError("times must be monotonically increasing")
-
-        interpolated_costs = []
-        j = 0  # Index for original times and costs
-
-        for new_time in new_timesteps:
-            if new_time < times[0]:  # Before the first time
-                interpolated_costs.append(np.inf)
-            elif new_time >= times[-1]:  # After or at the last time
-                interpolated_costs.append(costs[-1])
-            else:  # Within the original time range
-                j = 0
-                while j < len(times) - 1 and new_time > times[j + 1]:
-                    j += 1
-                interpolated_costs.append(costs[j])
-
-        return interpolated_costs
-
     # plt.figure("Cost plot")
 
     max_non_inf_cost = 0
@@ -251,8 +260,14 @@ def make_cost_plots(
 
         median_solution_cost = np.median(all_solution_costs, axis=0)
 
-        lb_solution_cost = np.quantile(all_solution_costs, 0.1, axis=0)
-        ub_solution_cost = np.quantile(all_solution_costs, 0.9, axis=0)
+        lb_index, ub_index, _ = computeConfidenceInterval(len(results), 0.95)
+        sorted_solution_costs = np.sort(all_solution_costs, axis=0)
+
+        lb_solution_cost = sorted_solution_costs[lb_index, :]
+        ub_solution_cost = sorted_solution_costs[ub_index, :]
+
+        # lb_solution_cost = np.quantile(all_solution_costs, 0.1, axis=0)
+        # ub_solution_cost = np.quantile(all_solution_costs, 0.9, axis=0)
 
         min_solution_cost = np.min(all_solution_costs, axis=0)
         max_solution_cost = np.max(all_solution_costs, axis=0)
@@ -320,29 +335,6 @@ def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
     interpolated_solution_times = np.arange(
         0, config["max_planning_time"], time_discretization
     )
-
-    def interpolate_costs(new_timesteps, times, costs):
-        # if not times or not costs or len(times) != len(costs) or not new_timesteps:
-        #     return []
-
-        if any(times[i] >= times[i + 1] for i in range(len(times) - 1)):
-            raise ValueError("times must be monotonically increasing")
-
-        interpolated_costs = []
-        j = 0  # Index for original times and costs
-
-        for new_time in new_timesteps:
-            if new_time < times[0]:  # Before the first time
-                interpolated_costs.append(np.inf)
-            elif new_time >= times[-1]:  # After or at the last time
-                interpolated_costs.append(costs[-1])
-            else:  # Within the original time range
-                j = 0
-                while j < len(times) - 1 and new_time > times[j + 1]:
-                    j += 1
-                interpolated_costs.append(costs[j])
-
-        return interpolated_costs
 
     plt.figure("Success plot")
 
