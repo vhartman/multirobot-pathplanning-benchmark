@@ -1,147 +1,49 @@
 {
-  "experiment_name": "test",
+  "experiment_name": "",
   "environment": "2d_handover",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 400,
+  "max_planning_time": 500,
   "optimize": true,
   "num_runs": 10,
   "seed": 0,
   "planners": [
-    {
-      "name": "informed_prm",
+     {
+      "name": "locally_informed_shortcutting_prm",
       "type": "prm",
       "options": {
-        "batch_size": 100,
-        "transition_batch_size": 400,
-        "informed_batch_size": 400,
-        "informed_transition_batch_size": 100,
-        "path_batch_size": 0,
-        "distance_function": "euclidean",
-        "connection_strategy": "radius",
-        "locally_informed_sampling": true,
-        "informed_sampling": true,
-        "informed_transition_sampling": false,
-        "sample_near_path": false
-      }
-    },
-    {
-      "name": "uniform_prm",
-      "type": "prm",
-      "options": {
-        "batch_size": 500,
-        "transition_batch_size": 500,
-        "informed_batch_size": 0,
-        "informed_transition_batch_size": 0,
-        "path_batch_size": 0,
-        "distance_function": "euclidean",
-        "connection_strategy": "radius",
-        "locally_informed_sampling": true,
-        "informed_sampling": false,
-        "informed_transition_sampling": false,
-        "sample_near_path": false
-      }
-    },
-    {
-      "name": "path_prm",
-      "type": "prm",
-      "options": {
-        "batch_size": 100,
-        "transition_batch_size": 500,
-        "informed_batch_size": 0,
-        "informed_transition_batch_size": 0,
-        "path_batch_size": 400,
-        "distance_function": "euclidean",
-        "connection_strategy": "radius",
-        "locally_informed_sampling": true,
-        "informed_sampling": false,
-        "informed_transition_sampling": false,
-        "sample_near_path": true
-      }
-    },
-    {
-      "name": "informed_path_prm",
-      "type": "prm",
-      "options": {
-        "batch_size": 100,
+        "batch_size": 200,
         "transition_batch_size": 250,
-        "informed_batch_size": 200,
+        "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
-        "path_batch_size": 200,
+        "path_batch_size": 0,
         "distance_function": "euclidean",
         "connection_strategy": "radius",
         "locally_informed_sampling": true,
         "informed_sampling": true,
         "informed_transition_sampling": true,
-        "sample_near_path": true
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true
       }
     },
     {
-      "name": "informed_prm_k_nearest",
+      "name": "globally_informed_shortcutting_prm",
       "type": "prm",
       "options": {
-        "batch_size": 100,
-        "transition_batch_size": 400,
-        "informed_batch_size": 400,
-        "informed_transition_batch_size": 100,
-        "path_batch_size": 0,
-        "distance_function": "euclidean",
-        "connection_strategy": "k_nearest",
-        "locally_informed_sampling": true,
-        "informed_sampling": true,
-        "informed_transition_sampling": false,
-        "sample_near_path": false
-      }
-    },
-    {
-      "name": "uniform_prm_k_nearest",
-      "type": "prm",
-      "options": {
-        "batch_size": 500,
-        "transition_batch_size": 500,
-        "informed_batch_size": 0,
-        "informed_transition_batch_size": 0,
-        "path_batch_size": 0,
-        "distance_function": "euclidean",
-        "connection_strategy": "k_nearest",
-        "locally_informed_sampling": true,
-        "informed_sampling": false,
-        "informed_transition_sampling": false,
-        "sample_near_path": false
-      }
-    },
-    {
-      "name": "path_prm_k_nearest",
-      "type": "prm",
-      "options": {
-        "batch_size": 100,
-        "transition_batch_size": 500,
-        "informed_batch_size": 0,
-        "informed_transition_batch_size": 0,
-        "path_batch_size": 400,
-        "distance_function": "euclidean",
-        "connection_strategy": "k_nearest",
-        "locally_informed_sampling": true,
-        "informed_sampling": false,
-        "informed_transition_sampling": false,
-        "sample_near_path": true
-      }
-    },
-    {
-      "name": "informed_path_prm_k_nearest",
-      "type": "prm",
-      "options": {
-        "batch_size": 100,
+        "batch_size": 200,
         "transition_batch_size": 250,
-        "informed_batch_size": 200,
+        "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
-        "path_batch_size": 200,
+        "path_batch_size": 0,
         "distance_function": "euclidean",
-        "connection_strategy": "k_nearest",
-        "locally_informed_sampling": true,
+        "connection_strategy": "radius",
+        "locally_informed_sampling": false,
         "informed_sampling": true,
         "informed_transition_sampling": true,
-        "sample_near_path": true
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true
       }
     }
   ]

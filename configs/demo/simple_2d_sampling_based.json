@@ -1,10 +1,10 @@
 {
-  "experiment_name": "test",
+  "experiment_name": "rrt_prm_planner_demo",
   "environment": "simple_2d",
   "per_agent_cost": "euclidean",
   "cost_reduction": "sum",
-  "max_planning_time": 200,
-  "num_runs": 5,
+  "max_planning_time": 20,
+  "num_runs": 20,
   "seed": 1,
   "optimize": true,
   "planners": [

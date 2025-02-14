@@ -1,6 +1,6 @@
 {
   "experiment_name": "",
-  "environment": "box_stacking",
+  "environment": "box_reorientation",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 1000,
