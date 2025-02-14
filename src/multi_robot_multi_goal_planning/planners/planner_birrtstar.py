@@ -68,8 +68,10 @@ class BidirectionalRRTstar(BaseRRTstar):
         self.add_tree(new_mode, tree_instance)
         self.InformedInitialization(new_mode)
         #Initialize transition nodes
-        for _ in range(self.transition_nodes):                 
+        for i in range(self.transition_nodes):                 
             q = self.sample_transition_configuration(new_mode)
+            if i > 0 and np.equal(q.state(), node.state.q.state()).all():
+                break
             node = Node(State(q, new_mode), self.operation)
             node.cost_to_parent = 0.0
             self.mark_node_as_transition(new_mode, node)
@@ -114,7 +116,6 @@ class BidirectionalRRTstar(BaseRRTstar):
                 if n_parent.transition:
                     self.transition_node_ids[mode].remove(n_parent.id)
                     self.mark_node_as_transition(mode, n_parent)
-                # self.GeneratePath(mode, n_parent, inter = True)
                 return 
             # print(n.state.mode)
             n.children.remove(n_parent)
@@ -169,6 +170,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 # print(time.time()-self.start_time)
         #need to do that after the next mode was initialized
         self.convert_node_to_transition_node(mode, transition_node)
+
 
     def Extend(self, mode:Mode, n_nearest_b:Node, n_new:Node, dist )-> Optional[Node]:
         q = n_new.state.q
@@ -228,11 +230,13 @@ class BidirectionalRRTstar(BaseRRTstar):
 
             if self.env.is_collision_free(state_new.q, active_mode) and self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, active_mode):
                 n_new = Node(state_new, self.operation)
-                N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, set_dists)
+                if np.equal(n_new.state.q.state(), q_rand.state()).all():
+                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, set_dists)
+                else:
+                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new)
                 if n_nearest.id not in node_indices:
-                    continue
-              
-                batch_cost =  batch_config_cost(n_new.state.q, N_near_batch, metric = self.env.cost_metric, reduction=self.env.cost_reduction)
+                    continue 
+                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = self.env.cost_metric, reduction=self.env.cost_reduction)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
                     self.UpdateCost(active_mode,n_new)

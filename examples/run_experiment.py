@@ -181,7 +181,9 @@ def setup_planner(
                     p_stay=options["p_stay"],
                     p_uniform=options["p_uniform"],
                     shortcutting=options["shortcutting"],
-                    mode_sampling=options["mode_sampling"], 
+                    mode_sampling=options["mode_sampling"],
+                    # shortcutting_dim_version = options["shortcutting_dim_version "], 
+                    # shortcutting_robot_version = options["shortcutting_robot_version"]  
                     # gaussian=options["gaussian"]
                 ).Plan()
     elif planner_config["type"] == "birrtstar":
@@ -199,6 +201,8 @@ def setup_planner(
                     p_uniform=options["p_uniform"],
                     shortcutting=options["shortcutting"],
                     mode_sampling=options["mode_sampling"], 
+                    # shortcutting_dim_version = options["shortcutting_dim_version "], 
+                    # shortcutting_robot_version = options["shortcutting_robot_version"],
                     # gaussian=options["gaussian"], 
                     transition_nodes = options["transition_nodes"], 
                     birrtstar_version= options["birrtstar_version"]
