@@ -10,11 +10,10 @@ from multi_robot_multi_goal_planning.problems.planning_env import *
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-import argparse
+from multi_robot_multi_goal_planning.planners import shortcutting
 import time as time
 import math as math
 from typing import Tuple, Optional, Union
-from functools import cache
 from numba import njit
 from scipy.stats.qmc import Halton
 
@@ -568,13 +567,13 @@ class InformedVersion5(Informed):
 
 @njit(fastmath=True, cache=True)
 def find_nearest_indices(set_dists, r):
+    r += 1e-10 #float issues
     return np.nonzero(set_dists <= r)[0]
 @njit
-def cumulative_sum(prev_cost, batch_cost):
+def cumulative_sum(batch_cost):
     cost = np.empty(len(batch_cost), dtype=np.float64) 
-    cost[0] = prev_cost + batch_cost[0]
-    for idx in range(1, len(batch_cost)):
-        cost[idx] = cost[idx - 1] + batch_cost[idx]
+    for idx in range(0, len(batch_cost)):
+        cost[idx] = np.sum(batch_cost[:idx+1])
     return cost
 @njit
 def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:Task, r_idx:int):
@@ -605,7 +604,9 @@ class BaseRRTstar(ABC):
                  p_uniform: float = 0.8, 
                  shortcutting: bool = True, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = True, 
+                 gaussian: bool = True,
+                 shortcutting_dim_version = 2, 
+                 shortcutting_robot_version = 1 
                  ):
         self.env = env
         self.ptc = ptc
@@ -619,7 +620,9 @@ class BaseRRTstar(ABC):
         self.p_uniform = p_uniform
         self.gaussian = gaussian
         self.p_stay = p_stay
-        self.eta = np.sqrt(sum(self.env.robot_dims.values()))
+        self.shortcutting_dim_version = shortcutting_dim_version
+        self.shortcutting_robot_version = shortcutting_robot_version
+        self.eta = np.sqrt(sum(self.env.robot_dims.values())/len(self.env.robots))
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
         self.modes = [] 
@@ -740,7 +743,7 @@ class BaseRRTstar(ABC):
         self.d = sum(self.env.robot_dims.values())
         unit_ball_volume = math.pi ** (self.d/ 2) / math.gamma((self.d / 2) + 1)
         self.get_lebesgue_measure_of_free_configuration_space()
-        self.gamma_rrtstar = ((2 *(1 + 1/self.d))**(1/self.d) * (self.c_free/unit_ball_volume)**(1/self.d))*1.3 
+        self.gamma_rrtstar = ((2 *(1 + 1/self.d))**(1/self.d) * (self.c_free/unit_ball_volume)**(1/self.d))*self.eta
     
     def get_next_ids(self, mode:Mode):
         possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
@@ -759,21 +762,20 @@ class BaseRRTstar(ABC):
                 q_new.append(q.robot_state(r_idx))
         # all other modes
         else:
-            
             previous_task = self.env.get_active_task(mode.prev_mode, mode.task_ids) 
+            goal = previous_task.goal.sample(mode.prev_mode)
             q = self.get_home_poses(mode.prev_mode)
             q_new = []
-            for r in self.env.robots:
-                r_idx = self.env.robots.index(r)
-                if r in previous_task.robots:
-                    #if several goals are available get random one
-                    goal = previous_task.goal.sample(mode.prev_mode)
-                    if len(goal) == self.env.robot_dims[r]:
-                        q_new.append(goal)
-                    else:
-                        q_new.append(goal[self.env.robot_idx[r]])
-                else:
-                    q_new.append(q[r_idx])
+            end_idx = 0
+            for robot in self.env.robots:
+                r_idx = self.env.robots.index(robot)
+                if robot in previous_task.robots:
+                    dim = self.env.robot_dims[robot]
+                    indices = list(range(end_idx, end_idx + dim))
+                    q_new.append(goal[indices])
+                    end_idx += dim 
+                    continue
+                q_new.append(q[r_idx])
         return q_new
     # @cache
     def get_task_goal_of_agent(self, mode:Mode, r:str):
@@ -785,7 +787,14 @@ class BaseRRTstar(ABC):
         if len(goal) == self.env.robot_dims[r]:
             return goal
         else:
-            return goal[self.env.robot_idx[r]]
+            constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+            end_idx = 0
+            for robot in constrained_robot:
+                dim = self.env.robot_dims[r]
+                if robot == r:
+                    indices = list(range(end_idx, end_idx + dim))
+                    return goal[indices]
+                end_idx += dim 
         # goal = task.goal.sample(mode)
         # if len(goal) == self.env.robot_dims[r]:
         #    return goal
@@ -796,13 +805,18 @@ class BaseRRTstar(ABC):
         """Returns transition node of mode"""
         constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
         while True:
+            goal = self.env.get_active_task(mode, self.get_next_ids(mode)).goal.sample(mode)
             q = []
+            end_idx = 0
             for robot in self.env.robots:
                 if robot in constrained_robot:
-                    q.append(self.get_task_goal_of_agent(mode, robot))
-                else:
-                    lims = self.env.limits[:, self.env.robot_idx[robot]]
-                    q.append(np.random.uniform(lims[0], lims[1]))
+                    dim = self.env.robot_dims[robot]
+                    indices = list(range(end_idx, end_idx + dim))
+                    q.append(goal[indices])
+                    end_idx += dim 
+                    continue
+                lims = self.env.limits[:, self.env.robot_idx[robot]]
+                q.append(np.random.uniform(lims[0], lims[1]))
             q = type(self.env.get_start_pos()).from_list(q)   
             if self.env.is_collision_free(q, mode):
                 return q
@@ -813,8 +827,7 @@ class BaseRRTstar(ABC):
         is_home_pose_sampling = sampling_type == 3
         is_gaussian_sampling = sampling_type == 4
         constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
-          
-        # print(is_goal_sampling, is_informed_sampling, is_home_pose_sampling, is_gaussian_sampling, constrained_robots)
+        attemps = 0  # if home poses are in collision
 
         while True:
             #goal sampling
@@ -841,30 +854,43 @@ class BaseRRTstar(ABC):
                         if node is None:
                             node = self.trees[mode.prev_mode].subtree_b.get(node_id)
                         return node.state.q
+            if is_goal_sampling:
+                goal_sample = []
+                q = self.sample_transition_configuration(mode)
+                goal_sample.append(q)
+                while True:
+                    q_noise = []
+                    for r in range(len(self.env.robots)):
+                        q_robot = q.robot_state(r)
+                        noise = np.random.normal(0, 0.1, q_robot.shape)
+                        q_noise.append(q_robot + noise)
+                    q = type(self.env.get_start_pos()).from_list(q_noise)
+                    if self.env.is_collision_free(q, mode):
+                        goal_sample.append(q)
+                        break    
+                return random.choice(goal_sample)
+                
             
             if not is_informed_sampling and not is_gaussian_sampling:
                 q = []
                 if is_home_pose_sampling:
+                    attemps += 1
                     q_home = self.get_home_poses(mode)
                 for robot in self.env.robots:
                     #home pose sampling
                     if is_home_pose_sampling:
                         r_idx = self.env.robots.index(robot)
-                        if robot not in constrained_robots:
+                        if robot not in constrained_robots: # can cause problems if several robots are not constrained and their home poses are in collision
                             q.append(q_home[r_idx])
                             continue
                         if np.array_equal(self.get_task_goal_of_agent(mode, robot), q_home[r_idx]):
-                            q.append(q_home[r_idx])
-                            continue
-                    #goal sampling
-                    if is_goal_sampling: 
-                        if self.general_goal_sampling or robot in constrained_robots:
-                            q.append(self.get_task_goal_of_agent(mode, robot))
-                            continue
+                            if np.random.uniform(0, 1) > self.p_goal: # goal sampling
+                                q.append(q_home[r_idx])
+                                continue
                     #uniform sampling
                     lims = self.env.limits[:, self.env.robot_idx[robot]]
                     q.append(np.random.uniform(lims[0], lims[1]))
-                        
+
             #informed sampling
             if is_informed_sampling:
                 q = self.sample_informed(mode)
@@ -875,13 +901,13 @@ class BaseRRTstar(ABC):
                 # standar_deviation = 0.5
                 noise = np.random.normal(0, standar_deviation, path_state.q.state().shape)
                 q = (path_state.q.state() + noise).tolist()
-           
+
             q = type(self.env.get_start_pos()).from_list(q)
             if self.env.is_collision_free(q, mode):
                 return q
-            # else:
-            #     self.env.show(False)
-          
+            if attemps > 100: # if home pose causes failed attemps
+                is_home_pose_sampling = False
+    
     def sample_informed(self, mode:Mode) -> None:
         """Returns: 
                 Samples a point from the ellipsoidal subset defined by the start and goal positions and c_best.
@@ -903,13 +929,9 @@ class BaseRRTstar(ABC):
                 if self.informed_sampling_version == 4 or self.informed_sampling_version == 3:
                     self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
                 if self.informed[mode].L[r_idx] is None:
-                    if np.random.uniform(0, 1) > self.p_goal:
-                        q_rand.append(self.get_task_goal_of_agent(mode, robot)) 
-                        continue
-                    else:
-                        lims = self.env.limits[:, self.env.robot_idx[robot]]
-                        q_rand.append(np.random.uniform(lims[0], lims[1]))
-                        continue
+                    lims = self.env.limits[:, self.env.robot_idx[robot]]
+                    q_rand.append(np.random.uniform(lims[0], lims[1]))
+                    continue
                     
                 # amount_of_failed_attemps = 0
                 while True:
@@ -1022,10 +1044,12 @@ class BaseRRTstar(ABC):
         if set_dists is None:
             set_dists = batch_config_dist(n_new.state.q, batch_subtree, self.distance_metric)
         vertices = self.trees[mode].get_number_of_nodes_in_tree()
-        r = np.minimum(float(self.gamma_rrtstar*(np.log(vertices)/vertices)**(1/self.d)), self.eta)
+        r = np.minimum(self.gamma_rrtstar*(np.log(vertices)/vertices)**(1/self.d), self.eta)
         if r == 0 and set_dists.size == 1: # when only one vertex is in the tree
             r = set_dists[0] 
         indices = find_nearest_indices(set_dists, r) # indices of batch_subtree
+        # if indices.size == 0:
+        #     print("-")
         node_indices = self.trees[mode].node_idx_subtree[indices]
         n_near_costs = self.operation.costs[node_indices]
         N_near_batch = batch_subtree[indices]
@@ -1080,12 +1104,17 @@ class BaseRRTstar(ABC):
                     rewired = True
         return rewired
       
-    def GeneratePath(self, mode:Mode, n: Node, shortcutting:bool = True) -> None:
-        path_nodes, path, path_modes = [], [], []
+    def GeneratePath(self, mode:Mode, n: Node, shortcutting_bool:bool = True) -> None:
+        path_nodes, path, path_modes, path_shortcutting = [], [], [], []
         while n:
             path_nodes.append(n)
             path_modes.append(n.state.mode.task_ids)
             path.append(n.state)
+            if shortcutting_bool:
+                path_shortcutting.append(n.state)
+                if n.parent is not None and n.parent.state.mode != n.state.mode:
+                    new_state = State(n.parent.state.q, n.state.mode)
+                    path_shortcutting.append(new_state)
             n = n.parent
         path_in_order = path[::-1]
         self.operation.path_modes = path_modes[::-1]
@@ -1095,9 +1124,22 @@ class BaseRRTstar(ABC):
         self.costs.append(self.operation.cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
-        if self.operation.init_sol and self.shortcutting and shortcutting:
-            print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            self.Shortcutting(mode)
+        if self.operation.init_sol and self.shortcutting and shortcutting_bool:
+            path_shortcutting_in_order = path_shortcutting[::-1]
+            # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
+            shortcut_path, _ = shortcutting.robot_mode_shortcut(
+                                self.env,
+                                path_shortcutting_in_order,
+                                500,
+                                resolution=self.env.collision_resolution,
+                                tolerance=self.env.collision_tolerance,
+                            )
+
+            batch_cost = batch_config_cost(shortcut_path[:-1], shortcut_path[1:], self.env.cost_metric, self.env.cost_reduction)
+            shortcut_path_costs = cumulative_sum(batch_cost)
+            shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
+            if shortcut_path_costs[-1] < self.operation.cost:
+                self.TreeExtension(mode, shortcut_path, shortcut_path_costs)
             
     def RandomMode(self) -> List[float]:
         num_modes = len(self.modes)
@@ -1111,7 +1153,7 @@ class BaseRRTstar(ABC):
             # equally (= mode uniformly)
             return np.random.choice(self.modes)
 
-        elif self.mode_sampling == 1:
+        elif self.mode_sampling == 1: #can cause some problem ...
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
             probability[-1] = 1
@@ -1135,11 +1177,11 @@ class BaseRRTstar(ABC):
         else:
             # manually set
             total_transition_nodes = sum(len(mode) for mode in self.transition_node_ids.values())
-            total_nodes = Node.id_counter -1 + total_transition_nodes
+            total_nodes = sum(len(self.trees[mode].subtree) for mode in self.modes[:-1]) - total_transition_nodes
             # Calculate probabilities inversely proportional to node counts
             inverse_probabilities = [
-                1 - (len(mode.subtree) / total_nodes)
-                for mode in self.modes[:-1]  # Exclude the last mode
+                1 - (len(self.trees[mode].subtree) / total_nodes)
+                for mode in self.modes[:-1]
             ]
 
             # Normalize the probabilities of all modes except the last one
@@ -1185,7 +1227,7 @@ class BaseRRTstar(ABC):
             if self.gaussian and self.operation.init_sol: 
                 return self.sample_configuration(mode, 4)
             # house pose sampling
-            if self.p_stay != 1 and np.random.uniform(0, 1) > self.p_stay: 
+            if self.p_stay != 0 and np.random.uniform(0, 1) < self.p_stay: 
                 return self.sample_configuration(mode, 3)
             #uniform sampling
             return self.sample_configuration(mode, 0)
@@ -1202,14 +1244,14 @@ class BaseRRTstar(ABC):
             if valid_mask.any():
                 lb_transition_node = self.get_transition_node(mode, result[1])
                 self.GeneratePath(mode, lb_transition_node)
-                print(f"{iter} M", mode.task_ids, "Cost: ", self.operation.cost.item())
+                # print(f"{iter} M", mode.task_ids, "Cost: ", self.operation.cost.item())
 
     def UpdateDiscretizedCost(self, path , cost, idx):
         path_a, path_b = path[idx-1: -1], path[idx: ]
         batch_cost = batch_config_cost(path_a, path_b, self.env.cost_metric, self.env.cost_reduction)
         cost[idx:] = cumulative_sum(cost[idx-1], batch_cost)
 
-    def Shortcutting(self,active_mode:Mode, version = 4, choice = 1, deterministic = False):
+    def Shortcutting(self,active_mode:Mode, version = None, choice = None, deterministic = False):
         indices  = [self.env.robot_idx[r] for r in self.env.robots]
 
         discretized_path, discretized_modes, discretized_costs = self.Discretization(self.operation.path_nodes, indices)  
@@ -1240,12 +1282,12 @@ class BaseRRTstar(ABC):
                 idx2 = max(i1, i2)
                 m1 = discretized_modes[idx1]    
                 m2 = discretized_modes[idx2]    
-                if m1 == m2 and choice == 0: #take all possible robots
+                if m1 == m2 and self.shortcutting_robot_version == 0: #take all possible robots
                     robot = None
-                    if version == 4:
+                    if self.shortcutting_dim_version == 2:
                         dim = [np.random.choice(indices[r_idx]) for r_idx in range(len(self.env.robots))]
                     
-                    if version == 5:
+                    if self.shortcutting_dim_version == 3:
                         dim = []
                         for r_idx in range(len(self.env.robots)):
                             all_indices = [i for i in indices[r_idx]]
@@ -1263,9 +1305,9 @@ class BaseRRTstar(ABC):
                     if m2[0][robot] != task_agent:
                         continue
 
-                    if version == 4:
+                    if self.shortcutting_dim_version == 2:
                         dim = [np.random.choice(indices[robot])]
-                    if version == 5:
+                    if self.shortcutting_dim_version == 3:
                         all_indices = [i for i in indices[robot]]
                         num_indices = np.random.choice(range(len(indices[robot])))
 
@@ -1274,9 +1316,9 @@ class BaseRRTstar(ABC):
 
 
                 edge, edge_cost =  self.EdgeInterpolation(discretized_path[idx1:idx2+1].copy(), 
-                                                            discretized_costs[idx1], indices, dim, version, robot, self.env.robots)
-                
-                if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge): #need to make path_collision_free
+                                                            discretized_costs[idx1], indices, dim, self.shortcutting_dim_version, robot, self.env.robots)
+        
+                if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge, resolution=0.001, tolerance=0.001): #need to make path_collision_free
                     discretized_path[idx1:idx2+1] = edge
                     discretized_costs[idx1:idx2+1] = edge_cost
                     self.UpdateDiscretizedCost(discretized_path, discretized_costs, idx2)
@@ -1290,27 +1332,26 @@ class BaseRRTstar(ABC):
                     
         self.TreeExtension(active_mode, discretized_path, discretized_costs, discretized_modes)
 
-    def TreeExtension(self, active_mode, discretized_path, discretized_costs, discretized_modes):
-        mode_idx = 0
-        mode = self.modes[mode_idx]
+    def TreeExtension(self, active_mode, discretized_path, discretized_costs):
+        mode = discretized_path[0].mode
         parent = self.operation.path_nodes[0]
         for i in range(1, len(discretized_path) - 1):
             state = discretized_path[i]
             node = Node(state, self.operation)
             node.parent = parent
-            self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, node.id)
+            self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
             node.cost = discretized_costs[i]
             node.cost_to_parent = node.cost - node.parent.cost
             parent.children.append(node)
-            if self.trees[mode].order == 1:
-                self.trees[mode].add_node(node)
+            if self.trees[discretized_path[i].mode].order == 1:
+                self.trees[discretized_path[i].mode].add_node(node)
             else:
-                self.trees[mode].add_node(node, 'B')
-            if len(discretized_modes[i]) > 1:
-                self.convert_node_to_transition_node(mode, node)
-                mode_idx += 1
-                mode = self.modes[mode_idx]
+                self.trees[discretized_path[i].mode].add_node(node, 'B')
             parent = node
+            if mode != discretized_path[i].mode:
+                self.convert_node_to_transition_node(mode, node.parent)
+                mode = discretized_path[i].mode
+            mode = discretized_path[i].mode
         #Reuse terminal node (don't want to add a new one)
         self.operation.path_nodes[-1].parent.children.remove(self.operation.path_nodes[-1])
         parent.children.append(self.operation.path_nodes[-1])
@@ -1318,7 +1359,7 @@ class BaseRRTstar(ABC):
         self.operation.path_nodes[-1].cost = discretized_costs[-1]
         self.operation.path_nodes[-1].cost_to_parent = self.operation.path_nodes[-1].cost - self.operation.path_nodes[-1].parent.cost
         
-        self.GeneratePath(active_mode, self.operation.path_nodes[-1], shortcutting =False)
+        self.GeneratePath(active_mode, self.operation.path_nodes[-1], shortcutting_bool=False)
 
     def EdgeInterpolation(self, path, cost, indices, dim, version, r = None, robots =None):
         q0 = path[0].q.state()
@@ -1332,8 +1373,8 @@ class BaseRRTstar(ABC):
             if version == 0 :
                 q = q0 +  (segment_vector * (i / N))
 
-            elif version == 3: #shortcutting agent
-                q = path[i].q.state()
+            elif version == 1: #shortcutting all indices of agent
+                q = path[i].q.state().copy()
                 for robot in range(len(robots)):
                     if r is not None and r == robot:
                         q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i /N))
@@ -1341,7 +1382,7 @@ class BaseRRTstar(ABC):
                     if r is None:
                         q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i / N))
 
-            elif version == 4: #partial shortcutting agent single dim 
+            elif version == 2: #partial shortcutting agent single dim 
                 q = path[i].q.state().copy()
                 for robot in range(len(robots)):
                     if r is not None and r == robot:
@@ -1350,8 +1391,8 @@ class BaseRRTstar(ABC):
                     if r is None:
                         q[dim[robot]] = q0[dim[robot]] +  (segment_vector[dim[robot]] * (i / N))
             
-            elif version == 5: #partial shortcutting agent random set of dim 
-                q = path[i].q.state()
+            elif version == 3: #partial shortcutting agent random set of dim 
+                q = path[i].q.state().copy()
                 for robot in range(len(robots)):
                     if r is not None and r == robot:
                         for idx in dim:
