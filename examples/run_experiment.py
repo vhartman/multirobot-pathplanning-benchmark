@@ -8,10 +8,13 @@ import os
 import numpy as np
 import random
 
+import time
 import sys
 import multiprocessing
 import copy
 import traceback
+
+import gc
 
 from typing import Dict, Any, Callable, Tuple, List
 
@@ -33,7 +36,9 @@ from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
-from multi_robot_multi_goal_planning.planners.planner_birrtstar import BidirectionalRRTstar
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BidirectionalRRTstar,
+)
 from make_plots import make_cost_plots
 
 # np.random.seed(100)
@@ -90,6 +95,7 @@ def run_single_planner(
     env: BaseProblem, planner: Callable[[BaseProblem], Tuple[Any, Dict]]
 ) -> Dict:
     _, data = planner(env)
+
     return data
 
 
@@ -168,45 +174,43 @@ def setup_planner(
                 try_direct_informed_sampling=options["direct_informed_sampling"],
             )
     elif planner_config["type"] == "rrtstar":
+
         def planner(env):
             options = planner_config["options"]
             return RRTstar(
-                    env, 
-                    ptc=RuntimeTerminationCondition(runtime),
-                    # general_goal_sampling=options["general_goal_sampling"],
-                    informed_sampling=options["informed_sampling"],
-                    informed_sampling_version=options["informed_sampling_version"],
-                    distance_metric=options["distance_metric"],
-                    p_goal=options["p_goal"],
-                    p_stay=options["p_stay"],
-                    p_uniform=options["p_uniform"],
-                    shortcutting=options["shortcutting"],
-                    mode_sampling=options["mode_sampling"],
-                    # shortcutting_dim_version = options["shortcutting_dim_version "], 
-                    # shortcutting_robot_version = options["shortcutting_robot_version"]  
-                    # gaussian=options["gaussian"]
-                ).Plan()
+                env,
+                ptc=RuntimeTerminationCondition(runtime),
+                # general_goal_sampling=options["general_goal_sampling"],
+                informed_sampling=options["informed_sampling"],
+                informed_sampling_version=options["informed_sampling_version"],
+                distance_metric=options["distance_metric"],
+                p_goal=options["p_goal"],
+                p_stay=options["p_stay"],
+                p_uniform=options["p_uniform"],
+                shortcutting=options["shortcutting"],
+                mode_sampling=options["mode_sampling"],
+                # gaussian=options["gaussian"]
+            ).Plan()
     elif planner_config["type"] == "birrtstar":
+
         def planner(env):
             options = planner_config["options"]
             return BidirectionalRRTstar(
-                    env, 
-                    ptc=RuntimeTerminationCondition(runtime),
-                    # general_goal_sampling=options["general_goal_sampling"],
-                    informed_sampling=options["informed_sampling"],
-                    informed_sampling_version=options["informed_sampling_version"],
-                    distance_metric=options["distance_metric"],
-                    p_goal=options["p_goal"],
-                    p_stay=options["p_stay"],
-                    p_uniform=options["p_uniform"],
-                    shortcutting=options["shortcutting"],
-                    mode_sampling=options["mode_sampling"], 
-                    # shortcutting_dim_version = options["shortcutting_dim_version "], 
-                    # shortcutting_robot_version = options["shortcutting_robot_version"],
-                    # gaussian=options["gaussian"], 
-                    transition_nodes = options["transition_nodes"], 
-                    birrtstar_version= options["birrtstar_version"]
-                ).Plan()
+                env,
+                ptc=RuntimeTerminationCondition(runtime),
+                # general_goal_sampling=options["general_goal_sampling"],
+                informed_sampling=options["informed_sampling"],
+                informed_sampling_version=options["informed_sampling_version"],
+                distance_metric=options["distance_metric"],
+                p_goal=options["p_goal"],
+                p_stay=options["p_stay"],
+                p_uniform=options["p_uniform"],
+                shortcutting=options["shortcutting"],
+                mode_sampling=options["mode_sampling"],
+                # gaussian=options["gaussian"],
+                transition_nodes=options["transition_nodes"],
+                birrtstar_version=options["birrtstar_version"],
+            ).Plan()
 
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
@@ -274,11 +278,16 @@ def run_experiment(
                     np.random.seed(seed + run_id)
                     random.seed(seed + run_id)
 
-                    res = run_single_planner(env, planner)
+                    env_copy = copy.deepcopy(env)
+                    res = run_single_planner(env_copy, planner)
 
-                    # planner_folder = experiment_folder + f"{planner_name}/"
-                    # if not os.path.isdir(planner_folder):
-                    # os.makedirs(planner_folder)
+                    del env_copy.C
+                    del planner
+                    gc.collect()
+
+                    planner_folder = experiment_folder + f"{planner_name}/"
+                    if not os.path.isdir(planner_folder):
+                        os.makedirs(planner_folder)
 
                     all_experiment_data[planner_name].append(res)
 
@@ -287,7 +296,9 @@ def run_experiment(
                 except Exception as e:
                     print(f"Error in {planner_name} run {run_id}: {e}")
                     tb = traceback.format_exc()  # Get the full traceback
-                    print(f"Error in {planner_name} run {run_id}: {e}\nTraceback:\n{tb}")
+                    print(
+                        f"Error in {planner_name} run {run_id}: {e}\nTraceback:\n{tb}"
+                    )
 
                 finally:
                     # Restore stdout and stderr
@@ -304,19 +315,18 @@ def run_planner_process(
     seed: int,
     env: BaseProblem,
     experiment_folder: str,
-    queue: List,
+    results: List,  # Changed from Queue to List
     semaphore,
     print_to_file_and_stdout: bool = False,
 ):
-    """Runs a planner, captures all output live, and stores results in a queue."""
-    with semaphore:  # Limit parallel execution
+    try:
+        semaphore.acquire()
         planner_folder = experiment_folder + f"{planner_name}/"
         os.makedirs(planner_folder, exist_ok=True)
 
         log_file = f"{planner_folder}run_{run_id}.log"
 
-        with open(log_file, "w", buffering=1) as f:  # Line-buffered writing
-            # Redirect stdout and stderr
+        with open(log_file, "w", buffering=1) as f:
             sys.stdout = Tee(f, print_to_file_and_stdout)
             sys.stderr = Tee(f, print_to_file_and_stdout)
 
@@ -326,22 +336,29 @@ def run_planner_process(
 
                 res = run_single_planner(env, planner)
 
+                del env.C
+                del planner
+                gc.collect()
+
                 planner_folder = experiment_folder + f"{planner_name}/"
                 os.makedirs(planner_folder, exist_ok=True)
 
-                # Export planner data
                 export_planner_data(planner_folder, run_id, res)
-
-                # Store result in queue
-                queue.put((planner_name, res))
+                results.append((planner_name, res))
 
             except Exception as e:
                 print(f"Error in {planner_name} run {run_id}: {e}")
+                results.append((planner_name, None))
 
             finally:
-                # Restore stdout and stderr
                 sys.stdout = sys.__stdout__
                 sys.stderr = sys.__stderr__
+                sys.stdout.flush()
+                sys.stderr.flush()
+
+    finally:
+        semaphore.release()
+        print(f"DONE {planner_name} {run_id}")
 
 
 def run_experiment_in_parallel(
@@ -355,37 +372,62 @@ def run_experiment_in_parallel(
     all_experiment_data = {planner_name: [] for planner_name, _ in planners}
     seed = config["seed"]
 
-    processes = []
-    queue = multiprocessing.Queue()
-    semaphore = multiprocessing.Semaphore(max_parallel)  # Limit max parallel processes
+    # Use Manager instead of Queue for better cleanup
+    with multiprocessing.Manager() as manager:
+        results = manager.list()
+        semaphore = manager.Semaphore(max_parallel)
+        processes = []
 
-    # Launch separate processes
-    for run_id in range(config["num_runs"]):
-        for planner_name, planner in planners:
-            p = multiprocessing.Process(
-                target=run_planner_process,
-                args=(
-                    run_id,
-                    planner_name,
-                    planner,
-                    seed,
-                    env,
-                    experiment_folder,
-                    queue,
-                    semaphore,
-                ),
-            )
-            p.start()
-            processes.append(p)
+        try:
+            # Launch separate processes
+            for run_id in range(config["num_runs"]):
+                for planner_name, planner in planners:
+                    env_copy = copy.deepcopy(env)
+                    p = multiprocessing.Process(
+                        target=run_planner_process,
+                        args=(
+                            run_id,
+                            planner_name,
+                            planner,
+                            seed,
+                            env_copy,
+                            experiment_folder,
+                            results,  # Use manager.list instead of Queue
+                            semaphore,
+                        ),
+                    )
+                    p.daemon = True  # Make processes daemon
+                    p.start()
+                    processes.append(p)
 
-    # Wait for all processes to finish
-    for p in processes:
-        p.join()
+            # Wait for processes with timeout
+            for p in processes:
+                p.join()  # Add timeout to join
 
-    # Collect results from the queue
-    while not queue.empty():
-        planner_name, res = queue.get()
-        all_experiment_data[planner_name].append(res)
+            # Collect results
+            for planner_name, res in results:
+                if res is not None:
+                    all_experiment_data[planner_name].append(res)
+
+        except KeyboardInterrupt:
+            print("\nCaught KeyboardInterrupt, terminating processes...")
+            for p in processes:
+                if p.is_alive():
+                    p.terminate()
+                    try:
+                        p.join(timeout=0.1)
+                    except TimeoutError:
+                        pass
+
+        finally:
+            # Force terminate any remaining processes
+            for p in processes:
+                if p.is_alive():
+                    try:
+                        p.terminate()
+                        p.join(timeout=0.1)
+                    except (TimeoutError, Exception):
+                        pass
 
     return all_experiment_data
 
@@ -395,8 +437,7 @@ def main():
     parser.add_argument("filepath", nargs="?", default="default", help="filepath")
     parser.add_argument(
         "--parallel_execution",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=False,
+        action="store_true",
         help="Run the experiments in parallel. (default: False)",
     )
     parser.add_argument(
@@ -408,6 +449,8 @@ def main():
 
     args = parser.parse_args()
     config = load_experiment_config(args.filepath)
+
+    # env = config["environment"]
 
     env = get_env_by_name(config["environment"])
     env.cost_reduction = config["cost_reduction"]
