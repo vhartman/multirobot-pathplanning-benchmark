@@ -10,11 +10,10 @@ from multi_robot_multi_goal_planning.problems.planning_env import *
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-import argparse
+from multi_robot_multi_goal_planning.planners import shortcutting
 import time as time
 import math as math
 from typing import Tuple, Optional, Union
-from functools import cache
 from numba import njit
 from scipy.stats.qmc import Halton
 
@@ -571,11 +570,10 @@ def find_nearest_indices(set_dists, r):
     r += 1e-10 #float issues
     return np.nonzero(set_dists <= r)[0]
 @njit
-def cumulative_sum(prev_cost, batch_cost):
+def cumulative_sum(batch_cost):
     cost = np.empty(len(batch_cost), dtype=np.float64) 
-    cost[0] = prev_cost + batch_cost[0]
-    for idx in range(1, len(batch_cost)):
-        cost[idx] = cost[idx - 1] + batch_cost[idx]
+    for idx in range(0, len(batch_cost)):
+        cost[idx] = np.sum(batch_cost[:idx+1])
     return cost
 @njit
 def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:Task, r_idx:int):
@@ -1106,12 +1104,17 @@ class BaseRRTstar(ABC):
                     rewired = True
         return rewired
       
-    def GeneratePath(self, mode:Mode, n: Node, shortcutting:bool = True) -> None:
-        path_nodes, path, path_modes = [], [], []
+    def GeneratePath(self, mode:Mode, n: Node, shortcutting_bool:bool = True) -> None:
+        path_nodes, path, path_modes, path_shortcutting = [], [], [], []
         while n:
             path_nodes.append(n)
             path_modes.append(n.state.mode.task_ids)
             path.append(n.state)
+            if shortcutting_bool:
+                path_shortcutting.append(n.state)
+                if n.parent is not None and n.parent.state.mode != n.state.mode:
+                    new_state = State(n.parent.state.q, n.state.mode)
+                    path_shortcutting.append(new_state)
             n = n.parent
         path_in_order = path[::-1]
         self.operation.path_modes = path_modes[::-1]
@@ -1121,9 +1124,22 @@ class BaseRRTstar(ABC):
         self.costs.append(self.operation.cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
-        if self.operation.init_sol and self.shortcutting and shortcutting:
-            print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            self.Shortcutting(mode)
+        if self.operation.init_sol and self.shortcutting and shortcutting_bool:
+            path_shortcutting_in_order = path_shortcutting[::-1]
+            # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
+            shortcut_path, _ = shortcutting.robot_mode_shortcut(
+                                self.env,
+                                path_shortcutting_in_order,
+                                500,
+                                resolution=self.env.collision_resolution,
+                                tolerance=self.env.collision_tolerance,
+                            )
+
+            batch_cost = batch_config_cost(shortcut_path[:-1], shortcut_path[1:], self.env.cost_metric, self.env.cost_reduction)
+            shortcut_path_costs = cumulative_sum(batch_cost)
+            shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
+            if shortcut_path_costs[-1] < self.operation.cost:
+                self.TreeExtension(mode, shortcut_path, shortcut_path_costs)
             
     def RandomMode(self) -> List[float]:
         num_modes = len(self.modes)
@@ -1228,7 +1244,7 @@ class BaseRRTstar(ABC):
             if valid_mask.any():
                 lb_transition_node = self.get_transition_node(mode, result[1])
                 self.GeneratePath(mode, lb_transition_node)
-                print(f"{iter} M", mode.task_ids, "Cost: ", self.operation.cost.item())
+                # print(f"{iter} M", mode.task_ids, "Cost: ", self.operation.cost.item())
 
     def UpdateDiscretizedCost(self, path , cost, idx):
         path_a, path_b = path[idx-1: -1], path[idx: ]
@@ -1316,27 +1332,26 @@ class BaseRRTstar(ABC):
                     
         self.TreeExtension(active_mode, discretized_path, discretized_costs, discretized_modes)
 
-    def TreeExtension(self, active_mode, discretized_path, discretized_costs, discretized_modes):
-        mode_idx = 0
-        mode = self.modes[mode_idx]
+    def TreeExtension(self, active_mode, discretized_path, discretized_costs):
+        mode = discretized_path[0].mode
         parent = self.operation.path_nodes[0]
         for i in range(1, len(discretized_path) - 1):
             state = discretized_path[i]
             node = Node(state, self.operation)
             node.parent = parent
-            self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, node.id)
+            self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
             node.cost = discretized_costs[i]
             node.cost_to_parent = node.cost - node.parent.cost
             parent.children.append(node)
-            if self.trees[mode].order == 1:
-                self.trees[mode].add_node(node)
+            if self.trees[discretized_path[i].mode].order == 1:
+                self.trees[discretized_path[i].mode].add_node(node)
             else:
-                self.trees[mode].add_node(node, 'B')
-            if len(discretized_modes[i]) > 1:
-                self.convert_node_to_transition_node(mode, node)
-                mode_idx += 1
-                mode = self.modes[mode_idx]
+                self.trees[discretized_path[i].mode].add_node(node, 'B')
             parent = node
+            if mode != discretized_path[i].mode:
+                self.convert_node_to_transition_node(mode, node.parent)
+                mode = discretized_path[i].mode
+            mode = discretized_path[i].mode
         #Reuse terminal node (don't want to add a new one)
         self.operation.path_nodes[-1].parent.children.remove(self.operation.path_nodes[-1])
         parent.children.append(self.operation.path_nodes[-1])
@@ -1344,7 +1359,7 @@ class BaseRRTstar(ABC):
         self.operation.path_nodes[-1].cost = discretized_costs[-1]
         self.operation.path_nodes[-1].cost_to_parent = self.operation.path_nodes[-1].cost - self.operation.path_nodes[-1].parent.cost
         
-        self.GeneratePath(active_mode, self.operation.path_nodes[-1], shortcutting =False)
+        self.GeneratePath(active_mode, self.operation.path_nodes[-1], shortcutting_bool=False)
 
     def EdgeInterpolation(self, path, cost, indices, dim, version, r = None, robots =None):
         q0 = path[0].q.state()
