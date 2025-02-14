@@ -53,7 +53,8 @@ def computeConfidenceInterval(n, p):
     bestPercentage = computeProbabilityForInterval(n, startIndex, endIndex)
 
     if bestPercentage < p:
-        raise ValueError("Search is not conservative enough. Lower the startSearchIdx and increase the endSearchIdx.")
+        return 0, n, bestPercentage
+        # raise ValueError("Search is not conservative enough. Lower the startSearchIdx and increase the endSearchIdx.")
 
     for i in range(startIndex, math.floor(n/2.)+1): #+1, since range() is not inclusive
         for j in range(math.ceil(n/2.), endIndex+1): #+1, since range() is not inclusive
