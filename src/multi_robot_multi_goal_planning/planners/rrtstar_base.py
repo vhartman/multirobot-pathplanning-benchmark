@@ -10,7 +10,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import *
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners import shortcutting
+import multi_robot_multi_goal_planning.planners as mrmgp
 import time as time
 import math as math
 from typing import Tuple, Optional, Union
@@ -622,7 +622,7 @@ class BaseRRTstar(ABC):
         self.p_stay = p_stay
         self.shortcutting_dim_version = shortcutting_dim_version
         self.shortcutting_robot_version = shortcutting_robot_version
-        self.eta = np.sqrt(sum(self.env.robot_dims.values())/len(self.env.robots))
+        self.eta = np.sqrt(sum(self.env.robot_dims.values()))
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
         self.modes = [] 
@@ -648,7 +648,7 @@ class BaseRRTstar(ABC):
         else:
             raise TypeError("tree_instance must be SingleTree or BidirectionalTree.")
            
-    def add_new_mode(self, q:Optional[Configuration]=None, mode:Mode=None, tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None) -> None: #TODO entry_configuration needs to be specified
+    def add_new_mode(self, q:Optional[Configuration]=None, mode:Mode=None, tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None) -> None:
         """Initializes a new mode"""
         if mode is None: 
             new_mode = self.env.make_start_mode()
@@ -1127,7 +1127,7 @@ class BaseRRTstar(ABC):
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
             path_shortcutting_in_order = path_shortcutting[::-1]
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path, _ = shortcutting.robot_mode_shortcut(
+            shortcut_path, _ = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
                                 path_shortcutting_in_order,
                                 500,
@@ -1159,10 +1159,9 @@ class BaseRRTstar(ABC):
             probability[-1] = 1
             p =  probability
 
-        elif self.mode_sampling == 0:#TODO not working properly for bidirectional
+        elif self.mode_sampling == 0:
             # Uniformly
-            total_transition_nodes = sum(len(mode) for mode in self.transition_node_ids.values())
-            total_nodes = Node.id_counter -1 + total_transition_nodes
+            total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes)
             # Calculate probabilities inversely proportional to node counts
             inverse_probabilities = [
                 1 - (len(self.trees[mode].subtree) / total_nodes)
@@ -1176,8 +1175,7 @@ class BaseRRTstar(ABC):
 
         else:
             # manually set
-            total_transition_nodes = sum(len(mode) for mode in self.transition_node_ids.values())
-            total_nodes = sum(len(self.trees[mode].subtree) for mode in self.modes[:-1]) - total_transition_nodes
+            total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes[:-1]) 
             # Calculate probabilities inversely proportional to node counts
             inverse_probabilities = [
                 1 - (len(self.trees[mode].subtree) / total_nodes)
@@ -1187,10 +1185,13 @@ class BaseRRTstar(ABC):
             # Normalize the probabilities of all modes except the last one
             remaining_probability = 1-self.mode_sampling  
             total_inverse = sum(inverse_probabilities)
-            p =  [
-                (inv_prob / total_inverse) * remaining_probability
-                for inv_prob in inverse_probabilities
-            ] + [self.mode_sampling]
+            if total_inverse == 0:
+                p = [1-self.mode_sampling, self.mode_sampling]
+            else:
+                p =  [
+                    (inv_prob / total_inverse) * remaining_probability
+                    for inv_prob in inverse_probabilities
+                ] + [self.mode_sampling]
 
         return np.random.choice(self.modes, p = p)
 
@@ -1216,12 +1217,15 @@ class BaseRRTstar(ABC):
             self.informed[mode].initialize()
 
     def SampleNodeManifold(self, mode:Mode) -> Configuration:
-        if np.random.uniform(0, 1) <= self.p_goal:
-            #informed_sampling
+        if  np.random.uniform(0, 1) < self.p_goal:
+            # goal sampling
+            return self.sample_configuration(mode, 2, self.transition_node_ids, self.trees[mode].order)
+        else:       
             if self.informed_sampling and self.operation.init_sol: 
-                if self.informed_sampling_version == 0 and np.random.uniform(0, 1) > self.p_uniform or self.informed_sampling_version == 5 and np.random.uniform(0, 1) > self.p_uniform:
+                if self.informed_sampling_version == 0 and np.random.uniform(0, 1) < self.p_uniform or self.informed_sampling_version == 5 and np.random.uniform(0, 1) < self.p_uniform:
                     #uniform sampling
                     return self.sample_configuration(mode, 0)
+                #informed_sampling
                 return self.sample_configuration(mode, 1)
             # gaussian sampling
             if self.gaussian and self.operation.init_sol: 
@@ -1231,9 +1235,7 @@ class BaseRRTstar(ABC):
                 return self.sample_configuration(mode, 3)
             #uniform sampling
             return self.sample_configuration(mode, 0)
-        # goal sampling
-        return self.sample_configuration(mode, 2, self.transition_node_ids, self.trees[mode].order)
-        
+               
     def FindLBTransitionNode(self, iter: int) -> None:
         if self.operation.init_sol: 
             modes = self.get_termination_modes()     
