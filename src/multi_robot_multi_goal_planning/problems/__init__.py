@@ -77,7 +77,8 @@ def get_env_by_name(name):
         "two_agents_many_goals_dep_no_rot": lambda: re.rai_two_dim_env_no_obs_dep_graph(agents_can_rotate=False),
         "three_agent_many_goals_dep": lambda: re.rai_two_dim_three_agent_env_dependency_graph(),
         "mobile_dep": lambda: re.rai_mobile_manip_wall_dep(),
-        "box_stacking_dep": lambda: re.rai_ur10_arm_box_stack_env_dep()
+        "box_stacking_dep": lambda: re.rai_ur10_arm_box_stack_env_dep(),
+        "box_reorientation_dep": lambda: re.rai_ur10_box_pile_cleanup_env_dep()
     }
     # fmt: on
 

@@ -432,6 +432,7 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
+
 class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_piano_mover_env()
@@ -1108,7 +1109,6 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
         self.C.addConfigurationCopy(self.C_coll)
         self.C_coll = None
 
-
         self.robots = ["a0", "a1", "a2"]
         self.robots = self.robots[:num_robots]
 
@@ -1452,6 +1452,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.05
 
+
 class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_bottle_insertion()
@@ -1735,6 +1736,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
+
 class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes=9):
         self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
@@ -1841,7 +1843,180 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
 
 
-#best cost found (max): 21.45
+class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
+    def __init__(self, num_boxes=9):
+        self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
+
+        self.robots = ["a1_", "a2_"]
+
+        # more efficient collision scene that only has the collidabe shapes (and the links)
+        self.C_coll = ry.Config()
+        self.C_coll.addConfigurationCopy(self.C)
+
+        # go through all frames, and delete the ones that are only visual
+        # that is, the frames that do not have a child, and are not
+        # contact frames
+        for f in self.C_coll.getFrames():
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                self.C_coll.delFrame(f.name)
+
+        # self.C_coll.view(True)
+        # self.C.view(True)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(self.C_coll)
+
+        self.C_coll = None
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        pick_task_names = ["pick", "place"]
+        handover_task_names = ["pick", "handover", "place"]
+
+        self.graph = DependencyGraph()
+
+        last_robot_task = {}
+        for r in self.robots:
+            last_robot_task[r] = None
+
+        cnt = 0
+        for primitive_type, robots, box_index, qs in keyframes:
+            box_name = "box" + str(box_index)
+            print(primitive_type)
+            prev_task = None
+
+            print(last_robot_task)
+
+            if primitive_type == "pick":
+                for t, k in zip(pick_task_names, qs):
+                    print(robots)
+                    print(k)
+                    task_name = robots[0] + t + "_" + box_name + "_" + str(cnt)
+
+                    if (
+                        last_robot_task[robots[0]] is not None
+                        and task_name != last_robot_task[robots[0]]
+                    ):
+                        self.graph.add_dependency(task_name, last_robot_task[robots[0]])
+
+                    if t == "pick":
+                        ee_name = robots[0] + "ur_vacuum"
+                        self.tasks.append(
+                            Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
+                        )
+                        last_robot_task[robots[0]] = task_name
+                    else:
+                        self.tasks.append(
+                            Task(robots, SingleGoal(k), t, frames=["tray", box_name])
+                        )
+                        last_robot_task[robots[0]] = task_name
+
+                    self.tasks[-1].name = task_name
+
+                    if prev_task is not None:
+                        self.graph.add_dependency(task_name, prev_task)
+
+                    prev_task = task_name
+
+                    cnt += 1
+            else:
+                for t, k in zip(handover_task_names, qs):
+                    task_name = robots[0] + t + "_" + box_name + "_" + str(cnt)
+
+                    if t == "pick":
+                        ee_name = robots[0] + "ur_vacuum"
+                        self.tasks.append(
+                            Task(
+                                [robots[0]],
+                                SingleGoal(k[self.robot_idx[robots[0]]]),
+                                t,
+                                frames=[ee_name, box_name],
+                            )
+                        )
+
+                        if (
+                            last_robot_task[robots[0]] != task_name
+                            and last_robot_task[robots[0]] is not None
+                        ):
+                            print("A")
+                            self.graph.add_dependency(
+                                task_name, last_robot_task[robots[0]]
+                            )
+
+                        last_robot_task[robots[0]] = task_name
+
+                    elif t == "handover":
+                        ee_name = robots[1] + "ur_vacuum"
+                        self.tasks.append(
+                            Task(
+                                robots,
+                                SingleGoal(k),
+                                t,
+                                frames=[ee_name, box_name],
+                            )
+                        )
+
+                        if (
+                            last_robot_task[robots[1]] != task_name
+                            and last_robot_task[robots[1]] is not None
+                        ):
+                            self.graph.add_dependency(
+                                task_name, last_robot_task[robots[1]]
+                            )
+
+                        last_robot_task[robots[0]] = task_name
+                        last_robot_task[robots[1]] = task_name
+
+                    else:
+                        task_name = robots[1] + t + "_" + box_name + "_" + str(cnt)
+
+                        self.tasks.append(
+                            Task(
+                                [robots[1]],
+                                SingleGoal(k[self.robot_idx[robots[1]]]),
+                                t,
+                                frames=["tray", box_name],
+                            )
+                        )
+
+                        if (
+                            last_robot_task[robots[1]] != task_name
+                            and last_robot_task[robots[1]] is not None
+                        ):
+                            self.graph.add_dependency(
+                                task_name, last_robot_task[robots[1]]
+                            )
+
+                        last_robot_task[robots[1]] = task_name
+
+                    self.tasks[-1].name = task_name
+
+                    if prev_task is not None:
+                        self.graph.add_dependency(task_name, prev_task)
+
+                    prev_task = task_name
+
+                    cnt += 1
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        for r in self.robots:
+            self.graph.add_dependency("terminal", last_robot_task[r])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.01
+
+
+# best cost found (max): 21.45
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 8):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
@@ -2163,7 +2338,7 @@ def display_path(
 
         dt = pause_time
         if adapt_to_max_distance:
-            if i < len(path)-1:
+            if i < len(path) - 1:
                 v = 5
                 diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean")
                 dt = diff / v

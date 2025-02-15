@@ -3324,7 +3324,7 @@ def is_z_axis_up(quaternion):
 
 
 def make_box_pile_env(num_boxes=6, view: bool = False):
-    assert(num_boxes >= 9)
+    assert(num_boxes <= 9)
 
     C = ry.Config()
 
@@ -3387,7 +3387,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             [
                 (random.random() - 0.5) * 1.2,
                 (random.random() - 0.7) * 0.6,
-                0.3,
+                0.35,
             ]
         )
 
