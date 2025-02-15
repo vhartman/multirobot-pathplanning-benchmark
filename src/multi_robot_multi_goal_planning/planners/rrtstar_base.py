@@ -648,7 +648,7 @@ class BaseRRTstar(ABC):
         else:
             raise TypeError("tree_instance must be SingleTree or BidirectionalTree.")
            
-    def add_new_mode(self, q:Optional[Configuration]=None, mode:Mode=None, tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None) -> None: #TODO entry_configuration needs to be specified
+    def add_new_mode(self, q:Optional[Configuration]=None, mode:Mode=None, tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None) -> None:
         """Initializes a new mode"""
         if mode is None: 
             new_mode = self.env.make_start_mode()
