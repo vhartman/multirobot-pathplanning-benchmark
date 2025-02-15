@@ -212,7 +212,7 @@ def make_cost_plots(
         sorted_solution_times = np.sort(all_initial_solution_times)
 
         lb_initial_solution_time = sorted_solution_times[lb_index]
-        ub_initial_solution_time = sorted_solution_times[ub_index]
+        ub_initial_solution_time = sorted_solution_times[ub_index-1]
 
         # lb_initial_solution_time = np.quantile(all_initial_solution_times, 0.1)
         # ub_initial_solution_time = np.quantile(all_initial_solution_times, 0.9)
@@ -220,7 +220,7 @@ def make_cost_plots(
         sorted_solution_costs = np.sort(all_initial_solution_costs)
 
         lb_initial_solution_cost = sorted_solution_costs[lb_index]
-        ub_initial_solution_cost = sorted_solution_costs[ub_index]
+        ub_initial_solution_cost = sorted_solution_costs[ub_index-1]
 
         # lb_initial_solution_cost = np.quantile(all_initial_solution_costs, 0.1)
         # ub_initial_solution_cost = np.quantile(all_initial_solution_costs, 0.9)
@@ -281,7 +281,7 @@ def make_cost_plots(
         sorted_solution_costs = np.sort(all_solution_costs, axis=0)
 
         lb_solution_cost = sorted_solution_costs[lb_index, :]
-        ub_solution_cost = sorted_solution_costs[ub_index, :]
+        ub_solution_cost = sorted_solution_costs[ub_index-1, :]
 
         # lb_solution_cost = np.quantile(all_solution_costs, 0.1, axis=0)
         # ub_solution_cost = np.quantile(all_solution_costs, 0.9, axis=0)
