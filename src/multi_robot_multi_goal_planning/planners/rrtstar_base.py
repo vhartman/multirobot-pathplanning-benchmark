@@ -564,10 +564,11 @@ class InformedVersion5(Informed):
         return goal_node.cost - start_node.cost
 
 class InformedVersion6():
-    def __init__(self, env, modes):
+    def __init__(self, env, modes, locally_informed_sampling):
         self.env = env
         self.modes = modes
         self.conf_type = type(self.env.get_start_pos())
+        self.locally_informed_sampling = locally_informed_sampling
         
     def sample_unit_ball(self, dim) -> np.array:
         """Samples a point uniformly from the unit ball. This is used to sample points from the Prolate HyperSpheroid (PHS).
@@ -1219,14 +1220,14 @@ class InformedVersion6():
 
         return self.generate_informed_samples(
             200,
-            interpolated_path, mode
+            interpolated_path, mode, locally_informed_sampling = self.locally_informed_sampling
         )
     
     def sample_transition(self, path, mode):
         interpolated_path =  mrmgp.joint_prm_planner.interpolate_path(path)
         return self.generate_informed_transitions(
                 200,
-                interpolated_path, mode
+                interpolated_path, mode, locally_informed_sampling = self.locally_informed_sampling
             )
 
 
@@ -1274,7 +1275,8 @@ class BaseRRTstar(ABC):
                  mode_sampling: Optional[Union[int, float]] = None, 
                  gaussian: bool = True,
                  shortcutting_dim_version = 2, 
-                 shortcutting_robot_version = 1
+                 shortcutting_robot_version = 1, 
+                 locally_informed_sampling = True
 
                  ):
         self.env = env
@@ -1291,6 +1293,7 @@ class BaseRRTstar(ABC):
         self.p_stay = p_stay
         self.shortcutting_dim_version = shortcutting_dim_version
         self.shortcutting_robot_version = shortcutting_robot_version
+        self.locally_informed_sampling = locally_informed_sampling
         self.eta = np.sqrt(sum(self.env.robot_dims.values()))
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
@@ -1946,7 +1949,7 @@ class BaseRRTstar(ABC):
             self.informed[mode] = InformedVersion5(self.env, config_cost)
             self.informed[mode].initialize()
         if self.informed_sampling_version == 6:
-            self.informed[mode] = InformedVersion6(self.env, self.modes)
+            self.informed[mode] = InformedVersion6(self.env, self.modes, self.locally_informed_sampling)
 
     def SampleNodeManifold(self, mode:Mode) -> Configuration:
         if  np.random.uniform(0, 1) < self.p_goal:

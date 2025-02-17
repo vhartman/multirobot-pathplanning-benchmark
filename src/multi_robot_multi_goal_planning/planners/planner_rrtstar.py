@@ -15,12 +15,13 @@ class RRTstar(BaseRRTstar):
                  p_uniform: float = 0.8, 
                  shortcutting: bool = False, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = False 
+                 gaussian: bool = False,
+                 locally_informed_sampling = True 
                  
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian)
+                    gaussian, locally_informed_sampling = locally_informed_sampling)
      
     def UpdateCost(self, n:Node) -> None:
         stack = [n]
