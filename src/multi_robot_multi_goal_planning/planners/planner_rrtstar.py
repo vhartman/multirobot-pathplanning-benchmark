@@ -15,7 +15,8 @@ class RRTstar(BaseRRTstar):
                  p_uniform: float = 0.8, 
                  shortcutting: bool = False, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = False, 
+                 gaussian: bool = False 
+                 
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
@@ -69,18 +70,16 @@ class RRTstar(BaseRRTstar):
 
             # RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
-            n_nearest, dist, set_dists = self.Nearest(active_mode, q_rand)    
+            n_nearest, dist, set_dists, n_nearest_idx = self.Nearest(active_mode, q_rand)    
             state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
             if self.env.is_collision_free(state_new.q, active_mode) and self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, active_mode):
                 n_new = Node(state_new, self.operation)
                 if np.equal(n_new.state.q.state(), q_rand.state()).all():
-                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, set_dists)
+                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx, set_dists)
                 else:
-                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new)
-                if n_nearest.id not in node_indices:
-                    continue
+                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx)
                 batch_cost = batch_config_cost(n_new.state.q, N_near_batch, self.env.cost_metric, self.env.cost_reduction)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):

@@ -123,7 +123,7 @@ class BidirectionalRRTstar(BaseRRTstar):
     def Connect(self, mode:Mode, n_new:Node, iter:int) -> None:
         if not self.trees[mode].subtree_b:
             return
-        n_nearest_b, dist, _ = self.Nearest(mode, n_new.state.q, 'B')
+        n_nearest_b, dist, _, _= self.Nearest(mode, n_new.state.q, 'B')
 
         if self.birrtstar_version == 1 or self.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
@@ -170,7 +170,6 @@ class BidirectionalRRTstar(BaseRRTstar):
                 # print(time.time()-self.start_time)
         #need to do that after the next mode was initialized
         self.convert_node_to_transition_node(mode, transition_node)
-
 
     def Extend(self, mode:Mode, n_nearest_b:Node, n_new:Node, dist )-> Optional[Node]:
         q = n_new.state.q
@@ -222,7 +221,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             active_mode  = self.RandomMode()
             # Bi RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
-            n_nearest, dist, set_dists = self.Nearest(active_mode, q_rand)        
+            n_nearest, dist, set_dists, n_nearest_idx = self.Nearest(active_mode, q_rand)        
             state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
             # q_rand == n_nearest
             if not state_new: 
@@ -231,11 +230,10 @@ class BidirectionalRRTstar(BaseRRTstar):
             if self.env.is_collision_free(state_new.q, active_mode) and self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, active_mode):
                 n_new = Node(state_new, self.operation)
                 if np.equal(n_new.state.q.state(), q_rand.state()).all():
-                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, set_dists)
+                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx, set_dists)
                 else:
-                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new)
-                if n_nearest.id not in node_indices:
-                    continue 
+                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx)
+
                 batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = self.env.cost_metric, reduction=self.env.cost_reduction)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
