@@ -189,6 +189,7 @@ def setup_planner(
                 p_uniform=options["p_uniform"],
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
+                locally_informed_sampling = options["locally_informed_sampling"]
                 # gaussian=options["gaussian"]
             ).Plan()
     elif planner_config["type"] == "birrtstar":
@@ -207,9 +208,10 @@ def setup_planner(
                 p_uniform=options["p_uniform"],
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
+                locally_informed_sampling = options["locally_informed_sampling"],
                 # gaussian=options["gaussian"],
                 transition_nodes=options["transition_nodes"],
-                birrtstar_version=options["birrtstar_version"],
+                birrtstar_version=options["birrtstar_version"], 
             ).Plan()
 
     else:

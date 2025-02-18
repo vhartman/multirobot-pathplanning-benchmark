@@ -13,13 +13,15 @@
       "type": "rrtstar",
       "options": {
         "informed_sampling": true,
-        "informed_sampling_version": 0,  
+        "informed_sampling_version": 6,  
         "distance_metric": "max_euclidean",
-        "p_goal": 0.9,
-        "p_stay": 1.0,
-        "p_uniform": 0.8,
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
         "shortcutting": true,
-        "mode_sampling": 1
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
       }
     }, 
     {
@@ -27,15 +29,16 @@
       "type": "birrtstar",
       "options": {
         "informed_sampling": true,
-        "informed_sampling_version": 0,  
+        "informed_sampling_version": 6,  
         "distance_metric": "max_euclidean",
-        "p_goal": 0.9,
-        "p_stay": 1.0,
-        "p_uniform": 0.8,
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
         "shortcutting": true,
         "mode_sampling": 1,
         "transition_nodes": 50,
-        "birrtstar_version": 2
+        "birrtstar_version": 2, 
+        "locally_informed_sampling": true
       }
     },
     {
