@@ -107,12 +107,12 @@ class BaseTree(ABC):
         Dynamically resizes a NumPy array to a new capacity.
 
         Args: 
-        array (NDArray): Array to be resized. 
-        current_capacity (int): Current capacity of array.
-        new_capacity (int):Target capacity for the array.
+            array (NDArray): Array to be resized. 
+            current_capacity (int): Current capacity of array.
+            new_capacity (int):Target capacity for the array.
 
         Returns: 
-        NDArray: The resized array. 
+            NDArray: The resized array. 
         """
         new_array = np.empty((new_capacity, *array.shape[1:]), dtype=array.dtype)
         new_array[:current_capacity] = array  # Copy existing data
@@ -124,11 +124,11 @@ class BaseTree(ABC):
         Ensures that a NumPy array has sufficient capacity to accommodate new elements and resizes it if necessary.
 
         Args: 
-        array (NDArray): The array to be checked and potentially resized. 
-        required_capacity (int): The minimum required capacity for the array.
+            array (NDArray): The array to be checked and potentially resized. 
+            required_capacity (int): The minimum required capacity for the array.
 
         Returns: 
-        NDArray: The array with ensured capacity. """
+            NDArray: The array with ensured capacity. """
         current_size = array.shape[0]
 
         if required_capacity == current_size:
@@ -376,14 +376,14 @@ class Informed(ABC):
         Computes rotation from the hyperellipsoid-aligned to the world frame based on the difference between the start and goal configs.
 
         Args: 
-        start (Configuration): Start configuration 
-        goal (Configuration): Goal configuration
-        n (int): Dimensionality of the state space.
+            start (Configuration): Start configuration 
+            goal (Configuration): Goal configuration
+            n (int): Dimensionality of the state space.
 
         Returns: 
-        Tuple[float, NDArray]:  
-            - Norm of difference between goal and start configs 
-            - NDArray representing the rotation matrix from the hyperellipsoid-aligned frame to the world frame."""
+            Tuple:  
+                - float: Norm of difference between goal and start configs 
+                - NDArray: Representing the rotation matrix from the hyperellipsoid-aligned frame to the world frame."""
         diff = goal.state() - start.state()
         norm = np.linalg.norm(diff)
         if norm < 1e-3 :
@@ -409,10 +409,10 @@ class Informed(ABC):
         Initializes dimensions of each robot
 
         Args: 
-        None
+            None
 
         Returns: 
-        None: This method does not return any value. """
+            None: This method does not return any value. """
         for robot in self.env.robots:
             r_idx = self.env.robots.index(robot)
             self.n[r_idx] = self.env.robot_dims[robot]
@@ -422,12 +422,12 @@ class Informed(ABC):
         Computes cholesky decomposition of hyperellipsoid matrix
 
         Args: 
-        r_indices (List[int]): List of indices of robot with idx r_idx. 
-        r_idx (int): Idx of robot 
-        path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
+            r_indices (List[int]): List of indices of robot with idx r_idx. 
+            r_idx (int): Idx of robot 
+            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
 
         Returns: 
-        NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None. """
+            NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None. """
         cmax = self.get_right_side_of_eq(r_indices, r_idx, path_nodes)
         if not cmax or self.cmin[r_idx] < 0:
             return
@@ -441,9 +441,9 @@ class Informed(ABC):
         Computes right-hand side of informed set description
 
         Args: 
-        r_indices (List[int]): List of indices of robot with idx r_idx. 
-        r_idx (int): Idx of robot 
-        path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
+            r_indices (List[int]): List of indices of robot with idx r_idx. 
+            r_idx (int): Idx of robot 
+            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
 
         Returns:
             float: Value of right-hand side (= cost)
@@ -527,7 +527,7 @@ class InformedVersion1(Informed):
         Computes right-hand side of informed set description
 
         Args: 
-        path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
+            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
 
         Returns:
             float: Value of right-hand side (= cost)
@@ -561,11 +561,11 @@ class InformedVersion1(Informed):
         Initializes dimensions of each robot
 
         Args: 
-        mode (Mode): Current active mode used to determine active tasks. 
-        next_ids (List[int]): List containing next task IDs 
+            mode (Mode): Current active mode used to determine active tasks. 
+            next_ids (List[int]): List containing next task IDs 
 
         Returns: 
-        None: This method does not return any value. """
+            None: This method does not return any value. """
         active_robots = self.env.get_active_task(mode, next_ids).robots 
         for robot in self.env.robots:
             if robot in active_robots:
@@ -577,10 +577,10 @@ class InformedVersion1(Informed):
         Computes cholesky decomposition of hyperellipsoid matrix
 
         Args: 
-        path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
+            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
 
         Returns: 
-        NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None. """
+            NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None. """
         cmax = self.get_right_side_of_eq( path_nodes)
         r1 = cmax / 2
         r2 = np.sqrt(cmax**2 - self.cmin**2) / 2

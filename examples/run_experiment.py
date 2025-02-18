@@ -211,8 +211,7 @@ def setup_planner(
                 locally_informed_sampling = options["locally_informed_sampling"],
                 # gaussian=options["gaussian"],
                 transition_nodes=options["transition_nodes"],
-                birrtstar_version=options["birrtstar_version"],
-                
+                birrtstar_version=options["birrtstar_version"], 
             ).Plan()
 
     else:
