@@ -11,8 +11,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode
 )
 from multi_robot_multi_goal_planning.problems.configuration import (
-    Configuration,
-    batch_config_cost
+    Configuration
 )
 
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
@@ -209,7 +208,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not n_nearest_b:
                 return
            
-        cost =  batch_config_cost([n_new.state],  [n_nearest_b.state], metric = self.env.cost_metric, reduction=self.env.cost_reduction)
+        cost =  self.env.batch_config_cost([n_new.state],  [n_nearest_b.state])
         if self.trees[mode].order == -1:
             #switch such that subtree is beginning from start and subtree_b from goal
             self.trees[mode].swap()
@@ -264,7 +263,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 # Add n_new to tree
                 n_new = Node(state_new,self.operation)
                
-                cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.env.cost_metric, reduction=self.env.cost_reduction)
+                cost =  self.env.batch_config_cost([n_new.state], [n_nearest_b.state])
                 c_min = n_nearest_b.cost + cost
 
                 n_new.parent = n_nearest_b
@@ -312,7 +311,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 else:
                     N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx)
 
-                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = self.env.cost_metric, reduction=self.env.cost_reduction)
+                batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
                     self.UpdateCost(active_mode,n_new)

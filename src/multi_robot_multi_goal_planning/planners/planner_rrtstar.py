@@ -98,7 +98,7 @@ class RRTstar(BaseRRTstar):
                     N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx, set_dists)
                 else:
                     N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx)
-                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, self.env.cost_metric, self.env.cost_reduction)
+                batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
                     self.UpdateCost(n_new) 

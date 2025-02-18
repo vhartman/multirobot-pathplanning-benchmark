@@ -19,9 +19,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
-    config_cost,
-    batch_config_dist,
-    batch_config_cost
+    batch_config_dist,  
 )
 
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
@@ -481,7 +479,7 @@ class InformedVersion0(Informed):
             self.start[r_idx] = n1
         for node in path_nodes[1:]:
             n2 = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-            cost += self.cost_fct(n1, n2, self.env.cost_metric, self.env.cost_reduction)
+            cost += self.cost_fct(n1, n2)
             #need to work with task IDs as same mode can have different configs
             if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
                 start_cost = cost
@@ -549,8 +547,8 @@ class InformedVersion1(Informed):
             if node.transition and node.state.mode.task_ids == mode_task_ids_task:
                 self.goal = node
                 break 
-        lb_goal = self.cost_fct(self.goal.state.q, path_nodes[-1].state.q, self.env.cost_metric, self.env.cost_reduction)
-        lb_start = self.cost_fct( path_nodes[0].state.q, self.start.state.q, self.env.cost_metric, self.env.cost_reduction)
+        lb_goal = self.cost_fct(self.goal.state.q, path_nodes[-1].state.q)
+        lb_start = self.cost_fct( path_nodes[0].state.q, self.start.state.q)
         norm, self.C = self.rotation_to_world_frame(self.start.state.q, self.goal.state.q, self.n)
         self.cmin = norm-2*self.env.collision_tolerance
         self.center = (self.goal.state.q.state() + self.start.state.q.state())/2
@@ -621,8 +619,8 @@ class InformedVersion2(Informed):
                 self.goal[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
                 break 
 
-        lb_goal = self.cost_fct(goal_node.state.q, path_nodes[-1].state.q, self.env.cost_metric, self.env.cost_reduction)
-        lb_start = self.cost_fct( path_nodes[0].state.q, start_node.state.q, self.env.cost_metric, self.env.cost_reduction)
+        lb_goal = self.cost_fct(goal_node.state.q, path_nodes[-1].state.q)
+        lb_start = self.cost_fct( path_nodes[0].state.q, start_node.state.q)
         norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
         if norm is None:
             return
@@ -671,8 +669,8 @@ class InformedVersion3(Informed):
         idx2 = np.random.randint(goal_idx, len(path_nodes))
 
 
-        lb_goal = self.cost_fct(goal_node.state.q, path_nodes[idx2].state.q, self.env.cost_metric, self.env.cost_reduction)
-        lb_start = self.cost_fct( path_nodes[idx1].state.q, start_node.state.q, self.env.cost_metric, self.env.cost_reduction)
+        lb_goal = self.cost_fct(goal_node.state.q, path_nodes[idx2].state.q)
+        lb_start = self.cost_fct( path_nodes[idx1].state.q, start_node.state.q)
         norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
         if norm is None:
             return
@@ -715,8 +713,8 @@ class InformedVersion4(Informed):
         self.start[r_idx] = NpConfiguration.from_numpy(start.state.q.state()[r_indices])
         self.goal[r_idx] = NpConfiguration.from_numpy(goal.state.q.state()[r_indices])
 
-        lb_goal = self.cost_fct(goal.state.q, path_nodes[-1].state.q, self.env.cost_metric, self.env.cost_reduction)
-        lb_start = self.cost_fct( path_nodes[0].state.q, start.state.q, self.env.cost_metric, self.env.cost_reduction)
+        lb_goal = self.cost_fct(goal.state.q, path_nodes[-1].state.q)
+        lb_start = self.cost_fct( path_nodes[0].state.q, start.state.q)
         norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
         if norm is None:
             return
@@ -2411,7 +2409,7 @@ class BaseRRTstar(ABC):
                                 tolerance=self.env.collision_tolerance,
                             )
 
-            batch_cost = batch_config_cost(shortcut_path[:-1], shortcut_path[1:], self.env.cost_metric, self.env.cost_reduction)
+            batch_cost = self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])
             shortcut_path_costs = cumulative_sum(batch_cost)
             shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
             if shortcut_path_costs[-1] < self.operation.cost:
@@ -2495,21 +2493,21 @@ class BaseRRTstar(ABC):
         if not self.informed_sampling:
             return
         if self.informed_sampling_version == 0:
-            self.informed[mode] = InformedVersion0(self.env, config_cost)
+            self.informed[mode] = InformedVersion0(self.env, self.env.config_cost)
             self.informed[mode].initialize()
         if self.informed_sampling_version == 1:
-            self.informed[mode] = InformedVersion1(self.env, config_cost)
+            self.informed[mode] = InformedVersion1(self.env, self.env.config_cost)
         if self.informed_sampling_version == 2:
-            self.informed[mode] = InformedVersion2(self.env, config_cost)
+            self.informed[mode] = InformedVersion2(self.env, self.env.config_cost)
             self.informed[mode].initialize()
         if self.informed_sampling_version == 3:
-            self.informed[mode] = InformedVersion3(self.env, config_cost)
+            self.informed[mode] = InformedVersion3(self.env, self.env.config_cost)
             self.informed[mode].initialize()
         if self.informed_sampling_version == 4:
-            self.informed[mode] = InformedVersion4(self.env, config_cost)
+            self.informed[mode] = InformedVersion4(self.env, self.env.config_cost)
             self.informed[mode].initialize()
         if self.informed_sampling_version == 5:
-            self.informed[mode] = InformedVersion5(self.env, config_cost)
+            self.informed[mode] = InformedVersion5(self.env, self.env.config_cost)
             self.informed[mode].initialize()
         if self.informed_sampling_version == 6:
             self.informed[mode] = InformedVersion6(self.env, self.modes, self.locally_informed_sampling)
@@ -2579,7 +2577,7 @@ class BaseRRTstar(ABC):
         """
 
         path_a, path_b = path[idx-1: -1], path[idx: ]
-        batch_cost = batch_config_cost(path_a, path_b, self.env.cost_metric, self.env.cost_reduction)
+        batch_cost = self.env.batch_config_cost(path_a, path_b)
         cost[idx:] = cumulative_sum(batch_cost) + cost[idx-1]
 
     def Shortcutting(self,
@@ -2795,7 +2793,7 @@ class BaseRRTstar(ABC):
             if i == 0:
                 continue  
             edge_a, edge_b = edge[:-1], edge[1:]
-            batch_cost = batch_config_cost(edge_a, edge_b, self.env.cost_metric, self.env.cost_reduction)
+            batch_cost = self.env.batch_config_cost(edge_a, edge_b)
             batch_cost = np.insert(batch_cost, 0, 0.0)
             edge_cost = cumulative_sum(batch_cost) + cost
         return edge, edge_cost
@@ -2860,7 +2858,7 @@ class BaseRRTstar(ABC):
         discretized_modes.append([path[-1].state.mode.task_ids])
         discretized_path.append(path[-1].state)
         path_a, path_b = discretized_path[:-1], discretized_path[1:]
-        batch_cost = batch_config_cost(path_a, path_b, self.env.cost_metric, self.env.cost_reduction)
+        batch_cost = self.env.batch_config_cost(path_a, path_b)
         batch_cost = np.insert(batch_cost, 0, 0.0)
         discretized_costs = cumulative_sum(batch_cost)
         return discretized_path, discretized_modes, discretized_costs
