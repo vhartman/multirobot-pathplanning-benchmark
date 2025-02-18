@@ -977,12 +977,12 @@ class InformedVersion6():
         try_direct_sampling:bool =True,
     ) -> Configuration:
         """ 
-        Samples configuration from informed set for the given mode.
+        Samples configuration from informed set for given mode.
 
         Args: 
             batch_size (int): Number of samples to generate in a batch.
             path (List[State]): Current path used to guide the informed sampling.
-            mode (Mode): Current operational mode for which the configuration is to be sampled.
+            mode (Mode): Current operational mode.
             max_attempts_per_sample (int, optional): Maximum number of attempts per sample.
             locally_informed_sampling (bool, optional): If True, applies locally informed sampling; otherwise globally.
             try_direct_sampling (bool, optional): If True, attempts direct sampling from the informed set.
@@ -1307,7 +1307,7 @@ class InformedVersion6():
         Args: 
             batch_size (int): Number of samples to generate in a batch.
             path (List[State]): Current path used to guide the informed sampling.
-            active_mode (Mode): Current operational mode for which the configuration is to be sampled.
+            active_mode (Mode): Current operational mode.
             locally_informed_sampling (bool, optional): If True, applies locally informed sampling; otherwise globally.
             max_attempts_per_sample (int, optional): Maximum number of attempts per sample.
 
@@ -1525,11 +1525,11 @@ class BaseRRTstar(ABC):
                  ptc: PlannerTerminationCondition, 
                  general_goal_sampling: bool = False, 
                  informed_sampling: bool = False, 
-                 informed_sampling_version: int = 0, 
+                 informed_sampling_version: int = 6, 
                  distance_metric: str = 'max_euclidean',
-                 p_goal: float = 0.9, 
-                 p_stay: float = 0.3,
-                 p_uniform: float = 0.8, 
+                 p_goal: float = 0.1, 
+                 p_stay: float = 0.0,
+                 p_uniform: float = 0.2, 
                  shortcutting: bool = True, 
                  mode_sampling: Optional[Union[int, float]] = None, 
                  gaussian: bool = True,
@@ -1570,10 +1570,10 @@ class BaseRRTstar(ABC):
                  tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None
                  ) -> None:
         """
-        Initializes new tree instance for specified mode.
+        Initializes new tree instance for the given mode.
 
         Args:
-            mode (Mode): Mode for which tto add the tree.
+            mode (Mode): Current operational mode.
             tree_instance (Optional[Union["SingleTree", "BidirectionalTree"]]): Type of tree instance to initialize. Must be either SingleTree or BidirectionalTree.
 
         Returns:
@@ -1625,7 +1625,7 @@ class BaseRRTstar(ABC):
         Marks node as a potential transition node for the specified mode.
 
         Args:
-            mode (Mode): Mode in which the node is marked as a transition node.
+            mode (Mode): Current operational mode in which the node is marked as a transition node.
             n (Node): Node to be marked as a transition node.
 
         Returns:
@@ -1643,7 +1643,7 @@ class BaseRRTstar(ABC):
         Marks a node as potential transition node in the specified mode and adds it as a start node for each subsequent mode. 
         
         Args: 
-            mode (Mode): Mode in which the node is converted to a transition node.
+            mode (Mode): Current operational mode in which the node is converted to a transition node.
             n (Node): Node to convert into a transition node. 
         
         Returns: 
@@ -1690,7 +1690,7 @@ class BaseRRTstar(ABC):
         Retrieves transition node from the primary subtree of the given mode by its id.
 
         Args:
-            mode (Mode): Mode from which the transition node is to be retrieved.
+            mode (Mode): Current operational mode from which the transition node is to be retrieved.
             id (int): The unique ID of the transition node.
 
         Returns:
@@ -1768,7 +1768,7 @@ class BaseRRTstar(ABC):
         Retrieves valid combination of next task IDs for given mode.
 
         Args:
-            mode (Mode): Mode for which to retrieve valid next task ID combinations.
+            mode (Mode): Current operational mode for which to retrieve valid next task ID combinations.
 
         Returns:
             Optional[List[int]]: Randomly selected valid combination of all next task ID combinations if available
@@ -1784,7 +1784,7 @@ class BaseRRTstar(ABC):
         Retrieves home poses (i.e., the most recent completed task configurations) for all agents of given mode.
 
         Args:
-            mode (Mode): Mode for which to retrieve home poses.
+            mode (Mode): Current operational mode.
 
         Returns:
             List[NDArray]: Representing home poses for each agent.
@@ -1820,7 +1820,7 @@ class BaseRRTstar(ABC):
         Retrieves task goal configuration of given mode for the specified robot.
 
         Args:
-            mode (Mode): Mode for which to retrieve task goal configuration.
+            mode (Mode): Current operational mode.
             r (str): The identifier of the robot whose task goal is to be retrieved.
 
         Returns:
@@ -1853,7 +1853,7 @@ class BaseRRTstar(ABC):
         Samples a collision-free transition configuration for the given mode.
 
         Args:
-            mode (Mode): Mode for which a transition configuration is to be sampled.
+            mode (Mode): Current operational mode.
 
         Returns:
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
@@ -1887,7 +1887,7 @@ class BaseRRTstar(ABC):
         Samples a collision-free configuration for the given mode using the specified sampling strategy.
         
         Args: 
-            mode (Mode): Mode for which a configuration is to be sampled. 
+            mode (Mode): Current operational mode. 
             sampling_type (str): String type specifying the sampling strategy to use. 
             transition_node_ids (Optional[Dict[Mode, List[int]]]): Dictionary mapping modes to lists of transition node IDs. 
             tree_order (int): Order of the subtrees (i.e. value of 1 indicates sampling from 'subtree' (primary); otherwise from 'subtree_b')
@@ -2016,7 +2016,7 @@ class BaseRRTstar(ABC):
         Samples configuration from informed set for the given mode.
 
         Args: 
-            mode (Mode): Mode for which the configuration is to be sampled. 
+            mode (Mode): Current operational mode. 
             goal_sampling (bool): Flag indicating whether to perform standard or goal-directed sampling within the informed set.
 
         Returns: 
@@ -2425,7 +2425,7 @@ class BaseRRTstar(ABC):
             None
 
         Returns:
-            Mode: Sampled Mode based on the mode sampling strategy.
+            Mode: Sampled mode based on the mode sampling strategy.
         """
 
         num_modes = len(self.modes)
@@ -2486,7 +2486,7 @@ class BaseRRTstar(ABC):
         Initializes the informed sampling module for the given mode based on the specified version.
 
         Args:
-            mode (Mode): Current operational mode for which informed sampling is initialized.
+            mode (Mode): Current operational mode.
 
         Returns:
             None: This method does not return any value.
@@ -2519,7 +2519,7 @@ class BaseRRTstar(ABC):
         Samples a node configuration from the manifold based on various probabilistic strategies.
 
         Args:
-            mode (Mode): Current operational mode for which the configuration is sampled.
+            mode (Mode): Current operational mode.
 
         Returns:
             Configuration: Configuration obtained by a sampling strategy based on preset probabilities and operational conditions.
@@ -2539,7 +2539,7 @@ class BaseRRTstar(ABC):
             if self.gaussian and self.operation.init_sol: 
                 return self.sample_configuration(mode, "gaussian")
             # home pose sampling
-            if self.p_stay != 0 and np.random.uniform(0, 1) < self.p_stay: 
+            if np.random.uniform(0, 1) < self.p_stay: 
                 return self.sample_configuration(mode, "home_pose")
             #uniform sampling
             return self.sample_configuration(mode, "uniform")

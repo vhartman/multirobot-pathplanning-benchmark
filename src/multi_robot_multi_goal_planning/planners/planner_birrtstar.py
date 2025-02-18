@@ -38,11 +38,11 @@ class BidirectionalRRTstar(BaseRRTstar):
                  ptc: PlannerTerminationCondition,
                  general_goal_sampling: bool = False, 
                  informed_sampling: bool = False, 
-                 informed_sampling_version: int = 0, 
+                 informed_sampling_version: int = 6, 
                  distance_metric: str = 'max_euclidean',
-                 p_goal: float = 0.9, 
-                 p_stay: float = 0.3,
-                 p_uniform: float = 0.8, 
+                 p_goal: float = 0.1, 
+                 p_stay: float = 0.0,
+                 p_uniform: float = 0.2, 
                  shortcutting: bool = False, 
                  mode_sampling: Optional[Union[int, float]] = None, 
                  gaussian: bool = False, 
@@ -73,7 +73,11 @@ class BidirectionalRRTstar(BaseRRTstar):
                     child.cost = current_node.cost + child.cost_to_parent                    
                 stack.extend(children)
 
-    def add_new_mode(self, q:Optional[Configuration]=None, mode:Mode=None, tree_instance: BidirectionalTree = None) -> None: 
+    def add_new_mode(self, 
+                     q:Optional[Configuration]=None, 
+                     mode:Mode=None, 
+                     tree_instance: BidirectionalTree = None
+                     ) -> None: 
         """
         Initializes a new mode (including its corresponding tree instance and performs informed initialization).
 
@@ -123,7 +127,12 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.operation.init_sol = True
         self.FindLBTransitionNode()
 
-    def UpdateTree(self, mode:Mode ,n: Node, n_parent:Node, cost_to_parent:NDArray) -> None: 
+    def UpdateTree(self, 
+                   mode:Mode,
+                   n: Node, 
+                   n_parent:Node, 
+                   cost_to_parent:NDArray
+                   ) -> None: 
         """
         Updates tree by transferring nodes from the reversed growing subtree (subtree_b) to the primary subtree, adjusting parent-child relationships and propagating cost updates.
 
@@ -226,7 +235,11 @@ class BidirectionalRRTstar(BaseRRTstar):
         #need to do that after the next mode was initialized
         self.convert_node_to_transition_node(mode, transition_node)
 
-    def Extend(self, mode:Mode, n_nearest_b:Node, n_new:Node, dist )-> Optional[Node]:
+    def Extend(self, 
+               mode:Mode, 
+               n_nearest_b:Node, 
+               n_new:Node, dist
+               )-> Optional[Node]:
         """
         Extends subtree by incrementally steering from the nearest node toward the target configuration.
 
