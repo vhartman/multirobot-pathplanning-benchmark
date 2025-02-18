@@ -7,10 +7,6 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode
 )
-from multi_robot_multi_goal_planning.problems.configuration import (
-    batch_config_cost
-)
-
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
     BaseRRTstar, 
     Node, 
