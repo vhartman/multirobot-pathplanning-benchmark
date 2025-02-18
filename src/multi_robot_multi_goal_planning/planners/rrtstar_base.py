@@ -1098,11 +1098,10 @@ class InformedVersion6():
                                 else:
                                     precomputed_robot_cost_bounds[i] = current_cost
 
-                            if (
-                                np.linalg.norm(
+                            norm = np.linalg.norm(
                                     path[start_ind].q[i] - path[end_ind].q[i]
                                 )
-                                < 1e-3
+                            if (norm < 1e-3 or norm > precomputed_robot_cost_bounds[i]
                             ):
                                 qr = (
                                     np.random.rand(self.env.robot_dims[r])
