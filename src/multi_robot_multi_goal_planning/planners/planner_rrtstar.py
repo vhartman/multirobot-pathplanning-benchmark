@@ -1,8 +1,28 @@
-from multi_robot_multi_goal_planning.planners.rrtstar_base import *
+import numpy as np
+import time as time
+import math as math
+from typing import Tuple, Optional, Union, List, Dict
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    State,
+    BaseProblem,
+    Mode
+)
+from multi_robot_multi_goal_planning.problems.configuration import (
+    batch_config_cost
+)
 
-"""This file contains the original RRT* based on the paper 'Sampling-based Algorithms for Optimal Motion Planning' by E. Frazolli et al."""
+from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+    BaseRRTstar, 
+    Node, 
+    SingleTree
+
+)
+from multi_robot_multi_goal_planning.planners.termination_conditions import (
+    PlannerTerminationCondition,
+)
 
 class RRTstar(BaseRRTstar):
+    """Represents the class for the RRT* based planner"""
     def __init__(self, 
                  env: BaseProblem,
                  ptc: PlannerTerminationCondition,  
@@ -34,7 +54,7 @@ class RRTstar(BaseRRTstar):
                     # child.agent_dists = current_node.agent_dists + child.agent_dists_to_parent
                 stack.extend(children)
    
-    def ManageTransition(self, mode:Mode, n_new: Node, iter: int) -> None:
+    def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         #check if transition is reached
         if self.env.is_transition(n_new.state.q, mode):
             self.add_new_mode(n_new.state.q, mode, SingleTree)
@@ -44,9 +64,10 @@ class RRTstar(BaseRRTstar):
             self.convert_node_to_transition_node(mode, n_new)
             if not self.operation.init_sol:
                 self.operation.init_sol = True
-        self.FindLBTransitionNode(iter)
+        self.FindLBTransitionNode()
  
     def PlannerInitialization(self) -> None:
+
         self.set_gamma_rrtstar()
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
@@ -58,17 +79,13 @@ class RRTstar(BaseRRTstar):
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
     
-    def Plan(self) -> List[State]:
+    def Plan(self) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0
         self.PlannerInitialization()
         while True:
             i += 1
             # Mode selectiom       
             active_mode  = self.RandomMode()
-
-            # if i % 100 == 0:
-                # print(i)
-
             # RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
             n_nearest, dist, set_dists, n_nearest_idx = self.Nearest(active_mode, q_rand)    
@@ -85,14 +102,13 @@ class RRTstar(BaseRRTstar):
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
                     self.UpdateCost(n_new) 
-                self.ManageTransition(active_mode, n_new, i)
+                self.ManageTransition(active_mode, n_new)
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break
         self.costs.append(self.operation.cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
-        # self.SaveData(active_mode, time.time()-self.start_time)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
         return self.operation.path, info    
 
