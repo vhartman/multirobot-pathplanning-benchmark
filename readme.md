@@ -22,6 +22,8 @@ At the moment, all of this is in python, with collision checks and other perform
 
 ## Examples
 
+## Getting started
+
 A planner can be run with 
 
 ```
@@ -76,7 +78,7 @@ There are two main requirements:
   - we need a scene that we are planning in, and
   - we need a description of the task sequence, respectively the dependence between tasks
 
-- `rai_envs.py` implements some concrete environments, ans some utilities to have a look at them.
+- `rai_envs.py` implements some concrete environments, and some utilities to have a look at them.
 
 - `benchmark.py` gives a test harness for benchmarking algorithms on a set of planning problems.
 
