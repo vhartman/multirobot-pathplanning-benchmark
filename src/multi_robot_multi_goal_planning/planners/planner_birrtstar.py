@@ -47,11 +47,12 @@ class BidirectionalRRTstar(BaseRRTstar):
                  gaussian: bool = False, 
                  transition_nodes: int = 50, 
                  birrtstar_version: int = 2,
-                 locally_informed_sampling: bool = True 
+                 locally_informed_sampling: bool = True, 
+                 remove_redundant_nodes: bool = True 
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling)
+                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes)
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
        
@@ -278,6 +279,10 @@ class BidirectionalRRTstar(BaseRRTstar):
                 return 
 
     def PlannerInitialization(self) -> None:
+        if self.distance_metric == "sum_euclidean":
+            self.eta = np.sqrt(sum(self.env.robot_dims.values())*len(self.env.robots))
+        else:
+            self.eta = np.sqrt(sum(self.env.robot_dims.values()))
         # Initilaize first Mode
         self.set_gamma_rrtstar()
         self.add_new_mode(tree_instance=BidirectionalTree)

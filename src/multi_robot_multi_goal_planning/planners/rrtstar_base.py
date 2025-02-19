@@ -1531,9 +1531,10 @@ class BaseRRTstar(ABC):
                  shortcutting: bool = True, 
                  mode_sampling: Optional[Union[int, float]] = None, 
                  gaussian: bool = True,
-                 shortcutting_dim_version = 2, 
-                 shortcutting_robot_version = 1, 
-                 locally_informed_sampling = True
+                 shortcutting_dim_version:int = 2, 
+                 shortcutting_robot_version:int = 1, 
+                 locally_informed_sampling:bool = True,
+                 remove_redundant_nodes:bool = True
 
                  ):
         self.env = env
@@ -1551,7 +1552,8 @@ class BaseRRTstar(ABC):
         self.shortcutting_dim_version = shortcutting_dim_version
         self.shortcutting_robot_version = shortcutting_robot_version
         self.locally_informed_sampling = locally_informed_sampling
-        self.eta = np.sqrt(sum(self.env.robot_dims.values()))
+        self.remove_redundant_nodes = remove_redundant_nodes
+        self.eta = None
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
         self.modes = [] 
@@ -2401,20 +2403,89 @@ class BaseRRTstar(ABC):
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
             path_shortcutting_in_order = path_shortcutting[::-1]
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path, _ = mrmgp.shortcutting.robot_mode_shortcut(
+            shortcut_path_, _ = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
                                 path_shortcutting_in_order,
                                 500,
                                 resolution=self.env.collision_resolution,
                                 tolerance=self.env.collision_tolerance,
                             )
+            if self.remove_redundant_nodes:
+                # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
+                shortcut_path = self.remove_interpolated_nodes(shortcut_path_)
+            else:
+                shortcut_path = shortcut_path_
+                # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
+            # import matplotlib.pyplot as plt
+            # fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
+            # # Top-left: shortcut_path, state()[3:5]
+            # samples = [sample.q.state()[3:5] for sample in shortcut_path]
+            # axes[0, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[0, 0].set_title('shortcut_path: state()[3:5]')
+
+            # # Top-right: shortcut_path, state()[:2]
+            # samples = [sample.q.state()[:2] for sample in shortcut_path]
+            # axes[0, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[0, 1].set_title('shortcut_path: state()[:2]')
+
+            # # Bottom-left: shortcut_path_, state()[3:5]
+            # samples = [sample.q.state()[3:5] for sample in shortcut_path_]
+            # axes[1, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[1, 0].set_title('shortcut_path_: state()[3:5]')
+
+            # # Bottom-right: shortcut_path_, state()[:2]
+            # samples = [sample.q.state()[:2] for sample in shortcut_path_]
+            # axes[1, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[1, 1].set_title('shortcut_path_: state()[:2]')
+
+            # # Adjust layout and display
+            # plt.tight_layout()
+            # plt.show()
             batch_cost = self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])
             shortcut_path_costs = cumulative_sum(batch_cost)
             shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
             if shortcut_path_costs[-1] < self.operation.cost:
                 self.TreeExtension(mode, shortcut_path, shortcut_path_costs)
+
+    def remove_interpolated_nodes(self, path:List[State], tolerance = 1e-15) -> List[State]:
+        """
+        Removes interpolated points from a given path, retaining only key nodes where direction changes or new mode begins.
+
+        Args:
+            path (List[Object]): Sequence of states representing original path.
+            tolerance (float, optional): Threshold for detecting collinearity between segments.
+
+        Returns:
+            List[Object]: Sequence of states representing a path without redundant nodes.
+        """
+
+        if len(path) < 3:
+            return path 
+
+        simplified_path = [path[0]]
+        
+        for i in range(1, len(path) - 1):
+            A = simplified_path[-1]
+            B = path[i]
+            C = path[i+1]
             
+            AB = B.q.state() - A.q.state()
+            AC = C.q.state() - A.q.state()
+            
+            # If A and C are almost the same, skip B.
+            if np.linalg.norm(AC) < tolerance:
+                continue
+            lam = np.dot(AB, AC) / np.dot(AC, AC)
+            
+            # Check if AB is collinear to AC (AB = lambda * AC)
+            if np.linalg.norm(AB - lam * AC) > tolerance or A.mode !=C.mode:
+                simplified_path.append(B)
+                
+        simplified_path.append(path[-1])
+        
+        return simplified_path
+
     def RandomMode(self) -> Mode:
         """
         Randomly selects a mode based on the current mode sampling strategy.
