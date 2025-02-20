@@ -64,10 +64,6 @@ class RRTstar(BaseRRTstar):
         self.FindLBTransitionNode()
  
     def PlannerInitialization(self) -> None:
-        if self.distance_metric == "sum_euclidean":
-            self.eta = np.sqrt(sum(self.env.robot_dims.values())*len(self.env.robots))
-        else:
-            self.eta = np.sqrt(sum(self.env.robot_dims.values()))
         self.set_gamma_rrtstar()
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
