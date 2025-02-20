@@ -181,3 +181,41 @@ def robot_mode_shortcut(
     # plt.show()
 
     return new_path, [costs, times]
+
+def remove_interpolated_nodes(path:List[State], tolerance = 1e-15) -> List[State]:
+        """
+        Removes interpolated points from a given path, retaining only key nodes where direction changes or new mode begins.
+
+        Args:
+            path (List[Object]): Sequence of states representing original path.
+            tolerance (float, optional): Threshold for detecting collinearity between segments.
+
+        Returns:
+            List[Object]: Sequence of states representing a path without redundant nodes.
+        """
+
+        if len(path) < 3:
+            return path 
+
+        simplified_path = [path[0]]
+        
+        for i in range(1, len(path) - 1):
+            A = simplified_path[-1]
+            B = path[i]
+            C = path[i+1]
+            
+            AB = B.q.state() - A.q.state()
+            AC = C.q.state() - A.q.state()
+            
+            # If A and C are almost the same, skip B.
+            if np.linalg.norm(AC) < tolerance:
+                continue
+            lam = np.dot(AB, AC) / np.dot(AC, AC)
+            
+            # Check if AB is collinear to AC (AB = lambda * AC)
+            if np.linalg.norm(AB - lam * AC) > tolerance or A.mode !=C.mode:
+                simplified_path.append(B)
+                
+        simplified_path.append(path[-1])
+        
+        return simplified_path

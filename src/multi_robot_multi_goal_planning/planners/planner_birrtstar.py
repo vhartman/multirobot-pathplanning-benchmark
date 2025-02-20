@@ -47,11 +47,12 @@ class BidirectionalRRTstar(BaseRRTstar):
                  gaussian: bool = False, 
                  transition_nodes: int = 50, 
                  birrtstar_version: int = 2,
-                 locally_informed_sampling: bool = True 
+                 locally_informed_sampling: bool = True, 
+                 remove_redundant_nodes: bool = True 
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling)
+                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes)
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
        

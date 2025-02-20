@@ -1531,9 +1531,10 @@ class BaseRRTstar(ABC):
                  shortcutting: bool = True, 
                  mode_sampling: Optional[Union[int, float]] = None, 
                  gaussian: bool = True,
-                 shortcutting_dim_version = 2, 
-                 shortcutting_robot_version = 1, 
-                 locally_informed_sampling = True
+                 shortcutting_dim_version:int = 2, 
+                 shortcutting_robot_version:int = 1, 
+                 locally_informed_sampling:bool = True,
+                 remove_redundant_nodes:bool = True
 
                  ):
         self.env = env
@@ -1551,6 +1552,7 @@ class BaseRRTstar(ABC):
         self.shortcutting_dim_version = shortcutting_dim_version
         self.shortcutting_robot_version = shortcutting_robot_version
         self.locally_informed_sampling = locally_informed_sampling
+        self.remove_redundant_nodes = remove_redundant_nodes
         self.eta = np.sqrt(sum(self.env.robot_dims.values()))
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
@@ -1925,9 +1927,9 @@ class BaseRRTstar(ABC):
                             self.operation.path, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                         if q is None:
-                            goal_sample = []
                             q = self.sample_transition_configuration(mode)
-                            goal_sample.append(q)
+                            if random.choice([0,1]) == 0:
+                                return q
                             while True:
                                 q_noise = []
                                 for r in range(len(self.env.robots)):
@@ -1936,9 +1938,7 @@ class BaseRRTstar(ABC):
                                     q_noise.append(q_robot + noise)
                                 q = type(self.env.get_start_pos()).from_list(q_noise)
                                 if self.env.is_collision_free(q, mode):
-                                    goal_sample.append(q)
-                                    break    
-                            return random.choice(goal_sample)
+                                    return q
                         if self.env.is_collision_free(q, mode):
                             return q
                         continue
@@ -1948,9 +1948,9 @@ class BaseRRTstar(ABC):
                         if self.env.is_collision_free(q, mode):
                             return q
                         continue
-                goal_sample = []
                 q = self.sample_transition_configuration(mode)
-                goal_sample.append(q)
+                if random.choice([0,1]) == 0:
+                    return q
                 while True:
                     q_noise = []
                     for r in range(len(self.env.robots)):
@@ -1959,11 +1959,9 @@ class BaseRRTstar(ABC):
                         q_noise.append(q_robot + noise)
                     q = type(self.env.get_start_pos()).from_list(q_noise)
                     if self.env.is_collision_free(q, mode):
-                        goal_sample.append(q)
-                        break    
-                return random.choice(goal_sample)
+                        return q
             #informed sampling       
-            if is_informed_sampling: 
+            if is_informed_sampling:
                 if self.informed_sampling_version == 6:
                     q = self.informed[mode].generate_informed_samples(
                             200,
@@ -2226,12 +2224,14 @@ class BaseRRTstar(ABC):
         if np.equal(n_nearest.state.q.state(), q_rand.state()).all():
             return None
         q_nearest = n_nearest.state.q.state()
-        q_rand = q_rand.state()
-        direction = q_rand - q_nearest
+        direction = q_rand.q - q_nearest
+        if self.distance_metric != "max_euclidean":
+            #most independent of the number of robots and their dimension
+            dist = batch_config_dist(n_nearest.state.q, [q_rand], metric = "max_euclidean")
         N = float((dist / self.eta)) # to have exactly the step size
 
         if N <= 1 or int(N) == i-1:#for bidirectional or drrt
-            q_new = q_rand
+            q_new = q_rand.q
         else:
             q_new = q_nearest + (direction * (i /N))
         state_new = State(type(self.env.get_start_pos())(q_new, n_nearest.state.q.array_slice), mode)
@@ -2295,7 +2295,7 @@ class BaseRRTstar(ABC):
             None: This method does not return any value.
         """
 
-        idx =  np.where(np.array(node_indices) == n_nearest.id)[0][0]
+        idx =  np.where(node_indices == n_nearest.id)[0][0]
         c_new_tensor = n_near_costs + batch_cost
         c_min = c_new_tensor[idx]
         c_min_to_parent = batch_cost[idx]
@@ -2359,7 +2359,8 @@ class BaseRRTstar(ABC):
 
                     n_near.cost = c_potential_tensor[idx]
                     n_near.cost_to_parent = batch_cost[idx]
-                    rewired = True
+                    if n_near.children != []:
+                        rewired = True
         return rewired
       
     def GeneratePath(self, 
@@ -2401,20 +2402,59 @@ class BaseRRTstar(ABC):
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
             path_shortcutting_in_order = path_shortcutting[::-1]
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path, _ = mrmgp.shortcutting.robot_mode_shortcut(
+            shortcut_path_, _ = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
                                 path_shortcutting_in_order,
                                 500,
                                 resolution=self.env.collision_resolution,
                                 tolerance=self.env.collision_tolerance,
                             )
+            if self.remove_redundant_nodes:
+                # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
+                shortcut_path = mrmgp.shortcutting.remove_interpolated_nodes(shortcut_path_)
+            else:
+                shortcut_path = shortcut_path_
+                # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
+            # import matplotlib.pyplot as plt
+            # fig, axes = plt.subplots(3, 2, figsize=(12, 15))
 
+            # samples = [sample.q.state()[3:5] for sample in shortcut_path]
+            # axes[1, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[1, 0].set_title('Agent 2')
+
+          
+            # samples = [sample.q.state()[:2] for sample in shortcut_path]
+            # axes[0, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[0, 0].set_title('Agent 1')
+
+       
+            # samples = [sample.q.state()[3:5] for sample in shortcut_path_]
+            # axes[1, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[1, 1].set_title('Agent 2')
+
+          
+            # samples = [sample.q.state()[:2] for sample in shortcut_path_]
+            # axes[0, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[0, 1].set_title('Agent 1')
+
+            # samples = [sample.q.state()[5:] for sample in shortcut_path]
+            # axes[2, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[2, 1].set_title('Agent 3')
+
+          
+            # samples = [sample.q.state()[5:] for sample in shortcut_path_]
+            # axes[2, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
+            # axes[2, 0].set_title('Agent 3')
+
+            # # Adjust layout and display the plots
+            # plt.tight_layout()
+            # plt.show()
             batch_cost = self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])
             shortcut_path_costs = cumulative_sum(batch_cost)
             shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
             if shortcut_path_costs[-1] < self.operation.cost:
                 self.TreeExtension(mode, shortcut_path, shortcut_path_costs)
-            
+
     def RandomMode(self) -> Mode:
         """
         Randomly selects a mode based on the current mode sampling strategy.
@@ -2693,7 +2733,7 @@ class BaseRRTstar(ABC):
 
         mode = discretized_path[0].mode
         parent = self.operation.path_nodes[0]
-        for i in range(1, len(discretized_path) - 1):
+        for i in range(1, len(discretized_path)):
             state = discretized_path[i]
             node = Node(state, self.operation)
             node.parent = parent
@@ -2708,16 +2748,9 @@ class BaseRRTstar(ABC):
             parent = node
             if mode != discretized_path[i].mode:
                 self.convert_node_to_transition_node(mode, node.parent)
-                mode = discretized_path[i].mode
             mode = discretized_path[i].mode
-        #Reuse terminal node (don't want to add a new one)
-        self.operation.path_nodes[-1].parent.children.remove(self.operation.path_nodes[-1])
-        parent.children.append(self.operation.path_nodes[-1])
-        self.operation.path_nodes[-1].parent = parent
-        self.operation.path_nodes[-1].cost = discretized_costs[-1]
-        self.operation.path_nodes[-1].cost_to_parent = self.operation.path_nodes[-1].cost - self.operation.path_nodes[-1].parent.cost
-        
-        self.GeneratePath(active_mode, self.operation.path_nodes[-1], shortcutting_bool=False)
+        self.convert_node_to_transition_node(mode, node)        
+        self.GeneratePath(active_mode, node, shortcutting_bool=False)
 
     def EdgeInterpolation(self, 
                           path:List[State], 
