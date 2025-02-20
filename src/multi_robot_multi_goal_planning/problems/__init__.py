@@ -42,6 +42,7 @@ def get_env_by_name(name):
         "simplified_welding": lambda: re.rai_quadruple_ur10_arm_spot_welding_env(num_robots=2, num_pts=2),
         "box_stacking": lambda: re.rai_ur10_arm_box_stack_env(),
         "box_stacking_two_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=2),
+        "box_stacking_three_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=3),
         "box_reorientation": lambda: re.rai_ur10_box_pile_cleanup_env(),
 
         "box_rearrangement": lambda: re.rai_ur10_arm_box_rearrangement_env(), # 2 robots, 9 boxes

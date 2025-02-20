@@ -2162,7 +2162,7 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
 
 # mobile manip
 class rai_mobile_manip_wall(SequenceMixin, rai_env):
-    def __init__(self, num_robots=3):
+    def __init__(self, num_robots=4):
         self.C, keyframes = rai_config.make_mobile_manip_env(num_robots)
 
         self.robots = [k for k in keyframes]
