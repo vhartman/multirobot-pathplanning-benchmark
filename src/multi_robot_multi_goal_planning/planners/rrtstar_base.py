@@ -2407,7 +2407,7 @@ class BaseRRTstar(ABC):
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             shortcut_path_, _ = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
-                                path_shortcutting_in_order,
+                                self.operation.path_shortcutting,
                                 250,
                                 resolution=self.env.collision_resolution,
                                 tolerance=self.env.collision_tolerance,
