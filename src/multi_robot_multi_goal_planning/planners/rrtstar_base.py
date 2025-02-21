@@ -39,6 +39,7 @@ class Operation:
         self.init_sol = False
         self.costs = np.empty(10000000, dtype=np.float64)
         self.paths_inter = []
+        self.path_shortcutting = []
     
     def get_cost(self, idx:int) -> float:
         """
@@ -1650,10 +1651,11 @@ class BaseRRTstar(ABC):
         Returns: 
             None: This method does not return any value. 
         """
-
         self.mark_node_as_transition(mode,n)
-        for next_mode in mode.next_modes:
-            self.trees[next_mode].add_transition_node_as_start_node(n)
+        if self.env.is_terminal_mode(mode):
+            return
+        next_mode = self.env.get_next_mode(n.state.q, mode)
+        self.trees[next_mode].add_transition_node_as_start_node(n)
 
     def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
         """
@@ -1925,7 +1927,7 @@ class BaseRRTstar(ABC):
                     if self.informed_sampling_version == 6 and not self.env.is_terminal_mode(mode):
                         q = self.informed[mode].generate_informed_transitions(
                             200,
-                            self.operation.path, mode, locally_informed_sampling = self.locally_informed_sampling
+                            self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                         if q is None:
                             q = self.sample_transition_configuration(mode)
@@ -1966,7 +1968,7 @@ class BaseRRTstar(ABC):
                 if self.informed_sampling_version == 6:
                     q = self.informed[mode].generate_informed_samples(
                             200,
-                            self.operation.path, mode, locally_informed_sampling = self.locally_informed_sampling
+                            self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                     if q is None:
                         is_informed_sampling = False
@@ -2349,7 +2351,7 @@ class BaseRRTstar(ABC):
 
             for idx in improved_indices:
                 n_near = self.trees[mode].subtree.get(node_indices[idx].item())
-                if n_near == n_new.parent or n_near.cost == np.inf or n_near == n_new:
+                if n_near == n_new.parent or n_near.cost == np.inf or n_near.id == n_new.id:
                     continue
 
                 if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):
@@ -2386,11 +2388,11 @@ class BaseRRTstar(ABC):
             path_nodes.append(n)
             path_modes.append(n.state.mode.task_ids)
             path.append(n.state)
-            if shortcutting_bool:
-                path_shortcutting.append(n.state)
-                if n.parent is not None and n.parent.state.mode != n.state.mode:
-                    new_state = State(n.parent.state.q, n.state.mode)
-                    path_shortcutting.append(new_state)
+            # if shortcutting_bool:
+            path_shortcutting.append(n.state)
+            if n.parent is not None and n.parent.state.mode != n.state.mode:
+                new_state = State(n.parent.state.q, n.state.mode)
+                path_shortcutting.append(new_state)
             n = n.parent
         path_in_order = path[::-1]
         self.operation.path_modes = path_modes[::-1]
@@ -2400,8 +2402,8 @@ class BaseRRTstar(ABC):
         self.costs.append(self.operation.cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
+        self.operation.path_shortcutting = path_shortcutting[::-1] # includes transiiton node twice
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
-            path_shortcutting_in_order = path_shortcutting[::-1]
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             shortcut_path_, _ = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,

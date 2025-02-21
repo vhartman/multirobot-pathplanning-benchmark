@@ -14,7 +14,6 @@
       "options": {
         "informed_sampling": true,
         "informed_sampling_version": 6,  
-        "informed_sampling_version": 6,  
         "distance_metric": "max_euclidean",
         "p_goal": 0.1,
         "p_stay": 0.0,
