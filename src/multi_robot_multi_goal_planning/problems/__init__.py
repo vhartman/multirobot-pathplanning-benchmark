@@ -50,7 +50,9 @@ def get_env_by_name(name):
         "box_rearrangement_four_robots": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=4),
     
         # mobile
-        "mobile_wall": lambda: re.rai_mobile_manip_wall(),
+        "mobile_wall_four": lambda: re.rai_mobile_manip_wall(num_robots=4),
+        "mobile_wall_three": lambda: re.rai_mobile_manip_wall(num_robots=3),
+        "mobile_wall_two": lambda: re.rai_mobile_manip_wall(num_robots=2),
 
         # single goal envs
         "two_dim_single_goal": lambda: rsge.rai_two_dim_env(),

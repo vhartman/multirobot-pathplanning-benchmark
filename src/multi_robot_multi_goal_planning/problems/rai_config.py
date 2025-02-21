@@ -503,7 +503,6 @@ def make_random_two_dim_single_goal(
         assert len(agents_can_rotate) == num_agents
 
     C = make_table_with_walls(4, 4)
-    C.view()
 
     added_agents = 0
     agent_names = []

@@ -1570,28 +1570,28 @@ def joint_prm_planner(
         lb_cost_from_start_index_to_state = env.config_cost(
             rnd_state.q, path[start_index].q
         )
-        if path[start_index].mode != rnd_state.mode:
-            start_state = path[start_index]
-            lb_cost_from_start_to_state = lb_cost_from_start(rnd_state)
-            lb_cost_from_start_to_index = lb_cost_from_start(start_state)
+        # if path[start_index].mode != rnd_state.mode:
+        #     start_state = path[start_index]
+        #     lb_cost_from_start_to_state = lb_cost_from_start(rnd_state)
+        #     lb_cost_from_start_to_index = lb_cost_from_start(start_state)
 
-            lb_cost_from_start_index_to_state = max(
-                (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
-                lb_cost_from_start_index_to_state,
-            )
+        #     lb_cost_from_start_index_to_state = max(
+        #         (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+        #         lb_cost_from_start_index_to_state,
+        #     )
 
         lb_cost_from_state_to_end_index = env.config_cost(
             rnd_state.q, path[end_index].q
         )
-        if path[end_index].mode != rnd_state.mode:
-            goal_state = path[end_index]
-            lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state)
-            lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
+        # if path[end_index].mode != rnd_state.mode:
+        #     goal_state = path[end_index]
+        #     lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state)
+        #     lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
 
-            lb_cost_from_state_to_end_index = max(
-                (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
-                lb_cost_from_state_to_end_index,
-            )
+        #     lb_cost_from_state_to_end_index = max(
+        #         (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+        #         lb_cost_from_state_to_end_index,
+        #     )
 
         # print("can_imrpove")
 
@@ -2410,6 +2410,8 @@ def joint_prm_planner(
             )
             g.add_transition_nodes(new_transitions)
             print(f"Adding {len(new_transitions)} transitions")
+    
+            # print(reached_modes)
 
             if len(g.goal_nodes) == 0:
                 continue
@@ -2473,7 +2475,6 @@ def joint_prm_planner(
         if not reached_terminal_mode:
             continue
 
-        # print(reached_modes)
 
         # for m in reached_modes:
         #     plt.figure()
@@ -2580,10 +2581,12 @@ def joint_prm_planner(
                             shortcut_path, _ = shortcutting.robot_mode_shortcut(
                                 env,
                                 path,
-                                500,
+                                250,
                                 resolution=env.collision_resolution,
                                 tolerance=env.collision_tolerance,
                             )
+
+                            shortcut_path  = shortcutting.remove_interpolated_nodes(shortcut_path)
 
                             shortcut_path_cost = path_cost(
                                 shortcut_path, env.batch_config_cost

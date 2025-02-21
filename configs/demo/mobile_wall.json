@@ -1,0 +1,46 @@
+{
+  "experiment_name": "rrt_planner_convergence",
+  "environment": "mobile_wall_three",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 800,
+  "num_runs": 20,
+  "seed": 1,
+  "optimize": true,
+  "planners": [
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 1,
+        "locally_informed_sampling": true
+      }
+    },
+    {
+      "name": "locally_informed_prm_shortcutting",
+      "type": "prm",
+      "options": {
+        "batch_size": 200,
+        "transition_batch_size": 250,
+        "informed_batch_size": 300,
+        "informed_transition_batch_size": 250,
+        "path_batch_size": 0,
+        "distance_function": "max_euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true
+      }
+    }
+  ]
+}
