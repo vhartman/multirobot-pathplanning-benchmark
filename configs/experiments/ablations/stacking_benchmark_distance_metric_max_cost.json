@@ -1,14 +1,14 @@
 {
-  "experiment_name": "",
-  "environment": "other_hallway",
+  "experiment_name": "max_cost",
+  "environment": "box_stacking",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "sum",
-  "max_planning_time": 500,
+  "cost_reduction": "max",
+  "max_planning_time": 1000,
   "optimize": true,
   "num_runs": 10,
   "seed": 0,
   "planners": [
-     {
+    {
       "name": "euclidean_prm",
       "type": "prm",
       "options": {
@@ -74,7 +74,7 @@
         "distance_metric": "max_euclidean",
         "p_goal": 0.5,
         "p_stay": 0.0,
-        "p_uniform": 0.8,
+        "p_uniform": 0.5,
         "shortcutting": true,
         "mode_sampling": 1,
         "locally_informed_sampling": true
@@ -89,7 +89,7 @@
         "distance_metric": "sum_euclidean",
         "p_goal": 0.5,
         "p_stay": 0.0,
-        "p_uniform": 0.8,
+        "p_uniform": 0.5,
         "shortcutting": true,
         "mode_sampling": 1,
         "locally_informed_sampling": true
@@ -104,7 +104,7 @@
         "distance_metric": "euclidean",
         "p_goal": 0.5,
         "p_stay": 0.0,
-        "p_uniform": 0.8,
+        "p_uniform": 0.5,
         "shortcutting": true,
         "mode_sampling": 1,
         "locally_informed_sampling": true

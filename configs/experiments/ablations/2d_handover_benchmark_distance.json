@@ -1,14 +1,14 @@
 {
   "experiment_name": "",
-  "environment": "other_hallway",
+  "environment": "mobile_wall",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "sum",
-  "max_planning_time": 500,
+  "cost_reduction": "max",
+  "max_planning_time": 1000,
   "optimize": true,
   "num_runs": 10,
   "seed": 0,
   "planners": [
-     {
+    {
       "name": "euclidean_prm",
       "type": "prm",
       "options": {
