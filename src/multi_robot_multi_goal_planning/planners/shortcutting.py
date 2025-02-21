@@ -86,16 +86,26 @@ def robot_mode_shortcut(
     resolution=0.001,
     tolerance=0.01,
 ):
-    new_path = interpolate_path(path, 0.05)
+    # non_redundant_path = remove_interpolated_nodes(path)
+
+    new_path = interpolate_path(path, 0.1)
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
+
+    # for p in new_path:
+    #     if not env.is_collision_free(p.q, p.mode):
+    #         print("startpath is in collision")
 
     start_time = time.time()
 
     config_type = type(env.get_start_pos())
 
     cnt = 0
-    for iter in range(max_iter):
+    # for iter in range(max_iter):
+    while True:
+        if cnt >= max_iter:
+            break
+
         i = np.random.randint(0, len(new_path))
         j = np.random.randint(0, len(new_path))
 
@@ -125,8 +135,6 @@ def robot_mode_shortcut(
         #     print("path is not collision free")
         #     env.show(True)
 
-        cnt += 1
-
         q0 = new_path[i].q
         q1 = new_path[j].q
 
@@ -152,6 +160,8 @@ def robot_mode_shortcut(
             # print(f"{iter} does not improve cost")
             continue
 
+        cnt += 1
+
         # this is wrong for partial shortcuts atm.
         if env.is_path_collision_free(
             path_element, resolution=resolution, tolerance=tolerance
@@ -169,6 +179,28 @@ def robot_mode_shortcut(
         times.append(current_time - start_time)
         costs.append(path_cost(new_path, env.batch_config_cost))
 
+    # path_without_redundant_nodes = [new_path[0]]
+    # for i in range(1, len(new_path)-1):
+    #     prev_state = path_without_redundant_nodes[-1]
+    #     current_state = new_path[i]
+    #     potential_next_state = new_path[i+1]
+
+    #     if prev_state.mode != current_state.mode:
+    #         path_without_redundant_nodes.append(current_state)
+    #         continue
+
+    #     vec_to_next_state = potential_next_state.q.state() - prev_state.q.state()
+    #     vec_to_this_state = potential_next_state.q.state() - current_state.q.state()
+
+    #     if np.linalg.norm(vec_to_next_state / np.linalg.norm(vec_to_next_state) - vec_to_this_state / np.linalg.norm(vec_to_this_state)) < 1e-3:
+    #         continue
+
+    #     path_without_redundant_nodes.append(current_state)
+
+    # path_without_redundant_nodes.append(new_path[-1])
+
+    # new_path = path_without_redundant_nodes
+
     assert new_path[-1].mode == path[-1].mode
     assert np.linalg.norm(new_path[-1].q.state() - path[-1].q.state()) < 1e-6
     assert np.linalg.norm(new_path[0].q.state() - path[0].q.state()) < 1e-6
@@ -182,40 +214,41 @@ def robot_mode_shortcut(
 
     return new_path, [costs, times]
 
-def remove_interpolated_nodes(path:List[State], tolerance = 1e-15) -> List[State]:
-        """
-        Removes interpolated points from a given path, retaining only key nodes where direction changes or new mode begins.
 
-        Args:
-            path (List[Object]): Sequence of states representing original path.
-            tolerance (float, optional): Threshold for detecting collinearity between segments.
+def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]:
+    """
+    Removes interpolated points from a given path, retaining only key nodes where direction changes or new mode begins.
 
-        Returns:
-            List[Object]: Sequence of states representing a path without redundant nodes.
-        """
+    Args:
+        path (List[Object]): Sequence of states representing original path.
+        tolerance (float, optional): Threshold for detecting collinearity between segments.
 
-        if len(path) < 3:
-            return path 
+    Returns:
+        List[Object]: Sequence of states representing a path without redundant nodes.
+    """
 
-        simplified_path = [path[0]]
-        
-        for i in range(1, len(path) - 1):
-            A = simplified_path[-1]
-            B = path[i]
-            C = path[i+1]
-            
-            AB = B.q.state() - A.q.state()
-            AC = C.q.state() - A.q.state()
-            
-            # If A and C are almost the same, skip B.
-            if np.linalg.norm(AC) < tolerance:
-                continue
-            lam = np.dot(AB, AC) / np.dot(AC, AC)
-            
-            # Check if AB is collinear to AC (AB = lambda * AC)
-            if np.linalg.norm(AB - lam * AC) > tolerance or A.mode !=C.mode:
-                simplified_path.append(B)
-                
-        simplified_path.append(path[-1])
-        
-        return simplified_path
+    if len(path) < 3:
+        return path
+
+    simplified_path = [path[0]]
+
+    for i in range(1, len(path) - 1):
+        A = simplified_path[-1]
+        B = path[i]
+        C = path[i + 1]
+
+        AB = B.q.state() - A.q.state()
+        AC = C.q.state() - A.q.state()
+
+        # If A and C are almost the same, skip B.
+        if np.linalg.norm(AC) < tolerance:
+            continue
+        lam = np.dot(AB, AC) / np.dot(AC, AC)
+
+        # Check if AB is collinear to AC (AB = lambda * AC)
+        if np.linalg.norm(AB - lam * AC) > tolerance or A.mode != C.mode:
+            simplified_path.append(B)
+
+    simplified_path.append(path[-1])
+
+    return simplified_path

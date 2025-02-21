@@ -988,6 +988,7 @@ class InformedVersion6():
         Returns: 
             Configuration: Configuration within the informed set that satisfies the specified limits for the robots. 
         """
+        # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
         path = mrmgp.joint_prm_planner.interpolate_path(path)
         new_samples = []
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
@@ -1312,7 +1313,7 @@ class InformedVersion6():
         Returns: 
             Configuration: Transiiton configuration within the informed set that satisfies the specified limits for the robots. 
         """
-        
+        # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
         path =  mrmgp.joint_prm_planner.interpolate_path(path)
         if len(self.env.tasks) == 1:
             return []
@@ -2405,7 +2406,7 @@ class BaseRRTstar(ABC):
             shortcut_path_, _ = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
                                 path_shortcutting_in_order,
-                                500,
+                                250,
                                 resolution=self.env.collision_resolution,
                                 tolerance=self.env.collision_tolerance,
                             )
