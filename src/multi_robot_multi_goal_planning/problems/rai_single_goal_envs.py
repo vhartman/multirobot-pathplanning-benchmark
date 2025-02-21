@@ -78,9 +78,6 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.05
 
-        self.C_base = ry.Config()
-        self.C_base.addConfigurationCopy(self.C)
-
         self.prev_mode = [0, 0]
 
         self.collision_tolerance = 0.01
@@ -111,9 +108,6 @@ class rai_random_two_dim_single_agent(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.005
-
-        self.C_base = ry.Config()
-        self.C_base.addConfigurationCopy(self.C)
 
         self.prev_mode = [0, 0]
 
@@ -147,9 +141,6 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.005
 
-        self.C_base = ry.Config()
-        self.C_base.addConfigurationCopy(self.C)
-
 
 class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
     def __init__(self, num_robots: int = 3):
@@ -169,6 +160,7 @@ class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
 
         self.C.clear()
         self.C.addConfigurationCopy(self.C_coll)
+        self.C_coll = None
 
         self.robots = ["a0", "a1", "a2"]
         self.robots = self.robots[:num_robots]
@@ -204,6 +196,7 @@ class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
 
         self.C.clear()
         self.C.addConfigurationCopy(self.C_coll)
+        self.C_coll = None
 
         self.robots = ["a0"]
 
@@ -241,6 +234,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
 
         self.C.clear()
         self.C.addConfigurationCopy(self.C_coll)
+        self.C_coll = None
 
         self.robots = ["a1", "a2"]
 
@@ -264,13 +258,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.C_base = ry.Config()
-        self.C_base.addConfigurationCopy(self.C)
-
         # buffer for faster collision checking
-        self.prev_mode = self.start_mode.copy()
+        self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.01
-
-        self.C_base = ry.Config()
-        self.C_base.addConfigurationCopy(self.C)
