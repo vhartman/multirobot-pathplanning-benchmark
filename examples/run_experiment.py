@@ -443,6 +443,11 @@ def main():
         help="Run the experiments in parallel. (default: False)",
     )
     parser.add_argument(
+        "--display_result",
+        action="store_true",
+        help="Display the resulting plots at the end. (default: False)",
+    )
+    parser.add_argument(
         "--num_processes",
         type=int,
         default=2,
@@ -453,6 +458,10 @@ def main():
     config = load_experiment_config(args.filepath)
 
     # env = config["environment"]
+
+    # make sure that the environment is initializaed correctly
+    np.random.seed(config["seed"])
+    random.seed(config["seed"])
 
     env = get_env_by_name(config["environment"])
     env.cost_reduction = config["cost_reduction"]
@@ -488,9 +497,9 @@ def main():
     else:
         all_experiment_data = run_experiment(env, planners, config, experiment_folder)
 
-    make_cost_plots(all_experiment_data, config)
-
-    plt.show()
+    if args.display_result:
+        make_cost_plots(all_experiment_data, config)
+        plt.show()
 
 
 if __name__ == "__main__":

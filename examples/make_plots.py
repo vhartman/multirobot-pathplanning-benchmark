@@ -12,7 +12,7 @@ import random
 
 from typing import List, Dict, Optional, Any
 
-# from multi_robot_multi_goal_planning.problems.planning_env import State
+from multi_robot_multi_goal_planning.problems.planning_env import State
 from compute_confidence_intervals import computeConfidenceInterval
 
 
@@ -142,7 +142,15 @@ planner_name_to_color = {
     "locally_informed_prm_shortcutting_rejection": "tab:red",
     "globally_informed_prm_shortcutting_rejection": "tab:brown",
     "birrtstar": "mediumvioletred",
+    "max_euclidean_rrtstar": "tab:red",
+    "sum_euclidean_rrtstar": "tab:brown",
+    "euclidean_rrtstar": "tab:purple",
     "rrtstar": "tab:red",
+    "rrtstar_local": "tab:red",
+    "rrtstar_shortcutting_global": "black",
+    "rrtstar_shortcutting": "tab:purple",
+    "rrtstar_shortcutting_local": "tab:purple",
+    "rrtstar_global": "tab:brown",
 }
 
 
@@ -183,6 +191,7 @@ def make_cost_plots(
     config: Dict,
     save: bool = False,
     foldername: Optional[str] = None,
+    save_as_png: bool = False,
 ):
     plt.figure("Cost plot")
 
@@ -212,7 +221,7 @@ def make_cost_plots(
         sorted_solution_times = np.sort(all_initial_solution_times)
 
         lb_initial_solution_time = sorted_solution_times[lb_index]
-        ub_initial_solution_time = sorted_solution_times[ub_index-1]
+        ub_initial_solution_time = sorted_solution_times[ub_index - 1]
 
         # lb_initial_solution_time = np.quantile(all_initial_solution_times, 0.1)
         # ub_initial_solution_time = np.quantile(all_initial_solution_times, 0.9)
@@ -220,7 +229,7 @@ def make_cost_plots(
         sorted_solution_costs = np.sort(all_initial_solution_costs)
 
         lb_initial_solution_cost = sorted_solution_costs[lb_index]
-        ub_initial_solution_cost = sorted_solution_costs[ub_index-1]
+        ub_initial_solution_cost = sorted_solution_costs[ub_index - 1]
 
         # lb_initial_solution_cost = np.quantile(all_initial_solution_costs, 0.1)
         # ub_initial_solution_cost = np.quantile(all_initial_solution_costs, 0.9)
@@ -281,7 +290,7 @@ def make_cost_plots(
         sorted_solution_costs = np.sort(all_solution_costs, axis=0)
 
         lb_solution_cost = sorted_solution_costs[lb_index, :]
-        ub_solution_cost = sorted_solution_costs[ub_index-1, :]
+        ub_solution_cost = sorted_solution_costs[ub_index - 1, :]
 
         # lb_solution_cost = np.quantile(all_solution_costs, 0.1, axis=0)
         # ub_solution_cost = np.quantile(all_solution_costs, 0.9, axis=0)
@@ -339,9 +348,13 @@ def make_cost_plots(
 
         pathlib.Path(f"{foldername}plots/").mkdir(parents=True, exist_ok=True)
 
+        format = "pdf"
+        if save_as_png:
+            format = "png"
+
         plt.savefig(
-            f"{foldername}plots/cost_plot.pdf",
-            format="pdf",
+            f"{foldername}plots/cost_plot.{format}",
+            format=format,
             dpi=300,
             bbox_inches="tight",
         )
@@ -409,7 +422,18 @@ def main():
         action="store_true",
         help="Use the paper style (default: False)",
     )
+    parser.add_argument(
+        "--png",
+        action="store_true",
+        help="Use the paper style (default: False)",
+    )
+    parser.add_argument(
+        "--no_display",
+        action="store_true",
+        help="Display the resulting plots at the end. (default: False)",
+    )
     args = parser.parse_args()
+
 
     if args.use_paper_style:
         plt.style.use("./examples/paper_2.mplstyle")
@@ -421,10 +445,11 @@ def main():
     all_experiment_data = load_data_from_folder(foldername)
     config = load_config_from_folder(foldername)
 
-    make_cost_plots(all_experiment_data, config, args.save, foldername)
+    make_cost_plots(all_experiment_data, config, args.save, foldername, args.png)
     make_success_plot(all_experiment_data, config)
 
-    plt.show()
+    if not args.no_display:
+        plt.show()
 
 
 if __name__ == "__main__":
