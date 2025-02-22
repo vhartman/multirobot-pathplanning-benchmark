@@ -9,8 +9,8 @@ import random
 import json
 
 # make everything predictable
-# np.random.seed(3)
-# random.seed(3)
+np.random.seed(2)
+random.seed(2)
 
 
 def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
@@ -503,7 +503,6 @@ def make_random_two_dim_single_goal(
         assert len(agents_can_rotate) == num_agents
 
     C = make_table_with_walls(4, 4)
-    C.view()
 
     added_agents = 0
     agent_names = []
@@ -3324,7 +3323,7 @@ def is_z_axis_up(quaternion):
 
 
 def make_box_pile_env(num_boxes=6, view: bool = False):
-    assert(num_boxes >= 9)
+    assert(num_boxes <= 9)
 
     C = ry.Config()
 
@@ -3387,7 +3386,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             [
                 (random.random() - 0.5) * 1.2,
                 (random.random() - 0.7) * 0.6,
-                0.3,
+                0.35,
             ]
         )
 
@@ -3843,7 +3842,6 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
             print(retval)
             if view:
                 komo.view(True, "IK solution")
-            komo.view(True, "IK solution")
 
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                 keyframes = komo.getPath()

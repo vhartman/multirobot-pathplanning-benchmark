@@ -42,6 +42,7 @@ def get_env_by_name(name):
         "simplified_welding": lambda: re.rai_quadruple_ur10_arm_spot_welding_env(num_robots=2, num_pts=2),
         "box_stacking": lambda: re.rai_ur10_arm_box_stack_env(),
         "box_stacking_two_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=2),
+        "box_stacking_three_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=3),
         "box_reorientation": lambda: re.rai_ur10_box_pile_cleanup_env(),
 
         "box_rearrangement": lambda: re.rai_ur10_arm_box_rearrangement_env(), # 2 robots, 9 boxes
@@ -49,7 +50,9 @@ def get_env_by_name(name):
         "box_rearrangement_four_robots": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=4),
     
         # mobile
-        "mobile_wall": lambda: re.rai_mobile_manip_wall(),
+        "mobile_wall_four": lambda: re.rai_mobile_manip_wall(num_robots=4),
+        "mobile_wall_three": lambda: re.rai_mobile_manip_wall(num_robots=3),
+        "mobile_wall_two": lambda: re.rai_mobile_manip_wall(num_robots=2),
 
         # single goal envs
         "two_dim_single_goal": lambda: rsge.rai_two_dim_env(),
@@ -76,7 +79,9 @@ def get_env_by_name(name):
         "two_agents_many_goals_dep": lambda: re.rai_two_dim_env_no_obs_dep_graph(),
         "two_agents_many_goals_dep_no_rot": lambda: re.rai_two_dim_env_no_obs_dep_graph(agents_can_rotate=False),
         "three_agent_many_goals_dep": lambda: re.rai_two_dim_three_agent_env_dependency_graph(),
-        "mobile_dep": lambda: re.rai_mobile_manip_wall_dep()
+        "mobile_dep": lambda: re.rai_mobile_manip_wall_dep(),
+        "box_stacking_dep": lambda: re.rai_ur10_arm_box_stack_env_dep(),
+        "box_reorientation_dep": lambda: re.rai_ur10_box_pile_cleanup_env_dep()
     }
     # fmt: on
 

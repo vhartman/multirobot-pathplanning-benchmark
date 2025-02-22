@@ -1,15 +1,15 @@
 {
   "experiment_name": "",
-  "environment": "box_stacking",
+  "environment": "other_hallway",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "max",
-  "max_planning_time": 1000,
+  "cost_reduction": "sum",
+  "max_planning_time": 500,
   "optimize": true,
   "num_runs": 10,
   "seed": 0,
   "planners": [
      {
-      "name": "locally_informed_shortcutting_prm",
+      "name": "euclidean_prm",
       "type": "prm",
       "options": {
         "batch_size": 200,
@@ -28,7 +28,7 @@
       }
     },
     {
-      "name": "globally_informed_shortcutting_prm",
+      "name": "sum_euclidean_prm",
       "type": "prm",
       "options": {
         "batch_size": 200,
@@ -36,9 +36,28 @@
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
         "path_batch_size": 0,
-        "distance_function": "euclidean",
+        "distance_function": "sum_euclidean",
         "connection_strategy": "radius",
-        "locally_informed_sampling": false,
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true
+      }
+    },
+    {
+      "name": "max_euclidean_prm",
+      "type": "prm",
+      "options": {
+        "batch_size": 200,
+        "transition_batch_size": 250,
+        "informed_batch_size": 300,
+        "informed_transition_batch_size": 250,
+        "path_batch_size": 0,
+        "distance_function": "max_euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": true,
         "informed_sampling": true,
         "informed_transition_sampling": true,
         "sample_near_path": false,

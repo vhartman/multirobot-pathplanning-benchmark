@@ -29,6 +29,7 @@ import io
 from contextlib import contextmanager
 from functools import wraps
 import tempfile
+import copy
 
 DEVNULL = os.open(os.devnull, os.O_WRONLY)
 
@@ -260,13 +261,39 @@ class rai_env(BaseProblem):
 
         self.limits = self.C.getJointLimits()
 
-        self.collision_tolerance = 0.1
-        self.collision_resolution = 0.05
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
 
-        self.cost_metric = "max"
+        self.cost_metric = "euclidean"
         self.cost_reduction = "max"
 
         self.C_cache = {}
+
+        self.C_base = ry.Config()
+        self.C_base.addConfigurationCopy(self.C)
+
+    def __deepcopy__(self, memo):
+        # Save the C attribute
+        C = self.C
+        C_base = self.C_base
+        
+        # Temporarily remove C to allow deepcopy of other attributes
+        self.C = None
+        self.C_base = None
+        
+        # Create a deep copy of self without C
+        new_env = copy.deepcopy(super(), memo)
+        
+        # Restore C in both objects
+        self.C = C
+        new_env.C = ry.Config()
+        new_env.C.addConfigurationCopy(self.C)
+
+        self.C_base = C_base
+        new_env.C_base = ry.Config()
+        new_env.C_base.addConfigurationCopy(self.C_base)
+
+        return new_env
 
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
@@ -291,8 +318,11 @@ class rai_env(BaseProblem):
         self,
         q: Optional[Configuration],
         m: Mode,
-        collision_tolerance: float = 0.01,
+        collision_tolerance: float = None,
     ) -> bool:
+        if collision_tolerance is None:
+            collision_tolerance = self.collision_tolerance
+
         # print(q)
         # self.C.setJointState(q)
 
@@ -314,10 +344,39 @@ class rai_env(BaseProblem):
             return False
 
         return True
+    
+    def is_collision_free_without_mode(
+        self,
+        q: Optional[Configuration],
+        collision_tolerance: float = 0.01,
+    ) -> bool:
+        # print(q)
+        # self.C.setJointState(q)
+
+        if q is not None:
+            self.C.setJointState(q.state())
+
+        # self.C.view()
+
+        binary_collision_free = self.C.getCollisionFree()
+        if binary_collision_free:
+            return True
+
+        col = self.C.getCollisionsTotalPenetration()
+        # print(col)
+        # self.C.view(False)
+        if col > collision_tolerance:
+            # self.C.view(False)
+            return False
+
+        return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode, collision_tolerance=0.01
+        self, r: str, q: NDArray, m: Mode, collision_tolerance: float=None
     ) -> bool:
+        if collision_tolerance is None:
+            collision_tolerance = self.collision_tolerance
+
         if isinstance(r, str):
             r = [r]
 
@@ -357,6 +416,7 @@ class rai_env(BaseProblem):
                 # else:
                 #     print("B")
                 #     print(c)
+
                 is_collision_with_other_robot = False
                 for other_robot in self.robots:
                     if other_robot in r:
@@ -364,97 +424,32 @@ class rai_env(BaseProblem):
                     if other_robot in c[0] or other_robot in c[1]:
                         is_collision_with_other_robot = True
                         break
+
                 if not is_collision_with_other_robot:
                     # print(c)
                     return False
-        return True
-    
-    def is_robot_env_collision_free(
-        self, r: str, q: NDArray, m: List[int], collision_tolerance=0.01
-    ) -> bool:
-        if isinstance(r, str):
-            r = [r]
-
-        if q is not None:
-            self.set_to_mode(m)
-            offset = 0
-            for robot in r:
-                dim = self.robot_dims[robot]
-                self.C.setJointState(q[offset:offset+dim], self.robot_joints[robot])
-                offset += dim
-
-        binary_collision_free = self.C.getCollisionFree()
-        if binary_collision_free:
-            return True
-
-        col = self.C.getCollisionsTotalPenetration()
-        # print(col)
-        # self.C.view(False)
-        if col > collision_tolerance:
-            # self.C.view(False)
-            colls = self.C.getCollisions()
-            for c in colls:
-                # ignore minor collisions
-                if c[2] > -collision_tolerance / 10:
-                    continue
-                involves_relevant_robot = False
-                relevant_robot = None
-                for robot in r:
-                    if robot in c[0] or robot in c[1]:
-                        involves_relevant_robot = True
-                        relevant_robot = robot
-                        break
-                if not involves_relevant_robot:
-                    continue
-                involves_objects = True
-                for other_robot in self.robots:
-                    if other_robot != relevant_robot:
-                        if other_robot in c[0] or other_robot in c[1]:
-                            involves_objects = False
-                            break
-                if involves_objects:
-                    return False
-            return True
-        return False
-
-    def is_collision_free_without_mode(
-        self,
-        q: Optional[Configuration],
-        collision_tolerance: float = 0.01,
-    ) -> bool:
-        # print(q)
-        # self.C.setJointState(q)
-
-        if q is not None:
-            self.C.setJointState(q.state())
-
-        # self.C.view()
-
-        binary_collision_free = self.C.getCollisionFree()
-        if binary_collision_free:
-            return True
-
-        col = self.C.getCollisionsTotalPenetration()
-        # print(col)
-        # self.C.view(False)
-        if col > collision_tolerance:
-            # self.C.view(False)
-            return False
 
         return True
 
+    # @silence_function
     def is_edge_collision_free(
         self,
         q1: Configuration,
         q2: Configuration,
         m: Mode,
-        resolution=0.01,
-        randomize_order=True,
-        tolerance=0.01,
+        resolution:float=None,
+        randomize_order:bool=True,
+        tolerance:float=None,
     ) -> bool:
+        if resolution is None:
+            resolution = self.collision_resolution
+
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+
         # print('q1', q1)
         # print('q2', q2)
-        N = int(config_dist(q1, q2) / resolution)
+        N = int(config_dist(q1, q2, "max") / resolution)
         N = max(2, N)
 
         # for a distance < resolution * 2, we do not do collision checking
@@ -477,8 +472,14 @@ class rai_env(BaseProblem):
         return True
 
     def is_path_collision_free(
-        self, path: List[State], randomize_order=True, resolution=0.1, tolerance=0.01
+        self, path: List[State], randomize_order=True, resolution=None, tolerance=None
     ) -> bool:
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+        
+        if resolution is None:
+            resolution = self.collision_resolution
+
         idx = list(range(len(path) - 1))
         if randomize_order:
             np.random.shuffle(idx)
@@ -490,14 +491,7 @@ class rai_env(BaseProblem):
 
             q1 = path[i].q
             q2 = path[i + 1].q
-            # mode = path[i].mode
-            for i in idx:
-                if path[i].mode != path[i + 1].mode:
-                    mode = path[i+1].mode
-                else:
-                    mode = path[i].mode
-
-
+            mode = path[i].mode
 
             if not self.is_edge_collision_free(
                 q1, q2, mode, resolution=resolution, tolerance=tolerance
@@ -505,7 +499,7 @@ class rai_env(BaseProblem):
                 return False
 
         return True
-    
+
     def get_scenegraph_info_for_mode(self, mode: Mode):
         if not self.manipulating_env:
             return {}
