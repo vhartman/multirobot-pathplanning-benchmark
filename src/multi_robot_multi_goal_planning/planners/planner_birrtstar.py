@@ -48,11 +48,12 @@ class BidirectionalRRTstar(BaseRRTstar):
                  transition_nodes: int = 50, 
                  birrtstar_version: int = 2,
                  locally_informed_sampling: bool = True, 
-                 remove_redundant_nodes: bool = True 
+                 remove_redundant_nodes: bool = True, 
+                 informed_batch_size: int = 500, 
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes)
+                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, informed_batch_size = informed_batch_size )
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
        
@@ -299,6 +300,8 @@ class BidirectionalRRTstar(BaseRRTstar):
             active_mode  = self.RandomMode()
             # Bi RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
+            if not q_rand:
+                continue
             n_nearest, dist, set_dists, n_nearest_idx = self.Nearest(active_mode, q_rand)        
             state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
             # q_rand == n_nearest
