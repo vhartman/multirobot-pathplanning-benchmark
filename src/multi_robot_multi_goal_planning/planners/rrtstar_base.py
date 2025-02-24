@@ -989,7 +989,7 @@ class InformedVersion6():
         Returns: 
             Configuration: Configuration within the informed set that satisfies the specified limits for the robots. 
         """
-        # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
+        path = mrmgp.shortcutting.remove_interpolated_nodes(path)
         path = mrmgp.joint_prm_planner.interpolate_path(path)
         new_samples = []
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
@@ -1314,7 +1314,7 @@ class InformedVersion6():
         Returns: 
             Configuration: Transiiton configuration within the informed set that satisfies the specified limits for the robots. 
         """
-        # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
+        path = mrmgp.shortcutting.remove_interpolated_nodes(path)
         path =  mrmgp.joint_prm_planner.interpolate_path(path)
         if len(self.env.tasks) == 1:
             return []
@@ -1349,6 +1349,9 @@ class InformedVersion6():
 
                 k = random.randint(start_ind, end_ind)
                 mode = path[k].mode
+                if mode != active_mode:
+                    continue
+                # mode = active_mode
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
@@ -1925,13 +1928,16 @@ class BaseRRTstar(ABC):
                         
                 if self.operation.init_sol and self.informed: 
                     if self.informed_sampling_version == 6 and not self.env.is_terminal_mode(mode):
-                        q = self.informed[mode].generate_informed_transitions(
-                            200,
-                            self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
-                        )
+                        q = None
+                        if np.random.uniform(0, 1) < 0.9:
+                            q = self.informed[mode].generate_informed_transitions(
+                                200,
+                                self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
+                            )
                         if q is None:
                             q = self.sample_transition_configuration(mode)
-                            if random.choice([0,1]) == 0:
+                            # if random.choice([0,1]) == 0:
+                            if True:
                                 return q
                             while True:
                                 q_noise = []
@@ -2408,13 +2414,14 @@ class BaseRRTstar(ABC):
             shortcut_path_, _ = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
                                 self.operation.path_shortcutting,
-                                250,
+                                500,
                                 resolution=self.env.collision_resolution,
                                 tolerance=self.env.collision_tolerance,
                             )
             if self.remove_redundant_nodes:
                 # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
                 shortcut_path = mrmgp.shortcutting.remove_interpolated_nodes(shortcut_path_)
+                shortcut_path = mrmgp.joint_prm_planner.interpolate_path(shortcut_path, 0.5)
             else:
                 shortcut_path = shortcut_path_
                 # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
@@ -2571,7 +2578,8 @@ class BaseRRTstar(ABC):
             return self.sample_configuration(mode, "goal", self.transition_node_ids, self.trees[mode].order)
         else:       
             if self.informed_sampling and self.operation.init_sol: 
-                if self.informed_sampling_version == 0 and np.random.uniform(0, 1) < self.p_uniform or self.informed_sampling_version == 5 and np.random.uniform(0, 1) < self.p_uniform:
+                # if self.informed_sampling_version == 0 and np.random.uniform(0, 1) < self.p_uniform or self.informed_sampling_version == 5 and np.random.uniform(0, 1) < self.p_uniform:
+                if np.random.uniform(0, 1) < 0.4:
                     #uniform sampling
                     return self.sample_configuration(mode, "uniform")
                 #informed_sampling
