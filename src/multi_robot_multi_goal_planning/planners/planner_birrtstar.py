@@ -118,10 +118,12 @@ class BidirectionalRRTstar(BaseRRTstar):
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         #check if transition is reached
         if self.trees[mode].order == 1 and self.env.is_transition(n_new.state.q, mode):
+            self.trees[mode].connected = True
             self.add_new_mode(n_new.state.q, mode, BidirectionalTree)
             self.convert_node_to_transition_node(mode, n_new)
         #check if termination is reached
         if self.trees[mode].order == 1 and self.env.done(n_new.state.q, mode):
+            self.trees[mode].connected = True
             self.convert_node_to_transition_node(mode, n_new)
             if not self.operation.init_sol:
                 # print(time.time()-self.start_time)
