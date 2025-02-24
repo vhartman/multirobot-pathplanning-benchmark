@@ -237,7 +237,8 @@ class NpConfiguration(Configuration):
             if metric == "sum_euclidean":
                 return np.sum(dists, axis=0)
             elif metric == "max_euclidean":
-                return np.max(dists, axis=0) + 0.01 * np.sum(dists, axis=0)
+                # return np.max(dists, axis=0) + 0.01 * np.sum(dists, axis=0)
+                return np.max(dists, axis=0)
         else:
             return np.max(np.abs(diff), axis=1)
 
