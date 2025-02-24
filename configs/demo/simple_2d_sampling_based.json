@@ -20,7 +20,8 @@
         "p_uniform": 0.2,
         "shortcutting": true,
         "mode_sampling": 1, 
-        "locally_informed_sampling": true
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
 
       }
     }, 
@@ -38,7 +39,8 @@
         "mode_sampling": 1,
         "transition_nodes": 50,
         "birrtstar_version": 2, 
-        "locally_informed_sampling": true
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
       }
     },
     {
