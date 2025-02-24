@@ -1,45 +1,47 @@
 import argparse
-import sys
 import dill
 import plotly.graph_objects as go
 from matplotlib.colors import to_rgb
 import os
+import numpy as np
 import webbrowser
-
-
-current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-project_root = os.path.abspath(os.path.join(current_file_dir, ".."))
-src_path = os.path.abspath(os.path.join(project_root, "../src"))
-sys.path.append(project_root)
-sys.path.append(os.path.join(project_root, "src"))
-# sys.path.append(os.path.dirname(os.path.realpath(__file__)))
-from analysis.analysis_util import *
-from multi_robot_multi_goal_planning.problems.rai_envs import *
-from multi_robot_multi_goal_planning.problems.planning_env import *
-from multi_robot_multi_goal_planning.problems.util import *
-from multi_robot_multi_goal_planning.problems.rai_config import *
-from multi_robot_multi_goal_planning.problems.planning_env import *
-from examples.run_experiment import load_experiment_config
-from analysis.shortcutting import *
+import time as time
 import subprocess
-import re
-import multi_robot_multi_goal_planning.problems as problems
-from analysis.check import *
+from datetime import datetime
+from analysis.analysis_util import(
+    colors_plotly,
+    count_files_in_folder,
+    mesh_traces_env,
+    get_latest_folder,
+    save_env_as_mesh
+    )
+from typing import List
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    State,
+    BaseProblem
+)
+
+from multi_robot_multi_goal_planning.problems.rai_config import (
+    get_robot_joints
+)
+from analysis.shortcutting import(
+    init_discretization
+)
+from analysis.check import(
+    nearest_neighbor, 
+    interpolation_check,
+    tree, 
+    graph
+)
+from multi_robot_multi_goal_planning.problems import get_env_by_name
+from examples.run_experiment import load_experiment_config
 
 
 def get_cost_label(cost_function, number_agents):
     if cost_function == 1:
-        if number_agents == 0:    
-            cost_label = f"$\\mathsf{{Cost}}: c = \\min \\sum\\limits_{{\\mathsf{{i}} \\in [0]}} \\Delta x_{{\\mathsf{{r}}^\\mathsf{{i}}}}$"
-        else:
-            cost_label = f"$\\mathsf{{Cost}}: c = \\min \\sum\\limits_{{\\mathsf{{i}} \\in [0 \\dots {number_agents}]}} \\Delta x_{{\\mathsf{{r}}^\\mathsf{{i}}}}$"
-
+        cost_label = 'sum'
     if cost_function == 2:
-        if number_agents == 0:             
-            cost_label = f"$c = \\min \\sum\\limits_{{\\substack{{n \\in [Path]}}}} \\max\\limits_{{\\substack{{i \\in [0]}}}} \\Delta x_{{r^i}}$"
-        else:              
-            cost_label = f"$c = \\min \\sum\\limits_{{\\substack{{n \\in [Path]}}}} \\max\\limits_{{\\substack{{i \\in [0 \\dots {number_agents}]}}}} \\Delta x_{{r^i}}$"
-               
+        cost_label = 'max'
     return cost_label
 
 def cost_single(env, pkl_folder, output_filename):
@@ -50,7 +52,6 @@ def cost_single(env, pkl_folder, output_filename):
         key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
     )
     num_agents = len(env.robots)
-    colors = colors_plotly()
     cost_function= 2 # TODO hardcoded
     cost_label = get_cost_label(cost_function, num_agents-1)
     costs = []
@@ -88,14 +89,6 @@ def cost_single(env, pkl_folder, output_filename):
 
     # Plot the cumulative total cost data
     fig.add_trace(go.Scatter(
-        x=times_discretized,
-        y=costs_discretized,
-        mode='lines',
-        name=cost_label,
-        line=dict(color='black'),
-        showlegend=True  # Ensure "Total Cost" is in the legend
-    ))
-    fig.add_trace(go.Scatter(
         x=[0],
         y=[0],
         mode='lines',
@@ -115,7 +108,7 @@ def cost_single(env, pkl_folder, output_filename):
     max_time = time[-1]
    
     fig.update_layout(
-        title="Cost vs Time",
+        title=f"Cost({cost_label}) vs Time",
         xaxis=dict(type='log', title="Time [s]",range = [np.log10(time[0]), np.log10(max_time +100)], autorange= False),
         yaxis=dict(title="Cost [m]", range=[0, max_cost+0.5], autorange=False ), 
         margin=dict(l=0, r=50, t=50, b=50),  # Increase right margin for legend space
@@ -140,14 +133,14 @@ def step_function(start_time, sum_times, runs, times, costs, resolution = 0.01):
     average_costs = []
     for idx, cost in enumerate(costs):
         cost_average = []
-        for time in average_time:
-            if times[idx][-1] < time:
+        for t in average_time:
+            if times[idx][-1] < t:
                 cost_average.append(cost[-1])
             for c_idx, _ in enumerate(cost):
-                if times[idx][c_idx] == time:
+                if times[idx][c_idx] == t:
                     cost_average.append(cost[c_idx])
                     break
-                elif times[idx][c_idx] > time:
+                elif times[idx][c_idx] > t:
                     cost_average.append(cost[c_idx-1])
                     break
                     
@@ -300,7 +293,7 @@ def cost_multiple(env, config, pkl_folder, parent_folders, output_filename, with
         x=[None], 
         y=[None], 
         mode='markers',
-        name= f"",
+        name= "",
         line=dict(color='white'),
         showlegend=True 
     ))
@@ -409,14 +402,14 @@ def discretization_shortcutting(sum_times, runs, max_len, times, costs):
     average_costs = []
     for idx, cost in enumerate(costs):
         cost_average = []
-        for time in average_time:
-            if time == 0:
+        for t in average_time:
+            if t == 0:
                 cost_average.append(cost[0])
                 continue
-            if times[idx][-1] < time:
+            if times[idx][-1] < t:
                 cost_average.append(cost[-1])
             for c_idx, _ in enumerate(cost):
-                if times[idx][c_idx] > time:
+                if times[idx][c_idx] > t:
                     cost_average.append(cost[c_idx-1])
                     break
                     
@@ -424,7 +417,7 @@ def discretization_shortcutting(sum_times, runs, max_len, times, costs):
     
     return np.mean(average_costs, axis=0).tolist(), average_time
 
-def shortcutting_cost(env, config, path, output_filename):
+def shortcutting_cost(env, path, output_filename):
     # Initialize lists and Plotly objects
     costs = []
     times = []
@@ -454,7 +447,7 @@ def shortcutting_cost(env, config, path, output_filename):
                 key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
             )
             print(f"Found {len(pkl_files)} .pkl files in {folder}.")
-        except:
+        except Exception:
             continue
         
         # Retrieve environment and configuration details
@@ -639,7 +632,7 @@ def developement_animation(env, env_path, pkl_folder, output_html, with_tree, di
         task_sequence_text = "Task sequence: " + ", ".join(
         [env.tasks[idx].name for idx in env.sequence]   
     )
-    except:
+    except Exception:
          task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
 
 
@@ -805,7 +798,7 @@ def developement_animation(env, env_path, pkl_folder, output_html, with_tree, di
                                 showlegend=False
                             )
                         )
-                    except:
+                    except Exception:
                         pass
         else:
             for robot_idx, robot in enumerate(env.robots):
@@ -1014,7 +1007,7 @@ def developement_animation(env, env_path, pkl_folder, output_html, with_tree, di
         #                         legendgroup = legends[mode_idx],
         #                         showlegend = False,
         #                     ))
-        # except:
+        # except Exception:
         #     if informed is not None:
         #         if config['informed_sampling'] != []:
         #             mode = informed_sampling['mode']
@@ -1148,7 +1141,7 @@ def final_path_animation(env, env_path, path, output_html):
         task_sequence_text = "Task sequence: " + ", ".join(
         [env.tasks[idx].name for idx in env.sequence]   
     )
-    except:
+    except Exception:
          task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
 
     # Initialize figure and static elements
@@ -1320,7 +1313,7 @@ def ellipse(env, env_path, pkl_folder):
         task_sequence_text = "Task sequence: " + ", ".join(
         [env.tasks[idx].name for idx in env.sequence]   
     )
-    except:
+    except Exception:
          task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
 
 
@@ -1387,7 +1380,7 @@ def ellipse(env, env_path, pkl_folder):
                     showlegend=True  # This will create a single legend entry for each mode
                 )
             )
-    except:
+    except Exception:
         modes = []
         pass
         
@@ -1405,7 +1398,7 @@ def ellipse(env, env_path, pkl_folder):
                 else:
                     try:
                         mode_idx = modes.index(mode)
-                    except: 
+                    except Exception: 
                         mode_idx = None
                         
                 for q in q_rand_ellipse:
@@ -1426,7 +1419,7 @@ def ellipse(env, env_path, pkl_folder):
                         legendgroup = legend_group,
                         showlegend = False,
                     ))
-            except: 
+            except Exception: 
                 continue
         all_frame_traces.append(frame_traces)
     
@@ -1548,7 +1541,7 @@ if __name__ == "__main__":
     # env_name, config_params, _, _ = get_config(path)
     config_dir = os.path.join(dir, 'config.json')
     config = load_experiment_config(config_dir)
-    env = problems.get_env_by_name(config["environment"])    
+    env = get_env_by_name(config["environment"])    
     path =   os.path.join(home_dir, 'output')
     pkl_folder = get_latest_folder(path)
     env_path = os.path.join(home_dir, f'env/{config["environment"]}')  
@@ -1592,7 +1585,7 @@ if __name__ == "__main__":
     if args.do == "shortcutting_cost":
         fix_axis = False
         output_filename_cost = os.path.join(path, 'ShortcuttingCost.png')
-        shortcutting_cost(env, config_params, path, output_filename_cost)
+        shortcutting_cost(env, path, output_filename_cost)
     
     if args.do == "path":
         pkl_folder = os.path.join(path, 'FramesFinalData')
@@ -1621,9 +1614,9 @@ if __name__ == "__main__":
         else:
             output_html = os.path.join(path, 'path_animation_3d.html')
             reducer = 400
-        nearest_neighbor(config_params, env, env_path, pkl_folder, output_html, with_tree, reducer)    
+        nearest_neighbor(env, env_path, pkl_folder, output_html, with_tree, reducer)    
     if args.do == "tree":
-        tree(config_params, env, env_path, pkl_folder)  
+        tree(env, env_path, pkl_folder)  
     if args.do == "graph":
         output_html = os.path.join(path, 'graph.html')
         graph(env, env_path, pkl_folder, output_html)    

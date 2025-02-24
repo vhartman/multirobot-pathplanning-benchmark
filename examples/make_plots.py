@@ -151,6 +151,17 @@ planner_name_to_color = {
     "rrtstar_shortcutting": "tab:purple",
     "rrtstar_shortcutting_local": "tab:purple",
     "rrtstar_global": "tab:brown",
+    "rrtstar_0": "tab:red",
+    "rrtstar_6": "tab:blue",
+    "rrtstar_2": "tab:green",
+    "rrtstar_5": "tab:brown",
+    "rrtstar_3": "black",
+    "rrtstar_4": "tab:orange",
+    "rrtstar_1": "tab:purple",
+    "drrtstar_2000": "black",
+    "drrtstar_5000": "magenta",
+    "rrtstar_informed_sampling": "tab:orange",
+    "rrtstar_no_informed_sampling": "tab:purple",
 }
 
 

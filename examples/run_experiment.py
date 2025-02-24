@@ -39,6 +39,7 @@ from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
 from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
     BidirectionalRRTstar,
 )
+from multi_robot_multi_goal_planning.planners.planner_drrtstar import dRRTstar
 from make_plots import make_cost_plots
 
 # np.random.seed(100)
@@ -212,6 +213,25 @@ def setup_planner(
                 # gaussian=options["gaussian"],
                 transition_nodes=options["transition_nodes"],
                 birrtstar_version=options["birrtstar_version"], 
+            ).Plan()
+    elif planner_config["type"] == "drrtstar":
+
+        def planner(env):
+            options = planner_config["options"]
+            return dRRTstar(
+                env,
+                ptc=RuntimeTerminationCondition(runtime),
+                # general_goal_sampling=options["general_goal_sampling"],
+                informed_sampling=options["informed_sampling"],
+                informed_sampling_version=options["informed_sampling_version"],
+                distance_metric=options["distance_metric"],
+                p_goal=options["p_goal"],
+                p_stay=options["p_stay"],
+                p_uniform=options["p_uniform"],
+                shortcutting=options["shortcutting"],
+                mode_sampling=options["mode_sampling"],
+                locally_informed_sampling = options["locally_informed_sampling"],
+                # gaussian=options["gaussian"],
             ).Plan()
 
     else:

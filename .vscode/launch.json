@@ -2,12 +2,40 @@
     "version": "0.2.0",
     "configurations": [
          {
-            "name": "- simple_2d_rrtstar",
+            "name": "- test",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/main.py",
+            "program": "${workspaceFolder}/examples/run_experiment.py",
             "args": [
-                "/home/tirza/multirobot-pathplanning-benchmark/configs/experiments/simple_2d_sampling_based.json"
+                "/home/tirza/multirobot-pathplanning-benchmark/configs/demo/test.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+         {
+            "name": "- test 1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/run_experiment.py",
+            "args": [
+                "/home/tirza/multirobot-pathplanning-benchmark/configs/demo/test_1.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        {
+            "name": "- test 2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/run_experiment.py",
+            "args": [
+                "/home/tirza/multirobot-pathplanning-benchmark/configs/demo/test_2.json"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",

@@ -499,6 +499,54 @@ class rai_env(BaseProblem):
                 return False
 
         return True
+    
+    def is_robot_env_collision_free(
+        self, r: str, q: NDArray, m: List[int], collision_tolerance=0.01
+    ) -> bool:
+        if isinstance(r, str):
+            r = [r]
+
+        if q is not None:
+            self.set_to_mode(m)
+            offset = 0
+            for robot in r:
+                dim = self.robot_dims[robot]
+                self.C.setJointState(q[offset:offset+dim], self.robot_joints[robot])
+                offset += dim
+
+        binary_collision_free = self.C.getCollisionFree()
+        if binary_collision_free:
+            return True
+
+        col = self.C.getCollisionsTotalPenetration()
+        # print(col)
+        # self.C.view(False)
+        if col > collision_tolerance:
+            # self.C.view(False)
+            colls = self.C.getCollisions()
+            for c in colls:
+                # ignore minor collisions
+                if c[2] > -collision_tolerance / 10:
+                    continue
+                involves_relevant_robot = False
+                relevant_robot = None
+                for robot in r:
+                    if robot in c[0] or robot in c[1]:
+                        involves_relevant_robot = True
+                        relevant_robot = robot
+                        break
+                if not involves_relevant_robot:
+                    continue
+                involves_objects = True
+                for other_robot in self.robots:
+                    if other_robot != relevant_robot:
+                        if other_robot in c[0] or other_robot in c[1]:
+                            involves_objects = False
+                            break
+                if involves_objects:
+                    return False
+            return True
+        return False
 
     def get_scenegraph_info_for_mode(self, mode: Mode):
         if not self.manipulating_env:

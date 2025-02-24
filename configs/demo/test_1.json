@@ -1,0 +1,28 @@
+{
+  "experiment_name": "planner_demo",
+  "environment": "other_hallway",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 400,
+  "num_runs": 6,
+  "seed": 1,
+  "optimize": true,
+  "planners": [
+    {
+      "name": "drrtstar_5000",
+      "type": "drrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.05,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
+      }
+    }
+  ]
+}

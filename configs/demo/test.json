@@ -1,0 +1,124 @@
+{
+  "experiment_name": "planner_demo",
+  "environment": "2d_handover",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 300,
+  "num_runs": 2,
+  "seed": 1,
+  "optimize": true,
+  "planners": [
+    {
+      "name": "rrtstar_0",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 0,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.05,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
+      }
+    },
+    {
+      "name": "rrtstar_1",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 1,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.05,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
+      }
+    },
+    {
+      "name": "rrtstar_2",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 2,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.05,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
+      }
+    },
+    {
+      "name": "rrtstar_3",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 3,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.05,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
+      }
+    },
+    {
+      "name": "rrtstar_4",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 4,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.05,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
+      }
+    },
+    {
+      "name": "rrtstar_5",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 5,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.05,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
+      }
+    },
+    {
+      "name": "rrtstar_6",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.1,
+        "p_stay": 0.0,
+        "p_uniform": 0.05,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true
+
+      }
+    }
+  ]
+}

@@ -1,11 +1,28 @@
-from multi_robot_multi_goal_planning.planners.planner_birrtstar import *
+import numpy as np
+import time as time
+import math as math
+from typing import Optional, Union
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    State,
+    BaseProblem,
+    Mode
+)
+from multi_robot_multi_goal_planning.problems.configuration import (
+    Configuration
+)
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BidirectionalRRTstar
+)
 
-"""
-This file contains the most important changes for the parallelized Bi-RRT* algorithm compared to the original RRT*. There are 2 versions possible: 
-Version 1 is inspired by the paper 'Bi-RRT*: An Improved Bidirectional RRT* Path Planner for Robot in Two-Dimensional Space' by B. Wang et al. 
-and version 2 is inspired by the paper 'RRT-Connect: An Efficient Approach to Single-Query Path Planning' by J.J Kuffner et al. and 
-by the paper 'RRT*-Connect: Faster, Asymptotically Optimal Motion Planning' by S. Klemm et al. 
-"""
+from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+    Node, 
+    BidirectionalTree,
+    SingleTree
+
+)
+from multi_robot_multi_goal_planning.planners.termination_conditions import (
+    PlannerTerminationCondition,
+)
 
 
 class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
@@ -88,7 +105,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
           
           
-            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.cost_metric, reduction=self.cost_reduction)
+            cost =  self.env.batch_config_cost([n_new.state], [n_nearest_b.state])
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
             #     if r in constrained_robots:
@@ -107,7 +124,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
             n_nearest_b = self.Extend(mode, n_nearest_b, n_new, dist)
             if not n_nearest_b:
                 return
-            cost =  batch_config_cost([n_new.state], [n_nearest_b.state], metric = self.cost_metric, reduction=self.cost_reduction)
+            cost =  self.env.batch_config_cost([n_new.state], [n_nearest_b.state])
             
  
         if self.trees[mode].order == -1:
@@ -143,16 +160,14 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                 print(time.time()-self.start_time)
                 self.operation.init_sol = True
             self.operation.cost = self.operation.path_nodes[-1].cost
-            self.SaveData(mode, time.time()-self.start_time)
             self.costs.append(self.operation.cost)
             self.times.append(time.time()-self.start_time)
             if self.shortcutting:
-                print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost)
+                print("-- M", mode.task_ids, "Cost: ", self.operation.cost)
                 self.Shortcutting(mode)
             print(f"{iter} M", mode.task_ids, "Cost: ", self.operation.cost)
         if self.shortcutting and not shortcutting:
             self.operation.cost = self.operation.path_nodes[-1].cost
-            self.SaveData(mode, time.time()-self.start_time)
             self.costs.append(self.operation.cost)
             self.times.append(time.time()-self.start_time)
                  
@@ -234,7 +249,7 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                     continue
 
               
-                batch_cost = batch_config_cost(n_new.state.q, N_near_batch, metric = self.cost_metric, reduction=self.cost_reduction)
+                batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 # if self.operation.init_sol:
                 if self.operation.init_sol:
@@ -243,17 +258,14 @@ class ParallelizedBidirectionalRRTstar(BidirectionalRRTstar):
                 self.Connect(active_mode, n_new, i)
                 self.ManageTransition(active_mode, n_new, i)
             self.trees[active_mode].swap()
-           
-            if self.PTC(i):
-                "PTC applied"
-                self.SaveFinalData()
+            if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break
-            
-
-        self.SaveData(active_mode, time.time()-self.start_time, n_new = n_new.state.q)
-        print(time.time()-self.start_time)
-        return self.operation.path    
-
+        self.costs.append(self.operation.cost)
+        self.times.append(time.time() - self.start_time)
+        self.all_paths.append(self.operation.path)
+        info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
+        return self.operation.path, info      
+         
 
 
 
