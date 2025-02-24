@@ -2324,12 +2324,18 @@ def display_path(
     pause_time: float = 0.01,
     stop_at_end=False,
     adapt_to_max_distance: bool = False,
+    stop_at_mode: bool = False,
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
         for k in range(len(env.robots)):
             q = path[i].q[k]
             env.C.setJointState(q, rai_config.get_robot_joints(env.C, env.robots[k]))
+
+        if stop_at_mode and i < len(path) - 1:
+            if path[i].mode != path[i + 1].mode:
+                print(i)
+                env.C.view(True)
 
         env.C.view(stop)
 
