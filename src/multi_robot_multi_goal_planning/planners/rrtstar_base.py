@@ -1674,7 +1674,7 @@ class BaseRRTstar(ABC):
         if index != 0:
             N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
             batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
-            if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs):
+            if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
                 self.UpdateCost(next_mode, n)
 
     def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
@@ -2349,7 +2349,8 @@ class BaseRRTstar(ABC):
                node_indices: NDArray, 
                n_new: Node, 
                batch_cost: NDArray, 
-               n_near_costs: NDArray
+               n_near_costs: NDArray,
+               tree: str = ''
                ) -> bool:
         """
         Rewires neighboring nodes by updating their parent connection to n_new if a lower-cost path is established.
@@ -2374,7 +2375,7 @@ class BaseRRTstar(ABC):
             improved_indices = np.nonzero(improvement_mask)[0]
 
             for idx in improved_indices:
-                n_near = self.trees[mode].subtree.get(node_indices[idx].item())
+                n_near = self.trees[mode].get_node(node_indices[idx].item(), tree)
                 if n_near == n_new.parent or n_near.cost == np.inf or n_near.id == n_new.id:
                     continue
 
