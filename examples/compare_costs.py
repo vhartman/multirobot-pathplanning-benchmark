@@ -122,109 +122,43 @@ def make_mode_plot(path, env):
 
 def main():
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument("path_filename", nargs="?", default="", help="filepath")
+    parser.add_argument("path_filename_1", nargs="?", default="", help="filepath")
+    parser.add_argument("path_filename_2", nargs="?", default="", help="filepath")
     parser.add_argument("env_name", nargs="?", default="", help="filepath")
-    parser.add_argument(
-        "--interpolate",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=True,
-        help="Interpolate the path that is loaded. (default: True)",
-    )
-    parser.add_argument(
-        "--shortcut",
-        action="store_true",
-        help="Shortcut the path. (default: False)",
-    )
-    parser.add_argument(
-        "--insert_transition_nodes",
-        action="store_true",
-        help="Shortcut the path. (default: False)",
-    )
-    parser.add_argument(
-        "--plot",
-        action="store_true",
-        help="Plot the path. (default: True)",
-    )
     args = parser.parse_args()
 
     np.random.seed(0)
     random.seed(0)
 
-    path_data = load_path(args.path_filename)
     env = get_env_by_name(args.env_name)
     env.cost_reduction = "sum"
     env.cost_metric = "euclidean"
 
-    path = convert_to_path(env, path_data)
+    path_data_1 = load_path(args.path_filename_1)
+    path_1 = convert_to_path(env, path_data_1)
+    path_1 = interpolate_path(path_1, 0.01)
 
-    cost = path_cost(path, env.batch_config_cost)
-    print("cost", cost)
+    path_data_2 = load_path(args.path_filename_2)
+    path_2 = convert_to_path(env, path_data_2)
+    path_2 = interpolate_path(path_2, 0.01)
 
-    if args.plot:
-        plt.figure()
-        for i in range(path[0].q.num_agents()):
-            plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
+    costs_1 = env.batch_config_cost(path_1[:-1], path_1[1:])
+    costs_2 = env.batch_config_cost(path_2[:-1], path_2[1:])
 
-        # plt.show(block=False)
+    print(sum(costs_1))
+    print(sum(costs_2))
 
-        # make_mode_plot(path, env)
-        plt.show()
+    plt.figure()
 
-    if args.insert_transition_nodes:
-        path_w_doubled_modes = []
-        for i in range(len(path)):
-            path_w_doubled_modes.append(path[i])
+    plt.plot(costs_1)
+    plt.plot(costs_2)
 
-            if i + 1 < len(path) and path[i].mode != path[i + 1].mode:
-                path_w_doubled_modes.append(State(path[i].q, path[i + 1].mode))
+    plt.figure()
 
-        path = path_w_doubled_modes
+    plt.plot(np.cumsum(costs_1))
+    plt.plot(np.cumsum(costs_2))
 
-    if args.interpolate:
-        path = interpolate_path(path, 0.01)
-
-    if args.shortcut:
-        plt.figure()
-        for i in range(path[0].q.num_agents()):
-            plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
-
-        # plt.show(block=False)
-
-        # make_mode_plot(path, env)
-
-        path, _ = robot_mode_shortcut(
-            env,
-            path,
-            10000,
-            resolution=env.collision_resolution,
-            tolerance=env.collision_tolerance,
-        )
-
-        plt.figure()
-        for i in range(path[0].q.num_agents()):
-            plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
-
-        # plt.show(block=False)
-
-        # make_mode_plot(path, env)
-        plt.show()
-
-        cost = path_cost(path, env.batch_config_cost)
-        print("cost", cost)
-
-    print("Attempting to display path")
-    env.show()
-    # display_path(env, real_path, True, True)
-
-    display_path(
-        env,
-        path,
-        False,
-        export=False,
-        pause_time=0.05,
-        stop_at_end=True,
-        adapt_to_max_distance=True,
-    )
+    plt.show()
 
 
 if __name__ == "__main__":
