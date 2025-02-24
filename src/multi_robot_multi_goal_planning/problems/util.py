@@ -26,7 +26,7 @@ def interpolate_path(path: List[State], resolution: float = 0.1):
         #     new_path.append(State(config_type.from_list(q), path[i].mode))
         #     continue
 
-        dist = config_dist(q0, q1)
+        dist = config_dist(q0, q1, "euclidean")
         N = int(dist / resolution)
         N = max(1, N)
 

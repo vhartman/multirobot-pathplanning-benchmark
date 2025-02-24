@@ -1922,28 +1922,28 @@ def joint_prm_planner(
         lb_cost_from_start_index_to_state = env.config_cost(
             rnd_state_mode_1.q, path[start_index].q
         )
-        if path[start_index].mode != rnd_state_mode_1.mode:
-            start_state = path[start_index]
-            lb_cost_from_start_to_state = lb_cost_from_start(rnd_state_mode_1)
-            lb_cost_from_start_to_index = lb_cost_from_start(start_state)
+        # if path[start_index].mode != rnd_state_mode_1.mode:
+        #     start_state = path[start_index]
+        #     lb_cost_from_start_to_state = lb_cost_from_start(rnd_state_mode_1)
+        #     lb_cost_from_start_to_index = lb_cost_from_start(start_state)
 
-            lb_cost_from_start_index_to_state = max(
-                (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
-                lb_cost_from_start_index_to_state,
-            )
+        #     lb_cost_from_start_index_to_state = max(
+        #         (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+        #         lb_cost_from_start_index_to_state,
+        #     )
 
         lb_cost_from_state_to_end_index = env.config_cost(
             rnd_state_mode_2.q, path[end_index].q
         )
-        if path[end_index].mode != rnd_state_mode_2.mode:
-            goal_state = path[end_index]
-            lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state_mode_2)
-            lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
+        # if path[end_index].mode != rnd_state_mode_2.mode:
+        #     goal_state = path[end_index]
+        #     lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state_mode_2)
+        #     lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
 
-            lb_cost_from_state_to_end_index = max(
-                (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
-                lb_cost_from_state_to_end_index,
-            )
+        #     lb_cost_from_state_to_end_index = max(
+        #         (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+        #         lb_cost_from_state_to_end_index,
+        #     )
 
         # print("can_imrpove")
 
@@ -2416,8 +2416,8 @@ def joint_prm_planner(
             if len(g.goal_nodes) == 0:
                 continue
 
-            g.compute_lower_bound_to_goal(env.batch_config_cost)
-            g.compute_lower_bound_from_start(env.batch_config_cost)
+            # g.compute_lower_bound_to_goal(env.batch_config_cost)
+            # g.compute_lower_bound_from_start(env.batch_config_cost)
 
             if current_best_cost is not None and (
                 try_informed_sampling or try_informed_transitions
@@ -2449,8 +2449,8 @@ def joint_prm_planner(
                         f"Adding {len(new_informed_transitions)} informed transitions"
                     )
 
-                    g.compute_lower_bound_to_goal(env.batch_config_cost)
-                    g.compute_lower_bound_from_start(env.batch_config_cost)
+                    # g.compute_lower_bound_to_goal(env.batch_config_cost)
+                    # g.compute_lower_bound_from_start(env.batch_config_cost)
 
             if try_sampling_around_path and current_best_path is not None:
                 print("Sampling around path")
@@ -2461,6 +2461,9 @@ def joint_prm_planner(
 
                 g.add_transition_nodes(path_transitions)
                 print(f"Adding {len(path_transitions)} path transitions")
+
+            g.compute_lower_bound_to_goal(env.batch_config_cost)
+
 
         samples_in_graph_after = g.get_num_samples()
         cnt += samples_in_graph_after - samples_in_graph_before

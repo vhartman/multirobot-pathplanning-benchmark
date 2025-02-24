@@ -33,7 +33,7 @@ def make_table_with_walls(width=2, length=2):
         C.addFrame("table")
         .setPosition([0, 0, 1.0])
         .setShape(ry.ST.box, size=[width, length, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
+        .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
 
@@ -633,10 +633,14 @@ def make_two_dim_handover(view: bool = False):
     )
 
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
-        ry.ST.cylinder, size=[4, 0.1, 0.04, 0.2]
-    ).setColor([1, 0.0, 0]).setContact(1).setJoint(
+        ry.ST.cylinder, size=[0.04, 0.15]
+    ).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
     ).setJointState([-0.5, 0.8, 0])
+
+    C.addFrame("a1_dir").setParent(C.getFrame("a1")).setShape(
+        ry.ST.box, size=[0.04, 0.15, 0.05]
+    ).setColor([0, 0, 0]).setContact(0).setRelativePosition([0, 0, 0.0])
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
@@ -650,10 +654,14 @@ def make_two_dim_handover(view: bool = False):
     )
 
     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
-        ry.ST.cylinder, size=[0.1, 0.2, 0.04, 0.2]
-    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.ST.cylinder, size=[0.04, 0.2]
+    ).setColor([0.7, 0.7, 0.7]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
     ).setJointState([0.0, -0.5, 0])
+
+    C.addFrame("a2_dir").setParent(C.getFrame("a2")).setShape(
+        ry.ST.box, size=[0.04, 0.2, 0.05]
+    ).setColor([0, 0, 0]).setContact(0).setRelativePosition([0, 0, 0.0])
 
     C.addFrame("obj1").setParent(table).setShape(
         ry.ST.box, size=[0.4, 0.4, 0.06, 0.005]
@@ -668,12 +676,12 @@ def make_two_dim_handover(view: bool = False):
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("goal1").setParent(table).setShape(
-        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+        ry.ST.box, size=[0.4, 0.4, 0.06, 0.005]
     ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([0.8, 0.4, 0.07])
 
     C.addFrame("goal2").setParent(table).setShape(
-        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
-    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([0.8, 1.3, 0.07])
+        ry.ST.box, size=[0.3, 0.4, 0.06, 0.005]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([0.8, 1.2, 0.07])
 
     C.addFrame("obs1").setParent(table).setPosition(
         C.getFrame("table").getPosition() + [0.0, 0, 0.07]
@@ -1162,7 +1170,7 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
     else:
         g1_state = np.array([-1.5, 0.5])
         # g1_state = np.array([-1.5, -0.5, 0])
-    
+
     if agents_can_rotate[1]:
         g2_state = np.array([0.5, +0.8, 0])
     else:
@@ -1277,19 +1285,19 @@ def make_two_dim_short_tunnel_env(view: bool = False, agents_can_rotate=True):
         ).setJointState([-1.5, -0.0])
 
     if agents_can_rotate[0]:
-        g1_state = np.array([-1.5, 1, np.pi/2])
+        g1_state = np.array([-1.5, 1, np.pi / 2])
         # g1_state = np.array([-1.5, -0.5, 0])
     else:
         g1_state = np.array([-1.5, 1])
         # g1_state = np.array([-1.5, -0.5, 0])
-    
+
     if agents_can_rotate[1]:
         g2_state = np.array([1.5, +1, 0])
     else:
         g2_state = np.array([1.5, +1])
 
     C.addFrame("goal1").setParent(table).setShape(
-        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+        ry.ST.box, size=[0.5, 0.1, 0.06, 0.005]
     ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition(
         [g1_state[0], g1_state[1], 0.07]
     )
@@ -1485,12 +1493,16 @@ def small_angle_quaternion(axis, delta_theta):
 
 def make_box_sorting_env(view: bool = False):
     C = ry.Config()
-
+    
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
         .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
+        .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
 
@@ -1710,11 +1722,15 @@ def make_box_sorting_env(view: bool = False):
 def make_egg_carton_env(num_boxes=9, view: bool = False):
     C = ry.Config()
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
         .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
+        .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
 
@@ -1896,11 +1912,15 @@ def make_egg_carton_env(num_boxes=9, view: bool = False):
 def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
     C = ry.Config()
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
         .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
+        .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
 
@@ -2271,11 +2291,15 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
 def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
     C = ry.Config()
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
         .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
+        .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
 
@@ -2321,12 +2345,14 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
     boxes = []
     goals = []
 
+    height = 0.065
+
     def get_pos(j, k):
         pos = np.array(
             [
-                j * size[0] * 2 - w / 2 * size[0] + size[0] / 2,
-                k * size[1] * 2 - 0.2,
-                0.1,
+                j * size[0] * 3 - w / 2 * size[0] + size[0] / 2,
+                k * size[1] * 3 - 0.2,
+                height,
             ]
         )
         return pos
@@ -2353,7 +2379,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
             C.addFrame("goal" + str(j) + str(k)).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition(
-                [get_pos(1, 1)[0], get_pos(1, 1)[1], cnt * size[2] * 1.1 + 0.1]
+                [get_pos(1, 1)[0], get_pos(1, 1)[1], cnt * size[2] * 1.1 + height]
             ).setColor([0, 0, 0.1, 0.5]).setContact(0).setQuaternion(
                 perturbation_quaternion
             ).setJoint(ry.JT.rigid)
@@ -2562,11 +2588,15 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
 def make_handover_env(view: bool = False):
     C = ry.Config()
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
         .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
+        .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
 
@@ -2726,9 +2756,13 @@ def make_panda_waypoint_env(
     C = ry.Config()
     # C.addFile(ry.raiPath('scenarios/pandaSingle.g'))
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
         ry.ST.box, size=[2, 2, 0.06, 0.005]
-    ).setColor([0.3, 0.3, 0.3]).setContact(1)
+    ).setColor([0.6, 0.6, 0.6]).setContact(1)
 
     robot_path = ry.raiPath("panda/panda.g")
     # robot_path = "ur10/ur10_vacuum.g"
@@ -2842,9 +2876,13 @@ def make_panda_single_joint_goal_env(
     C = ry.Config()
     # C.addFile(ry.raiPath('scenarios/pandaSingle.g'))
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
         ry.ST.box, size=[2, 2, 0.06, 0.005]
-    ).setColor([0.3, 0.3, 0.3]).setContact(1)
+    ).setColor([0.6, 0.6, 0.6]).setContact(1)
 
     robot_path = ry.raiPath("panda/panda.g")
     # robot_path = "ur10/ur10_vacuum.g"
@@ -2953,11 +2991,15 @@ def quaternion_from_z_rotation(angle):
 def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
     C = ry.Config()
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur_welding.g")
 
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
         ry.ST.box, size=[2, 2, 0.06, 0.005]
-    ).setColor([0.3, 0.3, 0.3]).setContact(1)
+    ).setColor([0.6, 0.6, 0.6]).setContact(1)
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -3131,6 +3173,10 @@ def make_shelf_env(view: bool = False):
 def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = False):
     C = ry.Config()
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     path = os.path.join(os.path.dirname(__file__), "../models/bottle.g")
     C.addFile(path).setPosition([1, 0, 0.2])
 
@@ -3237,7 +3283,7 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
     )
 
 
-def generate_rnd_axis_quaternion():
+def generate_rnd_axis_quaternion(dont_rotate_z=False):
     def align_x_with_target(target_vector):
         # Default vector to align from (1, 0, 0)
         source_vector = np.array([0.0, 0.0, 1.0])
@@ -3256,29 +3302,29 @@ def generate_rnd_axis_quaternion():
         q = (s * 0.5, v[0] / s, v[1] / s, v[2] / s)
 
         return q
-    
+
     def quaternion_multiply(q1, q2):
         w1, x1, y1, z1 = q1
         w2, x2, y2, z2 = q2
-        
+
         w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
         x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
         y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
         z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-        
+
         return np.array([w, x, y, z])
-    
+
     def axis_to_quaternion(axis, angle):
         axis = np.array(axis, dtype=float)
         norm = np.linalg.norm(axis)
         if norm == 0:
             raise ValueError("Axis vector must not be zero.")
-        
+
         axis = axis / norm  # Normalize the axis
         half_angle = angle / 2
         w = np.cos(half_angle)
         x, y, z = axis * np.sin(half_angle)
-        
+
         return np.array([w, x, y, z])
 
     # Randomly select one of the major axes (±X, ±Y, ±Z)
@@ -3292,9 +3338,10 @@ def generate_rnd_axis_quaternion():
     ]
 
     # Choose one axis randomly
-    chosen_axis = random.choice(axes)
-
-    print(chosen_axis)
+    if not dont_rotate_z:
+        chosen_axis = random.choice(axes)
+    else:
+        chosen_axis = axes[np.random.randint(4,5)]
 
     # Compute the quaternion to align the X-axis with the selected axis
     quat = align_x_with_target(chosen_axis)
@@ -3323,15 +3370,19 @@ def is_z_axis_up(quaternion):
 
 
 def make_box_pile_env(num_boxes=6, view: bool = False):
-    assert(num_boxes <= 9)
+    assert num_boxes <= 9
 
     C = ry.Config()
-
+    
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
         .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
+        .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
 
@@ -3353,7 +3404,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
 
     C.addFrame("tray").setParent(C.getFrame("table")).setShape(
         ry.ST.box, [0.5, 0.5, 0.025, 0.005]
-    ).setPosition([0, 0, 0.25]).setMass(0.1).setColor((1, 0, 0, 1)).setContact(
+    ).setPosition([0, 0, 0.25]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
         0
     ).setJoint(ry.JT.rigid)
 
@@ -3386,7 +3437,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             [
                 (random.random() - 0.5) * 1.2,
                 (random.random() - 0.7) * 0.6,
-                0.35,
+                0.285,
             ]
         )
 
@@ -3394,7 +3445,10 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         if pos[0] > -0.3 and pos[0] < 0.3 and pos[1] < 0.3 and pos[1] > -0.3:
             continue
 
-        quat = generate_rnd_axis_quaternion()
+        keep_z_aligned = np.random.rand() > 0.5
+        quat = generate_rnd_axis_quaternion(keep_z_aligned)
+
+        color = np.random.rand(3)
 
         box = (
             c_coll_tmp.addFrame("box" + str(added_boxes))
@@ -3402,7 +3456,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             .setShape(ry.ST.box, [size[0], size[1], size[2], 0.005])
             .setPosition([pos[0], pos[1], pos[2]])
             .setMass(0.1)
-            .setColor((0.1, 1, 0.1, 0.8))
+            .setColor(color)
             .setContact(1)
             .setQuaternion(quat)
             .setJoint(ry.JT.rigid)
@@ -3419,6 +3473,8 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             C.clear()
             C.addConfigurationCopy(c_coll_tmp)
 
+    C.view(True)
+
     # add goal positions
     for i in range(num_boxes):
         x_ind = i % 3
@@ -3434,10 +3490,10 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         box = (
             C.addFrame("goal" + str(i))
             .setParent(c_coll_tmp.getFrame("tray"))
-            .setShape(ry.ST.box, [size[0], size[1], size[2], 0.005])
+            .setShape(ry.ST.box, [size[0]*.9, size[1]*.9, size[2]*.9, 0.005])
             .setRelativePosition([pos[0], pos[1], pos[2]])
             .setMass(0.1)
-            .setColor((0.1, 0.1, 0.1, 0.5))
+            .setColor((0.1, 0.1, 0.1, 0.3))
             .setContact(0)
             .setJoint(ry.JT.rigid)
         )
@@ -3489,7 +3545,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             [r1 + "ur_ee_marker", "table"],
             ry.OT.sos,
             [2e1],
-            [-1]
+            [-1],
         )
 
         komo.addModeSwitch([2, 3], ry.SY.stable, [r2 + "ur_vacuum", box])
@@ -3514,7 +3570,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             [r2 + "ur_ee_marker", box],
             ry.OT.sos,
             [2e1],
-            [-1]
+            [-1],
         )
 
         komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
@@ -3557,7 +3613,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                 # komo.view(True, "IK solution")
 
-                return keyframes[:-1,:]
+                return keyframes[:-1, :]
 
         return None
 
@@ -3606,7 +3662,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             [robot_prefix + "ur_ee_marker", box],
             ry.OT.sos,
             [2e1],
-            [-1]
+            [-1],
         )
 
         # for pick and place directly
@@ -3639,8 +3695,11 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         # check how the object is oriented, and if we can grasp and place it directly
         quat = C.getFrame("box" + str(i)).getQuaternion()
         z_up = is_z_axis_up(quat)
+        robots = ["a1_", "a2_"]
+        random.shuffle(robots)
+
         if z_up:
-            for r in ["a1_", "a2_"]:
+            for r in robots:
                 keyframe = pick_and_place(r, i)
                 print(keyframe)
                 if keyframe is None:
@@ -3650,8 +3709,8 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         else:
             # otherwise a handover/regrasp is required
             found_sol = False
-            for r1 in ["a1_", "a2_"]:
-                for r2 in ["a1_", "a2_"]:
+            for r1 in robots:
+                for r2 in robots:
                     if r1 == r2:
                         continue
 
@@ -3675,9 +3734,9 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
 
     table = (
         C.addFrame("table")
-        .setPosition([0, 0, -0.05])
-        .setShape(ry.ST.box, size=[10, 10, 0.06, 0.005])
-        .setColor([0.3, 0.3, 0.3])
+        .setPosition([0, 0, -0.02])
+        .setShape(ry.ST.box, size=[20, 20, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
 
@@ -3688,24 +3747,18 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
     robots = []
     for i in range(num_robots):
         prefix = f"a{i}_"
-        C.addFile(mobile_robot_path, namePrefix=prefix).setPosition([0, 0, 0.2])
-        C.getFrame(prefix+"base").setColor(np.random.rand(3))
+        C.addFile(mobile_robot_path, namePrefix=prefix).setPosition([0, 0, 0.25])
+        C.getFrame(prefix + "base").setColor(np.random.rand(3))
         robots.append(prefix)
-
-    # C.addFile(mobile_robot_path, namePrefix="a0_").setPosition([0, 0, 0.2])
-    # C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([0, 0, 0.2])
-    # C.addFile(mobile_robot_path, namePrefix="a2_").setPosition([0, 0, 0.2])
-    # C.addFile(mobile_robot_path, namePrefix="a3_").setPosition([0, 0, 0.2])
-    # C.addFile(mobile_robot_path, namePrefix="a4_").setPosition([0, 0, 0.2])
 
     q = C.getJointState()
 
-    base_pos = np.array([[3, -2 + i, -np.pi/2] for i in range(num_robots)])
+    base_pos = np.array([[2.5, -(num_robots-1)/2 + i, -np.pi / 2] for i in range(num_robots)])
 
     for i in range(num_robots):
-        q[6*i] = base_pos[i, 0]
-        q[6*i+1] = base_pos[i, 1]
-        q[6*i+2] = base_pos[i, 2]
+        q[6 * i] = base_pos[i, 0]
+        q[6 * i + 1] = base_pos[i, 1]
+        q[6 * i + 2] = base_pos[i, 2]
 
         print(base_pos[i, 0])
 
@@ -3723,7 +3776,6 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
 
     for i in range(h):
         for j in range(w):
-
             pos = np.array(
                 [
                     j * size[0] * 1.05 - w / 2 * size[0] + size[0] / 2,
@@ -3739,15 +3791,13 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 color
-            ).setContact(1).setJoint(
-                ry.JT.rigid
-            )
+            ).setContact(1).setJoint(ry.JT.rigid)
 
             goal_pos = np.array(
                 [
                     j * size[0] * 1.01 - w / 2 * size[0] + size[0] / 2,
                     1,
-                    (1-i) * size[2] * 1.01 + 0.05 + 0.1,
+                    (1 - i) * size[2] * 1.01 + 0.05 + 0.1,
                 ]
             )
             goal_name = "box_goal_" + str(i) + str(j)
@@ -3755,9 +3805,7 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition(goal_pos).setMass(0.1).setColor(
                 [color[0], color[1], color[2], 0.5]
-            ).setContact(0).setJoint(
-                ry.JT.rigid
-            )
+            ).setContact(0).setJoint(ry.JT.rigid)
 
             if i == 1:
                 bottom_goal_names.append(goal_name)
@@ -3773,7 +3821,9 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
 
         q_home = c_tmp.getJointState()
 
-        komo = ry.KOMO(c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
         komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1], [-0.0])
 
         komo.addControlObjective([], 0, 1e-1)
@@ -3870,7 +3920,7 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
 
             res = compute_pick_and_place(c_tmp_2, box, box_goal, robot_prefix)
 
-            keyframes[robot_prefix].append((box, res[:-1])) 
+            keyframes[robot_prefix].append((box, res[:-1]))
 
             c_tmp.getFrame(box).setRelativePosition(
                 c_tmp.getFrame(box_goal).getRelativePosition()
@@ -4054,6 +4104,10 @@ def quaternion_from_z_to_target(target_z):
 def make_strut_assembly_problem():
     C = ry.Config()
 
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    
     mobile_robot_path = os.path.join(
         os.path.dirname(__file__), "../models/mobile-manipulator-restricted.g"
     )

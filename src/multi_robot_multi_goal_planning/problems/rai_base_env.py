@@ -223,6 +223,22 @@ def get_robot_state(C: ry.Config, robot_prefix: str) -> NDArray:
     return q
 
 
+
+def delete_visual_only_frames(C):
+    C_coll = ry.Config()
+    C_coll.addConfigurationCopy(C)
+
+    # go through all frames, and delete the ones that are only visual
+    # that is, the frames that do not have a child, and are not
+    # contact frames
+    for f in C_coll.getFrames():
+        info = f.info()
+        if "shape" in info and info["shape"] == "mesh":
+            C_coll.delFrame(f.name)
+
+    return C_coll
+
+
 # def set_robot_active(C: ry.Config, robot_prefix: str) -> None:
 #     robot_joints = get_robot_joints(C, robot_prefix)
 #     C.selectJoints(robot_joints)
@@ -269,6 +285,14 @@ class rai_env(BaseProblem):
 
         self.C_cache = {}
 
+        self.C_orig = ry.Config()
+        self.C_orig.addConfigurationCopy(self.C)
+
+        C_coll = delete_visual_only_frames(self.C)
+
+        self.C.clear()
+        self.C.addConfigurationCopy(C_coll)
+
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
@@ -276,14 +300,16 @@ class rai_env(BaseProblem):
         # Save the C attribute
         C = self.C
         C_base = self.C_base
-        
+        C_orig = self.C_orig
+
         # Temporarily remove C to allow deepcopy of other attributes
         self.C = None
         self.C_base = None
-        
+        self.C_orig = None
+
         # Create a deep copy of self without C
         new_env = copy.deepcopy(super(), memo)
-        
+
         # Restore C in both objects
         self.C = C
         new_env.C = ry.Config()
@@ -292,6 +318,10 @@ class rai_env(BaseProblem):
         self.C_base = C_base
         new_env.C_base = ry.Config()
         new_env.C_base.addConfigurationCopy(self.C_base)
+
+        self.C_orig = C_orig
+        new_env.C_orig = ry.Config()
+        new_env.C_orig.addConfigurationCopy(self.C_orig)
 
         return new_env
 
@@ -344,7 +374,7 @@ class rai_env(BaseProblem):
             return False
 
         return True
-    
+
     def is_collision_free_without_mode(
         self,
         q: Optional[Configuration],
@@ -372,7 +402,7 @@ class rai_env(BaseProblem):
         return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode, collision_tolerance: float=None
+        self, r: str, q: NDArray, m: Mode, collision_tolerance: float = None
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -437,9 +467,9 @@ class rai_env(BaseProblem):
         q1: Configuration,
         q2: Configuration,
         m: Mode,
-        resolution:float=None,
-        randomize_order:bool=True,
-        tolerance:float=None,
+        resolution: float = None,
+        randomize_order: bool = True,
+        tolerance: float = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
@@ -476,7 +506,7 @@ class rai_env(BaseProblem):
     ) -> bool:
         if tolerance is None:
             tolerance = self.collision_tolerance
-        
+
         if resolution is None:
             resolution = self.collision_resolution
 
@@ -521,7 +551,9 @@ class rai_env(BaseProblem):
 
         return sg
 
-    def set_to_mode(self, m: Mode, config=None):
+    def set_to_mode(
+        self, m: Mode, config=None, use_cached: bool = True, place_in_cache: bool = True
+    ):
         if not self.manipulating_env:
             return
 
@@ -531,7 +563,7 @@ class rai_env(BaseProblem):
 
         self.prev_mode = m
 
-        if m in self.C_cache:
+        if use_cached and m in self.C_cache:
             if config is not None:
                 config.clear()
                 config.addConfigurationCopy(self.C_cache[m])
@@ -605,10 +637,15 @@ class rai_env(BaseProblem):
                     box = self.tasks[prev_mode_index].frames[1]
                     tmp.delFrame(box)
 
-        self.C_cache[m] = ry.Config()
-        self.C_cache[m].addConfigurationCopy(tmp)
+        if place_in_cache:
+            self.C_cache[m] = ry.Config()
+            self.C_cache[m].addConfigurationCopy(tmp)
 
-        # self.C = None
-        viewer = self.C.get_viewer()
-        self.C_cache[m].set_viewer(viewer)
-        self.C = self.C_cache[m]
+            # self.C = None
+            viewer = self.C.get_viewer()
+            self.C_cache[m].set_viewer(viewer)
+            self.C = self.C_cache[m]
+        else:
+            viewer = self.C.get_viewer()
+            tmp.set_viewer(viewer)
+            self.C = tmp

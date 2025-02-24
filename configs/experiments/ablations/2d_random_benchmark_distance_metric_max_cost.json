@@ -1,14 +1,14 @@
 {
-  "experiment_name": "",
-  "environment": "other_hallway",
+  "experiment_name": "max_cost",
+  "environment": "random_2d",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "sum",
+  "cost_reduction": "max",
   "max_planning_time": 500,
   "optimize": true,
   "num_runs": 10,
   "seed": 0,
   "planners": [
-     {
+    {
       "name": "euclidean_prm",
       "type": "prm",
       "options": {

@@ -11,7 +11,6 @@ from multi_robot_multi_goal_planning.problems.planning_env import State
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
-
 def single_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
     new_path = interpolate_path(path, 0.05)
 
@@ -86,9 +85,9 @@ def robot_mode_shortcut(
     resolution=0.001,
     tolerance=0.01,
 ):
-    # non_redundant_path = remove_interpolated_nodes(path)
+    non_redundant_path = remove_interpolated_nodes(path)
+    new_path = interpolate_path(non_redundant_path, 0.1)
 
-    new_path = interpolate_path(path, 0.1)
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
 
@@ -127,6 +126,7 @@ def robot_mode_shortcut(
         for r in robots_to_shortcut:
             if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
                 can_shortcut_this = False
+                break
 
         if not can_shortcut_this:
             continue
@@ -160,6 +160,9 @@ def robot_mode_shortcut(
             # print(f"{iter} does not improve cost")
             continue
 
+        assert(np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6)
+        assert(np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6)
+
         cnt += 1
 
         # this is wrong for partial shortcuts atm.
@@ -179,28 +182,6 @@ def robot_mode_shortcut(
         times.append(current_time - start_time)
         costs.append(path_cost(new_path, env.batch_config_cost))
 
-    # path_without_redundant_nodes = [new_path[0]]
-    # for i in range(1, len(new_path)-1):
-    #     prev_state = path_without_redundant_nodes[-1]
-    #     current_state = new_path[i]
-    #     potential_next_state = new_path[i+1]
-
-    #     if prev_state.mode != current_state.mode:
-    #         path_without_redundant_nodes.append(current_state)
-    #         continue
-
-    #     vec_to_next_state = potential_next_state.q.state() - prev_state.q.state()
-    #     vec_to_this_state = potential_next_state.q.state() - current_state.q.state()
-
-    #     if np.linalg.norm(vec_to_next_state / np.linalg.norm(vec_to_next_state) - vec_to_this_state / np.linalg.norm(vec_to_this_state)) < 1e-3:
-    #         continue
-
-    #     path_without_redundant_nodes.append(current_state)
-
-    # path_without_redundant_nodes.append(new_path[-1])
-
-    # new_path = path_without_redundant_nodes
-
     assert new_path[-1].mode == path[-1].mode
     assert np.linalg.norm(new_path[-1].q.state() - path[-1].q.state()) < 1e-6
     assert np.linalg.norm(new_path[0].q.state() - path[0].q.state()) < 1e-6
@@ -208,9 +189,6 @@ def robot_mode_shortcut(
     print("original cost:", path_cost(path, env.batch_config_cost))
     print("Attempted shortcuts", cnt)
     print("new cost:", path_cost(new_path, env.batch_config_cost))
-
-    # plt.plot(times, costs)
-    # plt.show()
 
     return new_path, [costs, times]
 
