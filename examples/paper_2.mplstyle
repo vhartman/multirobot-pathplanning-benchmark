@@ -1,6 +1,6 @@
 xtick.labelsize: 28
 ytick.labelsize: 28
-font.size: 36
+font.size: 28
 figure.autolayout: True
 figure.figsize: 8,5
 axes.titlesize : 26

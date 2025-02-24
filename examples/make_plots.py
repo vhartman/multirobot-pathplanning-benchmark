@@ -146,6 +146,7 @@ planner_name_to_color = {
     "sum_euclidean_rrtstar": "tab:brown",
     "euclidean_rrtstar": "tab:purple",
     "rrtstar": "tab:red",
+    "rrtstar_2": "tab:orange",
     "rrtstar_local": "tab:red",
     "rrtstar_shortcutting_global": "black",
     "rrtstar_shortcutting": "tab:purple",
@@ -192,6 +193,7 @@ def make_cost_plots(
     save: bool = False,
     foldername: Optional[str] = None,
     save_as_png: bool = False,
+    add_legend: bool = True,
 ):
     plt.figure("Cost plot")
 
@@ -327,20 +329,25 @@ def make_cost_plots(
             ],
             lb_solution_cost[interpolated_solution_times < max_planner_solution_time],
             ub_solution_cost[interpolated_solution_times < max_planner_solution_time],
-            alpha=0.5,
-            lw=2,
+            alpha=0.3,
+            # lw=2,
             color=planner_name_to_color[planner_name],
         )
 
     plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
     # plt.grid()
-    plt.grid(which="major", ls="--")
+    # plt.grid(which="major", ls="--")
+    plt.grid(which='both', axis='both', ls='--')
 
     plt.ylabel(f"Cost ({config['cost_reduction']})")
-    plt.xlabel("T [s]")
+    plt.xlabel("Computation Time [s]")
 
-    plt.legend()
+    for side in ['top', 'bottom', 'left', 'right']:
+        plt.spines[side].set(lw=0.2)
+
+    if add_legend:
+        plt.legend()
 
     if save:
         if foldername is None:
@@ -352,8 +359,10 @@ def make_cost_plots(
         if save_as_png:
             format = "png"
 
+        scenario_name = config["environment"]
+
         plt.savefig(
-            f"{foldername}plots/cost_plot.{format}",
+            f"{foldername}plots/cost_plot_{scenario_name}.{format}",
             format=format,
             dpi=300,
             bbox_inches="tight",
@@ -428,12 +437,16 @@ def main():
         help="Use the paper style (default: False)",
     )
     parser.add_argument(
+        "--legend",
+        action="store_true",
+        help="Add the legend to the plot (default: False)",
+    )
+    parser.add_argument(
         "--no_display",
         action="store_true",
         help="Display the resulting plots at the end. (default: False)",
     )
     args = parser.parse_args()
-
 
     if args.use_paper_style:
         plt.style.use("./examples/paper_2.mplstyle")
@@ -445,7 +458,14 @@ def main():
     all_experiment_data = load_data_from_folder(foldername)
     config = load_config_from_folder(foldername)
 
-    make_cost_plots(all_experiment_data, config, args.save, foldername, args.png)
+    make_cost_plots(
+        all_experiment_data,
+        config,
+        args.save,
+        foldername,
+        save_as_png=args.png,
+        add_legend=args.legend,
+    )
     make_success_plot(all_experiment_data, config)
 
     if not args.no_display:
