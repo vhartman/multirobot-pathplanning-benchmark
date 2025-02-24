@@ -18,6 +18,9 @@ def get_env_by_name(name):
         "other_hallway": lambda: re.rai_alternative_hallway_two_dim(),
         "other_hallway_no_rot": lambda: re.rai_alternative_hallway_two_dim(),
         "random_2d": lambda: re.rai_random_two_dim(),
+        "random_2d_three_goals": lambda: re.rai_random_two_dim(num_goals=3),
+        "random_2d_two_goals": lambda: re.rai_random_two_dim(num_goals=2),
+        "random_2d_one_goals": lambda: re.rai_random_two_dim(num_goals=1),
         "random_2d_no_rot": lambda: re.rai_random_two_dim(agents_can_rotate=False),
         "2d_handover": lambda: re.rai_two_dim_handover(),
         "three_agents": lambda: re.rai_two_dim_three_agent_env(),
@@ -80,7 +83,9 @@ def get_env_by_name(name):
         "two_agents_many_goals_dep_no_rot": lambda: re.rai_two_dim_env_no_obs_dep_graph(agents_can_rotate=False),
         "three_agent_many_goals_dep": lambda: re.rai_two_dim_three_agent_env_dependency_graph(),
         "mobile_dep": lambda: re.rai_mobile_manip_wall_dep(),
+        "mobile_four_dep": lambda: re.rai_mobile_manip_wall_dep(num_robots=4),
         "box_stacking_dep": lambda: re.rai_ur10_arm_box_stack_env_dep(),
+        "box_stacking_three_robots_dep": lambda: re.rai_ur10_arm_box_stack_env_dep(num_robots=3),
         "box_reorientation_dep": lambda: re.rai_ur10_box_pile_cleanup_env_dep()
     }
     # fmt: on
