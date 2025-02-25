@@ -56,6 +56,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                     gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, informed_batch_size = informed_batch_size )
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
+        self.swap = True
        
     def UpdateCost(self, mode:Mode, n:Node, connection:bool = False) -> None:
         stack = [n]
@@ -119,17 +120,19 @@ class BidirectionalRRTstar(BaseRRTstar):
 
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         #check if transition is reached
-        if self.trees[mode].order == 1 and self.env.is_transition(n_new.state.q, mode):
-            self.trees[mode].connected = True
-            self.add_new_mode(n_new.state.q, mode, BidirectionalTree)
-            self.convert_node_to_transition_node(mode, n_new)
-        #check if termination is reached
-        if self.trees[mode].order == 1 and self.env.done(n_new.state.q, mode):
-            self.trees[mode].connected = True
-            self.convert_node_to_transition_node(mode, n_new)
-            if not self.operation.init_sol:
-                # print(time.time()-self.start_time)
-                self.operation.init_sol = True
+        if self.trees[mode].order == 1:
+            if n_new.id in self.trees[mode].subtree:
+                if self.env.is_transition(n_new.state.q, mode):
+                    self.trees[mode].connected = True
+                    self.add_new_mode(n_new.state.q, mode, BidirectionalTree)
+                    self.convert_node_to_transition_node(mode, n_new)
+                #check if termination is reached
+                if self.env.done(n_new.state.q, mode):
+                    self.trees[mode].connected = True
+                    self.convert_node_to_transition_node(mode, n_new)
+                    if not self.operation.init_sol:
+                        # print(time.time()-self.start_time)
+                        self.operation.init_sol = True
         self.FindLBTransitionNode()
 
     def UpdateTree(self, 
@@ -218,6 +221,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         if self.trees[mode].order == -1:
             #switch such that subtree is beginning from start and subtree_b from goal
             self.trees[mode].swap()
+            self.swap = False
             if not self.env.is_edge_collision_free(n_nearest_b.state.q, n_new.state.q, mode):
                 return
             self.UpdateTree(mode, n_new, n_nearest_b, cost[0]) 
@@ -234,7 +238,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             #check if terminal mode was already reached
             if not self.env.is_terminal_mode(mode):
                 self.add_new_mode(transition_node.state.q, mode, BidirectionalTree)
-            else:
+            elif transition_node.cost != np.inf:
                 self.operation.init_sol = True
                 # print(time.time()-self.start_time)
         #need to do that after the next mode was initialized
@@ -299,6 +303,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         i = 0
         self.PlannerInitialization()
         while True:
+            self.swap = True
             i += 1
             # Mode selection
             active_mode  = self.RandomMode()
@@ -325,7 +330,8 @@ class BidirectionalRRTstar(BaseRRTstar):
                     self.UpdateCost(active_mode,n_new)
                 self.Connect(active_mode, n_new)
                 self.ManageTransition(active_mode, n_new)
-            self.trees[active_mode].swap()
+            if self.swap:
+                self.trees[active_mode].swap()
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break
