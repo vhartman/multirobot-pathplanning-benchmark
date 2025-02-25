@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import datetime
 import json
 import os
+import re
 import random
 
 import numpy as np
@@ -19,7 +20,7 @@ from multi_robot_multi_goal_planning.planners.shortcutting import (
     single_mode_shortcut,
     robot_mode_shortcut,
 )
-
+from run_experiment import load_experiment_config
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 
@@ -149,13 +150,13 @@ def main():
     )
     args = parser.parse_args()
 
-    np.random.seed(0)
-    random.seed(0)
+    folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
+    config = load_experiment_config(os.path.join(folder_path, 'config.json'))
+    seed = config["seed"] 
+    np.random.seed(seed)
+    random.seed(seed)
 
     path_data = load_path(args.path_filename)
-
-    np.random.seed(0)
-    random.seed(0)
 
     env = get_env_by_name(args.env_name)
     env.cost_reduction = "sum"
