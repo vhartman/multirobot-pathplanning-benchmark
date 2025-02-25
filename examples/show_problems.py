@@ -178,11 +178,21 @@ if __name__ == "__main__":
         required=True,
         help="Select the mode of operation",
     )
+    parser.add_argument(
+        "--show_coll_config",
+        action="store_true",
+        help="Display the configuration used for collision checking. (default: False)",
+    )
     args = parser.parse_args()
 
     # check_all_modes()
 
     env = get_env_by_name(args.env_name)
+
+    # make use of the original config
+    if not args.show_coll_config:
+        env.C_base = env.C_orig
+        env.C = env.C_orig
 
     if args.mode == "show":
         print("Environment starting position")
