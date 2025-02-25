@@ -1662,8 +1662,10 @@ class BaseRRTstar(ABC):
             return
         next_mode = self.env.get_next_mode(n.state.q, mode)
         if next_mode not in self.modes:
-            self.trees[mode].connected = True
-            self.add_new_mode(n.state.q, mode, BidirectionalTree)
+            tree_type = type(self.trees[mode])
+            if tree_type == BidirectionalTree:
+                self.trees[mode].connected = True
+            self.add_new_mode(n.state.q, mode, tree_type)
         self.trees[next_mode].add_transition_node_as_start_node(n)
         if self.trees[next_mode].order == 1:
             index = len(self.trees[next_mode].subtree)-1
