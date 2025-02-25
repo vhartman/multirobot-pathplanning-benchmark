@@ -967,6 +967,42 @@ class InformedVersion6():
 
         return False
 
+    def get_inbetween_modes(self, start_mode, end_mode):
+        """
+        Find all possible paths from start_mode to end_mode.
+
+        Args:
+            start_mode: The starting mode object
+            end_mode: The ending mode object
+
+        Returns:
+            A list of lists, where each inner list represents a valid path
+            from start_mode to end_mode (inclusive of both).
+        """
+        # Store all found paths
+        open_paths = [[start_mode]]
+
+        in_between_modes = set()
+        in_between_modes.add(start_mode)
+        in_between_modes.add(end_mode)
+
+        while len(open_paths) > 0:
+            p = open_paths.pop()
+            last_mode = p[-1]
+
+            if last_mode == end_mode:
+                for m in p:
+                    in_between_modes.add(m)
+                continue
+
+            if len(last_mode.next_modes) > 0:
+                for mode in last_mode.next_modes:
+                    new_path = p.copy()
+                    new_path.append(mode)
+                    open_paths.append(new_path)
+
+        return list(in_between_modes)
+
     def generate_informed_samples(self,
         batch_size:int,
         path:List[State],
@@ -993,6 +1029,8 @@ class InformedVersion6():
         path = mrmgp.joint_prm_planner.interpolate_path(path)
         new_samples = []
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        
+        in_between_mode_cache = {}
 
         num_attempts = 0
         while True:
@@ -1015,10 +1053,25 @@ class InformedVersion6():
                         if lb_cost < current_cost:
                             break
 
-                # TODO: we need to sample from the set of all reachable modes here
-                # not only from the modes on the path
-                k = random.randint(start_ind, end_ind)
-                m = path[k].mode
+                if (
+                    path[start_ind].mode,
+                    path[end_ind].mode,
+                ) not in in_between_mode_cache:
+                    in_between_modes = self.get_inbetween_modes(
+                        path[start_ind].mode, path[end_ind].mode
+                    )
+                    in_between_mode_cache[
+                        (path[start_ind].mode, path[end_ind].mode)
+                    ] = in_between_modes
+
+                m = random.choice(
+                    in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
+                )
+
+                # k = random.randint(start_ind, end_ind)
+                # m = path[k].mode
+                # k = random.randint(start_ind, end_ind)
+                # m = path[k].mode
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
@@ -1325,6 +1378,9 @@ class InformedVersion6():
         num_attempts = 0
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
 
+        in_between_mode_cache = {}
+
+
         while True:
             num_attempts += 1
 
@@ -1348,9 +1404,24 @@ class InformedVersion6():
 
                         if lb_cost < current_cost:
                             break
+                if (
+                    path[start_ind].mode,
+                    path[end_ind].mode,
+                ) not in in_between_mode_cache:
+                    in_between_modes = self.get_inbetween_modes(
+                        path[start_ind].mode, path[end_ind].mode
+                    )
+                    in_between_mode_cache[
+                        (path[start_ind].mode, path[end_ind].mode)
+                    ] = in_between_modes
 
-                k = random.randint(start_ind, end_ind)
-                mode = path[k].mode
+                # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
+
+                mode = random.choice(
+                    in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
+                )
+                # k = random.randint(start_ind, end_ind)
+                # mode = path[k].mode
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
@@ -2536,26 +2607,54 @@ class BaseRRTstar(ABC):
                 inv_prob / total_inverse for inv_prob in inverse_probabilities
             ]
 
+        # else:
+        #     # manually set
+        #     total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes[:-1]) 
+        #     # Calculate probabilities inversely proportional to node counts
+        #     inverse_probabilities = [
+        #         1 - (len(self.trees[mode].subtree) / total_nodes)
+        #         for mode in self.modes[:-1]
+        #     ]
+
+        #     # Normalize the probabilities of all modes except the last one
+        #     remaining_probability = 1-self.mode_sampling  
+        #     total_inverse = sum(inverse_probabilities)
+        #     if total_inverse == 0:
+        #         p = [1-self.mode_sampling, self.mode_sampling]
+        #     else:
+        #         p =  [
+        #             (inv_prob / total_inverse) * remaining_probability
+        #             for inv_prob in inverse_probabilities
+        #         ] + [self.mode_sampling]
+
         else:
-            # manually set
-            total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes[:-1]) 
+            frontier_modes = []
+
+            for m in self.modes:
+                if len(m.next_modes) == 0:
+                    frontier_modes.append(m)
+
+            p_frontier = self.mode_sampling
+            p_remaining = 1 - p_frontier
+
+            total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
             # Calculate probabilities inversely proportional to node counts
             inverse_probabilities = [
                 1 - (len(self.trees[mode].subtree) / total_nodes)
-                for mode in self.modes[:-1]
+                for mode in self.modes if mode not in frontier_modes
             ]
-
-            # Normalize the probabilities of all modes except the last one
-            remaining_probability = 1-self.mode_sampling  
             total_inverse = sum(inverse_probabilities)
-            if total_inverse == 0:
-                p = [1-self.mode_sampling, self.mode_sampling]
-            else:
-                p =  [
-                    (inv_prob / total_inverse) * remaining_probability
-                    for inv_prob in inverse_probabilities
-                ] + [self.mode_sampling]
 
+            p = []
+
+            for m in self.modes:
+                if m in frontier_modes:
+                    tmp = p_frontier / len(frontier_modes)
+                else:
+                    tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
+                
+                p.append(tmp)
+        
         return np.random.choice(self.modes, p = p)
 
     def InformedInitialization(self, mode: Mode) -> None: 
