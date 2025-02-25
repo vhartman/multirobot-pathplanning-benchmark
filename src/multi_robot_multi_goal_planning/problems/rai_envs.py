@@ -71,6 +71,7 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
 # 2d inspection?
 
+
 ##############################
 # 2 dimensional environments #
 ##############################
@@ -695,7 +696,7 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
         self.graph.add_dependency("terminal", "a2_place")
 
         print(self.graph)
-        self.graph.visualize()
+        # self.graph.visualize()
 
         BaseModeLogic.__init__(self)
 
@@ -1025,26 +1026,6 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, self.keyframes = rai_config.make_box_sorting_env()
 
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        # self.C.clear()
-        # self.C.addConfigurationCopy(self.C_coll)
-
-        self.C_coll = None
-
         self.robots = ["a1", "a2"]
 
         rai_env.__init__(self)
@@ -1093,22 +1074,6 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
             num_robots=num_robots, num_waypoints=num_waypoints
         )
 
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-        self.C_coll = None
-
         self.robots = ["a0", "a1", "a2"]
         self.robots = self.robots[:num_robots]
 
@@ -1154,24 +1119,6 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
             num_robots=num_robots, view=False, num_pts=num_pts
         )
 
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-        self.C_coll = None
-
         self.robots = ["a1", "a2", "a3", "a4"][:num_robots]
 
         rai_env.__init__(self)
@@ -1210,25 +1157,6 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
 class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes: int = 9):
         self.C, keyframes = rai_config.make_egg_carton_env(num_boxes)
-
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-        self.C_coll = None
 
         self.robots = ["a1_", "a2_"]
 
@@ -1385,26 +1313,6 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_handover_env()
 
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-
-        self.C_coll = None
-
         self.robots = ["a1", "a2"]
 
         rai_env.__init__(self)
@@ -1456,26 +1364,6 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
 class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_bottle_insertion()
-
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-
-        self.C_coll = None
 
         self.robots = ["a0", "a1"]
 
@@ -1584,26 +1472,6 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
         self.C, actions, self.robots = rai_config.make_box_rearrangement_env(
             num_boxes=num_boxes, num_robots=num_robots
         )
-
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-
-        self.C_coll = None
 
         rai_env.__init__(self)
 
@@ -1743,26 +1611,6 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
 
         self.robots = ["a1_", "a2_"]
 
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-
-        self.C_coll = None
-
         rai_env.__init__(self)
 
         self.manipulating_env = True
@@ -1848,26 +1696,6 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
         self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
 
         self.robots = ["a1_", "a2_"]
-
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-
-        self.C_coll = None
 
         rai_env.__init__(self)
 
@@ -2023,25 +1851,6 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
             num_robots, num_boxes
         )
 
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-        self.C_coll = None
-
         rai_env.__init__(self)
 
         self.manipulating_env = True
@@ -2084,25 +1893,6 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
             num_robots, num_boxes
         )
-
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-        self.C_coll = None
 
         rai_env.__init__(self)
 
@@ -2151,7 +1941,7 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.graph.visualize()
+        # self.graph.visualize()
 
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
@@ -2166,25 +1956,6 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
         self.C, keyframes = rai_config.make_mobile_manip_env(num_robots)
 
         self.robots = [k for k in keyframes]
-
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-        self.C_coll = None
 
         rai_env.__init__(self)
 
@@ -2238,25 +2009,6 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
 
         self.robots = [k for k in keyframes]
 
-        # more efficient collision scene that only has the collidabe shapes (and the links)
-        self.C_coll = ry.Config()
-        self.C_coll.addConfigurationCopy(self.C)
-
-        # go through all frames, and delete the ones that are only visual
-        # that is, the frames that do not have a child, and are not
-        # contact frames
-        for f in self.C_coll.getFrames():
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                self.C_coll.delFrame(f.name)
-
-        # self.C_coll.view(True)
-        # self.C.view(True)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(self.C_coll)
-        self.C_coll = None
-
         rai_env.__init__(self)
 
         self.manipulating_env = True
@@ -2302,7 +2054,7 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
 
         print(self.graph)
 
-        self.graph.visualize()
+        # self.graph.visualize()
 
         # for t in self.tasks:
         #     print(t.name)
@@ -2324,12 +2076,18 @@ def display_path(
     pause_time: float = 0.01,
     stop_at_end=False,
     adapt_to_max_distance: bool = False,
+    stop_at_mode: bool = False,
 ) -> None:
     for i in range(len(path)):
         env.set_to_mode(path[i].mode)
         for k in range(len(env.robots)):
             q = path[i].q[k]
             env.C.setJointState(q, rai_config.get_robot_joints(env.C, env.robots[k]))
+
+        if stop_at_mode and i < len(path) - 1:
+            if path[i].mode != path[i + 1].mode:
+                print(i)
+                env.C.view(True)
 
         env.C.view(stop)
 

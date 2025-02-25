@@ -48,11 +48,12 @@ class BidirectionalRRTstar(BaseRRTstar):
                  transition_nodes: int = 50, 
                  birrtstar_version: int = 2,
                  locally_informed_sampling: bool = True, 
-                 remove_redundant_nodes: bool = True 
+                 remove_redundant_nodes: bool = True, 
+                 informed_batch_size: int = 500, 
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes)
+                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, informed_batch_size = informed_batch_size )
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
        
@@ -119,10 +120,12 @@ class BidirectionalRRTstar(BaseRRTstar):
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         #check if transition is reached
         if self.trees[mode].order == 1 and self.env.is_transition(n_new.state.q, mode):
+            self.trees[mode].connected = True
             self.add_new_mode(n_new.state.q, mode, BidirectionalTree)
             self.convert_node_to_transition_node(mode, n_new)
         #check if termination is reached
         if self.trees[mode].order == 1 and self.env.done(n_new.state.q, mode):
+            self.trees[mode].connected = True
             self.convert_node_to_transition_node(mode, n_new)
             if not self.operation.init_sol:
                 # print(time.time()-self.start_time)
@@ -301,6 +304,8 @@ class BidirectionalRRTstar(BaseRRTstar):
             active_mode  = self.RandomMode()
             # Bi RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
+            if not q_rand:
+                continue
             n_nearest, dist, set_dists, n_nearest_idx = self.Nearest(active_mode, q_rand)        
             state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
             # q_rand == n_nearest

@@ -134,6 +134,7 @@ class Task:
     ):
         self.robots = robots
         self.goal = goal
+        self.name = None
 
         # constraints
         self.type = type

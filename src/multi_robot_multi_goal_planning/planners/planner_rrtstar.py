@@ -33,14 +33,15 @@ class RRTstar(BaseRRTstar):
                  mode_sampling: Optional[Union[int, float]] = None, 
                  gaussian: bool = False,
                  locally_informed_sampling:bool = True, 
-                 remove_redundant_nodes:bool = True
+                 remove_redundant_nodes:bool = True,
+                 informed_batch_size: int = 500,
                  
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes)
+                    gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, informed_batch_size = informed_batch_size )
      
-    def UpdateCost(self, n:Node) -> None:
+    def UpdateCost(self, mode:Mode, n:Node) -> None:
         stack = [n]
         while stack:
             current_node = stack.pop()
@@ -84,6 +85,8 @@ class RRTstar(BaseRRTstar):
             active_mode  = self.RandomMode()
             # RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
+            if not q_rand:
+                continue
             n_nearest, dist, set_dists, n_nearest_idx = self.Nearest(active_mode, q_rand)    
             state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
             if not state_new:
@@ -97,7 +100,7 @@ class RRTstar(BaseRRTstar):
                 batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
                 self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
                 if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
-                    self.UpdateCost(n_new) 
+                    self.UpdateCost(active_mode, n_new) 
                 self.ManageTransition(active_mode, n_new)
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
@@ -106,8 +109,5 @@ class RRTstar(BaseRRTstar):
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
+        # print('Path is collision free:', self.env.is_path_collision_free(self.operation.path))
         return self.operation.path, info    
-
-
-
-

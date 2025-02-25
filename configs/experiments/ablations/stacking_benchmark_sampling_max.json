@@ -1,15 +1,34 @@
 {
-  "experiment_name": "",
-  "environment": "other_hallway",
+  "experiment_name": "connection_strategy",
+  "environment": "box_stacking",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "sum",
-  "max_planning_time": 500,
+  "cost_reduction": "max",
+  "max_planning_time": 750,
   "optimize": true,
-  "num_runs": 10,
+  "num_runs": 20,
   "seed": 0,
   "planners": [
-     {
-      "name": "euclidean_prm",
+    {
+      "name": "locally_informed_prm",
+      "type": "prm",
+      "options": {
+        "batch_size": 200,
+        "transition_batch_size": 250,
+        "informed_batch_size": 300,
+        "informed_transition_batch_size": 250,
+        "path_batch_size": 0,
+        "distance_function": "euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": false,
+        "direct_informed_sampling": true
+      }
+    },
+    {
+      "name": "locally_informed_prm_shortcutting",
       "type": "prm",
       "options": {
         "batch_size": 200,
@@ -28,7 +47,7 @@
       }
     },
     {
-      "name": "sum_euclidean_prm",
+      "name": "globally_informed_prm",
       "type": "prm",
       "options": {
         "batch_size": 200,
@@ -36,9 +55,28 @@
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
         "path_batch_size": 0,
-        "distance_function": "sum_euclidean",
+        "distance_function": "euclidean",
         "connection_strategy": "radius",
-        "locally_informed_sampling": true,
+        "locally_informed_sampling": false,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": false,
+        "direct_informed_sampling": true
+      }
+    },
+    {
+      "name": "globally_informed_prm_shortcutting",
+      "type": "prm",
+      "options": {
+        "batch_size": 200,
+        "transition_batch_size": 250,
+        "informed_batch_size": 300,
+        "informed_transition_batch_size": 250,
+        "path_batch_size": 0,
+        "distance_function": "euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": false,
         "informed_sampling": true,
         "informed_transition_sampling": true,
         "sample_near_path": false,
@@ -47,26 +85,7 @@
       }
     },
     {
-      "name": "max_euclidean_prm",
-      "type": "prm",
-      "options": {
-        "batch_size": 200,
-        "transition_batch_size": 250,
-        "informed_batch_size": 300,
-        "informed_transition_batch_size": 250,
-        "path_batch_size": 0,
-        "distance_function": "max_euclidean",
-        "connection_strategy": "radius",
-        "locally_informed_sampling": true,
-        "informed_sampling": true,
-        "informed_transition_sampling": true,
-        "sample_near_path": false,
-        "shortcutting": true,
-        "direct_informed_sampling": true
-      }
-    },
-    {
-      "name": "max_euclidean_rrtstar",
+      "name": "rrtstar_shortcutting_local",
       "type": "rrtstar",
       "options": {
         "informed_sampling": true,
@@ -74,40 +93,55 @@
         "distance_metric": "max_euclidean",
         "p_goal": 0.5,
         "p_stay": 0.0,
-        "p_uniform": 0.8,
+        "p_uniform": 0.5,
         "shortcutting": true,
         "mode_sampling": 1,
         "locally_informed_sampling": true
       }
     },
     {
-      "name": "sum_euclidean_rrtstar",
+      "name": "rrtstar_local",
       "type": "rrtstar",
       "options": {
         "informed_sampling": true,
         "informed_sampling_version": 6,
-        "distance_metric": "sum_euclidean",
+        "distance_metric": "max_euclidean",
         "p_goal": 0.5,
         "p_stay": 0.0,
-        "p_uniform": 0.8,
-        "shortcutting": true,
+        "p_uniform": 0.5,
+        "shortcutting": false,
         "mode_sampling": 1,
         "locally_informed_sampling": true
       }
     },
     {
-      "name": "euclidean_rrtstar",
+      "name": "rrtstar_shortcutting_global",
       "type": "rrtstar",
       "options": {
         "informed_sampling": true,
         "informed_sampling_version": 6,
-        "distance_metric": "euclidean",
+        "distance_metric": "max_euclidean",
         "p_goal": 0.5,
         "p_stay": 0.0,
-        "p_uniform": 0.8,
+        "p_uniform": 0.5,
         "shortcutting": true,
         "mode_sampling": 1,
-        "locally_informed_sampling": true
+        "locally_informed_sampling": false
+      }
+    },
+    {
+      "name": "rrtstar_global",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.5,
+        "p_stay": 0.0,
+        "p_uniform": 0.5,
+        "shortcutting": false,
+        "mode_sampling": 1,
+        "locally_informed_sampling": false
       }
     }
   ]

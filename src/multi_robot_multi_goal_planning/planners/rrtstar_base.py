@@ -1076,6 +1076,8 @@ class InformedVersion6():
                 start_ind = 0
                 end_ind = len(path) - 1
                 m = self.sample_mode("uniform_reached")
+            if mode != m:
+                continue
 
             # print(m)
 
@@ -1406,6 +1408,8 @@ class InformedVersion6():
                 start_ind = 0
                 end_ind = len(path) - 1
                 mode = self.sample_mode("uniform_reached")
+            if mode != active_mode:
+                continue
 
             # print(m)
 
@@ -1597,7 +1601,8 @@ class BaseRRTstar(ABC):
                  shortcutting_dim_version:int = 2, 
                  shortcutting_robot_version:int = 1, 
                  locally_informed_sampling:bool = True,
-                 remove_redundant_nodes:bool = True
+                 remove_redundant_nodes:bool = True,
+                 informed_batch_size: int = 500,
 
                  ):
         self.env = env
@@ -1627,6 +1632,7 @@ class BaseRRTstar(ABC):
         self.costs = [] 
         self.times = []
         self.all_paths = []
+        self.informed_batch_size = informed_batch_size
 
     def add_tree(self, 
                  mode: Mode, 
@@ -1716,6 +1722,20 @@ class BaseRRTstar(ABC):
             return
         next_mode = self.env.get_next_mode(n.state.q, mode)
         self.trees[next_mode].add_transition_node_as_start_node(n)
+        if self.trees[next_mode].order == 1:
+            index = len(self.trees[next_mode].subtree)-1
+            tree = 'A'
+        else:
+            index = len(self.trees[next_mode].subtree_b)-1
+            tree = 'B'
+        # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
+
+        #need to rewire tree of next mode as well
+        if index != 0:
+            N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
+            batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
+            if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
+                self.UpdateCost(next_mode, n)
 
     def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
         """
@@ -1986,10 +2006,11 @@ class BaseRRTstar(ABC):
                 if self.operation.init_sol and self.informed: 
                     if self.informed_sampling_version == 6 and not self.env.is_terminal_mode(mode):
                         q = self.informed[mode].generate_informed_transitions(
-                            200,
+                            self.informed_batch_size,
                             self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                         if q is None:
+                            return
                             q = self.sample_transition_configuration(mode)
                             if random.choice([0,1]) == 0:
                                 return q
@@ -2040,10 +2061,11 @@ class BaseRRTstar(ABC):
             if is_informed_sampling:
                 if self.informed_sampling_version == 6:
                     q = self.informed[mode].generate_informed_samples(
-                            200,
-                            self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
+                        self.informed_batch_size,
+                        self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                     if q is None:
+                        return
                         is_informed_sampling = False
                         continue
                     if self.env.is_collision_free(q, mode):
@@ -2319,7 +2341,8 @@ class BaseRRTstar(ABC):
              mode:Mode, 
              n_new: Node, 
              n_nearest_idx:int, 
-             set_dists:NDArray=None
+             set_dists:NDArray=None,
+             tree: str = ''
              ) -> Tuple[NDArray, NDArray, NDArray]:      
         """
         Retrieves neighbors of a node within a calculated radius for the given mode.
@@ -2329,6 +2352,7 @@ class BaseRRTstar(ABC):
             n_new (Node): New node for which neighbors are being identified.
             n_nearest_idx (int): Index of the nearest node to n_new.
             set_dists (Optional[NDArray]): Precomputed distances from n_new to all nodes in the specified subtree.
+            tree (str): Identifier of subtree in which the nearest node is searched for
 
         Returns:
             Tuple:   
@@ -2337,7 +2361,7 @@ class BaseRRTstar(ABC):
                 - NDArray: Corresponding IDs of these nodes.
         """
 
-        batch_subtree = self.trees[mode].get_batch_subtree()
+        batch_subtree = self.trees[mode].get_batch_subtree(tree)
         if set_dists is None:
             set_dists = batch_config_dist(n_new.state.q, batch_subtree, self.distance_metric)
         vertices = self.trees[mode].get_number_of_nodes_in_tree()
@@ -2345,7 +2369,7 @@ class BaseRRTstar(ABC):
         indices = find_nearest_indices(set_dists, r) # indices of batch_subtree
         if n_nearest_idx not in indices:
             indices = np.insert(indices, 0, n_nearest_idx)
-        node_indices = self.trees[mode].node_ids_subtree[indices]
+        node_indices = self.trees[mode].get_node_ids_subtree(tree)[indices]
         n_near_costs = self.operation.costs[node_indices]
         N_near_batch = batch_subtree[indices]
         return N_near_batch, n_near_costs, node_indices
@@ -2400,7 +2424,8 @@ class BaseRRTstar(ABC):
                node_indices: NDArray, 
                n_new: Node, 
                batch_cost: NDArray, 
-               n_near_costs: NDArray
+               n_near_costs: NDArray,
+               tree: str = ''
                ) -> bool:
         """
         Rewires neighboring nodes by updating their parent connection to n_new if a lower-cost path is established.
@@ -2425,7 +2450,7 @@ class BaseRRTstar(ABC):
             improved_indices = np.nonzero(improvement_mask)[0]
 
             for idx in improved_indices:
-                n_near = self.trees[mode].subtree.get(node_indices[idx].item())
+                n_near = self.trees[mode].get_node(node_indices[idx].item(), tree)
                 if n_near == n_new.parent or n_near.cost == np.inf or n_near.id == n_new.id:
                     continue
 
@@ -2480,7 +2505,7 @@ class BaseRRTstar(ABC):
         self.operation.path_shortcutting = path_shortcutting[::-1] # includes transiiton node twice
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path_, _ = mrmgp.shortcutting.robot_mode_shortcut(
+            shortcut_path_, result = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
                                 self.operation.path_shortcutting,
                                 250,
@@ -2527,11 +2552,14 @@ class BaseRRTstar(ABC):
             # # Adjust layout and display the plots
             # plt.tight_layout()
             # plt.show()
-            batch_cost = self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])
-            shortcut_path_costs = cumulative_sum(batch_cost)
-            shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
-            if shortcut_path_costs[-1] < self.operation.cost:
-                self.TreeExtension(mode, shortcut_path, shortcut_path_costs)
+            # batch_cost = self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])
+            # shortcut_path_costs = cumulative_sum(batch_cost)
+            # shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
+            if result[0][-1] < self.operation.cost:
+                self.costs.append(result[0][-1])
+                self.times.append(time.time() - self.start_time)
+                self.all_paths.append(shortcut_path)
+                self.TreeExtension(shortcut_path)
 
     def RandomMode(self) -> Mode:
         """
@@ -2655,12 +2683,12 @@ class BaseRRTstar(ABC):
             #uniform sampling
             return self.sample_configuration(mode, "uniform")
                
-    def FindLBTransitionNode(self) -> None:
+    def FindLBTransitionNode(self, shortcutting_bool:bool = True) -> None:
         """
         Searches lower-bound transition node and generates its corresponding path if a valid candidate is found.
 
         Args:
-            None
+            shortcutting_bool (bool): Flag to either apply shortcutting or not
 
         Returns:
             None: This method does not return any value.
@@ -2674,7 +2702,7 @@ class BaseRRTstar(ABC):
             valid_mask = result[0] < self.operation.cost
             if valid_mask.any():
                 lb_transition_node = self.get_transition_node(mode, result[1])
-                self.GeneratePath(mode, lb_transition_node)
+                self.GeneratePath(mode, lb_transition_node, shortcutting_bool= shortcutting_bool)
 
     def UpdateDiscretizedCost(self, path:List[State], cost:NDArray, idx:int) -> None:
         """
@@ -2788,9 +2816,7 @@ class BaseRRTstar(ABC):
         self.TreeExtension(active_mode, discretized_path, discretized_costs, discretized_modes)
 
     def TreeExtension(self, 
-                      active_mode:Mode, 
-                      discretized_path:List[State], 
-                      discretized_costs:List[float]
+                      discretized_path:List[State]
                       ) -> None:
         """
         Extends the tree by adding path states as nodes and updating parent-child relationships.
@@ -2798,7 +2824,6 @@ class BaseRRTstar(ABC):
         Args:
             active_mode (Mode): Current mode for tree extension.
             discretized_path (List[State]):Sequence of states forming the discretized path.
-            discretized_costs (List[float]): Associated costs for each state in the discretized path.
 
         Returns:
             None: This method does not return any value.
@@ -2809,21 +2834,77 @@ class BaseRRTstar(ABC):
         for i in range(1, len(discretized_path)):
             state = discretized_path[i]
             node = Node(state, self.operation)
-            node.parent = parent
-            self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
-            node.cost = discretized_costs[i]
-            node.cost_to_parent = node.cost - node.parent.cost
-            parent.children.append(node)
+            # node.parent = parent
+            # self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
+            # node.cost = discretized_costs[i]
+            # node.cost_to_parent = node.cost - node.parent.cost
+            # parent.children.append(node)
+            index = np.where(self.trees[mode].get_node_ids_subtree() == parent.id)
+            N_near_batch, n_near_costs, node_indices = self.Near(mode, node, index)
+            batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
+            if mode == discretized_path[i].mode:
+               self.FindParent(mode, node_indices, node, parent, batch_cost, n_near_costs) 
+            else:
+                node.parent = parent
+                self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
+                node.cost_to_parent = batch_cost[np.where(node_indices == parent.id)[0][0]]
+                node.cost = node.parent.cost + node.cost_to_parent
+                parent.children.append(node)
+            if self.Rewire(mode, node_indices, node, batch_cost, n_near_costs):
+                self.UpdateCost(mode, node)
             if self.trees[discretized_path[i].mode].order == 1:
                 self.trees[discretized_path[i].mode].add_node(node)
             else:
                 self.trees[discretized_path[i].mode].add_node(node, 'B')
             parent = node
+            
+
             if mode != discretized_path[i].mode:
                 self.convert_node_to_transition_node(mode, node.parent)
+            
+            
             mode = discretized_path[i].mode
-        self.convert_node_to_transition_node(mode, node)        
-        self.GeneratePath(active_mode, node, shortcutting_bool=False)
+
+        self.convert_node_to_transition_node(mode, node)
+        self.FindLBTransitionNode(shortcutting_bool =False)
+        # import matplotlib.pyplot as plt
+        # fig, axes = plt.subplots(3, 2, figsize=(12, 15))
+
+        # samples = [sample.q.state()[3:5] for sample in discretized_path]
+        # axes[1, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
+        # axes[1, 0].set_title('Agent 2')
+
+        
+        # samples = [sample.q.state()[:2] for sample in discretized_path]
+        # axes[0, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
+        # axes[0, 0].set_title('Agent 1')
+
+        # # samples = [sample.q.state()[5:] for sample in discretized_path]
+        # # axes[2, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
+        # # axes[2, 0].set_title('Agent 3')
+        
+        # samples = [sample.q.state()[3:5] for sample in self.operation.path]
+        # axes[1, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
+        # axes[1, 1].set_title('Agent 2')
+
+        
+        # samples = [sample.q.state()[:2] for sample in self.operation.path]
+        # axes[0, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
+        # axes[0, 1].set_title('Agent 1')
+
+        # # samples = [sample.q.state()[5:] for sample in self.operation.path]
+        # # axes[2, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
+        # # axes[2, 1].set_title('Agent 3')
+
+        
+        
+
+        # # Adjust layout and display the plots
+        # plt.tight_layout()
+        # plt.show()
+        print('final new cost:' , self.operation.cost)
+
+        # self.GeneratePath(active_mode, node, shortcutting_bool=False)
 
     def EdgeInterpolation(self, 
                           path:List[State], 
@@ -2970,11 +3051,12 @@ class BaseRRTstar(ABC):
         return discretized_path, discretized_modes, discretized_costs
 
     @abstractmethod
-    def UpdateCost(self, n: Node) -> None:
+    def UpdateCost(self, mode:Mode, n: Node) -> None:
         """
         Updates cost for a given node and all its descendants by propagating the cost change down the tree.
 
         Args:
+            mode (Mode): The current operational mode.
             n (Node): Root node from which the cost update begins.
 
         Returns:
