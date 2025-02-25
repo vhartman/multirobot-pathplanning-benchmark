@@ -4,7 +4,7 @@ import math as math
 import random
 import multi_robot_multi_goal_planning.planners as mrmgp
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Union, List, Dict, Callable
+from typing import Tuple, Optional, Union, List, Dict
 from numpy.typing import NDArray
 from numba import njit
 from scipy.stats.qmc import Halton
@@ -451,7 +451,7 @@ class Informed(ABC):
 
         Returns: 
             NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None. """
-        if self.get_right_side_of_eq(r_idx, path):
+        if self.get_ub_of_informed_set(r_idx, path):
             cmax = self.cmax[r_idx]
             if not cmax or self.cmin[r_idx] < 0 or self.cmin[r_idx] > cmax:
                 self.L[r_idx] = None
@@ -473,9 +473,9 @@ class Informed(ABC):
         Returns: 
             NDArray: Sampled point from the unit ball. """
         x_ball = np.random.normal(0, 1, n) 
-        x_ball /= np.linalg.norm(x_ball, ord=2)     # Normalize with L2 norm
-        radius = np.random.rand()**(1 / n)          # Generate a random radius and apply power
-        return x_ball * radius
+        norm = np.linalg.norm(x_ball)     # Normalize with L2 norm
+        radius = np.random.rand()**(1.0 / n)          # Generate a random radius and apply power
+        return (x_ball/norm) * radius
     
     def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
         focal_points = np.array(
@@ -506,7 +506,7 @@ class Informed(ABC):
         return
 
     @abstractmethod
-    def get_right_side_of_eq(self, r_idx:int, path:List[List]) -> bool:
+    def get_ub_of_informed_set(self, r_idx:int, path:List[List]) -> bool:
         """
         Computes right-hand side of informed set description
 
@@ -565,7 +565,7 @@ class InformedVersion0(Informed):
 
         return all_robot_dists[r_idx]   
 
-    def get_right_side_of_eq(self, r_idx:int, path:List[State]) -> bool:
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
         #need to calculate the cost only cnsidering one agent (euclidean distance)
         start = path[self.start_ind[r_idx]]
         end = path[self.end_ind[r_idx]]
@@ -577,8 +577,6 @@ class InformedVersion0(Informed):
             self.cmax[r_idx] = sum(path_segment_costs[self.start_ind[r_idx]:self.end_ind[r_idx]])
             return True
         return False
-    
-
 class InformedVersion1(Informed):
     """
     Locally informed sampling considering active task.
@@ -590,7 +588,7 @@ class InformedVersion1(Informed):
     def __init__(self, env, p_goal):
         super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, r_idx:int, path:List[State]) -> bool:
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
         #look for each robot at the home pose and task pose of active task in mode
         if len(self.active_robots_idx) == 1:
             idx = self.active_robots_idx[0]
@@ -637,7 +635,7 @@ class InformedVersion2(Informed):
             return True
         return False
     
-    def get_right_side_of_eq(self, r_idx:int, path:List[State]) -> bool:
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
         #need to calculate the cost only cnsidering one agent (euclidean distance)
         start = path[self.start_ind[r_idx]]
         end = path[self.end_ind[r_idx]]
@@ -660,7 +658,7 @@ class InformedVersion3(Informed):
     def __init__(self, env, p_goal):
         super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, r_idx:int, path:List[State]) -> bool:
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
         #need to calculate the cost only cnsidering one agent (euclidean distance)
         if len(self.active_robots_idx) == 1:
             idx = self.active_robots_idx[0]
@@ -707,7 +705,7 @@ class InformedVersion4(Informed):
     def __init__(self, env, p_goal):
         super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, r_idx:int, path:List[State]) -> bool:
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
         #need to calculate the cost only cnsidering one agent (euclidean distance)
         if len(self.active_robots_idx) == 1:
             idx = self.active_robots_idx[0]
@@ -769,7 +767,7 @@ class InformedVersion5(Informed):
             return True
         return False
     
-    def get_right_side_of_eq(self, r_idx:int, path:List[State]) -> bool:
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
         #need to calculate the cost only cnsidering one agent (euclidean distance)
         if len(self.active_robots_idx) == 1:
             idx = self.active_robots_idx[0]

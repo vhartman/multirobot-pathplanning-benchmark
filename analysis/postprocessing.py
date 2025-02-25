@@ -8,7 +8,7 @@ import webbrowser
 import time as time
 import subprocess
 from datetime import datetime
-from analysis.analysis_util import(
+from examples.analysis_util import(
     colors_plotly,
     count_files_in_folder,
     mesh_traces_env,
@@ -542,87 +542,7 @@ def shortcutting_cost(env, path, output_filename):
     # Save the plot as an image
     fig.write_image(output_filename)
 
-def path_as_png(
-    env,
-    path: List[State],
-    stop: bool = True,
-    export: bool = False,
-    pause_time: float = 0.05,
-    dir: str = "./z.vid/", 
-    framerate = 1
-) -> None:
-    for i in range(len(path)):
-        env.set_to_mode(path[i].mode)
-        for k in range(len(env.robots)):
-            q = path[i].q[k]
-            env.C.setJointState(q, get_robot_joints(env.C, env.robots[k]))
-        if i == 0:
-            env.C.view(True)
-        else:
-            env.C.view(False)
 
-        if export:
-            env.C.view_savePng(dir)
-
-        time.sleep(pause_time)
-
-    for i in range(2*framerate):
-        if export:
-            env.C.view_savePng(dir)
-
-def path_vis(env: BaseProblem, vid_path:str, framerate:int = 1, generate_png:bool = True, path_original:bool = False):
-    pkl_files = sorted(
-        [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
-        key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
-    )
-    
-    if generate_png:
-        with open(pkl_files[-1], 'rb') as file:
-            data = dill.load(file)
-            results = data["result"]
-            path_ = results["path"]
-            intermediate_tot = results["intermediate_tot"]
-            transition = results["is_transition"]
-            transition[0] = True
-            modes = results["modes"]
-            mode_sequence = []
-            m = env.start_mode
-            indices  = [env.robot_idx[r] for r in env.robots]
-            while True:
-                mode_sequence.append(m)
-                if env.is_terminal_mode(m):
-                    break
-                m = env.get_next_mode(None, m)
-            if path_original:
-                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=None)
-            else:
-                discretized_path, _, _, _ =init_discretization(path_, intermediate_tot, modes, indices, transition, resolution=0.01)  
-            path_as_png(env, discretized_path, export = True, dir =  vid_path, framerate = framerate)
-    # Generate a gif
-    palette_file = os.path.join(vid_path, 'palette.png')
-    output_gif = os.path.join(vid_path, 'out.gif')
-    for file in [palette_file, output_gif]:
-        if os.path.exists(file):
-            os.remove(file)
-    palette_command = [
-        "ffmpeg",
-        "-framerate", f"{framerate}",
-        "-i", os.path.join(vid_path, "%04d.png"),
-        "-vf", "scale=iw:-1:flags=lanczos,palettegen",
-        palette_file
-    ]
-
-    # Command 2: Use palette.png to generate the out.gif
-    gif_command = [
-        "ffmpeg",
-        "-framerate", f"{framerate}",
-        "-i", os.path.join(vid_path, "%04d.png"),
-        "-i", palette_file,
-        "-lavfi", "scale=iw:-1:flags=lanczos [scaled]; [scaled][1:v] paletteuse=dither=bayer:bayer_scale=5",
-        output_gif
-    ]
-    subprocess.run(palette_command, check=True)
-    subprocess.run(gif_command, check=True)
 
 # Only possible for env 2/3 DOFs
 def developement_animation(env, env_path, pkl_folder, output_html, with_tree, divider = None):

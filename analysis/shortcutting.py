@@ -16,7 +16,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 from multi_robot_multi_goal_planning.problems.configuration import (
     ListConfiguration
 )
-from analysis.analysis_util import(
+from examples.analysis_util import(
     colors_plotly,
     mesh_traces_env,
     get_latest_folder,

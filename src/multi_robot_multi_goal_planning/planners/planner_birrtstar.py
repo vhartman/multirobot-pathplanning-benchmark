@@ -115,7 +115,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             self.mark_node_as_transition(new_mode, node)
             self.trees[new_mode].add_node(node, 'B')
             self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
-            node.cost = 0.0
+            node.cost = np.inf
 
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         #check if transition is reached

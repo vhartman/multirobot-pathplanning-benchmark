@@ -15,6 +15,21 @@
                 "PYTHONPATH": "${workspaceFolder}/src"
             }
         },
+        {
+            "name": "- postprocess",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/run_postprocess.py",
+            "args": [
+                "--path",
+                "/home/tirza/multirobot-pathplanning-benchmark/out/20250224_160201_planner_demo_random_2d"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
          {
             "name": "- test 1",
             "type": "debugpy",

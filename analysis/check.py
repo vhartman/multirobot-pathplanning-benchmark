@@ -2,7 +2,7 @@ import dill
 import plotly.graph_objects as go
 import os
 import numpy as np
-from analysis.analysis_util import(
+from examples.analysis_util import(
 colors_plotly,
 count_files_in_folder,
 mesh_traces_env
