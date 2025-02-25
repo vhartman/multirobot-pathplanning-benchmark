@@ -1618,6 +1618,42 @@ def joint_prm_planner(
 
         return False
 
+    def get_inbetween_modes(start_mode, end_mode):
+        """
+        Find all possible paths from start_mode to end_mode.
+
+        Args:
+            start_mode: The starting mode object
+            end_mode: The ending mode object
+
+        Returns:
+            A list of lists, where each inner list represents a valid path
+            from start_mode to end_mode (inclusive of both).
+        """
+        # Store all found paths
+        open_paths = [[start_mode]]
+
+        in_between_modes = set()
+        in_between_modes.add(start_mode)
+        in_between_modes.add(end_mode)
+
+        while len(open_paths) > 0:
+            p = open_paths.pop()
+            last_mode = p[-1]
+
+            if last_mode == end_mode:
+                for m in p:
+                    in_between_modes.add(m)
+                continue
+
+            if len(last_mode.next_modes) > 0:
+                for mode in last_mode.next_modes:
+                    new_path = p.copy()
+                    new_path.append(mode)
+                    open_paths.append(new_path)
+
+        return list(in_between_modes)
+
     def generate_informed_samples(
         batch_size,
         path,
@@ -1627,6 +1663,8 @@ def joint_prm_planner(
     ):
         new_samples = []
         path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
+
+        in_between_mode_cache = {}
 
         num_attempts = 0
         while len(new_samples) < batch_size:
@@ -1651,8 +1689,25 @@ def joint_prm_planner(
 
                 # TODO: we need to sample from the set of all reachable modes here
                 # not only from the modes on the path
-                k = random.randint(start_ind, end_ind)
-                m = path[k].mode
+                if (
+                    path[start_ind].mode,
+                    path[end_ind].mode,
+                ) not in in_between_mode_cache:
+                    in_between_modes = get_inbetween_modes(
+                        path[start_ind].mode, path[end_ind].mode
+                    )
+                    in_between_mode_cache[
+                        (path[start_ind].mode, path[end_ind].mode)
+                    ] = in_between_modes
+
+                # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
+
+                m = random.choice(
+                    in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
+                )
+
+                # k = random.randint(start_ind, end_ind)
+                # m = path[k].mode
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
@@ -1980,6 +2035,8 @@ def joint_prm_planner(
         num_attempts = 0
         path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
 
+        in_between_mode_cache = {}
+
         while len(new_transitions) < batch_size:
             num_attempts += 1
 
@@ -2004,8 +2061,25 @@ def joint_prm_planner(
                         if lb_cost < current_cost:
                             break
 
-                k = random.randint(start_ind, end_ind)
-                mode = path[k].mode
+                if (
+                    path[start_ind].mode,
+                    path[end_ind].mode,
+                ) not in in_between_mode_cache:
+                    in_between_modes = get_inbetween_modes(
+                        path[start_ind].mode, path[end_ind].mode
+                    )
+                    in_between_mode_cache[
+                        (path[start_ind].mode, path[end_ind].mode)
+                    ] = in_between_modes
+
+                # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
+
+                mode = random.choice(
+                    in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
+                )
+
+                # k = random.randint(start_ind, end_ind)
+                # mode = path[k].mode
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
@@ -2410,7 +2484,7 @@ def joint_prm_planner(
             )
             g.add_transition_nodes(new_transitions)
             print(f"Adding {len(new_transitions)} transitions")
-    
+
             # print(reached_modes)
 
             if len(g.goal_nodes) == 0:
@@ -2464,7 +2538,6 @@ def joint_prm_planner(
 
             g.compute_lower_bound_to_goal(env.batch_config_cost)
 
-
         samples_in_graph_after = g.get_num_samples()
         cnt += samples_in_graph_after - samples_in_graph_before
 
@@ -2477,7 +2550,6 @@ def joint_prm_planner(
 
         if not reached_terminal_mode:
             continue
-
 
         # for m in reached_modes:
         #     plt.figure()
@@ -2513,7 +2585,7 @@ def joint_prm_planner(
         while True:
             # print([node.neighbors[0].state.mode for node in g.reverse_transition_nodes[g.goal_nodes[0].state.mode]])
             # print([node.neighbors[0].state.mode for node in g.transition_nodes[g.root.state.mode]])
-    
+
             sparsely_checked_path = g.search(
                 g.root,
                 g.goal_nodes,
@@ -2589,7 +2661,9 @@ def joint_prm_planner(
                                 tolerance=env.collision_tolerance,
                             )
 
-                            shortcut_path  = shortcutting.remove_interpolated_nodes(shortcut_path)
+                            shortcut_path = shortcutting.remove_interpolated_nodes(
+                                shortcut_path
+                            )
 
                             shortcut_path_cost = path_cost(
                                 shortcut_path, env.batch_config_cost
