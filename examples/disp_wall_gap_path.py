@@ -199,7 +199,7 @@ def main():
 
         # for i in range(path[0].q.num_agents()):
         #     plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
-        step = 40
+        step = 63
 
         path = path[::step]
 
