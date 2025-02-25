@@ -2176,8 +2176,9 @@ class BaseRRTstar(ABC):
         while attemps < max_attemps:
             attemps += 1
             if goal_sampling:
-                constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
-                goal = self.env.get_active_task(mode, self.get_next_ids(mode)).goal.sample(mode)
+                next_ids = self.get_next_ids(mode)
+                constrained_robot = self.env.get_active_task(mode, next_ids).robots
+                goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
             q_rand = []
             end_idx = 0
             for robot in self.env.robots:
