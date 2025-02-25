@@ -159,9 +159,6 @@ def main():
 
     path_data = load_path(args.path_filename)
 
-    np.random.seed(0)
-    random.seed(0)
-
     env = get_env_by_name(args.env_name)
     env.cost_reduction = "sum"
     env.cost_metric = "euclidean"
