@@ -1661,6 +1661,11 @@ class BaseRRTstar(ABC):
         if self.env.is_terminal_mode(mode):
             return
         next_mode = self.env.get_next_mode(n.state.q, mode)
+        if next_mode not in self.modes:
+            tree_type = type(self.trees[mode])
+            if tree_type == BidirectionalTree:
+                self.trees[mode].connected = True
+            self.add_new_mode(n.state.q, mode, tree_type)
         self.trees[next_mode].add_transition_node_as_start_node(n)
         if self.trees[next_mode].order == 1:
             index = len(self.trees[next_mode].subtree)-1
@@ -1882,9 +1887,11 @@ class BaseRRTstar(ABC):
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
 
-        constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+        
         while True:
-            goal = self.env.get_active_task(mode, self.get_next_ids(mode)).goal.sample(mode)
+            next_ids = self.get_next_ids(mode)
+            constrained_robot = self.env.get_active_task(mode, next_ids).robots
+            goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
             q = []
             end_idx = 0
             for robot in self.env.robots:
@@ -2050,8 +2057,9 @@ class BaseRRTstar(ABC):
                 self.informed[mode].cost = self.operation.cost
                 update = True
             if goal_sampling:
-                constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
-                goal = self.env.get_active_task(mode, self.get_next_ids(mode)).goal.sample(mode)
+                next_ids = self.get_next_ids(mode)
+                constrained_robot = self.env.get_active_task(mode, next_ids).robots
+                goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
                 q_rand = []
                 end_idx = 0
                 for robot in self.env.robots:
