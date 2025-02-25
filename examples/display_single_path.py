@@ -152,8 +152,7 @@ def main():
 
     folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
     config = load_experiment_config(os.path.join(folder_path, 'config.json'))
-    num_run = re.search(r'/(\d+)(?=/)', args.path_filename).group(1)
-    seed = config["seed"] + int(num_run)
+    seed = config["seed"] 
     np.random.seed(seed)
     random.seed(seed)
 
