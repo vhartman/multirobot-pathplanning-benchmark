@@ -9,8 +9,8 @@ import random
 import json
 
 # make everything predictable
-np.random.seed(2)
-random.seed(2)
+# np.random.seed(2)
+# random.seed(2)
 
 
 def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
@@ -3445,7 +3445,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         if pos[0] > -0.3 and pos[0] < 0.3 and pos[1] < 0.3 and pos[1] > -0.3:
             continue
 
-        keep_z_aligned = np.random.rand() > 0.5
+        keep_z_aligned = np.random.rand() > 0.8
         quat = generate_rnd_axis_quaternion(keep_z_aligned)
 
         color = np.random.rand(3)
@@ -3473,7 +3473,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             C.clear()
             C.addConfigurationCopy(c_coll_tmp)
 
-    C.view(True)
+    # C.view(True)
 
     # add goal positions
     for i in range(num_boxes):
@@ -3585,7 +3585,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
             target=q_home,
         )
 
-        for i in range(5):
+        for i in range(20):
             if i > 0:
                 komo.initRandom()
             #     # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
@@ -3778,7 +3778,7 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
         for j in range(w):
             pos = np.array(
                 [
-                    j * size[0] * 1.05 - w / 2 * size[0] + size[0] / 2,
+                    j * size[0] * 1.075 - w / 2 * size[0] + size[0] / 2,
                     -1,
                     i * size[2] * 1.05 + 0.05 + 0.1,
                 ]
@@ -3795,7 +3795,7 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
 
             goal_pos = np.array(
                 [
-                    j * size[0] * 1.01 - w / 2 * size[0] + size[0] / 2,
+                    j * size[0] * 1.075 - w / 2 * size[0] + size[0] / 2,
                     1,
                     (1 - i) * size[2] * 1.01 + 0.05 + 0.1,
                 ]
