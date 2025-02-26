@@ -1,10 +1,12 @@
 import argparse
 from matplotlib import pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 
 import datetime
 import json
 import os
-import re
 import random
 
 import numpy as np
@@ -20,7 +22,7 @@ from multi_robot_multi_goal_planning.planners.shortcutting import (
     single_mode_shortcut,
     robot_mode_shortcut,
 )
-from run_experiment import load_experiment_config
+
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 
@@ -44,7 +46,7 @@ def convert_to_path(env, path_data):
         q = type(env.get_start_pos())(q_np, start_conf.array_slice)
 
         if a["mode"] != prev_mode_ids:
-        # if a["mode"] != prev_mode_ids and a["mode"] != env._terminal_task_ids:
+            # if a["mode"] != prev_mode_ids and a["mode"] != env._terminal_task_ids:
             print(a["mode"])
             next_mode = env.get_next_mode(prev_config, modes[-1])
             modes.append(next_mode)
@@ -150,13 +152,13 @@ def main():
     )
     args = parser.parse_args()
 
-    folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
-    config = load_experiment_config(os.path.join(folder_path, 'config.json'))
-    seed = config["seed"] 
-    np.random.seed(seed)
-    random.seed(seed)
+    np.random.seed(0)
+    random.seed(0)
 
     path_data = load_path(args.path_filename)
+
+    np.random.seed(0)
+    random.seed(0)
 
     env = get_env_by_name(args.env_name)
     env.cost_reduction = "sum"
@@ -167,10 +169,77 @@ def main():
     cost = path_cost(path, env.batch_config_cost)
     print("cost", cost)
 
+    if args.interpolate:
+        path = interpolate_path(path, 0.01)
+
     if args.plot:
-        plt.figure()
-        for i in range(path[0].q.num_agents()):
-            plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
+        obstacles = [
+            {"pos": [0.0, -0.5], "size": [1.4, 1.2]},
+            {"pos": [0.0, 1.2], "size": [1.4, 1.5]},
+        ]
+
+        fig, ax = plt.subplots()
+        ax.set_xlim(2, -2)
+        ax.set_ylim(2, -2.0)
+        ax.set_aspect("equal")
+        # ax.set_xlabel("X")
+        # ax.set_ylabel("Y")
+        # ax.set_aspect("equal")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        
+        # Draw obstacles
+        for obs in obstacles:
+            x, y = obs["pos"]
+            w, h = obs["size"]
+            rect = patches.Rectangle((x - w / 2, y - h / 2), w, h, color="black")
+            ax.add_patch(rect)
+
+        # for i in range(path[0].q.num_agents()):
+        #     plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
+        step = 63
+
+        path = path[::step]
+
+        cmap = cm.get_cmap("viridis", len(path))
+        norm = mcolors.Normalize(vmin=0, vmax=len(path) - 1)
+
+        for i in range(2):
+            x_vals = [pt.q[i][0] for pt in path]
+            y_vals = [pt.q[i][1] for pt in path]
+            theta_vals = [pt.q[i][2] for pt in path]
+            
+            if i == 0:
+                shape = "rectangle"
+            else:
+                shape = "circle"
+            
+            for t, (x, y, theta) in enumerate(zip(x_vals, y_vals, theta_vals)):
+              color = cmap(norm(t))
+              if shape == "rectangle":
+                  # Simplified rectangle plotting
+                  width, height = 0.09, 0.49
+                  # Create rectangle at origin
+                  rect = patches.Rectangle(
+                      (-width/2, -height/2),  # Center the rectangle
+                      width, height,
+                      angle=np.degrees(theta),
+                      rotation_point='center',
+                      edgecolor=color,
+                      facecolor='none',
+                      linewidth=2
+                  )
+                  # Move rectangle to the right position
+                  transform = plt.matplotlib.transforms.Affine2D().translate(x, y)
+                  rect.set_transform(transform + ax.transData)
+                  ax.add_patch(rect)
+
+              else:
+                  circle = patches.Circle((x, y), 0.15, edgecolor=color, facecolor='none',linewidth=2)
+                  ax.add_patch(circle)
+                
 
         # plt.show(block=False)
 
@@ -186,9 +255,6 @@ def main():
                 path_w_doubled_modes.append(State(path[i].q, path[i + 1].mode))
 
         path = path_w_doubled_modes
-
-    if args.interpolate:
-        path = interpolate_path(path, 0.01)
 
     if args.shortcut:
         plt.figure()

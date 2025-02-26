@@ -160,14 +160,14 @@ def main():
     shortcut_path, info_shortcut = robot_mode_shortcut(
         env,
         path,
-        10000,
+        1000,
         tolerance=env.collision_tolerance,
         resolution=env.collision_resolution,
     )
 
     print("task-shortcut")
     single_mode_shortcut_path, info_single_mode_shortcut = single_mode_shortcut(
-        env, path, 10000
+        env, path, 1000
     )
 
     interpolated_path = interpolate_path(path, 0.05)

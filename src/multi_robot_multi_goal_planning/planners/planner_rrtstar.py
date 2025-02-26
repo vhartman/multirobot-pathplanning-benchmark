@@ -103,6 +103,9 @@ class RRTstar(BaseRRTstar):
                     self.UpdateCost(active_mode, n_new) 
                 self.ManageTransition(active_mode, n_new)
 
+            # if self.operation.init_sol and True:
+            #     break
+
             if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break
         self.costs.append(self.operation.cost)

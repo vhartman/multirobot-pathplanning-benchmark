@@ -1890,6 +1890,9 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
 
 class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 8):
+        np.random.seed(1)
+        random.seed(2)
+
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
             num_robots, num_boxes
         )
@@ -1940,8 +1943,6 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
             self.graph.add_dependency("terminal", prev_task_names[r])
 
         BaseModeLogic.__init__(self)
-
-        # self.graph.visualize()
 
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
