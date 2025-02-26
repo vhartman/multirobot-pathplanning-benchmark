@@ -132,16 +132,16 @@ planner_name_to_color = {
     "informed_prm_radius": "tab:blue",
     "locally_informed_path_prm": "tab:purple",
     "globally_informed_path_prm": "tab:brown",
-    "locally_informed_prm": "darkgreen",
+    # "locally_informed_prm": "darkgreen",
     "globally_informed_prm": "magenta",
     "locally_informed_shortcutting_prm": "tab:blue",
-    "locally_informed_prm_shortcutting": "tab:blue",
+    # "locally_informed_prm_shortcutting": "tab:blue",
     "globally_informed_prm_shortcutting": "tab:green",
     "globally_informed_shortcutting_prm": "tab:green",
     "locally_informed_prm_rejection": "tab:orange",
     "locally_informed_prm_shortcutting_rejection": "tab:red",
     "globally_informed_prm_shortcutting_rejection": "tab:brown",
-    "birrtstar": "mediumvioletred",
+    "birrtstar": "black",
     "max_euclidean_rrtstar": "tab:red",
     "sum_euclidean_rrtstar": "tab:brown",
     "euclidean_rrtstar": "tab:purple",
@@ -149,9 +149,16 @@ planner_name_to_color = {
     "rrtstar_2": "tab:orange",
     "rrtstar_local": "tab:red",
     "rrtstar_shortcutting_global": "black",
-    "rrtstar_shortcutting": "tab:purple",
+    # "rrtstar_shortcutting": "tab:purple",
     "rrtstar_shortcutting_local": "tab:purple",
     "rrtstar_global": "tab:brown",
+    "prm": "tab:blue",
+    "locally_informed_prm": "tab:yellow",
+    # "locally_informed_prm_shortcutting": "navy",
+    "rrtstar_shortcutting": "brown",
+    "locally_informed_rrtstar": "lightcoral",
+    "prm_shortcutting": "cyan",
+    "locally_informed_rrtstar_shortcut": "peru",
 }
 
 
@@ -253,7 +260,7 @@ def make_cost_plots(
             )[:, None],
             marker="o",
             color=planner_name_to_color[planner_name],
-            capsize=5,
+            # capsize=5,
             # capthick=5,
         )
 
@@ -338,13 +345,13 @@ def make_cost_plots(
 
     # plt.grid()
     # plt.grid(which="major", ls="--")
-    plt.grid(which='both', axis='both', ls='--')
+    plt.grid(which="both", axis="both", ls="--")
 
     plt.ylabel(f"Cost ({config['cost_reduction']})")
     plt.xlabel("Computation Time [s]")
 
-    for side in ['top', 'bottom', 'left', 'right']:
-        plt.spines[side].set(lw=0.2)
+    # for side in ['top', 'bottom', 'left', 'right']:
+    #     plt.spines[side].set(lw=0.2)
 
     if add_legend:
         plt.legend()
