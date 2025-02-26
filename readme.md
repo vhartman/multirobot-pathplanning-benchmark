@@ -1,6 +1,7 @@
 # Benchmarks for multi robot multi goal motion planning
 
-This repository provides some multi-robot-multi-goal motion planning problems, and some (naive) baselines for finding a solution.
+This repository provides some multi-robot-multi-goal motion planning problems, and some baseline-planners.
+There are also some utilities for visualizing plans, and plotting convergence and success rates of planners.
 
 The corresponding paper can be found at ~~not available yet~~.
 
@@ -17,10 +18,31 @@ which also installs this module
 
 # Overview and Usage
 
-We formulate some multi robot multi goal motion planning problems, and try to provide some baselines and base-classes to formulate your own problems.
-At the moment, all of this is in python, with collision checks and other performance critical parts happening in rai (or in the backend of your choice).
+We formulate some multi-robot multi-goal motion planning problems, and provide some baselines and base-classes to formulate your own problems.
+At the moment, all of this is implemented using python, with collision checks and other performance critical parts happening in rai (or in the backend of your choice).
+
+The structure of the benchmark should however make it easy to swap out this backend with any other backend which would e.g., allow for parallelization, and usage of your favorite framework.
 
 ## Examples
+Currently, there are 21 base scenarios, of which most can be adjusted in difficulty by changing the number of robots and objects that we need to deal with.
+
+Videos illustrate the types of problems we are interested in best:
+
+[][][]
+
+More examples can be seen with
+
+```
+python3 examples/show_problems.py --mode list_all
+```
+
+and 
+
+```
+python3 examples/show_problems.py [env_name] --mode modes
+```
+
+to see a specific environment and all its subgoals.
 
 ## Getting started
 
