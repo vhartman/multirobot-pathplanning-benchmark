@@ -2307,6 +2307,13 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         os.path.dirname(__file__), "../models/ur10/ur10_two_finger.g"
     )
 
+    # robot_path = os.path.join(
+    #     os.path.dirname(__file__), "../models/kuka_drake/kuka_two_finger.g"
+    # )
+
+    robot_type_prefix = "ur_"
+    # robot_type_prefix = "kuka_"
+
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
     ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
@@ -2403,7 +2410,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
 
     def compute_rearrangment(c_tmp, robot_prefix, box, goal):
         # set everything but the current box to non-contact
-        robot_base = robot_prefix + "ur_base"
+        robot_base = robot_prefix + robot_type_prefix + "base"
         c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
 
         q_home = c_tmp.getJointState()
@@ -2419,7 +2426,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         # komo.addControlObjective([], 1, 1e-1)
         # komo.addControlObjective([], 2, 1e-1)
 
-        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_gripper", box])
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + robot_type_prefix + "gripper", box])
         # komo.addObjective(
         #     [1, 2],
         #     ry.FS.distance,
@@ -2431,14 +2438,14 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         komo.addObjective(
             [1, 2],
             ry.FS.positionDiff,
-            [robot_prefix + "ur_gripper_center", box],
+            [robot_prefix + robot_type_prefix + "gripper_center", box],
             ry.OT.sos,
             [1e1, 1e1, 1],
         )
         komo.addObjective(
             [1, 2],
             ry.FS.scalarProductZZ,
-            [robot_prefix + "ur_gripper_center", box],
+            [robot_prefix + robot_type_prefix + "gripper_center", box],
             ry.OT.sos,
             [1e1],
             [-1],
@@ -2446,7 +2453,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         komo.addObjective(
             [1, 2],
             ry.FS.scalarProductXX,
-            [robot_prefix + "ur_gripper_center", box],
+            [robot_prefix + robot_type_prefix + "gripper_center", box],
             ry.OT.sos,
             [1e1],
             [1],
