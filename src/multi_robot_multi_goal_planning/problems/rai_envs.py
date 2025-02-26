@@ -1944,6 +1944,8 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
+        # self.graph.visualize()
+
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
