@@ -1,13 +1,30 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "other_hallway",
+  "environment": "triple_waypoints",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 200,
+  "max_planning_time": 100,
   "num_runs": 1,
   "seed": 1,
   "optimize": true,
   "planners": [
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+
+      }
+    },
     {
       "name": "drrtstar",
       "type": "drrtstar",
@@ -15,30 +32,16 @@
         "informed_sampling": true,
         "informed_sampling_version": 6,  
         "distance_metric": "max_euclidean",
-        "p_goal": 0.1,
+        "p_goal": 0.4,
         "p_stay": 0.0,
         "p_uniform": 0.05,
         "shortcutting": true,
         "mode_sampling": 1, 
         "locally_informed_sampling": true,
-        "informed_batch_size":300
-
-      }
-    },
-     {
-      "name": "rrtstar",
-      "type": "rrtstar",
-      "options": {
-        "informed_sampling": true,
-        "informed_sampling_version": 6,  
-        "distance_metric": "max_euclidean",
-        "p_goal": 0.1,
-        "p_stay": 0.0,
-        "p_uniform": 0.05,
-        "shortcutting": true,
-        "mode_sampling": 1, 
-        "locally_informed_sampling": true,
-        "informed_batch_size": 300
+        "informed_batch_size":300,
+        "sample_batch_size_per_task": 800,
+        "transistion_batch_size_per_mode":200, 
+        "expand_iter":200
 
       }
     }

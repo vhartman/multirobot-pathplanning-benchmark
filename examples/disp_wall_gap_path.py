@@ -199,11 +199,12 @@ def main():
 
         # for i in range(path[0].q.num_agents()):
         #     plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
-        step = 63
+        step = 50
 
         path = path[::step]
 
-        cmap = cm.get_cmap("viridis", len(path))
+        cmap_1 = cm.get_cmap("cool", len(path))
+        cmap_2 = cm.get_cmap("summer", len(path))
         norm = mcolors.Normalize(vmin=0, vmax=len(path) - 1)
 
         for i in range(2):
@@ -217,8 +218,8 @@ def main():
                 shape = "circle"
             
             for t, (x, y, theta) in enumerate(zip(x_vals, y_vals, theta_vals)):
-              color = cmap(norm(t))
               if shape == "rectangle":
+                  color = cmap_1(norm(t))
                   # Simplified rectangle plotting
                   width, height = 0.09, 0.49
                   # Create rectangle at origin
@@ -237,6 +238,7 @@ def main():
                   ax.add_patch(rect)
 
               else:
+                  color = cmap_2(norm(t))
                   circle = patches.Circle((x, y), 0.15, edgecolor=color, facecolor='none',linewidth=2)
                   ax.add_patch(circle)
                 

@@ -132,7 +132,7 @@ planner_name_to_color = {
     "informed_prm_radius": "tab:blue",
     "locally_informed_path_prm": "tab:purple",
     "globally_informed_path_prm": "tab:brown",
-    "locally_informed_prm": "darkgreen",
+    # "locally_informed_prm": "darkgreen",
     "globally_informed_prm": "magenta",
     "locally_informed_shortcutting_prm": "tab:blue",
     "locally_informed_prm_shortcutting": "tab:blue",
@@ -141,7 +141,7 @@ planner_name_to_color = {
     "locally_informed_prm_rejection": "tab:orange",
     "locally_informed_prm_shortcutting_rejection": "tab:red",
     "globally_informed_prm_shortcutting_rejection": "tab:brown",
-    "birrtstar": "mediumvioletred",
+    "birrtstar": "black",
     "max_euclidean_rrtstar": "tab:red",
     "sum_euclidean_rrtstar": "tab:brown",
     "euclidean_rrtstar": "tab:purple",
@@ -149,20 +149,33 @@ planner_name_to_color = {
     "rrtstar_2": "tab:orange",
     "rrtstar_local": "tab:red",
     "rrtstar_shortcutting_global": "black",
-    "rrtstar_shortcutting": "tab:purple",
+    # "rrtstar_shortcutting": "tab:purple",
     "rrtstar_shortcutting_local": "tab:purple",
     "rrtstar_global": "tab:brown",
-    "drrtstar": "magenta",
-    "rrtstar_6": "tab:blue",
-    "rrtstar_2": "tab:green",
-    "rrtstar_5": "tab:brown",
-    "rrtstar_3": "black",
-    "rrtstar_4": "tab:orange",
-    "rrtstar_1": "tab:purple",
-    "drrtstar_2000": "black",
-    "drrtstar_5000": "magenta",
-    "rrtstar_informed_sampling": "tab:orange",
-    "rrtstar_no_informed_sampling": "tab:purple",
+    "prm": "tab:blue",
+    # "locally_informed_prm": "tab:green",
+    # "locally_informed_prm_shortcutting": "navy",
+    "rrtstar_shortcutting": "brown",
+    "locally_informed_rrtstar": "lightcoral",
+    "prm_shortcutting": "cyan",
+    "locally_informed_rrtstar_shortcut": "peru",
+    "locally_informed_prm": "tab:blue",
+
+    "globally_informed_prm_no_shortcutting": "tab:blue",
+    "birrtstar_global_sampling": "black",
+    "rrtstar_global_sampling": "tab:red",
+    "locally_informed_prm_no_shortcutting": "tab:blue",
+    "birrtstar_no_shortcutting": "black",
+    "rrtstar_no_shortcutting": "tab:red",
+}
+
+planner_name_to_style = {
+    "globally_informed_prm_no_shortcutting": "--",
+    "birrtstar_global_sampling": "--",
+    "rrtstar_global_sampling": "--",
+    "locally_informed_prm_no_shortcutting": "--",
+    "birrtstar_no_shortcutting": "--",
+    "rrtstar_no_shortcutting": "--",
 }
 
 
@@ -247,6 +260,11 @@ def make_cost_plots(
         # lb_initial_solution_cost = np.quantile(all_initial_solution_costs, 0.1)
         # ub_initial_solution_cost = np.quantile(all_initial_solution_costs, 0.9)
 
+        if planner_name in planner_name_to_color:
+            color = planner_name_to_color[planner_name]
+        else:
+            color = np.random.rand(3,)
+
         plt.errorbar(
             [median_initial_solution_time],
             [median_initial_solution_cost],
@@ -263,8 +281,8 @@ def make_cost_plots(
                 ]
             )[:, None],
             marker="o",
-            color=planner_name_to_color[planner_name],
-            capsize=5,
+            color=color,
+            # capsize=5,
             # capthick=5,
         )
 
@@ -324,6 +342,15 @@ def make_cost_plots(
 
         ub_solution_cost[~np.isfinite(ub_solution_cost)] = 1e6
 
+        if planner_name in planner_name_to_color:
+            color = planner_name_to_color[planner_name]
+        else:
+            color = np.random.rand(3,)
+
+        ls = "-"
+        if planner_name in planner_name_to_style:
+            ls = planner_name_to_style[planner_name]
+
         plt.semilogx(
             interpolated_solution_times[
                 interpolated_solution_times < max_planner_solution_time
@@ -332,7 +359,8 @@ def make_cost_plots(
                 interpolated_solution_times < max_planner_solution_time
             ],
             label=planner_name,
-            color=planner_name_to_color[planner_name],
+            color=color,
+            ls = ls
         )
         plt.fill_between(
             interpolated_solution_times[
@@ -342,20 +370,20 @@ def make_cost_plots(
             ub_solution_cost[interpolated_solution_times < max_planner_solution_time],
             alpha=0.3,
             # lw=2,
-            color=planner_name_to_color[planner_name],
+            color=color,
         )
 
     plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
     # plt.grid()
     # plt.grid(which="major", ls="--")
-    plt.grid(which='both', axis='both', ls='--')
+    plt.grid(which="both", axis="both", ls="--")
 
     plt.ylabel(f"Cost ({config['cost_reduction']})")
     plt.xlabel("Computation Time [s]")
 
-    for side in ['top', 'bottom', 'left', 'right']:
-        plt.spines[side].set(lw=0.2)
+    # for side in ['top', 'bottom', 'left', 'right']:
+    #     plt.spines[side].set(lw=0.2)
 
     if add_legend:
         plt.legend()
@@ -411,10 +439,15 @@ def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
                 first_solution_found = min(first_solution_found, i)
                 break
 
+        if planner_name in planner_name_to_color:
+            color = planner_name_to_color[planner_name]
+        else:
+            color = np.random.rand(3,)
+
         plt.semilogx(
             interpolated_solution_times,
             percentage_solution_found,
-            color=planner_name_to_color[planner_name],
+            color=color,
             label=planner_name,
             drawstyle="steps-post",
         )

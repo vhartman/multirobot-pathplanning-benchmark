@@ -233,6 +233,9 @@ def setup_planner(
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
                 locally_informed_sampling = options["locally_informed_sampling"],
+                sample_batch_size_per_task = options["sample_batch_size_per_task"],
+                transistion_batch_size_per_mode  = options["transistion_batch_size_per_mode"],
+                expand_iter  = options["expand_iter"]
                 # gaussian=options["gaussian"],
             ).Plan()
 
@@ -504,7 +507,7 @@ def main():
 
     # convention: alsways use "/" as trailing character
     try: 
-        experiment_folder = f"/media/tirza/theinle/out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
+        experiment_folder = f"/media/tirza/tirza/MasterThesis/out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
     except Exception:
         experiment_folder = (
             f"./out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
