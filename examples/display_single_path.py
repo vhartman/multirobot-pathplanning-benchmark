@@ -148,11 +148,22 @@ def main():
         action="store_true",
         help="Plot the path. (default: True)",
     )
+    parser.add_argument(
+        "--export",
+        action="store_true",
+        help="Plot the path. (default: True)",
+    )
+    parser.add_argument(
+        "--show_coll_config",
+        action="store_true",
+        help="Display the configuration used for collision checking. (default: False)",
+    )
     args = parser.parse_args()
 
     folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
     config = load_experiment_config(os.path.join(folder_path, 'config.json'))
     seed = config["seed"] 
+
     np.random.seed(seed)
     random.seed(seed)
 
@@ -161,6 +172,10 @@ def main():
     env = get_env_by_name(args.env_name)
     env.cost_reduction = "sum"
     env.cost_metric = "euclidean"
+
+    if not args.show_coll_config:
+        env.C_base = env.C_orig
+        env.C = env.C_orig
 
     path = convert_to_path(env, path_data)
 
@@ -188,7 +203,7 @@ def main():
         path = path_w_doubled_modes
 
     if args.interpolate:
-        path = interpolate_path(path, 0.01)
+        path = interpolate_path(path, 0.1)
 
     if args.shortcut:
         plt.figure()
@@ -227,7 +242,7 @@ def main():
         env,
         path,
         False,
-        export=False,
+        export=args.export,
         pause_time=0.05,
         stop_at_end=True,
         adapt_to_max_distance=True,

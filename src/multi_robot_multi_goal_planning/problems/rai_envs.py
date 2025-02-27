@@ -1861,7 +1861,7 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
             cnt = 0
             for t, k in zip(task_names, qs):
                 if t == "pick":
-                    ee_name = r + "ur_gripper_center"
+                    ee_name = r + "gripper_center"
                     self.tasks.append(Task([r], SingleGoal(k), t, frames=[ee_name, b]))
                 else:
                     self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
@@ -1943,6 +1943,8 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
             self.graph.add_dependency("terminal", prev_task_names[r])
 
         BaseModeLogic.__init__(self)
+
+        # self.graph.visualize()
 
         # buffer for faster collision checking
         self.prev_mode = self.start_mode

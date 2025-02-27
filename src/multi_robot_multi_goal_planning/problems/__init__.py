@@ -5,8 +5,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 
-
-def get_env_by_name(name):
+def get_all_environments():
     # fmt: off
     environment_configs = {
         # 2D Environments
@@ -83,6 +82,7 @@ def get_env_by_name(name):
         "two_agents_many_goals_dep_no_rot": lambda: re.rai_two_dim_env_no_obs_dep_graph(agents_can_rotate=False),
         "three_agent_many_goals_dep": lambda: re.rai_two_dim_three_agent_env_dependency_graph(),
         "mobile_dep": lambda: re.rai_mobile_manip_wall_dep(),
+        "mobile_five_dep": lambda: re.rai_mobile_manip_wall_dep(num_robots=5),
         "mobile_four_dep": lambda: re.rai_mobile_manip_wall_dep(num_robots=4),
         "mobile_three_dep": lambda: re.rai_mobile_manip_wall_dep(num_robots=3),
         "mobile_two_dep": lambda: re.rai_mobile_manip_wall_dep(num_robots=2),
@@ -92,6 +92,11 @@ def get_env_by_name(name):
     }
     # fmt: on
 
+    return environment_configs
+
+def get_env_by_name(name):
+    environment_configs = get_all_environments()
+    
     if name not in environment_configs:
         raise ValueError(f"Unknown environment name: {name}")
 

@@ -183,9 +183,15 @@ if __name__ == "__main__":
         action="store_true",
         help="Display the configuration used for collision checking. (default: False)",
     )
+    parser.add_argument(
+        "--seed", type=int, default=0, help="Seed"
+    )
     args = parser.parse_args()
 
     # check_all_modes()
+
+    np.random.seed(args.seed)
+    random.seed(args.seed)
 
     env = get_env_by_name(args.env_name)
 
