@@ -1493,11 +1493,11 @@ def small_angle_quaternion(axis, delta_theta):
 
 def make_box_sorting_env(view: bool = False):
     C = ry.Config()
-    
+
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
@@ -1725,7 +1725,7 @@ def make_egg_carton_env(num_boxes=9, view: bool = False):
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
@@ -2288,7 +2288,9 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
     return C, keyframes, all_robots
 
 
-def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
+def make_box_stacking_env(
+    num_robots=2, num_boxes=9, mixed_robots: bool = True, view: bool = False
+):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -2303,16 +2305,29 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(
+    ur10_path = os.path.join(
         os.path.dirname(__file__), "../models/ur10/ur10_two_finger.g"
     )
 
-    # robot_path = os.path.join(
-    #     os.path.dirname(__file__), "../models/kuka_drake/kuka_two_finger.g"
-    # )
+    kuka_path = os.path.join(
+        os.path.dirname(__file__), "../models/kuka_drake/kuka_two_finger.g"
+    )
 
-    robot_type_prefix = "ur_"
-    # robot_type_prefix = "kuka_"
+    def get_robot_and_type_prefix(idx: int):
+        if not mixed_robots:
+            return ur10_path, "ur_"
+        else:
+            if idx in [0, 2]:
+                return ur10_path, "ur_"
+            else:
+                return kuka_path, "kuka_"
+
+    # robot_path = ur10_path
+
+    all_robots = []
+
+    robot_path, robot_type_prefix = get_robot_and_type_prefix(0)
+    all_robots.append(f"a1_{robot_type_prefix}")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -2323,6 +2338,9 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
     # C.getFrame('a1_ur_coll0').setContact(-5)
 
     if num_robots >= 2:
+        robot_path, robot_type_prefix = get_robot_and_type_prefix(1)
+        all_robots.append(f"a2_{robot_type_prefix}")
+        
         C.addFile(robot_path, namePrefix="a2_").setParent(
             C.getFrame("table")
         ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
@@ -2330,6 +2348,9 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         ).setJoint(ry.JT.rigid)
 
     if num_robots >= 3:
+        robot_path, robot_type_prefix = get_robot_and_type_prefix(2)
+        all_robots.append(f"a3_{robot_type_prefix}")
+        
         C.addFile(robot_path, namePrefix="a3_").setParent(
             C.getFrame("table")
         ).setRelativePosition([+0.5, -0.6, 0]).setRelativeQuaternion(
@@ -2337,6 +2358,9 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         ).setJoint(ry.JT.rigid)
 
     if num_robots >= 4:
+        robot_path, robot_type_prefix = get_robot_and_type_prefix(3)
+        all_robots.append(f"a4_{robot_type_prefix}")
+        
         C.addFile(robot_path, namePrefix="a4_").setParent(
             C.getFrame("table")
         ).setRelativePosition([-0.5, -0.6, 0]).setRelativeQuaternion(
@@ -2410,7 +2434,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
 
     def compute_rearrangment(c_tmp, robot_prefix, box, goal):
         # set everything but the current box to non-contact
-        robot_base = robot_prefix + robot_type_prefix + "base"
+        robot_base = robot_prefix + "base"
         c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
 
         q_home = c_tmp.getJointState()
@@ -2426,7 +2450,9 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         # komo.addControlObjective([], 1, 1e-1)
         # komo.addControlObjective([], 2, 1e-1)
 
-        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + robot_type_prefix + "gripper", box])
+        komo.addModeSwitch(
+            [1, 2], ry.SY.stable, [robot_prefix + "gripper", box]
+        )
         # komo.addObjective(
         #     [1, 2],
         #     ry.FS.distance,
@@ -2438,14 +2464,14 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         komo.addObjective(
             [1, 2],
             ry.FS.positionDiff,
-            [robot_prefix + robot_type_prefix + "gripper_center", box],
+            [robot_prefix + "gripper_center", box],
             ry.OT.sos,
             [1e1, 1e1, 1],
         )
         komo.addObjective(
             [1, 2],
             ry.FS.scalarProductZZ,
-            [robot_prefix + robot_type_prefix + "gripper_center", box],
+            [robot_prefix + "gripper_center", box],
             ry.OT.sos,
             [1e1],
             [-1],
@@ -2453,7 +2479,7 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
         komo.addObjective(
             [1, 2],
             ry.FS.scalarProductXX,
-            [robot_prefix + robot_type_prefix + "gripper_center", box],
+            [robot_prefix + "gripper_center", box],
             ry.OT.sos,
             [1e1],
             [1],
@@ -2541,8 +2567,8 @@ def make_box_stacking_env(num_robots=2, num_boxes=9, view: bool = False):
 
         return None
 
-    all_robots = ["a1_", "a2_", "a3_", "a4_"]
-    all_robots = all_robots[:num_robots]
+    # all_robots = ["a1_", "a2_", "a3_", "a4_"]
+    # all_robots = all_robots[:num_robots]
 
     direct_pick_place_keyframes = {}
 
@@ -2598,7 +2624,7 @@ def make_handover_env(view: bool = False):
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
@@ -2752,7 +2778,10 @@ def make_handover_env(view: bool = False):
 
 
 def make_panda_waypoint_env(
-    num_robots: int = 3, num_waypoints: int = 6, view: bool = False
+    num_robots: int = 3,
+    num_waypoints: int = 6,
+    mixed_robots: bool = True,
+    view: bool = False,
 ):
     if num_robots > 3:
         raise NotImplementedError("More than three robot arms are not supported.")
@@ -2761,34 +2790,57 @@ def make_panda_waypoint_env(
         raise NotImplementedError("More than six waypoints are not supported.")
 
     C = ry.Config()
-    # C.addFile(ry.raiPath('scenarios/pandaSingle.g'))
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
         ry.ST.box, size=[2, 2, 0.06, 0.005]
     ).setColor([0.6, 0.6, 0.6]).setContact(1)
 
-    robot_path = ry.raiPath("panda/panda.g")
-    # robot_path = "ur10/ur10_vacuum.g"
+    panda_path = ry.raiPath("panda/panda.g")
+    ur10_path = os.path.join(
+        os.path.dirname(__file__), "../models/ur10/ur10_two_finger.g"
+    )
+    kuka_path = os.path.join(
+        os.path.dirname(__file__), "../models/kuka_drake/kuka_two_finger.g"
+    )
 
-    C.addFile(robot_path, namePrefix="a0_").setParent(
+    C.addFile(panda_path, namePrefix="a0_").setParent(
         C.getFrame("table")
     ).setRelativePosition([0.0, -0.5, 0]).setRelativeQuaternion([0.7071, 0, 0, 0.7071])
 
+    ees = ["a0_gripper"]
+
     # this could likely be done nicer
     if num_robots > 1:
-        C.addFile(robot_path, namePrefix="a1_").setParent(
+        path = panda_path
+        ee = "a1_gripper"
+
+        if mixed_robots:
+            path = ur10_path
+            ee = "a1_ur_gripper_center"
+        ees.append(ee)
+
+        C.addFile(path, namePrefix="a1_").setParent(
             C.getFrame("table")
-        ).setRelativePosition([-0.3, 0.5, 0]).setRelativeQuaternion(
+        ).setRelativePosition([-0.4, 0.5, 0]).setRelativeQuaternion(
             [0.7071, 0, 0, -0.7071]
         )
     if num_robots > 2:
-        C.addFile(robot_path, namePrefix="a2_").setParent(
+        path = panda_path
+        ee = "a2_gripper"
+
+        if mixed_robots:
+            path = kuka_path
+            ee = "a2_kuka_gripper_center"
+
+        ees.append(ee)
+
+        C.addFile(path, namePrefix="a2_").setParent(
             C.getFrame("table")
-        ).setRelativePosition([+0.3, 0.5, 0]).setRelativeQuaternion(
+        ).setRelativePosition([+0.4, 0.5, 0]).setRelativeQuaternion(
             [0.7071, 0, 0, -0.7071]
         )
 
@@ -2802,10 +2854,11 @@ def make_panda_waypoint_env(
     q_init = C.getJointState()
     q_init[1] -= 0.5
 
-    if num_robots > 1:
+    if num_robots > 1 and not mixed_robots:
         q_init[8] -= 0.5
     if num_robots > 2:
-        q_init[15] -= 0.5
+        if not mixed_robots:
+            q_init[15] -= 0.5
 
     C.setJointState(q_init)
 
@@ -2862,10 +2915,10 @@ def make_panda_waypoint_env(
     keyframes = compute_pose_for_robot("a0_gripper")
 
     if num_robots > 1:
-        keyframes_a1 = compute_pose_for_robot("a1_gripper")
+        keyframes_a1 = compute_pose_for_robot(ees[1])
         keyframes = np.concatenate([keyframes, keyframes_a1])
     if num_robots > 2:
-        keyframes_a2 = compute_pose_for_robot("a2_gripper")
+        keyframes_a2 = compute_pose_for_robot(ees[2])
         keyframes = np.concatenate([keyframes, keyframes_a2])
 
     return C, keyframes
@@ -2886,7 +2939,7 @@ def make_panda_single_joint_goal_env(
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
         ry.ST.box, size=[2, 2, 0.06, 0.005]
     ).setColor([0.6, 0.6, 0.6]).setContact(1)
@@ -3001,7 +3054,7 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur_welding.g")
 
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
@@ -3183,7 +3236,7 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     path = os.path.join(os.path.dirname(__file__), "../models/bottle.g")
     C.addFile(path).setPosition([1, 0, 0.2])
 
@@ -3348,7 +3401,7 @@ def generate_rnd_axis_quaternion(dont_rotate_z=False):
     if not dont_rotate_z:
         chosen_axis = random.choice(axes)
     else:
-        chosen_axis = axes[np.random.randint(4,5)]
+        chosen_axis = axes[np.random.randint(4, 5)]
 
     # Compute the quaternion to align the X-axis with the selected axis
     quat = align_x_with_target(chosen_axis)
@@ -3380,11 +3433,11 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
     assert num_boxes <= 9
 
     C = ry.Config()
-    
+
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
@@ -3497,7 +3550,7 @@ def make_box_pile_env(num_boxes=6, view: bool = False):
         box = (
             C.addFrame("goal" + str(i))
             .setParent(c_coll_tmp.getFrame("tray"))
-            .setShape(ry.ST.box, [size[0]*.9, size[1]*.9, size[2]*.9, 0.005])
+            .setShape(ry.ST.box, [size[0] * 0.9, size[1] * 0.9, size[2] * 0.9, 0.005])
             .setRelativePosition([pos[0], pos[1], pos[2]])
             .setMass(0.1)
             .setColor((0.1, 0.1, 0.1, 0.3))
@@ -3760,7 +3813,9 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
 
     q = C.getJointState()
 
-    base_pos = np.array([[2.5, -(num_robots-1)/2 + i, -np.pi / 2] for i in range(num_robots)])
+    base_pos = np.array(
+        [[2.5, -(num_robots - 1) / 2 + i, -np.pi / 2] for i in range(num_robots)]
+    )
 
     for i in range(num_robots):
         q[6 * i] = base_pos[i, 0]
@@ -4114,7 +4169,7 @@ def make_strut_assembly_problem():
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
-    
+
     mobile_robot_path = os.path.join(
         os.path.dirname(__file__), "../models/mobile-manipulator-restricted.g"
     )

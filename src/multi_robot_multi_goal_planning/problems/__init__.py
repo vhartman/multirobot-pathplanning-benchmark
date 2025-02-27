@@ -5,8 +5,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 
-
-def get_env_by_name(name):
+def get_all_environments():
     # fmt: off
     environment_configs = {
         # 2D Environments
@@ -93,6 +92,11 @@ def get_env_by_name(name):
     }
     # fmt: on
 
+    return environment_configs
+
+def get_env_by_name(name):
+    environment_configs = get_all_environments()
+    
     if name not in environment_configs:
         raise ValueError(f"Unknown environment name: {name}")
 
