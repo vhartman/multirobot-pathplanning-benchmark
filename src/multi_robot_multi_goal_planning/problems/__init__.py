@@ -5,6 +5,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 
+
 def get_all_environments():
     # fmt: off
     environment_configs = {
@@ -50,7 +51,9 @@ def get_all_environments():
         "box_rearrangement": lambda: re.rai_ur10_arm_box_rearrangement_env(), # 2 robots, 9 boxes
         "box_rearrangement_only_five": lambda: re.rai_ur10_arm_box_rearrangement_env(num_boxes=5),
         "box_rearrangement_four_robots": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=4),
-    
+        "crl_four": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=4, logo=True), # 2 robots, 9 boxes
+        "crl_two": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=2, logo=True), # 2 robots, 9 boxes
+
         # mobile
         "mobile_wall_four": lambda: re.rai_mobile_manip_wall(num_robots=4),
         "mobile_wall_three": lambda: re.rai_mobile_manip_wall(num_robots=3),
@@ -94,9 +97,10 @@ def get_all_environments():
 
     return environment_configs
 
+
 def get_env_by_name(name):
     environment_configs = get_all_environments()
-    
+
     if name not in environment_configs:
         raise ValueError(f"Unknown environment name: {name}")
 
