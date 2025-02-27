@@ -2456,7 +2456,8 @@ class BaseRRTstar(ABC):
                 n_near = self.trees[mode].get_node(node_indices[idx].item(), tree)
                 if n_near == n_new.parent or n_near.cost == np.inf or n_near.id == n_new.id:
                     continue
-
+                if n_near.state.mode != mode:
+                    continue 
                 if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):
                     if n_near.parent is not None:
                         n_near.parent.children.remove(n_near)
