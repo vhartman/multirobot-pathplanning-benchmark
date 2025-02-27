@@ -503,9 +503,12 @@ def main():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # convention: alsways use "/" as trailing character
-    experiment_folder = (
-        f"./out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
-    )
+    try: 
+        experiment_folder = f"/media/tirza/theinle/out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
+    except Exception:
+        experiment_folder = (
+            f"./out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
+        )
 
     if not os.path.isdir(experiment_folder):
         os.makedirs(experiment_folder)
@@ -522,6 +525,11 @@ def main():
     if args.display_result:
         make_cost_plots(all_experiment_data, config)
         plt.show()
+    
+        
+
+    
+
 
 
 if __name__ == "__main__":

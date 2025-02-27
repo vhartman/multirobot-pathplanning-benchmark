@@ -16,13 +16,16 @@
             }
         },
         {
-            "name": "- postprocess",
+            "name": "- analysis ellipse",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/examples/run_postprocess.py",
+            "program": "${workspaceFolder}/examples/run_analysis.py",
             "args": [
-                "--path",
-                "/home/tirza/multirobot-pathplanning-benchmark/out/20250224_160201_planner_demo_random_2d"
+                "ellipse_with_matrices",
+                "simple_2d",
+                "1"
+                
+
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",

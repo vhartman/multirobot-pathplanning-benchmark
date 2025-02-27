@@ -1,16 +1,15 @@
 import argparse
-import dill
 import plotly.graph_objects as go
-from matplotlib.colors import to_rgb
 import os
 import numpy as np
 import webbrowser
 import time as time
 import subprocess
-from datetime import datetime
+import random
+import re
+import glob
 from analysis_util import(
     colors_plotly,
-    count_files_in_folder,
     mesh_traces_env,
     get_latest_folder,
     save_env_as_mesh
@@ -25,17 +24,19 @@ from multi_robot_multi_goal_planning.problems.rai_config import (
     get_robot_joints
 )
 
-# from analysis.check import(
-#     nearest_neighbor, 
-#     interpolation_check,
-#     tree, 
-#     graph
-# )
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 from run_experiment import load_experiment_config
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
+from display_single_path import (
+    load_path,
+    convert_to_path
+)
 
-
+def sort_key(file_path):
+    file_name = os.path.basename(file_path)  # e.g., "path_01.json"
+    # Remove the prefix "path_" and the suffix ".json", then convert to an integer.
+    number_str = file_name.replace("path_", "").replace(".json", "")
+    return int(number_str)
 
 def path_as_png(
     env,
@@ -65,40 +66,23 @@ def path_as_png(
         if export:
             env.C.view_savePng(dir)
 
-def path_vis(env: BaseProblem, vid_path:str, framerate:int = 1, generate_png:bool = True, path_original:bool = False):
-    pkl_files = None
+def path_vis(env: BaseProblem, dir:str, path: List[State], framerate:int = 1, generate_png:bool = True, path_original:bool = False):
     if generate_png:
-        with open(pkl_files[-1], 'rb') as file:
-            data = dill.load(file)
-            results = data["result"]
-            path_ = results["path"]
-            intermediate_tot = results["intermediate_tot"]
-            transition = results["is_transition"]
-            transition[0] = True
-            modes = results["modes"]
-            mode_sequence = []
-            m = env.start_mode
-            indices  = [env.robot_idx[r] for r in env.robots]
-            while True:
-                mode_sequence.append(m)
-                if env.is_terminal_mode(m):
-                    break
-                m = env.get_next_mode(None, m)
             if path_original:
-                discretized_path, _, _, _ = interpolate_path(path_, intermediate_tot, modes, indices, transition, resolution=None)
+                interpolated_path = interpolate_path(path, resolution=None)
             else:
-                discretized_path, _, _, _ = interpolate_path(path_, intermediate_tot, modes, indices, transition, resolution=0.01)  
-            path_as_png(env, discretized_path, export = True, dir =  vid_path, framerate = framerate)
+                interpolated_path = interpolate_path(path)  
+            path_as_png(env, interpolated_path, export = True, dir =  dir, framerate = framerate)
     # Generate a gif
-    palette_file = os.path.join(vid_path, 'palette.png')
-    output_gif = os.path.join(vid_path, 'out.gif')
+    palette_file = os.path.join(dir, 'palette.png')
+    output_gif = os.path.join(dir, 'out.gif')
     for file in [palette_file, output_gif]:
         if os.path.exists(file):
             os.remove(file)
     palette_command = [
         "ffmpeg",
         "-framerate", f"{framerate}",
-        "-i", os.path.join(vid_path, "%04d.png"),
+        "-i", os.path.join(dir, "%04d.png"),
         "-vf", "scale=iw:-1:flags=lanczos,palettegen",
         palette_file
     ]
@@ -107,7 +91,7 @@ def path_vis(env: BaseProblem, vid_path:str, framerate:int = 1, generate_png:boo
     gif_command = [
         "ffmpeg",
         "-framerate", f"{framerate}",
-        "-i", os.path.join(vid_path, "%04d.png"),
+        "-i", os.path.join(dir, "%04d.png"),
         "-i", palette_file,
         "-lavfi", "scale=iw:-1:flags=lanczos [scaled]; [scaled][1:v] paletteuse=dither=bayer:bayer_scale=5",
         output_gif
@@ -115,112 +99,485 @@ def path_vis(env: BaseProblem, vid_path:str, framerate:int = 1, generate_png:boo
     subprocess.run(palette_command, check=True)
     subprocess.run(gif_command, check=True)
 
+def single_path_html(env, env_path, path, output_html):
+    
+    # Print the parsed task sequence
+    try:
+        task_sequence_text = "Task sequence: " + ", ".join(
+        [env.tasks[idx].name for idx in env.sequence]   
+    )
+    except Exception:
+         task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
 
+    # Initialize figure and static elements
+    fig = go.Figure()
+    frames = []
+    all_frame_traces = []
+    colors = colors_plotly()
+    # static traces
+    static_traces = mesh_traces_env(env_path)
+    static_traces.append(
+            go.Mesh3d(
+                x=[0],  # Position outside the visible grid
+                y=[0],  # Position outside the visible grid
+                z=[0],
+                color = "white",
+                name='',
+                legendgroup='',
+                showlegend=True  # This will create a single legend entry for each mode
+            )
+        )
+    modes = []
+    mode = env.start_mode
+    while True:     
+            modes.append(mode.task_ids)
+            if env.is_terminal_mode(mode):
+                break
+            mode = env.get_next_mode(None, mode)
+    for robot_idx, robot in enumerate(env.robots):
+        legend_group = robot
+        static_traces.append(
+        go.Mesh3d(
+            x=[0],  # X-coordinates of the exterior points
+            y=[0],  # Y-coordinates of the exterior points
+            z=[0] ,  # Flat surface at z = 0
+            color=colors[len(modes)+robot_idx],  # Fill color from the agent's properties
+            opacity=1,  # Transparency level
+            name=legend_group,
+            legendgroup=legend_group,
+            showlegend=True
+        )
+    )
+    frame_traces = []
+    for robot_idx, robot in enumerate(env.robots):
+        indices = env.robot_idx[robot]
+        legend_group = robot
+        if path:
+            path_x = [state.q[robot_idx][0] for state in path]
+            path_y = [state.q[robot_idx][1] for state in path]
+            path_z = [1 for state in path]
+
+            
+        else:
+            start = env.start_pos.q[indices]
+            path_x = [start[0]]
+            path_y = [start[1]]
+            path_z = [1]
+
+
+        frame_traces.append(
+            go.Scatter3d(
+                x=path_x, 
+                y=path_y,
+                z=path_z,
+                mode="lines+markers",
+                line=dict(color=colors[len(modes)+robot_idx], width=6),
+                marker=dict(
+                    size=3,  # Very small markers
+                    color=colors[len(modes)+robot_idx],  # Match marker color with line
+                    opacity=1
+                ),
+                opacity=1,
+                name=legend_group,
+                legendgroup=legend_group,
+                showlegend=False
+            )
+        )
+    all_frame_traces.append(frame_traces)
+
+    # Determine the maximum number of dynamic traces needed
+    max_dynamic_traces = max(len(frame_traces) for frame_traces in all_frame_traces)
+
+    fig.add_traces(static_traces)
+
+    for _ in range(max_dynamic_traces):
+        fig.add_trace(go.Mesh3d(x=[], y=[], z =[]))
+
+    frames = []
+    for idx, frame_traces in enumerate(all_frame_traces):
+        while len(frame_traces) < max_dynamic_traces:
+            frame_traces.append(go.Mesh3d(x=[], y=[], z= []))
+        
+        frame = go.Frame(
+            data=frame_traces,
+            traces=list(range(len(static_traces), len(static_traces) + max_dynamic_traces)),
+            name=f"frame_{idx}"
+        )
+        frames.append(frame)
+
+    fig.frames = frames
+
+    # Animation settings
+    animation_settings = dict(
+        frame=dict(duration=100, redraw=True),  # Sets duration only for when Play is pressed
+        fromcurrent=True,
+        transition=dict(duration=0)
+    )
+
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=20),
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        updatemenus=[dict(
+            type="buttons",
+            buttons=[
+                dict(
+                    label="Play",
+                    method="animate",
+                    args=[None, animation_settings]  # Starts animation only on button press
+                ),
+                dict(
+                    label="Stop",
+                    method="animate",
+                    args=[
+                        [None],  # Stops the animation
+                        dict(frame=dict(duration=0, redraw=True), mode="immediate")
+                    ]
+                )
+            ],
+            direction="left",
+            pad={"t": 10},
+            showactive=False, #set auto-activation to false
+            x=0.1,
+            xanchor="right",
+            y=0,
+            yanchor="top"
+        )],
+        sliders=[dict(
+            active=0,
+            currentvalue=dict(prefix="Frame: "),
+            pad=dict(t=60),
+            steps=[dict(
+                method="animate",
+                args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True), transition=dict(duration=0))],
+                label=str(i)
+            ) for i, f in enumerate(fig.frames)]
+        )],
+        showlegend=True, 
+        annotations=[
+        dict(
+            x=1,  # Centered horizontally
+            y=-0.03,  # Adjusted position below the slider
+            xref="paper",
+            yref="paper",
+            text=task_sequence_text,
+            showarrow=False,
+            font=dict(size=14),
+            align="center",
+        )
+    ]
+    )
+
+    fig.write_html(output_html)
+    print(f"Animation saved to {output_html}")
+
+def path_evolution_html(env, env_path, dir_run, output_html):
+    
+    # Print the parsed task sequence
+    try:
+        task_sequence_text = "Task sequence: " + ", ".join(
+        [env.tasks[idx].name for idx in env.sequence]   
+    )
+    except Exception:
+         task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
+
+    # Initialize figure and static elements
+    fig = go.Figure()
+    frames = []
+    all_frame_traces = []
+    colors = colors_plotly()
+    # static traces
+    static_traces = mesh_traces_env(env_path)
+    static_traces.append(
+            go.Mesh3d(
+                x=[0],  # Position outside the visible grid
+                y=[0],  # Position outside the visible grid
+                z=[0],
+                color = "white",
+                name='',
+                legendgroup='',
+                showlegend=True  # This will create a single legend entry for each mode
+            )
+        )
+    modes = []
+    mode = env.start_mode
+    while True:     
+            modes.append(mode.task_ids)
+            if env.is_terminal_mode(mode):
+                break
+            mode = env.get_next_mode(None, mode)
+    for robot_idx, robot in enumerate(env.robots):
+        legend_group = robot
+        static_traces.append(
+        go.Mesh3d(
+            x=[0],  # X-coordinates of the exterior points
+            y=[0],  # Y-coordinates of the exterior points
+            z=[0] ,  # Flat surface at z = 0
+            color=colors[len(modes)+robot_idx],  # Fill color from the agent's properties
+            opacity=1,  # Transparency level
+            name=legend_group,
+            legendgroup=legend_group,
+            showlegend=True
+        )
+    )
+    files = glob.glob(os.path.join(dir_run, 'path_*.json'))
+
+    sorted_files = sorted(files, key=sort_key)
+    if len(sorted_files) > 50:
+        indices = np.linspace(0, len(sorted_files) - 1, num=50, dtype=int)
+        files_to_process = [sorted_files[i] for i in indices]
+        if files_to_process[-1] != sorted_files[-1]:
+            files_to_process.append(sorted_files[-1])
+        sorted_files = files_to_process
+
+    for dir_path_json in sorted_files:
+        frame_traces = []
+        path_data = load_path(dir_path_json)
+        path = convert_to_path(env, path_data)
+        for robot_idx, robot in enumerate(env.robots):
+            indices = env.robot_idx[robot]
+            legend_group = robot
+            if path:
+                path_x = [state.q[robot_idx][0] for state in path]
+                path_y = [state.q[robot_idx][1] for state in path]
+                path_z = [1 for state in path]
+
+                
+            else:
+                start = env.start_pos.q[indices]
+                path_x = [start[0]]
+                path_y = [start[1]]
+                path_z = [1]
+
+
+            frame_traces.append(
+                go.Scatter3d(
+                    x=path_x, 
+                    y=path_y,
+                    z=path_z,
+                    mode="lines+markers",
+                    line=dict(color=colors[len(modes)+robot_idx], width=6),
+                    marker=dict(
+                        size=3,  # Very small markers
+                        color=colors[len(modes)+robot_idx],  # Match marker color with line
+                        opacity=1
+                    ),
+                    opacity=1,
+                    name=legend_group,
+                    legendgroup=legend_group,
+                    showlegend=False
+                )
+            )
+        all_frame_traces.append(frame_traces)
+
+    # Determine the maximum number of dynamic traces needed
+    max_dynamic_traces = max(len(frame_traces) for frame_traces in all_frame_traces)
+
+    fig.add_traces(static_traces)
+
+    for _ in range(max_dynamic_traces):
+        fig.add_trace(go.Mesh3d(x=[], y=[], z =[]))
+
+    frames = []
+    for idx, frame_traces in enumerate(all_frame_traces):
+        while len(frame_traces) < max_dynamic_traces:
+            frame_traces.append(go.Mesh3d(x=[], y=[], z= []))
+        
+        frame = go.Frame(
+            data=frame_traces,
+            traces=list(range(len(static_traces), len(static_traces) + max_dynamic_traces)),
+            name=f"frame_{idx}"
+        )
+        frames.append(frame)
+
+    fig.frames = frames
+
+    # Animation settings
+    animation_settings = dict(
+        frame=dict(duration=100, redraw=True),  # Sets duration only for when Play is pressed
+        fromcurrent=True,
+        transition=dict(duration=0)
+    )
+
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=20),
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        updatemenus=[dict(
+            type="buttons",
+            buttons=[
+                dict(
+                    label="Play",
+                    method="animate",
+                    args=[None, animation_settings]  # Starts animation only on button press
+                ),
+                dict(
+                    label="Stop",
+                    method="animate",
+                    args=[
+                        [None],  # Stops the animation
+                        dict(frame=dict(duration=0, redraw=True), mode="immediate")
+                    ]
+                )
+            ],
+            direction="left",
+            pad={"t": 10},
+            showactive=False, #set auto-activation to false
+            x=0.1,
+            xanchor="right",
+            y=0,
+            yanchor="top"
+        )],
+        sliders=[dict(
+            active=0,
+            currentvalue=dict(prefix="Frame: "),
+            pad=dict(t=60),
+            steps=[dict(
+                method="animate",
+                args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True), transition=dict(duration=0))],
+                label=str(i)
+            ) for i, f in enumerate(fig.frames)]
+        )],
+        showlegend=True, 
+        annotations=[
+        dict(
+            x=1,  # Centered horizontally
+            y=-0.03,  # Adjusted position below the slider
+            xref="paper",
+            yref="paper",
+            text=task_sequence_text,
+            showarrow=False,
+            font=dict(size=14),
+            align="center",
+        )
+    ]
+    )
+
+    fig.write_html(output_html)
+    print(f"Animation saved to {output_html}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument(
-        "--path",
+        "--path_folder",
+        required=False,
+        help="Select the path of the folder to be processed",
+    )
+    parser.add_argument(
+        "--path_filename",
+        required=False,
+        help="Select the path of the json file to be processed",
+    )
+    parser.add_argument(
+        "--path_run",
         required=False,
         help="Select the path of the folder to be processed",
     )
     parser.add_argument(
         "--do",
-        choices=["dev", "cost_single", "cost_multiple", "shortcutting_cost", "path", "sum", "interpolation", "nn", "tree", "graph", "final_path_animation", "ellipse"],
+        choices=["single_path_html", "path_evolution_html", "final_paths", "single_path"],
         required=True,
         help="Select postprocess to be done",
     )
    
     args = parser.parse_args()
-    if args.path is not None:
-        dir = args.path
+    if args.path_folder is not None:
+        dir = args.path_folder
+        dir_path_json = None
+    elif args.path_filename is not None:
+        dir_path_json = args.path_filename
+        dir = '/'.join(dir_path_json.split('/')[:6]) 
+        run = re.search(r'/(\d+)(?=/)', dir_path_json).group(1)
+        dir_run = os.path.join(dir, run)
+    elif args.path_run is not None: 
+        dir_run = args.path_run
+        dir = '/'.join(dir_run.split('/')[:6]) 
+        run = os.path.basename(dir_run)
+        dir_path_json = None
     else:
+        #get latest created folder
         home_dir = os.path.expanduser("~")
         directory = os.path.join(home_dir, 'multirobot-pathplanning-benchmark/out')
         dir = get_latest_folder(directory)
+        dir_path_json = None
 
     config_dir = os.path.join(dir, 'config.json')
     config = load_experiment_config(config_dir)
+    seed = config["seed"] 
+    np.random.seed(seed)
+    random.seed(seed)
     env = get_env_by_name(config["environment"])    
-    path =   os.path.join(home_dir, 'output')
-    pkl_folder = get_latest_folder(path)
+    home_dir = os.path.expanduser("~")
     env_path = os.path.join(home_dir, f'env/{config["environment"]}')  
     save_env_as_mesh(env, env_path) 
-
-    # if args.do == "dev":
-    #     print("Development")
-    #     with_tree = True
-    #     if with_tree:
-    #         output_html = os.path.join(path, 'tree_animation_3d.html')
-    #         reducer = 100
-    #     else:
-    #         output_html = os.path.join(path, 'path_animation_3d.html')
-    #         reducer = 100
-    #     developement_animation(env, env_path, pkl_folder, output_html, with_tree, reducer)    
-    #     webbrowser.open('file://' + os.path.realpath(output_html))
-    # if args.do == 'final_path_animation':
-    #     save_env_as_mesh(env, env_path)
-    #     pkl_folder = os.path.join(path, 'FramesFinalData')
-    #     output_html = os.path.join(path, 'final_path_animation_3d.html')
-    #     final_path_animation(env, env_path, pkl_folder, output_html)    
-    #     webbrowser.open('file://' + os.path.realpath(output_html))
-        
-    # if args.do == "cost_single":
-    #     pkl_folder = os.path.join(path, 'FramesFinalData')
-    #     output_filename_cost = os.path.join(path, 'Cost.png')
-    #     cost_single(env, pkl_folder, output_filename_cost)
-
-    # if args.do == "cost_multiple":
-    #     dir_planner = []
-    #     for planner in config["planners"]:
-    #         dir_planner.append(os.path.join(dir, planner['name']))
-    #     with_inital_confidence_interval = False
-    #     pkl_folder = os.path.join(path, 'FramesFinalData')
-    #     output_filename_cost = os.path.join(os.path.dirname(dir), f'Cost_{datetime.now().strftime("%d%m%y_%H%M%S")}.png')
-    #     cost_multiple(env, config, pkl_folder ,dir_planner ,output_filename_cost, with_inital_confidence_interval)
     
-    # if args.do == "sum":
-    #     sum(dir, False)
-    
-    # if args.do == "shortcutting_cost":
-    #     fix_axis = False
-    #     output_filename_cost = os.path.join(path, 'ShortcuttingCost.png')
-    #     shortcutting_cost(env, path, output_filename_cost)
-    
-    if args.do == "final_path_animation":
+    if args.do == "final_paths":
+        #all final paths in one folder
+        #only path_folder needs to be specified
         path_original = False
         generate_png = True
+        framerate = 63
         if path_original:
-            output_filename_path = os.path.join(path,"PathOriginal/")
-            vid_path = os.path.join(path,"PathOriginal/")
+            folder_name = "PathOriginal"
         else:
-            output_filename_path = os.path.join(path,"Path/")
-            vid_path = os.path.join(path,"Path/")
-        os.makedirs(vid_path, exist_ok=True)
-        path_vis(env, vid_path, framerate=63, generate_png = generate_png, path_original= path_original)
+            folder_name = "Path"
+        
+        for planner in config['planners']:
+            dir_planner = os.path.join(dir, planner['name'])
+            dir_out = os.path.join(dir_planner, folder_name)
+            os.makedirs(dir_out, exist_ok=True)
+            for run in range(config['num_runs']):
+                dir_run = os.path.join(dir_planner, str(run))
+                dir_path_json = os.path.join(dir_run, sorted(os.listdir(dir_run))[-1])
+                path_data = load_path(dir_path_json)
+                path = convert_to_path(env, path_data)
+                dir_out_run = os.path.join(dir_out, str(run))
+                os.makedirs(dir_out_run, exist_ok=True)
+                path_vis(env, dir_out_run +"/", path, framerate=framerate, generate_png = generate_png, path_original= path_original)
+    
+    if args.do == "single_path":
+        #one single path in a folder
+        #path_filename needs to be specified
+        path_original = False
+        generate_png = True
+        framerate = 63
+        if path_original:
+            folder_name = "PathOriginal"
+        else:
+            folder_name = "Path"
+        try: 
+            planner_name = re.match(r'.*/out/[^/]+/([^/]+)(?:/|$)', dir_path_json).group(1)
+        except Exception:
+            print("Please give dir to json file")
+        dir_planner = os.path.join(dir, planner_name)
+        dir_out = os.path.join(dir_planner, folder_name)
+        os.makedirs(dir_out, exist_ok=True)
+        path_data = load_path(dir_path_json)
+        path = convert_to_path(env, path_data)
+        run = re.search(r'/(\d+)(?=/)', dir_path_json).group(1)
+        dir_out_run = os.path.join(dir_out, run)
+        os.makedirs(dir_out_run, exist_ok=True)
+        path_vis(env, dir_out_run +"/", path, framerate=framerate, generate_png = generate_png, path_original= path_original)
 
-#     if args.do == "ellipse":
-#         ellipse(env, env_path, pkl_folder)    
+    if args.do == "single_path_html":
+        #path_filename needs to be specified
+        try: 
+            planner_name = re.match(r'.*/out/[^/]+/([^/]+)(?:/|$)', dir_path_json).group(1)
+        except Exception:
+            print("Please give dir to json file")
+        dir_planner = os.path.join(dir, planner_name)
+        path_data = load_path(dir_path_json)
+        path = convert_to_path(env, path_data)
+        file_name = os.path.basename(dir_path_json)
+        modified_file_name = file_name.replace('.', '_')
+        output_html = os.path.join(dir_planner, f'run_{run}_{modified_file_name}.html')
+        single_path_html(env, env_path, path, output_html)    
+        webbrowser.open('file://' + os.path.realpath(output_html))
 
-# #TO CHECK
-#     if args.do == "interpolation":
-#         interpolation_check(env)
-#     if args.do == "nn":
-#         with_tree = True
-#         if with_tree:
-#             output_html = os.path.join(path, 'tree_animation_3d.html')
-#             reducer = 50
-#         else:
-#             output_html = os.path.join(path, 'path_animation_3d.html')
-#             reducer = 400
-#         nearest_neighbor(env, env_path, pkl_folder, output_html, with_tree, reducer)    
-#     if args.do == "tree":
-#         tree(env, env_path, pkl_folder)  
-#     if args.do == "graph":
-#         output_html = os.path.join(path, 'graph.html')
-#         graph(env, env_path, pkl_folder, output_html)    
-#         webbrowser.open('file://' + os.path.realpath(output_html))
- 
-
-
+    if args.do == "path_evolution_html":
+        planner_name = os.path.basename('/'.join(dir_run.split('/')[:7])) 
+        dir_planner = os.path.join(dir, planner_name)
+        output_html = os.path.join(dir_planner, f'run_{run}_path_evolution.html')
+        path_evolution_html(env, env_path, dir_run, output_html)    
+        webbrowser.open('file://' + os.path.realpath(output_html))

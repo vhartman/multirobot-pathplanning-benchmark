@@ -412,14 +412,12 @@ class Informed(ABC):
         self.cmin[r_idx] = norm
         # Create first column of the identity matrix
         e1 = np.zeros(self.n[r_idx])
-        e1[0] = 1
+        e1[0] = 1.0
 
         # Compute SVD directly on the outer product
         U, _, Vt = np.linalg.svd(np.outer(a1, e1))
-        V = Vt.T
-
         # Construct the rotation matrix C
-        det_factor = np.linalg.det(U) * np.linalg.det(V)
+        det_factor = np.linalg.det(U) * np.linalg.det(Vt.T)
         self.C[r_idx] = U @ np.diag([1] * ( self.n[r_idx] - 1) + [det_factor]) @ Vt
         return True
 
@@ -491,6 +489,8 @@ class Informed(ABC):
         if self.L[r_idx] is None:
             if np.random.uniform(0, 1) < self.p_goal:
                 return self.end[r_idx].q[r_idx]
+            if np.linalg.norm(self.start[r_idx].q[r_idx]- self.end[r_idx].q[r_idx]) < 1e-10: #TODO sample with noise
+                return self.end[r_idx].q[r_idx]
             lims = self.env.limits[:, r_indices]
             return np.random.uniform(lims[0], lims[1])
         attemps = 0
@@ -502,7 +502,7 @@ class Informed(ABC):
             # Check if x_rand is within limits
             lims = self.env.limits[:, r_indices]
             if np.all((lims[0] <= x_rand) & (x_rand <= lims[1])):  
-                    return x_rand
+                return x_rand
         return
 
     @abstractmethod
@@ -529,20 +529,20 @@ class InformedVersion0(Informed):
     def __init__(self, env, p_goal):
         super().__init__(env, p_goal)
     
-    # def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
+    def is_lb_cost_smaller(self, path:List[State], q:Configuration, s, e) -> float:
 
-    #     start_min = min(self.start_ind.values())
-    #     end_max = max(self.end_ind.values())
-    #     focal_points = np.array(
-    #             [path[start_min].q.state(), path[end_max].q.state()], dtype=np.float64
-    #         )
-    #     q = type(self.env.get_start_pos()).from_list(q)
-    #     c_lb = sum(self.env.batch_config_cost(q, focal_points))
-    #     path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-    #     cmax = sum(path_segment_costs[start_min:end_max])
-    #     if c_lb < cmax:
-    #         return True
-    #     return False
+        # start_min = min(self.start_ind.values())
+        # end_max = max(self.end_ind.values())
+        focal_points = np.array(
+                [path[s].q.state(), path[e].q.state()], dtype=np.float64
+            )
+        q = type(self.env.get_start_pos()).from_list(q)
+        c_lb = sum(self.env.batch_config_cost(q, focal_points))
+        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        cmax = sum(path_segment_costs[s:e])
+        if c_lb < cmax:
+            return True
+        return False
 
     def batch_config_cost_per_robot(self,
         starts: List[Configuration],
@@ -571,10 +571,10 @@ class InformedVersion0(Informed):
         end = path[self.end_ind[r_idx]]
         self.start[r_idx] = start
         self.end[r_idx] = end
+        self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
         if self.rotation_to_world_frame(start, end, r_idx):
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
             path_segment_costs = self.batch_config_cost_per_robot(path[:-1], path[1:], r_idx)
-            self.cmax[r_idx] = sum(path_segment_costs[self.start_ind[r_idx]:self.end_ind[r_idx]])
+            self.cmax[r_idx] = sum(path_segment_costs[self.start_ind[r_idx]:self.end_ind[r_idx]])          
             return True
         return False
 class InformedVersion1(Informed):
@@ -2105,18 +2105,19 @@ class BaseRRTstar(ABC):
                     elif not self.informed_sampling_version == 6:
                         q = self.sample_informed(mode, True)
                         if q is None:
-                            q = self.sample_transition_configuration(mode)
-                            if random.choice([0,1]) == 0:
-                                return q
-                            while True:
-                                q_noise = []
-                                for r in range(len(self.env.robots)):
-                                    q_robot = q.robot_state(r)
-                                    noise = np.random.normal(0, 0.1, q_robot.shape)
-                                    q_noise.append(q_robot + noise)
-                                q = type(self.env.get_start_pos()).from_list(q_noise)
-                                if self.env.is_collision_free(q, mode):
-                                    return q
+                            return
+                            # q = self.sample_transition_configuration(mode)
+                            # if random.choice([0,1]) == 0:
+                            #     return q
+                            # while True:
+                            #     q_noise = []
+                            #     for r in range(len(self.env.robots)):
+                            #         q_robot = q.robot_state(r)
+                            #         noise = np.random.normal(0, 0.1, q_robot.shape)
+                            #         q_noise.append(q_robot + noise)
+                            #     q = type(self.env.get_start_pos()).from_list(q_noise)
+                            #     if self.env.is_collision_free(q, mode):
+                            #         return q
                         q = type(self.env.get_start_pos()).from_list(q)
                         if self.env.is_collision_free(q, mode):
                             return q
@@ -2149,8 +2150,9 @@ class BaseRRTstar(ABC):
                 elif not self.informed_sampling_version == 6:
                     q = self.sample_informed(mode)
                     if q is None:
-                        is_informed_sampling = False
-                        continue
+                        # is_informed_sampling = False
+                        # continue
+                        return
             #gaussian noise
             if is_gaussian_sampling: 
                 path_state = np.random.choice(self.operation.path)
@@ -2295,39 +2297,69 @@ class BaseRRTstar(ABC):
 
                 # plt.tight_layout()
                 # plt.show()  
-                # if mode.task_ids == [0,2]:
-                #     i = 0
-                #     q_ellipse = {}
-                    
-                #     while i < 800:
+                
+                # s = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+                # e = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+                # i = 0
+                # q_ellipse = {}
+                # while i < 800:
+                #     q_rand = []
+                #     for robot in self.env.robots:
+                #         if robot not in q_ellipse:
+                #             q_ellipse[robot] = []
+                
+                #         r_idx = self.env.robots.index(robot)
+                #         r_indices = self.env.robot_idx[robot]
+                #         try:
+                #             x_rand = self.informed[mode].sample(path, r_indices, r_idx)
+                #             q_ellipse[robot].append(x_rand)
+                #             q_rand.append(x_rand)
+                #         except Exception:
+                #             continue
+                #     if self.informed[mode].is_lb_cost_smaller(path, q_rand, s, e):
+                #         for r_idx, robot in enumerate(self.env.robots):
+                #             q_ellipse[robot].append(q_rand[r_idx])
 
-                #         for robot in self.env.robots:
-                #             if robot not in q_ellipse:
-                #                 q_ellipse[robot] = []
-                    
-                #             r_idx = self.env.robots.index(robot)
-                #             r_indices = self.env.robot_idx[robot]
-                #             try:
-                #                 x_rand = self.informed[mode].sample(path, r_indices, r_idx)
-                #                 q_ellipse[robot].append(x_rand)
-                #             except Exception:
-                #                 continue
-                #         i+=1 
-                        
-                #     import matplotlib.pyplot as plt
+                #     i+=1 
+                # focal_pts = {}
+                # center = {}
+                # for r_idx, robot in enumerate(self.env.robots): 
+                #     focal_pts[robot] = np.array(
+                #                         [path[self.informed[mode].start_ind[r_idx]].q.state(), path[self.informed[mode].end_ind[r_idx]].q.state()], dtype=np.float64
+                #                         )
+                #     try:
+                #         center[robot] = self.informed[mode].center[r_idx]
+                #     except Exception:
+                #         center[robot] = None
+                # p = []
+                # for state in path:
+                #     p.append(state.q.state())
 
-                #     fig, axes = plt.subplots(2, 1, figsize=(12, 15))
+                # data = {
+                #     'ellipse': q_ellipse,
+                #     'mode': mode.task_ids,
+                #     'focal_points':focal_pts,
+                #     'center': center,
+                #     'path':p,
+                #     'C': self.informed[mode].C,
+                #     'L': self.informed[mode].L
+                # }
+                # self.save_data(data)
+                    # import matplotlib.pyplot as plt
 
-                #     samples = q_ellipse['a1']
-                #     axes[0].scatter([s[0] for s in samples], [s[1] for s in samples])
-                #     axes[0].set_title('Agent 1')
+                    # fig, axes = plt.subplots(2, 1, figsize=(12, 15))
 
-                #     samples = q_ellipse['a2']
-                #     axes[1].scatter([s[0] for s in samples], [s[1] for s in samples])
-                #     axes[1].set_title('Agent 2')
+                    # samples = q_ellipse['a1']
+                    # axes[0].scatter([s[0] for s in samples], [s[1] for s in samples])
+                    # axes[0].set_title('Agent 1')
 
-                #     plt.tight_layout()
-                #     plt.show()  
+                    # samples = q_ellipse['a2']
+                    # axes[1].scatter([s[0] for s in samples], [s[1] for s in samples])
+                    # axes[1].set_title('Agent 2')
+
+                    # plt.tight_layout()
+                    # plt.show()  
+                # return q_rand
                 if self.informed_sampling_version != 0:
                     if self.informed[mode].is_lb_cost_smaller(path, q_rand):
                         return q_rand 
@@ -3154,6 +3186,27 @@ class BaseRRTstar(ABC):
         batch_cost = np.insert(batch_cost, 0, 0.0)
         discretized_costs = cumulative_sum(batch_cost)
         return discretized_path, discretized_modes, discretized_costs
+
+    def save_data(self, data:dict):
+        import os
+        import pickle
+        # Directory Handling: Ensure directory exists
+        home_dir = os.path.expanduser("~")
+        directory = os.path.join(home_dir, 'multirobot-pathplanning-benchmark/out')
+        dir = os.path.join(directory, 'Analysis')
+        os.makedirs(dir, exist_ok=True)
+
+        # Determine Next File Number: Use generator expressions for efficiency
+        next_file_number = max(
+            (int(file.split('.')[0]) for file in os.listdir(dir)
+            if file.endswith('.pkl') and file.split('.')[0].isdigit()),
+            default=-1
+        ) + 1
+
+        # Save Data as Pickle File
+        filename = os.path.join(dir, f"{next_file_number:04d}.pkl")
+        with open(filename, 'wb') as file:
+            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
     @abstractmethod
     def UpdateCost(self, mode:Mode, n: Node) -> None:

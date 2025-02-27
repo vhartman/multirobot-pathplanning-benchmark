@@ -3,6 +3,7 @@ import json
 from plyfile import PlyData, PlyElement
 import numpy as np
 import plotly.graph_objects as go
+import shutil
 
 def colors_plotly():
     return [
@@ -251,7 +252,7 @@ def get_absolute_transforms(env):
 
 def save_env_as_mesh(env, directory):
     if os.path.exists(directory):
-        return
+        shutil.rmtree(directory)
     os.makedirs(directory, exist_ok=True)
 
     # Check the environment before exporting

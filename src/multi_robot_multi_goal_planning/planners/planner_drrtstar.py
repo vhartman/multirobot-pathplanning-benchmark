@@ -26,6 +26,10 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
     batch_config_dist,  
+    
+)
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    SingleGoal
 )
 
 class ImplicitTensorGraph:
@@ -47,28 +51,23 @@ class ImplicitTensorGraph:
 
     def add_robot_node(self, rs, q, t, is_transition):
         key = self.get_key(rs, t)
-
+        if key not in self.robot_nodes:
+            self.robot_nodes[key] = []
         if is_transition:
-            if key not in self.robot_nodes:
-                self.robot_nodes[key] = []
-            self.robot_nodes[key].append(NpConfiguration.from_list(q))
-
-            # print(f"adding transition with key {key}")
             if key not in self.transition_nodes:
                 self.transition_nodes[key] = []
 
             does_already_exist = False
             for n in self.transition_nodes[key]:
-                if rs == n.rs and t == n.task and np.linalg.norm(np.concatenate(q) - n.q.state()) < 1e-5:
+                if np.linalg.norm(np.concatenate(q) - n.state()) < 1e-5:
                     does_already_exist = True
                     break
 
             if not does_already_exist:
-                self.transition_nodes[key].append(NpConfiguration.from_list(q))
+                q = NpConfiguration.from_list(q)
+                self.transition_nodes[key].append(q)
+                self.robot_nodes[key].append(q)
         else:
-            # print(f"adding node with key {key}")
-            if key not in self.robot_nodes:
-                self.robot_nodes[key] = []
             self.robot_nodes[key].append(NpConfiguration.from_list(q))
 
     def get_robot_neighbors(self, rs, q, t, k=10):
@@ -99,7 +98,8 @@ class dRRTstar(BaseRRTstar):
                  gaussian: bool = False,
                  locally_informed_sampling:bool = True, 
                  remove_redundant_nodes:bool = True,
-                 batch_size:int = 2000, 
+                 sample_batch_size_per_task:int = 500,
+                 transistion_batch_size_per_mode:int = 200, 
                  expand_iter:int = 10
                  
                 ):
@@ -107,37 +107,28 @@ class dRRTstar(BaseRRTstar):
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
                     gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes)
         self.g = None
-        self.batch_size = batch_size
+        self.sample_batch_size_per_task = sample_batch_size_per_task
+        self.transistion_batch_size_per_mode = transistion_batch_size_per_mode
         self.expand_iter = expand_iter
+        self.conf_type = type(env.get_start_pos())
     
-    def sample_uniform_valid_per_robot(self, num_pts:int, modes:List[Mode]):
+    def sample_uniform_valid_per_robot(self, modes:List[Mode]):
             pts = []
             added_pts_dict = {}
             for mode in modes:
-                for t in mode.task_ids:    
+                for i, r in enumerate(self.env.robots):
+                    t = mode.task_ids[i]
+                    key = tuple([r, t])
+                    if key not in added_pts_dict:
+                        added_pts_dict[key] = 0
                     task = self.env.tasks[t]
-                    for r in task.robots:
-                        robot_pts = 0
-                        while robot_pts < num_pts:
-                            lims = self.env.limits[:, self.env.robot_idx[r]]
-
-                            if lims[0, 0] < lims[1, 0]:
-                                q = (
-                                    np.random.rand(self.env.robot_dims[r]) * (lims[1, :] - lims[0, :])
-                                    + lims[0, :]
-                                )
-                            else:
-                                q = np.random.rand(self.env.robot_dims[r]) * 6 - 3
-
-                            if self.env.is_robot_env_collision_free([r], q, mode):
-                                pt = (r, q, t)
-                                pts.append(pt) #TODO need to make sure its a general pt (not the same point for the same seperate graph)
-                                robot_pts += 1
-
-                                if tuple([r, t]) not in added_pts_dict:
-                                    added_pts_dict[tuple([r, t])] = 0
-
-                                added_pts_dict[tuple([r, t])] += 1
+                    lims = self.env.limits[:, self.env.robot_idx[r]]
+                    while added_pts_dict[key] < self.sample_batch_size_per_task:
+                        q = np.random.uniform(lims[0], lims[1])
+                        if self.env.is_robot_env_collision_free([r], q, mode):
+                            pt = (r, q, t)
+                            pts.append(pt) #TODO need to make sure its a general pt (not the same point for the same seperate graph)
+                            added_pts_dict[key] += 1
             
             print(added_pts_dict)
             
@@ -150,36 +141,39 @@ class dRRTstar(BaseRRTstar):
 
     def sample_goal_for_active_robots(self, modes:List[Mode]):
         """Sample goals for active robots as vertices for corresponding separate graph"""
-        transitions = []
+        
         for m in modes:
-            active_task = self.env.get_active_task(m, None)
-            constrained_robot = active_task.robots
+            transitions = []
+            while  len(transitions) < self.transistion_batch_size_per_mode:
+                next_ids = self.get_next_ids(m)
+                active_task = self.env.get_active_task(m, next_ids)
+                if len(transitions) > 0 and len(self.env.get_valid_next_task_combinations(m)) <= 1 and type(active_task.goal) is SingleGoal:
+                    break
+                constrained_robots = active_task.robots
+                q = active_task.goal.sample(m)
+                t = m.task_ids[self.env.robots.index(constrained_robots[0])]
+                if self.env.is_collision_free_for_robot(constrained_robots, q, m):
+                    offset = 0
+                    for r in constrained_robots:
+                        dim = self.env.robot_dims[r]
+                        q_transition = q[offset:offset+dim]
+                        offset += dim
+                        transition = (r, q_transition, t)
+                        transitions.append(transition)
+            for t in transitions:
+                r = t[0]
+                q = t[1]
+                task = t[2]
+                
+                self.g.add_robot_node([r], [q], task, True)
 
-            q = active_task.goal.sample(m)
-            t = m.task_ids[self.env.robots.index(constrained_robot[0])]
-            
-            # print(f"checking colls for {goal_constrainted_robots}")
-            if self.env.is_collision_free_for_robot(constrained_robot, q, m):
-                offset = 0
-                for r in constrained_robot:
-                    dim = self.env.robot_dims[r]
-                    q_transition = q[offset:offset+dim]
-                    offset += dim
-                    transition = (r, q_transition, t)
-                    transitions.append(transition)
-
-        for s in transitions:
-            r = s[0]
-            q = s[1]
-            task = s[2]
-            
-            self.g.add_robot_node([r], [q], task, True)
-
-    def initialize_graph(self, modes:List[Mode]):  
+    def add_samples_to_graph(self, modes:Optional[List[Mode]]=None):  
+        if modes is None:
+            modes = self.modes
         #sample task goal
         self.sample_goal_for_active_robots(modes)
         # sample uniform
-        self.sample_uniform_valid_per_robot(self.batch_size, modes)
+        self.sample_uniform_valid_per_robot(modes)
 
     def add_new_mode(self, 
                      q:Configuration=None, 
@@ -208,15 +202,15 @@ class dRRTstar(BaseRRTstar):
         self.modes.append(new_mode)
         self.add_tree(new_mode, tree_instance)
         self.InformedInitialization(new_mode)
-        self.initialize_graph([new_mode])
+        self.add_samples_to_graph([new_mode])
 
-    def UpdateCost(self, n:Node) -> None:
-       return RRTstar.UpdateCost(self, n)
+    def UpdateCost(self, mode:Mode, n:Node) -> None:
+       return RRTstar.UpdateCost(self, mode, n)
       
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         RRTstar.ManageTransition(self, mode, n_new)
 
-    def KNearest(self, mode:Mode, n_new_q_tensor: NDArray, n_new: Configuration, k:int = 20) -> Tuple[List[Node], NDArray]:
+    def KNearest(self, mode:Mode, n_new: Configuration, k:int = 20) -> Tuple[List[Node], NDArray]:
         batch_subtree = self.trees[mode].get_batch_subtree()
         set_dists = batch_config_dist(n_new.state.q, batch_subtree, self.distance_metric)
         indices = np.argsort(set_dists)
@@ -226,22 +220,60 @@ class dRRTstar(BaseRRTstar):
         n_near_costs = self.operation.costs.index_select(0,node_indices)
         return N_near_batch, n_near_costs, node_indices   
 
-    def FindParent(self, mode:Mode, n_near: Node, n_new: Node, batch_cost: NDArray) -> None:
-        potential_cost = n_near.cost + batch_cost
-        if n_new.cost > potential_cost:
-            if self.env.is_edge_collision_free(
-                n_near.state.q, n_new.state.q, mode
-            ):
+    # def ChangeParent(self, mode:Mode, n_near: Node, n_new: Node, batch_cost: NDArray) -> None:
+    #     potential_cost = n_near.cost + batch_cost
+    #     if n_new.cost > potential_cost:
+    #         if self.env.is_edge_collision_free(
+    #             n_near.state.q, n_new.state.q, mode
+    #         ):
                     
-                if n_new.parent is not None:
-                    n_new.parent.children.remove(n_new)
-                n_new.parent = n_near
-                n_new.cost_to_parent = batch_cost
-                n_near.children.append(n_new) #Set child
-                self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, n_new.id) 
-                n_new.cost = potential_cost
-                return True
-        return False
+    #             if n_new.parent is not None:
+    #                 n_new.parent.children.remove(n_new)
+    #             n_new.parent = n_near
+    #             n_new.cost_to_parent = batch_cost
+    #             n_near.children.append(n_new) #Set child
+    #             self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, n_new.id) 
+    #             n_new.cost = potential_cost
+    #             return True
+    #     return False
+    
+    def ChangeParent(self, 
+                   mode:Mode, 
+                   node_indices: NDArray, 
+                   n_new: Node, 
+                   batch_cost: NDArray, 
+                   n_near_costs: NDArray
+                   ) -> None:
+        """
+        Sets the optimal parent for a new node by evaluating connection costs among candidate nodes.
+
+        Args:
+            mode (Mode): Current operational mode.
+            node_indices (NDArray): Array of IDs representing candidate neighboring nodes.
+            n_new (Node): New node that needs a parent connection.
+            n_nearest (Node): Nearest candidate node to n_new.
+            batch_cost (NDArray): Costs associated from n_new to all candidate neighboring nodes.
+            n_near_costs (NDArray): Cost values for all candidate neighboring nodes.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        c_new_tensor = n_near_costs + batch_cost
+        valid_mask = c_new_tensor < n_new.cost
+        if np.any(valid_mask):
+            sorted_indices = np.where(valid_mask)[0][np.argsort(c_new_tensor[valid_mask])]
+            for idx in sorted_indices:
+                node = self.trees[mode].subtree.get(node_indices[idx].item())
+                if self.env.is_edge_collision_free(node.state.q, n_new.state.q, mode):
+                    self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, n_new.id) 
+                    n_new.cost = c_new_tensor[idx]
+                    n_new.cost_to_parent = batch_cost[idx]   
+                    if n_new.parent is not None:
+                        n_new.parent.children.remove(n_new)
+                    n_new.parent = node     
+                    node.children.append(n_new)
+                    self.UpdateCost(mode, n_new)                       
+                    return
    
     def PlannerInitialization(self):   
         self.g = ImplicitTensorGraph(self.env.robots) # vertices of graph are in general position (= one position only appears once)
@@ -359,35 +391,38 @@ class dRRTstar(BaseRRTstar):
                 N_near_batch, n_near_costs, node_indices = self.Near(mode, n_candidate, n_nearest_idx, set_dists )
                 batch_cost = self.env.batch_config_cost(n_candidate.state.q, N_near_batch)
                 if self.Rewire(mode, node_indices, n_candidate, batch_cost, n_near_costs):
-                    self.UpdateCost(n_candidate)
+                    self.UpdateCost(mode,n_candidate)
                 self.ManageTransition(mode, n_candidate) #Check if we have reached a goal
             else:
                 #reuse existing node
-                # existing_node_ = self.CheckForExistingNode(mode, n_candidate)
-                batch_cost = self.env.batch_config_cost([existing_node.state], [n_near.state])
-                if self.FindParent(mode, n_near, existing_node, batch_cost):
-                    self.UpdateCost(existing_node)
-                _, _, set_dists, n_nearest_idx = self.Nearest(mode, existing_node.state.q)  
-                N_near_batch, n_near_costs, node_indices = self.Near(mode, existing_node, n_nearest_idx, set_dists)
+                # existing_node_ = self.CheckForExistingNode(mode, n_candidate) # TODO make sure n_near is in neighbors
+                # _, _, set_dists, n_nearest_idx = self.Nearest(mode, existing_node.state.q)  #TODO not needed?
+                idx =  np.where(self.trees[mode].get_node_ids_subtree() == n_near.id)[0][0] 
+                N_near_batch, n_near_costs, node_indices = self.Near(mode, existing_node, idx)
                 batch_cost = self.env.batch_config_cost(existing_node.state.q, N_near_batch)
+                # batch_cost = self.env.batch_config_cost([existing_node.state], [n_near.state])
+                self.ChangeParent(mode, node_indices, existing_node, batch_cost, n_near_costs)
                 if self.Rewire(mode, node_indices, existing_node, batch_cost, n_near_costs):
-                    self.UpdateCost(existing_node)
+                    self.UpdateCost(mode, existing_node)
             self.FindLBTransitionNode()
                        
     def ConnectToTarget(self, mode:Mode, iter:int):
-        """Local connector: Tries to connect to a termination node in mode"""
+        """Local connector: Tries to connect to a transition node in mode"""
         #Not implemented as described in paper which uses a selected order
         # # select random termination node of created ones and try to connect
         new_node = True
         if self.operation.init_sol and self.env.is_terminal_mode(mode):
             #when termination node is restricted for all agents -> don't create a new transition node            
-            node_id = np.random.choice(self.transition_node_ids[mode] )
+            node_id = np.random.choice(self.transition_node_ids[mode])
             termination_node = self.trees[mode].subtree.get(node_id)
             terminal_q = termination_node.state.q
             new_node = False
         else:
             terminal_q = self.sample_transition_configuration(mode)
             termination_node = Node(State(terminal_q, mode), self.operation)
+            self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, termination_node.id)
+            termination_node.cost = np.inf
+
         
         # N_near_batch, n_near_costs, node_indices = self.KNearest(mode, terminal_q_tensor.unsqueeze(0), terminal_q) #TODO
         _, _, set_dists, n_nearest_idx = self.Nearest(mode, termination_node.state.q) 
@@ -396,8 +431,8 @@ class dRRTstar(BaseRRTstar):
         c_terminal_costs = n_near_costs + batch_cost       
         sorted_mask = np.argsort(c_terminal_costs)
         for idx in sorted_mask:
-            if termination_node.parent is None or termination_node.cost > c_terminal_costs[idx]:
-                node = self.trees[mode].subtree.get(node_indices[idx].item())
+            if termination_node.cost > c_terminal_costs[idx]:
+                node = self.trees[mode].get_node(node_indices[idx].item())
                 dist = batch_config_dist(node.state.q, [termination_node.state.q], self.distance_metric)
                 # dist = batch_dist_torch(node.q_tensor, node.state.q, termination_node.q_tensor.unsqueeze(0), self.distance_metric)
                 n_nearest = self.Extend(mode, node, termination_node, dist)
@@ -411,8 +446,12 @@ class dRRTstar(BaseRRTstar):
                         n_nearest.children.append(termination_node) #Set child
                         if new_node:
                             self.trees[mode].add_node(termination_node)
-                            self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, termination_node.id) 
                         termination_node.cost = n_nearest.cost + cost
+                        _, _, set_dists, n_nearest_idx = self.Nearest(mode, termination_node.state.q)  
+                        N_near_batch, n_near_costs, node_indices = self.Near(mode, termination_node, n_nearest_idx, set_dists)
+                        batch_cost = self.env.batch_config_cost(termination_node.state.q, N_near_batch)
+                        if self.Rewire(mode, node_indices, termination_node, batch_cost, n_near_costs):
+                            self.UpdateCost(mode, termination_node)
                         self.ManageTransition(mode, termination_node)
                         return 
 
@@ -420,13 +459,13 @@ class dRRTstar(BaseRRTstar):
         i = 0
         self.PlannerInitialization()
         
-
         while True:
             i += 1
             self.Expand(i)
             active_mode  = self.RandomMode()
             self.ConnectToTarget(active_mode, i)
-            
+            if self.operation.init_sol and i %100 == 0: # make it better!
+                self.add_samples_to_graph() 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break
 
