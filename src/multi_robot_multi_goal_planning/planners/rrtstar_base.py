@@ -1827,14 +1827,13 @@ class BaseRRTstar(ABC):
 
         # Map Halton samples to configuration space
         free_samples = 0
-        q_robots = np.array([
-            lims[0] + halton_samples[:, self.env.robot_idx[robot]] * (lims[1] - lims[0])
-            for robot, lims in zip(self.env.robots, limits)
-        ])
+        q_robots = np.empty(len(self.env.robots), dtype=object)
+        for i, (robot, lims) in enumerate(zip(self.env.robots, limits)):
+            q_robots[i] = lims[0] + halton_samples[:, self.env.robot_idx[robot]] * (lims[1] - lims[0])
         # idx = 0
         # q_ellipse = []
         for i in range(num_samples):
-            q = q_robots[:,i]              
+            q = [q_robot[i] for q_robot in q_robots]             
             q = type(self.env.get_start_pos()).from_list(q)
             # if idx < 800:
             #     q_ellipse.append(q.state())
