@@ -2,6 +2,7 @@ import argparse
 from matplotlib import pyplot as plt
 
 import datetime
+from pathlib import Path
 import json
 import os
 import re
@@ -39,15 +40,26 @@ def convert_to_path(env, path_data):
     start_conf = env.get_start_pos()
     prev_config = start_conf
 
-    for a in path_data:
+    for i, a in enumerate(path_data):
         q_np = np.array(a["q"])
         q = type(env.get_start_pos())(q_np, start_conf.array_slice)
 
+        # print(i)
+        # print(q.state())
+
         if a["mode"] != prev_mode_ids:
         # if a["mode"] != prev_mode_ids and a["mode"] != env._terminal_task_ids:
-            print(a["mode"])
-            next_mode = env.get_next_mode(prev_config, modes[-1])
-            modes.append(next_mode)
+            if a["mode"] in env.get_valid_next_task_combinations(modes[-1]):
+                # print("current read mode", a["mode"])
+                # print(q)
+                # try:
+                # print(prev_config.state(), modes[-1])
+                next_mode = env.get_next_mode(prev_config, modes[-1])
+
+                if next_mode.task_ids == a["mode"]:
+                    modes.append(next_mode)
+                # except:
+                #     break
 
         real_path.append(State(q, modes[-1]))
         prev_mode_ids = a["mode"]
@@ -161,16 +173,20 @@ def main():
     args = parser.parse_args()
 
     folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
-    config = load_experiment_config(os.path.join(folder_path, 'config.json'))
-    seed = config["seed"] 
-
+    potential_config_path = os.path.join(folder_path, 'config.json')
+    if Path(potential_config_path).exists():
+        config = load_experiment_config(potential_config_path)
+        seed = config["seed"] 
+    else:
+        seed = 0
+    
     np.random.seed(seed)
     random.seed(seed)
 
     path_data = load_path(args.path_filename)
 
     env = get_env_by_name(args.env_name)
-    env.cost_reduction = "sum"
+    env.cost_reduction = "max"
     env.cost_metric = "euclidean"
 
     if not args.show_coll_config:
@@ -246,6 +262,7 @@ def main():
         pause_time=0.05,
         stop_at_end=True,
         adapt_to_max_distance=True,
+        stop_at_mode=False
     )
 
 
