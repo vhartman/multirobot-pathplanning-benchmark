@@ -2099,7 +2099,7 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
             [robot_prefix + "ur_vacuum", box],
             ry.OT.ineq,
             [-1e0],
-            [0.01],
+            [0.02],
         )
         komo.addObjective(
             [1, 2],
@@ -2150,7 +2150,7 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
                 [robot_prefix + "ur_vacuum", box],
                 ry.OT.ineq,
                 [-1e0],
-                [0.01],
+                [0.02],
             )
             komo.addObjective(
                 [3, 4],
