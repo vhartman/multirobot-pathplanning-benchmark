@@ -1827,14 +1827,13 @@ class BaseRRTstar(ABC):
 
         # Map Halton samples to configuration space
         free_samples = 0
-        q_robots = np.array([
-            lims[0] + halton_samples[:, self.env.robot_idx[robot]] * (lims[1] - lims[0])
-            for robot, lims in zip(self.env.robots, limits)
-        ])
+        q_robots = np.empty(len(self.env.robots), dtype=object)
+        for i, (robot, lims) in enumerate(zip(self.env.robots, limits)):
+            q_robots[i] = lims[0] + halton_samples[:, self.env.robot_idx[robot]] * (lims[1] - lims[0])
         # idx = 0
         # q_ellipse = []
         for i in range(num_samples):
-            q = q_robots[:,i]              
+            q = [q_robot[i] for q_robot in q_robots]             
             q = type(self.env.get_start_pos()).from_list(q)
             # if idx < 800:
             #     q_ellipse.append(q.state())
@@ -2457,17 +2456,17 @@ class BaseRRTstar(ABC):
                 n_near = self.trees[mode].get_node(node_indices[idx].item(), tree)
                 if n_near == n_new.parent or n_near.cost == np.inf or n_near.id == n_new.id:
                     continue
+                if n_new.state.mode == n_near.state.mode or n_new.state.mode == n_near.state.mode.prev_mode:
+                    if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):
+                        if n_near.parent is not None:
+                            n_near.parent.children.remove(n_near)
+                        n_near.parent = n_new                    
+                        n_new.children.append(n_near)
 
-                if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):
-                    if n_near.parent is not None:
-                        n_near.parent.children.remove(n_near)
-                    n_near.parent = n_new                    
-                    n_new.children.append(n_near)
-
-                    n_near.cost = c_potential_tensor[idx]
-                    n_near.cost_to_parent = batch_cost[idx]
-                    if n_near.children != []:
-                        rewired = True
+                        n_near.cost = c_potential_tensor[idx]
+                        n_near.cost_to_parent = batch_cost[idx]
+                        if n_near.children != []:
+                            rewired = True
         return rewired
       
     def GeneratePath(self, 
@@ -2876,31 +2875,32 @@ class BaseRRTstar(ABC):
             # node.cost = discretized_costs[i]
             # node.cost_to_parent = node.cost - node.parent.cost
             # parent.children.append(node)
-            index = np.where(self.trees[mode].get_node_ids_subtree() == parent.id)
-            N_near_batch, n_near_costs, node_indices = self.Near(mode, node, index)
-            batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
-            if mode == discretized_path[i].mode:
-               self.FindParent(mode, node_indices, node, parent, batch_cost, n_near_costs) 
+            
+            if mode == node.state.mode:
+                index = np.where(self.trees[node.state.mode].get_node_ids_subtree() == parent.id)
+                N_near_batch, n_near_costs, node_indices = self.Near(node.state.mode, node, index)
+                batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
+                self.FindParent(node.state.mode, node_indices, node, parent, batch_cost, n_near_costs) 
             else:
                 node.parent = parent
                 self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
-                node.cost_to_parent = batch_cost[np.where(node_indices == parent.id)[0][0]]
+                node.cost_to_parent = self.env.config_cost(node.state.q, parent.state.q)
                 node.cost = node.parent.cost + node.cost_to_parent
                 parent.children.append(node)
-            if self.Rewire(mode, node_indices, node, batch_cost, n_near_costs):
-                self.UpdateCost(mode, node)
+                self.convert_node_to_transition_node(node.parent.state.mode, node.parent)
+                index = np.where(self.trees[node.state.mode].get_node_ids_subtree() == parent.id)
+                N_near_batch, n_near_costs, node_indices = self.Near(node.state.mode, node, index)
+                batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
+
+            if self.Rewire(node.state.mode, node_indices, node, batch_cost, n_near_costs):
+                self.UpdateCost(node.state.mode, node)
             if self.trees[discretized_path[i].mode].order == 1:
                 self.trees[discretized_path[i].mode].add_node(node)
             else:
                 self.trees[discretized_path[i].mode].add_node(node, 'B')
-            parent = node
+            parent = node             
             
-
-            if mode != discretized_path[i].mode:
-                self.convert_node_to_transition_node(mode, node.parent)
-            
-            
-            mode = discretized_path[i].mode
+            mode = node.state.mode
 
         self.convert_node_to_transition_node(mode, node)
         self.FindLBTransitionNode(shortcutting_bool =False)
