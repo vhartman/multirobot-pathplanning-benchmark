@@ -2875,29 +2875,30 @@ class BaseRRTstar(ABC):
             # node.cost = discretized_costs[i]
             # node.cost_to_parent = node.cost - node.parent.cost
             # parent.children.append(node)
-            index = np.where(self.trees[mode].get_node_ids_subtree() == parent.id)
-            N_near_batch, n_near_costs, node_indices = self.Near(mode, node, index)
-            batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
+            
             if mode == discretized_path[i].mode:
-               self.FindParent(mode, node_indices, node, parent, batch_cost, n_near_costs) 
+                index = np.where(self.trees[mode].get_node_ids_subtree() == parent.id)
+                N_near_batch, n_near_costs, node_indices = self.Near(mode, node, index)
+                batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
+                self.FindParent(mode, node_indices, node, parent, batch_cost, n_near_costs) 
             else:
                 node.parent = parent
                 self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
-                node.cost_to_parent = batch_cost[np.where(node_indices == parent.id)[0][0]]
+                node.cost_to_parent = self.env.config_cost(node.state.q, parent.state.q)
                 node.cost = node.parent.cost + node.cost_to_parent
                 parent.children.append(node)
-            if self.Rewire(mode, node_indices, node, batch_cost, n_near_costs):
+                self.convert_node_to_transition_node(mode, node.parent)
+                index = np.where(self.trees[node.state.mode].get_node_ids_subtree() == parent.id)
+                N_near_batch, n_near_costs, node_indices = self.Near(node.state.mode, node, index)
+                batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
+
+            if self.Rewire(node.state.mode, node_indices, node, batch_cost, n_near_costs):
                 self.UpdateCost(mode, node)
             if self.trees[discretized_path[i].mode].order == 1:
                 self.trees[discretized_path[i].mode].add_node(node)
             else:
                 self.trees[discretized_path[i].mode].add_node(node, 'B')
-            parent = node
-            
-
-            if mode != discretized_path[i].mode:
-                self.convert_node_to_transition_node(mode, node.parent)
-            
+            parent = node             
             
             mode = discretized_path[i].mode
 
