@@ -1908,6 +1908,411 @@ def make_egg_carton_env(num_boxes=9, view: bool = False):
 
     return C, keyframes
 
+def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_vacuum.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-5)
+
+    if num_robots >= 2:
+        C.addFile(robot_path, namePrefix="a2_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, -0.7071]
+        ).setJoint(ry.JT.rigid)
+
+    if num_robots >= 3:
+        C.addFile(robot_path, namePrefix="a3_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.5, -0.6, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, 0.7071]
+        ).setJoint(ry.JT.rigid)
+
+    if num_robots >= 4:
+        C.addFile(robot_path, namePrefix="a4_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([-0.5, -0.6, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, 0.7071]
+        ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a2_ur_coll0').setContact(-5)
+
+    w = 10
+    d = 3
+    size = np.array([0.1, 0.1, 0.1])
+
+    boxes = []
+    goals = []
+
+    crl_logo = np.array([
+        [0, 1, 1, 0, 1, 1, 0, 0, 1, 0],
+        [1, 0, 0, 0, 1, 1, 0, 0, 1, 0],
+        [0, 1, 1, 0, 1, 0, 1, 0, 1, 1]
+    ])
+
+    def get_pos(j, k):
+        stretch = 1.2
+        pos = np.array(
+            [
+                j * size[0] * stretch - (w-1) * stretch / 2 * size[0] + size[0] / 2 - .1,
+                k * size[1] * stretch - 0.2,
+                0.085,
+            ]
+        )
+
+        # if j > 2:
+        #     pos[0] += 0.12
+        # if j > 5:
+        #     pos[0] += 0.12
+
+        return pos
+
+    def get_intermediate_pos(j, k):
+        stretch = 1.2
+        pos = np.array(
+            [
+                j * size[0] * stretch - (w-1) * stretch / 2 * size[0] + size[0] / 2 - .1,
+                k * size[1] * stretch - 0.2,
+                0.085,
+            ]
+        )
+
+        return pos
+
+    indices = []
+    for k in range(d):
+        for j in range(w):
+            if j == 3 or j == 7:
+                continue
+            indices.append([k, j])
+
+    sequence = [i for i, _ in enumerate(indices)]
+    shuffled_sequence = sequence.copy()
+    random.shuffle(shuffled_sequence)
+
+    used_positions = []
+
+    for i, s in enumerate(shuffled_sequence): 
+        k, j = indices[i]
+        k_rnd, j_rnd = indices[s]
+
+        pos = get_pos(j, k)
+        rnd_pos = get_pos(j_rnd, k_rnd)
+
+        used_positions.append(tuple(list(pos.tobytes())))
+
+        color = [69/255, 144/255, 195/255, 1]
+        # color = [46/255, 108/255, 164/255, 1]
+        # color = [84/255, 188/255, 232/255, 1]
+        if crl_logo[2-k,j] == 0:
+            color = [1, 1, 1, 1]
+
+        C.addFrame("box" + str(j_rnd) + str(k_rnd)).setParent(table).setShape(
+            ry.ST.box, [size[0], size[1], size[2], 0.5]
+        ).setRelativePosition([rnd_pos[0], rnd_pos[1], rnd_pos[2]]).setMass(0.1).setColor(
+            np.array(color)
+        ).setContact(1).setJoint(ry.JT.rigid)
+
+        C.addFrame("goal" + str(j) + str(k)).setParent(table).setShape(
+            ry.ST.marker, [size[0], size[1], size[2], 0.005]
+        ).setRelativePosition([pos[0], pos[1], pos[2]]).setColor(
+            color
+        ).setContact(0).setJoint(ry.JT.rigid)
+
+        boxes.append("box" + str(j_rnd) + str(k_rnd))
+        goals.append("goal" + str(j) + str(k))
+
+    intermediate_goals = []
+
+    for k in range(-1, d + 1):
+        for j in range(-1, w + 1):
+            pos = get_intermediate_pos(j, k)
+
+            if tuple(list(pos.tobytes())) in used_positions:
+                continue
+
+            C.addFrame("intermediate_goal" + str(j) + str(k)).setParent(
+                table
+            ).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition([pos[0], pos[1], pos[2]]).setColor(
+                [0, 0, 0.1, 0.1]
+            ).setContact(0).setJoint(ry.JT.rigid)
+
+            intermediate_goals.append("intermediate_goal" + str(j) + str(k))
+
+    random.shuffle(intermediate_goals)
+
+    if view:
+        C.view(True)
+
+    def compute_rearrangment(
+        robot_prefix, box, intermediate_goal, goal, directly_place=False
+    ):
+        # set everything but the crrent box to non-contact
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        for frame_name in boxes:
+            if frame_name != box:
+                c_tmp.getFrame(frame_name).setContact(0)
+
+        komo = ry.KOMO(
+            c_tmp, phases=5, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+        komo.addObjective(
+            [1, 2],
+            ry.FS.distance,
+            [robot_prefix + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.01],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 0],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [robot_prefix + "ur_ee_marker", box],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductZZ,
+            [robot_prefix + "ur_ee_marker", box],
+            ry.OT.sos,
+            [1e1],
+        )
+
+        # for pick and place directly
+        if directly_place:
+            komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+            komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+            komo.addObjective(
+                times=[3, -1],
+                feature=ry.FS.jointState,
+                frames=[],
+                type=ry.OT.eq,
+                scale=[1e0],
+                target=q_home,
+            )
+
+        else:
+            komo.addModeSwitch([2, 3], ry.SY.stable, ["table", box])
+            komo.addObjective(
+                [2, 3], ry.FS.poseDiff, [intermediate_goal, box], ry.OT.eq, [1e1]
+            )
+
+            komo.addModeSwitch([3, 4], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+            komo.addObjective(
+                [3, 4],
+                ry.FS.distance,
+                [robot_prefix + "ur_vacuum", box],
+                ry.OT.ineq,
+                [-1e0],
+                [0.01],
+            )
+            komo.addObjective(
+                [3, 4],
+                ry.FS.positionDiff,
+                [robot_prefix + "ur_vacuum", box],
+                ry.OT.sos,
+                [1e1, 1e1, 0],
+            )
+            komo.addObjective(
+                [3, 4],
+                ry.FS.scalarProductYZ,
+                [robot_prefix + "ur_ee_marker", box],
+                ry.OT.sos,
+                [1e1],
+            )
+            komo.addObjective(
+                [3, 4],
+                ry.FS.scalarProductZZ,
+                [robot_prefix + "ur_ee_marker", box],
+                ry.OT.sos,
+                [1e1],
+            )
+
+            komo.addModeSwitch([4, -1], ry.SY.stable, ["table", box])
+            komo.addObjective([4, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+            komo.addObjective(
+                times=[5],
+                feature=ry.FS.jointState,
+                frames=[],
+                type=ry.OT.eq,
+                scale=[1e0],
+                target=q_home,
+            )
+
+        max_attempts = 5
+        for num_attempt in range(max_attempts):
+            # komo.initRandom()
+            if num_attempt > 0:
+                dim = len(c_tmp.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
+                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            # print(retval)
+
+            # if view:
+            # komo.view(True, "IK solution")
+
+            print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+                keyframes = komo.getPath()
+                return keyframes
+        
+        return None
+
+        # solver = ry.NLP_Solver(komo.nlp(), verbose=10)
+        # solver.setOptions(damping=0.1, wolfe=0.001)
+        # retval = solver.solve()
+
+        # print(retval.dict())
+
+        # if view:
+        #     komo.view(True, "IK solution")
+
+        # keyframes = komo.getPath()
+
+        # return keyframes
+
+    # all_robots = ["a1_", "a2_"]
+    all_robots = ["a1_", "a2_", "a3_", "a4_"]
+
+    all_robots = all_robots[:num_robots]
+
+    # direct_pick_place_keyframes = {"a1_": {}, "a2_": {}}
+    # indirect_pick_place_keyframes = {"a1_": {}, "a2_": {}}
+
+    direct_pick_place_keyframes = {}
+    indirect_pick_place_keyframes = {}
+
+    for r in all_robots:
+        direct_pick_place_keyframes[r] = {}
+        indirect_pick_place_keyframes[r] = {}
+
+    for r in all_robots:
+        for box, intermediate_goal, goal in zip(boxes, intermediate_goals, goals):
+            r1 = compute_rearrangment(
+                r, box, intermediate_goal, goal, directly_place=True
+            )
+            if r1 is not None:
+                direct_pick_place_keyframes[r][box] = r1[:2]
+
+            r2 = compute_rearrangment(r, box, intermediate_goal, goal)
+            if r2 is not None:
+                indirect_pick_place_keyframes[r][box] = r2[:4]
+
+    all_objs = boxes.copy()
+    random.shuffle(all_objs)
+
+    box_goal = {}
+    for b, g in zip(boxes, goals):
+        box_goal[b] = g
+
+    keyframes = []
+
+    for i in range(len(all_objs)):
+        obj_to_move = all_objs[i]
+        goal = box_goal[obj_to_move]
+
+        goal_location_is_free = False
+        for prev_moved_obj in all_objs[:i]:
+            # check if the 'coordinates' of a boxes goal location appear in the
+            # objects that were already moved. If yes,
+            # we already moved the object that previoulsy occupied
+            # this location.
+            if goal[-2:] == prev_moved_obj[-2:]:
+                goal_location_is_free = True
+                break
+
+        place_directly = False
+        if goal_location_is_free:
+            place_directly = True
+
+        while True:
+            robot = random.choice(all_robots)
+
+            if obj_to_move in direct_pick_place_keyframes[robot] or obj_to_move in direct_pick_place_keyframes[robot]:
+                break
+
+            print("choosing robot")
+
+        if place_directly:
+            keyframes.append(
+                (
+                    robot,
+                    obj_to_move,
+                    direct_pick_place_keyframes[robot][obj_to_move],
+                    goal,
+                )
+            )
+        else:
+            keyframes.append(
+                (
+                    robot,
+                    obj_to_move,
+                    indirect_pick_place_keyframes[robot][obj_to_move],
+                    goal,
+                )
+            )
+
+    return C, keyframes, all_robots
+
 
 def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
     C = ry.Config()
@@ -1976,7 +2381,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
                 [
                     j * size[0] * 1.5 - w / 2 * size[0] + size[0] / 2,
                     k * size[1] * 1.5 - 0.2,
-                    0.1,
+                    0.085,
                 ]
             )
             C.addFrame("box" + str(j) + str(k)).setParent(table).setShape(
@@ -2011,7 +2416,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
                     [
                         j * size[0] * 1.5 - (w + 2) / 2 * size[0],
                         k * size[1] * 1.5 - 0.35,
-                        0.1,
+                        0.085,
                     ]
                 )
 
@@ -2289,7 +2694,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
 
 
 def make_box_stacking_env(
-    num_robots=2, num_boxes=9, mixed_robots: bool = True, view: bool = False
+    num_robots=2, num_boxes=9, mixed_robots: bool = False, view: bool = False
 ):
     C = ry.Config()
 
@@ -4264,5 +4669,7 @@ if __name__ == "__main__":
         make_depalletizing_env()
     elif args.env == "struts":
         make_strut_assembly_problem()
+    elif args.env == "crl":
+        make_crl_logo_rearrangement_env()
     else:
         make_panda_waypoint_env(2, view=True)

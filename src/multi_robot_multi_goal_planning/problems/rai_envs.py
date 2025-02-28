@@ -1468,10 +1468,13 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
 
 
 class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
-    def __init__(self, num_robots=2, num_boxes=9):
-        self.C, actions, self.robots = rai_config.make_box_rearrangement_env(
-            num_boxes=num_boxes, num_robots=num_robots
-        )
+    def __init__(self, num_robots=2, num_boxes=9, logo:bool=False):
+        if not logo:
+            self.C, actions, self.robots = rai_config.make_box_rearrangement_env(
+                num_boxes=num_boxes, num_robots=num_robots
+            )
+        else:
+            self.C, actions, self.robots = rai_config.make_crl_logo_rearrangement_env(num_robots=num_robots)
 
         rai_env.__init__(self)
 
@@ -1917,7 +1920,7 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
                 task_name = r + t + "_" + b + "_" + str(cnt)
 
                 if t == "pick":
-                    ee_name = r + "ur_gripper_center"
+                    ee_name = r + "gripper_center"
                     self.tasks.append(Task([r], SingleGoal(k), t, frames=[ee_name, b]))
                 else:
                     self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
@@ -2087,9 +2090,12 @@ def display_path(
             q = path[i].q[k]
             env.C.setJointState(q, rai_config.get_robot_joints(env.C, env.robots[k]))
 
+            # print(q)
+
         if stop_at_mode and i < len(path) - 1:
             if path[i].mode != path[i + 1].mode:
                 print(i)
+                print(path[i].mode)
                 env.C.view(True)
 
         env.C.view(stop)
