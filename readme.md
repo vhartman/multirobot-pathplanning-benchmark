@@ -28,9 +28,7 @@ Currently, there are 21 base scenarios, of which most can be adjusted in difficu
 
 Videos illustrate the types of problems we are interested in best:
 
-![Example 1](assets/box_rearrangement.gif)
-![Example 2](assets/box_stacking_four_in_use.gif)
-![Example 3](assets/mobile_four_dep.gif)
+<img src="assets/box_rearrangement.gif" height="200"/><img src="assets/box_stacking_four.gif" height="200"/><img src="assets/mobile_four_dep.gif" height="200"/>
 
 More examples can be seen with
 
