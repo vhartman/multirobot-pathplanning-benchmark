@@ -28,7 +28,9 @@ Currently, there are 21 base scenarios, of which most can be adjusted in difficu
 
 Videos illustrate the types of problems we are interested in best:
 
-[][][]
+![Example 1](assets/box_rearrangement.gif)
+![Example 2](assets/box_stacking_four_in_use.gif)
+![Example 3](assets/mobile_four_dep.gif)
 
 More examples can be seen with
 
@@ -66,10 +68,23 @@ python3 ./examples/run_experiment.py [path to config]
 
 as a demo how such a config file can look, we suggest the files in confg/demo.
 
+Once an experiment finished (or even before), you can produce the success/cost evolution plots with 
+
+```
+python3 examples/make_plots.py [path_to_experiment_folder]
+```
+There are a couple of flags to save the plot if desired, and to possibly change the style (`--png --use_paper_style --save`).
+
 An environment and its modes can be inspected with
 
 ```
 python3 examples/show_problems.py [environment name] --mode modes
+```
+
+and finally, a path can be visualized  and possibly exported with 
+
+```
+python3 examples/display_single_path.py [filename] [environment_name]
 ```
 
 ## Problem description
