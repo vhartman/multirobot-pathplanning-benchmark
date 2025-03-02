@@ -3,7 +3,7 @@
 This repository provides some multi-robot-multi-goal motion planning problems, and some baseline-planners.
 There are also some utilities for visualizing plans, and plotting convergence and success rates of planners.
 
-The corresponding paper can be found at ~~not available yet~~.
+The corresponding paper can be found [here](https://vhartmann.com/assets/mrmg/a_benchmark_for_mr_mg_pf.pdf), and more videos can be seen on the [paper website](https://vhartmann.com/mrmg-planning/).
 
 # Installation
 The problems we propose here are built on top of [rai](https://marctoussaint.github.io/robotic/index.html) ([github](https://github.com/MarcToussaint/robotic)). We would recommend using the virtual environment of your choice to make sure nothing break with rai.
@@ -28,7 +28,7 @@ Currently, there are 21 base scenarios, of which most can be adjusted in difficu
 
 Videos illustrate the types of problems we are interested in best:
 
-<img src="assets/box_rearrangement.gif" height="200"/><img src="assets/box_stacking_four.gif" height="200"/><img src="assets/mobile_four_dep.gif" height="200"/>
+<img src="assets/box_rearrangement.gif" height="150"/><img src="assets/box_stacking_four.gif" height="150"/><img src="assets/mobile_four_dep.gif" height="150"/>
 
 More examples can be seen with
 
