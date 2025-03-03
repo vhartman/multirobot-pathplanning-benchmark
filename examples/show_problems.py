@@ -1,4 +1,7 @@
-from multi_robot_multi_goal_planning.problems import get_env_by_name
+from multi_robot_multi_goal_planning.problems import (
+    get_env_by_name,
+    get_all_environments,
+)
 import multi_robot_multi_goal_planning.problems as problems
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.planning_env import Mode
@@ -10,7 +13,7 @@ import time
 import random
 
 
-def visualize_modes(env: rai_env):
+def visualize_modes(env: rai_env, export_images: bool = False):
     env.show()
 
     q_home = env.start_pos
@@ -67,7 +70,11 @@ def visualize_modes(env: rai_env):
         #     if c[2] < 0:
         #         print(c)
 
-        env.show()
+        if export_images:
+            env.show(False)
+            env.C.view_savePng("./z.img/")
+        else:
+            env.show()
 
         if env.is_terminal_mode(m):
             break
@@ -162,10 +169,10 @@ def benchmark_collision_checking(env: rai_env, N=5000):
 
     end = time.time()
 
-    print(f"Took on avg. {(end-start)/N * 1000} ms for a collision check.")
+    print(f"Took on avg. {(end - start) / N * 1000} ms for a collision check.")
 
 
-if __name__ == "__main__":
+def main():
     # problems.rai_envs.rai_hallway_two_dim_dependency_graph()
     # print()
     # problems.rai_envs.rai_two_dim_three_agent_env_dependency_graph()
@@ -174,7 +181,7 @@ if __name__ == "__main__":
     parser.add_argument("env_name", nargs="?", default="default", help="env to show")
     parser.add_argument(
         "--mode",
-        choices=["benchmark", "show", "modes"],
+        choices=["benchmark", "show", "modes", "list_all"],
         required=True,
         help="Select the mode of operation",
     )
@@ -184,9 +191,17 @@ if __name__ == "__main__":
         help="Display the configuration used for collision checking. (default: False)",
     )
     parser.add_argument(
-        "--seed", type=int, default=0, help="Seed"
+        "--export",
+        action="store_true",
+        help="Export images of modes. (default: False)",
     )
+    parser.add_argument("--seed", type=int, default=0, help="Seed")
     args = parser.parse_args()
+
+    if args.mode == "list_all":
+        all_envs = get_all_environments()
+        print("\n".join([name for name in all_envs.keys()]))
+        return
 
     # check_all_modes()
 
@@ -207,4 +222,8 @@ if __name__ == "__main__":
         benchmark_collision_checking(env)
     elif args.mode == "modes":
         print("Environment modes/goals")
-        visualize_modes(env)
+        visualize_modes(env, args.export)
+
+
+if __name__ == "__main__":
+    main()

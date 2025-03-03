@@ -218,6 +218,7 @@ def make_cost_plots(
     foldername: Optional[str] = None,
     save_as_png: bool = False,
     add_legend: bool = True,
+    baseline_cost=None
 ):
     plt.figure("Cost plot")
 
@@ -373,6 +374,11 @@ def make_cost_plots(
             color=color,
         )
 
+    if baseline_cost is not None:
+        plt.axhline(y=baseline_cost, color="gray", linestyle="--")
+
+        min_non_inf_cost = min(min_non_inf_cost, baseline_cost)
+
     plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
     # plt.grid()
@@ -480,6 +486,7 @@ def main():
         action="store_true",
         help="Use the paper style (default: False)",
     )
+
     parser.add_argument(
         "--legend",
         action="store_true",
@@ -489,6 +496,9 @@ def main():
         "--no_display",
         action="store_true",
         help="Display the resulting plots at the end. (default: False)",
+    )
+    parser.add_argument(
+        "--baseline_cost", type=float, default=None, help="Baseline"
     )
     args = parser.parse_args()
 
@@ -509,6 +519,7 @@ def main():
         foldername,
         save_as_png=args.png,
         add_legend=args.legend,
+        baseline_cost=args.baseline_cost,
     )
     make_success_plot(all_experiment_data, config)
 
