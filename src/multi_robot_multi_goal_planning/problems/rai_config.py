@@ -4006,7 +4006,7 @@ def make_box_pile_env(
 
     keyframes = []
 
-    def handover(r1, r2, box_num):
+    def handover(r1, r2, box_num, num_keyframes=1, relative_pose_at_handover=None, ref_pose=None):
         c_tmp = ry.Config()
         c_tmp.addConfigurationCopy(C)
 
@@ -4031,16 +4031,16 @@ def make_box_pile_env(
             [1, 2],
             ry.FS.distance,
             [r1 + "ur_vacuum", box],
-            ry.OT.sos,
-            [1e0],
-            [0.07],
+            ry.OT.ineq,
+            [-1e0],
+            [0.00],
         )
         komo.addObjective(
             [1, 2],
             ry.FS.positionDiff,
             [r1 + "ur_vacuum", box],
             ry.OT.sos,
-            [1e1, 1e1, 1],
+            [1e1, 1e1, 0],
         )
         komo.addObjective(
             [1, 2],
@@ -4056,16 +4056,16 @@ def make_box_pile_env(
             [2, 3],
             ry.FS.distance,
             [r2 + "ur_vacuum", box],
-            ry.OT.sos,
-            [1e0],
-            [0.07],
+            ry.OT.eq,
+            [-1e0],
+            [0.00],
         )
         komo.addObjective(
             [2, 3],
             ry.FS.positionDiff,
             [r2 + "ur_vacuum", box],
             ry.OT.sos,
-            [1e1, 1e1, 1],
+            [1e1, 1e1, 0],
         )
         komo.addObjective(
             [2, 3],
@@ -4075,6 +4075,10 @@ def make_box_pile_env(
             [2e1],
             [-1],
         )
+
+        if relative_pose_at_handover is not None:
+            komo.addObjective([1,1], ry.FS.qItself, [], ry.OT.eq, [1e1], ref_pose[0])
+            komo.addObjective([2,2], ry.FS.poseDiff, [r2 + "ur_ee_marker", r1 + "ur_ee_marker"], ry.OT.eq, [1e1], relative_pose_at_handover)
 
         komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
         komo.addObjective([3, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
@@ -4088,37 +4092,47 @@ def make_box_pile_env(
             target=q_home,
         )
 
-        for i in range(20):
-            if i > 0:
-                komo.initRandom()
-            #     # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
-            #     x_init = np.random.rand(len(q_home)) * 4 - 2.0
-            #     komo.initWithConstant(x_init)
+        all_keyframes = []
+        for _ in range(num_keyframes):
+            max_attempts = 20
+            for i in range(max_attempts):
+                if i > 0 or relative_pose_at_handover is not None:
+                    komo.initRandom()
+                    # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
+                    # x_init = q_home + np.random.randn(len(q_home)) * 0.1
+                    # komo.initWithConstant(x_init)
 
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
+                if relative_pose_at_handover is not None :
+                    p = komo.getPath()
+                    p += np.random.randn(p.shape[0], p.shape[1]) * 0.1
+                    komo.initWithPath(p)
 
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
+                solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+                # options.nonStrictSteps = 50;
 
-            print(retval)
+                # solver.setOptions(damping=0.01, wolfe=0.001)
+                # solver.setOptions(damping=0.001)
+                retval = solver.solve()
+                retval = retval.dict()
 
-            if view:
-                komo.view(True, "IK solution")
-            # komo.view(True, "IK solution")
+                print(retval)
 
-            keyframes = komo.getPath()
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                if view:
+                    komo.view(True, "IK solution")
                 # komo.view(True, "IK solution")
 
-                return keyframes[:-1, :]
+                keyframes = komo.getPath()
 
-        return None
+                # print(retval)
+
+                if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                    # komo.view(True, "IK solution")
+                    
+                    all_keyframes.append(keyframes[:-1, :])
+                    break
+                    # return keyframes[:-1, :]
+
+        return all_keyframes
 
     def pick_and_place(robot_prefix, box_num):
         c_tmp = ry.Config()
@@ -4148,16 +4162,16 @@ def make_box_pile_env(
             [1, 2],
             ry.FS.distance,
             [robot_prefix + "ur_vacuum", box],
-            ry.OT.sos,
-            [1e0],
-            [0.05],
+            ry.OT.eq,
+            [-1e0],
+            [0.00],
         )
         komo.addObjective(
             [1, 2],
             ry.FS.positionDiff,
             [robot_prefix + "ur_vacuum", box],
             ry.OT.sos,
-            [1e1, 1e1, 1],
+            [1e1, 1e1, 0],
         )
         komo.addObjective(
             [1, 2],
@@ -4207,7 +4221,7 @@ def make_box_pile_env(
                 print(keyframe)
                 if keyframe is None:
                     continue
-                keyframes.append(("pick", [r], i, keyframe))
+                keyframes.append(("pick", [r], i, [keyframe]))
                 break
         else:
             # otherwise a handover/regrasp is required
@@ -4217,14 +4231,30 @@ def make_box_pile_env(
                     if r1 == r2:
                         continue
 
-                    keyframe = handover(r1, r2, i)
+                    poses = handover(r1, r2, i)
 
-                    if keyframe is None:
+                    if len(poses) == 0:
                         continue
 
-                    print(keyframe)
+                    if compute_multiple_keyframes:
+                        home = C.getJointState()
+                        C.setJointState(poses[0][1])
+                        ee_r1_pose = C.getFrame(r1 + "ur_ee_marker").getPose()
+                        # ee_r1_pose = C.getFrame("box" + str(i)).getPose()
+                        ee_r2_pose = C.getFrame(r2 + "ur_ee_marker").getPose()
+                        relative_pose = ee_r2_pose - ee_r1_pose
 
-                    keyframes.append(("handover", [r1, r2], i, keyframe))
+                        C.setJointState(home)
+
+                        print(relative_pose)
+
+                        keyframes_with_same_relative_pose = handover(r1, r2, i, num_keyframes=10, relative_pose_at_handover=relative_pose, ref_pose=poses[0])
+
+                        poses = poses + keyframes_with_same_relative_pose
+
+                    print(poses)
+
+                    keyframes.append(("handover", [r1, r2], i, poses))
                     found_sol = True
                 if found_sol:
                     break

@@ -47,6 +47,7 @@ def get_all_environments():
         "box_stacking_two_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=2),
         "box_stacking_three_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=3),
         "box_reorientation": lambda: re.rai_ur10_box_pile_cleanup_env(),
+        "box_reorientation_multi_handover": lambda: re.rai_ur10_box_pile_cleanup_env(make_many_handover_poses=True),
 
         "box_rearrangement": lambda: re.rai_ur10_arm_box_rearrangement_env(), # 2 robots, 9 boxes
         "box_rearrangement_only_five": lambda: re.rai_ur10_arm_box_rearrangement_env(num_boxes=5),
