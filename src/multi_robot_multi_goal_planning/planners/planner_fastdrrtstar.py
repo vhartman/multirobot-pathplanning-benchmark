@@ -13,12 +13,13 @@ from multi_robot_multi_goal_planning.planners.rrtstar_base import (
     BaseRRTstar, 
     Node, 
     SingleTree,
-    BidirectionalTree
+    BidirectionalTree,
+    get_index_of_first_mode_appearance_in_path,
+    get_index_of_last_mode_appearance_in_path
 
 )
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import (
     RRTstar
-
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
@@ -1491,8 +1492,8 @@ class ImplicitTensorGraph:
         best_nodes = [nodes[i] for i in topk]
         return best_nodes
 
-class dRRTstar(BaseRRTstar):
-    """Represents the class for the dRRT* based planner"""
+class fastdRRTstar(BaseRRTstar):
+    """Represents the class for the fast dRRT* based planner"""
     def __init__(self, 
                  env: BaseProblem,
                  ptc: PlannerTerminationCondition,  
@@ -1521,6 +1522,19 @@ class dRRTstar(BaseRRTstar):
         self.transistion_batch_size_per_mode = transistion_batch_size_per_mode
         self.expand_iter = expand_iter
         self.conf_type = type(env.get_start_pos())
+        self.n_last = {}
+        self.path_per_robot = {} #interpolated
+        self.interpolated_path = []
+        self.interpolated_path_modes = []
+        self.recalculate_flag = False
+    
+    def get_key(self, mode:Mode, robot:int):
+        mode_task_ids = mode.task_ids
+        robot_key = "_".join(str(robot))
+        return robot_key + "_" +  str(mode_task_ids)
+    
+    def set_last_node_in_mode(self, mode:Mode, node:Optional[Node]):
+        self.n_last[mode] = node
     
     def sample_uniform_valid_per_robot(self, modes:List[Mode]):
             pts = []
@@ -1616,12 +1630,28 @@ class dRRTstar(BaseRRTstar):
         self.add_tree(new_mode, tree_instance)
         self.InformedInitialization(new_mode)
         self.add_samples_to_graph([new_mode])
+        self.set_last_node_in_mode(new_mode, None)
 
     def UpdateCost(self, mode:Mode, n:Node) -> None:
        return RRTstar.UpdateCost(self, mode, n)
       
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
-        RRTstar.ManageTransition(self, mode, n_new)
+        cost = self.operation.cost
+        #check if transition is reached
+        if self.env.is_transition(n_new.state.q, mode):
+            self.add_new_mode(n_new.state.q, mode, SingleTree)
+            self.convert_node_to_transition_node(mode, n_new)
+            next_mode = self.env.get_next_mode(n_new.state.q, mode)
+            self.set_last_node_in_mode(next_mode, n_new)
+        #check if termination is reached
+        if self.env.done(n_new.state.q, mode):
+            self.convert_node_to_transition_node(mode, n_new)
+            if not self.operation.init_sol:
+                self.operation.init_sol = True
+        self.FindLBTransitionNode()
+        if cost != self.operation.cost:
+            self.path_per_robot = {}
+            self.recalculate_flag = True
 
     def KNearest(self, mode:Mode, n_new: Configuration, k:int = 20) -> Tuple[List[Node], NDArray]:
         batch_subtree = self.trees[mode].get_batch_subtree()
@@ -1680,6 +1710,7 @@ class dRRTstar(BaseRRTstar):
         # Create start node
         start_state = State(self.env.start_pos, active_mode)
         start_node = Node(start_state, self.operation)
+        self.set_last_node_in_mode(active_mode, start_node)
         self.trees[active_mode].add_node(start_node)
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
@@ -2038,17 +2069,113 @@ class dRRTstar(BaseRRTstar):
         q = type(self.env.get_start_pos()).from_list(q)
         return q
 
+    def get_path_of_robot(self, r:int, path:List[State], key:str):
+        path_robot = []
+        for state in path:
+            path_robot.append(state.q[r])
+        self.path_per_robot[key] = np.array(path_robot)
+
+    def NextElementOnPath(self, mode:Mode, node:Node, r:int):
+        key = self.get_key(mode, r)
+        if self.recalculate_flag:
+            path, path_modes = self.interpolate_path(self.operation.path_shortcutting)
+            self.interpolated_path.append(path)
+            self.interpolated_path_modes.append(path_modes)
+            self.recalculate_flag = False
+        if key not in self.path_per_robot:
+            start_idx = get_index_of_first_mode_appearance_in_path(np.array(self.interpolated_path_modes[-1]), np.array(mode.task_ids))
+            end_idx = get_index_of_last_mode_appearance_in_path(np.array(self.interpolated_path_modes[-1]), np.array(mode.task_ids))
+            self.get_path_of_robot(r, self.interpolated_path[-1][start_idx:end_idx+1], key)
+        node_robot = NpConfiguration.from_numpy(node.state.q.robot_state(r))
+        set_dists = batch_config_dist(node_robot, self.path_per_robot[key], 'euclidean')
+        # set_dists = batch_dist_torch(n.q_tensor.unsqueeze(0), n.state.q, self.trees[mode].get_batch_subtree(tree), self.distance_metric)
+        idx = np.argmin(set_dists)
+        return self.path_per_robot[key][idx]
+
+    def InformedAnyGoalExpansion(self, mode:Mode, n_nearest:Node, max_attemps = 200):
+        attemps = 0
+        while True: 
+            attemps +=1
+            q = []
+            if self.n_last[mode] is None:
+                if np.random.uniform(0,1) < 0.5: #TODO better?
+                    for i, r in enumerate(self.env.robots):
+                        # select configuration of robot r
+                        q_near = NpConfiguration.from_numpy(n_nearest.state.q.robot_state(i)) 
+                        if r not in n_nearest.neighbors:
+                            n_nearest.neighbors[r] = self.g.get_robot_neighbors([r], q_near, mode.task_ids[i])
+                        random_neighbor = np.random.choice(n_nearest.neighbors[r])
+                        q.append(random_neighbor.q)
+                else:
+                    q = self.sample_transition_configuration(mode)
+                    if self.env.is_collision_free(q, mode):
+                        return State(q, mode)
+                    continue
+            else:
+                next_ids = self.get_next_ids(mode)
+                constrained_robots = self.env.get_active_task(mode, next_ids).robots
+                goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
+                offset = 0
+                for i, r in enumerate(self.env.robots):
+                    if r not in constrained_robots:
+                        q.append(n_nearest.state.q[i])
+                    else:
+                        dim = self.env.robot_dims[r]
+                        if self.operation.init_sol:
+                            q.append(self.NextElementOnPath(mode, n_nearest, i))
+                        else:
+                            indices = list(range(offset, offset + dim))
+                            q.append(goal[indices])
+                        offset += dim 
+
+            q = self.conf_type.from_list(q)
+            if self.env.is_collision_free(q, mode):
+                return State(q, mode)
+            if attemps > max_attemps and self.n_last[mode] is not None: #TODO what if is None??
+                attemps = 0
+                self.set_last_node_in_mode(mode, None) 
+
     def Plan(self) -> List[State]:
         i = 0
         self.PlannerInitialization()
-        
+
         while True:
-            i += 1
-            self.Expand(i)
             active_mode  = self.RandomMode()
-            self.ConnectToTarget(active_mode, i)
-            if self.operation.init_sol and i %100 == 0: # make it better!
-                self.add_samples_to_graph() 
+            
+            #get nearest node in tree8:             
+            if self.n_last[active_mode] is not None:
+                q_rand = self.sample_transition_configuration(active_mode)
+                n_nearest = self.n_last[active_mode]
+            else:
+                q_rand = self.SampleNodeManifold(active_mode)
+                if q_rand is None:
+                    continue
+                n_nearest, _, _, _ = self.Nearest(active_mode, q_rand)  
+            state_new = self.InformedAnyGoalExpansion(active_mode, n_nearest)
+            cost_n_new_n_nearest = self.env.config_cost(n_nearest.state.q, state_new.q)
+            n_new_cost = n_nearest.cost + cost_n_new_n_nearest
+            self.set_last_node_in_mode(active_mode, None)
+            if n_new_cost > self.operation.cost:
+                continue
+            if self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, active_mode):
+                n_new = Node(state_new, self.operation)
+                existing_node = self.CheckForExistingNode(active_mode, n_new)
+                if existing_node:
+                    if n_new_cost >= existing_node.cost:
+                        continue
+                    if self.Rewire(active_mode, np.array([existing_node.id]), n_nearest, np.array([cost_n_new_n_nearest]), np.array([existing_node.cost])):
+                        self.UpdateCost(active_mode, n_nearest)
+                    n_new = existing_node
+                else:
+                    n_new.parent = n_nearest
+                    n_new.cost_to_parent = cost_n_new_n_nearest
+                    n_nearest.children.append(n_new) #Set child
+                    self.operation.costs = self.trees[active_mode].ensure_capacity(self.operation.costs, n_new.id) 
+                    n_new.cost = n_new_cost
+                    self.trees[active_mode].add_node(n_new)
+                self.ManageTransition(active_mode, n_new)
+                self.set_last_node_in_mode(active_mode, n_new)
+
             if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break
 

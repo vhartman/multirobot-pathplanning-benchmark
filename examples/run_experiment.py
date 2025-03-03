@@ -40,6 +40,7 @@ from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
     BidirectionalRRTstar,
 )
 from multi_robot_multi_goal_planning.planners.planner_drrtstar import dRRTstar
+from multi_robot_multi_goal_planning.planners.planner_fastdrrtstar import fastdRRTstar
 from make_plots import make_cost_plots
 
 # np.random.seed(100)
@@ -221,6 +222,28 @@ def setup_planner(
         def planner(env):
             options = planner_config["options"]
             return dRRTstar(
+                env,
+                ptc=RuntimeTerminationCondition(runtime),
+                # general_goal_sampling=options["general_goal_sampling"],
+                informed_sampling=options["informed_sampling"],
+                informed_sampling_version=options["informed_sampling_version"],
+                distance_metric=options["distance_metric"],
+                p_goal=options["p_goal"],
+                p_stay=options["p_stay"],
+                p_uniform=options["p_uniform"],
+                shortcutting=options["shortcutting"],
+                mode_sampling=options["mode_sampling"],
+                locally_informed_sampling = options["locally_informed_sampling"],
+                sample_batch_size_per_task = options["sample_batch_size_per_task"],
+                transistion_batch_size_per_mode  = options["transistion_batch_size_per_mode"],
+                expand_iter  = options["expand_iter"]
+                # gaussian=options["gaussian"],
+            ).Plan()
+    elif planner_config["type"] == "fastdrrtstar":
+
+        def planner(env):
+            options = planner_config["options"]
+            return fastdRRTstar(
                 env,
                 ptc=RuntimeTerminationCondition(runtime),
                 # general_goal_sampling=options["general_goal_sampling"],

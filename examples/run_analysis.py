@@ -47,11 +47,12 @@ def ellipse_with_samples(env, env_path, pkl_file):
     try:
         modes = []
         mode = env.start_mode
+        time.sleep(10)
         while True:     
-                modes.append(mode.task_ids)
-                if env.is_terminal_mode(mode):
-                    break
-                mode = env.get_next_mode(None, mode)
+            modes.append(mode.task_ids)
+            if env.is_terminal_mode(mode):
+                break
+            mode = env.get_next_mode(None, mode)
         for robot_idx, robot in enumerate(env.robots):
             legend_group = robot
             static_traces.append(
@@ -158,7 +159,8 @@ def ellipse_with_samples(env, env_path, pkl_file):
                     y=[q[1]],
                     z = [1],
                     mode='markers',
-                    marker=dict(size=3, color=color),
+                    opacity=0.6,
+                    marker=dict(size=5, color=color),
                     legendgroup = legend_group,
                     showlegend = False,
                 ))

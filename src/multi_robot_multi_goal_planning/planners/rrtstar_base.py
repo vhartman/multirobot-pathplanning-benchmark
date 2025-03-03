@@ -389,6 +389,7 @@ class Informed(ABC):
         self.p_goal = p_goal
         self.idx1 = {}
         self.idx2 = {}
+        self.rnd_idx = []
 
     
     def rotation_to_world_frame(self, start:State, goal:State, r_idx:int) -> bool:
@@ -431,6 +432,7 @@ class Informed(ABC):
 
         Returns: 
             None: This method does not return any value. """
+        self.active_robots_idx = []
         active_robots = self.env.get_active_task(mode, next_ids).robots 
         for robot in self.env.robots:
             r_idx = self.env.robots.index(robot)
@@ -494,7 +496,6 @@ class Informed(ABC):
             lims = self.env.limits[:, r_indices]
             return np.random.uniform(lims[0], lims[1])
         attemps = 0
-
         while attemps < max_attemps:
             attemps += 1
             x_ball = self.sample_unit_n_ball(self.n[r_idx])  
@@ -520,7 +521,106 @@ class Informed(ABC):
         """
         pass  
 
+# class InformedVersion0(Informed):
+
+#     """
+#     Locally informed sampling for each robot separately (start and goal config are equal to home pose and task).
+#     Upper bound cost is determined by cost of one robot.
+    
+#     """
+#     def __init__(self, env, p_goal):
+#         super().__init__(env, p_goal)
+    
+#     # def is_lb_cost_smaller(self, path:List[State], q:Configuration, s, e) -> float:
+
+#     #     # start_min = min(self.start_ind.values())
+#     #     # end_max = max(self.end_ind.values())
+#     #     focal_points = np.array(
+#     #             [path[s].q.state(), path[e].q.state()], dtype=np.float64
+#     #         )
+#     #     q = type(self.env.get_start_pos()).from_list(q)
+#     #     c_lb = sum(self.env.batch_config_cost(q, focal_points))
+#     #     path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+#     #     cmax = sum(path_segment_costs[s:e])
+#     #     if c_lb < cmax:
+#     #         return True
+#     #     return False
+    
+#     def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
+
+#         start_min = min(self.start_ind.values())
+#         end_max = max(self.end_ind.values())
+#         focal_points = np.array(
+#                 [path[start_min].q.state(), path[end_max].q.state()], dtype=np.float64
+#             )
+#         q = type(self.env.get_start_pos()).from_list(q)
+#         c_lb = sum(self.env.batch_config_cost(q, focal_points))
+#         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+#         cmax = sum(path_segment_costs[start_min:end_max])
+#         if c_lb < cmax:
+#             return True
+#         return False
+
+#     def batch_config_cost_per_robot(self,
+#         starts: List[Configuration],
+#         batch_other: List[Configuration],
+#         r_idx:int
+#     ) -> float:
+#         if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
+#             diff = starts.state() - batch_other
+#             all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
+#             agent_slices = starts.array_slice
+#         else:
+#             diff = np.array([start.q.state() for start in starts]) - np.array(
+#                 [other.q.state() for other in batch_other], dtype=np.float64
+#             )
+#             all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
+#             agent_slices = starts[0].q.array_slice
+
+#         squared_diff = diff * diff
+#         all_robot_dists = compute_sliced_dists(squared_diff, agent_slices)
+
+#         return all_robot_dists[r_idx]   
+
+#     def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
+#         #need to calculate the cost only cnsidering one agent (euclidean distance)
+#         start = path[self.start_ind[r_idx]]
+#         end = path[self.end_ind[r_idx]]
+
+#         self.idx1[r_idx], self.idx2[r_idx] = None, None
+#         path_segment_costs = self.batch_config_cost_per_robot(path[:-1], path[1:], r_idx)
+#         if r_idx not in self.active_robots_idx:
+#             for _ in range(500):
+#                 start_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
+#                 end_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
+
+#                 if end_ind - start_ind > 2:
+#                     # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+#                     current_cost = sum(path_segment_costs[start_ind:end_ind])
+#                     lb_cost = self.batch_config_cost_per_robot([path[start_ind]], [path[end_ind]], r_idx)
+
+#                     if lb_cost < current_cost: 
+#                         self.idx1[r_idx] = start_ind
+#                         self.idx2[r_idx] = end_ind
+#                         break
+
+#         if self.idx1[r_idx] is None: 
+#             self.idx1[r_idx] = self.start_ind[r_idx]
+#             self.idx2[r_idx] = self.end_ind[r_idx]
+
+#         self.start[r_idx] = path[self.idx1[r_idx]]
+#         self.end[r_idx] = path[self.idx2[r_idx]]
+
+#         # self.start[r_idx] = start
+#         # self.end[r_idx] = end
+#         self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
+#         if self.rotation_to_world_frame(self.start[r_idx], self.end[r_idx], r_idx):
+#             self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])          
+#             return True
+#         return False
+
 class InformedVersion0(Informed):
+
     """
     Locally informed sampling for each robot separately (start and goal config are equal to home pose and task).
     Upper bound cost is determined by cost of one robot.
@@ -529,17 +629,33 @@ class InformedVersion0(Informed):
     def __init__(self, env, p_goal):
         super().__init__(env, p_goal)
     
-    def is_lb_cost_smaller(self, path:List[State], q:Configuration, s, e) -> float:
+    # def is_lb_cost_smaller(self, path:List[State], q:Configuration, s, e) -> float:
+
+    #     # start_min = min(self.start_ind.values())
+    #     # end_max = max(self.end_ind.values())
+    #     focal_points = np.array(
+    #             [path[s].q.state(), path[e].q.state()], dtype=np.float64
+    #         )
+    #     q = type(self.env.get_start_pos()).from_list(q)
+    #     c_lb = sum(self.env.batch_config_cost(q, focal_points))
+    #     path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+    #     cmax = sum(path_segment_costs[s:e])
+    #     if c_lb < cmax:
+    #         return True
+    #     return False
+    
+    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
 
         # start_min = min(self.start_ind.values())
         # end_max = max(self.end_ind.values())
         focal_points = np.array(
-                [path[s].q.state(), path[e].q.state()], dtype=np.float64
+                [path[self.rnd_idx[0]].q.state(), path[self.rnd_idx[1]].q.state()], dtype=np.float64
             )
+        
         q = type(self.env.get_start_pos()).from_list(q)
         c_lb = sum(self.env.batch_config_cost(q, focal_points))
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-        cmax = sum(path_segment_costs[s:e])
+        cmax = sum(path_segment_costs[self.rnd_idx[0]:self.rnd_idx[1]])
         if c_lb < cmax:
             return True
         return False
@@ -567,16 +683,52 @@ class InformedVersion0(Informed):
 
     def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
         #need to calculate the cost only cnsidering one agent (euclidean distance)
-        start = path[self.start_ind[r_idx]]
-        end = path[self.end_ind[r_idx]]
-        self.start[r_idx] = start
-        self.end[r_idx] = end
+        path_segment_costs = self.batch_config_cost_per_robot(path[:-1], path[1:], r_idx)
+        if self.rnd_idx == []:
+            if len(self.active_robots_idx) == 1:
+                idx = self.active_robots_idx[0]
+            else:
+                idx = random.choice(self.active_robots_idx)
+            
+            self.chosen_active_robot = idx
+
+            start = path[self.start_ind[idx]]
+            end = path[self.end_ind[idx]]
+
+            self.idx1[r_idx], self.idx2[r_idx] = None, None
+            
+            # if r_idx not in self.active_robots_idx:
+            for _ in range(500):
+                start_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
+                end_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
+
+                if end_ind - start_ind > 2:
+                    # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+                    # current_cost = sum(path_segment_costs[start_ind:end_ind])
+                    # lb_cost = self.batch_config_cost_per_robot([path[start_ind]], [path[end_ind]], r_idx)
+
+                    # if lb_cost < current_cost: 
+                    self.idx1[r_idx] = start_ind
+                    self.idx2[r_idx] = end_ind
+                    break
+
+
+            if self.idx1[r_idx] is None: 
+                self.idx1[r_idx] = self.start_ind[r_idx]
+                self.idx2[r_idx] = self.end_ind[r_idx]
+            self.rnd_idx = list([self.idx1[r_idx], self.idx2[r_idx]])
+
+        self.start[r_idx] = path[self.rnd_idx[0]]
+        self.end[r_idx] = path[self.rnd_idx[1]]
+
+        # self.start[r_idx] = start
+        # self.end[r_idx] = end
         self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
-        if self.rotation_to_world_frame(start, end, r_idx):
-            path_segment_costs = self.batch_config_cost_per_robot(path[:-1], path[1:], r_idx)
-            self.cmax[r_idx] = sum(path_segment_costs[self.start_ind[r_idx]:self.end_ind[r_idx]])          
+        if self.rotation_to_world_frame(self.start[r_idx], self.end[r_idx], r_idx):
+            self.cmax[r_idx] = sum(path_segment_costs[self.rnd_idx[0]:self.rnd_idx[1]])          
             return True
         return False
+
 class InformedVersion1(Informed):
     """
     Locally informed sampling considering active task.
@@ -2102,7 +2254,7 @@ class BaseRRTstar(ABC):
                             return q
                         continue
                     elif not self.informed_sampling_version == 6:
-                        q = self.sample_informed(mode, True)
+                        q = self.sample_informed(mode, True, max_attemps=self.informed_batch_size)
                         if q is None:
                             return
                             # q = self.sample_transition_configuration(mode)
@@ -2117,6 +2269,7 @@ class BaseRRTstar(ABC):
                             #     q = type(self.env.get_start_pos()).from_list(q_noise)
                             #     if self.env.is_collision_free(q, mode):
                             #         return q
+
                         q = type(self.env.get_start_pos()).from_list(q)
                         if self.env.is_collision_free(q, mode):
                             return q
@@ -2222,7 +2375,7 @@ class BaseRRTstar(ABC):
 
         return new_path, path_modes
     
-    def sample_informed(self, mode:Mode, goal_sampling:bool = False, max_attemps:int = 200) -> None:
+    def sample_informed(self, mode:Mode, goal_sampling:bool = False, max_attemps:int = 300) -> None:
         """ 
         Samples configuration from informed set for the given mode.
 
@@ -2245,8 +2398,16 @@ class BaseRRTstar(ABC):
                     self.informed[mode].start_ind[r_idx] = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
                     self.informed[mode].end_ind[r_idx] = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
                     continue
+                if self.informed_sampling_version == 0:
+                    self.informed[mode].start_ind[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
+                    self.informed[mode].end_ind[r_idx] = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+                    continue
+
                 self.informed[mode].start_ind[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
                 self.informed[mode].end_ind[r_idx] = get_mode_task_ids_of_active_task_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
+        
+        # s = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+        # e = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))        
         while attemps < max_attemps:
             attemps += 1
             if goal_sampling:
@@ -2301,7 +2462,7 @@ class BaseRRTstar(ABC):
                 # e = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
                 # i = 0
                 # q_ellipse = {}
-                # while i < 800:
+                # while i < 1000:
                 #     q_rand = []
                 #     for robot in self.env.robots:
                 #         if robot not in q_ellipse:
@@ -2311,11 +2472,12 @@ class BaseRRTstar(ABC):
                 #         r_indices = self.env.robot_idx[robot]
                 #         try:
                 #             x_rand = self.informed[mode].sample(path, r_indices, r_idx)
-                #             q_ellipse[robot].append(x_rand)
+                #             # q_ellipse[robot].append(x_rand)
                 #             q_rand.append(x_rand)
                 #         except Exception:
                 #             continue
-                #     if self.informed[mode].is_lb_cost_smaller(path, q_rand, s, e):
+                    
+                #     if self.informed[mode].is_lb_cost_smaller(path, q_rand):
                 #         for r_idx, robot in enumerate(self.env.robots):
                 #             q_ellipse[robot].append(q_rand[r_idx])
 
@@ -2324,7 +2486,7 @@ class BaseRRTstar(ABC):
                 # center = {}
                 # for r_idx, robot in enumerate(self.env.robots): 
                 #     focal_pts[robot] = np.array(
-                #                         [path[self.informed[mode].start_ind[r_idx]].q.state(), path[self.informed[mode].end_ind[r_idx]].q.state()], dtype=np.float64
+                #                         [self.informed[mode].start[r_idx].q.state(), self.informed[mode].end[r_idx].q.state()], dtype=np.float64
                 #                         )
                 #     try:
                 #         center[robot] = self.informed[mode].center[r_idx]
@@ -2344,7 +2506,7 @@ class BaseRRTstar(ABC):
                 #     'L': self.informed[mode].L
                 # }
                 # self.save_data(data)
-                    # import matplotlib.pyplot as plt
+                # #     # import matplotlib.pyplot as plt
 
                     # fig, axes = plt.subplots(2, 1, figsize=(12, 15))
 
@@ -2359,9 +2521,17 @@ class BaseRRTstar(ABC):
                     # plt.tight_layout()
                     # plt.show()  
                 # return q_rand
-                if self.informed_sampling_version != 0:
-                    if self.informed[mode].is_lb_cost_smaller(path, q_rand):
-                        return q_rand 
+                
+                if self.informed[mode].is_lb_cost_smaller(path, q_rand):
+                    self.informed[mode].rnd_idx = []
+                    return q_rand
+                self.informed[mode].rnd_idx = []
+                
+                # if self.informed_sampling_version != 0:
+                #     if self.informed[mode].is_lb_cost_smaller(path, q_rand):
+                #         return q_rand 
+                # else:
+                #     return q_rand
                   
                     
         return
