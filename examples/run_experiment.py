@@ -190,7 +190,8 @@ def setup_planner(
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
                 locally_informed_sampling = options["locally_informed_sampling"],
-                informed_batch_size = options["informed_batch_size"]
+                informed_batch_size = options["informed_batch_size"],
+                optimize=optimize
                 # gaussian=options["gaussian"]
             ).Plan()
     elif planner_config["type"] == "birrtstar":
@@ -213,7 +214,8 @@ def setup_planner(
                 # gaussian=options["gaussian"],
                 transition_nodes=options["transition_nodes"],
                 birrtstar_version=options["birrtstar_version"], 
-                informed_batch_size = options["informed_batch_size"]
+                informed_batch_size = options["informed_batch_size"],
+                optimize=optimize
             ).Plan()
 
     else:
