@@ -140,4 +140,5 @@ Similarly as above, the formulation we propose here allows for kinodynamic motio
 
 #### More flexible task planning
 In the moment, we only support formulating the task structure as dependency graph or as sequence.
-It would theoretically be possible to us ethe formulation we propse here to implement and benchmark task and motion planning solvers.
+It would theoretically be possible to use the formulation we propse here to implement and benchmark task and motion planning solvers.
+This would require minor changes in how the starting mode is currently used.
