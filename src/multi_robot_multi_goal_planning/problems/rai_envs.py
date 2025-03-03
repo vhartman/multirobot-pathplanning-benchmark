@@ -709,11 +709,11 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 # best solution found with sum-cost: 49.48
 # best solution found with max-cost: xx
 class rai_random_two_dim(SequenceMixin, rai_env):
-    def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=True):
+    def __init__(self, num_robots=3, num_goals=4, num_obstacles=10, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_random_two_dim(
             num_agents=num_robots,
             num_goals=num_goals,
-            num_obstacles=10,
+            num_obstacles=num_obstacles,
             agents_can_rotate=agents_can_rotate,
         )
         # self.C.view(True)

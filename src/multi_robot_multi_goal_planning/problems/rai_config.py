@@ -1908,7 +1908,10 @@ def make_egg_carton_env(num_boxes=9, view: bool = False):
 
     return C, keyframes
 
+
 def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
+    assert num_robots <= 4, "Only a maximum of 4 robots are supported"
+
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -1963,17 +1966,22 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
     boxes = []
     goals = []
 
-    crl_logo = np.array([
-        [0, 1, 1, 0, 1, 1, 0, 0, 1, 0],
-        [1, 0, 0, 0, 1, 1, 0, 0, 1, 0],
-        [0, 1, 1, 0, 1, 0, 1, 0, 1, 1]
-    ])
+    crl_logo = np.array(
+        [
+            [0, 1, 1, 0, 1, 1, 0, 0, 1, 0],
+            [1, 0, 0, 0, 1, 1, 0, 0, 1, 0],
+            [0, 1, 1, 0, 1, 0, 1, 0, 1, 1],
+        ]
+    )
 
     def get_pos(j, k):
         stretch = 1.2
         pos = np.array(
             [
-                j * size[0] * stretch - (w-1) * stretch / 2 * size[0] + size[0] / 2 - .1,
+                j * size[0] * stretch
+                - (w - 1) * stretch / 2 * size[0]
+                + size[0] / 2
+                - 0.1,
                 k * size[1] * stretch - 0.2,
                 0.085,
             ]
@@ -1990,7 +1998,10 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
         stretch = 1.2
         pos = np.array(
             [
-                j * size[0] * stretch - (w-1) * stretch / 2 * size[0] + size[0] / 2 - .1,
+                j * size[0] * stretch
+                - (w - 1) * stretch / 2 * size[0]
+                + size[0] / 2
+                - 0.1,
                 k * size[1] * stretch - 0.2,
                 0.085,
             ]
@@ -2011,7 +2022,7 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
 
     used_positions = []
 
-    for i, s in enumerate(shuffled_sequence): 
+    for i, s in enumerate(shuffled_sequence):
         k, j = indices[i]
         k_rnd, j_rnd = indices[s]
 
@@ -2020,23 +2031,23 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
 
         used_positions.append(tuple(list(pos.tobytes())))
 
-        color = [69/255, 144/255, 195/255, 1]
+        color = [69 / 255, 144 / 255, 195 / 255, 1]
         # color = [46/255, 108/255, 164/255, 1]
         # color = [84/255, 188/255, 232/255, 1]
-        if crl_logo[2-k,j] == 0:
+        if crl_logo[2 - k, j] == 0:
             color = [1, 1, 1, 1]
 
         C.addFrame("box" + str(j_rnd) + str(k_rnd)).setParent(table).setShape(
             ry.ST.box, [size[0], size[1], size[2], 0.5]
-        ).setRelativePosition([rnd_pos[0], rnd_pos[1], rnd_pos[2]]).setMass(0.1).setColor(
-            np.array(color)
-        ).setContact(1).setJoint(ry.JT.rigid)
+        ).setRelativePosition([rnd_pos[0], rnd_pos[1], rnd_pos[2]]).setMass(
+            0.1
+        ).setColor(np.array(color)).setContact(1).setJoint(ry.JT.rigid)
 
         C.addFrame("goal" + str(j) + str(k)).setParent(table).setShape(
             ry.ST.marker, [size[0], size[1], size[2], 0.005]
-        ).setRelativePosition([pos[0], pos[1], pos[2]]).setColor(
-            color
-        ).setContact(0).setJoint(ry.JT.rigid)
+        ).setRelativePosition([pos[0], pos[1], pos[2]]).setColor(color).setContact(
+            0
+        ).setJoint(ry.JT.rigid)
 
         boxes.append("box" + str(j_rnd) + str(k_rnd))
         goals.append("goal" + str(j) + str(k))
@@ -2050,9 +2061,7 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
             if tuple(list(pos.tobytes())) in used_positions:
                 continue
 
-            C.addFrame("intermediate_goal" + str(j) + str(k)).setParent(
-                table
-            ).setShape(
+            C.addFrame("intermediate_goal" + str(j) + str(k)).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setColor(
                 [0, 0, 0.1, 0.1]
@@ -2214,7 +2223,7 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
                 # komo.view(True, "IK solution")
                 keyframes = komo.getPath()
                 return keyframes
-        
+
         return None
 
         # solver = ry.NLP_Solver(komo.nlp(), verbose=10)
@@ -2287,7 +2296,10 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
         while True:
             robot = random.choice(all_robots)
 
-            if obj_to_move in direct_pick_place_keyframes[robot] or obj_to_move in direct_pick_place_keyframes[robot]:
+            if (
+                obj_to_move in direct_pick_place_keyframes[robot]
+                or obj_to_move in direct_pick_place_keyframes[robot]
+            ):
                 break
 
             print("choosing robot")
@@ -2315,6 +2327,9 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
 
 
 def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
+    assert num_boxes <= 9, "A maximum of 9 boxes are supported"
+    assert num_robots <= 4, "A maximum of 4 robots are supported"
+
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -2575,18 +2590,36 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
                 target=q_home,
             )
 
-        solver = ry.NLP_Solver(komo.nlp(), verbose=10)
-        solver.setOptions(damping=0.1, wolfe=0.001)
-        retval = solver.solve()
+        max_attempts = 5
+        for num_attempt in range(max_attempts):
+            # komo.initRandom()
+            if num_attempt > 0:
+                dim = len(c_tmp.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
+                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
 
-        print(retval.dict())
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
 
-        if view:
-            komo.view(True, "IK solution")
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
 
-        keyframes = komo.getPath()
+            # print(retval)
 
-        return keyframes
+            # if view:
+            # komo.view(True, "IK solution")
+
+            print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+                keyframes = komo.getPath()
+                return keyframes
+
+        return None
 
     # all_robots = ["a1_", "a2_"]
     all_robots = ["a1_", "a2_", "a3_", "a4_"]
@@ -2696,6 +2729,9 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
 def make_box_stacking_env(
     num_robots=2, num_boxes=9, mixed_robots: bool = False, view: bool = False
 ):
+    assert num_boxes <= 9, "A maximum of 9 boxes are supported"
+    assert num_robots <= 4, "A maximum of 4 robots are supported"
+
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -2745,7 +2781,7 @@ def make_box_stacking_env(
     if num_robots >= 2:
         robot_path, robot_type_prefix = get_robot_and_type_prefix(1)
         all_robots.append(f"a2_{robot_type_prefix}")
-        
+
         C.addFile(robot_path, namePrefix="a2_").setParent(
             C.getFrame("table")
         ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
@@ -2755,7 +2791,7 @@ def make_box_stacking_env(
     if num_robots >= 3:
         robot_path, robot_type_prefix = get_robot_and_type_prefix(2)
         all_robots.append(f"a3_{robot_type_prefix}")
-        
+
         C.addFile(robot_path, namePrefix="a3_").setParent(
             C.getFrame("table")
         ).setRelativePosition([+0.5, -0.6, 0]).setRelativeQuaternion(
@@ -2765,7 +2801,7 @@ def make_box_stacking_env(
     if num_robots >= 4:
         robot_path, robot_type_prefix = get_robot_and_type_prefix(3)
         all_robots.append(f"a4_{robot_type_prefix}")
-        
+
         C.addFile(robot_path, namePrefix="a4_").setParent(
             C.getFrame("table")
         ).setRelativePosition([-0.5, -0.6, 0]).setRelativeQuaternion(
@@ -2855,9 +2891,7 @@ def make_box_stacking_env(
         # komo.addControlObjective([], 1, 1e-1)
         # komo.addControlObjective([], 2, 1e-1)
 
-        komo.addModeSwitch(
-            [1, 2], ry.SY.stable, [robot_prefix + "gripper", box]
-        )
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "gripper", box])
         # komo.addObjective(
         #     [1, 2],
         #     ry.FS.distance,
@@ -3454,6 +3488,8 @@ def quaternion_from_z_rotation(angle):
 
 
 def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
+    assert num_robots <= 4, "Number of robots should be less than or equal to 4"
+
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -3834,7 +3870,9 @@ def is_z_axis_up(quaternion):
     return np.isclose(np.dot(z_axis, np.array([0, 0, 1])), 1.0, atol=1e-6)
 
 
-def make_box_pile_env(num_boxes=6, view: bool = False):
+def make_box_pile_env(
+    num_boxes=6, compute_multiple_keyframes: bool = False, view: bool = False
+):
     assert num_boxes <= 9
 
     C = ry.Config()
