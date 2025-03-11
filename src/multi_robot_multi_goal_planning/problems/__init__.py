@@ -5,10 +5,13 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 
+import multi_robot_multi_goal_planning.problems.abstract_env as ae
 
 def get_all_environments():
     # fmt: off
     environment_configs = {
+        "abstract_test": lambda: ae.abstract_env_two_dim_middle_obs(),
+
         # 2D Environments
         "piano": lambda: re.rai_two_dim_simple_manip(),
         "simple_2d": lambda: re.rai_two_dim_env(),
