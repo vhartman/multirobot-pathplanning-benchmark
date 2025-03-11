@@ -251,7 +251,7 @@ class AbstractEnvironment(BaseProblem):
 
         return True
 
-    def batch_is_collision_free(self, qs: List[Configuration], mode: List[int]):
+    def _batch_is_collision_free(self, qs: List[Configuration], mode: List[int]):
         num_agents = qs[0].num_agents()
         for i in range(num_agents):
             positions = [qs[j][i] for j in range(len(qs))]
@@ -415,5 +415,67 @@ def make_wall_gap_two_dim():
     pass
 
 
-def make_random_rectangles_nd(dims, num_agents, num_goals, num_obstacles):
-    pass
+def make_center_rectangle_nd(dim, num_agents=2):
+    joint_limits = np.ones((2, num_agents * dim)) * 2
+    joint_limits[0, :] = -2
+
+    print(joint_limits)
+
+    start_poses = np.zeros(num_agents * dim)
+    start_poses[0] = -0.8
+    start_poses[dim] = 0.8
+
+    rect_obs = Rectangle(np.zeros(dim), np.ones(dim)*.5)
+
+    obstacles = [rect_obs]
+
+    return start_poses, joint_limits, obstacles
+
+class abstract_env_center_rect_nd(SequenceMixin, AbstractEnvironment):
+    def __init__(self, n=2):
+        AbstractEnvironment.__init__(self)
+
+        _, self.limits, self.obstacles = make_center_rectangle_nd(n)
+
+        r1_start = np.zeros(n)
+        r1_start[0] = -0.8
+        r2_start = np.zeros(n)
+        r2_start[0] = 0.8
+
+        self.start_pos = NpConfiguration.from_list([r1_start, r2_start])
+
+        self.agent_radii = [0.1, 0.1]
+
+        self.robot_idx = {"a1": [i for i in range(n)], "a2": [n+i for i in range(n)]}
+        self.robot_dims = {"a1": n, "a2": n}
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        self.tasks = [
+            # r1
+            Task(["a1"], SingleGoal(np.array(r2_start))),
+            # r2
+            Task(["a2"], SingleGoal(np.array(r1_start))),
+            # terminal mode
+            Task(
+                ["a1", "a2"],
+                SingleGoal(self.start_pos.state()),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_goal"
+        self.tasks[1].name = "a2_goal"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a2_goal", "a1_goal", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.01

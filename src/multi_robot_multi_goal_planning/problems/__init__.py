@@ -11,6 +11,8 @@ def get_all_environments():
     # fmt: off
     environment_configs = {
         "abstract_test": lambda: ae.abstract_env_two_dim_middle_obs(),
+        "2d_center_rect": lambda: ae.abstract_env_center_rect_nd(2),
+        "10d_center_rect": lambda: ae.abstract_env_center_rect_nd(10),
 
         # 2D Environments
         "piano": lambda: re.rai_two_dim_simple_manip(),
