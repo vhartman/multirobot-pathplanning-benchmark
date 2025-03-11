@@ -31,6 +31,7 @@ import matplotlib.pyplot as plt
 
 import time
 
+
 class Sphere:
     def __init__(self, pos, radius):
         self.pos = pos
@@ -46,6 +47,60 @@ class Sphere:
         if (np.linalg.norm(self.pos - centers, axis=1) < self.radius + radius).any():
             return True
         return False
+
+    def get_artists(self):
+        return plt.Circle(self.pos, self.radius, color="black")
+
+
+class Rectangle:
+    def __init__(self, center, bounds):
+        self.center = center
+        self.bounds = bounds
+
+        self.min_bounds = self.center - self.bounds / 2
+        self.max_bounds = self.center + self.bounds / 2
+
+    def collides_with_sphere(self, center, radius):
+        center = np.array(center, dtype=float)
+
+        # Verify the sphere center has the same dimensions
+        if center.shape != self.center.shape:
+            raise ValueError(
+                "Sphere center must have the same dimensionality as the rectangle"
+            )
+
+        # Calculate the closest point using vectorized operations
+        closest_point = np.clip(center, self.min_bounds, self.max_bounds)
+
+        # Calculate squared distance efficiently
+        distance_squared = np.sum((closest_point - center) ** 2)
+
+        return distance_squared <= radius**2
+
+    def batch_collides_with_sphere(self, centers, radius):
+        centers = np.array(centers, dtype=float)
+
+        # Handle single center case
+        if centers.ndim == 1:
+            centers = centers.reshape(1, -1)
+
+        # Verify dimensions match
+        if centers.shape[1] != len(self.center):
+            raise ValueError(f"Sphere centers must have {len(self.center)} dimensions")
+
+        # Broadcasting to find closest points for all centers at once
+        closest_points = np.clip(centers, self.min_bounds, self.max_bounds)
+
+        # Calculate all distances squared at once
+        distances_squared = np.sum((closest_points - centers) ** 2, axis=1)
+
+        # Compare with radius squared
+        return (distances_squared <= radius**2).any()
+
+    def get_artists(self):
+        return plt.Rectangle(
+            self.min_bounds, self.bounds[0], self.bounds[1], color="black"
+        )
 
 
 class AbstractEnvironment(BaseProblem):
@@ -92,14 +147,17 @@ class AbstractEnvironment(BaseProblem):
         return {}
 
     def show(self, blocking=True):
+        if len(self.start_pos[0]) > 2:
+            return
+
         plt.figure()
         plt.xlim(-2, 2)
         plt.ylim(-2, 2)
         plt.axis("equal")
 
         for o in self.obstacles:
-            circle = plt.Circle(o.pos, o.radius, color="black")
-            plt.gca().add_artist(circle)
+            artist = o.get_artists()
+            plt.gca().add_artist(artist)
 
         # get the tabular color rotation
         colors = plt.cm.tab20.colors
@@ -112,6 +170,9 @@ class AbstractEnvironment(BaseProblem):
         plt.show()
 
     def show_config(self, q, blocking=True):
+        if len(self.start_pos[0]) > 2:
+            return
+        
         if self.fig is None or self.ax is None:
             self.fig, self.ax = plt.subplots()
             # Set up the key press event handler only once
@@ -124,8 +185,8 @@ class AbstractEnvironment(BaseProblem):
         self.ax.set_aspect("equal")
 
         for o in self.obstacles:
-            circle = plt.Circle(o.pos, o.radius, color="black")
-            plt.gca().add_artist(circle)
+            artist = o.get_artists()
+            plt.gca().add_artist(artist)
 
         # get the tabular color rotation
         colors = plt.cm.tab20.colors
@@ -238,13 +299,19 @@ class AbstractEnvironment(BaseProblem):
             q = NpConfiguration(q, q1.array_slice)
             qs.append(q)
 
-        is_in_collision = self.batch_is_collision_free(qs, mode)
+        # is_in_collision = self.batch_is_collision_free(qs, mode)
+        is_collision_free = True
 
-        if not is_in_collision:
+        for q in qs:
+            if not self.is_collision_free(q, mode):
+                is_collision_free = False
+                break
+
+        if is_collision_free:
             # print('coll')
-            return False
+            return True
 
-        return True
+        return False
 
     def is_path_collision_free(
         self, path: List[State], randomize_order=True, resolution=None, tolerance=None
@@ -292,8 +359,9 @@ def make_middle_obstacle_n_dim_env(dim=2):
     start_poses[dim] = 0.8
 
     sphere_obs = Sphere(np.zeros(dim), 0.2)
-    obstacles = [sphere_obs]
-    # obstacles = []
+    rect_obs = Rectangle(np.array([0, 0.4]), np.array([0.5, 0.5]))
+
+    obstacles = [sphere_obs, rect_obs]
 
     return start_poses, joint_limits, obstacles
 
@@ -316,13 +384,13 @@ class abstract_env_two_dim_middle_obs(SequenceMixin, AbstractEnvironment):
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(np.array([-0.8, 0]))),
+            Task(["a1"], SingleGoal(np.array([0.8, 0]))),
             # r2
-            Task(["a2"], SingleGoal(np.array([0.8, 0]))),
+            Task(["a2"], SingleGoal(np.array([-0.8, 0]))),
             # terminal mode
             Task(
                 ["a1", "a2"],
-                SingleGoal(np.array([0.8, 0, -0.8, 0])),
+                SingleGoal(np.array([-0.8, 0, 0.8, 0])),
             ),
         ]
 
