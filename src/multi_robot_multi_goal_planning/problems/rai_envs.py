@@ -1,7 +1,6 @@
 import robotic as ry
 import numpy as np
 import random
-import time
 
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
@@ -2098,49 +2097,6 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
 
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.01
-
-
-def display_path(
-    env: rai_env,
-    path: List[State],
-    stop: bool = True,
-    export: bool = False,
-    pause_time: float = 0.01,
-    stop_at_end=False,
-    adapt_to_max_distance: bool = False,
-    stop_at_mode: bool = False,
-) -> None:
-    for i in range(len(path)):
-        env.set_to_mode(path[i].mode)
-        for k in range(len(env.robots)):
-            q = path[i].q[k]
-            env.C.setJointState(q, rai_config.get_robot_joints(env.C, env.robots[k]))
-
-            # print(q)
-
-        if stop_at_mode and i < len(path) - 1:
-            if path[i].mode != path[i + 1].mode:
-                print(i)
-                print(path[i].mode)
-                env.C.view(True)
-
-        env.C.view(stop)
-
-        if export:
-            env.C.view_savePng("./z.vid/")
-
-        dt = pause_time
-        if adapt_to_max_distance:
-            if i < len(path) - 1:
-                v = 5
-                diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean")
-                dt = diff / v
-
-        time.sleep(dt)
-
-    if stop_at_end:
-        env.C.view(True)
-
 
 def check_all_modes():
     all_envs = [

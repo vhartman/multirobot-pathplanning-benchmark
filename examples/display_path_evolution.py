@@ -11,7 +11,6 @@ import numpy as np
 # from typing import Dict, Any, Callable, Tuple, List
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
-from multi_robot_multi_goal_planning.problems.rai_envs import display_path
 
 from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
@@ -140,7 +139,7 @@ def main():
     env.show()
     # display_path(env, real_path, True, True)
 
-    display_path(env, path, False, export=False, stop_at_end=True)
+    env.display_path(path, False, export=False, stop_at_end=True)
 
 
 if __name__ == "__main__":

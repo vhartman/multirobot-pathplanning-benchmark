@@ -22,6 +22,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 
 from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
 
+import time
 
 import os
 import sys
@@ -221,7 +222,6 @@ def get_robot_state(C: ry.Config, robot_prefix: str) -> NDArray:
     q = C.getJointState()[idx]
 
     return q
-
 
 
 def delete_visual_only_frames(C):
@@ -649,3 +649,46 @@ class rai_env(BaseProblem):
             viewer = self.C.get_viewer()
             tmp.set_viewer(viewer)
             self.C = tmp
+
+    def display_path(
+        self,
+        path: List[State],
+        stop: bool = True,
+        export: bool = False,
+        pause_time: float = 0.01,
+        stop_at_end=False,
+        adapt_to_max_distance: bool = False,
+        stop_at_mode: bool = False,
+    ) -> None:
+        for i in range(len(path)):
+            self.set_to_mode(path[i].mode)
+            for k in range(len(self.robots)):
+                q = path[i].q[k]
+                self.C.setJointState(
+                    q, get_robot_joints(self.C, self.robots[k])
+                )
+
+                # print(q)
+
+            if stop_at_mode and i < len(path) - 1:
+                if path[i].mode != path[i + 1].mode:
+                    print(i)
+                    print(path[i].mode)
+                    self.C.view(True)
+
+            self.C.view(stop)
+
+            if export:
+                self.C.view_savePng("./z.vid/")
+
+            dt = pause_time
+            if adapt_to_max_distance:
+                if i < len(path) - 1:
+                    v = 5
+                    diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean")
+                    dt = diff / v
+
+            time.sleep(dt)
+
+        if stop_at_end:
+            self.C.view(True)

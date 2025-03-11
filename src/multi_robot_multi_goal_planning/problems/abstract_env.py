@@ -29,6 +29,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 
 import matplotlib.pyplot as plt
 
+import time
 
 class Sphere:
     def __init__(self, pos, radius):
@@ -55,10 +56,42 @@ class AbstractEnvironment(BaseProblem):
 
         self.obstacles = []
 
+        self.fig = None
+        self.ax = None
+        self.key_pressed = False
+
+    def display_path(
+        self,
+        path: List[State],
+        stop: bool = True,
+        export: bool = False,
+        pause_time: float = 0.01,
+        stop_at_end=False,
+        adapt_to_max_distance: bool = False,
+        stop_at_mode: bool = False,
+    ) -> None:
+        for i in range(len(path)):
+            self.show_config(path[i].q, stop)
+
+            # if export:
+            #     self.C.view_savePng("./z.vid/")
+
+            dt = pause_time
+            if adapt_to_max_distance:
+                if i < len(path) - 1:
+                    v = 5
+                    diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean")
+                    dt = diff / v
+
+            time.sleep(dt)
+
+        if stop_at_end:
+            self.show_config(path[-1].q, True)
+
     def get_scenegraph_info_for_mode(self, mode: Mode):
         return {}
 
-    def show(self):
+    def show(self, blocking=True):
         plt.figure()
         plt.xlim(-2, 2)
         plt.ylim(-2, 2)
@@ -71,16 +104,24 @@ class AbstractEnvironment(BaseProblem):
         # get the tabular color rotation
         colors = plt.cm.tab20.colors
         for i in range(self.start_pos.num_agents()):
-            circle = plt.Circle(self.start_pos[i], self.agent_radii[i], color=colors[i%len(colors)])
+            circle = plt.Circle(
+                self.start_pos[i], self.agent_radii[i], color=colors[i % len(colors)]
+            )
             plt.gca().add_artist(circle)
 
         plt.show()
 
-    def show_config(self, q):
-        plt.figure()
-        plt.xlim(-2, 2)
-        plt.ylim(-2, 2)
-        plt.axis("equal")
+    def show_config(self, q, blocking=True):
+        if self.fig is None or self.ax is None:
+            self.fig, self.ax = plt.subplots()
+            # Set up the key press event handler only once
+            self.fig.canvas.mpl_connect("key_press_event", self._on_key)
+
+        # Clear the previous plot but keep the figure
+        self.ax.clear()
+        self.ax.set_xlim(-2, 2)
+        self.ax.set_ylim(-2, 2)
+        self.ax.set_aspect("equal")
 
         for o in self.obstacles:
             circle = plt.Circle(o.pos, o.radius, color="black")
@@ -89,10 +130,34 @@ class AbstractEnvironment(BaseProblem):
         # get the tabular color rotation
         colors = plt.cm.tab20.colors
         for i in range(self.start_pos.num_agents()):
-            circle = plt.Circle(self.start_pos[i], self.agent_radii[i], color=colors[i%len(colors)])
+            circle = plt.Circle(
+                q[i], self.agent_radii[i], color=colors[i % len(colors)]
+            )
             plt.gca().add_artist(circle)
 
-        plt.show()
+        # Add instruction text
+        if len(self.fig.texts) > 0:
+            self.fig.texts[0].set_text("Press any key to continue")
+        else:
+            self.fig.text(0.5, 0.01, "Press any key to continue", ha="center")
+
+        # Reset the key_pressed flag
+        self.key_pressed = False
+
+        if not blocking:
+            self.key_pressed = True
+
+        # Show the plot and make it interactive
+        plt.draw()
+        plt.pause(0.001)  # Small pause to ensure the window appears
+
+        # Block until a key is pressed
+        while not self.key_pressed:
+            plt.pause(0.1)  # This keeps the GUI responsive
+
+    def _on_key(self, event):
+        if event.key is not None:
+            self.key_pressed = True
 
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
@@ -152,9 +217,10 @@ class AbstractEnvironment(BaseProblem):
         self,
         q1: Configuration,
         q2: Configuration,
-        mode: List[int],
-        resolution: float = 0.1,
+        mode: Mode,
+        resolution: float = None,
         randomize_order: bool = True,
+        tolerance: float = None,
     ):
         N = config_dist(q1, q2) / resolution
         N = max(5, N)
@@ -202,9 +268,7 @@ class AbstractEnvironment(BaseProblem):
             q2 = path[i + 1].q
             mode = path[i].mode
 
-            if not self.is_edge_collision_free(
-                q1, q2, mode, resolution=resolution
-            ):
+            if not self.is_edge_collision_free(q1, q2, mode, resolution=resolution):
                 return False
 
         return True
@@ -277,6 +341,7 @@ class abstract_env_two_dim_middle_obs(SequenceMixin, AbstractEnvironment):
 
         self.collision_resolution = 0.01
         self.collision_tolerance = 0.01
+
 
 def make_wall_gap_two_dim():
     pass

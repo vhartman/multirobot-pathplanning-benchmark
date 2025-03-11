@@ -7,7 +7,6 @@ import os
 import random
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
-from multi_robot_multi_goal_planning.problems.rai_envs import display_path
 
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
@@ -256,12 +255,12 @@ def main():
     plt.show()
 
     print("displaying path from planner")
-    display_path(
-        env, interpolated_path, stop=False, stop_at_end=True, adapt_to_max_distance=True
+    env.display_path(
+        interpolated_path, stop=False, stop_at_end=True, adapt_to_max_distance=True
     )
 
     print("displaying path from shortcut path")
-    display_path(env, shortcut_discretized_path, stop=False, adapt_to_max_distance=True)
+    env.display_path(shortcut_discretized_path, stop=False, adapt_to_max_distance=True)
 
 
 if __name__ == "__main__":
