@@ -986,7 +986,7 @@ class InformedVersion6():
         in_between_modes.add(start_mode)
         in_between_modes.add(end_mode)
 
-        while len(open_paths) > 0:
+        while open_paths:
             p = open_paths.pop()
             last_mode = p[-1]
 
@@ -995,7 +995,7 @@ class InformedVersion6():
                     in_between_modes.add(m)
                 continue
 
-            if len(last_mode.next_modes) > 0:
+            if last_mode.next_modes:
                 for mode in last_mode.next_modes:
                     new_path = p.copy()
                     new_path.append(mode)
@@ -1435,7 +1435,7 @@ class InformedVersion6():
 
             # sample transition at the end of this mode
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-            if len(possible_next_task_combinations) > 0:
+            if possible_next_task_combinations:
                 ind = random.randint(0, len(possible_next_task_combinations) - 1)
                 active_task = self.env.get_active_task(
                     mode, possible_next_task_combinations[ind]
@@ -1873,7 +1873,7 @@ class BaseRRTstar(ABC):
         """
 
         possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        if len(possible_next_task_combinations) == 0:
+        if not possible_next_task_combinations:
             return None
         return random.choice(possible_next_task_combinations)
 
@@ -2630,7 +2630,7 @@ class BaseRRTstar(ABC):
             frontier_modes = []
 
             for m in self.modes:
-                if len(m.next_modes) == 0:
+                if not m.next_modes:
                     frontier_modes.append(m)
 
             p_frontier = self.mode_sampling

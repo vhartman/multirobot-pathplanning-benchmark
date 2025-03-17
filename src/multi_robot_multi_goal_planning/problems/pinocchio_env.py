@@ -156,15 +156,18 @@ class PinocchioEnvironment(BaseProblem):
     def _set_to_scenegraph(self, sg, update_visual: bool = False):
         # update object positions
         # placement = pin.SE3.Identity()
-        for frame_id, (parent, parent_joint, _, placement) in sg.items():
+        for frame_id, (parent, parent_joint, pose, placement) in sg.items():
+            # placement = pin.SE3(np.frombuffer(pose).reshape(4, 4))
+
             if (
                 frame_id in self.current_scenegraph
                 and parent == self.current_scenegraph[frame_id][0]
                 and parent == "table_0"
-                and self.current_scenegraph[frame_id][3] == placement
+                and self.current_scenegraph[frame_id][2] == pose
             ):
                 # print("A")
                 continue
+
             frame_pose = self.data.oMi[parent_joint].act(placement)
             self.collision_model.geometryObjects[frame_id].placement = frame_pose
 
@@ -793,6 +796,11 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
         BaseModeLogic.__init__(self)
 
         self.start_mode.sg = self.initial_sg
+    
+    def make_start_mode(self):
+        start_mode = super().make_start_mode()
+        start_mode.sg = self.initial_sg
+        return start_mode
 
 
 def make_piano():
@@ -919,3 +927,8 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
         BaseModeLogic.__init__(self)
 
         self.start_mode.sg = self.initial_sg
+
+    def make_start_mode(self):
+        start_mode = super().make_start_mode()
+        start_mode.sg = self.initial_sg
+        return start_mode
