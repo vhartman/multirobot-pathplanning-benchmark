@@ -28,6 +28,10 @@ from multi_robot_multi_goal_planning.planners.shortcutting import (
 from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
+from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BidirectionalRRTstar,
+)
 
 from run_experiment import export_planner_data
 
@@ -40,15 +44,13 @@ def main():
         action="store_true",
         help="Enable optimization (default: True)",
     )
-    parser.add_argument(
-        "--seed", type=int, default=1, help="Seed"
-    )
+    parser.add_argument("--seed", type=int, default=1, help="Seed")
     parser.add_argument(
         "--num_iters", type=int, default=2000, help="Number of iterations"
     )
     parser.add_argument(
         "--planner",
-        choices=["joint_prm", "tensor_prm", "prioritized"],
+        choices=["joint_prm", "tensor_prm", "prioritized", "rrt_star"],
         default="joint_prm",
         help="Planner to use (default: joint_prm)",
     )
@@ -146,6 +148,23 @@ def main():
 
             planner_folder = experiment_folder + args.planner + "/"
             export_planner_data(planner_folder, 0, info)
+    elif args.planner == "rrt_star":
+        path, info = RRTstar(
+            env,
+            ptc=IterationTerminationCondition(args.num_iters),
+            # general_goal_sampling=options["general_goal_sampling"],
+            informed_sampling=True,
+            informed_sampling_version=6,
+            distance_metric=args.distance_metric,
+            p_goal=0.4,
+            p_stay=0,
+            p_uniform=0.2,
+            shortcutting=True,
+            mode_sampling=1,
+            locally_informed_sampling=True,
+            informed_batch_size=300,
+            # gaussian=options["gaussian"]
+        ).Plan()
 
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
