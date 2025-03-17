@@ -153,7 +153,7 @@ class PinocchioEnvironment(BaseProblem):
         pass
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def _set_to_scenegraph(self, sg):
+    def _set_to_scenegraph(self, sg, update_visual: bool= False):
         # update object positions
         # placement = pin.SE3.Identity()
         for frame_id, (parent, parent_joint, _, placement) in sg.items():
@@ -165,33 +165,13 @@ class PinocchioEnvironment(BaseProblem):
             ):
                 # print("A")
                 continue
-            # pose =
-            # placement = pin.SE3(np.frombuffer(pose).reshape(4, 4))
-            # tmp = np.frombuffer(pose).reshape(4, 4)
-            # print(pose)
-            # placement.translation[:]= tmp[:-1, 3]
-            # placement.rotation[:, :] = tmp[:3, :3]
-            # print(placement.translation)
-            # print(pose[:-1, 3])
-            # print(pose[:3, :3])
-            # placement.translation = pose[]
-            # parent_abs_pose = self.data.oMi[parent_joint]
-            # print("pose,",  parent)
-            # print(parent_abs_pose)
-            # print("rel pose", frame)
-            # print(placement)
-            # frame_pose = self.data.oMi[parent_joint] * placement
             frame_pose = self.data.oMi[parent_joint].act(placement)
-            # frame_pose = self.data.oMi[parent_joint] * (placement)
-            # tmp = self.data.oMi[parent_joint] * placement
-            # print(frame_pose)
-            # print(tmp)
-
-            # frame_id = self.collision_model.getGeometryId(frame)
             self.collision_model.geometryObjects[frame_id].placement = frame_pose
 
-            # frame_id = self.visual_model.getGeometryId(frame)
-            # self.visual_model.geometryObjects[frame_id].placement = frame_pose
+            if update_visual:
+                frame_name = self.collision_model.geometryObjects[frame_id].name
+                vis_frame_id = self.visual_model.getGeometryId(frame_name)
+                self.visual_model.geometryObjects[vis_frame_id].placement = frame_pose
 
             self.current_scenegraph[frame_id] = sg[frame_id]
 
@@ -411,9 +391,6 @@ class PinocchioEnvironment(BaseProblem):
         # self.viz.updatePlacements(pin.GeometryType.COLLISION)
         # self.viz.updatePlacements(pin.GeometryType.VISUAL)
 
-        # if mode.task_ids == [0, 1]:
-        # self.show(blocking=False)
-
         # for i in range(len(self.collision_model.collisionPairs)):
         #     in_collision = pin.computeCollision(self.collision_model, self.geom_data, i)
         #     if in_collision:
@@ -430,23 +407,9 @@ class PinocchioEnvironment(BaseProblem):
 
         # return True
 
-        # in_collision = pin.computeCollisions(
-        #     self.model, self.data, self.collision_model, self.geom_data, q, True
-        # )
-
         in_collision = pin.computeCollisions(self.collision_model, self.geom_data, True)
 
         if in_collision:
-            # for k in range(len(self.collision_model.collisionPairs)):
-            #     cr = self.geom_data.collisionResults[k]
-            #     cp = self.collision_model.collisionPairs[k]
-            #     if cr.isCollision():
-            #         print(self.collision_model.geometryObjects[cp.first].name, self.collision_model.geometryObjects[cp.second].name)
-            #         print("collision pair:", cp.first,",",cp.second,"- collision:","Yes" if cr.isCollision() else "No")
-            # print(q)
-            # print('colliding')
-            # self.show_config(q_orig, blocking=True)
-
             # pin.computeDistances(self.collision_model, self.geom_data)
 
             # total_penetration = 0
@@ -501,7 +464,7 @@ class PinocchioEnvironment(BaseProblem):
         for i in idx:
             # print(i / (N-1))
             q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
-            q = NpConfiguration(q, q1.array_slice)
+            # q = NpConfiguration(q, q1.array_slice)
 
             if not self.is_collision_free(q, mode):
                 # print(q)
@@ -558,9 +521,6 @@ def make_pinocchio_random_env(dim=2):
 
 def make_pin_middle_obstacle_two_dim_env():
     filename = "./middle_obstacle_two_agents.urdf"
-    # filename = "./2d_handover.urdf"
-    # filename = "./random_2d.urdf"
-    # filename = "/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur5e.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
     collision_model.addAllCollisionPairs()

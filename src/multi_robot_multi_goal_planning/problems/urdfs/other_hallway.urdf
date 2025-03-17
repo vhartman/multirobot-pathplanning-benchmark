@@ -1,0 +1,380 @@
+<?xml version="1.0" ?>
+<robot name="robot_model">
+  <material name="red">
+    <color rgba="1.0 0.0 0.0 1.0"/>
+  </material>
+  <material name="green">
+    <color rgba="0.0 1.0 0.0 1.0"/>
+  </material>
+  <material name="blue">
+    <color rgba="0.0 0.0 1.0 1.0"/>
+  </material>
+  <material name="yellow">
+    <color rgba="1.0 1.0 0.0 1.0"/>
+  </material>
+  <material name="purple">
+    <color rgba="0.5 0.0 0.5 1.0"/>
+  </material>
+  <material name="orange">
+    <color rgba="1.0 0.65 0.0 1.0"/>
+  </material>
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0"/>
+  </material>
+  <material name="white">
+    <color rgba="1.0 1.0 1.0 1.0"/>
+  </material>
+  <material name="gray">
+    <color rgba="0.5 0.5 0.5 1.0"/>
+  </material>
+  <material name="brown">
+    <color rgba="0.6 0.4 0.2 1.0"/>
+  </material>
+  <material name="cyan">
+    <color rgba="0.0 1.0 1.0 1.0"/>
+  </material>
+  <material name="magenta">
+    <color rgba="1.0 0.0 1.0 1.0"/>
+  </material>
+  <material name="default_material">
+    <color rgba="0.8 0.8 0.8 1.0"/>
+  </material>
+  <material name="table_material">
+    <color rgba="0.6 0.6 0.6 1.0"/>
+  </material>
+  <link name="table">
+    <visual>
+      <geometry>
+        <box size="4.0 4.0 0.06"/>
+      </geometry>
+      <material name="table_material"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="4.0 4.0 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <link name="wall1">
+    <visual>
+      <geometry>
+        <box size="3.999 0.2 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="3.999 0.2 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_wall1" type="fixed">
+    <parent link="table"/>
+    <child link="wall1"/>
+    <origin xyz="0.0 2.1 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="wall2">
+    <visual>
+      <geometry>
+        <box size="3.999 0.2 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="3.999 0.2 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_wall2" type="fixed">
+    <parent link="table"/>
+    <child link="wall2"/>
+    <origin xyz="0.0 -2.1 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="wall3">
+    <visual>
+      <geometry>
+        <box size="0.2 4.399 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.2 4.399 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_wall3" type="fixed">
+    <parent link="table"/>
+    <child link="wall3"/>
+    <origin xyz="2.1 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="wall4">
+    <visual>
+      <geometry>
+        <box size="0.2 4.399 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.2 4.399 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_wall4" type="fixed">
+    <parent link="table"/>
+    <child link="wall4"/>
+    <origin xyz="-2.1 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="pre_agent_1_frame_material">
+    <color rgba="1.0 0.5 0.0 1.0"/>
+  </material>
+  <link name="pre_agent_1_frame">
+    <visual>
+      <geometry>
+        <sphere radius="0.01"/>
+      </geometry>
+      <material name="pre_agent_1_frame_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_pre_agent_1_frame" type="fixed">
+    <parent link="table"/>
+    <child link="pre_agent_1_frame"/>
+    <origin xyz="0.0 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="a1_material">
+    <color rgba="1.0 0.5 0.0 1.0"/>
+  </material>
+  <link name="a1">
+    <visual>
+      <geometry>
+        <box size="0.1 0.5 0.06"/>
+      </geometry>
+      <material name="a1_material"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.1 0.5 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="pre_agent_1_frame_to_a1_x" type="prismatic">
+    <parent link="pre_agent_1_frame"/>
+    <child link="pre_agent_1_frame_to_a1_x_link"/>
+    <origin xyz="0.0 -0.0 0.0" rpy="0.0 -0.0 0.0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_1_frame_to_a1_y" type="prismatic">
+    <parent link="pre_agent_1_frame_to_a1_x_link"/>
+    <child link="pre_agent_1_frame_to_a1_y_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_1_frame_to_a1_phi" type="revolute">
+    <parent link="pre_agent_1_frame_to_a1_y_link"/>
+    <child link="a1"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="1.0"/>
+  </joint>
+  <material name="pre_agent_2_frame_material">
+    <color rgba="1.0 0.5 0.0 1.0"/>
+  </material>
+  <link name="pre_agent_2_frame">
+    <visual>
+      <geometry>
+        <sphere radius="0.01"/>
+      </geometry>
+      <material name="pre_agent_2_frame_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_pre_agent_2_frame" type="fixed">
+    <parent link="table"/>
+    <child link="pre_agent_2_frame"/>
+    <origin xyz="0.0 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="a2_material">
+    <color rgba="0.5 0.5 0.0 1.0"/>
+  </material>
+  <link name="a2">
+    <visual>
+      <geometry>
+        <cylinder radius="0.15" length="0.06"/>
+      </geometry>
+      <material name="a2_material"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.15" length="0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="pre_agent_2_frame_to_a2_x" type="prismatic">
+    <parent link="pre_agent_2_frame"/>
+    <child link="pre_agent_2_frame_to_a2_x_link"/>
+    <origin xyz="-0.0 -0.0 0.0" rpy="0.0 -0.0 0.0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_2_frame_to_a2_y" type="prismatic">
+    <parent link="pre_agent_2_frame_to_a2_x_link"/>
+    <child link="pre_agent_2_frame_to_a2_y_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_2_frame_to_a2_phi" type="revolute">
+    <parent link="pre_agent_2_frame_to_a2_y_link"/>
+    <child link="a2"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="1.0"/>
+  </joint>
+  <material name="goal1_material">
+    <color rgba="1.0 0.5 0.0 0.3"/>
+  </material>
+  <link name="goal1">
+    <visual>
+      <geometry>
+        <box size="0.5 0.1 0.06"/>
+      </geometry>
+      <material name="goal1_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal1" type="fixed">
+    <parent link="table"/>
+    <child link="goal1"/>
+    <origin xyz="-1.5 1.0 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal2_material">
+    <color rgba="0.5 0.5 0.0 0.3"/>
+  </material>
+  <link name="goal2">
+    <visual>
+      <geometry>
+        <box size="0.2 0.2 0.06"/>
+      </geometry>
+      <material name="goal2_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal2" type="fixed">
+    <parent link="table"/>
+    <child link="goal2"/>
+    <origin xyz="1.5 1.0 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs3">
+    <visual>
+      <geometry>
+        <box size="1.4 1.2 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="1.4 1.2 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs3" type="fixed">
+    <parent link="table"/>
+    <child link="obs3"/>
+    <origin xyz="0.0 -0.5 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs4">
+    <visual>
+      <geometry>
+        <box size="1.4 1.5 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="1.4 1.5 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs4" type="fixed">
+    <parent link="table"/>
+    <child link="obs4"/>
+    <origin xyz="0.0 1.2 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="pre_agent_1_frame_to_a1_x_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="pre_agent_1_frame_to_a1_y_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="pre_agent_2_frame_to_a2_x_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="pre_agent_2_frame_to_a2_y_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+</robot>
