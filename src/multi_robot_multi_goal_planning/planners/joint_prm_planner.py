@@ -286,6 +286,9 @@ class DictIndexHeap:
 
     def __len__(self) -> int:
         return len(self.queue)
+    
+    def __bool__(self):
+        return bool(self.queue)
 
     # def heappush_list(self, items: List[Tuple[float, Any]]) -> None:
     #     """Push a list of items into the heap."""
@@ -526,7 +529,7 @@ class Graph:
             costs[g.id] = 0
             # parents[hash(g)] = None
 
-        while len(queue) > 0:
+        while queue:
             # node = queue.pop(0)
             _, node = heapq.heappop(queue)
             # print(node)
@@ -542,7 +545,7 @@ class Graph:
                 n.neighbors[0] for n in self.reverse_transition_nodes[node.state.mode]
             ]
 
-            if len(neighbors) == 0:
+            if not neighbors:
                 continue
 
             if node.state.mode not in self.reverse_transition_node_array_cache:
@@ -623,7 +626,7 @@ class Graph:
 
             neighbors = [n.neighbors[0] for n in self.transition_nodes[node.state.mode]]
 
-            if len(neighbors) == 0:
+            if not neighbors:
                 continue
 
             if node.state.mode not in self.transition_node_array_cache:
@@ -1004,7 +1007,7 @@ class Graph:
         processed_edges = 0
 
         num_iter = 0
-        while len(queue) > 0:
+        while queue:
             # while len(open_queue) > 0:
             num_iter += 1
 
@@ -1106,7 +1109,7 @@ class Graph:
                 n1, space_extent=approximate_space_extent
             )
 
-            if len(neighbors) == 0:
+            if not neighbors:
                 continue
 
             # add neighbors to open_queue
@@ -1239,7 +1242,7 @@ class Graph:
         heapq.heappush(open_queue, (0, start_node))
 
         num_iter = 0
-        while len(open_queue) > 0:
+        while open_queue:
             num_iter += 1
 
             if num_iter % 1000 == 0:
@@ -1637,7 +1640,7 @@ def joint_prm_planner(
         in_between_modes.add(start_mode)
         in_between_modes.add(end_mode)
 
-        while len(open_paths) > 0:
+        while open_paths:
             p = open_paths.pop()
             last_mode = p[-1]
 
@@ -1646,7 +1649,7 @@ def joint_prm_planner(
                     in_between_modes.add(m)
                 continue
 
-            if len(last_mode.next_modes) > 0:
+            if last_mode.next_modes:
                 for mode in last_mode.next_modes:
                     new_path = p.copy()
                     new_path.append(mode)
@@ -2247,7 +2250,7 @@ def joint_prm_planner(
         num_attempts = 0
         num_valid = 0
 
-        if len(g.goal_nodes) > 0:
+        if g.goal_nodes:
             focal_points = np.array(
                 [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
                 dtype=np.float64,
@@ -2293,7 +2296,7 @@ def joint_prm_planner(
     def sample_valid_uniform_transitions(transistion_batch_size, cost):
         transitions = []
 
-        if len(g.goal_nodes) > 0:
+        if g.goal_nodes:
             focal_points = np.array(
                 [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
                 dtype=np.float64,
@@ -2487,7 +2490,7 @@ def joint_prm_planner(
 
             # print(reached_modes)
 
-            if len(g.goal_nodes) == 0:
+            if not g.goal_nodes:
                 continue
 
             # g.compute_lower_bound_to_goal(env.batch_config_cost)
@@ -2600,7 +2603,7 @@ def joint_prm_planner(
             # )
 
             # 2. in case this found a path, search with dense check from the other side
-            if len(sparsely_checked_path) > 0:
+            if sparsely_checked_path:
                 add_new_batch = False
 
                 is_valid_path = True

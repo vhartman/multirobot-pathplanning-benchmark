@@ -619,7 +619,7 @@ class rai_env(BaseProblem):
             assert mode is not None
             assert mode.entry_configuration is not None
 
-            q = np.concat(q_new)
+            q = np.concatenate(q_new)
             tmp.setJointState(q, joint_names)
 
             if self.tasks[prev_mode_index].type is not None:
