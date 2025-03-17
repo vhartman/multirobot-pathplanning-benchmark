@@ -520,7 +520,7 @@ def make_pinocchio_random_env(dim=2):
 
 
 def make_pin_middle_obstacle_two_dim_env():
-    filename = "./middle_obstacle_two_agents.urdf"
+    filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/middle_obstacle_two_agents.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
     collision_model.addAllCollisionPairs()
@@ -573,7 +573,7 @@ class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
 
 
 def make_pin_other_hallway_two_dim_env():
-    filename = "./other_hallway.urdf"
+    filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/other_hallway.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
     ids = range(len(collision_model.geometryObjects))
@@ -645,7 +645,7 @@ class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
 
 
 def make_2d_handover():
-    filename = "./2d_handover.urdf"
+    filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/2d_handover.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
     # collision_model.addAllCollisionPairs()

@@ -20,9 +20,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-pinocchio = ["pin"]
+pinocchio = ["pin" , "meshcat"]
 rai = ["robotic==0.2.2"]
-all = ["pin", "robotic==0.2.2"]
+all = ["pin", "meshcat", "robotic==0.2.2"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
