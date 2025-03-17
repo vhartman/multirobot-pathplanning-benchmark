@@ -105,10 +105,6 @@ class Operation:
             return self._resize_array(array, current_size, required_capacity * 2)  # Double the size
 
         return array
-    
-    
-
-
 
 class Node:
     __slots__ = [
@@ -211,7 +207,6 @@ class Node:
         Returns: 
             None: This method does not return any value."""
         self.operation.forward_costs[self.id] = value
-
 class DictIndexHeap(ABC, Generic[T]):
     __slots__ = ["queue", "items", "current_entries"]
 
@@ -505,7 +500,7 @@ class Graph:
                 self.reverse_transition_node_ids[mode].append(node.id)  # TODO for nearest neighbor search, correct ??
             else:
                 self.reverse_transition_node_ids[mode] = [node.id]
-            self.nodes[node.id] = node
+            self.add_node(node)
         self.operation.lb_costs_to_go_expanded = self.operation.ensure_capacity(self.operation.lb_costs_to_go_expanded, node.id) 
         node.lb_cost_to_go_expanded = np.inf
         self.operation.forward_costs = self.operation.ensure_capacity(self.operation.forward_costs, node.id) 
@@ -689,10 +684,6 @@ class Graph:
         # )
 
 
-
-
-        if key.task_ids == [0,1]:
-            pass
         if key in self.transition_node_ids:
             transition_dists = self.batch_dist_fun(
                 node.state.q, self.transition_node_array_cache[key]
@@ -767,6 +758,17 @@ class Graph:
             all_ids = np.concatenate((all_ids, np.array([node.transition.id])))
             arr = np.vstack([arr, node.transition.state.q.state()])
         
+
+        assert node.id in all_ids, (
+            " ohhh nooooooooooooooo"
+        )
+
+        #remove node itself
+        mask = all_ids != node.id
+        all_ids = all_ids[mask]
+        arr = arr[mask]
+
+
         if search == "forward":
             assert node.id not in self.neighbors_node_ids_cache,("2 already calculated")
             self.neighbors_node_ids_cache[node.id] = all_ids 
@@ -1486,18 +1488,44 @@ class AITstar:
             edge = (node, n)
             if n.id != node.id and edge:
                 self.g.forward_queue.heappush((edge_cost, edge))
- 
+    
+    def invalidate_rev_branch(self, node:Node):
+        if node not in self.g.goal_nodes:
+            self.update_node_without_available_reverse_parent(node)
+        node.lb_cost_to_go_expanded
+        self.g.reverse_queue.remove(node)
+        for id in node.reverse_children:
+            rev_child = self.g.nodes[id]
+            self.invalidate_rev_branch(rev_child)
+        self.update_state(node)
+
     def update_heuristic(self, edge: Optional[Tuple[Node, Node]] = None) -> float:
-        self.reversed_closed_set = set() #do it correctly
+        self.reversed_closed_set = set() #do it correctl
+        self.reversed_updated_set =set()
+        self.check_set = set()
         if edge is None:
             self.g.reverse_queue = ReverseQueue()
-            self.reversed_closed_set = set() #do it correctly
             self.g.reset_reverse_tree()
             self.g.reset_all_goal_nodes_lb_costs_to_go()
         else:
             self.update_edge_collision_cache(edge[0], edge[1], False)
-            self.reversed_closed_set.add(edge[0].id)
-            self.update_state(edge[0])
+            # self.reversed_closed_set.add(edge[0].id)#TODO smart??
+            #only then need to update
+
+            # assert edge[1].reverse_parent != edge[0], (
+            #     "ohhhhhhhhhhhhhh")
+
+            if edge[0].reverse_parent == edge[1]:
+                self.invalidate_rev_branch(edge[0])
+            elif edge[1].reverse_parent == edge[0]:
+                self.invalidate_rev_branch(edge[1])
+            else: #nothing changed
+                return
+
+
+
+
+            # self.update_state()
             # if edge[0].id not in self.reversed_closed_set:
             #     self.reversed_closed_set.add(edge[0].id)
             # else:
@@ -1516,6 +1544,7 @@ class AITstar:
             if self.ptc.should_terminate(self.cnt, time.time() - self.start_time):
                 break
             n = self.g.reverse_queue.heappop()
+            self.reversed_closed_set.add(n.id)
             num_iter += 1
             if num_iter % 100000 == 0:
                 print(num_iter, ": Reverse Queue: ", len(self.g.reverse_queue))
@@ -1526,14 +1555,13 @@ class AITstar:
                 n.lb_cost_to_go_expanded = np.inf
                 self.update_state(n)
 
-            self.reversed_closed_set.add(n.id)
             neighbors = self.g.get_neighbors(n, self.approximate_space_extent, search="reverse")# TODO no reverse?? check transition nodes???
             for id in neighbors:  
                 if id == n.id:
                     continue
                 nb = self.g.nodes[id]
                 self.update_state(nb)
-                # self.reversed_closed_set.add(nb.id)
+                self.reversed_updated_set.add(nb.id)
         
     def update_edge_collision_cache(
         self, n0: Node, n1: Node, is_edge_collision_free: bool
@@ -1552,6 +1580,7 @@ class AITstar:
             
     def update_node_without_available_reverse_parent(self, node:Node):
         node.lb_cost_to_go = np.inf
+        node.lb_cost_to_go_expanded = np.inf
         if node.reverse_parent is not None:
             node.reverse_parent.reverse_children.remove(node.id)
         node.reverse_parent = None
@@ -1560,29 +1589,43 @@ class AITstar:
     def update_state(self, node: Node) -> None:
         if node.id == self.g.root.id:
             return
-
         # Retrieve neighbors for node.
         if node not in self.g.goal_nodes:
-            in_closed_set = node.id in self.reversed_closed_set
-            if node.lb_cost_to_go == node.lb_cost_to_go_expanded and in_closed_set:
+            in_updated_set = node.id in self.reversed_updated_set
+
+            if node.lb_cost_to_go == node.lb_cost_to_go_expanded and not np.isinf(node.lb_cost_to_go):
                 self.inconcistency_check(node)
                 return
-            neighbors = list(self.g.get_neighbors(node, self.approximate_space_extent, "reverse", in_closed_set))
+                # if node.id in self.reversed_closed_set
+                    
+                # else:
+                #     pass
+            neighbors = list(self.g.get_neighbors(node, self.approximate_space_extent, search = "forward", in_closed_set= in_updated_set))
             if not neighbors:
                 self.update_node_without_available_reverse_parent(node)
                 self.inconcistency_check(node)
                 return
                             
-            batch_cost = self.g.reverse_tot_neighbors_batch_cost_cache[node.id]
+            batch_cost = self.g.tot_neighbors_batch_cost_cache[node.id]
+
+            if node.is_transition:
+                if node.transition.state.mode == node.state.mode.prev_mode:
+                    idx = neighbors.index(node.transition.id)
+                    neighbors.pop(idx)
+                    batch_cost = np.delete(batch_cost, idx)
 
             #cannot cache them as they are always updated
             
             lb_costs_to_go_expanded = self.operation.lb_costs_to_go_expanded[neighbors]
             candidates =  lb_costs_to_go_expanded + batch_cost
-
+            if np.all(np.isinf(candidates)):
+                self.g.reverse_queue.remove(node) 
+                return
             sorted_candidates_indices = np.argsort(candidates)
             compare_node = None
             best_idx = sorted_candidates_indices[0]
+            
+
             if candidates[best_idx] == node.lb_cost_to_go and node.reverse_parent is not None: 
                 self.inconcistency_check(node)
                 return
@@ -1595,10 +1638,11 @@ class AITstar:
             best_parent = None
             for idx in sorted_candidates_indices:
                 n = self.g.nodes[neighbors[idx]]
-                if n.state.mode == node.state.mode.prev_mode:
-                    continue
-                if n.id == node.id:
-                    continue
+                # if n.state.mode == node.state.mode.prev_mode:
+                #     continue
+                assert (n.state.mode != node.state.mode.prev_mode or n.id != node.id), (
+                    "ohhhhhhhhhhhhhhh"
+                )
                 assert (n.reverse_parent == node) == (n.id in node.reverse_children), (
                     f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
                 )
@@ -1630,6 +1674,14 @@ class AITstar:
                     assert node.id in node.reverse_parent.reverse_children, (
                         f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
                     )
+
+                if (best_parent.id, node.id) in self.check_set:
+                    if best_parent.lb_cost_to_go == np.inf or best_parent.lb_cost_to_go_expanded == np.inf:
+                        print(best_parent.id, node.id)
+               
+                self.check_set.add((best_parent.id, node.id,))
+
+
                 self.g.update_connectivity(
                     best_parent, node, best_edge_cost, "reverse"
                 ) 
@@ -1641,6 +1693,7 @@ class AITstar:
                     assert node.id in node.reverse_parent.reverse_children, (
                         f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
                     )
+
                 # if compare_node is not None:
                 #     n = compare_node
                 #     assert compare_node.id == best_parent.id ,(

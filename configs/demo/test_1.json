@@ -1,31 +1,13 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "hallway_dep",
+  "environment": "simple_2d",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 1000,
+  "max_planning_time": 500,
   "num_runs": 1,
   "seed": 1,
   "optimize": true,
   "planners": [
-    
-    {
-      "name": "rrtstar",
-      "type": "rrtstar",
-      "options": {
-        "informed_sampling": true,
-        "informed_sampling_version": 6,  
-        "distance_metric": "max_euclidean",
-        "p_goal": 0.4,
-        "p_stay": 0.0,
-        "p_uniform": 0.2,
-        "shortcutting": true,
-        "mode_sampling": 0.95, 
-        "locally_informed_sampling": true,
-        "informed_batch_size": 300
-
-      }
-    },
     {
       "name": "aitstar_informed_with_lb",
       "type": "aitstar",
@@ -44,6 +26,23 @@
         "shortcutting": true,
         "direct_informed_sampling": true,
         "informed_with_lb":true
+      }
+    },
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 0.95, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+
       }
     }
   ]
