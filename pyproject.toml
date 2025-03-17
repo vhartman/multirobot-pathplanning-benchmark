@@ -9,12 +9,10 @@ description = "A benchmarking framework for multi-robot path planning"
 readme = "readme.md"
 requires-python = ">=3.8"
 dependencies = [
-    "pin",
     "scipy",
     "networkx",
     "numba",
     "sortedcontainers",
-    "robotic==0.2.2",
     "numpy",
     "matplotlib>=3.4.0"
 ]
