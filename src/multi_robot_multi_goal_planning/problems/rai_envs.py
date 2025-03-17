@@ -1710,8 +1710,13 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
 
 
 class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
-    def __init__(self, num_boxes=9):
-        self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
+    def __init__(self, num_boxes=9, make_many_handover_poses: bool = False):
+        if not make_many_handover_poses:
+            self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
+        else:
+            self.C, keyframes = rai_config.make_box_pile_env(
+                num_boxes=num_boxes, compute_multiple_keyframes=make_many_handover_poses
+            )
 
         self.robots = ["a1_", "a2_"]
 
@@ -1738,7 +1743,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
             print(last_robot_task)
 
             if primitive_type == "pick":
-                for t, k in zip(pick_task_names, qs):
+                for t, k in zip(pick_task_names, qs[0]):
                     print(robots)
                     print(k)
                     task_name = robots[0] + t + "_" + box_name + "_" + str(cnt)
@@ -1770,7 +1775,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
 
                     cnt += 1
             else:
-                for t, k in zip(handover_task_names, qs):
+                for t, k in zip(handover_task_names, qs[0]):
                     task_name = robots[0] + t + "_" + box_name + "_" + str(cnt)
 
                     if t == "pick":
@@ -1798,9 +1803,15 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
                     elif t == "handover":
                         ee_name = robots[1] + "ur_vacuum"
                         self.tasks.append(
+                            # Task(
+                            #     robots,
+                            #     SingleGoal(k),
+                            #     t,
+                            #     frames=[ee_name, box_name],
+                            # )
                             Task(
-                                robots,
-                                SingleGoal(k),
+                                self.robots,
+                                GoalSet([q[1] for q in qs]),
                                 t,
                                 frames=[ee_name, box_name],
                             )
