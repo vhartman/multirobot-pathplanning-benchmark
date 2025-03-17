@@ -91,7 +91,7 @@ class PinocchioEnvironment(BaseProblem):
                 self.initial_sg[id_1] = (
                     "table_0",
                     parent,
-                    np.round(placement, 8).tobytes(),
+                    np.round(placement, 3).tobytes(),
                     pin.SE3(placement),
                 )
 
@@ -292,7 +292,7 @@ class PinocchioEnvironment(BaseProblem):
                     # sg[last_task.frames[1]] = (
                     last_task.frames[0],
                     new_parent_joint,
-                    np.round(obj_pose_in_new_frame.inverse(), 8).tobytes(),
+                    np.round(obj_pose_in_new_frame.inverse(), 3).tobytes(),
                     pin.SE3(obj_pose_in_new_frame.inverse()),
                 )
 
@@ -430,7 +430,7 @@ class PinocchioEnvironment(BaseProblem):
             return False    
 
         # print(mode)
-        # self.show_config(q_orig, blocking=True)
+        # self.show_config(q_orig, blocking=False)
 
         return True
 
@@ -464,7 +464,7 @@ class PinocchioEnvironment(BaseProblem):
         for i in idx:
             # print(i / (N-1))
             q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
-            # q = NpConfiguration(q, q1.array_slice)
+            q = NpConfiguration(q, q1.array_slice)
 
             if not self.is_collision_free(q, mode):
                 # print(q)

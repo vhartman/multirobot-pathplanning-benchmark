@@ -1840,7 +1840,7 @@ class BaseRRTstar(ABC):
             #     idx+=1
 
             # Check if sample is collision-free
-            if self.env.is_collision_free_without_mode(q):
+            if self.env.is_collision_free(q, self.env.start_mode):
                 free_samples += 1
         # Estimate C_free measure
         self.c_free = (free_samples / num_samples) * total_volume
