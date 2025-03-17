@@ -30,11 +30,14 @@ def interpolate_path(path: List[State], resolution: float = 0.1):
         N = int(dist / resolution)
         N = max(1, N)
 
+        q0_state = q0.state()
+        q1_state = q1.state()
+
         for j in range(N):
-            q = []
-            for k in range(q0.num_agents()):
-                qr = q0.robot_state(k) + (q1.robot_state(k) - q0.robot_state(k)) / N * j
-                q.append(qr)
+            q = q0_state + (q1_state - q0_state) / N * j
+            # for k in range(q0.num_agents()):
+            #     qr = q0.robot_state(k) + (q1.robot_state(k) - q0.robot_state(k)) / N * j
+            #     q.append(qr)
 
                 # env.C.setJointState(qr, get_robot_joints(env.C, env.robots[k]))
 
@@ -42,7 +45,7 @@ def interpolate_path(path: List[State], resolution: float = 0.1):
 
             # env.C.view(True)
 
-            new_path.append(State(config_type.from_list(q), path[i].mode))
+            new_path.append(State(config_type(q, q0.array_slice), path[i].mode))
 
     new_path.append(State(path[-1].q, path[-1].mode))
 
