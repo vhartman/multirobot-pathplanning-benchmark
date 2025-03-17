@@ -20,6 +20,7 @@ def get_all_environments():
         "pin_middle": lambda: pe.pinocchio_middle_obs(),
         "pin_other_hallway": lambda: pe.pinocchio_other_hallway(),
         "pin_2d_handover": lambda: pe.pinocchio_handover_two_dim(),
+        "pin_piano": lambda: pe.pinocchio_piano_two_dim(),
 
         # 2D Environments
         "piano": lambda: re.rai_two_dim_simple_manip(),

@@ -153,7 +153,7 @@ class PinocchioEnvironment(BaseProblem):
         pass
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def _set_to_scenegraph(self, sg, update_visual: bool= False):
+    def _set_to_scenegraph(self, sg, update_visual: bool = False):
         # update object positions
         # placement = pin.SE3.Identity()
         for frame_id, (parent, parent_joint, _, placement) in sg.items():
@@ -427,7 +427,7 @@ class PinocchioEnvironment(BaseProblem):
             # # self.show_config(q_orig, blocking=True)
 
             # if total_penetration > self.collision_tolerance:
-            return False    
+            return False
 
         # print(mode)
         # self.show_config(q_orig, blocking=False)
@@ -794,48 +794,128 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
 
         self.start_mode.sg = self.initial_sg
 
-        # self.collision_resolution = 0.01
-        # self.collision_tolerance = 0.01
 
-        # update object positions
-        # self.show(self.start_pos)
+def make_piano():
+    filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/piano.urdf"
+    model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
-        # sg = {}
+    # collision_model.addAllCollisionPairs()
 
-        # new_parent_id = self.collision_model.getGeometryId("a1_0")
+    ids = range(len(collision_model.geometryObjects))
 
-        # # print(f"frame id: {frame_id}")
-        # # print(f"new parent id: {new_parent_id}")
-        # new_parent_joint = self.collision_model.geometryObjects[
-        #     new_parent_id
-        # ].parentJoint
+    env_names = [
+        "",
+        "wall1_0",
+        "wall2_0",
+        "wall3_0",
+        "wall4_0",
+        "obs1_0",
+        "obs2_0",
+    ]
 
-        # for i in range(5):
-        #   tmp_pose = pin.SE3.Identity()
+    for i, id_1 in enumerate(ids):
+        for id_2 in ids[i + 1 :]:
+            #  = geomModel.getGeometryId(geomModelB.geometryObjects[cp.second].name);
+            if (
+                collision_model.geometryObjects[id_1].name in env_names
+                and collision_model.geometryObjects[id_2].name in env_names
+            ):
+                continue
 
-        #   tmp_pose.translation = np.array([0.3, 0, 0])
+            print(
+                "adding ",
+                id_1,
+                id_2,
+                collision_model.geometryObjects[id_1].name,
+                collision_model.geometryObjects[id_2].name,
+            )
+            collision_model.addCollisionPair(pin.CollisionPair(id_1, id_2))
 
-        #   sg["obj1_0"] = (
-        #       "a1_0",
-        #       new_parent_joint,
-        #       np.round(tmp_pose, 3).tobytes(),
-        #   )
+    return model, collision_model, visual_model
 
-        #   print(self.start_pos)
-        #   print(self.start_pos.state())
-        #   q = self.start_pos.state()
-        #   q[2] = i / 5
-        #   pin.forwardKinematics(self.model, self.data, q)
 
-        #   pin.updateGeometryPlacements(
-        #       self.model, self.data, self.collision_model, self.geom_data, q
-        #   )
+class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
+    def __init__(self):
+        model, collision_model, visual_model = make_piano()
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
-        #   self._set_to_scenegraph(sg)
+        self.manipulating_env = True
 
-        #   # self.viz.updatePlacements(pin.GeometryType.COLLISION)
-        #   # self.viz.updatePlacements(pin.GeometryType.VISUAL)
+        self.limits = np.ones((2, 2 * 3)) * 1
+        self.limits[0, :] = -1
+        self.limits[0, 2] = -3.1415
+        self.limits[1, 2] = 3.1415
+        self.limits[0, 5] = -3.1415
+        self.limits[1, 5] = 3.1415
 
-        #   self.viz.display(q)
+        self.start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
 
-        #   input("AAAA")
+        self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
+        self.robot_dims = {"a1": 3, "a2": 3}
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        task_1_pose = np.array([0.47685958, 0.22499656, 0.00066826])
+        task_2_pose = np.array([-5.23035087e-01, -7.74943558e-01, 7.45490689e-04])
+        task_3_pose = np.array([4.93481978e-01, -2.25359882e-01, -4.49533203e-04])
+        task_4_pose = np.array([-5.06410855e-01, 7.74578852e-01, -5.39715393e-04])
+        task_5_pose = np.array(
+            [
+                7.64079390e-12,
+                -4.95512533e-01,
+                8.62113109e-12,
+                -2.05527456e-12,
+                4.95512533e-01,
+                -7.33881002e-12,
+            ]
+        )
+
+        self.tasks = [
+            # a1
+            Task(
+                ["a1"],
+                SingleGoal(task_1_pose),
+                type="pick",
+                frames=["a1_0", "obj1_0"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(task_2_pose),
+                type="place",
+                frames=["table_0", "obj1_0"],
+            ),
+            # a2
+            Task(
+                ["a2"],
+                SingleGoal(task_3_pose),
+                type="pick",
+                frames=["a2_0", "obj2_0"],
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(task_4_pose),
+                type="place",
+                frames=["table_0", "obj2_0"],
+            ),
+            # terminal
+            Task(
+                ["a1", "a2"],
+                SingleGoal(task_5_pose),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_pick"
+        self.tasks[1].name = "a1_place"
+        self.tasks[2].name = "a2_pick"
+        self.tasks[3].name = "a2_place"
+        self.tasks[4].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"]
+        )
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.start_mode.sg = self.initial_sg

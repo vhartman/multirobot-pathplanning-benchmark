@@ -415,6 +415,10 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
             ),
         ]
 
+        for t in self.tasks:
+            arr = t.goal.sample(None)
+            print(np.array2string(np.array(arr), separator=", "))
+
         self.tasks[0].name = "a1_pick"
         self.tasks[1].name = "a1_place"
         self.tasks[2].name = "a2_pick"
