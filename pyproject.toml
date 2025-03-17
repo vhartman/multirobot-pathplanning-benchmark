@@ -19,6 +19,11 @@ dependencies = [
     "matplotlib>=3.4.0"
 ]
 
+[project.optional-dependencies]
+pinocchio = ["pin"]
+rai = ["robotic==0.2.2"]
+all = ["pin", "robotic==0.2.2"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

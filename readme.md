@@ -11,10 +11,11 @@ The problems we propose here are built on top of [rai](https://marctoussaint.git
 After cloning, and setting up the virtual env, the installation of all the required dependencies can be done with
 
 ```
-python3 -m pip install -e .
+python3 -m pip install -e .[all]
 ```
 
-which also installs this module
+which also installs this module.
+You can choose whatever backends you want from the start - [all] gives you al of them, but [pin] or [rai] is possible as well.
 
 # Overview and Usage
 
