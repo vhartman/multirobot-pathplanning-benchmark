@@ -151,7 +151,7 @@ def main():
     elif args.planner == "rrt_star":
         path, info = RRTstar(
             env,
-            ptc=RuntimeTerminationCondition(200),
+            ptc=IterationTerminationCondition(args.num_iters),
             # general_goal_sampling=options["general_goal_sampling"],
             informed_sampling=True,
             informed_sampling_version=6,

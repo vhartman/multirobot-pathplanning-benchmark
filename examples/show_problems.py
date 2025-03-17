@@ -211,7 +211,7 @@ def main():
     env = get_env_by_name(args.env_name)
 
     # make use of the original config
-    if not args.show_coll_config:
+    if not args.show_coll_config and isinstance(env, rai_env):
         env.C_base = env.C_orig
         env.C = env.C_orig
 
