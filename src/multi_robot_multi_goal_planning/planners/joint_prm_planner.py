@@ -2451,18 +2451,6 @@ def joint_prm_planner(
                 uniform_transition_batch_size if current_best_cost is not None else 500
             )
 
-            # nodes_per_state = []
-            # for m in reached_modes:
-            #     num_nodes = 0
-            #     for n in new_states:
-            #         if n.mode == m:
-            #             num_nodes += 1
-
-            #     nodes_per_state.append(num_nodes)
-
-            # plt.figure("Uniform states")
-            # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
-
             # if env.terminal_mode not in reached_modes:
             print("Sampling transitions")
             new_transitions = sample_valid_uniform_transitions(
@@ -2478,6 +2466,19 @@ def joint_prm_planner(
             )
             g.add_states(new_states)
             print(f"Adding {len(new_states)} new states")
+
+            # nodes_per_state = []
+            # for m in reached_modes:
+            #     num_nodes = 0
+            #     for n in new_states:
+            #         if n.mode == m:
+            #             num_nodes += 1
+
+            #     nodes_per_state.append(num_nodes)
+
+            # plt.figure("Uniform states")
+            # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
+            # plt.show()
 
             approximate_space_extent = (
                 np.prod(np.diff(env.limits, axis=0))

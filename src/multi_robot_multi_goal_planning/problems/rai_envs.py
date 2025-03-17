@@ -581,6 +581,9 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
             Task(["a1", "a2"], GoalSet(rotated_terminal_poses)),
         ]
 
+        # for t in self.tasks:
+            # print(t.goal.sample(None))
+
         self.tasks[0].name = "a1_pick_obj1"
         self.tasks[1].name = "handover"
         self.tasks[2].name = "a2_place"

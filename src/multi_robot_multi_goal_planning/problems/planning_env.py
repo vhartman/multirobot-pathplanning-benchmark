@@ -176,12 +176,15 @@ class Mode:
     def __hash__(self):
         if self.cached_hash is None:
             entry_hash = 0
-            sg_hash = hash(frozenset(self.sg.items()))
+            sg_fitered = {
+                k: (v[0], v[1], v[2]) if len(v) > 2 else v for k, v in self.sg.items()
+            }
+            sg_hash = hash(frozenset(sg_fitered.items()))
             task_hash = hash(tuple(self.task_ids))
             self.cached_hash = hash((entry_hash, sg_hash, task_hash))
-        
+
         return self.cached_hash
-        
+
 
 class State:
     q: Configuration
@@ -192,10 +195,7 @@ class State:
         self.mode = m
 
     def to_dict(self):
-        return {
-            "q": self.q.state().tolist(),
-            "mode": self.mode.task_ids
-        }        
+        return {"q": self.q.state().tolist(), "mode": self.mode.task_ids}
 
 
 def state_dist(start: State, end: State) -> float:
@@ -354,9 +354,7 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if terminal_task.goal.satisfies_constraints(
-            q_concat, mode=m, tolerance=1e-8
-        ):
+        if terminal_task.goal.satisfies_constraints(q_concat, mode=m, tolerance=1e-8):
             return True
 
         return False
@@ -576,10 +574,10 @@ class DependencyGraphMixin(BaseModeLogic):
                     ):
                         tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
-                        
+
                         sg = self.get_scenegraph_info_for_mode(tmp)
                         tmp.sg = sg
-                        
+
                         for nm in mode.next_modes:
                             if hash(nm) == hash(tmp):
                                 return nm
@@ -676,6 +674,14 @@ class BaseProblem(ABC):
     start_mode: Mode
     _terminal_task_ids: List[int]
 
+    # misc
+    # collision_tolerance: float
+    # collision_resolution: float
+
+    # def __init__(self):
+    #     self.collision_tolerance = 0.01
+    #     self.collision_resolution = 0.01
+
     # visualization
     @abstractmethod
     def show_config(self, q: Configuration):
@@ -746,7 +752,7 @@ class BaseProblem(ABC):
         q2: Configuration,
         mode: Mode,
         resolution: float = 0.1,
-        tolerance: float = 0.01
+        tolerance: float = 0.01,
     ) -> bool:
         pass
 

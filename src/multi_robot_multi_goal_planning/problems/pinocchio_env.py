@@ -35,18 +35,72 @@ import sys
 
 
 class PinocchioEnvironment(BaseProblem):
-    def __init__(self):
+    # misc
+    collision_tolerance: float
+    collision_resolution: float
+
+    def __init__(self, model, collision_model, visual_model):
         self.limits = None
         self.start_pos = None
 
-        self.model = None
-        self.collision_model = None
-        self.visual_model = None
+        self.model = model
+        self.collision_model = collision_model
+        self.visual_model = visual_model
 
-        self.data = None
-        self.geom_data = None
+        self.data = self.model.createData()
+        self.geom_data = pin.GeometryData(self.collision_model)
 
-        self.viz = None
+        self.viz = MeshcatVisualizer(
+            self.model, self.collision_model, self.visual_model
+        )
+
+        try:
+            self.viz.initViewer(open=False)
+            self.viz.viewer["/Background"].set_property("top_color", [0.9, 0.9, 0.9])
+            self.viz.viewer["/Background"].set_property("bottom_color", [0.9, 0.9, 0.9])
+
+            self.viz.viewer["/Grid"].set_property("color", [1, 0, 0, 0.2])
+        except ImportError as err:
+            print(
+                "Error while initializing the viewer. It seems you should install Python meshcat"
+            )
+            print(err)
+            sys.exit(0)
+
+        # Load the robot in the viewer.
+        self.viz.loadViewerModel()
+
+        # Display a robot configuration.
+        self.viz.displayVisuals(True)
+        self.viz.displayCollisions(True)
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
+        self.manipulating_env = False
+
+        self.initial_sg = {}
+
+        ids = range(len(collision_model.geometryObjects))
+
+        for i, id_1 in enumerate(ids):
+            obj_name = collision_model.geometryObjects[id_1].name
+            if obj_name[:3] == "obj":
+                parent = collision_model.geometryObjects[id_1].parentJoint
+                placement = collision_model.geometryObjects[id_1].placement
+                self.initial_sg[id_1] = (
+                    "table_0",
+                    parent,
+                    np.round(placement, 8).tobytes(),
+                    pin.SE3(placement),
+                )
+
+        self.current_scenegraph = self.initial_sg.copy()
+
+        n = len(self.collision_model.geometryObjects)
+        mat = np.zeros((n, n)) - self.collision_tolerance
+
+        self.geom_data.setSecurityMargins(self.collision_model, mat)
 
     def display_path(
         self,
@@ -59,10 +113,20 @@ class PinocchioEnvironment(BaseProblem):
         stop_at_mode: bool = False,
     ) -> None:
         for i in range(len(path)):
+            q = path[i].q.state()
+            pin.forwardKinematics(self.model, self.data, q)
+
+            pin.updateGeometryPlacements(
+                self.model, self.data, self.collision_model, self.geom_data, q
+            )
+            self._set_to_scenegraph(path[i].mode.sg)
+
             self.show_config(path[i].q, stop)
 
             if export:
                 print("Exporting is not supported in pinocchio envs.")
+                # with viz.create_video_ctx("../leap.mp4"):
+                #   viz.play(qs, dt, callback=my_callback)
 
             dt = pause_time
             if adapt_to_max_distance:
@@ -79,11 +143,221 @@ class PinocchioEnvironment(BaseProblem):
         if stop_at_end:
             self.show_config(path[-1].q, True)
 
+    def set_to_mode(
+        self,
+        mode: Mode,
+        config=None,
+        use_cached: bool = True,
+        place_in_cache: bool = True,
+    ):
+        pass
+
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def _set_to_scenegraph(self, sg):
+        # update object positions
+        # placement = pin.SE3.Identity()
+        for frame_id, (parent, parent_joint, _, placement) in sg.items():
+            if (
+                frame_id in self.current_scenegraph
+                and parent == self.current_scenegraph[frame_id][0]
+                and parent == "table_0"
+                and self.current_scenegraph[frame_id][3] == placement
+            ):
+                # print("A")
+                continue
+            # pose =
+            # placement = pin.SE3(np.frombuffer(pose).reshape(4, 4))
+            # tmp = np.frombuffer(pose).reshape(4, 4)
+            # print(pose)
+            # placement.translation[:]= tmp[:-1, 3]
+            # placement.rotation[:, :] = tmp[:3, :3]
+            # print(placement.translation)
+            # print(pose[:-1, 3])
+            # print(pose[:3, :3])
+            # placement.translation = pose[]
+            # parent_abs_pose = self.data.oMi[parent_joint]
+            # print("pose,",  parent)
+            # print(parent_abs_pose)
+            # print("rel pose", frame)
+            # print(placement)
+            # frame_pose = self.data.oMi[parent_joint] * placement
+            frame_pose = self.data.oMi[parent_joint].act(placement)
+            # frame_pose = self.data.oMi[parent_joint] * (placement)
+            # tmp = self.data.oMi[parent_joint] * placement
+            # print(frame_pose)
+            # print(tmp)
+
+            # frame_id = self.collision_model.getGeometryId(frame)
+            self.collision_model.geometryObjects[frame_id].placement = frame_pose
+
+            # frame_id = self.visual_model.getGeometryId(frame)
+            # self.visual_model.geometryObjects[frame_id].placement = frame_pose
+
+            self.current_scenegraph[frame_id] = sg[frame_id]
+
+        # self.viz.display()
+
     def get_scenegraph_info_for_mode(self, mode: Mode):
-        return {}
+        if not self.manipulating_env:
+            return {}
+
+        # self.set_to_mode(mode)
+        prev_mode = mode.prev_mode
+        sg = prev_mode.sg.copy()
+
+        active_task = self.get_active_task(prev_mode, mode.task_ids)
+
+        # mode_switching_robots = self.get_goal_constrained_robots(mode)
+        mode_switching_robots = active_task.robots
+
+        # set robot to config
+        prev_mode_index = prev_mode.task_ids[
+            self.robots.index(mode_switching_robots[0])
+        ]
+        # robot = self.robots[mode_switching_robots]
+
+        q_new = []
+        for r in self.robots:
+            if r in mode_switching_robots:
+                q_new.append(mode.entry_configuration[self.robots.index(r)])
+            else:
+                q_new.append(np.zeros(self.robot_dims[r]))
+
+        assert mode is not None
+        assert mode.entry_configuration is not None
+
+        q = np.concatenate(q_new)
+        pin.forwardKinematics(self.model, self.data, q)
+
+        pin.updateGeometryPlacements(
+            self.model, self.data, self.collision_model, self.geom_data, q
+        )
+        self._set_to_scenegraph(sg)
+
+        # self.viz.updatePlacements(pin.GeometryType.COLLISION)
+        # self.viz.updatePlacements(pin.GeometryType.VISUAL)
+
+        # self.viz.display()
+        # input("BB")
+
+        # self.viz.display(q)
+
+        last_task = self.tasks[prev_mode_index]
+
+        # print("prev mode")
+        # print(mode_switching_robots)
+        # print(q)
+        # print(prev_mode)
+
+        # print(last_task.name)
+        # print(active_task.name)
+
+        if last_task.type is not None:
+            if last_task.type == "goto":
+                pass
+            else:
+                # print(f"frame 0: {last_task.frames[0]}")
+                # print(f"frame 1: {last_task.frames[1]}")
+
+                # update scene graph by changing the links as below
+                obj_id = self.collision_model.getGeometryId(last_task.frames[1])
+                new_parent_id = self.collision_model.getGeometryId(last_task.frames[0])
+
+                # print(f"frame id: {frame_id}")
+                # print(f"new parent id: {new_parent_id}")
+                new_parent_joint = self.collision_model.geometryObjects[
+                    new_parent_id
+                ].parentJoint
+                obj_parent_joint = self.collision_model.geometryObjects[
+                    obj_id
+                ].parentJoint
+
+                new_parent_frame_abs_pose = (
+                    self.data.oMi[new_parent_joint]
+                    * self.collision_model.geometryObjects[new_parent_id].placement
+                )
+                old_parent_frame_abs_pose = self.data.oMi[obj_parent_joint]
+                # obj_parent_joint_id = self.collision_model.geometryObjects[new_parent_id].parentJoint
+
+                obj_frame_abs_pose = (
+                    old_parent_frame_abs_pose
+                    * self.collision_model.geometryObjects[obj_id].placement
+                )
+
+                obj_pose_in_new_frame = (
+                    obj_frame_abs_pose.inverse() * new_parent_frame_abs_pose
+                )
+
+                # print("new paren tpose", last_task.frames[0])
+                # print(new_parent_frame_abs_pose)
+
+                # print("obj pose in new frame", last_task.frames[1])
+                # print(obj_pose_in_new_frame)
+
+                # self.viz.display()
+                # input("BB")
+
+                # rel_pose_in_world_frame = obj_frame_abs_pose.actInv(
+                #     new_parent_frame_abs_pose
+                # )
+                # rel_pose_in_joint_frame = (
+                #     new_parent_frame_abs_pose * rel_pose_in_world_frame
+                # )
+
+                # print(last_task.frames[0])
+                # print(last_task.frames[1])
+                # print(rel_pose_in_joint_frame)
+
+                sg[obj_id] = (
+                    # sg[last_task.frames[1]] = (
+                    last_task.frames[0],
+                    new_parent_joint,
+                    np.round(obj_pose_in_new_frame.inverse(), 8).tobytes(),
+                    pin.SE3(obj_pose_in_new_frame.inverse()),
+                )
+
+                # if last_task.name == "a1_pick_obj1":
+                #     print(last_task.frames[1])
+                #     print(old_parent_frame_abs_pose)
+                #     print(last_task.frames[0])
+                #     print(new_parent_frame_abs_pose)
+                #     print("obj abs pose")
+                #     print(obj_frame_abs_pose)
+                #     print("obj rel pose")
+                #     print(rel_pose_in_world_frame)
+                #     print("obj rel pose in new joint frame")
+                #     print(rel_pose_in_joint_frame)
+
+                #     print(sg)
+                # tmp.attach(
+                #     self.tasks[prev_mode_index].frames[0],
+                #     self.tasks[prev_mode_index].frames[1],
+                # )
+                # tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
+
+            # postcondition
+            # if self.tasks[prev_mode_index].side_effect is not None:
+            #     box = self.tasks[prev_mode_index].frames[1]
+            #     tmp.delFrame(box)
+
+        # print(last_task.name)
+        # print(sg)
+        # print(rel_pose_in_joint_frame)
+        # self.show()
+
+        # if last_task.name == "a1_pick_obj1":
+        #     print(mode)
+        #     print(last_task.name)
+        #     print(sg)
+
+        #     print(rel_pose_in_joint_frame)
+
+        # self.show()
+
+        return sg
 
     def show(self, blocking=True):
-        self.viz.display(self.start_pos.state())
+        self.viz.display()
 
         if blocking:
             input("Press Enter to continue...")
@@ -102,18 +376,100 @@ class PinocchioEnvironment(BaseProblem):
     ) -> NDArray:
         return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction)
 
-    def is_collision_free(self, q: Optional[Configuration], mode: List[int]):
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def is_collision_free(self, q: Optional[Configuration], mode: Mode):
         if q is None:
             raise ValueError
 
-        in_collision = pin.computeCollisions(
-            self.model, self.data, self.collision_model, self.geom_data, q.state(), True
+        # self.show_config(q, blocking=False)
+
+        q_orig = q
+
+        # print(mode)
+
+        if isinstance(q, Configuration):
+            q = q.state()
+
+        # self.show_config(q_orig, blocking=False)
+
+        # pin.forwardKinematics(self.model, self.data, q)
+        pin.updateGeometryPlacements(
+            self.model, self.data, self.collision_model, self.geom_data, q
         )
 
-        if not in_collision:
-            return True
+        # update object positions
+        self._set_to_scenegraph(mode.sg)
 
-        return False
+        pin.updateGeometryPlacements(
+            self.model, self.data, self.collision_model, self.geom_data
+        )
+
+        # self.viz.display(q)
+        # print(mode)
+        # input("AA")
+
+        # self.viz.updatePlacements(pin.GeometryType.COLLISION)
+        # self.viz.updatePlacements(pin.GeometryType.VISUAL)
+
+        # if mode.task_ids == [0, 1]:
+        # self.show(blocking=False)
+
+        # for i in range(len(self.collision_model.collisionPairs)):
+        #     in_collision = pin.computeCollision(self.collision_model, self.geom_data, i)
+        #     if in_collision:
+        #         # cr = self.geom_data.collisionResults[i]
+        #         # cp = self.collision_model.collisionPairs[i]
+        #         # if cr.isCollision():
+        #         #     print(self.collision_model.geometryObjects[cp.first].name, self.collision_model.geometryObjects[cp.second].name)
+        #         #     print("collision pair:", cp.first,",",cp.second,"- collision:","Yes" if cr.isCollision() else "No")
+        #         # print(q)
+        #         # print('colliding')
+        #         # input("A")
+
+        #         return False
+
+        # return True
+
+        # in_collision = pin.computeCollisions(
+        #     self.model, self.data, self.collision_model, self.geom_data, q, True
+        # )
+
+        in_collision = pin.computeCollisions(self.collision_model, self.geom_data, True)
+
+        if in_collision:
+            # for k in range(len(self.collision_model.collisionPairs)):
+            #     cr = self.geom_data.collisionResults[k]
+            #     cp = self.collision_model.collisionPairs[k]
+            #     if cr.isCollision():
+            #         print(self.collision_model.geometryObjects[cp.first].name, self.collision_model.geometryObjects[cp.second].name)
+            #         print("collision pair:", cp.first,",",cp.second,"- collision:","Yes" if cr.isCollision() else "No")
+            # print(q)
+            # print('colliding')
+            # self.show_config(q_orig, blocking=True)
+
+            # pin.computeDistances(self.collision_model, self.geom_data)
+
+            # total_penetration = 0
+            # for k in range(len(self.collision_model.collisionPairs)):
+            #     cr = self.geom_data.distanceResults[k]
+            #     # cp = self.collision_model.collisionPairs[k]
+            #     if cr.min_distance < 0:
+            #         total_penetration += -cr.min_distance
+            #     # print(cr.min_distance)
+            #     # if cr.isCollision():
+            #     #     print(self.collision_model.geometryObjects[cp.first].name, self.collision_model.geometryObjects[cp.second].name)
+            #     #     print("collision pair:", cp.first,",",cp.second,"- collision:","Yes" if cr.isCollision() else "No")
+            # # print(q)
+            # # print('colliding')
+            # # self.show_config(q_orig, blocking=True)
+
+            # if total_penetration > self.collision_tolerance:
+            return False    
+
+        # print(mode)
+        # self.show_config(q_orig, blocking=True)
+
+        return True
 
     def is_edge_collision_free(
         self,
@@ -123,9 +479,17 @@ class PinocchioEnvironment(BaseProblem):
         resolution: float = None,
         randomize_order: bool = True,
         tolerance: float = None,
-    ):
-        N = config_dist(q1, q2) / resolution
-        N = max(5, N)
+    ) -> bool:
+        if resolution is None:
+            resolution = self.collision_resolution
+
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+
+        # print('q1', q1)
+        # print('q2', q2)
+        N = int(config_dist(q1, q2, "max") / resolution)
+        N = max(2, N)
 
         idx = list(range(int(N)))
         if randomize_order:
@@ -138,21 +502,16 @@ class PinocchioEnvironment(BaseProblem):
             # print(i / (N-1))
             q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
             q = NpConfiguration(q, q1.array_slice)
-            qs.append(q)
 
-        # is_in_collision = self.batch_is_collision_free(qs, mode)
-        is_collision_free = True
-
-        for q in qs:
             if not self.is_collision_free(q, mode):
-                is_collision_free = False
-                break
+                # print(q)
+                # print("crash ", mode)
+                # self.viz.display(q)
+                return False
 
-        if is_collision_free:
-            # print('coll')
-            return True
+        # print(mode)
 
-        return False
+        return True
 
     def is_path_collision_free(
         self, path: List[State], randomize_order=True, resolution=None, tolerance=None
@@ -180,11 +539,6 @@ class PinocchioEnvironment(BaseProblem):
                 return False
 
         return True
-
-    def set_to_mode(self, m: List[int]):
-        return
-
-        raise NotImplementedError("This is not supported for this environment.")
 
 
 def make_pinocchio_random_env(dim=2):
@@ -216,37 +570,12 @@ def make_pin_middle_obstacle_two_dim_env():
 
 class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
     def __init__(self, agents_can_rotate=True):
-        PinocchioEnvironment.__init__(self)
+        model, collision_model, visual_model = make_pin_middle_obstacle_two_dim_env()
 
-        self.model, self.collision_model, self.visual_model = (
-            make_pin_middle_obstacle_two_dim_env()
-        )
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
         self.limits = np.ones((2, 2 * 3)) * 1
         self.limits[0, :] = -1
-
-        self.data = self.model.createData()
-        self.geom_data = pin.GeometryData(self.collision_model)
-
-        self.viz = MeshcatVisualizer(
-            self.model, self.collision_model, self.visual_model
-        )
-
-        try:
-            self.viz.initViewer(open=True)
-        except ImportError as err:
-            print(
-                "Error while initializing the viewer. It seems you should install Python meshcat"
-            )
-            print(err)
-            sys.exit(0)
-
-        # Load the robot in the viewer.
-        self.viz.loadViewerModel()
-
-        # Display a robot configuration.
-        self.viz.displayVisuals(True)
-        self.viz.displayCollisions(True)
 
         self.start_pos = NpConfiguration.from_list([[0, -0.8, 0], [0, 0.8, 0]])
 
@@ -276,18 +605,277 @@ class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
             ["a2_goal", "a1_goal", "terminal"]
         )
 
-        self.collision_tolerance = 0.01
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        # self.collision_resolution = 0.01
+        # self.collision_tolerance = 0.01
+
+
+def make_pin_other_hallway_two_dim_env():
+    filename = "./other_hallway.urdf"
+    model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
+
+    ids = range(len(collision_model.geometryObjects))
+
+    env_names = ["wall1", "wall2", "wall3", "wall4", "obs3", "obs4"]
+
+    for i, id_1 in enumerate(ids):
+        for id_2 in ids[i + 1 :]:
+            #  = geomModel.getGeometryId(geomModelB.geometryObjects[cp.second].name);
+            if (
+                collision_model.geometryObjects[id_1].name in env_names
+                and collision_model.geometryObjects[id_2].name in env_names
+            ):
+                continue
+
+            collision_model.addCollisionPair(pin.CollisionPair(id_1, id_2))
+
+    # collision_model.addAllCollisionPairs()
+
+    return model, collision_model, visual_model
+
+
+class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
+    def __init__(self):
+        model, collision_model, visual_model = make_pin_other_hallway_two_dim_env()
+
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
+
+        self.limits = np.ones((2, 2 * 3)) * 2
+        self.limits[0, :] = -2
+        self.limits[0, 2] = -3.1415
+        self.limits[1, 2] = 3.1415
+        self.limits[0, 5] = -3.1415
+        self.limits[1, 5] = 3.1415
+
+        self.start_pos = NpConfiguration.from_list([[1.5, 0.0, 0], [-1.5, 0.0, 0]])
+
+        self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
+        self.robot_dims = {"a1": 3, "a2": 3}
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        self.tasks = [
+            # r1
+            Task(["a1"], SingleGoal(np.array([-1.5, 1, np.pi / 2]))),
+            # r2
+            Task(["a2"], SingleGoal(np.array([1.5, 1, 0]))),
+            # terminal mode
+            Task(
+                ["a1", "a2"],
+                SingleGoal(np.array([1.5, 0.0, 0, -1.5, 0.0, 0])),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_goal"
+        self.tasks[1].name = "a2_goal"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a2_goal", "a1_goal", "terminal"]
+        )
 
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
         BaseModeLogic.__init__(self)
 
-        self.collision_resolution = 0.01
-        self.collision_tolerance = 0.01
+        # self.collision_resolution = 0.01
+        # self.collision_tolerance = 0.01
 
 
-def make_wall_gap_two_dim():
-    pass
+def make_2d_handover():
+    filename = "./2d_handover.urdf"
+    model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
+
+    # collision_model.addAllCollisionPairs()
+
+    ids = range(len(collision_model.geometryObjects))
+
+    env_names = [
+        "",
+        "wall1_0",
+        "wall2_0",
+        "wall3_0",
+        "wall4_0",
+        "obs1_0",
+        "obs2_0",
+        "obs3_0",
+        "obs4_0",
+    ]
+
+    for i, id_1 in enumerate(ids):
+        for id_2 in ids[i + 1 :]:
+            #  = geomModel.getGeometryId(geomModelB.geometryObjects[cp.second].name);
+            if (
+                collision_model.geometryObjects[id_1].name in env_names
+                and collision_model.geometryObjects[id_2].name in env_names
+            ):
+                continue
+
+            print(
+                "adding ",
+                id_1,
+                id_2,
+                collision_model.geometryObjects[id_1].name,
+                collision_model.geometryObjects[id_2].name,
+            )
+            collision_model.addCollisionPair(pin.CollisionPair(id_1, id_2))
+
+    return model, collision_model, visual_model
 
 
-def make_pinocchio_hallway():
-    pass
+class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
+    def __init__(self):
+        model, collision_model, visual_model = make_2d_handover()
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
+
+        self.manipulating_env = True
+
+        self.limits = np.ones((2, 2 * 3)) * 2
+        self.limits[0, :] = -2
+        self.limits[0, 2] = -3.1415
+        self.limits[1, 2] = 3.1415
+        self.limits[0, 5] = -3.1415
+        self.limits[1, 5] = 3.1415
+
+        self.start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
+
+        self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
+        self.robot_dims = {"a1": 3, "a2": 3}
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        task_1_pose = np.array([-0.00353716, 0.76632651, 0.58110193])
+        # task_1_pose = np.array([-0.00353716, 0.76632651, 0.])
+        handover_pose = np.array(
+            [
+                0.98929765,
+                -0.89385425,
+                1.02667076,
+                1.49362046 + 0.01,
+                -1.02441501 + 0.01,
+                1.42582986,
+            ]
+        )
+        task_2_pose = np.array([1.19521468, 0.41126415, 0.98020169])
+        task_3_pose = np.array([0.50360456, -1.10537035, 0.97861029])
+        task_4_pose = np.array([0.80358028, 1.54452128, 0.97864346])
+        task_5_pose = np.array(
+            [
+                -4.99289680e-01,
+                7.98808085e-01,
+                7.11081401e-01,
+                -1.40245030e-04,
+                -4.99267552e-01,
+                -2.93781443e00,
+            ]
+        )
+
+        self.tasks = [
+            # a1
+            Task(
+                ["a1"],
+                SingleGoal(task_1_pose),
+                type="pick",
+                frames=["a1_0", "obj1_0"],
+            ),
+            Task(
+                ["a1", "a2"],
+                GoalSet([handover_pose]),
+                # SingleGoal(keyframes[1]),
+                type="handover",
+                frames=["a2_0", "obj1_0"],
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(task_2_pose),
+                type="place",
+                frames=["table_0", "obj1_0"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(task_3_pose),
+                type="pick",
+                frames=["a1_0", "obj2_0"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(task_4_pose),
+                type="place",
+                frames=["table_0", "obj2_0"],
+            ),
+            # terminal
+            # Task(["a1", "a2"], SingleGoal(keyframes[3])),
+            Task(["a1", "a2"], GoalSet([task_5_pose])),
+        ]
+
+        self.tasks[0].name = "a1_pick_obj1"
+        self.tasks[1].name = "handover"
+        self.tasks[2].name = "a2_place"
+        self.tasks[3].name = "a1_pick_obj2"
+        self.tasks[4].name = "a1_place_obj2"
+        self.tasks[5].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            [
+                "a1_pick_obj1",
+                "handover",
+                "a1_pick_obj2",
+                "a1_place_obj2",
+                "a2_place",
+                "terminal",
+            ]
+        )
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.start_mode.sg = self.initial_sg
+
+        # self.collision_resolution = 0.01
+        # self.collision_tolerance = 0.01
+
+        # update object positions
+        # self.show(self.start_pos)
+
+        # sg = {}
+
+        # new_parent_id = self.collision_model.getGeometryId("a1_0")
+
+        # # print(f"frame id: {frame_id}")
+        # # print(f"new parent id: {new_parent_id}")
+        # new_parent_joint = self.collision_model.geometryObjects[
+        #     new_parent_id
+        # ].parentJoint
+
+        # for i in range(5):
+        #   tmp_pose = pin.SE3.Identity()
+
+        #   tmp_pose.translation = np.array([0.3, 0, 0])
+
+        #   sg["obj1_0"] = (
+        #       "a1_0",
+        #       new_parent_joint,
+        #       np.round(tmp_pose, 3).tobytes(),
+        #   )
+
+        #   print(self.start_pos)
+        #   print(self.start_pos.state())
+        #   q = self.start_pos.state()
+        #   q[2] = i / 5
+        #   pin.forwardKinematics(self.model, self.data, q)
+
+        #   pin.updateGeometryPlacements(
+        #       self.model, self.data, self.collision_model, self.geom_data, q
+        #   )
+
+        #   self._set_to_scenegraph(sg)
+
+        #   # self.viz.updatePlacements(pin.GeometryType.COLLISION)
+        #   # self.viz.updatePlacements(pin.GeometryType.VISUAL)
+
+        #   self.viz.display(q)
+
+        #   input("AAAA")
