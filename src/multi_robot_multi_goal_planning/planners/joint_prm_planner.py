@@ -2106,6 +2106,10 @@ def joint_prm_planner(
 
             goal_sample = active_task.goal.sample(mode)
 
+            focal_points = np.array(
+                [path[start_ind].q.state(), path[end_ind].q.state()], dtype=np.float64
+            )
+            
             for k in range(max_attempts_per_sample):
                 # completely random sample configuration from the (valid) domain robot by robot
                 q = []
@@ -2137,11 +2141,7 @@ def joint_prm_planner(
 
                 q = conf_type.from_list(q)
 
-                if (
-                    env.config_cost(path[start_ind].q, q)
-                    + env.config_cost(path[end_ind].q, q)
-                    > current_cost
-                ):
+                if sum(env.batch_config_cost(q, focal_points)) > current_cost:
                     continue
 
                 if env.is_terminal_mode(mode):
