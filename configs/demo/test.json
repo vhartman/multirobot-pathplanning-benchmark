@@ -1,48 +1,51 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "2d_handover",
+  "environment": "hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 100,
+  "max_planning_time": 500,
   "num_runs": 10,
   "seed": 1,
   "optimize": true,
   "planners": [
     {
-      "name": "fastdrrtstar",
-      "type": "fastdrrtstar",
+      "name": "aitstar_informed_with_lb",
+      "type": "aitstar",
       "options": {
-        "informed_sampling": true,
-        "informed_sampling_version": 6,  
-        "distance_metric": "max_euclidean",
-        "p_goal": 0.4,
-        "p_stay": 0.0,
-        "p_uniform": 0.05,
-        "shortcutting": true,
-        "mode_sampling": 1, 
+        "batch_size": 100,
+        "transition_batch_size": 150,
+        "informed_batch_size": 200,
+        "informed_transition_batch_size": 250,
+        "path_batch_size": 0,
+        "distance_function": "max_euclidean",
+        "connection_strategy": "radius",
         "locally_informed_sampling": true,
-        "informed_batch_size":300,
-        "sample_batch_size_per_task": 200,
-        "transistion_batch_size_per_mode":200, 
-        "expand_iter":100
-
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "informed_with_lb":true
       }
     },
     {
-      "name": "rrtstar",
-      "type": "rrtstar",
+      "name": "aitstar_informed_without_lb",
+      "type": "aitstar",
       "options": {
-        "informed_sampling": true,
-        "informed_sampling_version": 6,  
-        "distance_metric": "max_euclidean",
-        "p_goal": 0.1,
-        "p_stay": 0.0,
-        "p_uniform": 0.2,
-        "shortcutting": true,
-        "mode_sampling": 1, 
+        "batch_size": 100,
+        "transition_batch_size": 150,
+        "informed_batch_size": 200,
+        "informed_transition_batch_size": 250,
+        "path_batch_size": 0,
+        "distance_function": "max_euclidean",
+        "connection_strategy": "radius",
         "locally_informed_sampling": true,
-        "informed_batch_size": 300
-
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "informed_with_lb":false
       }
     }
   ]

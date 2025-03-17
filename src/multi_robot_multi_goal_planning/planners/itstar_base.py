@@ -4,7 +4,7 @@ import math as math
 import random
 import multi_robot_multi_goal_planning.planners as mrmgp
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Union, List, Dict
+from typing import List, Dict, Tuple, Optional, Set, ClassVar, Any, Union 
 from numpy.typing import NDArray
 from numba import njit
 from scipy.stats.qmc import Halton
@@ -19,34 +19,13 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
-    batch_config_dist,  
-    compute_sliced_dists
+    batch_config_dist
 )
 
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 
-def save_data(data:dict):
-        import os
-        import pickle
-        # Directory Handling: Ensure directory exists
-        home_dir = os.path.expanduser("~")
-        directory = os.path.join(home_dir, 'multirobot-pathplanning-benchmark/out')
-        dir = os.path.join(directory, 'Analysis')
-        os.makedirs(dir, exist_ok=True)
-
-        # Determine Next File Number: Use generator expressions for efficiency
-        next_file_number = max(
-            (int(file.split('.')[0]) for file in os.listdir(dir)
-            if file.endswith('.pkl') and file.split('.')[0].isdigit()),
-            default=-1
-        ) + 1
-
-        # Save Data as Pickle File
-        filename = os.path.join(dir, f"{next_file_number:04d}.pkl")
-        with open(filename, 'wb') as file:
-            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
 class Operation:
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
@@ -72,48 +51,59 @@ class Operation:
         Returns: 
             float: Cost associated with the specified node."""
         return self.costs[idx]
-class Node:
-    """Represents a node in the planning structure"""
-    id_counter = 0
 
-    def __init__(self, state:State, operation: Operation):
-        self.state = state   
-        self.parent = None  
-        self.children = []    
-        self.transition = False
-        self.cost_to_parent = None
-        self.operation = operation
+class Node:
+    __slots__ = [
+        "state",
+        "lb_cost_to_goal",
+        "lb_cost_from_start",
+        "is_transition",
+        "neighbors",
+        "whitelist",
+        "blacklist",
+        "id",
+    ]
+
+    # Class attribute
+    id_counter: ClassVar[int] = 0
+
+    # Instance attributes
+    state: State
+    lb_cost_to_goal: Optional[float]
+    lb_cost_from_start: Optional[float]
+    is_transition: bool
+    neighbors: List[int]
+    whitelist: Set[int]
+    blacklist: Set[int]
+    id: int
+
+    def __init__(self, state: State, is_transition: bool = False) -> None:
+        self.state = state
+        self.lb_cost_to_goal = np.inf
+        self.lb_cost_from_start = np.inf
+
+        self.is_transition = is_transition
+
+        self.neighbors = []
+
+        self.whitelist = set()
+        self.blacklist = set()
+
         self.id = Node.id_counter
         Node.id_counter += 1
-        self.neighbors = {}
-        self.hash = None
+        self.parent = None  
+        self.children = []
+
+    def __lt__(self, other: "Node") -> bool:
+        return self.id < other.id
+
+    def __hash__(self) -> int:
+        return self.id
 
 
-    @property
-    def cost(self):
-        return self.operation.get_cost(self.id)
-    
-    @cost.setter
-    def cost(self, value) -> None:
-        """Set the cost in the shared operation costs array.
 
-        Args:
-            value (float): Cost value to assign to the current node.
 
-        Returns: 
-            None: This method does not return any value."""
-        self.operation.costs[self.id] = value
 
-    def __repr__(self):
-        return f"<N- {self.state.q.state()}, c: {self.cost}>"
-    
-    def __eq__(self, other):
-        return hash(self) == hash(other)
-
-    def __hash__(self):
-        if self.hash is None:
-            self.hash = hash((self.state.q.state().data.tobytes(), tuple(self.state.mode.task_ids)))
-        return self.hash
 
 class BaseTree(ABC):
     """
@@ -383,613 +373,15 @@ class BidirectionalTree(BaseTree):
     def get_number_of_nodes_in_tree(self) -> int:
         return len(self.subtree) + len(self.subtree_b)
 
+  
 
-class Informed(ABC):
-    """
-    Represents an informed sampling instance, providing methods for sampling within an informed set.
-    """
-    def __init__(self, 
-                 env:BaseProblem,
-                 p_goal: float
-                 ):
+class Informed():
+    def __init__(self, env:BaseProblem, sample_mode, conf_type, informed_with_lb):
         self.env = env
-        self.start_ind = {}
-        self.end_ind = {}
-        self.cmin = {}
-        self.cmax = {}
-        self.C = {}
-        self.start = {}
-        self.end = {}
-        self.center = {}
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
-        self.active_robots_idx = []
-        self.chosen_active_robot = None
-        self.p_goal = p_goal
-        self.idx1 = {}
-        self.idx2 = {}
-        self.rnd_idx = []
+        self.conf_type = conf_type
+        self.sample_mode = sample_mode
+        self.informed_with_lb = informed_with_lb
 
-    
-    def rotation_to_world_frame(self, start:State, goal:State, r_idx:int) -> bool:
-        """
-        Computes rotation from the hyperellipsoid-aligned to the world frame based on the difference between the start and goal configs.
-
-        Args: 
-            start (Configuration): Start configuration 
-            goal (Configuration): Goal configuration
-            n (int): Dimensionality of the state space.
-
-        Returns: 
-            Tuple:  
-                - float: Norm of difference between goal and start configs 
-                - NDArray: Representing the rotation matrix from the hyperellipsoid-aligned frame to the world frame."""
-        diff = goal.q[r_idx] - start.q[r_idx]
-        norm = np.linalg.norm(diff)
-        if norm < 1e-3 :
-            return False
-        a1 = diff / norm 
-        self.cmin[r_idx] = norm
-        # Create first column of the identity matrix
-        e1 = np.zeros(self.n[r_idx])
-        e1[0] = 1.0
-
-        # Compute SVD directly on the outer product
-        U, _, Vt = np.linalg.svd(np.outer(a1, e1))
-        # Construct the rotation matrix C
-        det_factor = np.linalg.det(U) * np.linalg.det(Vt.T)
-        self.C[r_idx] = U @ np.diag([1] * ( self.n[r_idx] - 1) + [det_factor]) @ Vt
-        return True
-
-    def initialize(self, mode:Mode, next_ids:List[int])-> None: 
-        """ 
-        Initializes dimensions of each robot
-
-        Args: 
-            mode (Mode): Current active mode used to determine active tasks. 
-            next_ids (List[int]): List containing next task IDs 
-
-        Returns: 
-            None: This method does not return any value. """
-        self.active_robots_idx = []
-        active_robots = self.env.get_active_task(mode, next_ids).robots 
-        for robot in self.env.robots:
-            r_idx = self.env.robots.index(robot)
-            self.n[r_idx] = self.env.robot_dims[robot]
-            if robot in active_robots:
-                self.active_robots_idx.append(self.env.robots.index(robot))
-            
-    def cholesky_decomposition(self, r_idx:int, path:List[State]) -> None:
-        """ 
-        Computes cholesky decomposition of hyperellipsoid matrix
-
-        Args: 
-            r_indices (List[int]): List of indices of robot with idx r_idx. 
-            r_idx (int): Idx of robot 
-            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
-
-        Returns: 
-            NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None. """
-        if self.get_ub_of_informed_set(r_idx, path):
-            cmax = self.cmax[r_idx]
-            if not cmax or self.cmin[r_idx] < 0 or self.cmin[r_idx] > cmax:
-                self.L[r_idx] = None
-                return
-            r1 = cmax / 2 
-            r2 = np.sqrt(cmax**2 - self.cmin[r_idx]**2) / 2
-            self.L[r_idx] = np.diag(np.concatenate([[r1], np.repeat(r2, self.n[r_idx] - 1)])) 
-        else:
-            self.L[r_idx] = None
-            return
-    
-    def sample_unit_n_ball(self, n:int) -> NDArray:
-        """ 
-        Samples a point uniformly from a n-dimensional unit ball centered at the origin.
-
-        Args: 
-            n (int): Dimension of the ball.
-
-        Returns: 
-            NDArray: Sampled point from the unit ball. """
-        x_ball = np.random.normal(0, 1, n) 
-        norm = np.linalg.norm(x_ball)     # Normalize with L2 norm
-        radius = np.random.rand()**(1.0 / n)          # Generate a random radius and apply power
-        return (x_ball/norm) * radius
-    
-    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
-        focal_points = np.array(
-                [self.start[self.chosen_active_robot].q.state(), self.end[self.chosen_active_robot].q.state()], dtype=np.float64
-            )
-        q = type(self.env.get_start_pos()).from_list(q)
-        c_lb = sum(self.env.batch_config_cost(q, focal_points))
-        if c_lb < self.cmax[self.chosen_active_robot]:
-            return True
-        return False
-
-    def sample(self, path, r_indices, r_idx, max_attemps = 100) -> Optional[NDArray]:
-        if self.L[r_idx] is None:
-            if np.random.uniform(0, 1) < self.p_goal:
-                return self.end[r_idx].q[r_idx]
-            if np.linalg.norm(self.start[r_idx].q[r_idx]- self.end[r_idx].q[r_idx]) < 1e-10: #TODO sample with noise
-                return self.end[r_idx].q[r_idx]
-            lims = self.env.limits[:, r_indices]
-            return np.random.uniform(lims[0], lims[1])
-        attemps = 0
-        while attemps < max_attemps:
-            attemps += 1
-            x_ball = self.sample_unit_n_ball(self.n[r_idx])  
-            x_rand = self.C[r_idx] @ (self.L[r_idx] @ x_ball) + self.center[r_idx]
-            # Check if x_rand is within limits
-            lims = self.env.limits[:, r_indices]
-            if np.all((lims[0] <= x_rand) & (x_rand <= lims[1])):  
-                return x_rand
-        return
-
-    @abstractmethod
-    def get_ub_of_informed_set(self, r_idx:int, path:List[List]) -> bool:
-        """
-        Computes right-hand side of informed set description
-
-        Args: 
-            r_indices (List[int]): List of indices of robot with idx r_idx. 
-            r_idx (int): Idx of robot 
-            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
-
-        Returns:
-            float: Value of right-hand side (= cost)
-        """
-        pass  
-
-# class InformedVersion0(Informed):
-
-#     """
-#     Locally informed sampling for each robot separately (start and goal config are equal to home pose and task).
-#     Upper bound cost is determined by cost of one robot.
-    
-#     """
-#     def __init__(self, env, p_goal):
-#         super().__init__(env, p_goal)
-    
-#     # def is_lb_cost_smaller(self, path:List[State], q:Configuration, s, e) -> float:
-
-#     #     # start_min = min(self.start_ind.values())
-#     #     # end_max = max(self.end_ind.values())
-#     #     focal_points = np.array(
-#     #             [path[s].q.state(), path[e].q.state()], dtype=np.float64
-#     #         )
-#     #     q = type(self.env.get_start_pos()).from_list(q)
-#     #     c_lb = sum(self.env.batch_config_cost(q, focal_points))
-#     #     path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-#     #     cmax = sum(path_segment_costs[s:e])
-#     #     if c_lb < cmax:
-#     #         return True
-#     #     return False
-    
-#     def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
-
-#         start_min = min(self.start_ind.values())
-#         end_max = max(self.end_ind.values())
-#         focal_points = np.array(
-#                 [path[start_min].q.state(), path[end_max].q.state()], dtype=np.float64
-#             )
-#         q = type(self.env.get_start_pos()).from_list(q)
-#         c_lb = sum(self.env.batch_config_cost(q, focal_points))
-#         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-#         cmax = sum(path_segment_costs[start_min:end_max])
-#         if c_lb < cmax:
-#             return True
-#         return False
-
-#     def batch_config_cost_per_robot(self,
-#         starts: List[Configuration],
-#         batch_other: List[Configuration],
-#         r_idx:int
-#     ) -> float:
-#         if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
-#             diff = starts.state() - batch_other
-#             all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
-#             agent_slices = starts.array_slice
-#         else:
-#             diff = np.array([start.q.state() for start in starts]) - np.array(
-#                 [other.q.state() for other in batch_other], dtype=np.float64
-#             )
-#             all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
-#             agent_slices = starts[0].q.array_slice
-
-#         squared_diff = diff * diff
-#         all_robot_dists = compute_sliced_dists(squared_diff, agent_slices)
-
-#         return all_robot_dists[r_idx]   
-
-#     def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
-#         #need to calculate the cost only cnsidering one agent (euclidean distance)
-#         start = path[self.start_ind[r_idx]]
-#         end = path[self.end_ind[r_idx]]
-
-#         self.idx1[r_idx], self.idx2[r_idx] = None, None
-#         path_segment_costs = self.batch_config_cost_per_robot(path[:-1], path[1:], r_idx)
-#         if r_idx not in self.active_robots_idx:
-#             for _ in range(500):
-#                 start_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
-#                 end_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
-
-#                 if end_ind - start_ind > 2:
-#                     # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-#                     current_cost = sum(path_segment_costs[start_ind:end_ind])
-#                     lb_cost = self.batch_config_cost_per_robot([path[start_ind]], [path[end_ind]], r_idx)
-
-#                     if lb_cost < current_cost: 
-#                         self.idx1[r_idx] = start_ind
-#                         self.idx2[r_idx] = end_ind
-#                         break
-
-#         if self.idx1[r_idx] is None: 
-#             self.idx1[r_idx] = self.start_ind[r_idx]
-#             self.idx2[r_idx] = self.end_ind[r_idx]
-
-#         self.start[r_idx] = path[self.idx1[r_idx]]
-#         self.end[r_idx] = path[self.idx2[r_idx]]
-
-#         # self.start[r_idx] = start
-#         # self.end[r_idx] = end
-#         self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
-#         if self.rotation_to_world_frame(self.start[r_idx], self.end[r_idx], r_idx):
-#             self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])          
-#             return True
-#         return False
-
-class InformedVersion0(Informed):
-
-    """
-    Locally informed sampling for each robot separately (start and goal config are equal to home pose and task).
-    Upper bound cost is determined by cost of one robot.
-    
-    """
-    def __init__(self, env, p_goal):
-        super().__init__(env, p_goal)
-    
-    # def is_lb_cost_smaller(self, path:List[State], q:Configuration, s, e) -> float:
-
-    #     # start_min = min(self.start_ind.values())
-    #     # end_max = max(self.end_ind.values())
-    #     focal_points = np.array(
-    #             [path[s].q.state(), path[e].q.state()], dtype=np.float64
-    #         )
-    #     q = type(self.env.get_start_pos()).from_list(q)
-    #     c_lb = sum(self.env.batch_config_cost(q, focal_points))
-    #     path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-    #     cmax = sum(path_segment_costs[s:e])
-    #     if c_lb < cmax:
-    #         return True
-    #     return False
-    
-    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
-
-        # start_min = min(self.start_ind.values())
-        # end_max = max(self.end_ind.values())
-        focal_points = np.array(
-                [path[self.rnd_idx[0]].q.state(), path[self.rnd_idx[1]].q.state()], dtype=np.float64
-            )
-        
-        q = type(self.env.get_start_pos()).from_list(q)
-        c_lb = sum(self.env.batch_config_cost(q, focal_points))
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-        cmax = sum(path_segment_costs[self.rnd_idx[0]:self.rnd_idx[1]])
-        if c_lb < cmax:
-            return True
-        return False
-
-    def batch_config_cost_per_robot(self,
-        starts: List[Configuration],
-        batch_other: List[Configuration],
-        r_idx:int
-    ) -> float:
-        if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
-            diff = starts.state() - batch_other
-            all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
-            agent_slices = starts.array_slice
-        else:
-            diff = np.array([start.q.state() for start in starts]) - np.array(
-                [other.q.state() for other in batch_other], dtype=np.float64
-            )
-            all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
-            agent_slices = starts[0].q.array_slice
-
-        squared_diff = diff * diff
-        all_robot_dists = compute_sliced_dists(squared_diff, agent_slices)
-
-        return all_robot_dists[r_idx]   
-
-    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
-        #need to calculate the cost only cnsidering one agent (euclidean distance)
-        path_segment_costs = self.batch_config_cost_per_robot(path[:-1], path[1:], r_idx)
-        if self.rnd_idx == []:
-            if len(self.active_robots_idx) == 1:
-                idx = self.active_robots_idx[0]
-            else:
-                idx = random.choice(self.active_robots_idx)
-            
-            self.chosen_active_robot = idx
-
-            start = path[self.start_ind[idx]]
-            end = path[self.end_ind[idx]]
-
-            self.idx1[r_idx], self.idx2[r_idx] = None, None
-            
-            # if r_idx not in self.active_robots_idx:
-            for _ in range(500):
-                start_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
-                end_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
-
-                if end_ind - start_ind > 2:
-                    # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-                    # current_cost = sum(path_segment_costs[start_ind:end_ind])
-                    # lb_cost = self.batch_config_cost_per_robot([path[start_ind]], [path[end_ind]], r_idx)
-
-                    # if lb_cost < current_cost: 
-                    self.idx1[r_idx] = start_ind
-                    self.idx2[r_idx] = end_ind
-                    break
-
-
-            if self.idx1[r_idx] is None: 
-                self.idx1[r_idx] = self.start_ind[r_idx]
-                self.idx2[r_idx] = self.end_ind[r_idx]
-            self.rnd_idx = list([self.idx1[r_idx], self.idx2[r_idx]])
-
-        self.start[r_idx] = path[self.rnd_idx[0]]
-        self.end[r_idx] = path[self.rnd_idx[1]]
-
-        # self.start[r_idx] = start
-        # self.end[r_idx] = end
-        self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
-        if self.rotation_to_world_frame(self.start[r_idx], self.end[r_idx], r_idx):
-            self.cmax[r_idx] = sum(path_segment_costs[self.rnd_idx[0]:self.rnd_idx[1]])          
-            return True
-        return False
-
-class InformedVersion1(Informed):
-    """
-    Locally informed sampling considering active task.
-    Upper bound cost is determined by actual cost from start(home_pose) to end(active_task).
-    Same start and end idx for all agents
-
-    """
-
-    def __init__(self, env, p_goal):
-        super().__init__(env, p_goal)
-    
-    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
-        #look for each robot at the home pose and task pose of active task in mode
-        if len(self.active_robots_idx) == 1:
-            idx = self.active_robots_idx[0]
-        else:
-            idx = random.choice(self.active_robots_idx)
-        
-        self.chosen_active_robot = idx
-
-        start_ind = self.start_ind[idx]
-        end_ind = self.end_ind[idx]
-        start = path[start_ind]
-        end = path[end_ind]
-        self.start[r_idx] = start
-        self.end[r_idx] = end
-        if self.rotation_to_world_frame(start, end, r_idx):
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
-            path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-            self.cmax[r_idx] = sum(path_segment_costs[self.start_ind[idx]:self.end_ind[idx]])
-            return True                  
-class InformedVersion2(Informed):
-    """
-    Locally informed sampling for each agent separately (start and goal config are equal to home pose and task).
-    Upper bound cost is determined by actual cost from start(home_pose) to end(active_task).
-    """
-
-    def __init__(self, env, p_goal):
-        super().__init__(env, p_goal)
-    
-    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
-        if len(self.active_robots_idx) == 1:
-            idx = self.active_robots_idx[0]
-        else:
-            idx = random.choice(self.active_robots_idx)
-        
-        self.chosen_active_robot = idx
-        focal_points = np.array(
-                [self.start[self.chosen_active_robot].q.state(), self.end[self.chosen_active_robot].q.state()], dtype=np.float64
-            )
-        q = type(self.env.get_start_pos()).from_list(q)
-        c_lb = sum(self.env.batch_config_cost(q, focal_points))
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-        cmax = sum(path_segment_costs[self.start_ind[idx]:self.end_ind[idx]])
-        if c_lb < cmax:
-            return True
-        return False
-    
-    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
-        #need to calculate the cost only cnsidering one agent (euclidean distance)
-        start = path[self.start_ind[r_idx]]
-        end = path[self.end_ind[r_idx]]
-        self.start[r_idx] = start
-        self.end[r_idx] = end
-        if self.rotation_to_world_frame(start, end, r_idx):
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
-            path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-            self.cmax[r_idx] = sum(path_segment_costs[self.start_ind[r_idx]:self.end_ind[r_idx]])
-            return True
-        return False    
-class InformedVersion3(Informed):
-    """
-    Locally informed sampling considering active task.
-    Upper bound cost is determined by actual cost from radnom point i to j between start(home_pose) end(active_task).
-    Same start and end idx for all agents
-    """
-
-    def __init__(self, env, p_goal):
-        super().__init__(env, p_goal)
-    
-    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
-        #need to calculate the cost only cnsidering one agent (euclidean distance)
-        if len(self.active_robots_idx) == 1:
-            idx = self.active_robots_idx[0]
-        else:
-            idx = random.choice(self.active_robots_idx)
-        
-        self.chosen_active_robot = idx
-        self.idx1[r_idx], self.idx2[r_idx] = None, None
-
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-        for _ in range(500):
-            start_ind = random.randint(self.start_ind[idx], self.end_ind[idx])
-            end_ind = random.randint(self.start_ind[idx], self.end_ind[idx])
-
-            if end_ind - start_ind > 2:
-                # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-                current_cost = sum(path_segment_costs[start_ind:end_ind])
-                lb_cost = self.env.config_cost(path[start_ind].q, path[end_ind].q)
-
-                if lb_cost < current_cost: 
-                    self.idx1[r_idx] = start_ind
-                    self.idx2[r_idx] = end_ind
-                    break
-
-        if self.idx1[r_idx] is None: 
-            self.idx1[r_idx] = self.start_ind[idx]
-            self.idx2[r_idx] = self.end_ind[idx]
-
-        self.start[r_idx] = path[self.idx1[r_idx]]
-        self.end[r_idx] = path[self.idx2[r_idx]]
-        
-        if self.rotation_to_world_frame( self.start[r_idx], self.end[r_idx], r_idx):
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
-            self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])
-            return True
-        return False   
-class InformedVersion4(Informed):
-    """
-    Globally informed sampling for each agent separately (randomly select start and end config on whole path).
-    Upper bound cost is determined by subtracting a lower bound from the path cost.
-    """
-
-    def __init__(self, env, p_goal):
-        super().__init__(env, p_goal)
-    
-    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
-        #need to calculate the cost only cnsidering one agent (euclidean distance)
-        if len(self.active_robots_idx) == 1:
-            idx = self.active_robots_idx[0]
-        else:
-            idx = random.choice(self.active_robots_idx)
-        
-        self.chosen_active_robot = idx
-        self.idx1[r_idx], self.idx2[r_idx] = None, None
-
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-        for _ in range(500):
-            start_ind = random.randint(self.start_ind[idx], self.end_ind[idx])
-            end_ind = random.randint(self.start_ind[idx], self.end_ind[idx])
-
-            if end_ind - start_ind > 2:
-                # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-                current_cost = sum(path_segment_costs[start_ind:end_ind])
-                lb_cost = self.env.config_cost(path[start_ind].q, path[end_ind].q)
-
-                if lb_cost < current_cost: 
-                    self.idx1[r_idx] = start_ind
-                    self.idx2[r_idx] = end_ind
-                    break
-
-        if self.idx1[r_idx] is None: 
-            self.idx1[r_idx] = self.start_ind[idx]
-            self.idx2[r_idx] = self.end_ind[idx]
-
-        self.start[r_idx] = path[self.idx1[r_idx]]
-        self.end[r_idx] = path[self.idx2[r_idx]]
-        
-        if self.rotation_to_world_frame( self.start[r_idx], self.end[r_idx], r_idx):
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
-            self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])
-            return True
-        return False 
-class InformedVersion5(Informed):
-    """
-    Globally informed sampling for each agent separately (start and goal config are equal to home pose and task).
-    Upper bound cost is determined by the path cost between start and goal node.
-    """
-
-    def __init__(self, env, p_goal):
-        super().__init__(env, p_goal)
-    
-    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
-
-        start_min = min(self.start_ind.values())
-        end_max = max(self.end_ind.values())
-        focal_points = np.array(
-                [path[start_min].q.state(), path[end_max].q.state()], dtype=np.float64
-            )
-        q = type(self.env.get_start_pos()).from_list(q)
-        c_lb = sum(self.env.batch_config_cost(q, focal_points))
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-        cmax = sum(path_segment_costs[start_min:end_max])
-        if c_lb < cmax:
-            return True
-        return False
-    
-    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
-        #need to calculate the cost only cnsidering one agent (euclidean distance)
-        if len(self.active_robots_idx) == 1:
-            idx = self.active_robots_idx[0]
-        else:
-            idx = random.choice(self.active_robots_idx)
-        
-        self.chosen_active_robot = idx
-        self.idx1[r_idx], self.idx2[r_idx] = None, None
-
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-        start_min = min(self.start_ind.values())
-        end_max = max(self.end_ind.values())
-        for _ in range(500):
-            start_ind = random.randint(start_min, end_max)
-            end_ind = random.randint(start_min, end_max)
-
-            if end_ind - start_ind > 2:
-                # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-                current_cost = sum(path_segment_costs[start_ind:end_ind])
-                lb_cost = self.env.config_cost(path[start_ind].q, path[end_ind].q)
-
-                if lb_cost < current_cost: 
-                    self.idx1[r_idx] = start_ind
-                    self.idx2[r_idx] = end_ind
-                    break
-
-        if self.idx1[r_idx] is None: 
-            self.idx1[r_idx] = start_min
-            self.idx2[r_idx] = end_max
-
-        self.start[r_idx] = path[self.idx1[r_idx]]
-        self.end[r_idx] = path[self.idx2[r_idx]]
-        
-        if self.rotation_to_world_frame( self.start[r_idx], self.end[r_idx], r_idx):
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
-            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
-            self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])
-            return True
-        return False 
-class InformedVersion6():
-    """Locally and globally informed sampling"""
-    def __init__(self, 
-                 env: BaseProblem, 
-                 modes: List[Mode], 
-                 locally_informed_sampling: bool):
-        self.env = env
-        self.modes = modes
-        self.conf_type = type(self.env.get_start_pos())
-        self.locally_informed_sampling = locally_informed_sampling
-        
     def sample_unit_ball(self, dim:int) -> NDArray:
         """ 
         Samples a point uniformly from a n-dimensional unit ball centered at the origin.
@@ -1079,40 +471,69 @@ class InformedVersion6():
         x_ball = self.sample_unit_ball(dim)
         return rot @ x_ball + center
 
-    def sample_mode(self,
-        mode_sampling_type: str = "uniform_reached"
-    ) -> Mode:
-        """
-        Selects a mode based on the specified sampling strategy.
+    def lb_cost_from_start(self, g, state):
+        if state.mode not in g.reverse_transition_node_array_cache:
+            g.reverse_transition_node_array_cache[state.mode] = np.array(
+                [g.nodes[id].state.q.q for id in g.reverse_transition_node_ids[state.mode]],
+                dtype=np.float64,
+            )
 
-        Args:
-            mode_sampling_type (str): Mode sampling strategy to use.
+        if state.mode not in g.reverse_transition_node_lb_cache:
+            g.reverse_transition_node_lb_cache[state.mode] = np.array(
+                [
+                    g.nodes[id].forward_cost
+                    for id in g.reverse_transition_node_ids[state.mode]
+                ],
+                dtype=np.float64,
+            )
 
-        Returns:
-            Mode: Sampled mode according to the specified strategy.
-        """
+        costs_to_transitions = self.env.batch_config_cost(
+            state.q,
+            g.reverse_transition_node_array_cache[state.mode],
+        )
 
-        if mode_sampling_type == "uniform_reached":
-            m_rnd = random.choice(self.modes)
-        return m_rnd
-    
-    def can_improve(self, 
-        rnd_state: State, path: List[State], start_index:int, end_index:int, path_segment_costs:NDArray, current_cost
-    ) -> bool:
-        """
-        Determines if a segment of the path can be improved by comparing its cost to a lower-bound estimate.
+        min_cost = np.min(
+            g.reverse_transition_node_lb_cache[state.mode] + costs_to_transitions
+        )
 
-        Args:
-            rnd_state (State): Reference state used for computing lower-bound costs.
-            path (List[State]): Sequence of states representing current path.
-            start_index (int): Index marking the start of the segment to evaluate.
-            end_index (int): Index marking the end of the segment to evaluate.
-            path_segment_costs (NDArray):Costs associated with each segment between consecutive states in the path.
+        return min_cost
 
-        Returns:
-            bool: True if the segment's actual cost exceeds lower-bound estimate (indicating potential improvement); otherwise, False.
-        """
+    def lb_cost_from_goal(self, g, state):
+        if state.mode not in g.transition_node_ids:
+            return np.inf
 
+        if state.mode not in g.transition_node_array_cache:
+            g.transition_node_array_cache[state.mode] = np.array(
+                [g.nodes[id].state.q.q for id in g.transition_node_ids[state.mode]],
+                dtype=np.float64,
+            )
+
+        if state.mode not in g.transition_node_lb_cache:
+            g.transition_node_lb_cache[state.mode] = np.array(
+                [g.nodes[id].lb_cost_to_go for id in g.transition_node_ids[state.mode]],
+                dtype=np.float64,
+            )
+
+        costs_to_transitions = self.env.batch_config_cost(
+            state.q,
+            g.transition_node_array_cache[state.mode],
+        )
+
+        min_cost = np.min(
+            g.transition_node_lb_cache[state.mode] + costs_to_transitions
+        )
+
+        return min_cost
+
+    def can_improve(
+        self, 
+        g,
+        rnd_state: State, 
+        path: List[State], 
+        start_index, 
+        end_index, 
+        path_segment_costs
+        ) -> bool:
         # path_segment_costs = env.batch_config_cost(path[:-1], path[1:])
 
         # compute the local cost
@@ -1134,28 +555,28 @@ class InformedVersion6():
         lb_cost_from_start_index_to_state = self.env.config_cost(
             rnd_state.q, path[start_index].q
         )
-        # if path[start_index].mode != rnd_state.mode:
-        #     start_state = path[start_index]
-        #     lb_cost_from_start_to_state = lb_cost_from_start(rnd_state)
-        #     lb_cost_from_start_to_index = lb_cost_from_start(start_state)
+        if path[start_index].mode != rnd_state.mode and self.informed_with_lb:
+            start_state = path[start_index]
+            lb_cost_from_start_to_state = self.lb_cost_from_start(g, rnd_state)
+            lb_cost_from_start_to_index = self.lb_cost_from_start(g, start_state)
 
-        #     lb_cost_from_start_index_to_state = max(
-        #         (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
-        #         lb_cost_from_start_index_to_state,
-        #     )
+            lb_cost_from_start_index_to_state = max(
+                (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+                lb_cost_from_start_index_to_state,
+            )
 
         lb_cost_from_state_to_end_index = self.env.config_cost(
             rnd_state.q, path[end_index].q
         )
-        # if path[end_index].mode != rnd_state.mode:
-        #     goal_state = path[end_index]
-        #     lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state)
-        #     lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
+        if path[end_index].mode != rnd_state.mode and self.informed_with_lb:
+            goal_state = path[end_index]
+            lb_cost_from_goal_to_state = self.lb_cost_from_goal(g, rnd_state)
+            lb_cost_from_goal_to_index = self.lb_cost_from_goal(g, goal_state)
 
-        #     lb_cost_from_state_to_end_index = max(
-        #         (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
-        #         lb_cost_from_state_to_end_index,
-        #     )
+            lb_cost_from_state_to_end_index = max(
+                (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+                lb_cost_from_state_to_end_index,
+            )
 
         # print("can_imrpove")
 
@@ -1173,14 +594,6 @@ class InformedVersion6():
         #     "lb cost",
         #     lb_cost_from_start_index_to_state + lb_cost_from_state_to_end_index,
         # )
-        # focal_points = np.array(
-        #         [path[start_index].q.state(), path[end_index].q.state()], dtype=np.float64
-        #     )
-        # c = sum(self.env.batch_config_cost(rnd_state.q, focal_points))
-        # if current_cost != path_cost_from_index_to_index:
-        #     print("")
-        # if c != lb_cost_from_start_index_to_state + lb_cost_from_state_to_end_index:
-        #     print("")
 
         if (
             path_cost_from_index_to_index
@@ -1226,37 +639,23 @@ class InformedVersion6():
 
         return list(in_between_modes)
 
-    def generate_informed_samples(self,
-        batch_size:int,
-        path:List[State],
-        mode:Mode,
-        max_attempts_per_sample:int =200,
-        locally_informed_sampling:bool =True,
-        try_direct_sampling:bool =True,
-    ) -> Configuration:
-        """ 
-        Samples configuration from informed set for given mode.
-
-        Args: 
-            batch_size (int): Number of samples to generate in a batch.
-            path (List[State]): Current path used to guide the informed sampling.
-            mode (Mode): Current operational mode.
-            max_attempts_per_sample (int, optional): Maximum number of attempts per sample.
-            locally_informed_sampling (bool, optional): If True, applies locally informed sampling; otherwise globally.
-            try_direct_sampling (bool, optional): If True, attempts direct sampling from the informed set.
-
-        Returns: 
-            Configuration: Configuration within the informed set that satisfies the specified limits for the robots. 
-        """
-        # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
-        path = mrmgp.joint_prm_planner.interpolate_path(path)
+    def generate_samples(
+        self,
+        g, 
+        reached_modes,
+        batch_size,
+        path,
+        max_attempts_per_sample=200,
+        locally_informed_sampling=True,
+        try_direct_sampling=True,
+    ):
         new_samples = []
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-        
+
         in_between_mode_cache = {}
 
         num_attempts = 0
-        while True:
+        while len(new_samples) < batch_size:
             if num_attempts > batch_size:
                 break
 
@@ -1276,6 +675,8 @@ class InformedVersion6():
                         if lb_cost < current_cost:
                             break
 
+                # TODO: we need to sample from the set of all reachable modes here
+                # not only from the modes on the path
                 if (
                     path[start_ind].mode,
                     path[end_ind].mode,
@@ -1287,20 +688,18 @@ class InformedVersion6():
                         (path[start_ind].mode, path[end_ind].mode)
                     ] = in_between_modes
 
+                # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
+
                 m = random.choice(
                     in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
                 )
 
                 # k = random.randint(start_ind, end_ind)
                 # m = path[k].mode
-                # k = random.randint(start_ind, end_ind)
-                # m = path[k].mode
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
-                m = self.sample_mode("uniform_reached")
-            if mode != m:
-                continue
+                m = self.sample_mode(reached_modes, "uniform_reached", True)
 
             # print(m)
 
@@ -1308,7 +707,7 @@ class InformedVersion6():
 
             # tmp = 0
             # for i in range(start_ind, end_ind):
-            #     tmp += env.config_cost(path[i].q, path[i+1].q)
+            #     tmp += self.env.config_cost(path[i].q, path[i+1].q)
 
             # print(current_cost, tmp)
 
@@ -1376,10 +775,11 @@ class InformedVersion6():
                                 else:
                                     precomputed_robot_cost_bounds[i] = current_cost
 
-                            norm = np.linalg.norm(
+                            if (
+                                np.linalg.norm(
                                     path[start_ind].q[i] - path[end_ind].q[i]
                                 )
-                            if (norm < 1e-3 or norm > precomputed_robot_cost_bounds[i]
+                                < 1e-3
                             ):
                                 qr = (
                                     np.random.rand(self.env.robot_dims[r])
@@ -1396,7 +796,7 @@ class InformedVersion6():
                                 # )
 
                                 if i not in precomputed_phs_matrices:
-                                    precomputed_phs_matrices[i] =self.compute_PHS_matrices(
+                                    precomputed_phs_matrices[i] = self.compute_PHS_matrices(
                                         path[start_ind].q[i],
                                         path[end_ind].q[i],
                                         precomputed_robot_cost_bounds[i],
@@ -1405,10 +805,11 @@ class InformedVersion6():
                                 qr = self.sample_phs_with_given_matrices(
                                     *precomputed_phs_matrices[i]
                                 )
+
                                 # plt.figure()
                                 # samples = []
                                 # for _ in range(500):
-                                #     sample = self.sample_phs_with_given_matrices(
+                                #     sample = sample_phs_with_given_matrices(
                                 #         *precomputed_phs_matrices[i]
                                 #     )
                                 #     # sample = samplePHS(np.array([[-1], [0]]), np.array([[1], [0]]), 3)
@@ -1442,12 +843,12 @@ class InformedVersion6():
 
                 q = self.conf_type.from_list(q)
 
-                if sum(self.env.batch_config_cost(q, focal_points)) > current_cost: #gives the same as can_improve...
+                if sum(self.env.batch_config_cost(q, focal_points)) > current_cost:
                     # print(path[start_ind].mode, path[end_ind].mode, m)
                     # print(
                     #     current_cost,
-                    #     env.config_cost(path[start_ind].q, q)
-                    #     + env.config_cost(path[end_ind].q, q),
+                    #     self.self.env.config_cost(path[start_ind].q, q)
+                    #     + self.env.config_cost(path[end_ind].q, q),
                     # )
                     # if can_improve(State(q, m), path, start_ind, end_ind):
                     #     assert False
@@ -1463,18 +864,16 @@ class InformedVersion6():
                     continue
 
                 if self.can_improve(
-                    State(q, m), path, start_ind, end_ind, path_segment_costs, current_cost
+                    g, State(q, m), path, start_ind, end_ind, path_segment_costs
                 ):
-                    # if env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
-                    if m == mode:
-                        return q
+                    # if self.env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
                     new_samples.append(State(q, m))
                     break
 
             # print("inv attempt", obv_inv_attempts)
             # print("coll", sample_in_collision)
 
-        # print(len(new_samples) / num_attempts)
+        print(len(new_samples) / num_attempts)
 
         # fig = plt.figure()
         # ax = fig.add_subplot(projection='3d')
@@ -1488,22 +887,15 @@ class InformedVersion6():
         # ax.scatter([a.q[1][0] for a in new_samples], [a.q[1][1] for a in new_samples])
         # plt.show()
 
-        return 
+        return new_samples
 
-    def can_transition_improve(self, transition: Tuple[Configuration, Mode, Mode], path:List[State], start_index:int, end_index:int) -> bool:
-        """
-        Determines if current path segment can be improved by comparing its actual cost to a lower-bound estimate.
-
-        Args:
-            transition (Tuple[Configuration, Mode, Mode]): Tuple containing a configuration and two mode identifiers, used to construct reference states for lower-bound cost calculations.
-            path (List[State]): A sequence of states representing current path.
-            start_index (int): Index marking the beginning of the segment to evaluate.
-            end_index (int): Index marking the end of the segment to evaluate.
-
-        Returns:
-            bool: True if the segment's actual cost exceeds lower-bound estimate (indicating potential improvement); otherwise, False.
-        """
-
+    def can_transition_improve(
+            self, 
+            g, 
+            transition, 
+            path, 
+            start_index, 
+            end_index):
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
 
         # compute the local cost
@@ -1528,28 +920,28 @@ class InformedVersion6():
         lb_cost_from_start_index_to_state = self.env.config_cost(
             rnd_state_mode_1.q, path[start_index].q
         )
-        # if path[start_index].mode != rnd_state_mode_1.mode:
-        #     start_state = path[start_index]
-        #     lb_cost_from_start_to_state = lb_cost_from_start(rnd_state_mode_1)
-        #     lb_cost_from_start_to_index = lb_cost_from_start(start_state)
+        if path[start_index].mode != rnd_state_mode_1.mode and self.informed_with_lb:
+            start_state = path[start_index]
+            lb_cost_from_start_to_state = self.lb_cost_from_start(g, rnd_state_mode_1)
+            lb_cost_from_start_to_index = self.lb_cost_from_start(g, start_state)
 
-        #     lb_cost_from_start_index_to_state = max(
-        #         (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
-        #         lb_cost_from_start_index_to_state,
-        #     )
+            lb_cost_from_start_index_to_state = max(
+                (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+                lb_cost_from_start_index_to_state,
+            )
 
         lb_cost_from_state_to_end_index = self.env.config_cost(
             rnd_state_mode_2.q, path[end_index].q
         )
-        # if path[end_index].mode != rnd_state_mode_2.mode:
-        #     goal_state = path[end_index]
-        #     lb_cost_from_goal_to_state = lb_cost_from_goal(rnd_state_mode_2)
-        #     lb_cost_from_goal_to_index = lb_cost_from_goal(goal_state)
+        if path[end_index].mode != rnd_state_mode_2.mode and self.informed_with_lb:
+            goal_state = path[end_index]
+            lb_cost_from_goal_to_state = self.lb_cost_from_goal(g, rnd_state_mode_2)
+            lb_cost_from_goal_to_index = self.lb_cost_from_goal(g, goal_state)
 
-        #     lb_cost_from_state_to_end_index = max(
-        #         (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
-        #         lb_cost_from_state_to_end_index,
-        #     )
+            lb_cost_from_state_to_end_index = max(
+                (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+                lb_cost_from_state_to_end_index,
+            )
 
         # print("can_imrpove")
 
@@ -1576,24 +968,15 @@ class InformedVersion6():
 
         return False
 
-    def generate_informed_transitions(self,
-        batch_size:int, path:List[State], active_mode:Mode, locally_informed_sampling:bool =True, max_attempts_per_sample:int =100
-    ) -> Configuration:
-        """ 
-        Samples transition configuration from informed set for the given mode.
-
-        Args: 
-            batch_size (int): Number of samples to generate in a batch.
-            path (List[State]): Current path used to guide the informed sampling.
-            active_mode (Mode): Current operational mode.
-            locally_informed_sampling (bool, optional): If True, applies locally informed sampling; otherwise globally.
-            max_attempts_per_sample (int, optional): Maximum number of attempts per sample.
-
-        Returns: 
-            Configuration: Transiiton configuration within the informed set that satisfies the specified limits for the robots. 
-        """
-        # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
-        path =  mrmgp.joint_prm_planner.interpolate_path(path)
+    def generate_transitions(
+        self,
+        g, 
+        reached_modes,
+        batch_size, 
+        path, 
+        locally_informed_sampling=False, 
+        max_attempts_per_sample=100
+        ):
         if len(self.env.tasks) == 1:
             return []
 
@@ -1603,8 +986,7 @@ class InformedVersion6():
 
         in_between_mode_cache = {}
 
-
-        while True:
+        while len(new_transitions) < batch_size:
             num_attempts += 1
 
             if num_attempts > batch_size:
@@ -1627,6 +1009,7 @@ class InformedVersion6():
 
                         if lb_cost < current_cost:
                             break
+
                 if (
                     path[start_ind].mode,
                     path[end_ind].mode,
@@ -1643,14 +1026,13 @@ class InformedVersion6():
                 mode = random.choice(
                     in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
                 )
+
                 # k = random.randint(start_ind, end_ind)
                 # mode = path[k].mode
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
-                mode = self.sample_mode("uniform_reached")
-            if mode != active_mode:
-                continue
+                mode = self.sample_mode(reached_modes,"uniform_reached", True)
 
             # print(m)
 
@@ -1714,10 +1096,8 @@ class InformedVersion6():
                     next_mode = self.env.get_next_mode(q, mode)
 
                 if self.can_transition_improve(
-                    (q, mode, next_mode), path, start_ind, end_ind
+                    g, (q, mode, next_mode), path, start_ind, end_ind
                 ) and self.env.is_collision_free(q, mode):
-                    if mode == active_mode:
-                        return q
                     new_transitions.append((q, mode, next_mode))
                     break
 
@@ -1735,7 +1115,11 @@ class InformedVersion6():
         # ax.scatter([a[0][1][0] for a in new_transitions], [a[0][1][1] for a in new_transitions])
         # plt.show()
 
-        return 
+        return new_transitions
+
+
+
+
 
 @njit(fastmath=True, cache=True)
 def find_nearest_indices(set_dists:NDArray, r:float) -> NDArray:
@@ -1818,62 +1202,48 @@ def get_index_of_last_mode_appearance_in_path(path_modes, task_id:List[int]) -> 
             last_index = i 
     return last_index
 
-
-
-
-
-class BaseRRTstar(ABC):
+class BaseITstar(ABC):
     """
-    Represents the base class for RRT*-based algorithms, providing core functionalities for motion planning.
+    Represents the base class for IT*-based algorithms, providing core functionalities for motion planning.
     """
-    def __init__(self, 
-                 env:BaseProblem,
-                 ptc: PlannerTerminationCondition, 
-                 general_goal_sampling: bool = False, 
-                 informed_sampling: bool = False, 
-                 informed_sampling_version: int = 6, 
-                 distance_metric: str = 'max_euclidean',
-                 p_goal: float = 0.1, 
-                 p_stay: float = 0.0,
-                 p_uniform: float = 0.2, 
-                 shortcutting: bool = True, 
-                 mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = True,
-                 shortcutting_dim_version:int = 2, 
-                 shortcutting_robot_version:int = 1, 
-                 locally_informed_sampling:bool = True,
-                 remove_redundant_nodes:bool = True,
-                 informed_batch_size: int = 500,
+    def __init__(
+                self,
+                env: BaseProblem,
+                ptc: PlannerTerminationCondition,
+                optimize: bool = True,
+                mode_sampling_type: str = "greedy",
+                distance_metric: str = "euclidean",
+                try_sampling_around_path: bool = True,
+                use_k_nearest: bool = True,
+                try_informed_sampling: bool = True,
+                uniform_batch_size: int = 200,
+                uniform_transition_batch_size: int = 500,
+                informed_batch_size: int = 500,
+                informed_transition_batch_size: int = 500,
+                path_batch_size: int = 500,
+                locally_informed_sampling: bool = True,
+                try_informed_transitions: bool = True,
+                try_shortcutting: bool = True,
+                try_direct_informed_sampling: bool = True
+                ):
 
-                 ):
         self.env = env
         self.ptc = ptc
-        self.general_goal_sampling = general_goal_sampling
-        self.informed_sampling = informed_sampling
-        self.informed_sampling_version = informed_sampling_version
+        self.optimize = optimize
+        self.mode_sampling_type = mode_sampling_type
         self.distance_metric = distance_metric
-        self.p_goal = p_goal
-        self.shortcutting = shortcutting
-        self.mode_sampling = mode_sampling
-        self.p_uniform = p_uniform
-        self.gaussian = gaussian
-        self.p_stay = p_stay
-        self.shortcutting_dim_version = shortcutting_dim_version
-        self.shortcutting_robot_version = shortcutting_robot_version
-        self.locally_informed_sampling = locally_informed_sampling
-        self.remove_redundant_nodes = remove_redundant_nodes
-        self.eta = np.sqrt(sum(self.env.robot_dims.values()))
-        self.operation = Operation()
-        self.start_single_goal= SingleGoal(self.env.start_pos.q)
-        self.modes = [] 
-        self.trees = {}
-        self.transition_node_ids = {}
-        self.informed = {}
-        self.start_time = time.time()
-        self.costs = [] 
-        self.times = []
-        self.all_paths = []
+        self.try_sampling_around_path = try_sampling_around_path
+        self.use_k_nearest = use_k_nearest
+        self.try_informed_sampling = try_informed_sampling
+        self.uniform_batch_size = uniform_batch_size
+        self.uniform_transition_batch_size = uniform_transition_batch_size
         self.informed_batch_size = informed_batch_size
+        self.informed_transition_batch_size = informed_transition_batch_size
+        self.path_batch_size = path_batch_size
+        self.locally_informed_sampling = locally_informed_sampling
+        self.try_informed_transitions = try_informed_transitions
+        self.try_shortcutting = try_shortcutting
+        self.try_direct_informed_sampling = try_direct_informed_sampling
 
     def add_tree(self, 
                  mode: Mode, 
@@ -1900,7 +1270,7 @@ class BaseRRTstar(ABC):
             self.trees[mode] = BidirectionalTree(self.env)
         else:
             raise TypeError("tree_instance must be SingleTree or BidirectionalTree.")
-           
+                         
     def add_new_mode(self, 
                      q:Configuration=None, 
                      mode:Mode=None, 
@@ -2951,33 +2321,33 @@ class BaseRRTstar(ABC):
         
         return np.random.choice(self.modes, p = p)
 
-    def InformedInitialization(self, mode: Mode) -> None: 
-        """
-        Initializes the informed sampling module for the given mode based on the specified version.
+    # def InformedInitialization(self, mode: Mode) -> None: 
+    #     """
+    #     Initializes the informed sampling module for the given mode based on the specified version.
 
-        Args:
-            mode (Mode): Current operational mode.
+    #     Args:
+    #         mode (Mode): Current operational mode.
 
-        Returns:
-            None: This method does not return any value.
-        """
+    #     Returns:
+    #         None: This method does not return any value.
+    #     """
 
-        if not self.informed_sampling:
-            return
-        if self.informed_sampling_version == 0:
-            self.informed[mode] = InformedVersion0(self.env, self.p_goal)
-        if self.informed_sampling_version == 1:
-            self.informed[mode] = InformedVersion1(self.env, self.p_goal)
-        if self.informed_sampling_version == 2:
-            self.informed[mode] = InformedVersion2(self.env, self.p_goal)
-        if self.informed_sampling_version == 3:
-            self.informed[mode] = InformedVersion3(self.env, self.p_goal)
-        if self.informed_sampling_version == 4:
-            self.informed[mode] = InformedVersion4(self.env, self.p_goal)
-        if self.informed_sampling_version == 5:
-            self.informed[mode] = InformedVersion5(self.env, self.p_goal)
-        if self.informed_sampling_version == 6:
-            self.informed[mode] = InformedVersion6(self.env, self.modes, self.locally_informed_sampling)
+    #     if not self.informed_sampling:
+    #         return
+    #     if self.informed_sampling_version == 0:
+    #         self.informed[mode] = InformedVersion0(self.env, self.p_goal)
+    #     if self.informed_sampling_version == 1:
+    #         self.informed[mode] = InformedVersion1(self.env, self.p_goal)
+    #     if self.informed_sampling_version == 2:
+    #         self.informed[mode] = InformedVersion2(self.env, self.p_goal)
+    #     if self.informed_sampling_version == 3:
+    #         self.informed[mode] = InformedVersion3(self.env, self.p_goal)
+    #     if self.informed_sampling_version == 4:
+    #         self.informed[mode] = InformedVersion4(self.env, self.p_goal)
+    #     if self.informed_sampling_version == 5:
+    #         self.informed[mode] = InformedVersion5(self.env, self.p_goal)
+    #     if self.informed_sampling_version == 6:
+    #         self.informed[mode] = InformedVersion6(self.env, self.modes, self.locally_informed_sampling)
 
     def SampleNodeManifold(self, mode:Mode) -> Configuration:
         """
@@ -3375,50 +2745,71 @@ class BaseRRTstar(ABC):
         batch_cost = self.env.batch_config_cost(path_a, path_b)
         batch_cost = np.insert(batch_cost, 0, 0.0)
         discretized_costs = cumulative_sum(batch_cost)
-        return discretized_path, discretized_modes, discretized_costs  
+        return discretized_path, discretized_modes, discretized_costs
 
-    @abstractmethod
-    def UpdateCost(self, mode:Mode, n: Node) -> None:
-        """
-        Updates cost for a given node and all its descendants by propagating the cost change down the tree.
+    def save_data(self, data:dict):
+        import os
+        import pickle
+        # Directory Handling: Ensure directory exists
+        home_dir = os.path.expanduser("~")
+        directory = os.path.join(home_dir, 'multirobot-pathplanning-benchmark/out')
+        dir = os.path.join(directory, 'Analysis')
+        os.makedirs(dir, exist_ok=True)
 
-        Args:
-            mode (Mode): The current operational mode.
-            n (Node): Root node from which the cost update begins.
+        # Determine Next File Number: Use generator expressions for efficiency
+        next_file_number = max(
+            (int(file.split('.')[0]) for file in os.listdir(dir)
+            if file.endswith('.pkl') and file.split('.')[0].isdigit()),
+            default=-1
+        ) + 1
 
-        Returns:
-            None: This method does not return any value.
-        """
-        pass
-    @abstractmethod
-    def PlannerInitialization(self) -> None:
-        """
-        Initializes planner by setting parameters, creating the initial mode, and adding start node.
+        # Save Data as Pickle File
+        filename = os.path.join(dir, f"{next_file_number:04d}.pkl")
+        with open(filename, 'wb') as file:
+            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
-        Args:
-            None
+    # @abstractmethod
+    # def UpdateCost(self, mode:Mode, n: Node) -> None:
+    #     """
+    #     Updates cost for a given node and all its descendants by propagating the cost change down the tree.
 
-        Returns:
-            None: None: This method does not return any value.
-        """
-        pass
-    @abstractmethod
-    def ManageTransition(self, mode:Mode, n_new: Node) -> None:
-        """
-        Checks if new node qualifies as a transition or termination node. 
-        If it does, node is converted into transition node, mode is updated accordingly, 
-        and a new path is generated if node is the lower-bound transition node. 
+    #     Args:
+    #         mode (Mode): The current operational mode.
+    #         n (Node): Root node from which the cost update begins.
 
-        Args:
-            mode (Mode): The current operational mode.
-            n_new (Node): The newly added node to evaluate for triggering a transition or termination.
+    #     Returns:
+    #         None: This method does not return any value.
+    #     """
+    #     pass
+    # @abstractmethod
+    # def PlannerInitialization(self) -> None:
+    #     """
+    #     Initializes planner by setting parameters, creating the initial mode, and adding start node.
 
-        Returns:
-            None: This method does not return any value.
-        """
-        pass
-    @abstractmethod
-    def Plan(self) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    #     Args:
+    #         None
+
+    #     Returns:
+    #         None: None: This method does not return any value.
+    #     """
+    #     pass
+    # @abstractmethod
+    # def ManageTransition(self, mode:Mode, n_new: Node) -> None:
+    #     """
+    #     Checks if new node qualifies as a transition or termination node. 
+    #     If it does, node is converted into transition node, mode is updated accordingly, 
+    #     and a new path is generated if node is the lower-bound transition node. 
+
+    #     Args:
+    #         mode (Mode): The current operational mode.
+    #         n_new (Node): The newly added node to evaluate for triggering a transition or termination.
+
+    #     Returns:
+    #         None: This method does not return any value.
+    #     """
+    #     pass
+    # @abstractmethod
+    # def Plan(self) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         """
         Executes planning process using an RRT* framework.
 

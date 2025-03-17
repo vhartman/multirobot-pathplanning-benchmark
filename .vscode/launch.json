@@ -16,14 +16,33 @@
             }
         },
         {
-            "name": "- analysis ellipse",
+            "name": "- analysis samples",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/examples/run_analysis.py",
             "args": [
-                "ellipse_with_matrices",
+                "samples",
                 "simple_2d",
                 "1"
+                
+
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+         {
+            "name": "- single path html",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/run_postprocess.py",
+            "args": [
+                "--path_filename",
+                "/home/tirza/multirobot-pathplanning-benchmark/out/20250309_152800_planner_demo_simple_2d/locally_informed_prm_shortcutting/0/path_2.json",
+                "--do",
+                "single_path_html"
                 
 
             ],

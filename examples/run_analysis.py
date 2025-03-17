@@ -14,21 +14,102 @@ from analysis_util import(
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
-def ellipse_with_samples(env, env_path, pkl_file):
-
+def process_all_frame_traces_to_figure(env, all_frame_traces, static_traces):
+    # Determine the maximum number of dynamic traces needed
     try:
         task_sequence_text = "Task sequence: " + ", ".join(
         [env.tasks[idx].name for idx in env.sequence]   
     )
     except Exception:
          task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
-
-
-
-
-    # Initialize figure and static elements
+    
     fig = go.Figure()
+    max_dynamic_traces = max(len(frame_traces) for frame_traces in all_frame_traces)
+
+    fig.add_traces(static_traces)
+
+    for _ in range(max_dynamic_traces):
+        fig.add_trace(go.Mesh3d(x=[], y=[], z =[]))
+
     frames = []
+    for idx, frame_traces in enumerate(all_frame_traces):
+        while len(frame_traces) < max_dynamic_traces:
+            frame_traces.append(go.Mesh3d(x=[], y=[], z= []))
+        
+        frame = go.Frame(
+            data=frame_traces,
+            traces=list(range(len(static_traces), len(static_traces) + max_dynamic_traces)),
+            name=f"frame_{idx}"
+        )
+        frames.append(frame)
+
+    fig.frames = frames
+
+    # Animation settings
+    animation_settings = dict(
+        frame=dict(duration=100, redraw=True),  # Sets duration only for when Play is pressed
+        fromcurrent=True,
+        transition=dict(duration=0)
+    )
+
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=20),
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        updatemenus=[dict(
+            type="buttons",
+            buttons=[
+                dict(
+                    label="Play",
+                    method="animate",
+                    args=[None, animation_settings]  # Starts animation only on button press
+                ),
+                dict(
+                    label="Stop",
+                    method="animate",
+                    args=[
+                        [None],  # Stops the animation
+                        dict(frame=dict(duration=0, redraw=True), mode="immediate")
+                    ]
+                )
+            ],
+            direction="left",
+            pad={"t": 10},
+            showactive=False, #set auto-activation to false
+            x=0.1,
+            xanchor="right",
+            y=0,
+            yanchor="top"
+        )],
+        sliders=[dict(
+            active=0,
+            currentvalue=dict(prefix="Frame: "),
+            pad=dict(t=60),
+            steps=[dict(
+                method="animate",
+                args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True), transition=dict(duration=0))],
+                label=str(i)
+            ) for i, f in enumerate(fig.frames)]
+        )],
+        showlegend=True, 
+        annotations=[
+        dict(
+            x=1,  # Centered horizontally
+            y=-0.03,  # Adjusted position below the slider
+            xref="paper",
+            yref="paper",
+            text=task_sequence_text,
+            showarrow=False,
+            font=dict(size=14),
+            align="center",
+        )
+    ]
+    )
+
+    # fig.write_html(output_html)
+    fig.show()
+
+def ellipse_with_samples(env, env_path, pkl_file):
     all_frame_traces = []
     colors = colors_plotly()
     # static traces
@@ -192,103 +273,9 @@ def ellipse_with_samples(env, env_path, pkl_file):
             pass
     all_frame_traces.append(frame_traces)
 
-    # Determine the maximum number of dynamic traces needed
-    max_dynamic_traces = max(len(frame_traces) for frame_traces in all_frame_traces)
-
-    fig.add_traces(static_traces)
-
-    for _ in range(max_dynamic_traces):
-        fig.add_trace(go.Mesh3d(x=[], y=[], z =[]))
-
-    frames = []
-    for idx, frame_traces in enumerate(all_frame_traces):
-        while len(frame_traces) < max_dynamic_traces:
-            frame_traces.append(go.Mesh3d(x=[], y=[], z= []))
-        
-        frame = go.Frame(
-            data=frame_traces,
-            traces=list(range(len(static_traces), len(static_traces) + max_dynamic_traces)),
-            name=f"frame_{idx}"
-        )
-        frames.append(frame)
-
-    fig.frames = frames
-
-    # Animation settings
-    animation_settings = dict(
-        frame=dict(duration=100, redraw=True),  # Sets duration only for when Play is pressed
-        fromcurrent=True,
-        transition=dict(duration=0)
-    )
-
-    fig.update_layout(
-        margin=dict(l=0, r=0, t=0, b=20),
-        paper_bgcolor='white',
-        plot_bgcolor='white',
-        updatemenus=[dict(
-            type="buttons",
-            buttons=[
-                dict(
-                    label="Play",
-                    method="animate",
-                    args=[None, animation_settings]  # Starts animation only on button press
-                ),
-                dict(
-                    label="Stop",
-                    method="animate",
-                    args=[
-                        [None],  # Stops the animation
-                        dict(frame=dict(duration=0, redraw=True), mode="immediate")
-                    ]
-                )
-            ],
-            direction="left",
-            pad={"t": 10},
-            showactive=False, #set auto-activation to false
-            x=0.1,
-            xanchor="right",
-            y=0,
-            yanchor="top"
-        )],
-        sliders=[dict(
-            active=0,
-            currentvalue=dict(prefix="Frame: "),
-            pad=dict(t=60),
-            steps=[dict(
-                method="animate",
-                args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True), transition=dict(duration=0))],
-                label=str(i)
-            ) for i, f in enumerate(fig.frames)]
-        )],
-        showlegend=True, 
-        annotations=[
-        dict(
-            x=1,  # Centered horizontally
-            y=-0.03,  # Adjusted position below the slider
-            xref="paper",
-            yref="paper",
-            text=task_sequence_text,
-            showarrow=False,
-            font=dict(size=14),
-            align="center",
-        )
-    ]
-    )
-
-    # fig.write_html(output_html)
-    fig.show()
+    process_all_frame_traces_to_figure(env, all_frame_traces, static_traces)
 
 def ellipse_with_matrices(env, env_path, pkl_file):
-
-    try:
-        task_sequence_text = "Task sequence: " + ", ".join(
-        [env.tasks[idx].name for idx in env.sequence]   
-    )
-    except Exception:
-         task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
-    # Initialize figure and static elements
-    fig = go.Figure()
-    frames = []
     all_frame_traces = []
     colors = colors_plotly()
     # static traces
@@ -516,93 +503,130 @@ def ellipse_with_matrices(env, env_path, pkl_file):
                     )
     all_frame_traces.append(frame_traces)
 
-    # Determine the maximum number of dynamic traces needed
-    max_dynamic_traces = max(len(frame_traces) for frame_traces in all_frame_traces)
+    process_all_frame_traces_to_figure(env, all_frame_traces, static_traces)
 
-    fig.add_traces(static_traces)
-
-    for _ in range(max_dynamic_traces):
-        fig.add_trace(go.Mesh3d(x=[], y=[], z =[]))
-
-    frames = []
-    for idx, frame_traces in enumerate(all_frame_traces):
-        while len(frame_traces) < max_dynamic_traces:
-            frame_traces.append(go.Mesh3d(x=[], y=[], z= []))
+def samples(env, env_path, pkl_file):
+    all_frame_traces = []
+    colors = colors_plotly()
+    # static traces
+    static_traces = mesh_traces_env(env_path)
+    static_traces.append(
+            go.Mesh3d(
+                x=[0],  # Position outside the visible grid
+                y=[0],  # Position outside the visible grid
+                z=[0],
+                color = "white",
+                name='',
+                legendgroup='',
+                showlegend=True  # This will create a single legend entry for each mode
+            )
+        )
+    try:
+        modes = []
+        mode = env.start_mode
+        time.sleep(10)
+        while True:     
+            modes.append(mode.task_ids)
+            if env.is_terminal_mode(mode):
+                break
+            mode = env.get_next_mode(None, mode)
+        for robot_idx, robot in enumerate(env.robots):
+            legend_group = robot
+            static_traces.append(
+            go.Mesh3d(
+                x=[0],  # X-coordinates of the exterior points
+                y=[0],  # Y-coordinates of the exterior points
+                z=[0] ,  # Flat surface at z = 0
+                color=colors[len(modes)+robot_idx],  # Fill color from the agent's properties
+                opacity=1,  # Transparency level
+                name=legend_group,
+                legendgroup=legend_group,
+                showlegend=True
+            )
+        )
         
-        frame = go.Frame(
-            data=frame_traces,
-            traces=list(range(len(static_traces), len(static_traces) + max_dynamic_traces)),
-            name=f"frame_{idx}"
-        )
-        frames.append(frame)
-
-    fig.frames = frames
-
-    # Animation settings
-    animation_settings = dict(
-        frame=dict(duration=100, redraw=True),  # Sets duration only for when Play is pressed
-        fromcurrent=True,
-        transition=dict(duration=0)
-    )
-
-    fig.update_layout(
-        margin=dict(l=0, r=0, t=0, b=20),
-        paper_bgcolor='white',
-        plot_bgcolor='white',
-        updatemenus=[dict(
-            type="buttons",
-            buttons=[
-                dict(
-                    label="Play",
-                    method="animate",
-                    args=[None, animation_settings]  # Starts animation only on button press
-                ),
-                dict(
-                    label="Stop",
-                    method="animate",
-                    args=[
-                        [None],  # Stops the animation
-                        dict(frame=dict(duration=0, redraw=True), mode="immediate")
-                    ]
+        legends = []
+        for idx in range(len(modes)):
+            name = f"Mode: {modes[idx]}"
+            legends.append(name)
+            static_traces.append(
+                go.Mesh3d(
+                    x=[0],  # Position outside the visible grid
+                    y=[0],  # Position outside the visible grid
+                    z=[0],
+                    name=name,
+                    color = colors[idx],
+                    legendgroup=name,  # Unique legend group for each mode
+                    showlegend=True  # This will create a single legend entry for each mode
                 )
-            ],
-            direction="left",
-            pad={"t": 10},
-            showactive=False, #set auto-activation to false
-            x=0.1,
-            xanchor="right",
-            y=0,
-            yanchor="top"
-        )],
-        sliders=[dict(
-            active=0,
-            currentvalue=dict(prefix="Frame: "),
-            pad=dict(t=60),
-            steps=[dict(
-                method="animate",
-                args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True), transition=dict(duration=0))],
-                label=str(i)
-            ) for i, f in enumerate(fig.frames)]
-        )],
-        showlegend=True, 
-        annotations=[
-        dict(
-            x=1,  # Centered horizontally
-            y=-0.03,  # Adjusted position below the slider
-            xref="paper",
-            yref="paper",
-            text=task_sequence_text,
-            showarrow=False,
-            font=dict(size=14),
-            align="center",
-        )
-    ]
-    )
+            )
+    except Exception:
+        modes = []
+        pass
+        
+    
+    # dynamic_traces
+    with open(pkl_file, 'rb') as file:
+        frame_traces = []
+        data = dill.load(file)
+        try:
+            q_samples = data["q_samples"]
+            modes_samples = data["modes"]
+            try:
+                path = data["path"]
+            except Exception:
+                path = None
+            for robot_idx, robot in enumerate(env.robots):
+                legend_group = robot
+                r_indices = env.robot_idx[robot]
+                for idx, q in enumerate(q_samples):
+                    mode = modes_samples[idx]
+                    mode_idx = modes.index(mode)
+                    if mode_idx is None:
+                        color = colors[robot_idx]
+                    else:
+                        color = colors[mode_idx]
+                    
+                    frame_traces.append(go.Scatter3d(
+                    x=[q[r_indices][0]],
+                    y=[q[r_indices][1]],
+                    z = [1],
+                    mode='markers',
+                    opacity=0.6,
+                    marker=dict(size=5, color=color),
+                    legendgroup = legend_group,
+                    showlegend = False,
+                ))
+                if path is not None:
+                    path_x = [state.q.state()[r_indices][0] for state in path]
+                    path_y = [state.q.state()[r_indices][1] for state in path]
+                    path_z = [1 for _ in path]
+                    frame_traces.append(
+                        go.Scatter3d(
+                            x=path_x, 
+                            y=path_y,
+                            z=path_z,
+                            mode="lines+markers",
+                            line=dict(color=colors[len(modes)+robot_idx], width=6),
+                            marker=dict(
+                                size=3,  # Very small markers
+                                color=colors[len(modes)+robot_idx],  # Match marker color with line
+                                opacity=1
+                            ),
+                            opacity=1,
+                            legendgroup=robot,
+                            showlegend=False
+                        )
+                        )
+        
+        
+        
+        except Exception: 
+            print("Error occured")
+            pass
+    all_frame_traces.append(frame_traces)
 
-    # fig.write_html(output_html)
-    fig.show()
-
-
+    process_all_frame_traces_to_figure(env, all_frame_traces, static_traces)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
@@ -611,7 +635,7 @@ if __name__ == "__main__":
         required=False,
         help="Select the path of the folder to be processed",
     )
-    parser.add_argument("do", nargs="?", choices=["ellipse_with_samples", "ellipse_with_matrices"], default="", help="action to do")
+    parser.add_argument("do", nargs="?", choices=["ellipse_with_samples", "ellipse_with_matrices", "samples"], default="", help="action to do")
     parser.add_argument("env_name", nargs="?", default="", help="name of environment")
     parser.add_argument("seed", nargs="?", default="", help="seed")
 
@@ -642,5 +666,6 @@ if __name__ == "__main__":
     if args.do == "ellipse_with_matrices":
         ellipse_with_matrices(env, env_path, dir_path_pkl) 
        
-    
+    if args.do == "samples":
+        samples(env, env_path, dir_path_pkl) 
 
