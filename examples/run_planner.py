@@ -45,9 +45,8 @@ def main():
         help="Enable optimization (default: True)",
     )
     parser.add_argument("--seed", type=int, default=1, help="Seed")
-    parser.add_argument(
-        "--num_iters", type=int, default=2000, help="Number of iterations"
-    )
+    parser.add_argument("--num_iters", type=int, help="Maximum number of iterations for termination.")
+    parser.add_argument("--max_time", type=float, help="Maximum runtime (in seconds) for termination.")
     parser.add_argument(
         "--planner",
         choices=["joint_prm", "tensor_prm", "prioritized", "rrt_star"],
@@ -111,6 +110,9 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.num_iters is not None and args.max_time is not None:
+        raise ValueError("Cannot specify both num_iters and max_time.")
+
     np.random.seed(args.seed)
     random.seed(args.seed)
 
@@ -120,10 +122,17 @@ def main():
 
     env.show()
 
+    termination_condition = None
+    if args.num_iters is not None:
+        termination_condition = IterationTerminationCondition(args.num_iters)
+    elif args.max_time is not None:
+        termination_condition = RuntimeTerminationCondition(args.max_time)
+
+
     if args.planner == "joint_prm":
         path, info = joint_prm_planner(
             env,
-            IterationTerminationCondition(args.num_iters),
+            ptc=termination_condition,
             optimize=args.optimize,
             mode_sampling_type=None,
             distance_metric=args.distance_metric,
@@ -151,7 +160,7 @@ def main():
     elif args.planner == "rrt_star":
         path, info = RRTstar(
             env,
-            ptc=IterationTerminationCondition(args.num_iters),
+            ptc=termination_condition,
             # general_goal_sampling=options["general_goal_sampling"],
             informed_sampling=True,
             informed_sampling_version=6,
