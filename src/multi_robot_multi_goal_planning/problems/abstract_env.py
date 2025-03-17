@@ -283,6 +283,12 @@ class AbstractEnvironment(BaseProblem):
         randomize_order: bool = True,
         tolerance: float = None,
     ):
+        if resolution is None:
+            resolution = self.collision_resolution
+
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+            
         N = config_dist(q1, q2) / resolution
         N = max(5, N)
 
