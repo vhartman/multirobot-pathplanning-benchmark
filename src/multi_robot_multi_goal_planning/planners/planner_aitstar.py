@@ -683,6 +683,14 @@ class Graph:
             node_ids = np.array(self.node_ids[key])[indices]
 
             best_nodes_arr = self.node_array_cache[key][indices]
+        #     if node_ids.size > 0:
+        #         assert all([(self.nodes[id].state.mode == node.state.mode) for id in node_ids]),  (
+        #     "Not good"
+        # )
+
+
+
+
         if key.task_ids == [0,1]:
             pass
         if key in self.transition_node_ids:
@@ -703,6 +711,11 @@ class Graph:
                 indices_transitions
             ]
             best_transitions_arr = self.transition_node_array_cache[key][indices_transitions]
+
+        #     if transition_node_ids.size > 0:
+        #         assert all([(self.nodes[id].state.mode in node.state.mode.next_modes or self.nodes[id].state.mode == node.state.mode) for id in transition_node_ids]),  (
+        #     "Not good"
+        # )
 
             # assert len(indices_transitions) != 0, (
             #     "didn't find a transition node"
@@ -1103,11 +1116,6 @@ class AITstar:
                     next_mode = None
                 else:
                     next_mode = self.env.get_next_mode(q, mode)
-                    if next_mode.task_ids == [2,2] and mode.task_ids == [2,1]:
-                        pass
-                    if next_mode.task_ids == [2,2] and mode.task_ids == [0,2]:
-                        next_mode.prev_mode = mode
-                        pass
 
                 transitions.append((q, mode, next_mode))
 
@@ -1359,24 +1367,24 @@ class AITstar:
             num_pts_for_removal += original_count - len(
                 self.g.transition_node_ids[mode]
             )
-        # Update elements from g.reverse_transition_node_ids
+        # Update elements from g.reverse_transition_node_ids # doesn't work ffor dependency graph!!!!!!!!
         for mode in list(self.g.reverse_transition_node_ids.keys()):
             original_count = len(self.g.reverse_transition_node_ids[mode])
             if mode == self.env.get_start_mode():
-                num_pts_for_removal += original_count - len(
-                self.g.reverse_transition_node_ids[mode]
-                )
+                num_pts_for_removal += original_count
                 continue
-            
             self.g.reverse_transition_node_ids[mode] = [
-                self.g.nodes[id].transition.id
-                for id in self.g.transition_node_ids[mode.prev_mode]
+                id
+                for id in self.g.reverse_transition_node_ids[mode]
+                if id in self.g.vertices or sum(
+                    self.env.batch_config_cost(self.g.nodes[id].state.q, focal_points)
+                )
+                <= self.current_best_cost
             ]
             num_pts_for_removal += original_count - len(
                 self.g.reverse_transition_node_ids[mode]
             )
-
-
+        
         print(f"Removed {num_pts_for_removal} nodes")
 
     def process_valid_path(self, valid_path):
@@ -1462,6 +1470,9 @@ class AITstar:
         if len(neighbors) == 0:
             return
         # add neighbors to open_queue
+        # assert all([(self.g.nodes[id].state.mode in node.state.mode.next_modes or self.g.nodes[id].state.mode == node.state.mode) for id in neighbors]),  (
+        #     "Not good"
+        # )
         edge_costs = self.g.tot_neighbors_batch_cost_cache[node.id]
         for id, edge_cost in zip(neighbors, edge_costs):
             n = self.g.nodes[id]
@@ -1469,6 +1480,8 @@ class AITstar:
                     f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
                     )
             if n.id in node.blacklist or n.forward_parent == node:
+                continue
+            if node.state.mode in n.state.mode.next_modes:
                 continue
             edge = (node, n)
             if n.id != node.id and edge:
