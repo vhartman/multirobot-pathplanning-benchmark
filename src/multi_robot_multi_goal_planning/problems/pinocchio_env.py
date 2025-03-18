@@ -28,6 +28,8 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 
 import pinocchio as pin
+import hppfcl as fcl
+
 from pinocchio.visualize import MeshcatVisualizer
 
 import time
@@ -40,7 +42,7 @@ class PinocchioEnvironment(BaseProblem):
     collision_resolution: float
 
     def __init__(self, model, collision_model, visual_model):
-        self.limits = None
+        self.limits = np.vstack([model.lowerPositionLimit, model.upperPositionLimit])
         self.start_pos = None
 
         self.model = model
@@ -104,7 +106,6 @@ class PinocchioEnvironment(BaseProblem):
         # Display a robot configuration.
         self.viz.displayVisuals(True)
         self.viz.displayCollisions(True)
-
 
     def display_path(
         self,
@@ -355,7 +356,7 @@ class PinocchioEnvironment(BaseProblem):
     def show_config(self, q, blocking=True):
         if self.viz is None:
             self.setup_visualization()
-        
+
         self.viz.display(q.state())
 
         if blocking:
@@ -391,7 +392,8 @@ class PinocchioEnvironment(BaseProblem):
         )
 
         # update object positions
-        self._set_to_scenegraph(mode.sg)
+        if mode:
+            self._set_to_scenegraph(mode.sg)
 
         pin.updateGeometryPlacements(
             self.model, self.data, self.collision_model, self.geom_data
@@ -407,14 +409,24 @@ class PinocchioEnvironment(BaseProblem):
         # for i in range(len(self.collision_model.collisionPairs)):
         #     in_collision = pin.computeCollision(self.collision_model, self.geom_data, i)
         #     if in_collision:
-        #         # cr = self.geom_data.collisionResults[i]
-        #         # cp = self.collision_model.collisionPairs[i]
-        #         # if cr.isCollision():
-        #         #     print(self.collision_model.geometryObjects[cp.first].name, self.collision_model.geometryObjects[cp.second].name)
-        #         #     print("collision pair:", cp.first,",",cp.second,"- collision:","Yes" if cr.isCollision() else "No")
-        #         # print(q)
-        #         # print('colliding')
-        #         # input("A")
+        #         cr = self.geom_data.collisionResults[i]
+        #         cp = self.collision_model.collisionPairs[i]
+        #         if cr.isCollision():
+        #             print(
+        #                 self.collision_model.geometryObjects[cp.first].name,
+        #                 self.collision_model.geometryObjects[cp.second].name,
+        #             )
+        #             print(
+        #                 "collision pair:",
+        #                 cp.first,
+        #                 ",",
+        #                 cp.second,
+        #                 "- collision:",
+        #                 "Yes" if cr.isCollision() else "No",
+        #             )
+                # print(q)
+                # print('colliding')
+                # input("A")
 
         #         return False
 
@@ -437,7 +449,7 @@ class PinocchioEnvironment(BaseProblem):
             #     #     print("collision pair:", cp.first,",",cp.second,"- collision:","Yes" if cr.isCollision() else "No")
             # # print(q)
             # # print('colliding')
-            # # self.show_config(q_orig, blocking=True)
+            # self.show_config(q_orig, blocking=False)
 
             # if total_penetration > self.collision_tolerance:
             return False
@@ -517,21 +529,6 @@ class PinocchioEnvironment(BaseProblem):
         return True
 
 
-def make_pinocchio_random_env(dim=2):
-    num_agents = 2
-
-    joint_limits = np.ones((2, num_agents * dim)) * 2
-    joint_limits[0, :] = -2
-
-    print(joint_limits)
-
-    start_poses = np.zeros(num_agents * dim)
-    start_poses[0] = -0.8
-    start_poses[dim] = 0.8
-
-    return None
-
-
 def make_pin_middle_obstacle_two_dim_env():
     filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/middle_obstacle_two_agents.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
@@ -544,11 +541,7 @@ def make_pin_middle_obstacle_two_dim_env():
 class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
     def __init__(self, agents_can_rotate=True):
         model, collision_model, visual_model = make_pin_middle_obstacle_two_dim_env()
-
         PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
-
-        self.limits = np.ones((2, 2 * 3)) * 1
-        self.limits[0, :] = -1
 
         self.start_pos = NpConfiguration.from_list([[0, -0.8, 0], [0, 0.8, 0]])
 
@@ -591,7 +584,15 @@ def make_pin_other_hallway_two_dim_env():
 
     ids = range(len(collision_model.geometryObjects))
 
-    env_names = ["table_0", "wall1_0", "wall2_0", "wall3_0", "wall4_0", "obs3_0", "obs4_0"]
+    env_names = [
+        "table_0",
+        "wall1_0",
+        "wall2_0",
+        "wall3_0",
+        "wall4_0",
+        "obs3_0",
+        "obs4_0",
+    ]
 
     for i, id_1 in enumerate(ids):
         for id_2 in ids[i + 1 :]:
@@ -619,15 +620,7 @@ def make_pin_other_hallway_two_dim_env():
 class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
     def __init__(self):
         model, collision_model, visual_model = make_pin_other_hallway_two_dim_env()
-
         PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
-
-        self.limits = np.ones((2, 2 * 3)) * 2
-        self.limits[0, :] = -2
-        self.limits[0, 2] = -3.1415
-        self.limits[1, 2] = 3.1415
-        self.limits[0, 5] = -3.1415
-        self.limits[1, 5] = 3.1415
 
         self.start_pos = NpConfiguration.from_list([[1.5, 0.0, 0], [-1.5, 0.0, 0]])
 
@@ -711,13 +704,6 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
         PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
         self.manipulating_env = True
-
-        self.limits = np.ones((2, 2 * 3)) * 2
-        self.limits[0, :] = -2
-        self.limits[0, 2] = -3.1415
-        self.limits[1, 2] = 3.1415
-        self.limits[0, 5] = -3.1415
-        self.limits[1, 5] = 3.1415
 
         self.start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
 
@@ -813,7 +799,7 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
         BaseModeLogic.__init__(self)
 
         self.start_mode.sg = self.initial_sg
-    
+
     def make_start_mode(self):
         start_mode = super().make_start_mode()
         start_mode.sg = self.initial_sg
@@ -865,13 +851,6 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
         PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
         self.manipulating_env = True
-
-        self.limits = np.ones((2, 2 * 3)) * 1
-        self.limits[0, :] = -1
-        self.limits[0, 2] = -3.1415
-        self.limits[1, 2] = 3.1415
-        self.limits[0, 5] = -3.1415
-        self.limits[1, 5] = 3.1415
 
         self.start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
 
@@ -949,3 +928,212 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
         start_mode = super().make_start_mode()
         start_mode.sg = self.initial_sg
         return start_mode
+
+
+def add_namespace_prefix_to_models(model, collision_model, visual_model, namespace):
+    # Rename geometry objects in collision model:
+    for geom in collision_model.geometryObjects:
+        geom.name = f"{namespace}/{geom.name}"
+
+    # Rename geometry objects in visual model:
+    for geom in visual_model.geometryObjects:
+        geom.name = f"{namespace}/{geom.name}"
+
+    # Rename frames in model:
+    for f in model.frames:
+        f.name = f"{namespace}/{f.name}"
+
+    # Rename joints in model:
+    for k in range(len(model.names)):
+        model.names[k] = f"{namespace}/{model.names[k]}"
+
+
+def make_dual_ur5_waypoint_env():
+    # urdf_path = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
+    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/pin-venv/hello-world/ur5e/ur5e.urdf"
+
+    robot_1, r1_coll, r1_viz = pin.buildModelsFromUrdf(urdf_path)
+    robot_2, r2_coll, r2_viz = pin.buildModelsFromUrdf(urdf_path)
+
+    # robot_3, r3_coll, r3_viz = pin.buildModelsFromUrdf(urdf_path)
+    # robot_4, r4_coll, r4_viz = pin.buildModelsFromUrdf(urdf_path)
+
+    add_namespace_prefix_to_models(robot_1, r1_coll, r1_viz, "ur5_1")
+    add_namespace_prefix_to_models(robot_2, r2_coll, r2_viz, "ur5_2")
+    # add_namespace_prefix_to_models(robot_3, r3_coll, r3_viz, "ur5_3")
+    # add_namespace_prefix_to_models(robot_4, r4_coll, r4_viz, "ur5_4")
+
+    # Create a composite model
+    world = pin.Model()
+    geom_model = pin.GeometryModel()
+
+    # geom1_name = "table"
+    # shape1 = fcl.Box(4, 4, 0.01)
+    # geom1_obj = pin.GeometryObject(geom1_name, 0, pin.SE3.Identity(), shape1)
+    # geom1_obj.meshColor = np.ones(4)
+    # geom_model.addGeometryObject(geom1_obj)
+
+    joint_placement1 = pin.SE3(
+        np.eye(3), np.array([0.0, 0.0, 0.01])
+    )  # Base of first UR5
+    joint_placement2 = pin.SE3(
+        np.eye(3), np.array([0.5, 0.0, 0.01])
+    )  # Base of second UR5
+    # joint_placement3 = pin.SE3(
+    #     np.eye(3), np.array([0.0, 1.0, 0.01])
+    # )  # Base of second UR5
+    # joint_placement4 = pin.SE3(
+    #     np.eye(3), np.array([1.0, 1.0, 0.01])
+    # )  # Base of second UR5
+
+    # Add UR5 models to the world model
+    model, visual_model = pin.appendModel(
+        world,
+        robot_1,
+        geom_model,
+        r1_viz,
+        0,
+        joint_placement1,
+    )
+    model, collision_model = pin.appendModel(
+        world,
+        robot_1,
+        geom_model,
+        r1_coll,
+        0,
+        joint_placement1,
+    )
+
+    tmp = model.copy()
+
+    model, visual_model = pin.appendModel(
+        tmp,
+        robot_2,
+        visual_model,
+        r2_viz,
+        0,
+        joint_placement2,
+    )
+    model, collision_model = pin.appendModel(
+        tmp,
+        robot_2,
+        collision_model,
+        r2_coll,
+        0,
+        joint_placement2,
+    )
+
+    collision_model.addAllCollisionPairs()
+
+    ids = range(len(collision_model.geometryObjects))
+    for i, id_1 in enumerate(ids):
+        for id_2 in ids[i + 1 :]:
+            #  = geomModel.getGeometryId(geomModelB.geometryObjects[cp.second].name);
+            # if (
+            #     "ur5_1" in collision_model.geometryObjects[id_1].name
+            #     and "ur5_1" in collision_model.geometryObjects[id_2].name
+            #     and abs(id_1 - id_2) < 4
+            # ) or (
+            #     "ur5_2" in collision_model.geometryObjects[id_1].name
+            #     and "ur5_2" in collision_model.geometryObjects[id_2].name
+            #     and abs(id_1 - id_2) < 4
+            # ):
+            if (
+                "base_link" in collision_model.geometryObjects[id_1].name
+                or id_1+1 == id_2
+            ):
+                # print(
+                #     "remoiving",
+                #     id_1,
+                #     id_2,
+                #     collision_model.geometryObjects[id_1].name,
+                #     collision_model.geometryObjects[id_2].name,
+                # )
+                collision_model.removeCollisionPair(pin.CollisionPair(id_1, id_2))
+
+    model.lowerPositionLimit[0] = -3.14
+    model.upperPositionLimit[0] = 3.14
+
+    model.lowerPositionLimit[1] = -3.14
+    model.upperPositionLimit[1] = 0
+
+    model.lowerPositionLimit[6] = -3.14
+    model.upperPositionLimit[6] = 3.14
+
+    model.lowerPositionLimit[7] = -3.14
+    model.upperPositionLimit[7] = 0
+
+    return model, collision_model, visual_model
+
+
+class rai_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
+    def sample_random_valid_state(self):
+        while True:
+            q = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
+            q = NpConfiguration.from_list([q[:6], q[6:]])
+            if self.is_collision_free(q, None):
+                return q
+
+    def __init__(self):
+        model, collision_model, visual_model = make_dual_ur5_waypoint_env()
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
+
+        print(self.limits)
+
+        q_rnd_start = self.sample_random_valid_state()
+        self.start_pos = q_rnd_start
+
+        self.robots = ["a1", "a2"]
+
+        self.robot_idx = {"a1": [i for i in range(6)], "a2": [i + 6 for i in range(6)]}
+        self.robot_dims = {"a1": 6, "a2": 6}
+
+        self.tasks = []
+        self.sequence = []
+
+        q_inter = self.sample_random_valid_state()
+        q_goal = self.sample_random_valid_state()
+
+        print(q_rnd_start.state())
+        print(q_inter.state())
+        print(q_goal.state())
+
+        self.tasks = [
+            # r1
+            Task(
+                ["a1"],
+                SingleGoal(q_inter[0]),
+            ),
+            # r2
+            Task(
+                ["a2"],
+                SingleGoal(q_inter[1]),
+            ),
+            # terminal mode
+            Task(
+                ["a1", "a2"],
+                SingleGoal(q_goal.state()),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_goal"
+        self.tasks[1].name = "a2_goal"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a2_goal", "a1_goal", "terminal"]
+        )
+
+        # permute goals, but only the ones that ware waypoints, not the final configuration
+
+        # append terminal task
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+
+        # for i in range(100):
+        #     q = q_rnd_start[0] + (q_inter[0] - q_rnd_start[0]) / 100 * i
+        #     q = NpConfiguration.from_list([q, np.zeros(6)])
+        #     self.show_config(q)
