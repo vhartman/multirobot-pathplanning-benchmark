@@ -50,29 +50,7 @@ class PinocchioEnvironment(BaseProblem):
         self.data = self.model.createData()
         self.geom_data = pin.GeometryData(self.collision_model)
 
-        self.viz = MeshcatVisualizer(
-            self.model, self.collision_model, self.visual_model
-        )
-
-        try:
-            self.viz.initViewer(open=False)
-            self.viz.viewer["/Background"].set_property("top_color", [0.9, 0.9, 0.9])
-            self.viz.viewer["/Background"].set_property("bottom_color", [0.9, 0.9, 0.9])
-
-            self.viz.viewer["/Grid"].set_property("color", [1, 0, 0, 0.2])
-        except ImportError as err:
-            print(
-                "Error while initializing the viewer. It seems you should install Python meshcat"
-            )
-            print(err)
-            sys.exit(0)
-
-        # Load the robot in the viewer.
-        self.viz.loadViewerModel()
-
-        # Display a robot configuration.
-        self.viz.displayVisuals(True)
-        self.viz.displayCollisions(True)
+        self.viz = None
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
@@ -101,6 +79,32 @@ class PinocchioEnvironment(BaseProblem):
         mat = np.zeros((n, n)) - self.collision_tolerance
 
         self.geom_data.setSecurityMargins(self.collision_model, mat)
+
+    def setup_visualization(self):
+        self.viz = MeshcatVisualizer(
+            self.model, self.collision_model, self.visual_model
+        )
+
+        try:
+            self.viz.initViewer(open=False)
+            self.viz.viewer["/Background"].set_property("top_color", [0.9, 0.9, 0.9])
+            self.viz.viewer["/Background"].set_property("bottom_color", [0.9, 0.9, 0.9])
+
+            self.viz.viewer["/Grid"].set_property("color", [1, 0, 0, 0.2])
+        except ImportError as err:
+            print(
+                "Error while initializing the viewer. It seems you should install Python meshcat"
+            )
+            print(err)
+            sys.exit(0)
+
+        # Load the robot in the viewer.
+        self.viz.loadViewerModel()
+
+        # Display a robot configuration.
+        self.viz.displayVisuals(True)
+        self.viz.displayCollisions(True)
+
 
     def display_path(
         self,
@@ -340,12 +344,18 @@ class PinocchioEnvironment(BaseProblem):
         return sg
 
     def show(self, blocking=True):
+        if self.viz is None:
+            self.setup_visualization()
+
         self.viz.display()
 
         if blocking:
             input("Press Enter to continue...")
 
     def show_config(self, q, blocking=True):
+        if self.viz is None:
+            self.setup_visualization()
+        
         self.viz.display(q.state())
 
         if blocking:
@@ -676,13 +686,13 @@ def make_2d_handover():
             ):
                 continue
 
-            print(
-                "adding ",
-                id_1,
-                id_2,
-                collision_model.geometryObjects[id_1].name,
-                collision_model.geometryObjects[id_2].name,
-            )
+            # print(
+            #     "adding ",
+            #     id_1,
+            #     id_2,
+            #     collision_model.geometryObjects[id_1].name,
+            #     collision_model.geometryObjects[id_2].name,
+            # )
             collision_model.addCollisionPair(pin.CollisionPair(id_1, id_2))
 
     return model, collision_model, visual_model
@@ -830,13 +840,13 @@ def make_piano():
             ):
                 continue
 
-            print(
-                "adding ",
-                id_1,
-                id_2,
-                collision_model.geometryObjects[id_1].name,
-                collision_model.geometryObjects[id_2].name,
-            )
+            # print(
+            #     "adding ",
+            #     id_1,
+            #     id_2,
+            #     collision_model.geometryObjects[id_1].name,
+            #     collision_model.geometryObjects[id_2].name,
+            # )
             collision_model.addCollisionPair(pin.CollisionPair(id_1, id_2))
 
     return model, collision_model, visual_model
