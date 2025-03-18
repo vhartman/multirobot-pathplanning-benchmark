@@ -591,7 +591,7 @@ def make_pin_other_hallway_two_dim_env():
 
     ids = range(len(collision_model.geometryObjects))
 
-    env_names = ["wall1", "wall2", "wall3", "wall4", "obs3", "obs4"]
+    env_names = ["table_0", "wall1_0", "wall2_0", "wall3_0", "wall4_0", "obs3_0", "obs4_0"]
 
     for i, id_1 in enumerate(ids):
         for id_2 in ids[i + 1 :]:
@@ -601,6 +601,13 @@ def make_pin_other_hallway_two_dim_env():
                 and collision_model.geometryObjects[id_2].name in env_names
             ):
                 continue
+            # print(
+            #     "adding ",
+            #     id_1,
+            #     id_2,
+            #     collision_model.geometryObjects[id_1].name,
+            #     collision_model.geometryObjects[id_2].name,
+            # )
 
             collision_model.addCollisionPair(pin.CollisionPair(id_1, id_2))
 

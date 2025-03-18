@@ -82,7 +82,7 @@ def visualize_modes(env: rai_env, export_images: bool = False):
         m = env.get_next_mode(type(env.get_start_pos()).from_list(q), m)
 
 
-def benchmark_collision_checking(env: rai_env, N=5000):
+def benchmark_collision_checking(env: rai_env, N=10000):
     conf_type = type(env.get_start_pos())
 
     def sample_next_mode(mode: Mode):
