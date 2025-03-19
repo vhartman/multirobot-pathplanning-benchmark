@@ -7,7 +7,11 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Union, List, Dict, Callable
 from numpy.typing import NDArray
 from numba import njit
-from scipy.stats.qmc import Halton
+
+try:
+    from scipy.stats.qmc import Halton
+except ImportError:
+    Halton = None
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
@@ -1822,8 +1826,11 @@ class BaseRRTstar(ABC):
             total_volume *= np.prod(lims[1] - lims[0])  # Compute volume product
 
         # Generate Halton sequence samples
-        halton_sampler = Halton(self.d, scramble=False)
-        halton_samples = halton_sampler.random(num_samples)  # Scaled [0,1] samples
+        try:
+            halton_sampler = Halton(self.d, scramble=False)
+            halton_samples = halton_sampler.random(num_samples)  # Scaled [0,1] samples
+        except ImportError:
+            halton_samples = np.random.rand(num_samples, self.d)  # Fallback to uniform random sampling
 
         # Map Halton samples to configuration space
         free_samples = 0
