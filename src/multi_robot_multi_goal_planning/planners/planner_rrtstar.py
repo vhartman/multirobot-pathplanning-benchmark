@@ -76,7 +76,7 @@ class RRTstar(BaseRRTstar):
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
     
-    def Plan(self) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def Plan(self, optimize:bool=True) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0
         self.PlannerInitialization()
         while True:
@@ -103,8 +103,8 @@ class RRTstar(BaseRRTstar):
                     self.UpdateCost(active_mode, n_new) 
                 self.ManageTransition(active_mode, n_new)
 
-            # if self.operation.init_sol and True:
-            #     break
+            if not optimize and self.operation.init_sol:
+                break
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break

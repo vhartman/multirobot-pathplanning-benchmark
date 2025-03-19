@@ -3128,7 +3128,7 @@ class BaseRRTstar(ABC):
         """
         pass
     @abstractmethod
-    def Plan(self) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def Plan(self, optimize:bool=True) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         """
         Executes planning process using an RRT* framework.
 

@@ -173,7 +173,7 @@ def main():
             locally_informed_sampling=True,
             informed_batch_size=300,
             # gaussian=options["gaussian"]
-        ).Plan()
+        ).Plan(args.optimize)
 
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
