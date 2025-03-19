@@ -74,7 +74,7 @@ def visualize_modes(env: rai_env, export_images: bool = False):
             env.show(False)
             env.C.view_savePng("./z.img/")
         else:
-            env.show()
+            env.show_config(type(env.get_start_pos()).from_list(q))
 
         if env.is_terminal_mode(m):
             break
@@ -138,6 +138,7 @@ def benchmark_collision_checking(env: rai_env, N=10000):
                 return next_mode
 
     # create list of modes that we can reach
+    print("Make mode list")
     reachable_modes = [env.get_start_mode()]
     max_iter = 500
     for _ in range(max_iter):
@@ -148,6 +149,7 @@ def benchmark_collision_checking(env: rai_env, N=10000):
             reachable_modes.append(next_mode)
 
     # actually do the benchmarking
+    print("Starting benchmark")
     start = time.time()
     for _ in range(N):
         q = []
