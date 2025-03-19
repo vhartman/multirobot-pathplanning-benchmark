@@ -682,6 +682,52 @@ class BaseProblem(ABC):
     #     self.collision_tolerance = 0.01
     #     self.collision_resolution = 0.01
 
+    def serialize_tasks(self):
+        #open file
+        task_list = []
+
+        for t in self.tasks:
+            task_data = {
+                "name": t.name,
+                "robots": t.robots,
+                "goal": t.goal.goal.tolist() if isinstance(t.goal, SingleGoal) else t.goal.sample(None).tolist(),
+                "type": t.type,
+                "frames": t.frames,
+                "side_effect": t.side_effect,
+            }
+
+            task_list.append(task_data)
+
+        return task_list
+                
+    def export_tasks(self, path):
+        task_list = self.serialize_tasks()
+        with open(path, "w") as file:
+            for task_data in task_list:
+                file.write(f"{task_data}\n")
+
+    def import_tasks(self, path):
+        with open(path, "r") as file:
+            task_list = []
+            for line in file:
+                task_data = eval(line.strip())  # Convert string representation back to dictionary
+                goal = (
+                    SingleGoal(np.array(task_data["goal"]))
+                    if task_data["goal"] is not None
+                    else None
+                )
+                task = Task(
+                    robots=task_data["robots"],
+                    goal=goal,
+                    type=task_data["type"],
+                    frames=task_data["frames"],
+                    side_effect=task_data["side_effect"],
+                )
+                task.name = task_data["name"]
+                task_list.append(task)
+
+            self.tasks = task_list
+
     # visualization
     @abstractmethod
     def show_config(self, q: Configuration):

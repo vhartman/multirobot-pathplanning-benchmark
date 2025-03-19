@@ -21,7 +21,8 @@ def get_all_environments():
         "pin_other_hallway": lambda: pe.pinocchio_other_hallway(),
         "pin_2d_handover": lambda: pe.pinocchio_handover_two_dim(),
         "pin_piano": lambda: pe.pinocchio_piano_two_dim(),
-        "pin_random_ur5": lambda: pe.rai_random_dual_ur5_env(),
+        "pin_random_ur5": lambda: pe.pin_random_dual_ur5_env(),
+        "pin_reorientation": lambda: pe.pin_reorientation_dual_ur5_env(),
 
         # 2D Environments
         "piano": lambda: re.rai_two_dim_simple_manip(),

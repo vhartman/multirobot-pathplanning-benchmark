@@ -30,6 +30,8 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 import pinocchio as pin
 import hppfcl as fcl
 
+import json
+
 from pinocchio.visualize import MeshcatVisualizer
 
 import time
@@ -65,9 +67,11 @@ class PinocchioEnvironment(BaseProblem):
 
         for i, id_1 in enumerate(ids):
             obj_name = collision_model.geometryObjects[id_1].name
-            if obj_name[:3] == "obj":
+            if obj_name[:3] == "obj" or obj_name[:3] == "box":
                 parent = collision_model.geometryObjects[id_1].parentJoint
                 placement = collision_model.geometryObjects[id_1].placement
+                # print(obj_name)
+                # print(placement)
                 self.initial_sg[id_1] = (
                     "table_0",
                     parent,
@@ -80,7 +84,7 @@ class PinocchioEnvironment(BaseProblem):
         n = len(self.collision_model.geometryObjects)
         mat = np.zeros((n, n)) - self.collision_tolerance
 
-        # self.geom_data.setSecurityMargins(self.collision_model, mat)
+        self.geom_data.setSecurityMargins(self.collision_model, mat)
 
     def setup_visualization(self):
         self.viz = MeshcatVisualizer(
@@ -164,13 +168,15 @@ class PinocchioEnvironment(BaseProblem):
         for frame_id, (parent, parent_joint, pose, placement) in sg.items():
             # placement = pin.SE3(np.frombuffer(pose).reshape(4, 4))
 
+            # print(frame_id)
+
             if (
                 frame_id in self.current_scenegraph
                 and parent == self.current_scenegraph[frame_id][0]
                 and parent == "table_0"
                 and self.current_scenegraph[frame_id][2] == pose
             ):
-                # print("A")
+            #     # print("A")
                 continue
 
             frame_pose = self.data.oMi[parent_joint].act(placement)
@@ -262,7 +268,7 @@ class PinocchioEnvironment(BaseProblem):
 
                 new_parent_frame_abs_pose = (
                     self.data.oMi[new_parent_joint]
-                    * self.collision_model.geometryObjects[new_parent_id].placement
+                    # * self.collision_model.geometryObjects[new_parent_id].placement
                 )
                 old_parent_frame_abs_pose = self.data.oMi[obj_parent_joint]
                 # obj_parent_joint_id = self.collision_model.geometryObjects[new_parent_id].parentJoint
@@ -990,8 +996,8 @@ def make_dual_ur5_waypoint_env():
         ]
     )
 
-    joint_placement1 = pin.SE3(R, np.array([-0.5, 0.0, 0.01]))  # Base of first UR5
-    joint_placement2 = pin.SE3(R, np.array([0.5, 0.0, 0.01]))  # Base of second UR5
+    joint_placement1 = pin.SE3(R, np.array([0.5, -0.5, 0.01]))  # Base of first UR5
+    joint_placement2 = pin.SE3(R, np.array([-0.5, -0.5, 0.01]))  # Base of second UR5
     # joint_placement3 = pin.SE3(
     #     np.eye(3), np.array([0.0, 1.0, 0.01])
     # )  # Base of second UR5
@@ -1036,19 +1042,6 @@ def make_dual_ur5_waypoint_env():
         joint_placement2,
     )
 
-    # add boxes
-    for i in range(3):
-        for j in range(3):
-            geom1_name = f"box{i}{j}"
-            shape1 = fcl.Box(0.05, 0.05, 0.05)
-            placement = pin.SE3.Identity()
-            placement.translation = np.array([i * 0.1, j * 0.1, 0.05])
-            geom1_obj = pin.GeometryObject(geom1_name, 0, placement, shape1)
-            color = np.random.rand(4)
-            color[3] = 1
-            geom1_obj.meshColor = color
-            collision_model.addGeometryObject(geom1_obj)
-
     collision_model.addAllCollisionPairs()
 
     ids = range(len(collision_model.geometryObjects))
@@ -1064,6 +1057,11 @@ def make_dual_ur5_waypoint_env():
             #     and "ur5_2" in collision_model.geometryObjects[id_2].name
             #     and abs(id_1 - id_2) < 4
             # ):
+            if (
+                "box" in collision_model.geometryObjects[id_1].name
+                or "box" in collision_model.geometryObjects[id_2].name
+            ):
+                continue
             if (
                 (
                     "base_link" in collision_model.geometryObjects[id_1].name
@@ -1085,8 +1083,9 @@ def make_dual_ur5_waypoint_env():
                     collision_model.geometryObjects[id_1].name,
                     collision_model.geometryObjects[id_2].name,
                     model.names[collision_model.geometryObjects[id_1].parentJoint],
-                    model.names[model.parents[collision_model.geometryObjects[id_2].parentJoint]],
-
+                    model.names[
+                        model.parents[collision_model.geometryObjects[id_2].parentJoint]
+                    ],
                 )
                 collision_model.removeCollisionPair(pin.CollisionPair(id_1, id_2))
 
@@ -1105,7 +1104,7 @@ def make_dual_ur5_waypoint_env():
     return model, collision_model, visual_model
 
 
-class rai_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
+class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
     def sample_random_valid_state(self):
         while True:
             q = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
@@ -1171,9 +1170,24 @@ class rai_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
         self.collision_tolerance = 0.01
 
-        q = np.array([0, -2, 1.0, -1, -1.57, 1])
+        q = np.array(
+            [
+                0.19570329,
+                -1.32450056,
+                1.46959289,
+                -0.73982317,
+                -0.24690964,
+                1.87430268,
+                -0.85429199,
+                -1.37153235,
+                1.39270263,
+                -1.65086109,
+                -1.59343625,
+                0.62897099,
+            ]
+        )
 
-        q = NpConfiguration.from_list([q, q])
+        q = NpConfiguration.from_list([q[:6], q[6:]])
         self.show_config(q)
 
         # for j in range(6):
@@ -1185,3 +1199,298 @@ class rai_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         #         q[j] = low[j] + (up[j] - low[j]) / 100 * i
         #         q = NpConfiguration.from_list([q[:6], np.zeros(6)])
         #         self.show_config(q)
+
+
+def make_dual_ur5_reorientation_env():
+    # urdf_path = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_primitives.urdf"
+    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/foam-venv/foam/test.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/foam-venv/foam/test_primitives.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained_coll_primitives.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/pin-venv/hello-world/ur5e/ur5e.urdf"
+
+    robot_1, r1_coll, r1_viz = pin.buildModelsFromUrdf(urdf_path)
+    robot_2, r2_coll, r2_viz = pin.buildModelsFromUrdf(urdf_path)
+
+    # robot_3, r3_coll, r3_viz = pin.buildModelsFromUrdf(urdf_path)
+    # robot_4, r4_coll, r4_viz = pin.buildModelsFromUrdf(urdf_path)
+
+    add_namespace_prefix_to_models(robot_1, r1_coll, r1_viz, "ur5_1")
+    add_namespace_prefix_to_models(robot_2, r2_coll, r2_viz, "ur5_2")
+    # add_namespace_prefix_to_models(robot_3, r3_coll, r3_viz, "ur5_3")
+    # add_namespace_prefix_to_models(robot_4, r4_coll, r4_viz, "ur5_4")
+
+    # Create a composite model
+    world = pin.Model()
+    geom_model = pin.GeometryModel()
+
+    geom1_name = "table"
+    shape1 = fcl.Box(4, 4, 0.01)
+    geom1_obj = pin.GeometryObject(geom1_name, 0, pin.SE3.Identity(), shape1)
+    geom1_obj.meshColor = np.ones(4)
+    geom_model.addGeometryObject(geom1_obj)
+
+    # rotation matrix around the z-axis
+    theta = np.pi / 2  # Example: 45 degrees rotation around z-axis
+    R = np.array(
+        [
+            [np.cos(theta), -np.sin(theta), 0],
+            [np.sin(theta), np.cos(theta), 0],
+            [0, 0, 1],
+        ]
+    )
+
+    joint_placement1 = pin.SE3(R, np.array([0.5, -0.5, 0.0]))  # Base of first UR5
+    joint_placement2 = pin.SE3(R, np.array([-0.5, -0.5, 0.0]))  # Base of second UR5
+    # joint_placement3 = pin.SE3(
+    #     np.eye(3), np.array([0.0, 1.0, 0.01])
+    # )  # Base of second UR5
+    # joint_placement4 = pin.SE3(
+    #     np.eye(3), np.array([1.0, 1.0, 0.01])
+    # )  # Base of second UR5
+
+    # Add UR5 models to the world model
+    model, visual_model = pin.appendModel(
+        world,
+        robot_1,
+        geom_model,
+        r1_viz,
+        0,
+        joint_placement1,
+    )
+    model, collision_model = pin.appendModel(
+        world,
+        robot_1,
+        geom_model,
+        r1_coll,
+        0,
+        joint_placement1,
+    )
+
+    tmp = model.copy()
+
+    model, visual_model = pin.appendModel(
+        tmp,
+        robot_2,
+        visual_model,
+        r2_viz,
+        0,
+        joint_placement2,
+    )
+    model, collision_model = pin.appendModel(
+        tmp,
+        robot_2,
+        collision_model,
+        r2_coll,
+        0,
+        joint_placement2,
+    )
+
+    # Read the file back and print the data
+
+    def quaternion_to_rotation_matrix(q):
+        """
+        Convert a quaternion to a 3x3 rotation matrix.
+
+        Parameters:
+        q : array-like, shape (4,)
+            Quaternion in form [w, x, y, z] where w is the real part
+            and x, y, z are the imaginary parts.
+
+        Returns:
+        R : ndarray, shape (3, 3)
+            Rotation matrix.
+        """
+        # Normalize the quaternion
+        q = np.array(q)
+        q = q / np.linalg.norm(q)
+
+        w, x, y, z = q
+
+        # Calculate rotation matrix elements
+        R = np.array(
+            [
+                [
+                    1 - 2 * y * y - 2 * z * z,
+                    2 * x * y - 2 * z * w,
+                    2 * x * z + 2 * y * w,
+                ],
+                [
+                    2 * x * y + 2 * z * w,
+                    1 - 2 * x * x - 2 * z * z,
+                    2 * y * z - 2 * x * w,
+                ],
+                [
+                    2 * x * z - 2 * y * w,
+                    2 * y * z + 2 * x * w,
+                    1 - 2 * x * x - 2 * y * y,
+                ],
+            ]
+        )
+
+        return R
+
+    # add boxes
+    transformation_z_180 = pin.SE3(
+        np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+    )
+
+    with open("src/multi_robot_multi_goal_planning/problems/desc/box_poses.json", "r") as f:
+        loaded_box_data = json.load(f)
+        print("Loaded box data:")
+        for box in loaded_box_data:
+            print(f"Position: {box['position']}, Quaternion: {box['quaternion']}")
+
+            geom1_name = box['name']
+            shape1 = fcl.Box(0.1, 0.1, 0.1)
+            placement = pin.SE3.Identity()
+            placement.translation = np.array(box["position"])
+            placement.translation[2] += 0.048
+            placement.rotation = quaternion_to_rotation_matrix(box["quaternion"])
+            geom1_obj = pin.GeometryObject(geom1_name, 0, transformation_z_180 * placement, shape1)
+            color = np.random.rand(4)
+            color[3] = 1
+            geom1_obj.meshColor = color
+            collision_model.addGeometryObject(geom1_obj)
+
+    collision_model.addAllCollisionPairs()
+
+    ids = range(len(collision_model.geometryObjects))
+    for i, id_1 in enumerate(ids):
+        for id_2 in ids[i + 1 :]:
+            #  = geomModel.getGeometryId(geomModelB.geometryObjects[cp.second].name);
+            # if (
+            #     "ur5_1" in collision_model.geometryObjects[id_1].name
+            #     and "ur5_1" in collision_model.geometryObjects[id_2].name
+            #     and abs(id_1 - id_2) < 4
+            # ) or (
+            #     "ur5_2" in collision_model.geometryObjects[id_1].name
+            #     and "ur5_2" in collision_model.geometryObjects[id_2].name
+            #     and abs(id_1 - id_2) < 4
+            # ):
+            if (
+                "box" in collision_model.geometryObjects[id_1].name
+                or "box" in collision_model.geometryObjects[id_2].name
+            ):
+                continue
+            if (
+                (
+                    "base_link" in collision_model.geometryObjects[id_1].name
+                    or id_1 + 1 == id_2
+                )
+                or (
+                    collision_model.geometryObjects[id_1].parentJoint
+                    == collision_model.geometryObjects[id_2].parentJoint
+                )
+                or (
+                    collision_model.geometryObjects[id_1].parentJoint
+                    == model.parents[collision_model.geometryObjects[id_2].parentJoint]
+                )
+            ):
+                # print(
+                #     "removing",
+                #     id_1,
+                #     id_2,
+                #     collision_model.geometryObjects[id_1].name,
+                #     collision_model.geometryObjects[id_2].name,
+                #     model.names[collision_model.geometryObjects[id_1].parentJoint],
+                #     model.names[
+                #         model.parents[collision_model.geometryObjects[id_2].parentJoint]
+                #     ],
+                # )
+                collision_model.removeCollisionPair(pin.CollisionPair(id_1, id_2))
+
+    model.lowerPositionLimit[0] = -3.14
+    model.upperPositionLimit[0] = 3.14
+
+    model.lowerPositionLimit[1] = -3.14
+    model.upperPositionLimit[1] = 0
+
+    model.lowerPositionLimit[6] = -3.14
+    model.upperPositionLimit[6] = 3.14
+
+    model.lowerPositionLimit[7] = -3.14
+    model.upperPositionLimit[7] = 0
+
+    return model, collision_model, visual_model
+
+
+class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
+    def sample_random_valid_state(self):
+        while True:
+            q = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
+            q = NpConfiguration.from_list([q[:6], q[6:]])
+            if self.is_collision_free(q, None):
+                return q
+
+    def __init__(self):
+        model, collision_model, visual_model = make_dual_ur5_reorientation_env()
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
+
+        # self.show(blocking=True)
+
+        print(self.limits)
+
+        # q_rnd_start = self.sample_random_valid_state()
+        # self.start_pos = q_rnd_start
+        q = np.array([0, -2, 1.0, -1, -1.57, 1])
+
+        self.start_pos = NpConfiguration.from_list([q, q])
+
+        self.robots = ["a1_", "a2_"]
+
+        self.robot_idx = {
+            "a1_": [i for i in range(6)],
+            "a2_": [i + 6 for i in range(6)],
+        }
+        self.robot_dims = {"a1_": 6, "a2_": 6}
+
+        self.tasks = []
+        self.sequence = []
+
+
+        self.import_tasks("src/multi_robot_multi_goal_planning/problems/desc/box_reorientation_tasks.txt")
+        self.sequence = self._make_sequence_from_names(
+            [
+                "a2_pick_box0_0",
+                "a2_handover_box0_1",
+                "a2_place_box0_2",
+                "a1_pick_box1_3",
+                "a1_handover_box1_4",
+                "a1_place_box1_5",
+                "a1_pick_box2_6",
+                "a1_handover_box2_7",
+                "a1_place_box2_8",
+                "a2_pick_box3_9",
+                "a2_handover_box3_10",
+                "a2_place_box3_11",
+                "a2_pick_box4_12",
+                "a2_handover_box4_13",
+                "a2_place_box4_14",
+                "a2_pick_box5_15",
+                "a2_place_box5_16",
+                # "a1_pick_box6_17",
+                # "a1_handover_box6_18",
+                # "a1_place_box6_19",
+                "a1_pick_box7_20",
+                "a1_handover_box7_21",
+                "a1_place_box7_22",
+                "a2_pick_box8_23",
+                "a2_handover_box8_24",
+                "a2_place_box8_25",
+                "terminal",
+            ]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+
+        self.manipulating_env = True
+
+    def make_start_mode(self):
+        start_mode = super().make_start_mode()
+        start_mode.sg = self.initial_sg
+        return start_mode
