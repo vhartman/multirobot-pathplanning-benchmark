@@ -80,7 +80,7 @@ class PinocchioEnvironment(BaseProblem):
         n = len(self.collision_model.geometryObjects)
         mat = np.zeros((n, n)) - self.collision_tolerance
 
-        self.geom_data.setSecurityMargins(self.collision_model, mat)
+        # self.geom_data.setSecurityMargins(self.collision_model, mat)
 
     def setup_visualization(self):
         self.viz = MeshcatVisualizer(
@@ -424,15 +424,16 @@ class PinocchioEnvironment(BaseProblem):
         #                 "- collision:",
         #                 "Yes" if cr.isCollision() else "No",
         #             )
-                # print(q)
-                # print('colliding')
-                # input("A")
+        # print(q)
+        # print('colliding')
+        # input("A")
 
         #         return False
 
         # return True
 
         in_collision = pin.computeCollisions(self.collision_model, self.geom_data, True)
+        # in_collision = pin.computeCollisionsparallel(self.collision_model, self.geom_data, True)
 
         if in_collision:
             # pin.computeDistances(self.collision_model, self.geom_data)
@@ -449,7 +450,7 @@ class PinocchioEnvironment(BaseProblem):
             #     #     print("collision pair:", cp.first,",",cp.second,"- collision:","Yes" if cr.isCollision() else "No")
             # # print(q)
             # # print('colliding')
-            # self.show_config(q_orig, blocking=False)
+            # self.show_config(q_orig, blocking=True)
 
             # if total_penetration > self.collision_tolerance:
             return False
@@ -950,7 +951,12 @@ def add_namespace_prefix_to_models(model, collision_model, visual_model, namespa
 
 def make_dual_ur5_waypoint_env():
     # urdf_path = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
-    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
+    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained.urdf"
+    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_primitives.urdf"
+    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/foam-venv/foam/test.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/foam-venv/foam/test_primitives.urdf"
+    # urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained_coll_primitives.urdf"
     # urdf_path = "/home/valentin/git/postdoc/pin-venv/hello-world/ur5e/ur5e.urdf"
 
     robot_1, r1_coll, r1_viz = pin.buildModelsFromUrdf(urdf_path)
@@ -968,18 +974,24 @@ def make_dual_ur5_waypoint_env():
     world = pin.Model()
     geom_model = pin.GeometryModel()
 
-    # geom1_name = "table"
-    # shape1 = fcl.Box(4, 4, 0.01)
-    # geom1_obj = pin.GeometryObject(geom1_name, 0, pin.SE3.Identity(), shape1)
-    # geom1_obj.meshColor = np.ones(4)
-    # geom_model.addGeometryObject(geom1_obj)
+    geom1_name = "table"
+    shape1 = fcl.Box(4, 4, 0.01)
+    geom1_obj = pin.GeometryObject(geom1_name, 0, pin.SE3.Identity(), shape1)
+    geom1_obj.meshColor = np.ones(4)
+    geom_model.addGeometryObject(geom1_obj)
 
-    joint_placement1 = pin.SE3(
-        np.eye(3), np.array([0.0, 0.0, 0.01])
-    )  # Base of first UR5
-    joint_placement2 = pin.SE3(
-        np.eye(3), np.array([0.5, 0.0, 0.01])
-    )  # Base of second UR5
+    # rotation matrix around the z-axis
+    theta = np.pi / 2  # Example: 45 degrees rotation around z-axis
+    R = np.array(
+        [
+            [np.cos(theta), -np.sin(theta), 0],
+            [np.sin(theta), np.cos(theta), 0],
+            [0, 0, 1],
+        ]
+    )
+
+    joint_placement1 = pin.SE3(R, np.array([-0.5, 0.0, 0.01]))  # Base of first UR5
+    joint_placement2 = pin.SE3(R, np.array([0.5, 0.0, 0.01]))  # Base of second UR5
     # joint_placement3 = pin.SE3(
     #     np.eye(3), np.array([0.0, 1.0, 0.01])
     # )  # Base of second UR5
@@ -1024,6 +1036,19 @@ def make_dual_ur5_waypoint_env():
         joint_placement2,
     )
 
+    # add boxes
+    for i in range(3):
+        for j in range(3):
+            geom1_name = f"box{i}{j}"
+            shape1 = fcl.Box(0.05, 0.05, 0.05)
+            placement = pin.SE3.Identity()
+            placement.translation = np.array([i * 0.1, j * 0.1, 0.05])
+            geom1_obj = pin.GeometryObject(geom1_name, 0, placement, shape1)
+            color = np.random.rand(4)
+            color[3] = 1
+            geom1_obj.meshColor = color
+            collision_model.addGeometryObject(geom1_obj)
+
     collision_model.addAllCollisionPairs()
 
     ids = range(len(collision_model.geometryObjects))
@@ -1040,16 +1065,29 @@ def make_dual_ur5_waypoint_env():
             #     and abs(id_1 - id_2) < 4
             # ):
             if (
-                "base_link" in collision_model.geometryObjects[id_1].name
-                or id_1+1 == id_2
+                (
+                    "base_link" in collision_model.geometryObjects[id_1].name
+                    or id_1 + 1 == id_2
+                )
+                or (
+                    collision_model.geometryObjects[id_1].parentJoint
+                    == collision_model.geometryObjects[id_2].parentJoint
+                )
+                or (
+                    collision_model.geometryObjects[id_1].parentJoint
+                    == model.parents[collision_model.geometryObjects[id_2].parentJoint]
+                )
             ):
-                # print(
-                #     "remoiving",
-                #     id_1,
-                #     id_2,
-                #     collision_model.geometryObjects[id_1].name,
-                #     collision_model.geometryObjects[id_2].name,
-                # )
+                print(
+                    "removing",
+                    id_1,
+                    id_2,
+                    collision_model.geometryObjects[id_1].name,
+                    collision_model.geometryObjects[id_2].name,
+                    model.names[collision_model.geometryObjects[id_1].parentJoint],
+                    model.names[model.parents[collision_model.geometryObjects[id_2].parentJoint]],
+
+                )
                 collision_model.removeCollisionPair(pin.CollisionPair(id_1, id_2))
 
     model.lowerPositionLimit[0] = -3.14
@@ -1133,7 +1171,17 @@ class rai_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
         self.collision_tolerance = 0.01
 
-        # for i in range(100):
-        #     q = q_rnd_start[0] + (q_inter[0] - q_rnd_start[0]) / 100 * i
-        #     q = NpConfiguration.from_list([q, np.zeros(6)])
-        #     self.show_config(q)
+        q = np.array([0, -2, 1.0, -1, -1.57, 1])
+
+        q = NpConfiguration.from_list([q, q])
+        self.show_config(q)
+
+        # for j in range(6):
+        #     low = model.lowerPositionLimit
+        #     up = model.upperPositionLimit
+
+        #     for i in range(100):
+        #         q = np.zeros(6)
+        #         q[j] = low[j] + (up[j] - low[j]) / 100 * i
+        #         q = NpConfiguration.from_list([q[:6], np.zeros(6)])
+        #         self.show_config(q)

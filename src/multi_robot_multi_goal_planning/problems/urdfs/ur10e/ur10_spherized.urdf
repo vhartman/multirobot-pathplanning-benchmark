@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="ur10e_robot" path="assets/ur10e/ur10e_primitives.urdf">
+	<transmission name="shoulder_pan_trans">
+		<type>transmission_interface/SimpleTransmission</type>
+		<joint name="shoulder_pan_joint">
+			<hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+		</joint>
+		<actuator name="shoulder_pan_motor">
+			<mechanicalReduction>1</mechanicalReduction>
+		</actuator>
+	</transmission>
+	<transmission name="shoulder_lift_trans">
+		<type>transmission_interface/SimpleTransmission</type>
+		<joint name="shoulder_lift_joint">
+			<hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+		</joint>
+		<actuator name="shoulder_lift_motor">
+			<mechanicalReduction>1</mechanicalReduction>
+		</actuator>
+	</transmission>
+	<transmission name="elbow_trans">
+		<type>transmission_interface/SimpleTransmission</type>
+		<joint name="elbow_joint">
+			<hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+		</joint>
+		<actuator name="elbow_motor">
+			<mechanicalReduction>1</mechanicalReduction>
+		</actuator>
+	</transmission>
+	<transmission name="wrist_1_trans">
+		<type>transmission_interface/SimpleTransmission</type>
+		<joint name="wrist_1_joint">
+			<hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+		</joint>
+		<actuator name="wrist_1_motor">
+			<mechanicalReduction>1</mechanicalReduction>
+		</actuator>
+	</transmission>
+	<transmission name="wrist_2_trans">
+		<type>transmission_interface/SimpleTransmission</type>
+		<joint name="wrist_2_joint">
+			<hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+		</joint>
+		<actuator name="wrist_2_motor">
+			<mechanicalReduction>1</mechanicalReduction>
+		</actuator>
+	</transmission>
+	<transmission name="wrist_3_trans">
+		<type>transmission_interface/SimpleTransmission</type>
+		<joint name="wrist_3_joint">
+			<hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+		</joint>
+		<actuator name="wrist_3_motor">
+			<mechanicalReduction>1</mechanicalReduction>
+		</actuator>
+	</transmission>
+	<link name="base_link"></link>
+	<link name="base_link_inertia">
+		<visual>
+			<origin rpy="0 0 3.141592653589793" xyz="0 0 0"></origin>
+			<geometry>
+				<mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/base.dae"></mesh>
+			</geometry>
+			<material name="LightGrey">
+				<color rgba="0.7 0.7 0.7 1.0"></color>
+			</material>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.113017"></sphere>
+			</geometry>
+			<origin xyz="-3e-06 1e-06 0.09482600000000002" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.113013"></sphere>
+			</geometry>
+			<origin xyz="1e-06 2e-06 0.20517700000000003" rpy="0 0 0"></origin>
+		</collision>
+		<inertial>
+			<mass value="4.0"></mass>
+			<origin rpy="0 0 0" xyz="0 0 0"></origin>
+			<inertia ixx="0.0061063308908" ixy="0.0" ixz="0.0" iyy="0.0061063308908" iyz="0.0" izz="0.01125"></inertia>
+		</inertial>
+	</link>
+	<link name="shoulder_link">
+		<visual>
+			<origin rpy="0 0 3.141592653589793" xyz="0 0 0"></origin>
+			<geometry>
+				<mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/shoulder.dae"></mesh>
+			</geometry>
+			<material name="LightGrey">
+				<color rgba="0.7 0.7 0.7 1.0"></color>
+			</material>
+		</visual>
+		<inertial>
+			<mass value="7.778"></mass>
+			<origin rpy="0 0 0" xyz="0 0 0"></origin>
+			<inertia ixx="0.03147431257693659" ixy="0.0" ixz="0.0" iyy="0.03147431257693659" iyz="0.0" izz="0.021875624999999996"></inertia>
+		</inertial>
+	</link>
+	<link name="upper_arm_link">
+		<visual>
+			<origin rpy="1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0.1762"></origin>
+			<geometry>
+				<mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/upperarm.dae"></mesh>
+			</geometry>
+			<material name="LightGrey">
+				<color rgba="0.7 0.7 0.7 1.0"></color>
+			</material>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.090867"></sphere>
+			</geometry>
+			<origin xyz="-0.28439400000000004 0.0 0.176197" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.093298"></sphere>
+			</geometry>
+			<origin xyz="-0.19161100000000003 0.0 0.176204" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.089024"></sphere>
+			</geometry>
+			<origin xyz="-0.502081 2e-06 0.176198" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.093827"></sphere>
+			</geometry>
+			<origin xyz="-0.09394000000000002 0.0 0.17621" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.113022"></sphere>
+			</geometry>
+			<origin xyz="-0.555164 1e-06 0.176201" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.087752"></sphere>
+			</geometry>
+			<origin xyz="-0.363559 0.0 0.176186" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.113021"></sphere>
+			</geometry>
+			<origin xyz="-0.004827000000000026 2e-06 0.176209" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.086022"></sphere>
+			</geometry>
+			<origin xyz="-0.431388 -8e-06 0.176182" rpy="0 0 0"></origin>
+		</collision>
+		<inertial>
+			<mass value="12.93"></mass>
+			<origin rpy="0 1.5707963267948966 0" xyz="-0.306 0.0 0.175"></origin>
+			<inertia ixx="0.42175380379841093" ixy="0.0" ixz="0.0" iyy="0.42175380379841093" iyz="0.0" izz="0.03636562499999999"></inertia>
+		</inertial>
+	</link>
+	<link name="forearm_link">
+		<visual>
+			<origin rpy="1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0.0393"></origin>
+			<geometry>
+				<mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/forearm.dae"></mesh>
+			</geometry>
+			<material name="LightGrey">
+				<color rgba="0.7 0.7 0.7 1.0"></color>
+			</material>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.064763"></sphere>
+			</geometry>
+			<origin xyz="-0.5701309999999999 -2e-06 0.039298" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.084764"></sphere>
+			</geometry>
+			<origin xyz="-0.029872999999999983 1e-06 0.039301" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.081695"></sphere>
+			</geometry>
+			<origin xyz="-0.336713 1e-06 0.039546000000000005" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.08262"></sphere>
+			</geometry>
+			<origin xyz="-0.45245199999999997 -2e-06 0.039071" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.077564"></sphere>
+			</geometry>
+			<origin xyz="-0.140949 -2e-06 0.039047" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.072952"></sphere>
+			</geometry>
+			<origin xyz="-0.23342999999999997 -1e-06 0.039305" rpy="0 0 0"></origin>
+		</collision>
+		<inertial>
+			<mass value="3.87"></mass>
+			<origin rpy="0 1.5707963267948966 0" xyz="-0.285775 0.0 0.0393"></origin>
+			<inertia ixx="0.11079302548902206" ixy="0.0" ixz="0.0" iyy="0.11079302548902206" iyz="0.0" izz="0.010884375"></inertia>
+		</inertial>
+	</link>
+	<link name="wrist_1_link">
+		<visual>
+			<origin rpy="1.5707963267948966 0 0" xyz="0 0 -0.135"></origin>
+			<geometry>
+				<mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/wrist1.dae"></mesh>
+			</geometry>
+			<material name="LightGrey">
+				<color rgba="0.7 0.7 0.7 1.0"></color>
+			</material>
+		</visual>
+		<inertial>
+			<mass value="1.96"></mass>
+			<origin rpy="0 0 0" xyz="0 0 0"></origin>
+			<inertia ixx="0.005108247956699999" ixy="0.0" ixz="0.0" iyy="0.005108247956699999" iyz="0.0" izz="0.005512499999999999"></inertia>
+		</inertial>
+	</link>
+	<link name="wrist_2_link">
+		<visual>
+			<origin rpy="0 0 0" xyz="0 0 -0.12"></origin>
+			<geometry>
+				<mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/wrist2.dae"></mesh>
+			</geometry>
+			<material name="LightGrey">
+				<color rgba="0.7 0.7 0.7 1.0"></color>
+			</material>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.05433"></sphere>
+			</geometry>
+			<origin xyz="0.0 0.0 -0.12" rpy="0 0 0"></origin>
+		</collision>
+		<inertial>
+			<mass value="1.96"></mass>
+			<origin rpy="0 0 0" xyz="0 0 0"></origin>
+			<inertia ixx="0.005108247956699999" ixy="0.0" ixz="0.0" iyy="0.005108247956699999" iyz="0.0" izz="0.005512499999999999"></inertia>
+		</inertial>
+	</link>
+	<link name="wrist_3_link">
+		<visual>
+			<origin rpy="1.5707963267948966 0 0" xyz="0 0 -0.1168"></origin>
+			<geometry>
+				<mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/wrist3.dae"></mesh>
+			</geometry>
+			<material name="LightGrey">
+				<color rgba="0.7 0.7 0.7 1.0"></color>
+			</material>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.063571"></sphere>
+			</geometry>
+			<origin xyz="1e-06 -1e-06 -0.12689899999999998" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.063575"></sphere>
+			</geometry>
+			<origin xyz="1e-06 0.0 -0.06670699999999999" rpy="0 0 0"></origin>
+		</collision>
+		<inertial>
+			<mass value="0.202"></mass>
+			<origin rpy="0 0 0" xyz="0.0 0.0 -0.025"></origin>
+			<inertia ixx="0.00014434577559500002" ixy="0.0" ixz="0.0" iyy="0.00014434577559500002" iyz="0.0" izz="0.00020452500000000002"></inertia>
+		</inertial>
+	</link>
+	<link name="base"></link>
+	<link name="flange"></link>
+	<link name="tool0"></link>
+	<joint name="base_link-base_link_inertia" type="fixed">
+		<parent link="base_link"></parent>
+		<child link="base_link_inertia"></child>
+		<origin rpy="0 0 3.141592653589793" xyz="0 0 0"></origin>
+	</joint>
+	<joint name="shoulder_pan_joint" type="revolute">
+		<parent link="base_link_inertia"></parent>
+		<child link="shoulder_link"></child>
+		<origin rpy="0 0 0" xyz="0 0 0.1807"></origin>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="330.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="2.0943951023931953"></limit>
+		<dynamics damping="0" friction="0"></dynamics>
+	</joint>
+	<joint name="shoulder_lift_joint" type="revolute">
+		<parent link="shoulder_link"></parent>
+		<child link="upper_arm_link"></child>
+		<origin rpy="1.570796327 0 0" xyz="0 0 0"></origin>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="330.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="2.0943951023931953"></limit>
+		<dynamics damping="0" friction="0"></dynamics>
+	</joint>
+	<joint name="elbow_joint" type="revolute">
+		<parent link="upper_arm_link"></parent>
+		<child link="forearm_link"></child>
+		<origin rpy="0 0 0" xyz="-0.6127 0 0"></origin>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="150.0" lower="-3.141592653589793" upper="3.141592653589793" velocity="3.141592653589793"></limit>
+		<dynamics damping="0" friction="0"></dynamics>
+	</joint>
+	<joint name="wrist_1_joint" type="revolute">
+		<parent link="forearm_link"></parent>
+		<child link="wrist_1_link"></child>
+		<origin rpy="0 0 0" xyz="-0.57155 0 0.17415"></origin>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="56.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.141592653589793"></limit>
+		<dynamics damping="0" friction="0"></dynamics>
+	</joint>
+	<joint name="wrist_2_joint" type="revolute">
+		<parent link="wrist_1_link"></parent>
+		<child link="wrist_2_link"></child>
+		<origin rpy="1.570796327 0 0" xyz="0 -0.11985 -2.458164590756244e-11"></origin>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="56.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.141592653589793"></limit>
+		<dynamics damping="0" friction="0"></dynamics>
+	</joint>
+	<joint name="wrist_3_joint" type="revolute">
+		<parent link="wrist_2_link"></parent>
+		<child link="wrist_3_link"></child>
+		<origin rpy="1.570796326589793 3.141592653589793 3.141592653589793" xyz="0 0.11655 -2.390480459346185e-11"></origin>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="56.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.141592653589793"></limit>
+		<dynamics damping="0" friction="0"></dynamics>
+	</joint>
+	<joint name="base_link-base_fixed_joint" type="fixed">
+		<origin rpy="0 0 3.141592653589793" xyz="0 0 0"></origin>
+		<parent link="base_link"></parent>
+		<child link="base"></child>
+	</joint>
+	<joint name="wrist_3-flange" type="fixed">
+		<parent link="wrist_3_link"></parent>
+		<child link="flange"></child>
+		<origin rpy="0 -1.5707963267948966 -1.5707963267948966" xyz="0 0 0"></origin>
+	</joint>
+	<joint name="flange-tool0" type="fixed">
+		<origin rpy="1.5707963267948966 0 1.5707963267948966" xyz="0 0 0"></origin>
+		<parent link="flange"></parent>
+		<child link="tool0"></child>
+	</joint>
+</robot>
