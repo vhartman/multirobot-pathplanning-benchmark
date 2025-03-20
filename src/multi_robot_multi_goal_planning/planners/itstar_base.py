@@ -1,47 +1,52 @@
 import numpy as np
-import time as time
-import math as math
 import random
-import multi_robot_multi_goal_planning.planners as mrmgp
-from abc import ABC, abstractmethod
-from typing import List, Dict, Tuple, Optional, Set, ClassVar, Any, Union 
-from numpy.typing import NDArray
-from numba import njit
-from scipy.stats.qmc import Halton
 
+from typing import (
+    List,
+    Dict,
+    Tuple,
+    Optional,
+    Set,
+    ClassVar,
+    Any,
+    Union,
+    Generic,
+    TypeVar,
+)
+from numpy.typing import NDArray
+
+import heapq
+import time
+import math
+from abc import ABC, abstractmethod
+from itertools import chain
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
     Mode,
-    SingleGoal
 )
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
-    NpConfiguration,
-    config_dist,
-    batch_config_dist
 )
+from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate_path
+
+from multi_robot_multi_goal_planning.planners import shortcutting
 
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
+from multi_robot_multi_goal_planning.planners.rrtstar_base import find_nearest_indices
+from multi_robot_multi_goal_planning.planners.rrtstar_base import save_data
 
-
+T = TypeVar("T")
 class Operation:
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
     def __init__(self):
-        
-        self.path = []
-        self.path_modes = []
-        self.path_nodes = None
-        self.cost = np.inf
-        self.cost_change = np.inf
-        self.init_sol = False
-        self.costs = np.empty(10000000, dtype=np.float64)
-        self.paths_inter = []
-        self.path_shortcutting = []
     
-    def get_cost(self, idx:int) -> float:
+        self.lb_costs_to_go_expanded = np.empty(10000000, dtype=np.float64)
+        self.forward_costs = np.empty(10000000, dtype=np.float64)
+
+    def get_lb_cost_to_go_expanded(self, idx:int) -> float:
         """
         Returns cost of node with the specified index.
 
@@ -50,68 +55,19 @@ class Operation:
 
         Returns: 
             float: Cost associated with the specified node."""
-        return self.costs[idx]
+        return self.lb_costs_to_go_expanded[idx]
+    
+    def get_forward_cost(self, idx:int) -> float:
+        """
+        Returns cost of node with the specified index.
 
-class Node:
-    __slots__ = [
-        "state",
-        "lb_cost_to_goal",
-        "lb_cost_from_start",
-        "is_transition",
-        "neighbors",
-        "whitelist",
-        "blacklist",
-        "id",
-    ]
+        Args: 
+            idx (int): Index of node whose cost is to be retrieved.
 
-    # Class attribute
-    id_counter: ClassVar[int] = 0
-
-    # Instance attributes
-    state: State
-    lb_cost_to_goal: Optional[float]
-    lb_cost_from_start: Optional[float]
-    is_transition: bool
-    neighbors: List[int]
-    whitelist: Set[int]
-    blacklist: Set[int]
-    id: int
-
-    def __init__(self, state: State, is_transition: bool = False) -> None:
-        self.state = state
-        self.lb_cost_to_goal = np.inf
-        self.lb_cost_from_start = np.inf
-
-        self.is_transition = is_transition
-
-        self.neighbors = []
-
-        self.whitelist = set()
-        self.blacklist = set()
-
-        self.id = Node.id_counter
-        Node.id_counter += 1
-        self.parent = None  
-        self.children = []
-
-    def __lt__(self, other: "Node") -> bool:
-        return self.id < other.id
-
-    def __hash__(self) -> int:
-        return self.id
-
-
-
-
-
-
-class BaseTree(ABC):
-    """
-    Represents base structure for different tree implementations.
-    """
-    def __init__(self):
-        pass
-
+        Returns: 
+            float: Cost associated with the specified node."""
+        return self.forward_costs[idx]
+    
     def _resize_array(self, array: NDArray, current_capacity: int, new_capacity: int) -> NDArray:
         """
         Dynamically resizes a NumPy array to a new capacity.
@@ -145,235 +101,727 @@ class BaseTree(ABC):
             return self._resize_array(array, current_size, required_capacity * 2)  # Double the size
 
         return array
+
+class Node:
+    __slots__ = [
+        "state",
+        "forward_parent",
+        "reverse_parent",
+        "forward_children",
+        "reverse_children",
+        "forward_cost_to_parent",
+        "reverse_cost_to_parent",
+        "lb_cost_to_go",
+        "is_transition",
+        "transition",
+        "forward_fam",
+        "reverse_fam",
+        "whitelist",
+        "blacklist",
+        "id",
+        "operation"
+    ]
+
+    # Class attribute
+    id_counter: ClassVar[int] = 0
+
+    # Instance attributes
+    state: State
+    forward_parent: Optional["Node"]
+    reverse_parent: Optional["Node"]
+    forward_children: List[int]
+    reverse_children: List[int]
+    forward_cost_to_parent: float
+    reverse_cost_to_parent: float
+    lb_cost_to_go: Optional[
+        float
+    ]  # cost to go to the goal from the node when it was connected the last time
+    # lb_cost_to_go_expanded: Optional[
+    #     float
+    # ]  # cost to go to the goal from the node when it was expanded the last time
+    is_transition: bool
+    transition: Optional["Node"]
+    whitelist: Set[int]
+    blacklist: Set[int]
+    forward_fam: Set[int] 
+    reverse_fam: Set[int]
+    id: int
+    operation:Operation
+
+    def __init__(self, operation: Operation, state: State, is_transition: bool = False) -> None:
+        self.state = state
+        # self.forward_cost = np.inf
+        self.forward_parent = None
+        self.reverse_parent = None
+        self.forward_children = []  # children in the forward tree
+        self.reverse_children = []  # children in the reverse tree
+        self.forward_cost_to_parent = np.inf
+        self.reverse_cost_to_parent = np.inf
+        self.lb_cost_to_go = np.inf
+        # self.lb_cost_to_go_expanded = np.inf
+        self.is_transition = is_transition
+        self.transition = None
+        self.whitelist = set()
+        self.blacklist = set()
+        self.forward_fam = set()
+        self.reverse_fam = set()
+        self.id = Node.id_counter
+        Node.id_counter += 1
+        self.operation = operation
+
+    def __lt__(self, other: "Node") -> bool:
+        return self.id < other.id
+
+    def __hash__(self) -> int:
+        return self.id
+
+    @property
+    def lb_cost_to_go_expanded(self):
+        return self.operation.get_lb_cost_to_go_expanded(self.id)
     
-    @abstractmethod
-    def add_node(self, n:Node, tree:str = '') -> None:
-        """
-        Adds a node to the specified subtree.
+    @lb_cost_to_go_expanded.setter
+    def lb_cost_to_go_expanded(self, value) -> None:
+        """Set the cost in the shared operation costs array.
 
         Args:
-            n (Node): Node to be added.
-            tree (str, optional): Identifier of subtree where the node will be added.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        pass
-    @abstractmethod
-    def remove_node(self, n:Node, tree:str = '') -> None:
-        """
-        Removes a node from the specified subtree.
-
-        Args:
-            n (Node): The node to be removed.
-            tree (str, optional): Identifier of subtree from which the node will be removed.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        pass
-    @abstractmethod
-    def get_batch_subtree(self, tree:str = '') -> NDArray:
-        """
-        Retrieves batch representation of specified subtree.
-
-        Args:
-            tree (str, optional): Identifier of subtree to be retrieved.
-
-        Returns:
-            NDArray: A NumPy array representing the batch data of the subtree.
-        """
-
-        pass
-    @abstractmethod
-    def get_node_ids_subtree(self, tree:str = '') -> NDArray:
-        """
-        Retrieves node IDs of specified subtree.
-
-        Args:
-            tree (str, optional): Identifier of subtree.
-
-        Returns:
-            NDArray: A NumPy array containing node IDs of the subtree.
-        """
-
-        pass
-    @abstractmethod
-    def add_transition_node_as_start_node(self, n:Node, tree:str = '') -> None:
-        """
-        Adds transition node as a start node in the specified subtree.
-
-        Args:
-            n (Node): The transition node to be added as the start node.
-            tree (str, optional):  Identifier of subtree.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        pass
-    @abstractmethod
-    def get_node(self, id:int, tree:str = '') -> Node:
-        """
-        Retrieves node from the specified subtree by its id.
-
-        Args:
-            id (int): The unique ID of the node to be retrieved.
-            tree (str, optional):  Identifier of subtree.
-
-        Returns:
-            Node: The node with the desired id.
-        """
-
-        pass
-    @abstractmethod
-    def get_number_of_nodes_in_tree(self) -> int:
-        """
-        Returns total number of nodes in the tree.
-
-        Args:
-            None
-
-        Returns:
-            int: Number of nodes present in the tree.
-        """
-
-        pass
-class SingleTree(BaseTree):
-    """
-    Represents single tree structure.
-    """
-
-    def __init__(self, env:BaseProblem):
-        self.order = 1
-        # self.informed = Informed()
-        robot_dims = sum(env.robot_dims.values())
-        self.subtree = {}
-        self.initial_capacity = 100000
-        self.batch_subtree = np.empty((self.initial_capacity, robot_dims), dtype=np.float64)
-        self.node_ids_subtree = np.empty(self.initial_capacity, dtype=np.int64)
-    def add_node(self, n:Node, tree:str = '') -> None:
-        self.subtree[n.id] = n               
-        position = len(self.subtree) -1
-        self.batch_subtree = self.ensure_capacity(self.batch_subtree, position)
-        self.batch_subtree[position,:] = n.state.q.state()
-        self.node_ids_subtree = self.ensure_capacity(self.node_ids_subtree, position)
-        self.node_ids_subtree[position] = n.id
-    
-    def remove_node(self, n:Node, tree:str = '') -> None:
-        mask = self.node_ids_subtree != n.id
-        self.node_ids_subtree = self.node_ids_subtree[mask] 
-        self.batch_subtree = self.batch_subtree[mask]
-        del self.subtree[n.id]
-
-
-    def get_batch_subtree(self, tree:str = '') -> NDArray:
-        return self.batch_subtree[:len(self.subtree)]
-    
-    def get_node_ids_subtree(self, tree:str = '') -> NDArray:
-        return self.node_ids_subtree[:len(self.subtree)]
-
-    def add_transition_node_as_start_node(self, n:Node, tree:str = '') -> None:
-        if n.id not in self.subtree:
-            self.add_node(n)
-    
-    def get_node(self, id:int, tree:str = '') -> Node:
-        return self.subtree.get(id)
-    def get_number_of_nodes_in_tree(self) -> int:
-        return len(self.subtree)
-class BidirectionalTree(BaseTree):
-    """
-    Represents bidirectional tree structure. 
-    """
-
-    def __init__(self, env:BaseProblem):
-        self.order = 1
-        # self.informed = Informed()
-        robot_dims = sum(env.robot_dims.values())
-        self.subtree = {}
-        self.initial_capacity = 100000
-        self.batch_subtree = np.empty((self.initial_capacity, robot_dims), dtype=np.float64)
-        self.node_ids_subtree = np.empty(self.initial_capacity, dtype=np.int64)
-        self.subtree_b = {} 
-        self.batch_subtree_b = np.empty((self.initial_capacity, robot_dims), dtype=np.float64)
-        self.node_ids_subtree_b = np.empty(self.initial_capacity, dtype=np.int64)
-        self.connected = False
-    
-    def add_node(self, n:Node, tree:str = '') -> None:
-        if tree == 'A' or tree == '':
-            self.subtree[n.id] = n               
-            position = len(self.subtree) -1
-            self.batch_subtree = self.ensure_capacity(self.batch_subtree, position)
-            self.batch_subtree[position,:] = n.state.q.state()
-            self.node_ids_subtree = self.ensure_capacity(self.node_ids_subtree, position)
-            self.node_ids_subtree[position] = n.id
-        if tree == 'B':
-            self.subtree_b[n.id] = n               
-            position = len(self.subtree_b) -1
-            self.batch_subtree_b = self.ensure_capacity(self.batch_subtree_b, position)
-            self.batch_subtree_b[position,:] = n.state.q.state()
-            self.node_ids_subtree_b = self.ensure_capacity(self.node_ids_subtree_b, position)
-            self.node_ids_subtree_b[position] = n.id
-    
-    def remove_node(self, n:Node, tree:str = '') -> None:
-        if tree == 'A' or tree == '':
-            mask = self.node_ids_subtree != n.id
-            self.node_ids_subtree = self.node_ids_subtree[mask] 
-            self.batch_subtree = self.batch_subtree[mask]
-            del self.subtree[n.id]
-
-        if tree == 'B':
-            mask = self.node_ids_subtree_b != n.id
-            self.node_ids_subtree_b = self.node_ids_subtree_b[mask] 
-            self.batch_subtree_b = self.batch_subtree_b[mask]
-            del self.subtree_b[n.id]
-
-    def get_batch_subtree(self, tree:str = '') -> NDArray:
-        if tree == 'A' or tree == '':
-            return self.batch_subtree[:len(self.subtree)]
-        if tree == 'B':
-            return self.batch_subtree_b[:len(self.subtree_b)]
-    
-    def get_node_ids_subtree(self, tree:str = '') -> NDArray:
-        if tree == 'A' or tree == '':
-            return self.node_ids_subtree[:len(self.subtree)]
-        if tree == 'B':
-            return self.node_ids_subtree_b[:len(self.subtree_b)]
-
-    def add_transition_node_as_start_node(self, n:Node, tree:str = '') -> None:
-        if self.order == 1:
-            if n.id not in self.subtree:
-                self.add_node(n)
-        else:
-            if n.id not in self.subtree_b:
-                self.add_node(n, 'B')
-
-    def get_node(self, id:int, tree:str = '') -> Node:
-        if tree == 'A' or tree == '':
-            return self.subtree.get(id)
-        if tree == 'B':
-            return self.subtree_b.get(id)
-        
-    def swap(self) -> None:
-        """ 
-        Swaps the forward (primary) and reversed growing subtree representations if not already connected.
-
-        Args: 
-        None
+            value (float): Cost value to assign to the current node.
 
         Returns: 
-        None: This method does not return any value. """
-        if not self.connected:
-            self.subtree, self.subtree_b = self.subtree_b, self.subtree
-            self.batch_subtree, self.batch_subtree_b = self.batch_subtree_b, self.batch_subtree
-            self.node_ids_subtree, self.node_ids_subtree_b = self.node_ids_subtree_b, self.node_ids_subtree 
-            self.order *= (-1)
-    def get_number_of_nodes_in_tree(self) -> int:
-        return len(self.subtree) + len(self.subtree_b)
+            None: This method does not return any value."""
+        self.operation.lb_costs_to_go_expanded[self.id] = value
+    @property
+    def forward_cost(self):
+        return self.operation.get_forward_cost(self.id)
+    
+    @forward_cost.setter
+    def forward_cost(self, value) -> None:
+        """Set the cost in the shared operation costs array.
 
+        Args:
+            value (float): Cost value to assign to the current node.
+
+        Returns: 
+            None: This method does not return any value."""
+        self.operation.forward_costs[self.id] = value
+class DictIndexHeap(ABC, Generic[T]):
+    __slots__ = ["queue", "items", "current_entries"]
+
+    queue: List[Tuple[float, int]]  # (priority, index)
+    items: Dict[int, Any]  # Dictionary for storing active items
+    current_entries: Dict[T, Tuple[float, int]]
+
+    idx = 0
+
+    def __init__(self) -> None:
+        self.queue = []
+        self.items = {}
+        self.current_entries = {}  
+        heapq.heapify(self.queue)
+
+    def __len__(self):
+        return len(self.current_entries)
+    
+    def __contains__(self, item: T) -> bool:
+        return item in self.current_entries
+    
+    @abstractmethod
+    def key(self, node: Node) -> float:
+        pass
+
+    def heappush(self, item: T) -> None:
+        """Push a single item into the heap."""
+        # idx = len(self.items)
+        self.items[DictIndexHeap.idx] = item  # Store only valid items
+        priority = self.key(item)
+        self.current_entries[item] = (priority, DictIndexHeap.idx) # always up to date with the newest one!
+        # self.nodes_in_queue[item[1]] = (priority, DictIndexHeap.idx)
+        heapq.heappush(self.queue, (priority, DictIndexHeap.idx))
+        DictIndexHeap.idx += 1
+
+    def peek_priority(self) -> Any:
+        """Return the smallest priority (the key) without removing the item."""
+        if not self.queue:
+            raise IndexError("peek from an empty heap")
+        # Return only the priority (i.e. the first element of the tuple)
+        return self.queue[0][0]
+
+    def is_smallest_priority_less_than_root_priority(self, root: Node) -> bool:
+        """Return True if the smallest key in the heap is less than other_key."""
+        root_key = self.key(root)
+        return self.peek_priority() < root_key
+
+    def remove(self, item):
+        if item in self.current_entries:
+            del self.current_entries[item]
   
+class ForwarrdQueue(DictIndexHeap[Tuple[Any]]):
+    def __init__(self, alpha = 1.0):
+        super().__init__()
+        self.alpha = alpha
+
+    def key(self, item: Tuple[Any]) -> float:
+        # item[0]: edge_cost from n0 to n1
+        # item[1]: edge (n0, n1)
+        return (
+            item[1][0].forward_cost + item[0] + item[1][1].lb_cost_to_go*self.alpha,
+            item[1][0].forward_cost + item[0],
+            item[1][0].forward_cost,
+        )
+
+    def heappop(self) -> Node:
+        """Pop the item with the smallest priority from the heap."""
+        if not self.queue:
+            raise IndexError("pop from an empty heap")
+
+         # Remove from dictionary (Lazy approach)
+        while self.current_entries:
+            priority, idx = heapq.heappop(self.queue)
+            item = self.items.pop(idx)
+            if item in self.current_entries:
+                current_priority, current_idx = self.current_entries[item]
+                new_priority = self.key(item)
+                if current_priority == priority and current_idx == idx:
+                    if new_priority != priority: #needed if reverse search changed priorities
+                        self.heappush(item) 
+                        continue
+                    del self.current_entries[item]
+                    return item
+            else:
+                continue
+                
+        raise IndexError("pop from an empty queue")
+class Graph:
+    root: Node
+    nodes: Dict
+    node_ids: Dict
+    vertices: Dict
+
+    def __init__(self, operation:Operation, start: State, batch_dist_fun, batch_cost_fun):
+        self.operation = operation
+        self.dim = len(start.q.state())
+        self.root = Node(self.operation, start)
+        self.root.forward_cost = 0
+        self.root.lb_cost_to_go_expanded = np.inf
+
+        self.batch_dist_fun = batch_dist_fun
+        self.batch_cost_fun = batch_cost_fun
+
+        self.nodes = {}  # contains all the nodes ever created
+        self.nodes[self.root.id] = self.root
+        
+        self.node_ids = {}
+        self.node_ids[self.root.state.mode] = [self.root.id]
+        self.vertices = set()
+        self.vertices.add(self.root.id)
+        self.transition_node_ids = {}  # contains the transitions at the end of the mode
+        self.reverse_transition_node_ids = {}
+        self.reverse_transition_node_ids[self.root.state.mode] = [self.root.id]
+        self.goal_nodes = []
+        self.goal_node_ids = []
+        self.lb_costs_to_go_expanded = np.empty(10000000, dtype=np.float64)
+        self.initialize_cache()
+        # self.current_best_path_nodes = []
+        self.current_best_path = []
+        self.unit_n_ball_measure = ((np.pi**0.5) ** self.dim) / math.gamma(self.dim / 2 + 1)
+           
+    def get_lb_cost_to_go_expand(self, id:int) -> float:
+        """
+        Returns cost of node with the specified index.
+
+        Args: 
+            id (int): Index of node whose cost is to be retrieved.
+
+        Returns: 
+            float: Cost associated with the specified node."""
+        return self.lb_costs_to_go_expanded[id]
+    
+    def reset_reverse_tree(self):
+        [
+            (
+                setattr(self.nodes[node_id], "lb_cost_to_go", math.inf),
+                setattr(self.nodes[node_id], "lb_cost_to_go_expanded", math.inf),
+                setattr(self.nodes[node_id], "reverse_parent", None),
+                setattr(self.nodes[node_id], "reverse_children", []),
+                setattr(self.nodes[node_id], "reverse_cost_to_parent", np.inf),
+                setattr(self.nodes[node_id], "reverse_fam", set()),
+            )
+            for sublist in self.node_ids.values()
+            for node_id in sublist
+        ]
+        [
+            (
+                setattr(self.nodes[node_id], "lb_cost_to_go", math.inf),
+                setattr(self.nodes[node_id], "lb_cost_to_go_expanded", math.inf),
+                setattr(self.nodes[node_id], "reverse_parent", None),
+                setattr(self.nodes[node_id], "reverse_children", []),
+                setattr(self.nodes[node_id], "reverse_cost_to_parent", np.inf),
+                setattr(self.nodes[node_id], "reverse_fam", set()),
+            )
+            for sublist in self.transition_node_ids.values()
+            for node_id in sublist
+        ]  # also includes goal nodes
+        [
+            (
+                setattr(self.nodes[node_id], "lb_cost_to_go", math.inf),
+                setattr(self.nodes[node_id], "lb_cost_to_go_expanded", math.inf),
+                setattr(self.nodes[node_id], "reverse_parent", None),
+                setattr(self.nodes[node_id], "reverse_children", []),
+                setattr(self.nodes[node_id], "reverse_cost_to_parent", np.inf),
+                setattr(self.nodes[node_id], "reverse_fam", set()),
+            )
+            for sublist in self.reverse_transition_node_ids.values()
+            for node_id in sublist
+        ]
+        pass
+
+    def reset_all_goal_nodes_lb_costs_to_go(self):
+        for node in self.goal_nodes:
+            node.lb_cost_to_go = 0
+            node.reverse_cost_to_parent = 0
+            self.reverse_queue.heappush(node)
+
+    def get_num_samples(self) -> int:
+        num_samples = 0
+        for k, v in self.node_ids.items():
+            num_samples += len(v)
+
+        num_transition_samples = 0
+        for k, v in self.transition_node_ids.items():
+            num_transition_samples += len(v)
+
+        return num_samples + num_transition_samples
+
+    def add_node(self, new_node: Node, forward_cost:float = np.inf, lb_cost_to_go:float = np.inf) -> None:
+        self.nodes[new_node.id] = new_node
+        key = new_node.state.mode
+        if key not in self.node_ids:
+            self.node_ids[key] = []
+        self.node_ids[key].append(new_node.id)
+        self.operation.lb_costs_to_go_expanded = self.operation.ensure_capacity(self.operation.lb_costs_to_go_expanded, new_node.id) 
+        new_node.lb_cost_to_go_expanded = lb_cost_to_go
+        new_node.lb_cost_to_go = lb_cost_to_go
+        self.operation.forward_costs = self.operation.ensure_capacity(self.operation.forward_costs, new_node.id) 
+        new_node.forward_cost = forward_cost
+
+    def add_vertex(self, node: Node) -> None:  
+        if node.id in self.vertices:
+            return
+        self.vertices.add(node.id)
+    
+    def add_states(self, states: List[State]):
+        for s in states:
+            self.add_node(Node(self.operation, s))
+
+    def add_nodes(self, nodes: List[Node]):  # EXTEND not better??? TODO
+        for n in nodes:
+            self.add_node(n)
+
+    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, Mode]):
+        
+        for q, this_mode, next_mode in transitions:
+            node_this_mode = Node(self.operation, State( q, this_mode), True)
+            node_next_mode = Node(self.operation, State( q, next_mode), True)
+
+
+            if this_mode in self.transition_node_ids:
+                if self.transition_is_already_present(node_this_mode):
+                    # if path:
+                    #     print("QQQQQQQQQQQQQQQQQQQQQQQQQQQ")
+                    #     self.add_vertex(node_this_mode)
+                    #     self.add_vertex(node_next_mode)
+                    # continue
+                    return False
+            is_goal = True
+            if next_mode is not None:
+                is_goal = False
+                node_next_mode.transition = node_this_mode
+                node_this_mode.transition = node_next_mode
+                assert this_mode.task_ids != next_mode.task_ids
+
+            self.add_transition_node(node_this_mode, is_goal=is_goal)
+            self.add_transition_node(node_next_mode, reverse=True)
+            return True
+
+    def add_transition_node(self, node:Node, is_goal:bool = False, reverse:bool = False, forward_cost:float = np.inf, lb_cost_to_go:float = np.inf):
+        mode = node.state.mode
+        if mode is None:
+            return 
+        
+        if is_goal:
+            self.goal_nodes.append(node)
+            self.goal_node_ids.append(node.id)
+
+        if not reverse:
+            if mode in self.transition_node_ids:
+                self.transition_node_ids[mode].append(node.id)
+            else:
+                self.transition_node_ids[mode] = [node.id]
+
+        if reverse: 
+            if mode in self.reverse_transition_node_ids:
+                self.reverse_transition_node_ids[mode].append(node.id)  # TODO for nearest neighbor search, correct ??
+            else:
+                self.reverse_transition_node_ids[mode] = [node.id]
+
+        self.nodes[node.id] = node
+        self.operation.lb_costs_to_go_expanded = self.operation.ensure_capacity(self.operation.lb_costs_to_go_expanded, node.id) 
+        node.lb_cost_to_go_expanded = lb_cost_to_go
+        node.lb_cost_to_go = lb_cost_to_go
+        self.operation.forward_costs = self.operation.ensure_capacity(self.operation.forward_costs, node.id) 
+        node.forward_cost = forward_cost
+        
+    def add_path_node(self, node:Node, parent:Node, edge_cost:float, is_transition:bool, next_mode:Mode, current_best_cost:float): 
+        self.update_connectivity(parent, node, edge_cost)
+        if is_transition:
+            is_goal = True
+            node_next_mode = Node(self.operation, State(node.state.q, next_mode), is_transition)            
+            if next_mode is not None:
+                self.current_best_path_nodes.append(node_next_mode)
+                self.current_best_path.append(node_next_mode.state)
+                is_goal = False
+                self.update_connectivity(node, node_next_mode, 0.0)
+
+                node.transition = node_next_mode
+                node_next_mode.transition = node
+
+            self.add_transition_node(node, is_goal=is_goal, forward_cost=node.forward_cost, lb_cost_to_go=current_best_cost-node.forward_cost)
+            self.add_transition_node(node_next_mode, reverse=True, forward_cost=node.forward_cost, lb_cost_to_go=current_best_cost-node.forward_cost)
+        else:
+            self.add_node(node, node.forward_cost, current_best_cost-node.forward_cost)
+
+    def add_path_states(self, path:List[State], current_best_cost:float):
+        self.current_best_path_nodes = []
+        self.current_best_path = []
+        batch_edge_cost = self.batch_cost_fun(path[:-1], path[1:])
+        parent = self.root
+        self.current_best_path_nodes.append(parent)
+        self.current_best_path.append(parent.state)
+        parent.lb_cost_to_go = current_best_cost
+        parent.lb_cost_to_go_expanded = current_best_cost
+        for i in range(len(path)):
+            if i == 0:
+                continue
+            is_transition = False
+            next_mode = None
+            edge_cost = batch_edge_cost[i-1]
+            # if not self.env.is_collision_free(s.q, s.mode):
+            #     continue #TODO needed?
+
+            if (
+                i < len(path) - 1
+                and path[i].mode
+                != path[i + 1].mode
+            ):
+                is_transition = True
+                next_mode = path[i+1].mode
+            if i == len(path)-1:
+                is_transition = True
+            node = Node(self.operation, path[i], is_transition)
+            self.current_best_path_nodes.append(node)
+            self.current_best_path.append(node.state)
+            self.add_path_node(node, parent, edge_cost, is_transition, next_mode, current_best_cost)
+            parent = self.current_best_path_nodes[-1]
+        return self.current_best_path, self.current_best_path_nodes
+
+    def transition_is_already_present(self, node:Node, is_goal:bool = False):
+        if len(self.transition_node_ids[node.state.mode]) > 0:
+            configs_list = [
+                            self.nodes[id].state.q
+                            for id in self.transition_node_ids[node.state.mode]
+                            ]
+        
+            dists = self.batch_dist_fun(node.state.q, configs_list)
+
+            if min(dists) < 1e-6:
+                return True
+        else:
+            pass
+        return False
+
+    def update_cache(self, key: Mode):
+        if key in self.node_ids:
+            if key not in self.node_array_cache:
+                self.node_array_cache[key] = np.array(
+                    [self.nodes[id].state.q.q for id in self.node_ids[key]],
+                    dtype=np.float64,
+                )
+        if key in self.transition_node_ids:
+            if key not in self.transition_node_array_cache:
+                self.transition_node_array_cache[key] = np.array(
+                    [self.nodes[id].state.q.q for id in self.transition_node_ids[key]],
+                    dtype=np.float64,
+                )
+        if key in self.reverse_transition_node_ids:
+            if key not in self.reverse_transition_node_array_cache:
+                self.reverse_transition_node_array_cache[key] = np.array(
+                    [
+                        self.nodes[id].state.q.q
+                        for id in self.reverse_transition_node_ids[key]
+                    ],
+                    dtype=np.float64,
+                )
+        if key.prev_mode is None:
+            if key not in self.reverse_transition_node_array_cache:
+                self.reverse_transition_node_array_cache[key] = np.array(
+                    [self.root.state.q.q], dtype=np.float64
+                )
+
+    def initialize_cache(self):
+        # modes as keys
+        self.node_array_cache = {}
+        self.transition_node_array_cache = {}
+
+        # node ids as keys
+        self.neighbors_node_ids_cache = {}
+        self.neighbors_array_cache = {}
+        self.neighbors_fam_ids_cache = {}
+        self.tot_neighbors_batch_cost_cache = {}
+        self.tot_neighbors_id_cache = {}
+        self.transition_node_lb_cache = {}
+        self.reverse_transition_node_lb_cache = {}
+        self.reverse_transition_node_array_cache = {}
+         
+    def get_r_star(
+        self, number_of_nodes, informed_measure, unit_n_ball_measure, wheight=1
+    ):
+        r_star = (
+            1.001
+            * wheight
+            * (
+                (2 * (1 + 1 / self.dim))
+                * (informed_measure / unit_n_ball_measure)
+                * (np.log(number_of_nodes) / number_of_nodes)
+            )
+            ** (1 / self.dim)
+        )
+        return r_star
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    def get_neighbors(
+        self, node: Node, space_extent: float = None, in_closed_set:bool = False
+    ) -> set:
+        
+        
+        if node.id in self.neighbors_node_ids_cache:
+            if in_closed_set:
+                return self.update_neighbors_with_family_of_node(node)
+            return self.update_neighbors(node)
+
+        key = node.state.mode
+        self.update_cache(key)
+
+        best_nodes_arr, best_transitions_arr= np.zeros((0, self.dim)), np.zeros((0, self.dim))
+        informed_measure = 1
+        if space_extent is not None:
+            informed_measure = space_extent
+        
+        indices_transitions, indices = np.empty((0,), dtype=int), np.empty((0,), dtype=int)
+        node_ids, transition_node_ids = np.empty((0,), dtype=int), np.empty((0,), dtype=int)
+        if key in self.node_ids:
+            dists = self.batch_dist_fun(node.state.q, self.node_array_cache[key])
+            r_star = self.get_r_star(
+                len(self.node_ids[key]), informed_measure, self.unit_n_ball_measure
+            )
+            indices = find_nearest_indices(dists, r_star)
+            node_ids = np.array(self.node_ids[key])[indices]
+
+            best_nodes_arr = self.node_array_cache[key][indices]
+
+        if key in self.transition_node_ids:
+            transition_dists = self.batch_dist_fun(
+                node.state.q, self.transition_node_array_cache[key]
+            )
+
+            r_star = self.get_r_star(
+                len(self.transition_node_ids[key]),
+                informed_measure,
+                self.unit_n_ball_measure
+            )
+            if len(self.transition_node_ids[key]) == 1:
+                r_star = 1e6
+
+            indices_transitions = find_nearest_indices(transition_dists, r_star)
+            transition_node_ids = np.array(self.transition_node_ids[key])[
+                indices_transitions
+            ]
+            best_transitions_arr = self.transition_node_array_cache[key][indices_transitions]
+
+        if key in self.reverse_transition_node_array_cache:
+            reverse_transition_dists = self.batch_dist_fun(
+                node.state.q, self.reverse_transition_node_array_cache[key]
+            )
+            r_star = self.get_r_star(
+                len(self.reverse_transition_node_ids[key]),
+                informed_measure,
+                self.unit_n_ball_measure
+               
+            )
+
+            # if len(self.reverse_transition_node_array_cache[key]) == 1:
+            #     r_star = 1e6
+
+            indices_reverse_transitions = find_nearest_indices(
+                reverse_transition_dists, r_star
+            )
+            if indices_reverse_transitions.size > 0:
+                reverse_transition_node_ids = np.array(
+                    self.reverse_transition_node_ids[key]
+                )[indices_reverse_transitions]
+                
+                # reverse_transition_node_ids = reverse_transition_node_ids[~np.isin(reverse_transition_node_ids, list(node.blacklist))]
+                best_reverse_transitions_arr = self.reverse_transition_node_array_cache[
+                    key
+                ][indices_reverse_transitions]
+
+                indices_transitions = np.concatenate((indices_transitions, indices_reverse_transitions))
+
+                transition_node_ids = np.concatenate(
+                    (reverse_transition_node_ids, transition_node_ids)
+                )
+                best_transitions_arr = np.vstack(
+                    [best_reverse_transitions_arr, best_transitions_arr],
+                    dtype=np.float64,
+                )
+        all_ids = np.concatenate((node_ids, transition_node_ids)) 
+        arr = np.vstack([best_nodes_arr, best_transitions_arr], dtype=np.float64)
+
+        if node.is_transition and node.transition is not None:
+            all_ids = np.concatenate((all_ids, np.array([node.transition.id])))
+            arr = np.vstack([arr, node.transition.state.q.state()])
+
+
+        assert node.id in all_ids, (
+           " ohhh nooooooooooooooo"
+        )
+        # if node.id not in all_ids:
+        #     pass
+
+        #remove node itself
+        mask = all_ids != node.id
+        all_ids = all_ids[mask]
+        arr = arr[mask]
+
+        assert node.id not in self.neighbors_node_ids_cache,("2 already calculated")
+        self.neighbors_node_ids_cache[node.id] = all_ids 
+        self.neighbors_array_cache[node.id] = arr
+
+        return self.update_neighbors(node)
+
+    def update_neighbors_with_family_of_node(self, node:Node):
+        neighbors_fam = set()
+        if node.id in self.neighbors_fam_ids_cache:
+            neighbors_fam = self.neighbors_fam_ids_cache[node.id]
+
+        combined_fam = node.forward_fam | node.reverse_fam
+        blacklist = node.blacklist
+        if len(blacklist) > 0 and len(combined_fam) > 0:
+            combined_fam =  combined_fam - blacklist
+        if  neighbors_fam != combined_fam:
+            self.neighbors_fam_ids_cache[node.id] = combined_fam 
+            node_ids = self.neighbors_node_ids_cache[node.id]
+            arr = self.neighbors_array_cache[node.id]
+            mask_node_ids =  np.array(list(combined_fam - set(node_ids)))
+            if mask_node_ids.size > 0:
+                arr = np.array(
+                    [self.nodes[id].state.q.q for id in mask_node_ids],
+                    dtype=np.float64,
+                )
+                arr = np.concatenate((arr, self.neighbors_array_cache[node.id]))
+                self.tot_neighbors_batch_cost_cache[node.id] = self.batch_cost_fun(node.state.q, arr)
+                self.tot_neighbors_id_cache[node.id] = np.concatenate((mask_node_ids, self.neighbors_node_ids_cache[node.id]))
+                assert len(self.tot_neighbors_id_cache[node.id]) == len(self.tot_neighbors_batch_cost_cache[node.id]),(
+                    "forward not right"
+                )
+                return self.tot_neighbors_id_cache[node.id]
+        if node.id not in self.tot_neighbors_id_cache:
+            arr = self.neighbors_array_cache[node.id]
+            self.tot_neighbors_batch_cost_cache[node.id] = self.batch_cost_fun(node.state.q, arr)
+            self.tot_neighbors_id_cache[node.id] = self.neighbors_node_ids_cache[node.id]
+        assert len(self.tot_neighbors_id_cache[node.id]) == len(self.tot_neighbors_batch_cost_cache[node.id]),(
+            "forward not right"
+        )
+        return self.tot_neighbors_id_cache[node.id]
+
+    def update_neighbors(self, node:Node): # only needed for forward
+        blacklist = node.blacklist
+        if len(blacklist) > 0:
+            node_ids = self.neighbors_node_ids_cache[node.id]
+            arr =  self.neighbors_array_cache[node.id]
+            mask_node_ids =  ~np.isin(node_ids, blacklist)
+            if not mask_node_ids.all():
+                node_ids = node_ids[mask_node_ids]
+                arr = arr[mask_node_ids]
+                self.neighbors_node_ids_cache[node.id] = node_ids
+                self.neighbors_array_cache[node.id] = arr
+
+        return self.update_neighbors_with_family_of_node(node)
+            
+    def update_forward_cost(self, n: Node) -> None:
+        stack = [n.id]
+        while stack:
+            current_id = stack.pop()
+            current_node = self.nodes[current_id]
+            children = current_node.forward_children
+            if children:
+                for _, id in enumerate(children):
+                    child = self.nodes[id]
+                    new_cost = current_node.forward_cost + child.forward_cost_to_parent
+                    child.forward_cost = new_cost
+                    self.forward_queue.heappush((child.forward_cost_to_parent, (current_node, child)))
+                    # child.agent_dists = current_node.agent_dists + child.agent_dists_to_parent
+                stack.extend(children)
+
+    def update_connectivity(self, n0: Node, n1: Node, edge_cost, tree: str = "forward"):
+        if tree == "forward":
+            if n1.forward_parent is not None and n1.forward_parent.id != n0.id:
+                n1.forward_parent.forward_children.remove(n1.id)
+                n1.forward_parent.forward_fam.remove(n1.id)
+                n1.forward_fam.remove(n1.forward_parent.id)
+            n1.forward_parent = n0
+            updated_cost = n0.forward_cost + edge_cost
+            n1.forward_cost_to_parent = edge_cost
+            n0.forward_children.append(n1.id)
+            if updated_cost != n1.forward_cost:
+                n1.forward_cost = updated_cost
+                if len(n1.forward_children) > 0:
+                    self.update_forward_cost(n1)
+            else:
+                print("uhhh")
+            self.add_vertex(n1)
+            self.add_vertex(n0)
+            n1.forward_fam.add(n0.id)
+            n0.forward_fam.add(n1.id)
+        else:
+            n1.lb_cost_to_go = n0.lb_cost_to_go_expanded + edge_cost
+            if n1.reverse_parent is not None:
+                if n1.reverse_parent.id == n0.id:
+                    return
+                if n1.reverse_parent.id != n0.id:
+                    assert [
+                                (self.nodes[child].reverse_parent, child)
+                                for child in n1.reverse_parent.reverse_children
+                                if self.nodes[child].reverse_parent is None
+                                or self.nodes[child].reverse_parent.id != n1.reverse_parent.id
+                            ] == [], "parent and children not correct"
+
+                    n1.reverse_parent.reverse_children.remove(n1.id)
+                    n1.reverse_parent.reverse_fam.remove(n1.id)
+                    n1.reverse_fam.remove(n1.reverse_parent.id)
+
+
+            n1.reverse_parent = n0
+            assert n1.id not in n0.reverse_children, (
+                "already a child")
+            n0.reverse_children.append(n1.id)
+            n1.reverse_cost_to_parent = edge_cost
+            assert [
+                        (self.nodes[child].reverse_parent, child)
+                        for child in n1.reverse_parent.reverse_children
+                        if self.nodes[child].reverse_parent is None
+                        or self.nodes[child].reverse_parent.id != n1.reverse_parent.id
+                    ] == [], (
+                        "new parent and new children not correct")
+            n1.reverse_fam.add(n0.id)
+            n0.reverse_fam.add(n1.id)
 
 class Informed():
     def __init__(self, env:BaseProblem, sample_mode, conf_type, informed_with_lb):
@@ -495,7 +943,6 @@ class Informed():
         min_cost = np.min(
             g.reverse_transition_node_lb_cache[state.mode] + costs_to_transitions
         )
-
         return min_cost
 
     def lb_cost_from_goal(self, g, state):
@@ -522,7 +969,6 @@ class Informed():
         min_cost = np.min(
             g.transition_node_lb_cache[state.mode] + costs_to_transitions
         )
-
         return min_cost
 
     def can_improve(
@@ -565,6 +1011,7 @@ class Informed():
                 lb_cost_from_start_index_to_state,
             )
 
+
         lb_cost_from_state_to_end_index = self.env.config_cost(
             rnd_state.q, path[end_index].q
         )
@@ -572,7 +1019,6 @@ class Informed():
             goal_state = path[end_index]
             lb_cost_from_goal_to_state = self.lb_cost_from_goal(g, rnd_state)
             lb_cost_from_goal_to_index = self.lb_cost_from_goal(g, goal_state)
-
             lb_cost_from_state_to_end_index = max(
                 (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
                 lb_cost_from_state_to_end_index,
@@ -1117,116 +1563,33 @@ class Informed():
 
         return new_transitions
 
-
-
-
-
-@njit(fastmath=True, cache=True)
-def find_nearest_indices(set_dists:NDArray, r:float) -> NDArray:
-    """
-    Finds the indices of elements in the distance array that are less than or equal to the specified threshold r.
-
-    Args:
-        set_dists (NDArray): Array of distance values.
-        r (float): Threshold value for comparison (.
-
-    Returns:
-        NDArray: Array of indices where the distance values are less than or equal to the threshold.
-    """
-
-    r += 1e-10 # a small epsilon is added to mitigate floating point issues
-    return np.nonzero(set_dists <= r)[0]
-@njit
-def cumulative_sum(batch_cost:NDArray) -> NDArray:
-    """
-    Computes the cumulative sum of the input cost array, where each element is the sum of all previous elements including itself.
-
-    Args:
-        batch_cost (NDArray): Array of cost values.
-
-    Returns:
-        NDArray: Array containing the cumulative sums.
-    """
-    cost = np.empty(len(batch_cost), dtype=np.float64) 
-    for idx in range(0, len(batch_cost)):
-        cost[idx] = np.sum(batch_cost[:idx+1])
-    return cost
-@njit
-def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:int, r_idx:int) -> int:
-    """
-    Retrieves mode task ID for the active task in a given path by selecting the last occurrence that matches the specified task id.
-
-    Args:
-        path_modes (NDArray): Sequence of mode task IDs along the path.
-        task_id (List[int]): Task IDs to search for in the path.
-        r_idx (int): Corresponding idx of robot.
-
-    Returns:
-        NDArray: Mode task ID associated with the last occurrence of the specified active task for the desired robot.
-    """
-
-    last_index = 0 
-    for i in range(len(path_modes)):
-        if path_modes[i][r_idx] == task_id:  
-            last_index = i 
-    return last_index
-@njit
-def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:int, r_idx:int) -> int:
-    """
-    Retrieves mode task ID for the active task in a given path by selecting the first occurrence that matches the specified task id.
-
-    Args:
-        path_modes (NDArray): Sequence of mode task IDs along the path.
-        task_id (List[int]): Task IDs to search for in the path.
-        r_idx (int): Corresponding idx of robot.
-
-    Returns:
-        NDArray: Mode task ID associated with the first occurrence of the specified active task for the desired robot ( = home pose). 
-    """
-
-    for i in range(len(path_modes)):
-        if path_modes[i][r_idx] == task_id:  
-            if i == 0:
-                return i
-            return i-1
-@njit
-def get_index_of_first_mode_appearance_in_path(path_modes, task_id:List[int]) -> int:
-    for i in range(len(path_modes)):
-        if np.equal(path_modes[i],task_id).all():  
-                return i
-@njit
-def get_index_of_last_mode_appearance_in_path(path_modes, task_id:List[int]) -> int:
-    last_index = 0 
-    for i in range(len(path_modes)):
-        if np.equal(path_modes[i],task_id).all(): 
-            last_index = i 
-    return last_index
-
+# taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
+# needed adaption to work.
 class BaseITstar(ABC):
     """
     Represents the base class for IT*-based algorithms, providing core functionalities for motion planning.
     """
     def __init__(
-                self,
-                env: BaseProblem,
-                ptc: PlannerTerminationCondition,
-                optimize: bool = True,
-                mode_sampling_type: str = "greedy",
-                distance_metric: str = "euclidean",
-                try_sampling_around_path: bool = True,
-                use_k_nearest: bool = True,
-                try_informed_sampling: bool = True,
-                uniform_batch_size: int = 200,
-                uniform_transition_batch_size: int = 500,
-                informed_batch_size: int = 500,
-                informed_transition_batch_size: int = 500,
-                path_batch_size: int = 500,
-                locally_informed_sampling: bool = True,
-                try_informed_transitions: bool = True,
-                try_shortcutting: bool = True,
-                try_direct_informed_sampling: bool = True
-                ):
-
+        self,
+        env: BaseProblem,
+        ptc: PlannerTerminationCondition,
+        optimize: bool = True,
+        mode_sampling_type: str = "greedy",
+        distance_metric: str = "euclidean",
+        try_sampling_around_path: bool = True,
+        use_k_nearest: bool = True,
+        try_informed_sampling: bool = True,
+        uniform_batch_size: int = 200,
+        uniform_transition_batch_size: int = 500,
+        informed_batch_size: int = 500,
+        informed_transition_batch_size: int = 500,
+        path_batch_size: int = 500,
+        locally_informed_sampling: bool = True,
+        try_informed_transitions: bool = True,
+        try_shortcutting: bool = True,
+        try_direct_informed_sampling: bool = True,
+        informed_with_lb:bool = True
+    ):
         self.env = env
         self.ptc = ptc
         self.optimize = optimize
@@ -1244,1572 +1607,777 @@ class BaseITstar(ABC):
         self.try_informed_transitions = try_informed_transitions
         self.try_shortcutting = try_shortcutting
         self.try_direct_informed_sampling = try_direct_informed_sampling
+        self.informed_with_lb = informed_with_lb
 
-    def add_tree(self, 
-                 mode: Mode, 
-                 tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None
-                 ) -> None:
-        """
-        Initializes new tree instance for the given mode.
+        self.reached_modes = []
+        self.start_time = time.time()
+        self.costs = []
+        self.times = []
+        self.all_paths = []
+        self.conf_type = type(env.get_start_pos())
+        self.informed = Informed(env, self.sample_mode, self.conf_type, self.informed_with_lb)
+        self.approximate_space_extent = np.prod(np.diff(env.limits, axis=0))
+        self.current_best_cost = None
+        self.current_best_path = None
+        self.current_best_path_nodes = None
+        self.cnt = 0
+        self.operation = Operation()
 
-        Args:
-            mode (Mode): Current operational mode.
-            tree_instance (Optional[Union["SingleTree", "BidirectionalTree"]]): Type of tree instance to initialize. Must be either SingleTree or BidirectionalTree.
+    def sample_valid_uniform_batch(self, batch_size: int, cost: float) -> List[State]:
+        new_samples = []
+        num_attempts = 0
+        num_valid = 0
 
-        Returns:
-            None: This method does not return any value.
-        """
+        if len(self.g.goal_nodes) > 0:
+            focal_points = np.array(
+                [self.g.root.state.q.state(), self.g.goal_nodes[0].state.q.state()],
+                dtype=np.float64,
+            )
 
-        if tree_instance is None:
-            raise ValueError("You must provide a tree instance type: SingleTree or BidirectionalTree.")
-        
-        # Check type and initialize the tree
-        if tree_instance == SingleTree:
-            self.trees[mode] = SingleTree(self.env)
-        elif tree_instance == BidirectionalTree:
-            self.trees[mode] = BidirectionalTree(self.env)
-        else:
-            raise TypeError("tree_instance must be SingleTree or BidirectionalTree.")
-                         
-    def add_new_mode(self, 
-                     q:Configuration=None, 
-                     mode:Mode=None, 
-                     tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None
-                     ) -> None:
-        """
-        Initializes a new mode (including its corresponding tree instance and performs informed initialization).
+        while len(new_samples) < batch_size:
+            num_attempts += 1
+            # print(len(new_samples))
+            # sample mode
+            m = self.sample_mode(
+                self.reached_modes, "uniform_reached", cost is not None
+            )
 
-        Args:
-            q (Configuration): Configuration used to determine the new mode. 
-            mode (Mode): The current mode from which to get the next mode. 
-            tree_instance (Optional[Union["SingleTree", "BidirectionalTree"]]): Type of tree instance to initialize for the next mode. Must be either SingleTree or BidirectionalTree.
+            # print(m)
 
-        Returns:
-            None: This method does not return any value.
-        """
-        if mode is None: 
-            new_mode = self.env.make_start_mode()
-            new_mode.prev_mode = None
-        else:
-            new_mode = self.env.get_next_mode(q, mode)
-            new_mode.prev_mode = mode
-        if new_mode in self.modes:
-            return 
-        self.modes.append(new_mode)
-        self.add_tree(new_mode, tree_instance)
-        self.InformedInitialization(new_mode)
-
-    def mark_node_as_transition(self, mode:Mode, n:Node) -> None:
-        """
-        Marks node as a potential transition node for the specified mode.
-
-        Args:
-            mode (Mode): Current operational mode in which the node is marked as a transition node.
-            n (Node): Node to be marked as a transition node.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        n.transition = True
-        if mode not in self.transition_node_ids:
-            self.transition_node_ids[mode] = []
-        if n.id not in self.transition_node_ids[mode]:
-            self.transition_node_ids[mode].append(n.id)
-
-    def convert_node_to_transition_node(self, mode:Mode, n:Node) -> None:
-        """
-        Marks a node as potential transition node in the specified mode and adds it as a start node for each subsequent mode. 
-        
-        Args: 
-            mode (Mode): Current operational mode in which the node is converted to a transition node.
-            n (Node): Node to convert into a transition node. 
-        
-        Returns: 
-            None: This method does not return any value. 
-        """
-        self.mark_node_as_transition(mode,n)
-        if self.env.is_terminal_mode(mode):
-            return
-        next_mode = self.env.get_next_mode(n.state.q, mode)
-        if next_mode not in self.modes:
-            tree_type = type(self.trees[mode])
-            if tree_type == BidirectionalTree:
-                self.trees[mode].connected = True
-            self.add_new_mode(n.state.q, mode, tree_type)
-        self.trees[next_mode].add_transition_node_as_start_node(n)
-        if self.trees[next_mode].order == 1:
-            index = len(self.trees[next_mode].subtree)-1
-            tree = 'A'
-        else:
-            index = len(self.trees[next_mode].subtree_b)-1
-            tree = 'B'
-        # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
-
-        #need to rewire tree of next mode as well
-        if index != 0:
-            N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
-            batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
-            if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
-                self.UpdateCost(next_mode, n)
-
-    def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
-        """
-        Retrieves the lower bound cost and corresponding transition node ID from a list of modes. 
-        
-        Args:
-            modes (List[Mode]): List of modes to search for the transition node with the minimum cost.
-        
-        Returns:
-            Tuple: 
-                - float: A tuple with the lower bound cost.
-                - int: Corresponding transition node id.
-                - Mode: Mode from which the transition node was selected.
-        """
-
-        indices, costs = [], []
-        for mode in modes:
-            i = np.argmin(self.operation.costs[self.transition_node_ids[mode]], axis=0) 
-            indices.append(i)
-            costs.append(self.operation.costs[self.transition_node_ids[mode]][i])
-        idx = np.argmin(costs, axis=0) 
-        m = modes[idx]
-        node_id = self.transition_node_ids[m][indices[idx]]
-        return (costs[idx], node_id), m
-        # sorted_indices = costs.argsort()
-        # for idx in sorted_indices:       
-            
-        #     if self.trees[mode].order == 1 and node_id in self.trees[mode].subtree:
-                
-        #     elif self.trees[mode].order == -1 and node_id in self.trees[mode].subtree_b:
-        #         return (costs[idx], node_id)
-           
-    def get_transition_node(self, mode:Mode, id:int) -> Node:
-        """
-        Retrieves transition node from the primary subtree of the given mode by its id.
-
-        Args:
-            mode (Mode): Current operational mode from which the transition node is to be retrieved.
-            id (int): The unique ID of the transition node.
-
-        Returns:
-            Node: Transition node from the primary subtree (i.e. 'subtree' if order is 1; otherwise 'subtree_b' as trees are swapped).
-        """
-
-        if self.trees[mode].order == 1:
-            return self.trees[mode].subtree.get(id)
-        else:
-            return self.trees[mode].subtree_b.get(id)
-
-    def get_lebesgue_measure_of_free_configuration_space(self, num_samples:int=10000) -> None:
-        """
-        Sets the free configuration space parameter by estimating its Lebesgue measure using Halton sequence sampling.
-
-        Args:
-            num_samples (int): Number of samples to generate the estimation.
-
-        Returns:
-            None: This method does not return any value. 
-        """
-
-        total_volume = 1.0
-        limits = []
-        
-        for robot in self.env.robots:
-            r_indices = self.env.robot_idx[robot]  # Get joint indices for the robot
-            lims = self.env.limits[:, r_indices]  # Extract joint limits
-            limits.append(lims)
-            total_volume *= np.prod(lims[1] - lims[0])  # Compute volume product
-
-        # Generate Halton sequence samples
-        halton_sampler = Halton(self.d, scramble=False)
-        halton_samples = halton_sampler.random(num_samples)  # Scaled [0,1] samples
-
-        # Map Halton samples to configuration space
-        free_samples = 0
-        q_robots = np.empty(len(self.env.robots), dtype=object)
-        for i, (robot, lims) in enumerate(zip(self.env.robots, limits)):
-            q_robots[i] = lims[0] + halton_samples[:, self.env.robot_idx[robot]] * (lims[1] - lims[0])
-        # idx = 0
-        # q_ellipse = []
-        for i in range(num_samples):
-            q = [q_robot[i] for q_robot in q_robots]             
-            q = type(self.env.get_start_pos()).from_list(q)
-            # if idx < 800:
-            #     q_ellipse.append(q.state())
-            #     idx+=1
-
-            # Check if sample is collision-free
-            if self.env.is_collision_free_without_mode(q):
-                free_samples += 1
-        # Estimate C_free measure
-        self.c_free = (free_samples / num_samples) * total_volume
-        
-    def set_gamma_rrtstar(self) -> None:
-        """
-        Sets the constant gamma parameter used to define the search radius in RRT* and the dimension of state space.
-
-        Args:
-            None
-
-        Returns:
-            None: This method does not return any value. 
-        """
-
-        self.d = sum(self.env.robot_dims.values())
-        unit_ball_volume = math.pi ** (self.d/ 2) / math.gamma((self.d / 2) + 1)
-        self.get_lebesgue_measure_of_free_configuration_space()
-        self.gamma_rrtstar = ((2 *(1 + 1/self.d))**(1/self.d) * (self.c_free/unit_ball_volume)**(1/self.d))*self.eta
-    
-    def get_next_ids(self, mode:Mode) -> List[int]:
-        """
-        Retrieves valid combination of next task IDs for given mode.
-
-        Args:
-            mode (Mode): Current operational mode for which to retrieve valid next task ID combinations.
-
-        Returns:
-            Optional[List[int]]: Randomly selected valid combination of all next task ID combinations if available
-        """
-
-        possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        if len(possible_next_task_combinations) == 0:
-            return None
-        return random.choice(possible_next_task_combinations)
-
-    def get_home_poses(self, mode:Mode) -> List[NDArray]:
-        """
-        Retrieves home poses (i.e., the most recent completed task configurations) for all agents of given mode.
-
-        Args:
-            mode (Mode): Current operational mode.
-
-        Returns:
-            List[NDArray]: Representing home poses for each agent.
-        """
-
-        # Start mode
-        if mode.prev_mode is None: 
-            q = self.env.start_pos
-            q_new = []
-            for r_idx in range(len(self.env.robots)):
-                q_new.append(q.robot_state(r_idx))
-        # all other modes
-        else:
-            previous_task = self.env.get_active_task(mode.prev_mode, mode.task_ids) 
-            goal = previous_task.goal.sample(mode.prev_mode)
-            q = self.get_home_poses(mode.prev_mode)
-            q_new = []
-            end_idx = 0
-            for robot in self.env.robots:
-                r_idx = self.env.robots.index(robot)
-                if robot in previous_task.robots:
-                    dim = self.env.robot_dims[robot]
-                    indices = list(range(end_idx, end_idx + dim))
-                    q_new.append(goal[indices])
-                    end_idx += dim 
-                    continue
-                q_new.append(q[r_idx])
-        return q_new
-
-    def get_task_goal_of_agent(self, mode:Mode, r:str) -> NDArray:
-        """Returns task goal of agent in current mode"""
-        """
-        Retrieves task goal configuration of given mode for the specified robot.
-
-        Args:
-            mode (Mode): Current operational mode.
-            r (str): The identifier of the robot whose task goal is to be retrieved.
-
-        Returns:
-            NDArray: Goal configuration for the specified robot. 
-        """
-
-        # task = self.env.get_active_task(mode, self.get_next_ids(mode)) 
-        # if r not in task.robots:
-        r_idx = self.env.robots.index(r)
-        goal = self.env.tasks[mode.task_ids[r_idx]].goal.sample(mode)
-        if len(goal) == self.env.robot_dims[r]:
-            return goal
-        else:
-            constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
-            end_idx = 0
-            for robot in constrained_robot:
-                dim = self.env.robot_dims[r]
-                if robot == r:
-                    indices = list(range(end_idx, end_idx + dim))
-                    return goal[indices]
-                end_idx += dim 
-        # goal = task.goal.sample(mode)
-        # if len(goal) == self.env.robot_dims[r]:
-        #    return goal
-        # else:
-        #     return goal[self.env.robot_idx[r]]
-
-    def sample_transition_configuration(self, mode) -> Configuration:
-        """
-        Samples a collision-free transition configuration for the given mode.
-
-        Args:
-            mode (Mode): Current operational mode.
-
-        Returns:
-            Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
-        """
-
-        
-        while True:
-            next_ids = self.get_next_ids(mode)
-            constrained_robot = self.env.get_active_task(mode, next_ids).robots
-            goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
+            # sample configuration
             q = []
-            end_idx = 0
-            for robot in self.env.robots:
-                if robot in constrained_robot:
-                    dim = self.env.robot_dims[robot]
-                    indices = list(range(end_idx, end_idx + dim))
-                    q.append(goal[indices])
-                    end_idx += dim 
+            for i in range(len(self.env.robots)):
+                r = self.env.robots[i]
+                lims = self.env.limits[:, self.env.robot_idx[r]]
+                if lims[0, 0] < lims[1, 0]:
+                    qr = (
+                        np.random.rand(self.env.robot_dims[r])
+                        * (lims[1, :] - lims[0, :])
+                        + lims[0, :]
+                    )
+                else:
+                    qr = np.random.rand(self.env.robot_dims[r]) * 6 - 3
+
+                q.append(qr)
+
+            q = self.conf_type.from_list(q)
+
+            if cost is not None:
+                if sum(self.env.batch_config_cost(q, focal_points)) > cost:
                     continue
-                lims = self.env.limits[:, self.env.robot_idx[robot]]
-                q.append(np.random.uniform(lims[0], lims[1]))
-            q = type(self.env.get_start_pos()).from_list(q)   
-            if self.env.is_collision_free(q, mode):
-                return q
-    
-    def sample_configuration(self, 
-                             mode:Mode, 
-                             sampling_type: str, 
-                             transition_node_ids:Dict[Mode, List[int]] = None, 
-                             tree_order:int = 1
-                             ) -> Configuration:
-        """
-        Samples a collision-free configuration for the given mode using the specified sampling strategy.
-        
-        Args: 
-            mode (Mode): Current operational mode. 
-            sampling_type (str): String type specifying the sampling strategy to use. 
-            transition_node_ids (Optional[Dict[Mode, List[int]]]): Dictionary mapping modes to lists of transition node IDs. 
-            tree_order (int): Order of the subtrees (i.e. value of 1 indicates sampling from 'subtree' (primary); otherwise from 'subtree_b')
 
-        Returns: 
-            Configuration:Collision-free configuration within specified limits for the robots based on the sampling strategy. 
-        """
-        is_goal_sampling = sampling_type == "goal"
-        is_informed_sampling = sampling_type == "informed"
-        is_home_pose_sampling = sampling_type == "home_pose"
-        is_gaussian_sampling = sampling_type == "gaussian"
-        constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
-        attemps = 0  # needed if home poses are in collision
+            if self.env.is_collision_free(q, m):
+                new_samples.append(State(q, m))
+                num_valid += 1
 
-        while True:
-            #goal sampling
-            if is_goal_sampling:
-                if tree_order == -1:
-                    if mode.prev_mode is None: 
-                        return self.env.start_pos
-                    else: 
-                        transition_nodes_id = transition_node_ids[mode.prev_mode]
-                        if transition_nodes_id == []:
-                            return self.sample_transition_configuration(mode.prev_mode)
-                            
-                        else:
-                            node_id = np.random.choice(transition_nodes_id)
-                            node = self.trees[mode.prev_mode].subtree.get(node_id)
-                            if node is None:
-                                node = self.trees[mode.prev_mode].subtree_b.get(node_id)
-                            return node.state.q
-                        
-                if self.operation.init_sol and self.informed: 
-                    if self.informed_sampling_version == 6 and not self.env.is_terminal_mode(mode):
-                        q = self.informed[mode].generate_informed_transitions(
-                            self.informed_batch_size,
-                            self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
+        print("Percentage of succ. attempts", num_valid / num_attempts)
+
+        return new_samples, num_attempts
+
+    def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
+        transitions = []
+
+        if len(self.g.goal_nodes) > 0:
+            focal_points = np.array(
+                [self.g.root.state.q.state(), self.g.goal_nodes[0].state.q.state()],
+                dtype=np.float64,
+            )
+        added_transitions = 0
+        # while len(transitions) < transistion_batch_size:
+        while added_transitions < transistion_batch_size:
+
+            # sample mode
+            mode = self.sample_mode(self.reached_modes, "uniform_reached", None)
+
+            # sample transition at the end of this mode
+            possible_next_task_combinations = self.env.get_valid_next_task_combinations(
+                mode
+            )
+            # print(mode, possible_next_task_combinations)
+
+            if len(possible_next_task_combinations) > 0:
+                ind = random.randint(0, len(possible_next_task_combinations) - 1)
+                active_task = self.env.get_active_task(
+                    mode, possible_next_task_combinations[ind]
+                )
+            else:
+                active_task = self.env.get_active_task(mode, None)
+
+            goals_to_sample = active_task.robots
+
+            goal_sample = active_task.goal.sample(mode)
+
+            # if mode.task_ids == [3, 8]:
+            #     print(active_task.name)
+
+            q = []
+            for i in range(len(self.env.robots)):
+                r = self.env.robots[i]
+                if r in goals_to_sample:
+                    offset = 0
+                    for _, task_robot in enumerate(active_task.robots):
+                        if task_robot == r:
+                            q.append(
+                                goal_sample[
+                                    offset : offset + self.env.robot_dims[task_robot]
+                                ]
+                            )
+                            break
+                        offset += self.env.robot_dims[task_robot]
+                else:  # uniform sample
+                    lims = self.env.limits[:, self.env.robot_idx[r]]
+                    if lims[0, 0] < lims[1, 0]:
+                        qr = (
+                            np.random.rand(self.env.robot_dims[r])
+                            * (lims[1, :] - lims[0, :])
+                            + lims[0, :]
                         )
-                        if q is None:
-                            return
-                            q = self.sample_transition_configuration(mode)
-                            if random.choice([0,1]) == 0:
-                                return q
-                            while True:
-                                q_noise = []
-                                for r in range(len(self.env.robots)):
-                                    q_robot = q.robot_state(r)
-                                    noise = np.random.normal(0, 0.1, q_robot.shape)
-                                    q_noise.append(q_robot + noise)
-                                q = type(self.env.get_start_pos()).from_list(q_noise)
-                                if self.env.is_collision_free(q, mode):
-                                    return q
-                        if self.env.is_collision_free(q, mode):
-                            return q
-                        continue
-                    elif not self.informed_sampling_version == 6:
-                        q = self.sample_informed(mode, True, max_attemps=self.informed_batch_size)
-                        if q is None:
-                            return
-                            # q = self.sample_transition_configuration(mode)
-                            # if random.choice([0,1]) == 0:
-                            #     return q
-                            # while True:
-                            #     q_noise = []
-                            #     for r in range(len(self.env.robots)):
-                            #         q_robot = q.robot_state(r)
-                            #         noise = np.random.normal(0, 0.1, q_robot.shape)
-                            #         q_noise.append(q_robot + noise)
-                            #     q = type(self.env.get_start_pos()).from_list(q_noise)
-                            #     if self.env.is_collision_free(q, mode):
-                            #         return q
+                    else:
+                        qr = np.random.rand(self.env.robot_dims[r]) * 6 - 3
 
-                        q = type(self.env.get_start_pos()).from_list(q)
-                        if self.env.is_collision_free(q, mode):
-                            return q
-                        continue
-                q = self.sample_transition_configuration(mode)
-                if random.choice([0,1]) == 0:
-                    return q
-                while True:
-                    q_noise = []
-                    for r in range(len(self.env.robots)):
-                        q_robot = q.robot_state(r)
-                        noise = np.random.normal(0, 0.1, q_robot.shape)
-                        q_noise.append(q_robot + noise)
-                    q = type(self.env.get_start_pos()).from_list(q_noise)
-                    if self.env.is_collision_free(q, mode):
-                        return q
-            #informed sampling       
-            if is_informed_sampling:
-                if self.informed_sampling_version == 6:
-                    q = self.informed[mode].generate_informed_samples(
-                        self.informed_batch_size,
-                        self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
-                        )
-                    if q is None:
-                        return
-                        is_informed_sampling = False
-                        continue
-                    if self.env.is_collision_free(q, mode):
-                        return q
-                elif not self.informed_sampling_version == 6:
-                    q = self.sample_informed(mode)
-                    if q is None:
-                        # is_informed_sampling = False
-                        # continue
-                        return
-            #gaussian noise
-            if is_gaussian_sampling: 
-                path_state = np.random.choice(self.operation.path)
-                standar_deviation = np.random.uniform(0, 5.0)
-                # standar_deviation = 0.5
-                noise = np.random.normal(0, standar_deviation, path_state.q.state().shape)
-                q = (path_state.q.state() + noise).tolist()
-            #home pose sampling or uniform sampling
-            else: 
-                q = []
-                if is_home_pose_sampling:
-                    attemps += 1
-                    q_home = self.get_home_poses(mode)
-                for robot in self.env.robots:
-                    #home pose sampling
-                    if is_home_pose_sampling:
-                        r_idx = self.env.robots.index(robot)
-                        if robot not in constrained_robots: # can cause problems if several robots are not constrained and their home poses are in collision
-                            q.append(q_home[r_idx])
-                            continue
-                        if np.array_equal(self.get_task_goal_of_agent(mode, robot), q_home[r_idx]):
-                            if np.random.uniform(0, 1) < self.p_goal: # goal sampling
-                                q.append(q_home[r_idx])
-                                continue
-                    #uniform sampling
-                    lims = self.env.limits[:, self.env.robot_idx[robot]]
-                    q.append(np.random.uniform(lims[0], lims[1]))
-            q = type(self.env.get_start_pos()).from_list(q)
-            if self.env.is_collision_free(q, mode):
-                return q
-            if attemps > 100: # if home pose causes failed attemps
-                is_home_pose_sampling = False
-    
-    def interpolate_path(self, path: List[State], resolution: float = 0.1):
-        config_type = type(path[0].q)
-        new_path = []
-        path_modes = []
-        # discretize path
-        for i in range(len(path) - 1):
-            q0 = path[i].q
-            q1 = path[i + 1].q
-
-            # if path[i].mode != path[i + 1].mode:
-            #     new_path.append(State(config_type.from_list(q), path[i].mode))
-            #     continue
-
-            dist = config_dist(q0, q1)
-            N = int(dist / resolution)
-            N = max(1, N)
-
-            for j in range(N):
-                q = []
-                for k in range(q0.num_agents()):
-                    qr = q0.robot_state(k) + (q1.robot_state(k) - q0.robot_state(k)) / N * j
                     q.append(qr)
 
-                    # env.C.setJointState(qr, get_robot_joints(env.C, env.robots[k]))
+            q = self.conf_type.from_list(q)
 
-                    # env.C.setJointState(qr, [env.robots[k]])
-
-                # env.C.view(True)
-
-                new_path.append(State(config_type.from_list(q), path[i].mode))
-                path_modes.append(path[i].mode.task_ids)
-
-        new_path.append(State(path[-1].q, path[-1].mode))
-        path_modes.append(path[-1].mode.task_ids)
-
-        return new_path, path_modes
-    
-    def sample_informed(self, mode:Mode, goal_sampling:bool = False, max_attemps:int = 300) -> None:
-        """ 
-        Samples configuration from informed set for the given mode.
-
-        Args: 
-            mode (Mode): Current operational mode. 
-            goal_sampling (bool): Flag indicating whether to perform standard or goal-directed sampling within the informed set.
-
-        Returns: 
-            Configuration: Configuration within the informed set that satisfies the specified limits for the robots. """
-        path, path_modes = self.interpolate_path(self.operation.path_shortcutting)
-        q_rand = []
-        attemps = 0
-        next_ids = self.get_next_ids(mode)
-        self.informed[mode].initialize(mode, next_ids)
-        if self.operation.cost != self.informed[mode].cost:
-            self.informed[mode].cost = self.operation.cost
-            for robot in self.env.robots:
-                r_idx = self.env.robots.index(robot)
-                if self.informed_sampling_version == 4:
-                    self.informed[mode].start_ind[r_idx] = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
-                    self.informed[mode].end_ind[r_idx] = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
-                    continue
-                if self.informed_sampling_version == 0:
-                    self.informed[mode].start_ind[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
-                    self.informed[mode].end_ind[r_idx] = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+            if cost is not None:
+                if sum(self.env.batch_config_cost(q, focal_points)) > cost:
                     continue
 
-                self.informed[mode].start_ind[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
-                self.informed[mode].end_ind[r_idx] = get_mode_task_ids_of_active_task_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
-        
-        # s = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
-        # e = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))        
-        while attemps < max_attemps:
-            attemps += 1
-            if goal_sampling:
-                next_ids = self.get_next_ids(mode)
-                constrained_robot = self.env.get_active_task(mode, next_ids).robots
-                goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
-            q_rand = []
-            end_idx = 0
-            for robot in self.env.robots:
-                r_idx = self.env.robots.index(robot)
-                r_indices = self.env.robot_idx[robot]
-                self.informed[mode].cholesky_decomposition(r_idx, path)
-                if goal_sampling and robot in constrained_robot:
-                    dim = self.env.robot_dims[robot]
-                    indices = list(range(end_idx, end_idx + dim))
-                    q_rand.append(goal[indices])
-                    end_idx += dim 
-                    continue
-                x_rand = self.informed[mode].sample(path, r_indices, r_idx)
-                # if self.informed_sampling_version == 0:
-                #     cost = np.linalg.norm(x_rand - path[self.informed[mode].start_ind[r_idx]].q[r_idx] ) + np.linalg.norm(x_rand - path[self.informed[mode].end_ind[r_idx]].q[r_idx])
-                    # if cost > self.informed[mode].cmax[r_idx]:
-                    #     print(f"Cost {cost} exceeds maximum allowed {self.informed[mode].cmax[r_idx]}")
-                        # raise AssertionError(f"Cost {cost} exceeds maximum allowed {self.informed[mode].cmax[r_idx]}")
-
-                if x_rand is not None: 
-                    q_rand.append(x_rand)
+            if self.env.is_collision_free(q, mode):
+                if self.env.is_terminal_mode(mode):
+                    next_mode = None
                 else:
-                    break
+                    next_mode = self.env.get_next_mode(q, mode)
 
-            if len(q_rand) == len(self.env.robots): 
-                # import matplotlib.pyplot as plt
+                transitions.append((q, mode, next_mode))
 
-                # fig, axes = plt.subplots(2, 1, figsize=(12, 15))
-                # try:
-                #     samples = [q_rand[0], self.informed[mode].start[0].q[0],self.informed[mode].end[0].q[0]]
-                # except:
-                #     samples = [q_rand[0]]
-                # axes[0].scatter([s[0] for s in samples], [s[1] for s in samples])
-                # axes[0].set_title('Agent 1')
-                # try:
-                #     samples = [q_rand[1], self.informed[mode].start[1].q[1],self.informed[mode].end[1].q[1]]
-                # except:
-                #     samples = [q_rand[1]]
-                # axes[1].scatter([s[0] for s in samples], [s[1] for s in samples])
-                # axes[1].set_title('Agent 2')
+                # print(mode, mode.next_modes)
 
-                # plt.tight_layout()
-                # plt.show()  
-                
-                # s = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
-                # e = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
-                # i = 0
-                # q_ellipse = {}
-                # while i < 1000:
-                #     q_rand = []
-                #     for robot in self.env.robots:
-                #         if robot not in q_ellipse:
-                #             q_ellipse[robot] = []
-                
-                #         r_idx = self.env.robots.index(robot)
-                #         r_indices = self.env.robot_idx[robot]
-                #         try:
-                #             x_rand = self.informed[mode].sample(path, r_indices, r_idx)
-                #             # q_ellipse[robot].append(x_rand)
-                #             q_rand.append(x_rand)
-                #         except Exception:
-                #             continue
-                    
-                #     if self.informed[mode].is_lb_cost_smaller(path, q_rand):
-                #         for r_idx, robot in enumerate(self.env.robots):
-                #             q_ellipse[robot].append(q_rand[r_idx])
+                if next_mode not in self.reached_modes and next_mode is not None:
+                    self.reached_modes.append(next_mode)
 
-                #     i+=1 
-                # focal_pts = {}
-                # center = {}
-                # for r_idx, robot in enumerate(self.env.robots): 
-                #     focal_pts[robot] = np.array(
-                #                         [self.informed[mode].start[r_idx].q.state(), self.informed[mode].end[r_idx].q.state()], dtype=np.float64
-                #                         )
-                #     try:
-                #         center[robot] = self.informed[mode].center[r_idx]
-                #     except Exception:
-                #         center[robot] = None
-                # p = []
-                # for state in path:
-                #     p.append(state.q.state())
-
-                # data = {
-                #     'ellipse': q_ellipse,
-                #     'mode': mode.task_ids,
-                #     'focal_points':focal_pts,
-                #     'center': center,
-                #     'path':p,
-                #     'C': self.informed[mode].C,
-                #     'L': self.informed[mode].L
-                # }
-                # self.save_data(data)
-                # #     # import matplotlib.pyplot as plt
-
-                    # fig, axes = plt.subplots(2, 1, figsize=(12, 15))
-
-                    # samples = q_ellipse['a1']
-                    # axes[0].scatter([s[0] for s in samples], [s[1] for s in samples])
-                    # axes[0].set_title('Agent 1')
-
-                    # samples = q_ellipse['a2']
-                    # axes[1].scatter([s[0] for s in samples], [s[1] for s in samples])
-                    # axes[1].set_title('Agent 2')
-
-                    # plt.tight_layout()
-                    # plt.show()  
-                # return q_rand
-                
-                if self.informed[mode].is_lb_cost_smaller(path, q_rand):
-                    self.informed[mode].rnd_idx = []
-                    return q_rand
-                self.informed[mode].rnd_idx = []
-                
-                # if self.informed_sampling_version != 0:
-                #     if self.informed[mode].is_lb_cost_smaller(path, q_rand):
-                #         return q_rand 
-                # else:
-                #     return q_rand
-                  
-                    
+                if self.g.add_transition_nodes(transitions):
+                    added_transitions +=1
+                transitions = []
+            # else:
+            #     if mode.task_ids == [3, 8]:
+            #         self.env.show(True)
+        print(f"Adding {added_transitions} transitions")
         return
- 
-    def get_termination_modes(self) -> List[Mode]:
-        """ 
-        Retrieves a list of modes that are considered terminal based on the environment's criteria.
 
-        Args: 
-            None
-
-        Returns: 
-            List[Mode]:List containing all terminal modes. """
-
-        termination_modes = []
-        for mode in self.modes:
-            if self.env.is_terminal_mode(mode):
-                termination_modes.append(mode)
-        return termination_modes
-
-    def Nearest(self, 
-                mode:Mode, 
-                q_rand: Configuration, 
-                tree: str = ''
-                ) -> Tuple[Node, float, NDArray, int]:
-        """
-        Retrieves nearest node to a configuration in the specified subree for a given mode.
-
-        Args:
-            mode (Mode): Current operational mode.
-            q_rand (Configuration): Random configuration for which the nearest node is sought.
-            tree (str): Identifier of subtree in which the nearest node is searched for
-        Returns:
-            Tuple:   
-                - Node: Nearest node.
-                - float: Distance from q_rand to nearest node.
-                - NDArray: Array of distances from q_rand to all nodes in the specified subtree.
-                - int: Index of the nearest node in the distance array.
-        """
-
-        set_dists = batch_config_dist(q_rand, self.trees[mode].get_batch_subtree(tree), self.distance_metric)
-        idx = np.argmin(set_dists)
-        node_id = self.trees[mode].get_node_ids_subtree(tree)[idx]
-        # print([float(set_dists[idx])])
-        return  self.trees[mode].get_node(node_id, tree), set_dists[idx], set_dists, idx
-    
-    def Steer(self, 
-              mode:Mode, 
-              n_nearest: Node, 
-              q_rand: Configuration, 
-              dist: NDArray, 
-              i:int=1
-              ) -> State: 
-        """
-        Steers from the nearest node toward the target configuration by taking an incremental step.
-
-        Args:
-            mode (Mode): Current operational mode.
-            n_nearest (Node): Nearest node from which steering begins.
-            q_rand (Configuration): Target random configuration for steering.
-            dist (NDArray): Distance between the nearest node and q_rand.
-            i (int): Step index for incremental movement. 
-
-        Returns:
-            State: New obtained state by steering from n_nearest towards q_rand (i.e. q_rand, if within the allowed step size; otherwise, advances by one incremental step).
-        """
-
-        if np.equal(n_nearest.state.q.state(), q_rand.state()).all():
-            return None
-        q_nearest = n_nearest.state.q.state()
-        direction = q_rand.q - q_nearest
-        if self.distance_metric != "max_euclidean":
-            #most independent of the number of robots and their dimension
-            dist = batch_config_dist(n_nearest.state.q, [q_rand], metric = "max_euclidean")
-        N = float((dist / self.eta)) # to have exactly the step size
-
-        if N <= 1 or int(N) == i-1:#for bidirectional or drrt
-            q_new = q_rand.q
-        else:
-            q_new = q_nearest + (direction * (i /N))
-        state_new = State(type(self.env.get_start_pos())(q_new, n_nearest.state.q.array_slice), mode)
-        return state_new
-    
-    def Near(self, 
-             mode:Mode, 
-             n_new: Node, 
-             n_nearest_idx:int, 
-             set_dists:NDArray=None,
-             tree: str = ''
-             ) -> Tuple[NDArray, NDArray, NDArray]:      
-        """
-        Retrieves neighbors of a node within a calculated radius for the given mode.
-
-        Args:
-            mode (Mode):  Current operational mode.
-            n_new (Node): New node for which neighbors are being identified.
-            n_nearest_idx (int): Index of the nearest node to n_new.
-            set_dists (Optional[NDArray]): Precomputed distances from n_new to all nodes in the specified subtree.
-            tree (str): Identifier of subtree in which the nearest node is searched for
-
-        Returns:
-            Tuple:   
-                - NDArray: Batch of neighbors near n_new.
-                - NDArray: Corresponding cost values of these nodes.
-                - NDArray: Corresponding IDs of these nodes.
-        """
-
-        batch_subtree = self.trees[mode].get_batch_subtree(tree)
-        if set_dists is None:
-            set_dists = batch_config_dist(n_new.state.q, batch_subtree, self.distance_metric)
-        vertices = self.trees[mode].get_number_of_nodes_in_tree()
-        r = np.minimum(self.gamma_rrtstar*(np.log(vertices)/vertices)**(1/self.d), self.eta)
-        indices = find_nearest_indices(set_dists, r) # indices of batch_subtree
-        if n_nearest_idx not in indices:
-            indices = np.insert(indices, 0, n_nearest_idx)
-        node_indices = self.trees[mode].get_node_ids_subtree(tree)[indices]
-        n_near_costs = self.operation.costs[node_indices]
-        N_near_batch = batch_subtree[indices]
-        return N_near_batch, n_near_costs, node_indices
-    
-    def FindParent(self, 
-                   mode:Mode, 
-                   node_indices: NDArray, 
-                   n_new: Node, 
-                   n_nearest: Node, 
-                   batch_cost: NDArray, 
-                   n_near_costs: NDArray
-                   ) -> None:
-        """
-        Sets the optimal parent for a new node by evaluating connection costs among candidate nodes.
-
-        Args:
-            mode (Mode): Current operational mode.
-            node_indices (NDArray): Array of IDs representing candidate neighboring nodes.
-            n_new (Node): New node that needs a parent connection.
-            n_nearest (Node): Nearest candidate node to n_new.
-            batch_cost (NDArray): Costs associated from n_new to all candidate neighboring nodes.
-            n_near_costs (NDArray): Cost values for all candidate neighboring nodes.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        idx =  np.where(node_indices == n_nearest.id)[0][0]
-        c_new_tensor = n_near_costs + batch_cost
-        c_min = c_new_tensor[idx]
-        c_min_to_parent = batch_cost[idx]
-        n_min = n_nearest
-        valid_mask = c_new_tensor < c_min
-        if np.any(valid_mask):
-            sorted_indices = np.where(valid_mask)[0][np.argsort(c_new_tensor[valid_mask])]
-            for idx in sorted_indices:
-                node = self.trees[mode].subtree.get(node_indices[idx].item())
-                if self.env.is_edge_collision_free(node.state.q, n_new.state.q, mode):
-                    c_min = c_new_tensor[idx]
-                    c_min_to_parent = batch_cost[idx]      # Update minimum cost
-                    n_min = node                            # Update parent node
-                    break
-        n_new.parent = n_min
-        n_new.cost_to_parent = c_min_to_parent
-        n_min.children.append(n_new) #Set child
-        self.operation.costs = self.trees[mode].ensure_capacity(self.operation.costs, n_new.id) 
-        n_new.cost = c_min
-        self.trees[mode].add_node(n_new)
-    
-    def Rewire(self, 
-               mode:Mode,  
-               node_indices: NDArray, 
-               n_new: Node, 
-               batch_cost: NDArray, 
-               n_near_costs: NDArray,
-               tree: str = ''
-               ) -> bool:
-        """
-        Rewires neighboring nodes by updating their parent connection to n_new if a lower-cost path is established.
-
-        Args:
-            mode (Mode): Current operational mode.
-            node_indices (NDArray): Array of IDs representing candidate neighboring nodes.
-            n_new (Node): New node as potential parent for neighboring nodes.
-            batch_cost (NDArray): Costs associated from n_new to all candidate neighboring nodes.
-            n_near_costs (NDArray): Cost values for all candidate neighboring nodes.
-
-        Returns:
-            bool: True if any neighbor's parent connection is updated to n_new; otherwise, False.
-        """
-
-        rewired = False
-        c_potential_tensor = n_new.cost + batch_cost
-
-        improvement_mask = c_potential_tensor < n_near_costs
-        
-        if np.any(improvement_mask):
-            improved_indices = np.nonzero(improvement_mask)[0]
-
-            for idx in improved_indices:
-                n_near = self.trees[mode].get_node(node_indices[idx].item(), tree)
-                if n_near == n_new.parent or n_near.cost == np.inf or n_near.id == n_new.id:
-                    continue
-                if n_new.state.mode == n_near.state.mode or n_new.state.mode == n_near.state.mode.prev_mode:
-                    if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):
-                        if n_near.parent is not None:
-                            n_near.parent.children.remove(n_near)
-                        n_near.parent = n_new                    
-                        n_new.children.append(n_near)
-
-                        n_near.cost = c_potential_tensor[idx]
-                        n_near.cost_to_parent = batch_cost[idx]
-                        if n_near.children != []:
-                            rewired = True
-        return rewired
-      
-    def GeneratePath(self, 
-                     mode:Mode, 
-                     n: Node, 
-                     shortcutting_bool:bool = True
-                     ) -> None:
-        """
-        Sets path from the specified node back to the root by following parent links, with optional shortcutting.
-
-        Args:
-            mode (Mode): Current operational Mode.
-            n (Node): Starting node from which the path is generated.
-            shortcutting_bool (bool): If True, applies shortcutting to the generated path.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        path_nodes, path, path_modes, path_shortcutting = [], [], [], []
-        while n:
-            path_nodes.append(n)
-            path_modes.append(n.state.mode.task_ids)
-            path.append(n.state)
-            # if shortcutting_bool:
-            path_shortcutting.append(n.state)
-            if n.parent is not None and n.parent.state.mode != n.state.mode:
-                new_state = State(n.parent.state.q, n.state.mode)
-                path_shortcutting.append(new_state)
-            n = n.parent
-        path_in_order = path[::-1]
-        self.operation.path_modes = path_modes[::-1]
-        self.operation.path = path_in_order  
-        self.operation.path_nodes = path_nodes[::-1]
-        self.operation.cost = self.operation.path_nodes[-1].cost
-        self.costs.append(self.operation.cost)
-        self.times.append(time.time() - self.start_time)
-        self.all_paths.append(self.operation.path)
-        self.operation.path_shortcutting = path_shortcutting[::-1] # includes transiiton node twice
-        if self.operation.init_sol and self.shortcutting and shortcutting_bool:
-            # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path_, result = mrmgp.shortcutting.robot_mode_shortcut(
-                                self.env,
-                                self.operation.path_shortcutting,
-                                250,
-                                resolution=self.env.collision_resolution,
-                                tolerance=self.env.collision_tolerance,
-                            )
-            if self.remove_redundant_nodes:
-                # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
-                shortcut_path = mrmgp.shortcutting.remove_interpolated_nodes(shortcut_path_)
-            else:
-                shortcut_path = shortcut_path_
-                # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
-            # import matplotlib.pyplot as plt
-            # fig, axes = plt.subplots(3, 2, figsize=(12, 15))
-
-            # samples = [sample.q.state()[3:5] for sample in shortcut_path]
-            # axes[1, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
-            # axes[1, 0].set_title('Agent 2')
-
-          
-            # samples = [sample.q.state()[:2] for sample in shortcut_path]
-            # axes[0, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
-            # axes[0, 0].set_title('Agent 1')
-
-       
-            # samples = [sample.q.state()[3:5] for sample in shortcut_path_]
-            # axes[1, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
-            # axes[1, 1].set_title('Agent 2')
-
-          
-            # samples = [sample.q.state()[:2] for sample in shortcut_path_]
-            # axes[0, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
-            # axes[0, 1].set_title('Agent 1')
-
-            # samples = [sample.q.state()[5:] for sample in shortcut_path]
-            # axes[2, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
-            # axes[2, 1].set_title('Agent 3')
-
-          
-            # samples = [sample.q.state()[5:] for sample in shortcut_path_]
-            # axes[2, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
-            # axes[2, 0].set_title('Agent 3')
-
-            # # Adjust layout and display the plots
-            # plt.tight_layout()
-            # plt.show()
-            # batch_cost = self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])
-            # shortcut_path_costs = cumulative_sum(batch_cost)
-            # shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
-            if result[0][-1] < self.operation.cost:
-                self.costs.append(result[0][-1])
-                self.times.append(time.time() - self.start_time)
-                self.all_paths.append(shortcut_path)
-                self.TreeExtension(shortcut_path)
-
-    def RandomMode(self) -> Mode:
-        """
-        Randomly selects a mode based on the current mode sampling strategy.
-
-        Args:
-            None
-
-        Returns:
-            Mode: Sampled mode based on the mode sampling strategy.
-        """
-
-        num_modes = len(self.modes)
-        if num_modes == 1:
-            return np.random.choice(self.modes)
-        # if self.operation.task_sequence == [] and self.mode_sampling != 0:
-        elif self.operation.init_sol and self.mode_sampling != 0:
-                p = [1/num_modes] * num_modes
-        
-        elif self.mode_sampling is None:
-            # equally (= mode uniformly)
-            return np.random.choice(self.modes)
-
-        elif self.mode_sampling == 1: 
-            # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
-            probability = [0] * (num_modes)
-            probability[-1] = 1
-            p =  probability
-
-        elif self.mode_sampling == 0:
-            # Uniformly
-            total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes)
-            # Calculate probabilities inversely proportional to node counts
-            inverse_probabilities = [
-                1 - (len(self.trees[mode].subtree) / total_nodes)
-                for mode in self.modes
-            ]
-            # Normalize the probabilities to sum to 1
-            total_inverse = sum(inverse_probabilities)
-            p =   [
-                inv_prob / total_inverse for inv_prob in inverse_probabilities
-            ]
-
-        # else:
-        #     # manually set
-        #     total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes[:-1]) 
-        #     # Calculate probabilities inversely proportional to node counts
-        #     inverse_probabilities = [
-        #         1 - (len(self.trees[mode].subtree) / total_nodes)
-        #         for mode in self.modes[:-1]
-        #     ]
-
-        #     # Normalize the probabilities of all modes except the last one
-        #     remaining_probability = 1-self.mode_sampling  
-        #     total_inverse = sum(inverse_probabilities)
-        #     if total_inverse == 0:
-        #         p = [1-self.mode_sampling, self.mode_sampling]
-        #     else:
-        #         p =  [
-        #             (inv_prob / total_inverse) * remaining_probability
-        #             for inv_prob in inverse_probabilities
-        #         ] + [self.mode_sampling]
-
-        else:
-            frontier_modes = []
-
-            for m in self.modes:
-                if len(m.next_modes) == 0:
-                    frontier_modes.append(m)
-
-            p_frontier = self.mode_sampling
-            p_remaining = 1 - p_frontier
-
-            total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
-            # Calculate probabilities inversely proportional to node counts
-            inverse_probabilities = [
-                1 - (len(self.trees[mode].subtree) / total_nodes)
-                for mode in self.modes if mode not in frontier_modes
-            ]
-            total_inverse = sum(inverse_probabilities)
-
-            p = []
-
-            for m in self.modes:
-                if m in frontier_modes:
-                    tmp = p_frontier / len(frontier_modes)
-                else:
-                    tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
-                
-                p.append(tmp)
-        
-        return np.random.choice(self.modes, p = p)
-
-    # def InformedInitialization(self, mode: Mode) -> None: 
-    #     """
-    #     Initializes the informed sampling module for the given mode based on the specified version.
-
-    #     Args:
-    #         mode (Mode): Current operational mode.
-
-    #     Returns:
-    #         None: This method does not return any value.
-    #     """
-
-    #     if not self.informed_sampling:
-    #         return
-    #     if self.informed_sampling_version == 0:
-    #         self.informed[mode] = InformedVersion0(self.env, self.p_goal)
-    #     if self.informed_sampling_version == 1:
-    #         self.informed[mode] = InformedVersion1(self.env, self.p_goal)
-    #     if self.informed_sampling_version == 2:
-    #         self.informed[mode] = InformedVersion2(self.env, self.p_goal)
-    #     if self.informed_sampling_version == 3:
-    #         self.informed[mode] = InformedVersion3(self.env, self.p_goal)
-    #     if self.informed_sampling_version == 4:
-    #         self.informed[mode] = InformedVersion4(self.env, self.p_goal)
-    #     if self.informed_sampling_version == 5:
-    #         self.informed[mode] = InformedVersion5(self.env, self.p_goal)
-    #     if self.informed_sampling_version == 6:
-    #         self.informed[mode] = InformedVersion6(self.env, self.modes, self.locally_informed_sampling)
-
-    def SampleNodeManifold(self, mode:Mode) -> Configuration:
-        """
-        Samples a node configuration from the manifold based on various probabilistic strategies.
-
-        Args:
-            mode (Mode): Current operational mode.
-
-        Returns:
-            Configuration: Configuration obtained by a sampling strategy based on preset probabilities and operational conditions.
-        """
-
-        if  np.random.uniform(0, 1) < self.p_goal:
-            # goal sampling
-            return self.sample_configuration(mode, "goal", self.transition_node_ids, self.trees[mode].order)
-        else:       
-            if self.informed_sampling and self.operation.init_sol: 
-                if self.informed_sampling_version == 0 and np.random.uniform(0, 1) < self.p_uniform or self.informed_sampling_version == 5 and np.random.uniform(0, 1) < self.p_uniform:
-                    #uniform sampling
-                    return self.sample_configuration(mode, "uniform")
-                #informed_sampling
-                return self.sample_configuration(mode, "informed")
-            # gaussian sampling
-            if self.gaussian and self.operation.init_sol: 
-                return self.sample_configuration(mode, "gaussian")
-            # home pose sampling
-            if np.random.uniform(0, 1) < self.p_stay: 
-                return self.sample_configuration(mode, "home_pose")
-            #uniform sampling
-            return self.sample_configuration(mode, "uniform")
-               
-    def FindLBTransitionNode(self, shortcutting_bool:bool = True) -> None:
-        """
-        Searches lower-bound transition node and generates its corresponding path if a valid candidate is found.
-
-        Args:
-            shortcutting_bool (bool): Flag to either apply shortcutting or not
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        if self.operation.init_sol: 
-            modes = self.get_termination_modes()     
-            result, mode = self.get_lb_transition_node_id(modes) 
-            if not result:
-                return
-            valid_mask = result[0] < self.operation.cost
-            if valid_mask.any():
-                lb_transition_node = self.get_transition_node(mode, result[1])
-                self.GeneratePath(mode, lb_transition_node, shortcutting_bool= shortcutting_bool)
-
-    def UpdateDiscretizedCost(self, path:List[State], cost:NDArray, idx:int) -> None:
-        """
-        Updates discretized cost along a given path by recalculating segment costs from a specified index onward.
-
-        Args:
-            path (List[State]): The sequence of states representing the path.
-            cost (NDArray): The array storing cumulative cost values along the path.
-            idx (int): The index from which cost updates should begin.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        path_a, path_b = path[idx-1: -1], path[idx: ]
-        batch_cost = self.env.batch_config_cost(path_a, path_b)
-        cost[idx:] = cumulative_sum(batch_cost) + cost[idx-1]
-
-    def Shortcutting(self,
-                     active_mode:Mode, 
-                     deterministic:bool = False
-                     ) -> None:
-        """
-        Applies shortcutting logic based on the given mode.
-
-        Args:
-            active_mode (Mode): Current operational mode.
-            deterministic (bool): If True, applies a deterministic approach. 
-
-        Returns:
-            None: This method does not return any value.
-        """
-        
-        indices  = [self.env.robot_idx[r] for r in self.env.robots]
-
-        discretized_path, discretized_modes, discretized_costs = self.Discretization(self.operation.path_nodes, indices)  
-
-        termination_cost = discretized_costs[-1]
-        termination_iter = 0
-        dim = None
-
-        if not deterministic:
-            range1 = 1
-            range2 = 2000
-        else:
-            range1 = len(discretized_path)
-            range2 = range1
-
-        for i in range(range1):
-            for j in range(range2):
-                if not deterministic:
-                    i1 = np.random.choice(len(discretized_path)-1)
-                    i2 = np.random.choice(len(discretized_path)-1)
-                else:
-                    i1 = i
-                    i2 = j
-                if np.abs(i1-i2) < 2:
-                    continue
-                idx1 = min(i1, i2)
-                idx2 = max(i1, i2)
-                m1 = discretized_modes[idx1]    
-                m2 = discretized_modes[idx2]    
-                if m1 == m2 and self.shortcutting_robot_version == 0: #take all possible robots
-                    robot = None
-                    if self.shortcutting_dim_version == 2:
-                        dim = [np.random.choice(indices[r_idx]) for r_idx in range(len(self.env.robots))]
-                    
-                    if self.shortcutting_dim_version == 3:
-                        dim = []
-                        for r_idx in range(len(self.env.robots)):
-                            all_indices = [i for i in indices[r_idx]]
-                            num_indices = np.random.choice(range(len(indices[r_idx])))
-                            random.shuffle(all_indices)
-                            dim.append(all_indices[:num_indices])
-                else:
-                    robot = np.random.choice(len(self.env.robots)) 
-                    #robot just needs to pursue the same task across the modes
-                    if len(m1) > 1:
-                        task_agent = m1[1][robot]
+    def sample_around_path(self, path):
+        # sample index
+        interpolated_path = interpolate_path(path)
+        # interpolated_path = current_best_path
+        new_states_from_path_sampling = []
+        new_transitions_from_path_sampling = []
+        for _ in range(200):
+            idx = random.randint(0, len(interpolated_path) - 2)
+            state = interpolated_path[idx]
+
+            # this is a transition. we would need to figure out which robots are active and not sample those
+            q = []
+            if (
+                state.mode != interpolated_path[idx + 1].mode
+                and np.linalg.norm(
+                    state.q.state() - interpolated_path[idx + 1].q.state()
+                )
+                < 1e-5
+            ):
+                next_task_ids = interpolated_path[idx + 1].mode.task_ids
+
+                # TODO: this seems to move transitions around
+                task = self.env.get_active_task(state.mode, next_task_ids)
+                involved_robots = task.robots
+                for i in range(len(self.env.robots)):
+                    r = self.env.robots[i]
+                    if r in involved_robots:
+                        qr = state.q[i] * 1.0
                     else:
-                        task_agent = m1[0][robot]
+                        qr_mean = state.q[i] * 1.0
 
-                    if m2[0][robot] != task_agent:
-                        continue
+                        qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
 
-                    if self.shortcutting_dim_version == 2:
-                        dim = [np.random.choice(indices[robot])]
-                    if self.shortcutting_dim_version == 3:
-                        all_indices = [i for i in indices[robot]]
-                        num_indices = np.random.choice(range(len(indices[robot])))
+                        lims = self.env.limits[:, self.env.robot_idx[r]]
+                        if lims[0, 0] < lims[1, 0]:
+                            qr = np.clip(qr, lims[0, :], lims[1, :])
 
-                        random.shuffle(all_indices)
-                        dim = all_indices[:num_indices]
+                    q.append(qr)
 
+                q = self.conf_type.from_list(q)
 
-                edge, edge_cost =  self.EdgeInterpolation(discretized_path[idx1:idx2+1].copy(), 
-                                                            discretized_costs[idx1], indices, dim, self.shortcutting_dim_version, robot)
-        
-                if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge, resolution=0.001, tolerance=0.001): #need to make path_collision_free
-                    discretized_path[idx1:idx2+1] = edge
-                    discretized_costs[idx1:idx2+1] = edge_cost
-                    self.UpdateDiscretizedCost(discretized_path, discretized_costs, idx2)
-                    self.operation.path = discretized_path
-                    if not deterministic:
-                        if np.abs(discretized_costs[-1] - termination_cost) > 0.001:
-                            termination_cost = discretized_costs[-1]
-                            termination_iter = j
-                        elif np.abs(termination_iter -j) > 25000:
-                            break
-                    
-        self.TreeExtension(active_mode, discretized_path, discretized_costs, discretized_modes)
+                if self.env.is_collision_free(q, state.mode):
+                    new_transitions_from_path_sampling.append(
+                        (q, state.mode, interpolated_path[idx + 1].mode)
+                    )
 
-    def TreeExtension(self, 
-                      discretized_path:List[State]
-                      ) -> None:
-        """
-        Extends the tree by adding path states as nodes and updating parent-child relationships.
-
-        Args:
-            active_mode (Mode): Current mode for tree extension.
-            discretized_path (List[State]):Sequence of states forming the discretized path.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        mode = discretized_path[0].mode
-        parent = self.operation.path_nodes[0]
-        for i in range(1, len(discretized_path)):
-            state = discretized_path[i]
-            node = Node(state, self.operation)
-            # node.parent = parent
-            # self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
-            # node.cost = discretized_costs[i]
-            # node.cost_to_parent = node.cost - node.parent.cost
-            # parent.children.append(node)
-            
-            if mode == node.state.mode:
-                index = np.where(self.trees[node.state.mode].get_node_ids_subtree() == parent.id)
-                N_near_batch, n_near_costs, node_indices = self.Near(node.state.mode, node, index)
-                batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
-                self.FindParent(node.state.mode, node_indices, node, parent, batch_cost, n_near_costs) 
             else:
-                node.parent = parent
-                self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
-                node.cost_to_parent = self.env.config_cost(node.state.q, parent.state.q)
-                node.cost = node.parent.cost + node.cost_to_parent
-                parent.children.append(node)
-                self.convert_node_to_transition_node(node.parent.state.mode, node.parent)
-                index = np.where(self.trees[node.state.mode].get_node_ids_subtree() == parent.id)
-                N_near_batch, n_near_costs, node_indices = self.Near(node.state.mode, node, index)
-                batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
+                for i in range(len(self.env.robots)):
+                    r = self.env.robots[i]
+                    qr_mean = state.q[i]
 
-            if self.Rewire(node.state.mode, node_indices, node, batch_cost, n_near_costs):
-                self.UpdateCost(node.state.mode, node)
-            if self.trees[discretized_path[i].mode].order == 1:
-                self.trees[discretized_path[i].mode].add_node(node)
-            else:
-                self.trees[discretized_path[i].mode].add_node(node, 'B')
-            parent = node             
-            
-            mode = node.state.mode
+                    qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
 
-        self.convert_node_to_transition_node(mode, node)
-        self.FindLBTransitionNode(shortcutting_bool =False)
-        # import matplotlib.pyplot as plt
-        # fig, axes = plt.subplots(3, 2, figsize=(12, 15))
+                    lims = self.env.limits[:, self.env.robot_idx[r]]
+                    if lims[0, 0] < lims[1, 0]:
+                        qr = np.clip(qr, lims[0, :], lims[1, :])
 
-        # samples = [sample.q.state()[3:5] for sample in discretized_path]
-        # axes[1, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
-        # axes[1, 0].set_title('Agent 2')
+                    q.append(qr)
 
-        
-        # samples = [sample.q.state()[:2] for sample in discretized_path]
-        # axes[0, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
-        # axes[0, 0].set_title('Agent 1')
+                q = self.conf_type.from_list(q)
 
-        # # samples = [sample.q.state()[5:] for sample in discretized_path]
-        # # axes[2, 0].scatter([s[0] for s in samples], [s[1] for s in samples])
-        # # axes[2, 0].set_title('Agent 3')
-        
-        # samples = [sample.q.state()[3:5] for sample in self.operation.path]
-        # axes[1, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
-        # axes[1, 1].set_title('Agent 2')
+                if self.env.is_collision_free(q, state.mode):
+                    rnd_state = State(q, state.mode)
+                    new_states_from_path_sampling.append(rnd_state)
 
-        
-        # samples = [sample.q.state()[:2] for sample in self.operation.path]
-        # axes[0, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
-        # axes[0, 1].set_title('Agent 1')
-
-        # # samples = [sample.q.state()[5:] for sample in self.operation.path]
-        # # axes[2, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
-        # # axes[2, 1].set_title('Agent 3')
-
-        
-        
-
-        # # Adjust layout and display the plots
-        # plt.tight_layout()
+        # fig = plt.figure()
+        # ax = fig.add_subplot(projection='3d')
+        # ax.scatter([a.q[0][0] for a in new_states_from_path_sampling], [a.q[0][1] for a in new_states_from_path_sampling], [a.q[0][2] for a in new_states_from_path_sampling])
+        # ax.scatter([a.q[1][0] for a in new_states_from_path_sampling], [a.q[1][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
+        # ax.scatter([a.q[2][0] for a in new_states_from_path_sampling], [a.q[2][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
         # plt.show()
-        print('final new cost:' , self.operation.cost)
 
-        # self.GeneratePath(active_mode, node, shortcutting_bool=False)
+        return new_states_from_path_sampling, new_transitions_from_path_sampling
 
-    def EdgeInterpolation(self, 
-                          path:List[State], 
-                          cost:float, 
-                          indices:List[List[int]], 
-                          dim:Union[int, List[int]], 
-                          version:int, 
-                          r:Optional[int]
-                          ) -> Tuple[List[State], List[float]]:
-        """
-            Interpolates an edge between two configurations along a path using different shortcutting strategies.
-
-            Args:
-                path (List[State]): Sequence of states representing path.
-                cost (float): Initial cost associated with path segment.
-                indices (List[List[int]]): Indices of relevant dimensions for each robot.
-                dim (Union[int, List[int]]): Specific dimensions to interpolate.
-                version (int): The interpolation strategy to use:
-                    - 0: Uniform interpolation across all dimensions.
-                    - 1: Shortcutting across all indices of a robot.
-                    - 2: Partial shortcutting for a single dimension of a robot.
-                    - 3: Partial shortcutting for a random set of dimensions.
-                r (Optional[int]): Specific robot to apply shortcutting to.
-
-            Returns:
-                Tuple: 
-                    - List[State]: Interpolated states forming the edge.
-                    - List[float]: Computed costs for each segment the interpolated path.
-            """
-
-        q0 = path[0].q.state()
-        q1 = path[-1].q.state()
-        edge  = []
-        # edge_cost = [cost]
-        segment_vector = q1 - q0
-        # dim_indices = [indices[i][dim] for i in range(len(indices))]
-        N = len(path) -1
-        for i in range(len(path)):
-            if version == 0 :
-                q = q0 +  (segment_vector * (i / N))
-
-            elif version == 1: #shortcutting all indices of agent
-                q = path[i].q.state().copy()
-                for robot in range(len(self.env.robots)):
-                    if r is not None and r == robot:
-                        q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i /N))
-                        break
-                    if r is None:
-                        q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i / N))
-
-            elif version == 2: #partial shortcutting agent single dim 
-                q = path[i].q.state().copy()
-                for robot in range(len(self.env.robots)):
-                    if r is not None and r == robot:
-                        q[dim] = q0[dim] +  (segment_vector[dim] * (i / N))
-                        break
-                    if r is None:
-                        q[dim[robot]] = q0[dim[robot]] +  (segment_vector[dim[robot]] * (i / N))
+    def add_sample_batch(self):
+        # add new batch of nodes
+        while True:
             
-            elif version == 3: #partial shortcutting agent random set of dim 
-                q = path[i].q.state().copy()
-                for robot in range(len(self.env.robots)):
-                    if r is not None and r == robot:
-                        for idx in dim:
-                            q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
-                        break
-                    if r is None:
-                        for idx in dim[robot]:
-                            q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
+            if len(self.g.nodes) > 1:
+                sample_batch_size = 350
+                transition_batch_size = 350
+            else:
+                sample_batch_size = 250
+                transition_batch_size = 250
 
-            q_list = [q[indices[i]] for i in range(len(indices))]
-            edge.append(State(NpConfiguration.from_list(q_list),path[i].mode))
-            if i == 0:
-                continue  
-            edge_a, edge_b = edge[:-1], edge[1:]
-            batch_cost = self.env.batch_config_cost(edge_a, edge_b)
-            batch_cost = np.insert(batch_cost, 0, 0.0)
-            edge_cost = cumulative_sum(batch_cost) + cost
-        return edge, edge_cost
 
-    def Discretization(self, 
-                       path:List[State], 
-                       indices: List[List[int]], 
-                       resolution:float=0.1
-                       ) -> Tuple[List[State], List[List[int]], List[float]]:
+
+            effective_uniform_batch_size = (
+                self.uniform_batch_size if self.current_best_cost is not None else sample_batch_size
+            )
+            effective_uniform_transition_batch_size = (
+                self.uniform_transition_batch_size
+                if self.current_best_cost is not None
+                else transition_batch_size
+            )
+
+            # nodes_per_state = []
+            # for m in reached_modes:
+            #     num_nodes = 0
+            #     for n in new_states:
+            #         if n.mode == m:
+            #             num_nodes += 1
+
+            #     nodes_per_state.append(num_nodes)
+
+            # plt.figure("Uniform states")
+            # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
+
+            # if self.env.terminal_mode not in reached_modes:   
+            print("--------------------")
+            print("Sampling transitions")
+            self.sample_valid_uniform_transitions(
+                transistion_batch_size=effective_uniform_transition_batch_size,
+                cost=self.current_best_cost,
+            )
+            # new_transitions = self.sample_valid_uniform_transitions(
+            #     transistion_batch_size=effective_uniform_transition_batch_size,
+            #     cost=self.current_best_cost,
+            # )
+
+
+            # self.g.add_transition_nodes(new_transitions)
+            # print(f"Adding {len(new_transitions)} transitions")
+            
+            print("Sampling uniform")
+            new_states, required_attempts_this_batch = self.sample_valid_uniform_batch(
+                    batch_size=effective_uniform_batch_size, cost=self.current_best_cost
+                )
+            self.g.add_states(new_states)
+            print(f"Adding {len(new_states)} new states")
+
+            self.approximate_space_extent = (
+                np.prod(np.diff(self.env.limits, axis=0))
+                * len(new_states)
+                / required_attempts_this_batch
+            )
+
+            # print(reached_modes)
+
+            if len(self.g.goal_nodes) == 0:
+                continue
+
+        # g.compute_lb_cost_to_go(self.env.batch_config_cost)
+        # g.compute_lower_bound_from_start(self.env.batch_config_cost)
+
+            if self.current_best_cost is not None and (
+                self.try_informed_sampling or self.try_informed_transitions
+            ):
+                interpolated_path = interpolate_path(self.current_best_path)
+                # interpolated_path = current_best_path
+
+                if self.try_informed_sampling:
+                    print("Generating informed samples")
+                    new_informed_states = self.informed.generate_samples(
+                        self.g,
+                        self.reached_modes,
+                        self.informed_batch_size,
+                        interpolated_path,
+                        locally_informed_sampling=self.locally_informed_sampling,
+                        try_direct_sampling=self.try_direct_informed_sampling,
+                    )
+                    self.g.add_states(new_informed_states)
+
+                    print(f"Adding {len(new_informed_states)} informed samples")
+
+                if self.try_informed_transitions:
+                    print("Generating informed transitions")
+                    new_informed_transitions = self.informed.generate_transitions(
+                        self.g,
+                        self.reached_modes,
+                        self.informed_transition_batch_size,
+                        interpolated_path,
+                        locally_informed_sampling=self.locally_informed_sampling,
+                    )
+                    self.g.add_transition_nodes(new_informed_transitions)
+                    print(f"Adding {len(new_informed_transitions)} informed transitions")
+
+                    # g.compute_lb_cost_to_go(self.env.batch_config_cost)
+                    # g.compute_lower_bound_from_start(self.env.batch_config_cost)
+
+            if self.try_sampling_around_path and self.current_best_path is not None:
+                print("Sampling around path")
+                path_samples, path_transitions = self.sample_around_path(
+                    self.current_best_path
+                )
+
+                self.g.add_states(path_samples)
+                print(f"Adding {len(path_samples)} path samples")
+
+                self.g.add_transition_nodes(path_transitions)
+                print(f"Adding {len(path_transitions)} path transitions")
+            
+            if len(self.g.goal_nodes) != 0:
+                break
+        # for mode in self.reached_modes:
+        #     q_samples = [self.g.nodes[id].state.q.state() for id in self.g.node_ids[mode]]
+        #     modes = [self.g.nodes[id].state.mode.task_ids for id in self.g.node_ids[mode]]
+        #     data = {
+        #         "q_samples": q_samples,
+        #         "modes": modes,
+        #         "path": self.current_best_path
+        #     }
+        #     save_data(data)
+        #     print()
+        
+
+        # self.g.compute_lb_reverse_cost_to_come(self.env.batch_config_cost)
+        # self.g.compute_lb_cost_to_come(self.env.batch_config_cost)
+
+    def sample_mode(
+        self,
+        reached_modes,
+        mode_sampling_type: str = "uniform_reached",
+        found_solution: bool = False,
+    ) -> Mode:
+        if mode_sampling_type == "uniform_reached":
+            m_rnd = random.choice(reached_modes)
+
+        return m_rnd
+
+    def sample_manifold(self) -> None:
+        print("====================")
+        while True:
+            self.g.initialize_cache()
+            if self.current_best_path is not None:
+                # prune
+                # for mode in self.reached_modes:
+                #     q_samples = [self.g.nodes[id].state.q.state() for id in self.g.node_ids[mode]]
+                #     modes = [self.g.nodes[id].state.mode.task_ids for id in self.g.node_ids[mode]]
+                #     data = {
+                #         "q_samples": q_samples,
+                #         "modes": modes,
+                #         "path": self.current_best_path
+                #     }
+                #     save_data(data)
+                #     print()
+                # for mode in self.reached_modes:
+                #     q_samples = [self.g.nodes[id].state.q.state() for id in self.g.transition_node_ids[mode]]
+                #     modes = [self.g.nodes[id].state.mode.task_ids for id in self.g.transition_node_ids[mode]]
+                #     data = {
+                #         "q_samples": q_samples,
+                #         "modes": modes,
+                #         "path": self.current_best_path
+                #     }
+                #     save_data(data)
+                #     print()
+
+                self.remove_nodes_in_graph()
+
+                # for mode in self.reached_modes:
+                #     q_samples = [self.g.nodes[id].state.q.state() for id in self.g.node_ids[mode]]
+                #     modes = [self.g.nodes[id].state.mode.task_ids for id in self.g.node_ids[mode]]
+                #     data = {
+                #         "q_samples": q_samples,
+                #         "modes": modes,
+                #         "path": self.current_best_path
+                #     }
+                #     save_data(data)
+                #     print()
+                # for mode in self.reached_modes:
+                #     q_samples = [self.g.nodes[id].state.q.state() for id in self.g.transition_node_ids[mode]]
+                #     modes = [self.g.nodes[id].state.mode.task_ids for id in self.g.transition_node_ids[mode]]
+                #     data = {
+                #         "q_samples": q_samples,
+                #         "modes": modes,
+                #         "path": self.current_best_path
+                #     }
+                #     save_data(data)
+                #     print()
+
+
+            print(f"Samples: {self.cnt}; {self.ptc}")
+
+            samples_in_graph_before = self.g.get_num_samples()
+            self.add_sample_batch()
+            self.g.initialize_cache()
+
+            samples_in_graph_after = self.g.get_num_samples()
+            self.cnt += samples_in_graph_after - samples_in_graph_before
+
+            # search over nodes:
+            # 1. search from goal state with sparse check
+            reached_terminal_mode = False
+            for m in self.reached_modes:
+                if self.env.is_terminal_mode(m):
+                    reached_terminal_mode = True
+                    break
+
+            if reached_terminal_mode:
+                print("====================")
+                break
+    
+    def prune_set_of_expanded_nodes(self):
+        if not self.remove_nodes:
+            return self.g.vertices, []
+
+        vertices = []
+        stack = [self.g.root.id]
+        children_to_be_removed = []
+        focal_points = {}
+        focal_points_transition = {}
+        inter_costs = {}
+        count = 0
+        while len(stack) > 0:
+            id = stack.pop()
+            node = self.g.nodes[id]
+            key = node.state.mode
+            
+            if node.is_transition:
+                if key in self.g.reverse_transition_node_ids:
+                    if node.id in self.g.reverse_transition_node_ids[key]:
+                        stack.extend(node.forward_children)
+                        count +=1
+                        continue
+            
+            if key not in self.start_transition_arrays:
+                if key not in focal_points:
+                    focal_points[key] = np.array(
+                    [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
+                    dtype=np.float64,
+                    )
+                    focal_points_transition[key] =  focal_points[key]
+
+                    inter_costs[key] = self.current_best_cost
+            else:
+                if key not in focal_points:
+                    focal_points[key] = np.array(
+                        [self.start_transition_arrays[key], self.end_transition_arrays[key]],
+                        dtype=np.float64,
+                    )
+                    focal_points_transition[key] = np.array(
+                    [self.start_transition_arrays[key]],
+                    dtype=np.float64,
+                    )
+                    inter_costs[key] =  self.intermediate_mode_costs[key]
+            
+
+            if node in self.current_best_path_nodes:
+                flag = False
+            elif not node.is_transition:
+                flag = sum(self.env.batch_config_cost(node.state.q, focal_points[key])) > inter_costs[key]
+                if not flag:
+                        if node.id not in self.g.vertices:
+                            flag = True
+            else:
+                flag = sum(self.env.batch_config_cost(node.state.q, focal_points_transition[key])) > inter_costs[key]
+                
+            if flag:
+                children = [node.id]
+                if node.forward_parent is not None:
+                    node.forward_parent.forward_children.remove(node.id)
+                    node.forward_parent.forward_fam.remove(node.id)
+                    node.forward_fam.remove(node.forward_parent.id)
+                    node.forward_parent = None
+                to_be_removed = []
+                while len(children) > 0:
+                    child_id = children.pop()
+                    to_be_removed.append(child_id)
+                    children.extend(self.g.nodes[child_id].forward_children)
+                children_to_be_removed.extend(to_be_removed)
+            else:
+                vertices.append(id)
+                stack.extend(node.forward_children)
+
+        goal_mask = np.array([item in children_to_be_removed for item in self.g.goal_node_ids])
+        goal_nodes = np.array(self.g.goal_node_ids)[goal_mask]
+        if goal_nodes.size > 0:
+            for goal in goal_nodes:
+                goal_node = self.g.nodes[goal]
+                goal_node.forward_cost = np.inf
+                goal_node.forward_cost_to_parent = np.inf
+                goal_node.forward_children = []
+                goal_node.forward_parent = None
+                goal_node.forward_fam = set()
+                children_to_be_removed.remove(goal)
+                key = goal_node.state.mode
+                vertices.append(goal)
+        
+        return vertices, children_to_be_removed
+
+    def remove_nodes_in_graph(self):
+        num_pts_for_removal = 0
+        vertices_to_keep, vertices_to_be_removed = self.prune_set_of_expanded_nodes()
+        # vertices_to_keep = list(chain.from_iterable(self.g.vertices.values()))
+        # Remove elements from g.nodes_ids
+        for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
+            # start = random.choice(self.g.reverse_transition_node_ids[mode])
+            # goal = random.choice(self.g.re)
+            if mode not in self.start_transition_arrays:
+                focal_points = np.array(
+                [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
+                dtype=np.float64,
+                )
+                cost = self.current_best_cost
+                
+            else:
+                focal_points = np.array(
+                    [self.start_transition_arrays[mode], self.end_transition_arrays[mode]],
+                    dtype=np.float64,
+                )
+                cost =  self.intermediate_mode_costs[mode]
+            original_count = len(self.g.node_ids[mode])
+            self.g.node_ids[mode] = [
+                id
+                for id in self.g.node_ids[mode]
+                if id in vertices_to_keep or (id not in vertices_to_be_removed and sum(
+                    self.env.batch_config_cost(self.g.nodes[id].state.q, focal_points))
+                <= cost)
+            ]
+            assert[id for id in self.g.node_ids[mode] if id in vertices_to_be_removed]== [],(
+                "hoh"
+            )
+            num_pts_for_removal += original_count - len(self.g.node_ids[mode])
+        # Remove elements from g.transition_node_ids
+        self.g.reverse_transition_node_ids = {}
+
+        for mode in list(self.g.transition_node_ids.keys()):
+            self.g.reverse_transition_node_ids[mode] = []
+            if self.env.is_terminal_mode(mode):
+                continue
+            
+            if mode not in self.start_transition_arrays:
+                focal_points = np.array(
+                [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
+                dtype=np.float64,
+                )
+                cost = self.current_best_cost
+            else:
+                focal_points = np.array(
+                    [self.start_transition_arrays[mode]],
+                    dtype=np.float64,
+                )
+                cost =  self.intermediate_mode_costs[mode]
+            original_count = len(self.g.transition_node_ids[mode])
+            self.g.transition_node_ids[mode] = [
+                id
+                for id in self.g.transition_node_ids[mode]
+                if id in vertices_to_keep or (id not in vertices_to_be_removed and sum(
+                    self.env.batch_config_cost(self.g.nodes[id].state.q, focal_points))
+                <= cost)
+            ]
+            num_pts_for_removal += original_count - len(
+                self.g.transition_node_ids[mode]
+            )
+        # Update elements from g.reverse_transition_node_ids
+        self.g.reverse_transition_node_ids[self.env.get_start_mode()] = [self.g.root.id]
+        all_transitions = list(chain.from_iterable(self.g.transition_node_ids.values()))
+        transition_nodes = np.array([self.g.nodes[id] for id in all_transitions])
+        valid_mask = np.array([node.transition is not None for node in transition_nodes])
+        valid_nodes = transition_nodes[valid_mask]
+        reverse_transition_ids = [node.transition.id for node in valid_nodes]
+        reverse_transition_modes =[node.transition.state.mode for node in valid_nodes]
+        for mode, t_id in zip(reverse_transition_modes, reverse_transition_ids):
+            self.g.reverse_transition_node_ids[mode].append(t_id)
+        if self.remove_nodes:
+            self.g.vertices = set()
+            self.g.vertices.add(self.g.root.id)
+        print(f"Removed {num_pts_for_removal} nodes")
+
+    def process_valid_path(self, valid_path):
+        path = [node.state for node in valid_path]
+        new_path_cost = path_cost(path, self.env.batch_config_cost)
+        if self.current_best_cost is None or new_path_cost < self.current_best_cost:
+            self.alpha = 1.0
+            self.current_best_path = path
+            self.current_best_cost = new_path_cost
+            self.current_best_path_nodes = valid_path
+            self.remove_nodes = True
+
+            print(f"New cost: {new_path_cost} at time {time.time() - self.start_time}")
+            self.update_results_tracking(new_path_cost, path)
+
+            if self.try_shortcutting:
+                print("Shortcutting path")
+                shortcut_path, _ = shortcutting.robot_mode_shortcut(
+                    self.env,
+                    path,
+                    250,
+                    resolution=self.env.collision_resolution,
+                    tolerance=self.env.collision_tolerance,
+                )
+
+                shortcut_path = shortcutting.remove_interpolated_nodes(shortcut_path)
+
+                shortcut_path_cost = path_cost(
+                    shortcut_path, self.env.batch_config_cost
+                )
+
+                if shortcut_path_cost < self.current_best_cost:
+                    print("New cost: ", shortcut_path_cost)
+                    self.update_results_tracking(shortcut_path_cost, shortcut_path)
+
+                    self.current_best_path = shortcut_path
+                    self.current_best_cost = shortcut_path_cost
+
+                    interpolated_path = shortcut_path
+                    self.current_best_path, self.current_best_path_nodes = self.g.add_path_states(interpolated_path, self.current_best_cost)   
+                    self.current_best_cost = path_cost(self.current_best_path, self.env.batch_config_cost) 
+            if not self.optimize and self.current_best_cost is not None:
+                return  
+            # extract modes
+            self.start_transition_arrays, self.end_transition_arrays, self.intermediate_mode_costs = {}, {}, {}
+            self.start_transition_arrays[self.current_best_path_nodes[0].state.mode] = self.g.root.state.q.state()
+            modes = [self.current_best_path_nodes[0].state.mode]
+            start_cost = 0
+            for n in self.current_best_path_nodes:
+                if n.state.mode != modes[-1]:
+                    self.end_transition_arrays[modes[-1]] = n.state.q.state()
+                    self.start_transition_arrays[n.state.mode] = n.state.q.state()
+                    self.intermediate_mode_costs[modes[-1]] = n.forward_cost - start_cost
+                    start_cost = n.forward_cost
+                    modes.append(n.state.mode)
+            self.end_transition_arrays[modes[-1]] = self.current_best_path_nodes[-1].state.q.state()
+            self.intermediate_mode_costs[modes[-1]] = self.current_best_path_nodes[-1].forward_cost - start_cost
+            print("Modes of new path")
+            print([m.task_ids for m in modes])
+
+            self.initialize_samples_and_forward_queue()       
+
+    def generate_path(self) -> List[Node]:
+        path = []
+        goal, cost = self.get_lb_goal_node_and_cost()
+        if math.isinf(cost) or goal is None or (self.current_best_cost is not None and cost >= self.current_best_cost):
+            return path
+        path.append(goal)
+
+        n = goal
+
+        while n.forward_parent is not None:
+            path.append(n.forward_parent)
+            n = n.forward_parent
+
+        path.append(n)
+        path = path[::-1]
+        return path
+
+    def expand(self, node: Optional[Node] = None) -> None:
+        if node is None:
+            node = self.g.root
+            self.g.forward_queue = ForwarrdQueue(self.alpha)
+            self.forward_closed_set = set()
+            assert node.forward_cost == 0 ,(
+                " root node wrong"
+            )
+            print("Restart reverse search ...")
+            self.update_heuristic()
+            print("... finished")
+            
+        neighbors = self.g.get_neighbors(node, space_extent=self.approximate_space_extent)
+        if len(neighbors) == 0:
+            return
+        # add neighbors to open_queue
+        # assert all([(self.g.nodes[id].state.mode in node.state.mode.next_modes or self.g.nodes[id].state.mode == node.state.mode) for id in neighbors]),  (
+        #     "Not good"
+        # )
+        edge_costs = self.g.tot_neighbors_batch_cost_cache[node.id]
+        for id, edge_cost in zip(neighbors, edge_costs):
+            n = self.g.nodes[id]
+            assert (n.forward_parent == node) == (n.id in node.forward_children), (
+                    f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
+                    )
+            if n.id in node.blacklist or n.forward_parent == node:
+                continue
+            if node.state.mode in n.state.mode.next_modes:
+                continue
+            if n.is_transition:
+                if n.transition is not None and n.id in self.g.reverse_transition_node_ids[node.state.mode]: 
+                    if node.id != n.transition.id:
+                        continue
+            edge = (node, n)
+            if n.id != node.id and edge:
+                self.g.forward_queue.heappush((edge_cost, edge))
+    
+    def update_edge_collision_cache(
+        self, n0: Node, n1: Node, is_edge_collision_free: bool
+    ):
+        if is_edge_collision_free:
+            n1.whitelist.add(n0.id)
+            n0.whitelist.add(n1.id)
+        else:
+            n0.blacklist.add(n1.id)
+            n1.blacklist.add(n0.id)
+
+    def update_results_tracking(self, cost, path):
+        self.costs.append(cost)
+        self.times.append(time.time() - self.start_time)
+        self.all_paths.append(path)
+
+    def get_lb_goal_node_and_cost(self) -> Node:
+        min_id = np.argmin(self.operation.forward_costs[self.g.goal_node_ids], axis=0)
+        best_cost = self.operation.forward_costs[self.g.goal_node_ids][min_id]
+        best_node = self.g.goal_nodes[min_id]
+        return best_node, best_cost
+
+    @abstractmethod
+    def initialize_samples_and_forward_queue(self):
+        pass
+
+    @abstractmethod
+    def PlannerInitialization(self) -> None:
         """
-        Discretizes a given path into intermediate states based on specified resolution.
+        Initializes planner by setting parameters, creating the initial mode, and adding start node.
 
         Args:
-            path (List[State]): Sequence of states representing original path.
-            indices (List[List[int]]): Indices of relevant dimensions for interpolation.
-            resolution (float, optional): Step size used to determine the number of discretized points.
+            None
 
         Returns:
-            Tuple:
-                - List[State]: List of discretized states forming the refined path.
-                - List[List[int]: List of mode transitions associated with each discretized state.
-                - List[float]: List of cumulative costs along the discretized path.
+            None: None: This method does not return any value.
         """
+        pass
 
-        discretized_path, discretized_modes = [], []
-        for i in range(len(path) - 1):
-            start = path[i].state.q
-            end = path[i+1].state.q
-
-            # Calculate the vector difference and the length of the segment
-            segment_vector = end.state() - start.state()
-            # Determine the number of points needed for the current segment
-            if resolution is None: 
-                num_points = 2 
-            else:
-                N = config_dist(start, end) / resolution
-                N = max(2, N)
-                num_points = int(N)            # num_points = 
-            
-            # Create the points along the segment
-            mode = [path[i].state.mode.task_ids]
-            for j in range(num_points):
-                if path[i].transition and j == 0:
-                    if mode[0] != path[i+1].state.mode.task_ids:
-                        mode.append(path[i+1].state.mode.task_ids)
-                if j == 0:
-                    original_mode = path[i].state.mode
-                    discretized_modes.append(mode)
-                    discretized_path.append(path[i].state)
-                    if i == 0:
-                        continue
-
-                else:
-                    original_mode = path[i+1].state.mode
-                    if j != num_points-1:
-                        interpolated_point = start.state() + (segment_vector * (j / (num_points -1)))
-                        q_list = [interpolated_point[indices[i]] for i in range(len(indices))]
-                        discretized_path.append(State(NpConfiguration.from_list(q_list), original_mode))
-                        discretized_modes.append([mode[-1]])
-                        
-                
-        discretized_modes.append([path[-1].state.mode.task_ids])
-        discretized_path.append(path[-1].state)
-        path_a, path_b = discretized_path[:-1], discretized_path[1:]
-        batch_cost = self.env.batch_config_cost(path_a, path_b)
-        batch_cost = np.insert(batch_cost, 0, 0.0)
-        discretized_costs = cumulative_sum(batch_cost)
-        return discretized_path, discretized_modes, discretized_costs
-
-    def save_data(self, data:dict):
-        import os
-        import pickle
-        # Directory Handling: Ensure directory exists
-        home_dir = os.path.expanduser("~")
-        directory = os.path.join(home_dir, 'multirobot-pathplanning-benchmark/out')
-        dir = os.path.join(directory, 'Analysis')
-        os.makedirs(dir, exist_ok=True)
-
-        # Determine Next File Number: Use generator expressions for efficiency
-        next_file_number = max(
-            (int(file.split('.')[0]) for file in os.listdir(dir)
-            if file.endswith('.pkl') and file.split('.')[0].isdigit()),
-            default=-1
-        ) + 1
-
-        # Save Data as Pickle File
-        filename = os.path.join(dir, f"{next_file_number:04d}.pkl")
-        with open(filename, 'wb') as file:
-            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
-
-    # @abstractmethod
-    # def UpdateCost(self, mode:Mode, n: Node) -> None:
-    #     """
-    #     Updates cost for a given node and all its descendants by propagating the cost change down the tree.
-
-    #     Args:
-    #         mode (Mode): The current operational mode.
-    #         n (Node): Root node from which the cost update begins.
-
-    #     Returns:
-    #         None: This method does not return any value.
-    #     """
-    #     pass
-    # @abstractmethod
-    # def PlannerInitialization(self) -> None:
-    #     """
-    #     Initializes planner by setting parameters, creating the initial mode, and adding start node.
-
-    #     Args:
-    #         None
-
-    #     Returns:
-    #         None: None: This method does not return any value.
-    #     """
-    #     pass
-    # @abstractmethod
-    # def ManageTransition(self, mode:Mode, n_new: Node) -> None:
-    #     """
-    #     Checks if new node qualifies as a transition or termination node. 
-    #     If it does, node is converted into transition node, mode is updated accordingly, 
-    #     and a new path is generated if node is the lower-bound transition node. 
-
-    #     Args:
-    #         mode (Mode): The current operational mode.
-    #         n_new (Node): The newly added node to evaluate for triggering a transition or termination.
-
-    #     Returns:
-    #         None: This method does not return any value.
-    #     """
-    #     pass
-    # @abstractmethod
-    # def Plan(self) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    @abstractmethod
+    def Plan(self) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         """
         Executes planning process using an RRT* framework.
 
