@@ -1055,17 +1055,17 @@ def make_dual_ur5_waypoint_env():
                     == model.parents[collision_model.geometryObjects[id_2].parentJoint]
                 )
             ):
-                print(
-                    "removing",
-                    id_1,
-                    id_2,
-                    collision_model.geometryObjects[id_1].name,
-                    collision_model.geometryObjects[id_2].name,
-                    model.names[collision_model.geometryObjects[id_1].parentJoint],
-                    model.names[
-                        model.parents[collision_model.geometryObjects[id_2].parentJoint]
-                    ],
-                )
+                # print(
+                #     "removing",
+                #     id_1,
+                #     id_2,
+                #     collision_model.geometryObjects[id_1].name,
+                #     collision_model.geometryObjects[id_2].name,
+                #     model.names[collision_model.geometryObjects[id_1].parentJoint],
+                #     model.names[
+                #         model.parents[collision_model.geometryObjects[id_2].parentJoint]
+                #     ],
+                # )
                 collision_model.removeCollisionPair(pin.CollisionPair(id_1, id_2))
 
     model.lowerPositionLimit[0] = -3.14
@@ -1095,8 +1095,6 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         model, collision_model, visual_model = make_dual_ur5_waypoint_env()
         PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
-        print(self.limits)
-
         q_rnd_start = self.sample_random_valid_state()
         self.start_pos = q_rnd_start
 
@@ -1111,9 +1109,9 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         q_inter = self.sample_random_valid_state()
         q_goal = self.sample_random_valid_state()
 
-        print(q_rnd_start.state())
-        print(q_inter.state())
-        print(q_goal.state())
+        # print(q_rnd_start.state())
+        # print(q_inter.state())
+        # print(q_goal.state())
 
         self.tasks = [
             # r1
@@ -1140,10 +1138,6 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         self.sequence = self._make_sequence_from_names(
             ["a2_goal", "a1_goal", "terminal"]
         )
-
-        # permute goals, but only the ones that ware waypoints, not the final configuration
-
-        # append terminal task
 
         BaseModeLogic.__init__(self)
 
@@ -1374,17 +1368,18 @@ def make_dual_ur5_reorientation_env():
                     == model.parents[collision_model.geometryObjects[id_2].parentJoint]
                 )
             ):
-                print(
-                    "removing",
-                    id_1,
-                    id_2,
-                    collision_model.geometryObjects[id_1].name,
-                    collision_model.geometryObjects[id_2].name,
-                    model.names[collision_model.geometryObjects[id_1].parentJoint],
-                    model.names[
-                        model.parents[collision_model.geometryObjects[id_2].parentJoint]
-                    ],
-                )
+                # TODO: should probably use an sdf here
+                # print(
+                #     "removing",
+                #     id_1,
+                #     id_2,
+                #     collision_model.geometryObjects[id_1].name,
+                #     collision_model.geometryObjects[id_2].name,
+                #     model.names[collision_model.geometryObjects[id_1].parentJoint],
+                #     model.names[
+                #         model.parents[collision_model.geometryObjects[id_2].parentJoint]
+                #     ],
+                # )
                 collision_model.removeCollisionPair(pin.CollisionPair(id_1, id_2))
 
     model.lowerPositionLimit[0] = -3.14
@@ -1414,14 +1409,7 @@ class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         model, collision_model, visual_model = make_dual_ur5_reorientation_env()
         PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
-        # self.show(blocking=True)
-
-        print(self.limits)
-
-        # q_rnd_start = self.sample_random_valid_state()
-        # self.start_pos = q_rnd_start
         q = np.array([0, -2, 1.0, -1, -1.57, 1])
-
         self.start_pos = NpConfiguration.from_list([q, q])
 
         self.robots = ["a1_", "a2_"]
@@ -1472,6 +1460,7 @@ class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
+        # self.collision_resolution = 0.05
 
         self.manipulating_env = True
 
