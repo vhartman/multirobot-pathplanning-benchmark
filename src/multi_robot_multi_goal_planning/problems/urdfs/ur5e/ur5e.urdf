@@ -119,7 +119,7 @@
     <visual>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur_description/meshes/ur5e/visual/base.dae"/>
+        <mesh filename="./base.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -141,7 +141,7 @@
     <visual>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur_description/meshes/ur5e/visual/shoulder.dae"/>
+        <mesh filename="./shoulder.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -163,7 +163,7 @@
     <visual>
       <origin rpy="1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0.138"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur_description/meshes/ur5e/visual/upperarm.dae"/>
+        <mesh filename="./upperarm.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -185,7 +185,7 @@
     <visual>
       <origin rpy="1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0.007"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur_description/meshes/ur5e/visual/forearm.dae"/>
+        <mesh filename="./forearm.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -208,7 +208,7 @@
       <!-- TODO: Move this to a parameter -->
       <origin rpy="1.5707963267948966 0 0" xyz="0 0 -0.127"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur_description/meshes/ur5e/visual/wrist1.dae"/>
+        <mesh filename="./wrist1.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -230,7 +230,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 -0.0997"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur_description/meshes/ur5e/visual/wrist2.dae"/>
+        <mesh filename="./wrist2.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -252,7 +252,7 @@
     <visual>
       <origin rpy="1.5707963267948966 0 0" xyz="0 0 -0.0989"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur_description/meshes/ur5e/visual/wrist3.dae"/>
+        <mesh filename="./wrist3.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>

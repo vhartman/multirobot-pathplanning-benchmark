@@ -29,6 +29,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 
 import pinocchio as pin
 import hppfcl as fcl
+from pathlib import Path
 
 import json
 
@@ -36,7 +37,16 @@ from pinocchio.visualize import MeshcatVisualizer
 
 import time
 import sys
+import numba
 
+@numba.jit((numba.float64[:, :], numba.float64[:, :]), nopython=True)
+def multiply_4x4_matrices(mat1, mat2):
+    result = np.zeros((4, 4))
+    for i in range(4):
+        for j in range(4):
+            for k in range(4):
+                result[i, j] += mat1[i, k] * mat2[k, j]
+    return result
 
 class PinocchioEnvironment(BaseProblem):
     # misc
@@ -65,6 +75,8 @@ class PinocchioEnvironment(BaseProblem):
 
         ids = range(len(collision_model.geometryObjects))
 
+        self.root_name = "table"
+
         for i, id_1 in enumerate(ids):
             obj_name = collision_model.geometryObjects[id_1].name
             if obj_name[:3] == "obj" or obj_name[:3] == "box":
@@ -73,7 +85,7 @@ class PinocchioEnvironment(BaseProblem):
                 # print(obj_name)
                 # print(placement)
                 self.initial_sg[id_1] = (
-                    "table_0",
+                    self.root_name,
                     parent,
                     np.round(placement, 3).tobytes(),
                     pin.SE3(placement),
@@ -162,7 +174,7 @@ class PinocchioEnvironment(BaseProblem):
         pass
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def _set_to_scenegraph(self, sg, update_visual: bool = False):
+    def _set_to_scenegraph(self, sg, update_visual: bool = False, update_collision_pairs = False):
         # update object positions
         # placement = pin.SE3.Identity()
         for frame_id, (parent, parent_joint, pose, placement) in sg.items():
@@ -173,19 +185,41 @@ class PinocchioEnvironment(BaseProblem):
             if (
                 frame_id in self.current_scenegraph
                 and parent == self.current_scenegraph[frame_id][0]
-                and parent == "table_0"
+                and parent == self.root_name
                 and self.current_scenegraph[frame_id][2] == pose
             ):
             #     # print("A")
                 continue
 
             frame_pose = self.data.oMi[parent_joint].act(placement)
+            # frame_pose = multiply_4x4_matrices(self.data.oMi[parent_joint].homogeneous, placement.homogeneous)
+            # frame_pose = pin.SE3(frame_pose)
             self.collision_model.geometryObjects[frame_id].placement = frame_pose
 
             if update_visual:
                 frame_name = self.collision_model.geometryObjects[frame_id].name
                 vis_frame_id = self.visual_model.getGeometryId(frame_name)
                 self.visual_model.geometryObjects[vis_frame_id].placement = frame_pose
+
+            if update_collision_pairs and self.current_scenegraph[frame_id][0] != sg[frame_id][0]:
+                # disable collisions for the objects that are linked together
+                new_parent_id = self.collision_model.getGeometryId(parent)
+                old_parent_id = self.collision_model.getGeometryId(self.current_scenegraph[frame_id][0])
+
+                # print(self.collision_model.geometryObjects[frame_id].name, parent)
+                # print("removing", frame_id, new_parent_id)
+
+                # print(self.collision_model.geometryObjects[frame_id].name, self.current_scenegraph[frame_id][0])
+                # print("adding", frame_id, old_parent_id)
+
+                if self.collision_model.existCollisionPair(pin.CollisionPair(frame_id, new_parent_id)):
+                    new_pair_id = self.collision_model.findCollisionPair(pin.CollisionPair(frame_id, new_parent_id))
+                    self.geom_data.deactivateCollisionPair(new_pair_id)
+
+                # re-enable them for the objects that are not linked together anymore
+                if self.collision_model.existCollisionPair(pin.CollisionPair(frame_id, old_parent_id)):
+                    old_pair_id = self.collision_model.findCollisionPair(pin.CollisionPair(frame_id, old_parent_id))
+                    self.geom_data.activateCollisionPair(old_pair_id)
 
             self.current_scenegraph[frame_id] = sg[frame_id]
 
@@ -412,31 +446,32 @@ class PinocchioEnvironment(BaseProblem):
         # self.viz.updatePlacements(pin.GeometryType.COLLISION)
         # self.viz.updatePlacements(pin.GeometryType.VISUAL)
 
-        # for i in range(len(self.collision_model.collisionPairs)):
-        #     in_collision = pin.computeCollision(self.collision_model, self.geom_data, i)
-        #     if in_collision:
-        #         cr = self.geom_data.collisionResults[i]
-        #         cp = self.collision_model.collisionPairs[i]
-        #         if cr.isCollision():
-        #             print(
-        #                 self.collision_model.geometryObjects[cp.first].name,
-        #                 self.collision_model.geometryObjects[cp.second].name,
-        #             )
-        #             print(
-        #                 "collision pair:",
-        #                 cp.first,
-        #                 ",",
-        #                 cp.second,
-        #                 "- collision:",
-        #                 "Yes" if cr.isCollision() else "No",
-        #             )
-        # print(q)
-        # print('colliding')
-        # input("A")
+        if False:
+            for i in range(len(self.collision_model.collisionPairs)):
+                in_collision = pin.computeCollision(self.collision_model, self.geom_data, i)
+                if in_collision:
+                    cr = self.geom_data.collisionResults[i]
+                    cp = self.collision_model.collisionPairs[i]
+                    if cr.isCollision():
+                        print(
+                            self.collision_model.geometryObjects[cp.first].name,
+                            self.collision_model.geometryObjects[cp.second].name,
+                        )
+                        print(
+                            "collision pair:",
+                            cp.first,
+                            ",",
+                            cp.second,
+                            "- collision:",
+                            "Yes" if cr.isCollision() else "No",
+                        )
+            # print(q)
+            # print('colliding')
+            # input("A")
 
-        #         return False
+            #         return False
 
-        # return True
+            # return True
 
         in_collision = pin.computeCollisions(self.collision_model, self.geom_data, True)
         # in_collision = pin.computeCollisionsparallel(self.collision_model, self.geom_data, True)
@@ -629,6 +664,8 @@ class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
         model, collision_model, visual_model = make_pin_other_hallway_two_dim_env()
         PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
+        self.root_name = "table_0"
+
         self.start_pos = NpConfiguration.from_list([[1.5, 0.0, 0], [-1.5, 0.0, 0]])
 
         self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
@@ -673,7 +710,7 @@ def make_2d_handover():
     ids = range(len(collision_model.geometryObjects))
 
     env_names = [
-        "",
+        "table_0",
         "wall1_0",
         "wall2_0",
         "wall3_0",
@@ -710,6 +747,8 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
         model, collision_model, visual_model = make_2d_handover()
         PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
+        self.root_name = "table_0"
+
         self.manipulating_env = True
 
         self.start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
@@ -720,76 +759,11 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
 
         self.robots = ["a1", "a2"]
 
-        task_1_pose = np.array([-0.00353716, 0.76632651, 0.58110193])
-        # task_1_pose = np.array([-0.00353716, 0.76632651, 0.])
-        handover_pose = np.array(
-            [
-                0.98929765,
-                -0.89385425,
-                1.02667076,
-                1.49362046 + 0.01,
-                -1.02441501 + 0.01,
-                1.42582986,
-            ]
-        )
-        task_2_pose = np.array([1.19521468, 0.41126415, 0.98020169])
-        task_3_pose = np.array([0.50360456, -1.10537035, 0.97861029])
-        task_4_pose = np.array([0.80358028, 1.54452128, 0.97864346])
-        task_5_pose = np.array(
-            [
-                -4.99289680e-01,
-                7.98808085e-01,
-                7.11081401e-01,
-                -1.40245030e-04,
-                -4.99267552e-01,
-                -2.93781443e00,
-            ]
-        )
+        for obj in self.collision_model.geometryObjects:
+            if obj.name[-2:] == "_0":
+                obj.name = obj.name[:-2]
 
-        self.tasks = [
-            # a1
-            Task(
-                ["a1"],
-                SingleGoal(task_1_pose),
-                type="pick",
-                frames=["a1_0", "obj1_0"],
-            ),
-            Task(
-                ["a1", "a2"],
-                GoalSet([handover_pose]),
-                # SingleGoal(keyframes[1]),
-                type="handover",
-                frames=["a2_0", "obj1_0"],
-            ),
-            Task(
-                ["a2"],
-                SingleGoal(task_2_pose),
-                type="place",
-                frames=["table_0", "obj1_0"],
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(task_3_pose),
-                type="pick",
-                frames=["a1_0", "obj2_0"],
-            ),
-            Task(
-                ["a1"],
-                SingleGoal(task_4_pose),
-                type="place",
-                frames=["table_0", "obj2_0"],
-            ),
-            # terminal
-            # Task(["a1", "a2"], SingleGoal(keyframes[3])),
-            Task(["a1", "a2"], GoalSet([task_5_pose])),
-        ]
-
-        self.tasks[0].name = "a1_pick_obj1"
-        self.tasks[1].name = "handover"
-        self.tasks[2].name = "a2_place"
-        self.tasks[3].name = "a1_pick_obj2"
-        self.tasks[4].name = "a1_place_obj2"
-        self.tasks[5].name = "terminal"
+        self.import_tasks("2d_handover_tasks.txt")
 
         self.sequence = self._make_sequence_from_names(
             [
@@ -822,7 +796,7 @@ def make_piano():
     ids = range(len(collision_model.geometryObjects))
 
     env_names = [
-        "",
+        "table_0",
         "wall1_0",
         "wall2_0",
         "wall3_0",
@@ -864,6 +838,8 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
         self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
         self.robot_dims = {"a1": 3, "a2": 3}
         # self.C.view(True)
+
+        self.root_name = "table_0"
 
         self.robots = ["a1", "a2"]
 
@@ -957,16 +933,22 @@ def add_namespace_prefix_to_models(model, collision_model, visual_model, namespa
 
 def make_dual_ur5_waypoint_env():
     # urdf_path = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
-    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained.urdf"
-    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_primitives.urdf"
-    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/foam-venv/foam/test.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/foam-venv/foam/test_primitives.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained_coll_primitives.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/pin-venv/hello-world/ur5e/ur5e.urdf"
+    urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
 
-    robot_1, r1_coll, r1_viz = pin.buildModelsFromUrdf(urdf_path)
-    robot_2, r2_coll, r2_viz = pin.buildModelsFromUrdf(urdf_path)
+    mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/visual/"
+
+    # mesh_dir = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/"
+
+    robot_1 = pin.buildModelFromUrdf(urdf_path)
+    r1_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, mesh_dir)
+    r1_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, mesh_dir)
+
+    robot_2 = pin.buildModelFromUrdf(urdf_path)
+    r2_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, mesh_dir)
+    r2_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, mesh_dir)
+
+    # robot_1, r1_coll, r1_viz = pin.buildModelsFromUrdf(urdf_path)
+    # robot_2, r2_coll, r2_viz = pin.buildModelsFromUrdf(urdf_path)
 
     # robot_3, r3_coll, r3_viz = pin.buildModelsFromUrdf(urdf_path)
     # robot_4, r4_coll, r4_viz = pin.buildModelsFromUrdf(urdf_path)
@@ -1057,11 +1039,6 @@ def make_dual_ur5_waypoint_env():
             #     and "ur5_2" in collision_model.geometryObjects[id_2].name
             #     and abs(id_1 - id_2) < 4
             # ):
-            if (
-                "box" in collision_model.geometryObjects[id_1].name
-                or "box" in collision_model.geometryObjects[id_2].name
-            ):
-                continue
             if (
                 (
                     "base_link" in collision_model.geometryObjects[id_1].name
@@ -1202,17 +1179,17 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
 
 def make_dual_ur5_reorientation_env():
-    # urdf_path = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_primitives.urdf"
-    urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/foam-venv/foam/test.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/foam-venv/foam/test_primitives.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained_coll_primitives.urdf"
-    # urdf_path = "/home/valentin/git/postdoc/pin-venv/hello-world/ur5e/ur5e.urdf"
+    urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
 
-    robot_1, r1_coll, r1_viz = pin.buildModelsFromUrdf(urdf_path)
-    robot_2, r2_coll, r2_viz = pin.buildModelsFromUrdf(urdf_path)
+    mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/visual/"
+
+    robot_1 = pin.buildModelFromUrdf(urdf_path)
+    r1_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, mesh_dir)
+    r1_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, mesh_dir)
+
+    robot_2 = pin.buildModelFromUrdf(urdf_path)
+    r2_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, mesh_dir)
+    r2_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, mesh_dir)
 
     # robot_3, r3_coll, r3_viz = pin.buildModelsFromUrdf(urdf_path)
     # robot_4, r4_coll, r4_viz = pin.buildModelsFromUrdf(urdf_path)
@@ -1377,8 +1354,11 @@ def make_dual_ur5_reorientation_env():
                 continue
             if (
                 (
-                    "base_link" in collision_model.geometryObjects[id_1].name
-                    or id_1 + 1 == id_2
+                    "base_link" in collision_model.geometryObjects[id_1].name and ((
+                    "ur5_1" in collision_model.geometryObjects[id_1].name
+                    and "ur5_1" in collision_model.geometryObjects[id_2].name) or (
+                    "ur5_2" in collision_model.geometryObjects[id_1].name
+                    and "ur5_2" in collision_model.geometryObjects[id_2].name))
                 )
                 or (
                     collision_model.geometryObjects[id_1].parentJoint
@@ -1389,17 +1369,17 @@ def make_dual_ur5_reorientation_env():
                     == model.parents[collision_model.geometryObjects[id_2].parentJoint]
                 )
             ):
-                # print(
-                #     "removing",
-                #     id_1,
-                #     id_2,
-                #     collision_model.geometryObjects[id_1].name,
-                #     collision_model.geometryObjects[id_2].name,
-                #     model.names[collision_model.geometryObjects[id_1].parentJoint],
-                #     model.names[
-                #         model.parents[collision_model.geometryObjects[id_2].parentJoint]
-                #     ],
-                # )
+                print(
+                    "removing",
+                    id_1,
+                    id_2,
+                    collision_model.geometryObjects[id_1].name,
+                    collision_model.geometryObjects[id_2].name,
+                    model.names[collision_model.geometryObjects[id_1].parentJoint],
+                    model.names[
+                        model.parents[collision_model.geometryObjects[id_2].parentJoint]
+                    ],
+                )
                 collision_model.removeCollisionPair(pin.CollisionPair(id_1, id_2))
 
     model.lowerPositionLimit[0] = -3.14

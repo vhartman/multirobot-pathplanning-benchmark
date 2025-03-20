@@ -547,6 +547,8 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
 
         rotated_terminal_poses.append(keyframes[3])
 
+        # self.import_tasks("2d_handover_tasks.txt")
+
         self.tasks = [
             # a1
             Task(
@@ -605,6 +607,8 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
                 "terminal",
             ]
         )
+
+        # self.export_tasks("2d_handover_tasks.txt")
 
         BaseModeLogic.__init__(self)
 
@@ -1710,7 +1714,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
             print(t.robots)
             print(np.array2string(np.array(arr), separator=", "))
 
-        self.export_tasks("tmp.txt")
+        # self.export_tasks("tmp.txt")
 
         print([t.name for t in self.tasks])
 
