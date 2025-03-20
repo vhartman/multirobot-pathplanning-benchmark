@@ -128,7 +128,7 @@
     <collision>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/pin-venv/hello-world/ur5e_2nd_try/ur_description/meshes/ur5e/collision/base.stl"/>
+        <mesh filename="./base.stl"/>
       </geometry>
     </collision>
     <inertial>

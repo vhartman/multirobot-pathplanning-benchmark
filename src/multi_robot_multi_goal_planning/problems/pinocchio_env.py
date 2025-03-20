@@ -96,7 +96,7 @@ class PinocchioEnvironment(BaseProblem):
         n = len(self.collision_model.geometryObjects)
         mat = np.zeros((n, n)) - self.collision_tolerance
 
-        self.geom_data.setSecurityMargins(self.collision_model, mat)
+        # self.geom_data.setSecurityMargins(self.collision_model, mat)
 
     def setup_visualization(self):
         self.viz = MeshcatVisualizer(
@@ -932,20 +932,22 @@ def add_namespace_prefix_to_models(model, collision_model, visual_model, namespa
 
 
 def make_dual_ur5_waypoint_env():
-    # urdf_path = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
-    urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
+    # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
+    # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained_coll_primitives.urdf"
+    urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained.urdf"
 
-    mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/visual/"
+    coll_mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur5e/collision/"
+    visual_mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur5e/visual/"
 
     # mesh_dir = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/"
 
     robot_1 = pin.buildModelFromUrdf(urdf_path)
-    r1_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, mesh_dir)
-    r1_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, mesh_dir)
+    r1_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir)
+    r1_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir)
 
     robot_2 = pin.buildModelFromUrdf(urdf_path)
-    r2_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, mesh_dir)
-    r2_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, mesh_dir)
+    r2_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir)
+    r2_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir)
 
     # robot_1, r1_coll, r1_viz = pin.buildModelsFromUrdf(urdf_path)
     # robot_2, r2_coll, r2_viz = pin.buildModelsFromUrdf(urdf_path)
@@ -1180,16 +1182,19 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
 def make_dual_ur5_reorientation_env():
     urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
+    # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_meshes.urdf"
+    # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_primitives.urdf"
 
-    mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/visual/"
+    coll_mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/collision/"
+    visual_mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/visual/"
 
     robot_1 = pin.buildModelFromUrdf(urdf_path)
-    r1_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, mesh_dir)
-    r1_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, mesh_dir)
+    r1_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir)
+    r1_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir)
 
     robot_2 = pin.buildModelFromUrdf(urdf_path)
-    r2_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, mesh_dir)
-    r2_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, mesh_dir)
+    r2_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir)
+    r2_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir)
 
     # robot_3, r3_coll, r3_viz = pin.buildModelsFromUrdf(urdf_path)
     # robot_4, r4_coll, r4_viz = pin.buildModelsFromUrdf(urdf_path)

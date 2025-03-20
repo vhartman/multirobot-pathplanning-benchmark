@@ -119,7 +119,7 @@
     <visual>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/base.dae"/>
+        <mesh filename="./base.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -128,7 +128,7 @@
     <collision>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/collision/base.stl"/>
+        <mesh filename="./base.stl"/>
       </geometry>
     </collision>
     <inertial>
@@ -141,7 +141,7 @@
     <visual>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/shoulder.dae"/>
+        <mesh filename="./shoulder.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -150,7 +150,7 @@
     <collision>
       <origin rpy="0 0 3.141592653589793" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/collision/shoulder.stl"/>
+        <mesh filename="./shoulder.stl"/>
       </geometry>
     </collision>
     <inertial>
@@ -163,7 +163,7 @@
     <visual>
       <origin rpy="1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0.1762"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/upperarm.dae"/>
+        <mesh filename="./upperarm.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -172,7 +172,7 @@
     <collision>
       <origin rpy="1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0.1762"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/collision/upperarm.stl"/>
+        <mesh filename="./upperarm.stl"/>
       </geometry>
     </collision>
     <inertial>
@@ -185,7 +185,7 @@
     <visual>
       <origin rpy="1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0.0393"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/forearm.dae"/>
+        <mesh filename="./forearm.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -194,7 +194,7 @@
     <collision>
       <origin rpy="1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0.0393"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/collision/forearm.stl"/>
+        <mesh filename="./forearm.stl"/>
       </geometry>
     </collision>
     <inertial>
@@ -208,7 +208,7 @@
       <!-- TODO: Move this to a parameter -->
       <origin rpy="1.5707963267948966 0 0" xyz="0 0 -0.135"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/wrist1.dae"/>
+        <mesh filename="./wrist1.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -217,7 +217,7 @@
     <collision>
       <origin rpy="1.5707963267948966 0 0" xyz="0 0 -0.135"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/collision/wrist1.stl"/>
+        <mesh filename="./wrist1.stl"/>
       </geometry>
     </collision>
     <inertial>
@@ -230,7 +230,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 -0.12"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/wrist2.dae"/>
+        <mesh filename="./wrist2.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -239,7 +239,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 -0.12"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/collision/wrist2.stl"/>
+        <mesh filename="./wrist2.stl"/>
       </geometry>
     </collision>
     <inertial>
@@ -252,7 +252,7 @@
     <visual>
       <origin rpy="1.5707963267948966 0 0" xyz="0 0 -0.1168"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/wrist3.dae"/>
+        <mesh filename="./wrist3.dae"/>
       </geometry>
       <material name="LightGrey">
         <color rgba="0.7 0.7 0.7 1.0"/>
@@ -261,7 +261,7 @@
     <collision>
       <origin rpy="1.5707963267948966 0 0" xyz="0 0 -0.1168"/>
       <geometry>
-        <mesh filename="/home/valentin/git/postdoc/robotic-venv/mr_bench/src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/collision/wrist3.stl"/>
+        <mesh filename="./wrist3.stl"/>
       </geometry>
     </collision>
     <inertial>
