@@ -45,8 +45,12 @@ def main():
         help="Enable optimization (default: True)",
     )
     parser.add_argument("--seed", type=int, default=1, help="Seed")
-    parser.add_argument("--num_iters", type=int, help="Maximum number of iterations for termination.")
-    parser.add_argument("--max_time", type=float, help="Maximum runtime (in seconds) for termination.")
+    parser.add_argument(
+        "--num_iters", type=int, help="Maximum number of iterations for termination."
+    )
+    parser.add_argument(
+        "--max_time", type=float, help="Maximum runtime (in seconds) for termination."
+    )
     parser.add_argument(
         "--planner",
         choices=["joint_prm", "tensor_prm", "prioritized", "rrt_star"],
@@ -128,7 +132,6 @@ def main():
     elif args.max_time is not None:
         termination_condition = RuntimeTerminationCondition(args.max_time)
 
-
     if args.planner == "joint_prm":
         path, info = joint_prm_planner(
             env,
@@ -174,7 +177,6 @@ def main():
             informed_batch_size=300,
             # gaussian=options["gaussian"]
         ).Plan(args.optimize)
-
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
             env,
