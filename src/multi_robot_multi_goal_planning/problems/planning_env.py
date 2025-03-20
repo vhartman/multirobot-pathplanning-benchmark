@@ -27,6 +27,15 @@ class Goal(ABC):
     def sample(self, mode: "Mode") -> NDArray:
         pass
 
+    @abstractmethod
+    def serialize(self):
+        pass
+
+    @classmethod
+    @abstractmethod
+    def from_data(cls, data):
+        pass
+
 
 # class DummyGoal(ABC):
 #     def __init__(self):
@@ -54,6 +63,13 @@ class GoalRegion(Goal):
             + self.limits[0, :]
         )
         return q
+
+    def serialize(self):
+        return self.limits.tolist()
+    
+    @classmethod
+    def from_data(cls, data):
+        return GoalRegion(np.array(data))
 
 
 # TODO: implement sampler to sample a goal
@@ -83,6 +99,15 @@ class ConditionalGoal(Goal):
 
         raise ValueError("No feasible goal in mode")
 
+    def serialize(self):
+        print("This is not yet implemented")
+        raise NotImplementedError
+    
+    @classmethod
+    def from_data(cls, data):
+        print("This is not yet implemented")
+        raise NotImplementedError
+    
 
 class GoalSet(Goal):
     def __init__(self, goals):
@@ -99,7 +124,13 @@ class GoalSet(Goal):
         rnd = np.random.randint(0, len(self.goals))
         return self.goals[rnd]
 
+    def serialize(self):
+        return [goal.tolist() for goal in self.goals]
 
+    @classmethod
+    def from_data(cls, data):
+        return GoalSet([np.array(goal) for goal in data])
+    
 class SingleGoal(Goal):
     def __init__(self, goal: NDArray):
         self.goal = goal
@@ -114,6 +145,13 @@ class SingleGoal(Goal):
 
     def sample(self, mode: "Mode") -> NDArray:
         return self.goal
+
+    def serialize(self):
+        return self.goal.tolist()
+    
+    @classmethod
+    def from_data(cls, data):
+        return SingleGoal(np.array(data))
 
 
 class Task:
@@ -690,7 +728,8 @@ class BaseProblem(ABC):
             task_data = {
                 "name": t.name,
                 "robots": t.robots,
-                "goal": t.goal.goal.tolist() if isinstance(t.goal, SingleGoal) else t.goal.sample(None).tolist(),
+                "goal_type": type(t.goal).__name__,
+                "goal": t.goal.serialize(),
                 "type": t.type,
                 "frames": t.frames,
                 "side_effect": t.side_effect,
@@ -711,11 +750,20 @@ class BaseProblem(ABC):
             task_list = []
             for line in file:
                 task_data = eval(line.strip())  # Convert string representation back to dictionary
-                goal = (
-                    SingleGoal(np.array(task_data["goal"]))
-                    if task_data["goal"] is not None
-                    else None
-                )
+                goal_type = task_data["goal_type"]
+                
+                goal = None
+                if goal_type == "SingleGoal":
+                    goal = SingleGoal.from_data(task_data["goal"])
+                elif goal_type == "GoalRegion":
+                    goal = GoalRegion.from_data(task_data["goal"])
+                elif goal_type == "GoalSet":
+                    goal = GoalSet.from_data(task_data["goal"])
+                elif goal_type == "ConditionalGoal":
+                    goal = ConditionalGoal.from_data(task_data["goal"])
+                elif goal_type == "ConstrainedGoal":
+                    goal = ConstrainedGoal.from_data(task_data["goal"])
+
                 task = Task(
                     robots=task_data["robots"],
                     goal=goal,
