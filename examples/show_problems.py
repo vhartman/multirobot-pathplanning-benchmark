@@ -86,6 +86,9 @@ def benchmark_collision_checking(env: rai_env, N=10000):
     conf_type = type(env.get_start_pos())
 
     def sample_next_mode(mode: Mode):
+        if env.is_terminal_mode(mode):
+            return None
+        
         while True:
             possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
             if len(possible_next_task_combinations) > 0:
@@ -129,12 +132,8 @@ def benchmark_collision_checking(env: rai_env, N=10000):
 
             q = conf_type.from_list(q)
 
-            if env.is_collision_free(q, mode):
-                if env.is_terminal_mode(mode):
-                    next_mode = None
-                else:
-                    next_mode = env.get_next_mode(q, mode)
-
+            if env.is_collision_free(q, mode):                
+                next_mode = env.get_next_mode(q, mode)
                 return next_mode
 
     # create list of modes that we can reach

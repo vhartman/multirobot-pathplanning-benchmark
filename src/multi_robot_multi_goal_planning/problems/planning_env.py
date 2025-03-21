@@ -352,7 +352,7 @@ class SequenceMixin(BaseModeLogic):
     def is_terminal_mode(self, mode: Mode):
         if mode.task_ids == self._terminal_task_ids:
             return True
-
+        
         return False
 
     def get_current_seq_index(self, mode: Mode) -> int:
