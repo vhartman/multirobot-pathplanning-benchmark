@@ -401,7 +401,13 @@ class PinocchioEnvironment(BaseProblem):
 
         if blocking:
             input("Press Enter to continue...")
+    
+    def sample_config_uniform_in_limits(self):
+        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
+        q = NpConfiguration(rnd, self.start_pos.array_slice)
 
+        return q
+    
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
@@ -524,13 +530,15 @@ class PinocchioEnvironment(BaseProblem):
         idx = list(range(int(N)))
         if randomize_order:
             # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(int(N)).copy()
+            idx = generate_binary_search_indices(int(N))
 
-        qs = []
+        q1_state = q1.state()
+        q2_state = q2.state()
+        dir = (q2_state - q1_state) / (N - 1)
 
         for i in idx:
             # print(i / (N-1))
-            q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
+            q = q1_state + dir * (i)
             q = NpConfiguration(q, q1.array_slice)
 
             if not self.is_collision_free(q, mode):
