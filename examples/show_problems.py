@@ -148,26 +148,16 @@ def benchmark_collision_checking(env: rai_env, N=10000):
         if next_mode is not None:
             reachable_modes.append(next_mode)
 
+    is_collision_free = env.is_collision_free
+
     # actually do the benchmarking
     print("Starting benchmark")
     start = time.time()
     for _ in range(N):
-        q = []
-        for i in range(len(env.robots)):
-            lims = env.limits[:, env.robot_idx[env.robots[i]]]
-            if lims[0, 0] < lims[1, 0]:
-                qr = (
-                    np.random.rand(env.robot_dims[env.robots[i]])
-                    * (lims[1, :] - lims[0, :])
-                    + lims[0, :]
-                )
-            else:
-                qr = np.random.rand(env.robot_dims[env.robots[i]]) * 6 - 3
-            q.append(qr)
-
+        q = env.sample_config_uniform_in_limits()
         m = random.choice(reachable_modes)
 
-        env.is_collision_free(type(env.get_start_pos()).from_list(q), m)
+        is_collision_free(q, m)
 
     end = time.time()
 

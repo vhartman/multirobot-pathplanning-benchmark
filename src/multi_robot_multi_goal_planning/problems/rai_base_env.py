@@ -374,6 +374,37 @@ class rai_env(BaseProblem):
             return False
 
         return True
+    
+    def is_collision_free_np(
+        self,
+        q: Optional[Configuration],
+        m: Mode,
+        collision_tolerance: float = None,
+    ) -> bool:
+        if collision_tolerance is None:
+            collision_tolerance = self.collision_tolerance
+
+        # print(q)
+        # self.C.setJointState(q)
+
+        if q is not None:
+            self.set_to_mode(m)
+            self.C.setJointState(q)
+
+        # self.C.view()
+
+        binary_collision_free = self.C.getCollisionFree()
+        if binary_collision_free:
+            return True
+
+        col = self.C.getCollisionsTotalPenetration()
+        # print(col)
+        # self.C.view(False)
+        if col > collision_tolerance:
+            # self.C.view(False)
+            return False
+
+        return True
 
     def is_collision_free_for_robot(
         self, r: str, q: NDArray, m: Mode, collision_tolerance: float = None
@@ -460,16 +491,23 @@ class rai_env(BaseProblem):
         # if N == 0:
         #     return True
 
-        idx = list(range(N))
         if randomize_order:
             # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(N).copy()
+            idx = generate_binary_search_indices(N)
+        else:
+            idx = list(range(N))
+
+        is_collision_free = self.is_collision_free_np
+
+        q1_state = q1.state()
+        q2_state = q2.state()
+        dir = (q2_state - q1_state) / (N - 1)
 
         for i in idx:
             # print(i / (N-1))
-            q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
-            q_conf = NpConfiguration(q, q1.array_slice)
-            if not self.is_collision_free(q_conf, m, collision_tolerance=tolerance):
+            q = q1_state + dir * (i)
+            # q_conf = NpConfiguration(q, q1.array_slice)
+            if not is_collision_free(q, m, collision_tolerance=tolerance):
                 # print('coll')
                 return False
 
