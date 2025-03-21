@@ -1006,6 +1006,9 @@ class Graph:
         wasted_pops = 0
         processed_edges = 0
 
+        queue_pop = queue.heappop
+        queue_push = queue.heappush
+
         num_iter = 0
         while queue:
             # while len(open_queue) > 0:
@@ -1018,7 +1021,7 @@ class Graph:
                 print(len(queue))
 
             # f_pred, edge_cost, (n0, n1) = heapq.heappop(open_queue)
-            f_pred, edge_cost, (n0, n1) = queue.heappop()
+            f_pred, edge_cost, (n0, n1) = queue_pop()
             # print(open_queue[-1])
             # print(open_queue[-2])
             # f_pred, edge_cost, edge = open_queue.pop()
@@ -1151,7 +1154,7 @@ class Graph:
 
                     # if n not in closed_list:
                     # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
-                    queue.heappush((f_node, edge_cost, (n1, n)))
+                    queue_push((f_node, edge_cost, (n1, n)))
                     # new_edges.append((f_node, edge_cost, (n1, n)))
 
                     # added_edge = True
