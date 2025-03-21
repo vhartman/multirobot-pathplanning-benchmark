@@ -401,7 +401,13 @@ class PinocchioEnvironment(BaseProblem):
 
         if blocking:
             input("Press Enter to continue...")
+    
+    def sample_config_uniform_in_limits(self):
+        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
+        q = NpConfiguration(rnd, self.start_pos.array_slice)
 
+        return q
+    
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
