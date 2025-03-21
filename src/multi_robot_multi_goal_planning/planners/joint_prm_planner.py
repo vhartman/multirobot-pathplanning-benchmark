@@ -1751,20 +1751,7 @@ def joint_prm_planner(
                 had_to_be_clipped = False
                 if not try_direct_sampling or env.cost_metric != "euclidean":
                     # completely random sample configuration from the (valid) domain robot by robot
-                    q = []
-                    for i in range(len(env.robots)):
-                        r = env.robots[i]
-                        lims = env.limits[:, env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = (
-                                np.random.rand(env.robot_dims[r])
-                                * (lims[1, :] - lims[0, :])
-                                + lims[0, :]
-                            )
-                        else:
-                            qr = np.random.rand(env.robot_dims[r]) * 6 - 3
-
-                        q.append(qr)
+                    q = env.sample_config_uniform_in_limits()
                 else:
                     # sample by sampling each agent separately
                     q = []
@@ -1845,8 +1832,9 @@ def joint_prm_planner(
                                 #     print("AAAAAAAAA")
                                 #     print(np.linalg.norm(path[start_ind].q[i] - qr) + np.linalg.norm(path[end_ind].q[i] - qr), c_robot_bound)
 
-                                clipped = np.clip(qr, lims[0, :], lims[1, :])
-                                if not np.array_equal(clipped, qr):
+                                # clipped = np.clip(qr, lims[0, :], lims[1, :])
+                                # if not np.array_equal(clipped, qr):
+                                if np.any((qr < lims[0, :]) | (qr > lims[1, :])):
                                     had_to_be_clipped = True
                                     break
                                     # print("AAA")
@@ -1856,7 +1844,10 @@ def joint_prm_planner(
                 if had_to_be_clipped:
                     continue
 
-                q = conf_type.from_list(q)
+                if not isinstance(q, Configuration):
+                    # q = conf_type.from_list(q)
+                    q = conf_type(np.concatenate(q), env.start_pos.array_slice)
+
 
                 if sum(env.batch_config_cost(q, focal_points)) > current_cost:
                     # print(path[start_ind].mode, path[end_ind].mode, m)
@@ -2139,7 +2130,7 @@ def joint_prm_planner(
 
                         q.append(qr)
 
-                q = conf_type.from_list(q)
+                q = conf_type(np.concatenate(q), env.start_pos.array_slice)
 
                 if sum(env.batch_config_cost(q, focal_points)) > current_cost:
                     continue
@@ -2265,21 +2256,7 @@ def joint_prm_planner(
             # print(m)
 
             # sample configuration
-            q = []
-            for i in range(len(env.robots)):
-                r = env.robots[i]
-                lims = env.limits[:, env.robot_idx[r]]
-                if lims[0, 0] < lims[1, 0]:
-                    qr = (
-                        np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
-                        + lims[0, :]
-                    )
-                else:
-                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
-
-                q.append(qr)
-
-            q = conf_type.from_list(q)
+            q = env.sample_config_uniform_in_limits()
 
             if cost is not None:
                 if sum(env.batch_config_cost(q, focal_points)) > cost:
@@ -2319,11 +2296,20 @@ def joint_prm_planner(
                 active_task = env.get_active_task(mode, None)
 
             goals_to_sample = active_task.robots
-
             goal_sample = active_task.goal.sample(mode)
 
             # if mode.task_ids == [3, 8]:
             #     print(active_task.name)
+
+            # q = env.sample_config_uniform_in_limits()
+
+            # for i in range(len(env.robots)):
+            #     r = env.robots[i]
+            #     if r in goals_to_sample:
+            #         offset = 0
+            #         for _, task_robot in enumerate(active_task.robots):
+            #             if task_robot == r:
+            #                 q[i] = goal_sample[offset : offset + env.robot_dims[task_robot]]
 
             q = []
             for i in range(len(env.robots)):
@@ -2352,7 +2338,7 @@ def joint_prm_planner(
 
                     q.append(qr)
 
-            q = conf_type.from_list(q)
+            q = conf_type(np.concatenate(q), env.start_pos.array_slice)
 
             if cost is not None:
                 if sum(env.batch_config_cost(q, focal_points)) > cost:
