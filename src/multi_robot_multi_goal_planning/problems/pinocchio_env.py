@@ -107,7 +107,7 @@ class PinocchioEnvironment(BaseProblem):
         n = len(self.collision_model.geometryObjects)
         mat = np.zeros((n, n)) - self.collision_tolerance
 
-        # self.geom_data.setSecurityMargins(self.collision_model, mat)
+        self.geom_data.setSecurityMargins(self.collision_model, mat)
 
     def setup_visualization(self):
         self.viz = MeshcatVisualizer(
