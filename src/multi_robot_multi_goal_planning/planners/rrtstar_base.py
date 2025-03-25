@@ -46,6 +46,7 @@ class Operation:
         self.costs = np.empty(10000000, dtype=np.float64)
         self.paths_inter = []
         self.path_shortcutting = []
+        self.path_shortcutting_interpolated = []
     
     def get_cost(self, idx:int) -> float:
         """
@@ -944,7 +945,7 @@ class InformedVersion6():
             Configuration: Configuration within the informed set that satisfies the specified limits for the robots. 
         """
         # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
-        path = mrmgp.joint_prm_planner.interpolate_path(path)
+        # path = mrmgp.joint_prm_planner.interpolate_path(path)
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
         
         in_between_mode_cache = {}
@@ -1317,7 +1318,7 @@ class InformedVersion6():
             Configuration: Transiiton configuration within the informed set that satisfies the specified limits for the robots. 
         """
         # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
-        path =  mrmgp.joint_prm_planner.interpolate_path(path)
+        # path =  mrmgp.joint_prm_planner.interpolate_path(path)
         if len(self.env.tasks) == 1:
             return []
 
@@ -1974,7 +1975,7 @@ class BaseRRTstar(ABC):
                     if self.informed_sampling_version == 6 and not self.env.is_terminal_mode(mode):
                         q = self.informed[mode].generate_informed_transitions(
                             self.informed_batch_size,
-                            self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
+                            self.operation.path_shortcutting_interpolated, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                         if q is None:
                             return
@@ -2016,7 +2017,7 @@ class BaseRRTstar(ABC):
                 if self.informed_sampling_version == 6:
                     q = self.informed[mode].generate_informed_samples(
                         self.informed_batch_size,
-                        self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
+                        self.operation.path_shortcutting_interpolated, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                     if q is None:
                         return
@@ -2456,6 +2457,7 @@ class BaseRRTstar(ABC):
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
         self.operation.path_shortcutting = path_shortcutting[::-1] # includes transiiton node twice
+        self.operation.path_shortcutting_interpolated = mrmgp.joint_prm_planner.interpolate_path(path_shortcutting)
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             shortcut_path_, result = mrmgp.shortcutting.robot_mode_shortcut(
@@ -2963,7 +2965,7 @@ class BaseRRTstar(ABC):
                             q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
 
             q_list = [q[indices[i]] for i in range(len(indices))]
-            edge.append(State(NpConfiguration.from_list(q_list),path[i].mode))
+            edge.append(State(NpConfiguration(q_list, self.env.start_pos.array_slice),path[i].mode))
             if i == 0:
                 continue  
             edge_a, edge_b = edge[:-1], edge[1:]
