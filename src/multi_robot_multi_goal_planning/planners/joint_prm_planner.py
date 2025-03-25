@@ -1764,9 +1764,7 @@ def joint_prm_planner(
 
                             if is_almost_the_same[i]:
                                 qr = (
-                                    np.random.rand((env.robot_dims[r], num_samples_at_a_time))
-                                    * (lims[1, :] - lims[0, :])
-                                    + lims[0, :]
+                                    np.random.uniform(size=(num_samples_at_a_time, env.robot_dims[r]), low=lims[0, :], high = lims[1, :]).T
                                 )
                             else:
                                 # print("cost", current_cost)
