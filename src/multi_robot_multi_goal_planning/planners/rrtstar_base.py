@@ -1071,9 +1071,7 @@ class InformedVersion6():
 
                             if (per_robot_index_diff[i] < 1e-3 or per_robot_index_diff[i] > precomputed_robot_cost_bounds[i]):
                                 qr = (
-                                    np.random.rand(self.env.robot_dims[r], num_samples_at_a_time)
-                                    * (lims[1, :] - lims[0, :])
-                                    + lims[0, :]
+                                    np.random.uniform(size=(num_samples_at_a_time, self.env.robot_dims[r]), low=lims[0, :], high = lims[1, :]).T
                                 )
                             else:
                                 # print("cost", current_cost)
