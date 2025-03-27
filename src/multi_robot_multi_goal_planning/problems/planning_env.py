@@ -181,6 +181,16 @@ class Task:
 
 
 class Mode:
+    __slots__ = (
+        'task_ids', 
+        'entry_configuration', 
+        'sg', 
+        'id', 
+        'prev_mode', 
+        'next_modes', 
+        '_cached_hash'
+    )
+        
     task_ids: List[int]
     entry_configuration: Configuration
     sg: Dict[str, tuple]
@@ -203,25 +213,31 @@ class Mode:
         self.id = Mode.id_counter
         Mode.id_counter += 1
 
-        self.cached_hash = None
+        self._cached_hash = None
 
     def __repr__(self):
-        return "Tasks: " + str(self.task_ids) + "id: " + str(self.id)
+        return f"Tasks: {self.task_ids}, id: {self.id}"
 
     def __eq__(self, other):
+        if not isinstance(other, Mode):
+            return False
+
+        if self.task_ids == other.task_ids:
+            return True 
+
         return hash(self) == hash(other)
 
     def __hash__(self):
-        if self.cached_hash is None:
+        if self._cached_hash is None:
             entry_hash = 0
             sg_fitered = {
                 k: (v[0], v[1], v[2]) if len(v) > 2 else v for k, v in self.sg.items()
             }
             sg_hash = hash(frozenset(sg_fitered.items()))
             task_hash = hash(tuple(self.task_ids))
-            self.cached_hash = hash((entry_hash, sg_hash, task_hash))
+            self._cached_hash = hash((entry_hash, sg_hash, task_hash))
 
-        return self.cached_hash
+        return self._cached_hash
 
 
 class State:

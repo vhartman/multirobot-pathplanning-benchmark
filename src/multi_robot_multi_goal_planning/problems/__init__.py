@@ -82,12 +82,15 @@ def get_all_environments():
         "random_2d_single_goal_no_rot": lambda: rsge.rai_random_two_dim(agents_can_rotate=False),
         "hallway_single_goal": lambda: rsge.rai_hallway_two_dim(),
         "hallway_single_goal_no_rot": lambda: rsge.rai_hallway_two_dim(agents_can_rotate=False),
+    
+        "single_agent_box_stacking": lambda: re.rai_ur10_arm_box_stack_env(num_robots=1, num_boxes=2),
+        "single_agent_box_reorientation": lambda: re.rai_ur10_box_pile_cleanup_env(num_boxes=2),
 
         # single robot, single goal: debugging
         "two_dim_single_robot_single_goal": lambda: rsge.rai_random_two_dim_single_agent(),
         "single_panda_arm_single_goal": lambda: rsge.rai_single_panda_arm_single_goal_env(),
-        "single_agent_box_stacking": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=1, num_boxes=2),
-
+        "single_agent_box_rearrangement": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=1, num_boxes=2),
+      
         # 3d single goal envs
         "multi_agent_panda_single_goal": lambda: rsge.rai_multi_panda_arm_single_goal_env(),
         "handover_single_goal": lambda: rsge.rai_ur10_handover_env(),
