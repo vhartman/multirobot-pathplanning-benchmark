@@ -715,7 +715,7 @@ class Graph:
                     [n.state.q for n in self.transition_nodes[this_mode]],
                 )
                 if min(dists) < 1e-6:
-                    is_in_goal_nodes_already = True
+                    is_in_transition_nodes_already = True
                 # for n in self.transition_nodes[this_mode]:
                 #     if (
                 #         np.linalg.norm(
@@ -728,6 +728,9 @@ class Graph:
 
                 if is_in_transition_nodes_already:
                     continue
+
+            # if this_mode in self.transition_nodes:
+                # print(len(self.transition_nodes[this_mode]))
 
             if next_mode is not None:
                 if this_mode in self.transition_nodes:
