@@ -89,7 +89,7 @@ def numba_parallelized_sum(
     return dists
 
 
-@numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True)
+@numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True)
 def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
     num_slices = len(slices)
     num_samples = squared_diff.shape[0]
