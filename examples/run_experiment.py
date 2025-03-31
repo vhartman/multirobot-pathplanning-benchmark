@@ -21,6 +21,7 @@ from typing import Dict, Any, Callable, Tuple, List
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
 from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
+from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 # planners
@@ -287,7 +288,9 @@ def run_experiment(
                     env_copy = copy.deepcopy(env)
                     res = run_single_planner(env_copy, planner)
 
-                    del env_copy.C
+                    if isinstance(env, rai_env):
+                        del env_copy.C
+                        
                     del planner
                     gc.collect()
 
@@ -342,7 +345,8 @@ def run_planner_process(
 
                 res = run_single_planner(env, planner)
 
-                del env.C
+                if isinstance(env, rai_env):
+                    del env.C
                 del planner
                 gc.collect()
 

@@ -1,7 +1,6 @@
 import robotic as ry
 import numpy as np
 import random
-import time
 
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
@@ -416,6 +415,10 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
             ),
         ]
 
+        # for t in self.tasks:
+        #     arr = t.goal.sample(None)
+        #     print(np.array2string(np.array(arr), separator=", "))
+
         self.tasks[0].name = "a1_pick"
         self.tasks[1].name = "a1_place"
         self.tasks[2].name = "a2_pick"
@@ -544,6 +547,8 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
 
         rotated_terminal_poses.append(keyframes[3])
 
+        # self.import_tasks("2d_handover_tasks.txt")
+
         self.tasks = [
             # a1
             Task(
@@ -582,6 +587,9 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
             Task(["a1", "a2"], GoalSet(rotated_terminal_poses)),
         ]
 
+        # for t in self.tasks:
+            # print(t.goal.sample(None))
+
         self.tasks[0].name = "a1_pick_obj1"
         self.tasks[1].name = "handover"
         self.tasks[2].name = "a2_place"
@@ -599,6 +607,8 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
                 "terminal",
             ]
         )
+
+        # self.export_tasks("2d_handover_tasks.txt")
 
         BaseModeLogic.__init__(self)
 
@@ -1699,6 +1709,15 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
         self.tasks[-1].name = "terminal"
 
+        # for t in self.tasks:
+        #     arr = t.goal.sample(None)
+        #     print(t.robots)
+        #     print(np.array2string(np.array(arr), separator=", "))
+
+        # self.export_tasks("tmp.txt")
+
+        # print([t.name for t in self.tasks])
+
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
 
         BaseModeLogic.__init__(self)
@@ -2098,49 +2117,6 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
 
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.01
-
-
-def display_path(
-    env: rai_env,
-    path: List[State],
-    stop: bool = True,
-    export: bool = False,
-    pause_time: float = 0.01,
-    stop_at_end=False,
-    adapt_to_max_distance: bool = False,
-    stop_at_mode: bool = False,
-) -> None:
-    for i in range(len(path)):
-        env.set_to_mode(path[i].mode)
-        for k in range(len(env.robots)):
-            q = path[i].q[k]
-            env.C.setJointState(q, rai_config.get_robot_joints(env.C, env.robots[k]))
-
-            # print(q)
-
-        if stop_at_mode and i < len(path) - 1:
-            if path[i].mode != path[i + 1].mode:
-                print(i)
-                print(path[i].mode)
-                env.C.view(True)
-
-        env.C.view(stop)
-
-        if export:
-            env.C.view_savePng("./z.vid/")
-
-        dt = pause_time
-        if adapt_to_max_distance:
-            if i < len(path) - 1:
-                v = 5
-                diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean")
-                dt = diff / v
-
-        time.sleep(dt)
-
-    if stop_at_end:
-        env.C.view(True)
-
 
 def check_all_modes():
     all_envs = [

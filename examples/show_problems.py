@@ -74,7 +74,7 @@ def visualize_modes(env: rai_env, export_images: bool = False):
             env.show(False)
             env.C.view_savePng("./z.img/")
         else:
-            env.show()
+            env.show_config(type(env.get_start_pos()).from_list(q))
 
         if env.is_terminal_mode(m):
             break
@@ -82,7 +82,7 @@ def visualize_modes(env: rai_env, export_images: bool = False):
         m = env.get_next_mode(type(env.get_start_pos()).from_list(q), m)
 
 
-def benchmark_collision_checking(env: rai_env, N=5000):
+def benchmark_collision_checking(env: rai_env, N=10000):
     conf_type = type(env.get_start_pos())
 
     def sample_next_mode(mode: Mode):
@@ -138,6 +138,7 @@ def benchmark_collision_checking(env: rai_env, N=5000):
                 return next_mode
 
     # create list of modes that we can reach
+    print("Make mode list")
     reachable_modes = [env.get_start_mode()]
     max_iter = 500
     for _ in range(max_iter):
@@ -147,25 +148,16 @@ def benchmark_collision_checking(env: rai_env, N=5000):
         if next_mode is not None:
             reachable_modes.append(next_mode)
 
+    is_collision_free = env.is_collision_free
+
     # actually do the benchmarking
+    print("Starting benchmark")
     start = time.time()
     for _ in range(N):
-        q = []
-        for i in range(len(env.robots)):
-            lims = env.limits[:, env.robot_idx[env.robots[i]]]
-            if lims[0, 0] < lims[1, 0]:
-                qr = (
-                    np.random.rand(env.robot_dims[env.robots[i]])
-                    * (lims[1, :] - lims[0, :])
-                    + lims[0, :]
-                )
-            else:
-                qr = np.random.rand(env.robot_dims[env.robots[i]]) * 6 - 3
-            q.append(qr)
-
+        q = env.sample_config_uniform_in_limits()
         m = random.choice(reachable_modes)
 
-        env.is_collision_free(type(env.get_start_pos()).from_list(q), m)
+        is_collision_free(q, m)
 
     end = time.time()
 
@@ -211,7 +203,7 @@ def main():
     env = get_env_by_name(args.env_name)
 
     # make use of the original config
-    if not args.show_coll_config:
+    if not args.show_coll_config and isinstance(env, rai_env):
         env.C_base = env.C_orig
         env.C = env.C_orig
 

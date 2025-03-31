@@ -13,10 +13,14 @@ dependencies = [
     "networkx",
     "numba",
     "sortedcontainers",
-    "robotic==0.2.2",
-    "numpy>=1.21.0",
+    "numpy",
     "matplotlib>=3.4.0"
 ]
+
+[project.optional-dependencies]
+pinocchio = ["pin>=3.4" , "meshcat"]
+rai = ["robotic==0.2.2"]
+all = ["pin>=3.4", "meshcat", "robotic==0.2.2"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

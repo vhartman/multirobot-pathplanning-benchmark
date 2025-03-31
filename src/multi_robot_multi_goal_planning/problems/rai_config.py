@@ -3976,6 +3976,16 @@ def make_box_pile_env(
             C.clear()
             C.addConfigurationCopy(c_coll_tmp)
 
+    # with open("box_poses.json", "w") as f:
+    #     box_data = []
+    #     for frame in C.getFrames():
+    #         if "box" == frame.name[:3]:
+    #             rel_pos = frame.getRelativePosition()
+    #             rel_quat = frame.getRelativeQuaternion()
+    #             box_data.append({"position": rel_pos.tolist(), "quaternion": rel_quat.tolist(), "name": frame.name})
+    #     # write all data as a single JSON array
+    #     json.dump(box_data, f)
+
     # C.view(True)
 
     # add goal positions

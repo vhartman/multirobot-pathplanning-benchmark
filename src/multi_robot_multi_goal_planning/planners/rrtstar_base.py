@@ -7,7 +7,11 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Union, List, Dict, Callable
 from numpy.typing import NDArray
 from numba import njit
-from scipy.stats.qmc import Halton
+
+try:
+    from scipy.stats.qmc import Halton
+except ImportError:
+    Halton = None
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
@@ -986,7 +990,7 @@ class InformedVersion6():
         in_between_modes.add(start_mode)
         in_between_modes.add(end_mode)
 
-        while len(open_paths) > 0:
+        while open_paths:
             p = open_paths.pop()
             last_mode = p[-1]
 
@@ -995,7 +999,7 @@ class InformedVersion6():
                     in_between_modes.add(m)
                 continue
 
-            if len(last_mode.next_modes) > 0:
+            if last_mode.next_modes:
                 for mode in last_mode.next_modes:
                     new_path = p.copy()
                     new_path.append(mode)
@@ -1435,7 +1439,7 @@ class InformedVersion6():
 
             # sample transition at the end of this mode
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-            if len(possible_next_task_combinations) > 0:
+            if possible_next_task_combinations:
                 ind = random.randint(0, len(possible_next_task_combinations) - 1)
                 active_task = self.env.get_active_task(
                     mode, possible_next_task_combinations[ind]
@@ -1824,8 +1828,11 @@ class BaseRRTstar(ABC):
             total_volume *= np.prod(lims[1] - lims[0])  # Compute volume product
 
         # Generate Halton sequence samples
-        halton_sampler = Halton(self.d, scramble=False)
-        halton_samples = halton_sampler.random(num_samples)  # Scaled [0,1] samples
+        try:
+            halton_sampler = Halton(self.d, scramble=False)
+            halton_samples = halton_sampler.random(num_samples)  # Scaled [0,1] samples
+        except ImportError:
+            halton_samples = np.random.rand(num_samples, self.d)  # Fallback to uniform random sampling
 
         # Map Halton samples to configuration space
         free_samples = 0
@@ -1842,7 +1849,7 @@ class BaseRRTstar(ABC):
             #     idx+=1
 
             # Check if sample is collision-free
-            if self.env.is_collision_free_without_mode(q):
+            if self.env.is_collision_free(q, self.env.start_mode):
                 free_samples += 1
         # Estimate C_free measure
         self.c_free = (free_samples / num_samples) * total_volume
@@ -1875,7 +1882,7 @@ class BaseRRTstar(ABC):
         """
 
         possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        if len(possible_next_task_combinations) == 0:
+        if not possible_next_task_combinations:
             return None
         return random.choice(possible_next_task_combinations)
 
@@ -2632,7 +2639,7 @@ class BaseRRTstar(ABC):
             frontier_modes = []
 
             for m in self.modes:
-                if len(m.next_modes) == 0:
+                if not m.next_modes:
                     frontier_modes.append(m)
 
             p_frontier = self.mode_sampling
@@ -3130,7 +3137,7 @@ class BaseRRTstar(ABC):
         """
         pass
     @abstractmethod
-    def Plan(self) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def Plan(self, optimize:bool=True) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         """
         Executes planning process using an RRT* framework.
 

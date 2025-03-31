@@ -22,6 +22,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 
 from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
 
+import time
 
 import os
 import sys
@@ -223,7 +224,6 @@ def get_robot_state(C: ry.Config, robot_prefix: str) -> NDArray:
     return q
 
 
-
 def delete_visual_only_frames(C):
     C_coll = ry.Config()
     C_coll.addConfigurationCopy(C)
@@ -325,6 +325,12 @@ class rai_env(BaseProblem):
 
         return new_env
 
+    def sample_config_uniform_in_limits(self):
+        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
+        q = NpConfiguration(rnd, self.start_pos.array_slice)
+
+        return q
+    
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
@@ -374,17 +380,22 @@ class rai_env(BaseProblem):
             return False
 
         return True
-
-    def is_collision_free_without_mode(
+    
+    def is_collision_free_np(
         self,
         q: Optional[Configuration],
-        collision_tolerance: float = 0.01,
+        m: Mode,
+        collision_tolerance: float = None,
     ) -> bool:
+        if collision_tolerance is None:
+            collision_tolerance = self.collision_tolerance
+
         # print(q)
         # self.C.setJointState(q)
 
         if q is not None:
-            self.C.setJointState(q.state())
+            self.set_to_mode(m)
+            self.C.setJointState(q)
 
         # self.C.view()
 
@@ -486,16 +497,23 @@ class rai_env(BaseProblem):
         # if N == 0:
         #     return True
 
-        idx = list(range(N))
         if randomize_order:
             # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(N).copy()
+            idx = generate_binary_search_indices(N)
+        else:
+            idx = list(range(N))
+
+        is_collision_free = self.is_collision_free_np
+
+        q1_state = q1.state()
+        q2_state = q2.state()
+        dir = (q2_state - q1_state) / (N - 1)
 
         for i in idx:
             # print(i / (N-1))
-            q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
-            q_conf = NpConfiguration(q, q1.array_slice)
-            if not self.is_collision_free(q_conf, m, collision_tolerance=tolerance):
+            q = q1_state + dir * (i)
+            # q_conf = NpConfiguration(q, q1.array_slice)
+            if not is_collision_free(q, m, collision_tolerance=tolerance):
                 # print('coll')
                 return False
 
@@ -619,7 +637,7 @@ class rai_env(BaseProblem):
             assert mode is not None
             assert mode.entry_configuration is not None
 
-            q = np.concat(q_new)
+            q = np.concatenate(q_new)
             tmp.setJointState(q, joint_names)
 
             if self.tasks[prev_mode_index].type is not None:
@@ -649,3 +667,46 @@ class rai_env(BaseProblem):
             viewer = self.C.get_viewer()
             tmp.set_viewer(viewer)
             self.C = tmp
+
+    def display_path(
+        self,
+        path: List[State],
+        stop: bool = True,
+        export: bool = False,
+        pause_time: float = 0.01,
+        stop_at_end=False,
+        adapt_to_max_distance: bool = False,
+        stop_at_mode: bool = False,
+    ) -> None:
+        for i in range(len(path)):
+            self.set_to_mode(path[i].mode)
+            for k in range(len(self.robots)):
+                q = path[i].q[k]
+                self.C.setJointState(
+                    q, get_robot_joints(self.C, self.robots[k])
+                )
+
+                # print(q)
+
+            if stop_at_mode and i < len(path) - 1:
+                if path[i].mode != path[i + 1].mode:
+                    print(i)
+                    print(path[i].mode)
+                    self.C.view(True)
+
+            self.C.view(stop)
+
+            if export:
+                self.C.view_savePng("./z.vid/")
+
+            dt = pause_time
+            if adapt_to_max_distance:
+                if i < len(path) - 1:
+                    v = 5
+                    diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean")
+                    dt = diff / v
+
+            time.sleep(dt)
+
+        if stop_at_end:
+            self.C.view(True)

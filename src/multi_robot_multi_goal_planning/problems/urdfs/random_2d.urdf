@@ -1,0 +1,829 @@
+<?xml version="1.0" ?>
+<robot name="robot_model">
+  <material name="red">
+    <color rgba="1.0 0.0 0.0 1.0"/>
+  </material>
+  <material name="green">
+    <color rgba="0.0 1.0 0.0 1.0"/>
+  </material>
+  <material name="blue">
+    <color rgba="0.0 0.0 1.0 1.0"/>
+  </material>
+  <material name="yellow">
+    <color rgba="1.0 1.0 0.0 1.0"/>
+  </material>
+  <material name="purple">
+    <color rgba="0.5 0.0 0.5 1.0"/>
+  </material>
+  <material name="orange">
+    <color rgba="1.0 0.65 0.0 1.0"/>
+  </material>
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0"/>
+  </material>
+  <material name="white">
+    <color rgba="1.0 1.0 1.0 1.0"/>
+  </material>
+  <material name="gray">
+    <color rgba="0.5 0.5 0.5 1.0"/>
+  </material>
+  <material name="brown">
+    <color rgba="0.6 0.4 0.2 1.0"/>
+  </material>
+  <material name="cyan">
+    <color rgba="0.0 1.0 1.0 1.0"/>
+  </material>
+  <material name="magenta">
+    <color rgba="1.0 0.0 1.0 1.0"/>
+  </material>
+  <material name="default_material">
+    <color rgba="0.8 0.8 0.8 1.0"/>
+  </material>
+  <material name="table_material">
+    <color rgba="0.6 0.6 0.6 1.0"/>
+  </material>
+  <link name="table">
+    <visual>
+      <geometry>
+        <box size="4.0 4.0 0.06"/>
+      </geometry>
+      <material name="table_material"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="4.0 4.0 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <link name="wall1">
+    <visual>
+      <geometry>
+        <box size="3.999 0.2 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="3.999 0.2 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_wall1" type="fixed">
+    <parent link="table"/>
+    <child link="wall1"/>
+    <origin xyz="0.0 2.1 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="wall2">
+    <visual>
+      <geometry>
+        <box size="3.999 0.2 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="3.999 0.2 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_wall2" type="fixed">
+    <parent link="table"/>
+    <child link="wall2"/>
+    <origin xyz="0.0 -2.1 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="wall3">
+    <visual>
+      <geometry>
+        <box size="0.2 4.399 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.2 4.399 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_wall3" type="fixed">
+    <parent link="table"/>
+    <child link="wall3"/>
+    <origin xyz="2.1 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="wall4">
+    <visual>
+      <geometry>
+        <box size="0.2 4.399 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.2 4.399 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_wall4" type="fixed">
+    <parent link="table"/>
+    <child link="wall4"/>
+    <origin xyz="-2.1 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="pre_agent_0_frame_material">
+    <color rgba="0.9 0.9 0.9 1.0"/>
+  </material>
+  <link name="pre_agent_0_frame">
+    <visual>
+      <geometry>
+        <sphere radius="0.01"/>
+      </geometry>
+      <material name="pre_agent_0_frame_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_pre_agent_0_frame" type="fixed">
+    <parent link="table"/>
+    <child link="pre_agent_0_frame"/>
+    <origin xyz="0.0 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="a0_material">
+    <color rgba="0.6458941130666561 0.4375872112626925 0.8917730007820798 1.0"/>
+  </material>
+  <link name="a0">
+    <visual>
+      <geometry>
+        <cylinder radius="0.2" length="0.06"/>
+      </geometry>
+      <material name="a0_material"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.2" length="0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="pre_agent_0_frame_to_a0_x" type="prismatic">
+    <parent link="pre_agent_0_frame"/>
+    <child link="pre_agent_0_frame_to_a0_x_link"/>
+    <origin xyz="0.0 0.0 0.0" rpy="0.0 -0.0 0.0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_0_frame_to_a0_y" type="prismatic">
+    <parent link="pre_agent_0_frame_to_a0_x_link"/>
+    <child link="pre_agent_0_frame_to_a0_y_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_0_frame_to_a0_phi" type="revolute">
+    <parent link="pre_agent_0_frame_to_a0_y_link"/>
+    <child link="a0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="1.0"/>
+  </joint>
+  <material name="pre_agent_1_frame_material">
+    <color rgba="0.9 0.9 0.9 1.0"/>
+  </material>
+  <link name="pre_agent_1_frame">
+    <visual>
+      <geometry>
+        <sphere radius="0.01"/>
+      </geometry>
+      <material name="pre_agent_1_frame_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_pre_agent_1_frame" type="fixed">
+    <parent link="table"/>
+    <child link="pre_agent_1_frame"/>
+    <origin xyz="0.0 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="a1_material">
+    <color rgba="0.4146619399905236 0.26455561210462697 0.7742336894342167 1.0"/>
+  </material>
+  <link name="a1">
+    <visual>
+      <geometry>
+        <cylinder radius="0.2" length="0.06"/>
+      </geometry>
+      <material name="a1_material"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.2" length="0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="pre_agent_1_frame_to_a1_x" type="prismatic">
+    <parent link="pre_agent_1_frame"/>
+    <child link="pre_agent_1_frame_to_a1_x_link"/>
+    <origin xyz="-0.0 0.0 0.0" rpy="0.0 -0.0 0.0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_1_frame_to_a1_y" type="prismatic">
+    <parent link="pre_agent_1_frame_to_a1_x_link"/>
+    <child link="pre_agent_1_frame_to_a1_y_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_1_frame_to_a1_phi" type="revolute">
+    <parent link="pre_agent_1_frame_to_a1_y_link"/>
+    <child link="a1"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="1.0"/>
+  </joint>
+  <material name="pre_agent_2_frame_material">
+    <color rgba="0.9 0.9 0.9 1.0"/>
+  </material>
+  <link name="pre_agent_2_frame">
+    <visual>
+      <geometry>
+        <sphere radius="0.01"/>
+      </geometry>
+      <material name="pre_agent_2_frame_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_pre_agent_2_frame" type="fixed">
+    <parent link="table"/>
+    <child link="pre_agent_2_frame"/>
+    <origin xyz="0.0 0.0 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="a2_material">
+    <color rgba="0.6169339968747569 0.9437480785146242 0.6818202991034834 1.0"/>
+  </material>
+  <link name="a2">
+    <visual>
+      <geometry>
+        <cylinder radius="0.2" length="0.06"/>
+      </geometry>
+      <material name="a2_material"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.2" length="0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="pre_agent_2_frame_to_a2_x" type="prismatic">
+    <parent link="pre_agent_2_frame"/>
+    <child link="pre_agent_2_frame_to_a2_x_link"/>
+    <origin xyz="-0.0 0.0 0.0" rpy="0.0 -0.0 0.0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_2_frame_to_a2_y" type="prismatic">
+    <parent link="pre_agent_2_frame_to_a2_x_link"/>
+    <child link="pre_agent_2_frame_to_a2_y_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.0" upper="2.0" effort="100" velocity="1.0"/>
+  </joint>
+  <joint name="pre_agent_2_frame_to_a2_phi" type="revolute">
+    <parent link="pre_agent_2_frame_to_a2_y_link"/>
+    <child link="a2"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="1.0"/>
+  </joint>
+  <link name="obs0">
+    <visual>
+      <geometry>
+        <box size="0.5488155979636324 0.23011273581463493 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.5488155979636324 0.23011273581463493 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs0" type="fixed">
+    <parent link="table"/>
+    <child link="obs0"/>
+    <origin xyz="-0.561968397704856 -0.2518721848026342 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs1">
+    <visual>
+      <geometry>
+        <box size="0.30519128053692046 0.26446314882742666 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.30519128053692046 0.26446314882742666 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs1" type="fixed">
+    <parent link="table"/>
+    <child link="obs1"/>
+    <origin xyz="0.6670668617826707 0.6825514784726376 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs2">
+    <visual>
+      <geometry>
+        <box size="0.43315538642815316 0.3222127960008014 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.43315538642815316 0.3222127960008014 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs2" type="fixed">
+    <parent link="table"/>
+    <child link="obs2"/>
+    <origin xyz="0.6124333018615937 -0.9868335898408716 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs3">
+    <visual>
+      <geometry>
+        <box size="0.5281647947326367 0.2690914756743069 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.5281647947326367 0.2690914756743069 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs3" type="fixed">
+    <parent link="table"/>
+    <child link="obs3"/>
+    <origin xyz="-1.3641216654179211 -1.5584994353427795 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs4">
+    <visual>
+      <geometry>
+        <box size="0.6104966149239676 0.24855063789653065 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.6104966149239676 0.24855063789653065 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs4" type="fixed">
+    <parent link="table"/>
+    <child link="obs4"/>
+    <origin xyz="-1.213670553279786 -0.5250993173561436 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs5">
+    <visual>
+      <geometry>
+        <box size="0.6882297325066979 0.4343256008238508 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.6882297325066979 0.4343256008238508 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs5" type="fixed">
+    <parent link="table"/>
+    <child link="obs5"/>
+    <origin xyz="1.3517796299952156 -1.6156063684241477 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs6">
+    <visual>
+      <geometry>
+        <box size="0.3480700987610725 0.25936385947712204 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.3480700987610725 0.25936385947712204 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs6" type="fixed">
+    <parent link="table"/>
+    <child link="obs6"/>
+    <origin xyz="-0.8687721496943617 -1.5192137551473244 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs7">
+    <visual>
+      <geometry>
+        <box size="0.35928447622566184 0.5337051899818408 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.35928447622566184 0.5337051899818408 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs7" type="fixed">
+    <parent link="table"/>
+    <child link="obs7"/>
+    <origin xyz="0.3037859822247171 1.7171847903048563 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs8">
+    <visual>
+      <geometry>
+        <box size="0.4960209656359195 0.4861259528954367 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.4960209656359195 0.4861259528954367 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs8" type="fixed">
+    <parent link="table"/>
+    <child link="obs8"/>
+    <origin xyz="-1.0049874259201679 0.3046293376713476 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="obs9">
+    <visual>
+      <geometry>
+        <box size="0.6408676809274264 0.546265795038883 0.06"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.6408676809274264 0.546265795038883 0.06"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_obs9" type="fixed">
+    <parent link="table"/>
+    <child link="obs9"/>
+    <origin xyz="1.5244127884446463 0.3250914905434348 0.07000000000000006" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a0_0_material">
+    <color rgba="0.6458941130666561 0.4375872112626925 0.8917730007820798 0.3"/>
+  </material>
+  <link name="goal_a0_0">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a0_0_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a0_0" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a0_0"/>
+    <origin xyz="0.9010171192785621 0.005297527706809024 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a0_1_material">
+    <color rgba="0.6458941130666561 0.4375872112626925 0.8917730007820798 0.3"/>
+  </material>
+  <link name="goal_a0_1">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a0_1_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a0_1" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a0_1"/>
+    <origin xyz="0.5759607969185496 -0.3045798057672813 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a0_2_material">
+    <color rgba="0.6458941130666561 0.4375872112626925 0.8917730007820798 0.3"/>
+  </material>
+  <link name="goal_a0_2">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a0_2_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a0_2" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a0_2"/>
+    <origin xyz="0.3634910449926929 0.2973009953983152 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a0_3_material">
+    <color rgba="0.6458941130666561 0.4375872112626925 0.8917730007820798 0.3"/>
+  </material>
+  <link name="goal_a0_3">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a0_3_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a0_3" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a0_3"/>
+    <origin xyz="0.6084130800067555 -0.2743262582641042 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a1_0_material">
+    <color rgba="0.4146619399905236 0.26455561210462697 0.7742336894342167 0.3"/>
+  </material>
+  <link name="goal_a1_0">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a1_0_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a1_0" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a1_0"/>
+    <origin xyz="1.224775956184343 0.8155543341614653 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a1_1_material">
+    <color rgba="0.4146619399905236 0.26455561210462697 0.7742336894342167 0.3"/>
+  </material>
+  <link name="goal_a1_1">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a1_1_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a1_1" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a1_1"/>
+    <origin xyz="1.6779304549786942 0.8569651981964457 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a1_2_material">
+    <color rgba="0.4146619399905236 0.26455561210462697 0.7742336894342167 0.3"/>
+  </material>
+  <link name="goal_a1_2">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a1_2_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a1_2" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a1_2"/>
+    <origin xyz="-1.402206781368025 1.472504229472857 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a1_3_material">
+    <color rgba="0.4146619399905236 0.26455561210462697 0.7742336894342167 0.3"/>
+  </material>
+  <link name="goal_a1_3">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a1_3_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a1_3" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a1_3"/>
+    <origin xyz="0.4622382571353767 -1.504720068602234 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a2_0_material">
+    <color rgba="0.6169339968747569 0.9437480785146242 0.6818202991034834 0.3"/>
+  </material>
+  <link name="goal_a2_0">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a2_0_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a2_0" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a2_0"/>
+    <origin xyz="0.8882223978813917 1.4655293037145167 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a2_1_material">
+    <color rgba="0.6169339968747569 0.9437480785146242 0.6818202991034834 0.3"/>
+  </material>
+  <link name="goal_a2_1">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a2_1_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a2_1" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a2_1"/>
+    <origin xyz="-1.7826480466429855 -1.2000139004143997 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a2_2_material">
+    <color rgba="0.6169339968747569 0.9437480785146242 0.6818202991034834 0.3"/>
+  </material>
+  <link name="goal_a2_2">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a2_2_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a2_2" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a2_2"/>
+    <origin xyz="1.1747908134296825 -1.1043012477584795 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <material name="goal_a2_3_material">
+    <color rgba="0.6169339968747569 0.9437480785146242 0.6818202991034834 0.3"/>
+  </material>
+  <link name="goal_a2_3">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.06"/>
+      </geometry>
+      <material name="goal_a2_3_material"/>
+    </visual>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+  <joint name="table_to_goal_a2_3" type="fixed">
+    <parent link="table"/>
+    <child link="goal_a2_3"/>
+    <origin xyz="1.7123251738623635 0.8176576076941311 0.07" rpy="0.0 -0.0 0.0"/>
+  </joint>
+  <link name="pre_agent_0_frame_to_a0_x_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="pre_agent_0_frame_to_a0_y_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="pre_agent_1_frame_to_a1_x_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="pre_agent_1_frame_to_a1_y_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="pre_agent_2_frame_to_a2_x_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <link name="pre_agent_2_frame_to_a2_y_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+  </link>
+</robot>
