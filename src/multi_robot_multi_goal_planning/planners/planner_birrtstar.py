@@ -44,16 +44,18 @@ class BidirectionalRRTstar(BaseRRTstar):
                  p_uniform: float = 0.2, 
                  shortcutting: bool = False, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = False, 
+                 sample_near_path: bool = False, 
                  transition_nodes: int = 50, 
                  birrtstar_version: int = 2,
                  locally_informed_sampling: bool = True, 
                  remove_redundant_nodes: bool = True, 
                  informed_batch_size: int = 500,
                 ):
-        super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
-                    p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, informed_batch_size = informed_batch_size )
+        super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
+                         informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
+                         p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
+                         sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
+                         informed_batch_size = informed_batch_size )
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
         self.swap = True

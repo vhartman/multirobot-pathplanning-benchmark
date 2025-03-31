@@ -70,8 +70,11 @@ def load_experiment_config(filepath: str) -> Dict[str, Any]:
     with open(filepath) as f:
         config = json.load(f)
 
-    planner_default_configs = {}
-    planner_default_config_paths = {"prm": "configs/defaults/composite_prm.json"}
+    planner_default_configs, planner_default_config_paths = {}, {}
+    planner_default_config_paths["prm"] = "configs/defaults/composite_prm.json"
+    planner_default_config_paths["rrtstar"] = "configs/defaults/rrtstar.json"
+    planner_default_config_paths["birrtstar"] = "configs/defaults/birrtstar.json"
+
 
     for planner_type, default_config_path in planner_default_config_paths.items():
         with open(default_config_path) as f:
@@ -181,7 +184,7 @@ def setup_planner(
             return RRTstar(
                 env,
                 ptc=RuntimeTerminationCondition(runtime),
-                # general_goal_sampling=options["general_goal_sampling"],
+                general_goal_sampling=options["general_goal_sampling"],
                 informed_sampling=options["informed_sampling"],
                 informed_sampling_version=options["informed_sampling_version"],
                 distance_metric=options["distance_metric"],
@@ -191,8 +194,9 @@ def setup_planner(
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
                 locally_informed_sampling = options["locally_informed_sampling"],
-                informed_batch_size = options["informed_batch_size"]
-                # gaussian=options["gaussian"]
+                informed_batch_size = options["informed_batch_size"],
+                sample_near_path=options["sample_near_path"],
+                remove_redundant_nodes = options["remove_redundant_nodes"]
             ).Plan(optimize)
     elif planner_config["type"] == "birrtstar":
 
@@ -201,7 +205,7 @@ def setup_planner(
             return BidirectionalRRTstar(
                 env,
                 ptc=RuntimeTerminationCondition(runtime),
-                # general_goal_sampling=options["general_goal_sampling"],
+                general_goal_sampling=options["general_goal_sampling"],
                 informed_sampling=options["informed_sampling"],
                 informed_sampling_version=options["informed_sampling_version"],
                 distance_metric=options["distance_metric"],
@@ -211,10 +215,11 @@ def setup_planner(
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
                 locally_informed_sampling = options["locally_informed_sampling"],
-                # gaussian=options["gaussian"],
+                sample_near_path=options["sample_near_path"],
                 transition_nodes=options["transition_nodes"],
                 birrtstar_version=options["birrtstar_version"], 
-                informed_batch_size = options["informed_batch_size"]
+                informed_batch_size = options["informed_batch_size"],
+                remove_redundant_nodes = options["remove_redundant_nodes"]
             ).Plan(optimize)
 
     else:

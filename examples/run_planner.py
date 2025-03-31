@@ -164,7 +164,7 @@ def main():
         path, info = RRTstar(
             env,
             ptc=termination_condition,
-            # general_goal_sampling=options["general_goal_sampling"],
+            general_goal_sampling=False,
             informed_sampling=True,
             informed_sampling_version=6,
             distance_metric=args.distance_metric,
@@ -173,9 +173,11 @@ def main():
             p_uniform=0.2,
             shortcutting=True,
             mode_sampling=1,
+            sample_near_path=False,
             locally_informed_sampling=True,
             informed_batch_size=300,
-            # gaussian=options["gaussian"]
+            remove_redundant_nodes = True
+            
         ).Plan(args.optimize)
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
