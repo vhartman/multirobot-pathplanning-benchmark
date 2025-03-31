@@ -47,6 +47,7 @@ def get_all_environments():
         "box_stacking_two_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=2),
         "box_stacking_three_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=3),
         "box_reorientation": lambda: re.rai_ur10_box_pile_cleanup_env(),
+        "box_reorientation_multi_handover": lambda: re.rai_ur10_box_pile_cleanup_env(make_many_handover_poses=True),
 
         "box_rearrangement": lambda: re.rai_ur10_arm_box_rearrangement_env(), # 2 robots, 9 boxes
         "box_rearrangement_only_five": lambda: re.rai_ur10_arm_box_rearrangement_env(num_boxes=5),
@@ -91,7 +92,9 @@ def get_all_environments():
         "mobile_two_dep": lambda: re.rai_mobile_manip_wall_dep(num_robots=2),
         "box_stacking_dep": lambda: re.rai_ur10_arm_box_stack_env_dep(),
         "box_stacking_three_robots_dep": lambda: re.rai_ur10_arm_box_stack_env_dep(num_robots=3),
-        "box_reorientation_dep": lambda: re.rai_ur10_box_pile_cleanup_env_dep()
+        "box_reorientation_dep": lambda: re.rai_ur10_box_pile_cleanup_env_dep(),
+        "box_reorientation_handover_set_dep": lambda: re.rai_ur10_box_pile_cleanup_env_dep(make_many_handover_poses=True),
+
     }
     # fmt: on
 

@@ -709,11 +709,13 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 # best solution found with sum-cost: 49.48
 # best solution found with max-cost: xx
 class rai_random_two_dim(SequenceMixin, rai_env):
-    def __init__(self, num_robots=3, num_goals=4, agents_can_rotate=True):
+    def __init__(
+        self, num_robots=3, num_goals=4, num_obstacles=10, agents_can_rotate=True
+    ):
         self.C, keyframes = rai_config.make_random_two_dim(
             num_agents=num_robots,
             num_goals=num_goals,
-            num_obstacles=10,
+            num_obstacles=num_obstacles,
             agents_can_rotate=agents_can_rotate,
         )
         # self.C.view(True)
@@ -1468,13 +1470,15 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
 
 
 class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
-    def __init__(self, num_robots=2, num_boxes=9, logo:bool=False):
+    def __init__(self, num_robots=2, num_boxes=9, logo: bool = False):
         if not logo:
             self.C, actions, self.robots = rai_config.make_box_rearrangement_env(
                 num_boxes=num_boxes, num_robots=num_robots
             )
         else:
-            self.C, actions, self.robots = rai_config.make_crl_logo_rearrangement_env(num_robots=num_robots)
+            self.C, actions, self.robots = rai_config.make_crl_logo_rearrangement_env(
+                num_robots=num_robots
+            )
 
         rai_env.__init__(self)
 
@@ -1609,8 +1613,13 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
 
 
 class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
-    def __init__(self, num_boxes=9):
-        self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
+    def __init__(self, num_boxes=9, make_many_handover_poses: bool = False):
+        if not make_many_handover_poses:
+            self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
+        else:
+            self.C, keyframes = rai_config.make_box_pile_env(
+                num_boxes=num_boxes, compute_multiple_keyframes=make_many_handover_poses
+            )
 
         self.robots = ["a1_", "a2_"]
 
@@ -1627,7 +1636,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
             box_name = "box" + str(box_index)
             print(primitive_type)
             if primitive_type == "pick":
-                for t, k in zip(pick_task_names, qs):
+                for t, k in zip(pick_task_names, qs[0]):
                     print(robots)
                     print(k)
                     if t == "pick":
@@ -1645,7 +1654,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                     )
                     cnt += 1
             else:
-                for t, k in zip(handover_task_names, qs):
+                for t, k in zip(handover_task_names, qs[0]):
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
@@ -1659,9 +1668,15 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                     elif t == "handover":
                         ee_name = robots[1] + "ur_vacuum"
                         self.tasks.append(
+                            # Task(
+                            #     self.robots,
+                            #     SingleGoal(k),
+                            #     t,
+                            #     frames=[ee_name, box_name],
+                            # )
                             Task(
                                 self.robots,
-                                SingleGoal(k),
+                                GoalSet([q[1] for q in qs]),
                                 t,
                                 frames=[ee_name, box_name],
                             )
@@ -1695,8 +1710,13 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
 
 
 class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
-    def __init__(self, num_boxes=9):
-        self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
+    def __init__(self, num_boxes=9, make_many_handover_poses: bool = False):
+        if not make_many_handover_poses:
+            self.C, keyframes = rai_config.make_box_pile_env(num_boxes=num_boxes)
+        else:
+            self.C, keyframes = rai_config.make_box_pile_env(
+                num_boxes=num_boxes, compute_multiple_keyframes=make_many_handover_poses
+            )
 
         self.robots = ["a1_", "a2_"]
 
@@ -1723,7 +1743,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
             print(last_robot_task)
 
             if primitive_type == "pick":
-                for t, k in zip(pick_task_names, qs):
+                for t, k in zip(pick_task_names, qs[0]):
                     print(robots)
                     print(k)
                     task_name = robots[0] + t + "_" + box_name + "_" + str(cnt)
@@ -1755,7 +1775,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
 
                     cnt += 1
             else:
-                for t, k in zip(handover_task_names, qs):
+                for t, k in zip(handover_task_names, qs[0]):
                     task_name = robots[0] + t + "_" + box_name + "_" + str(cnt)
 
                     if t == "pick":
@@ -1783,9 +1803,15 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
                     elif t == "handover":
                         ee_name = robots[1] + "ur_vacuum"
                         self.tasks.append(
+                            # Task(
+                            #     robots,
+                            #     SingleGoal(k),
+                            #     t,
+                            #     frames=[ee_name, box_name],
+                            # )
                             Task(
-                                robots,
-                                SingleGoal(k),
+                                self.robots,
+                                GoalSet([q[1] for q in qs]),
                                 t,
                                 frames=[ee_name, box_name],
                             )

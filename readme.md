@@ -3,7 +3,7 @@
 This repository provides some multi-robot-multi-goal motion planning problems, and some baseline-planners.
 There are also some utilities for visualizing plans, and plotting convergence and success rates of planners.
 
-The corresponding paper can be found at ~~not available yet~~.
+The corresponding paper can be found [here](https://vhartmann.com/assets/mrmg/a_benchmark_for_mr_mg_pf.pdf), and more videos can be seen on the [paper website](https://vhartmann.com/mrmg-planning/).
 
 # Installation
 The problems we propose here are built on top of [rai](https://marctoussaint.github.io/robotic/index.html) ([github](https://github.com/MarcToussaint/robotic)). We would recommend using the virtual environment of your choice to make sure nothing break with rai.
@@ -28,7 +28,7 @@ Currently, there are 21 base scenarios, of which most can be adjusted in difficu
 
 Videos illustrate the types of problems we are interested in best:
 
-[][][]
+<img src="assets/box_rearrangement.gif" height="150"/><img src="assets/box_stacking_four.gif" height="150"/><img src="assets/mobile_four_dep.gif" height="150"/>
 
 More examples can be seen with
 
@@ -66,10 +66,23 @@ python3 ./examples/run_experiment.py [path to config]
 
 as a demo how such a config file can look, we suggest the files in confg/demo.
 
+Once an experiment finished (or even before), you can produce the success/cost evolution plots with 
+
+```
+python3 examples/make_plots.py [path_to_experiment_folder]
+```
+There are a couple of flags to save the plot if desired, and to possibly change the style (`--png --use_paper_style --save`).
+
 An environment and its modes can be inspected with
 
 ```
 python3 examples/show_problems.py [environment name] --mode modes
+```
+
+and finally, a path can be visualized  and possibly exported with 
+
+```
+python3 examples/display_single_path.py [filename] [environment_name]
 ```
 
 ## Problem description
@@ -127,4 +140,5 @@ Similarly as above, the formulation we propose here allows for kinodynamic motio
 
 #### More flexible task planning
 In the moment, we only support formulating the task structure as dependency graph or as sequence.
-It would theoretically be possible to us ethe formulation we propse here to implement and benchmark task and motion planning solvers.
+It would theoretically be possible to use the formulation we propse here to implement and benchmark task and motion planning solvers.
+This would require minor changes in how the starting mode is currently used.

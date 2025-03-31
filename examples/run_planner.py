@@ -4,6 +4,7 @@ import numpy as np
 
 import datetime
 import os
+import random
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 from multi_robot_multi_goal_planning.problems.rai_envs import display_path
@@ -109,13 +110,14 @@ def main():
     )
     args = parser.parse_args()
 
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+
     env = get_env_by_name(args.env)
     env.cost_reduction = args.cost_reduction
     env.cost_metric = args.per_agent_cost_function
 
     env.show()
-
-    np.random.seed(args.seed)
 
     if args.planner == "joint_prm":
         path, info = joint_prm_planner(

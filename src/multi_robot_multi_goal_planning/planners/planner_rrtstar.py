@@ -35,11 +35,14 @@ class RRTstar(BaseRRTstar):
                  locally_informed_sampling:bool = True, 
                  remove_redundant_nodes:bool = True,
                  informed_batch_size: int = 500,
+                 optimize: bool = True
                  
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, informed_batch_size = informed_batch_size )
+                    gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
+                    informed_batch_size = informed_batch_size, optimize = optimize)
+        
      
     def UpdateCost(self, mode:Mode, n:Node) -> None:
         stack = [n]
@@ -105,6 +108,8 @@ class RRTstar(BaseRRTstar):
 
             # if self.operation.init_sol and True:
             #     break
+            if not self.optimize and self.operation.init_sol:
+                break
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break
