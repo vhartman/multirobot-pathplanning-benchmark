@@ -43,7 +43,7 @@ from multi_robot_multi_goal_planning.planners.planner_drrtstar import dRRTstar
 from multi_robot_multi_goal_planning.planners.planner_fastdrrtstar import fastdRRTstar
 from make_plots import make_cost_plots
 from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
-
+from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
 # np.random.seed(100)
 
 
@@ -285,7 +285,33 @@ def setup_planner(
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
-                informed_with_lb = options["informed_with_lb"]
+                informed_with_lb = options["informed_with_lb"],
+                remove_based_on_modes = options["remove_based_on_modes"]
+            ).Plan()
+    elif planner_config["type"] == "eitstar":
+        def planner(env):
+            options = planner_config["options"]
+            return EITstar(
+                env,
+                ptc=RuntimeTerminationCondition(runtime),
+                optimize=optimize,
+                distance_metric=options["distance_function"],
+                try_sampling_around_path=options["sample_near_path"],
+                use_k_nearest=options["connection_strategy"] == "k_nearest",
+                try_informed_sampling=options["informed_sampling"],
+                try_informed_transitions=options["informed_transition_sampling"],
+                uniform_batch_size=options["batch_size"],
+                uniform_transition_batch_size=options["transition_batch_size"],
+                informed_batch_size=options["informed_batch_size"],
+                informed_transition_batch_size=options[
+                    "informed_transition_batch_size"
+                ],
+                path_batch_size=options["path_batch_size"],
+                locally_informed_sampling=options["locally_informed_sampling"],
+                try_shortcutting=options["shortcutting"],
+                try_direct_informed_sampling=options["direct_informed_sampling"],
+                informed_with_lb = options["informed_with_lb"],
+                remove_based_on_modes = options["remove_based_on_modes"]
             ).Plan()
 
     else:

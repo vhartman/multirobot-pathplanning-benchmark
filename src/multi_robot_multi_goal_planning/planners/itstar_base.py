@@ -12,14 +12,15 @@ from typing import (
     Union,
     Generic,
     TypeVar,
+    Type
 )
-from numpy.typing import NDArray
 
+from numpy.typing import NDArray
+from itertools import chain
 import heapq
 import time
 import math
 from abc import ABC, abstractmethod
-from itertools import chain
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
@@ -39,14 +40,14 @@ from multi_robot_multi_goal_planning.planners.rrtstar_base import find_nearest_i
 from multi_robot_multi_goal_planning.planners.rrtstar_base import save_data
 
 T = TypeVar("T")
-class Operation:
+class BaseOperation(ABC):
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
     def __init__(self):
-    
-        self.lb_costs_to_go_expanded = np.empty(10000000, dtype=np.float64)
-        self.forward_costs = np.empty(10000000, dtype=np.float64)
 
-    def get_lb_cost_to_go_expanded(self, idx:int) -> float:
+        self.costs = np.empty(10000000, dtype=np.float64)
+        self.lb_costs_to_come = np.empty(10000000, dtype=np.float64)
+
+    def get_cost(self, idx:int) -> float:
         """
         Returns cost of node with the specified index.
 
@@ -55,9 +56,9 @@ class Operation:
 
         Returns: 
             float: Cost associated with the specified node."""
-        return self.lb_costs_to_go_expanded[idx]
+        return self.costs[idx]
     
-    def get_forward_cost(self, idx:int) -> float:
+    def get_lb_cost_to_come(self, idx:int) -> float:
         """
         Returns cost of node with the specified index.
 
@@ -66,8 +67,12 @@ class Operation:
 
         Returns: 
             float: Cost associated with the specified node."""
-        return self.forward_costs[idx]
+        return self.lb_costs_to_come[idx]
     
+    @abstractmethod
+    def update(self):
+        pass
+
     def _resize_array(self, array: NDArray, current_capacity: int, new_capacity: int) -> NDArray:
         """
         Dynamically resizes a NumPy array to a new capacity.
@@ -102,85 +107,69 @@ class Operation:
 
         return array
 
-class Node:
+class BaseNode(ABC):
     __slots__ = [
         "state",
-        "forward_parent",
-        "reverse_parent",
-        "forward_children",
-        "reverse_children",
-        "forward_cost_to_parent",
-        "reverse_cost_to_parent",
-        "lb_cost_to_go",
+        "forward",
+        "rev",
         "is_transition",
+        "is_reverse_transition",
         "transition",
-        "forward_fam",
-        "reverse_fam",
         "whitelist",
         "blacklist",
         "id",
-        "operation"
+        "operation",
+        "lb_cost_to_go"
     ]
-
-    # Class attribute
+    
     id_counter: ClassVar[int] = 0
-
+    
     # Instance attributes
+    forward: "Relatives"
+    rev: "Relatives"
     state: State
-    forward_parent: Optional["Node"]
-    reverse_parent: Optional["Node"]
-    forward_children: List[int]
-    reverse_children: List[int]
-    forward_cost_to_parent: float
-    reverse_cost_to_parent: float
-    lb_cost_to_go: Optional[
-        float
-    ]  # cost to go to the goal from the node when it was connected the last time
-    # lb_cost_to_go_expanded: Optional[
-    #     float
-    # ]  # cost to go to the goal from the node when it was expanded the last time
     is_transition: bool
-    transition: Optional["Node"]
+    is_reverse_transition:bool
+    transition: Optional["BaseNode"]
     whitelist: Set[int]
     blacklist: Set[int]
-    forward_fam: Set[int] 
-    reverse_fam: Set[int]
     id: int
-    operation:Operation
+    operation:BaseOperation
+    lb_cost_to_go: float
 
-    def __init__(self, operation: Operation, state: State, is_transition: bool = False) -> None:
+    def __init__(self, operation: BaseOperation, state: State, is_transition: bool = False) -> None:
         self.state = state
-        # self.forward_cost = np.inf
-        self.forward_parent = None
-        self.reverse_parent = None
-        self.forward_children = []  # children in the forward tree
-        self.reverse_children = []  # children in the reverse tree
-        self.forward_cost_to_parent = np.inf
-        self.reverse_cost_to_parent = np.inf
-        self.lb_cost_to_go = np.inf
-        # self.lb_cost_to_go_expanded = np.inf
+        self.forward = Relatives()
+        self.rev = Relatives()
         self.is_transition = is_transition
+        self.is_reverse_transition = False
         self.transition = None
         self.whitelist = set()
         self.blacklist = set()
-        self.forward_fam = set()
-        self.reverse_fam = set()
-        self.id = Node.id_counter
-        Node.id_counter += 1
+        self.id = BaseNode.id_counter
+        BaseNode.id_counter += 1
         self.operation = operation
+        self.lb_cost_to_go = np.inf
+    
+    @abstractmethod
+    def close(self):
+        pass
+    @abstractmethod
+    def set_to_goal_node(self):
+        pass
 
-    def __lt__(self, other: "Node") -> bool:
+    def __lt__(self, other: "BaseNode") -> bool:
         return self.id < other.id
 
     def __hash__(self) -> int:
         return self.id
 
     @property
-    def lb_cost_to_go_expanded(self):
-        return self.operation.get_lb_cost_to_go_expanded(self.id)
+    def lb_cost_to_come(self):
+        return self.operation.get_lb_cost_to_come(self.id)
     
-    @lb_cost_to_go_expanded.setter
-    def lb_cost_to_go_expanded(self, value) -> None:
+    @lb_cost_to_come.setter
+    def lb_cost_to_come(self, value) -> None:
         """Set the cost in the shared operation costs array.
 
         Args:
@@ -188,13 +177,14 @@ class Node:
 
         Returns: 
             None: This method does not return any value."""
-        self.operation.lb_costs_to_go_expanded[self.id] = value
+        self.operation.lb_costs_to_come[self.id] = value
+
     @property
-    def forward_cost(self):
-        return self.operation.get_forward_cost(self.id)
+    def cost(self):
+        return self.operation.get_cost(self.id)
     
-    @forward_cost.setter
-    def forward_cost(self, value) -> None:
+    @cost.setter
+    def cost(self, value) -> None:
         """Set the cost in the shared operation costs array.
 
         Args:
@@ -202,16 +192,41 @@ class Node:
 
         Returns: 
             None: This method does not return any value."""
-        self.operation.forward_costs[self.id] = value
+        self.operation.costs[self.id] = value
+        # if not np.isinf(value):
+        #     self.lb_cost_to_come = value
+
+class Relatives:
+    __slots__ = [
+        "parent",
+        "children",
+        "cost_to_parent",
+        "fam"        
+    ]
+    parent: Optional["BaseNode"]
+    children: List[int]
+    cost_to_parent: Optional[float]
+    fam: Set
+
+    def __init__(self):
+        self.parent = None
+        self.children = []
+        self.cost_to_parent = np.inf
+        self.fam = set()
+
+    def reset(self):
+        self.parent = None
+        self.children = []
+        self.cost_to_parent = np.inf
+        self.fam.clear()  
 class DictIndexHeap(ABC, Generic[T]):
-    __slots__ = ["queue", "items", "current_entries"]
+    __slots__ = ["queue", "items", "current_entries", "nodes"]
 
     queue: List[Tuple[float, int]]  # (priority, index)
     items: Dict[int, Any]  # Dictionary for storing active items
     current_entries: Dict[T, Tuple[float, int]]
-
+    nodes: set
     idx = 0
-
     def __init__(self) -> None:
         self.queue = []
         self.items = {}
@@ -225,50 +240,54 @@ class DictIndexHeap(ABC, Generic[T]):
         return item in self.current_entries
     
     @abstractmethod
-    def key(self, node: Node) -> float:
+    def key(self, node: BaseNode) -> float:
         pass
 
     def heappush(self, item: T) -> None:
         """Push a single item into the heap."""
         # idx = len(self.items)
-        self.items[DictIndexHeap.idx] = item  # Store only valid items
-        priority = self.key(item)
-        self.current_entries[item] = (priority, DictIndexHeap.idx) # always up to date with the newest one!
+        priority = self.push_and_sync(item)
         # self.nodes_in_queue[item[1]] = (priority, DictIndexHeap.idx)
         heapq.heappush(self.queue, (priority, DictIndexHeap.idx))
         DictIndexHeap.idx += 1
 
-    def peek_priority(self) -> Any:
-        """Return the smallest priority (the key) without removing the item."""
-        if not self.queue:
-            raise IndexError("peek from an empty heap")
-        # Return only the priority (i.e. the first element of the tuple)
-        return self.queue[0][0]
+    def pop_and_sync(self, idx:int):
+        return self.items.pop(idx)
 
-    def is_smallest_priority_less_than_root_priority(self, root: Node) -> bool:
-        """Return True if the smallest key in the heap is less than other_key."""
-        root_key = self.key(root)
-        return self.peek_priority() < root_key
+    def push_and_sync(self, item):
+        self.items[DictIndexHeap.idx] = item  # Store only valid items
+        priority = self.key(item)
+        self.current_entries[item] = (priority, DictIndexHeap.idx) # always up to date with the newest one!
+        return priority
 
-    def remove(self, item):
-        if item in self.current_entries:
-            del self.current_entries[item]
-  
-class ForwarrdQueue(DictIndexHeap[Tuple[Any]]):
-    def __init__(self, alpha = 1.0):
-        super().__init__()
-        self.alpha = alpha
+    def peek_first_element(self) -> Any:
+        while self.current_entries:
+            priority, idx = self.queue[0]
+            item = self.items[idx]
+            if item in self.current_entries:
+                current_priority, current_idx = self.current_entries[item]
+                new_priority = self.key(item)
+                if current_priority == priority and current_idx == idx:
+                    if type(item) is BaseNode:
+                        assert(new_priority == priority), (
+                            "queue wrong"
+                        )
+                    if new_priority != priority: #needed if reverse search changed priorities
+                        _, idx = heapq.heappop(self.queue)
+                        item = self.pop_and_sync(idx)
+                        self.heappush(item) 
+                        continue
+                    return priority, item
+            _, idx = heapq.heappop(self.queue)
+            _ = self.pop_and_sync(idx)
+            continue
 
-    def key(self, item: Tuple[Any]) -> float:
-        # item[0]: edge_cost from n0 to n1
-        # item[1]: edge (n0, n1)
-        return (
-            item[1][0].forward_cost + item[0] + item[1][1].lb_cost_to_go*self.alpha,
-            item[1][0].forward_cost + item[0],
-            item[1][0].forward_cost,
-        )
-
-    def heappop(self) -> Node:
+    def remove(self, item, in_current_entries:bool = False):
+        if not in_current_entries and item not in self.current_entries:
+           return
+        del self.current_entries[item]
+    
+    def heappop(self) -> BaseNode:
         """Pop the item with the smallest priority from the heap."""
         if not self.queue:
             raise IndexError("pop from an empty heap")
@@ -276,109 +295,220 @@ class ForwarrdQueue(DictIndexHeap[Tuple[Any]]):
          # Remove from dictionary (Lazy approach)
         while self.current_entries:
             priority, idx = heapq.heappop(self.queue)
-            item = self.items.pop(idx)
+            item = self.pop_and_sync(idx)
             if item in self.current_entries:
                 current_priority, current_idx = self.current_entries[item]
                 new_priority = self.key(item)
                 if current_priority == priority and current_idx == idx:
-                    if new_priority != priority: #needed if reverse search changed priorities
-                        self.heappush(item) 
-                        continue
-                    del self.current_entries[item]
+                    assert(new_priority == priority), (
+                        "queue wrong"
+                    )
+                    # if new_priority != priority: #needed if reverse search changed priorities
+                    #     if type(item) is BaseNode:
+                    #         pass
+                    #     self.heappush(item) 
+                    #     continue
+                    self.remove(item, True)
                     return item
-            else:
-                continue
+            
                 
         raise IndexError("pop from an empty queue")
-class Graph:
-    root: Node
+class BaseTree():
+    all_vertices = set()
+    def __init__(self, 
+                 operation:BaseOperation, 
+                 robot_dims, 
+                 batch_dist_fun, 
+                 batch_cost_fun, 
+                 update_connectivity, 
+                 is_edge_collision_free
+                 ):
+
+        self.operation = operation
+        self.cnt = 0
+        self.vertices = {}
+        self.vertices_node_ids = np.empty(100000, dtype=np.int64)
+        self.vertices_batch_array = np.empty((100000, robot_dims), dtype=np.float64)
+        self.vertices_position = {}
+        self.batch_dist_fun = batch_dist_fun
+        self.batch_cost_fun = batch_cost_fun
+        self.update_connectivity = update_connectivity
+        self.is_edge_collision_free = is_edge_collision_free
+
+    def ensure_capacity(self,array: NDArray, required_capacity: int) -> NDArray:
+        return self.operation.ensure_capacity(array, required_capacity)
+       
+    def add_vertex(self, node: BaseNode) -> None:  
+        if node.id in BaseTree.all_vertices:
+            return
+        BaseTree.all_vertices.add(node.id)         
+        position = self.cnt
+        self.vertices_position[node.id] = position
+        self.vertices_batch_array = self.ensure_capacity(self.vertices_batch_array, position)
+        self.vertices_batch_array[position,:] = node.state.q.state()
+        self.vertices_node_ids = self.ensure_capacity(self.vertices_node_ids, position)
+        self.vertices_node_ids[position] = node.id
+        self.vertices[node.id] = node
+        self.cnt +=1
+    
+    def get_vertices_batch_array(self)-> NDArray:
+        return self.vertices_batch_array[:self.cnt]
+
+    def get_vertices_node_ids(self)-> NDArray:
+        return self.vertices_node_ids[:self.cnt]
+    
+    def get_position_of_node(self, node:BaseNode) -> int:
+        return self.vertices_position[node.id]
+
+    
+    def neighbors(self, 
+             node: BaseNode, 
+             potential_parent:BaseNode, 
+             r:float,
+             ) -> Tuple[NDArray, NDArray, NDArray]:      
+        """
+        Retrieves neighbors of a node within a calculated radius for the given mode.
+
+        Args:
+            node (Node): New node for which neighbors are being identified.
+            n_nearest_idx (int): Index of the nearest node to node.
+            set_dists (Optional[NDArray]): Precomputed distances from n_new to all nodes in the specified subtree.
+            tree (str): Identifier of subtree in which the nearest node is searched for
+
+        Returns:
+            Tuple:   
+                - NDArray: Batch of neighbors near n_new.
+                - NDArray: Corresponding cost values of these nodes.
+                - NDArray: Corresponding IDs of these nodes.
+        """
+        #node is not yet in the tree
+        batch_array= self.get_vertices_batch_array()
+        set_dists = self.batch_dist_fun(node.state.q, batch_array)
+        indices = find_nearest_indices(set_dists, r) # indices of batch_subtree
+        if potential_parent is not None:
+            potential_parent_idx = self.get_position_of_node(potential_parent)
+            if potential_parent_idx not in indices:
+                indices = np.insert(indices, 0, potential_parent_idx)
+        node_indices = self.get_vertices_node_ids()[indices]
+        n_near_costs = self.operation.costs[node_indices]
+        N_near_batch = batch_array[indices]
+        batch_cost = self.batch_cost_fun(node.state.q, N_near_batch)
+        return batch_cost, n_near_costs, node_indices
+    
+    def find_parent(self, 
+                    node: BaseNode, 
+                    potential_parent:BaseNode,  
+                    batch_cost: NDArray, 
+                    n_near_costs: NDArray,
+                    node_indices: NDArray,
+                    ) -> None:
+        """
+        Sets the optimal parent for a new node by evaluating connection costs among candidate nodes.
+
+        Args:
+            mode (Mode): Current operational mode.
+            node_indices (NDArray): Array of IDs representing candidate neighboring nodes.
+            n_new (Node): New node that needs a parent connection.
+            n_nearest (Node): Nearest candidate node to n_new.
+            batch_cost (NDArray): Costs associated from n_new to all candidate neighboring nodes.
+            n_near_costs (NDArray): Cost values for all candidate neighboring nodes.
+
+        Returns:
+            None: This method does not return any value.
+        """
+
+        idx =  np.where(node_indices == potential_parent.id)[0][0]
+        c_new_tensor = n_near_costs + batch_cost
+        c_min = c_new_tensor[idx]
+        c_min_to_parent = batch_cost[idx]
+        n_min = potential_parent
+        if node.is_transition and node.is_reverse_transition:
+            return n_min, c_min_to_parent 
+        valid_mask = c_new_tensor < c_min
+        if np.any(valid_mask):
+            sorted_indices = np.where(valid_mask)[0][np.argsort(c_new_tensor[valid_mask])]
+            for idx in sorted_indices:
+                n = self.vertices[node_indices[idx].item()]
+                if self.is_edge_collision_free(n.state.q, node.state.q, node.state.mode):
+                    c_min = c_new_tensor[idx]
+                    c_min_to_parent = batch_cost[idx]      
+                    n_min = n                            
+                    break
+        return n_min, c_min_to_parent
+
+    def rewire(self, 
+                node: BaseNode, 
+                batch_cost: NDArray, 
+                n_near_costs: NDArray,
+                node_indices: NDArray,
+               ) -> bool:
+        """
+        Rewires neighboring nodes by updating their parent connection to n_new if a lower-cost path is established.
+
+        Args:
+            mode (Mode): Current operational mode.
+            node_indices (NDArray): Array of IDs representing candidate neighboring nodes.
+            n_new (Node): New node as potential parent for neighboring nodes.
+            batch_cost (NDArray): Costs associated from n_new to all candidate neighboring nodes.
+            n_near_costs (NDArray): Cost values for all candidate neighboring nodes.
+
+        Returns:
+            bool: True if any neighbor's parent connection is updated to n_new; otherwise, False.
+        """
+
+        c_potential_tensor = node.cost + batch_cost
+
+        improvement_mask = c_potential_tensor < n_near_costs
+        
+        if np.any(improvement_mask):
+            improved_indices = np.nonzero(improvement_mask)[0]
+
+            for idx in improved_indices:
+                n_near = self.vertices[node_indices[idx].item()]
+                if n_near.is_transition and n_near.is_reverse_transition:
+                    continue
+                if n_near == node.forward.parent or n_near.cost == np.inf or n_near.id == node.id:
+                    continue
+                if node.state.mode == n_near.state.mode or node.state.mode == n_near.state.mode.prev_mode:
+                    if self.is_edge_collision_free(node.state.q, n_near.state.q, node.state.mode):
+                        edge_cost = float(batch_cost[idx])
+                        self.update_connectivity(node, n_near, edge_cost, node.cost + edge_cost)
+
+
+    
+    
+
+class BaseGraph(ABC):
+    root: BaseNode
     nodes: Dict
     node_ids: Dict
-    vertices: Dict
+    tree: BaseTree
 
-    def __init__(self, operation:Operation, start: State, batch_dist_fun, batch_cost_fun):
+    def __init__(self, root, operation:BaseOperation, batch_dist_fun, batch_cost_fun, is_edge_collision_free, node_cls: Type["BaseNode"] = BaseNode):
         self.operation = operation
-        self.dim = len(start.q.state())
-        self.root = Node(self.operation, start)
-        self.root.forward_cost = 0
-        self.root.lb_cost_to_go_expanded = np.inf
+        self.dim = len(root.state.q.state())
+        self.root = root
+        self.operation.update(root, lb_cost_to_go=np.inf, cost = 0, lb_cost_to_come = 0.0)
+        self.node_cls = node_cls
 
         self.batch_dist_fun = batch_dist_fun
         self.batch_cost_fun = batch_cost_fun
+        self.is_edge_collision_free = is_edge_collision_free
 
         self.nodes = {}  # contains all the nodes ever created
         self.nodes[self.root.id] = self.root
         
         self.node_ids = {}
         self.node_ids[self.root.state.mode] = [self.root.id]
-        self.vertices = set()
-        self.vertices.add(self.root.id)
+        self.tree = {}
         self.transition_node_ids = {}  # contains the transitions at the end of the mode
         self.reverse_transition_node_ids = {}
         self.reverse_transition_node_ids[self.root.state.mode] = [self.root.id]
         self.goal_nodes = []
         self.goal_node_ids = []
-        self.lb_costs_to_go_expanded = np.empty(10000000, dtype=np.float64)
         self.initialize_cache()
-        # self.current_best_path_nodes = []
-        self.current_best_path = []
-        self.unit_n_ball_measure = ((np.pi**0.5) ** self.dim) / math.gamma(self.dim / 2 + 1)
-           
-    def get_lb_cost_to_go_expand(self, id:int) -> float:
-        """
-        Returns cost of node with the specified index.
-
-        Args: 
-            id (int): Index of node whose cost is to be retrieved.
-
-        Returns: 
-            float: Cost associated with the specified node."""
-        return self.lb_costs_to_go_expanded[id]
-    
-    def reset_reverse_tree(self):
-        [
-            (
-                setattr(self.nodes[node_id], "lb_cost_to_go", math.inf),
-                setattr(self.nodes[node_id], "lb_cost_to_go_expanded", math.inf),
-                setattr(self.nodes[node_id], "reverse_parent", None),
-                setattr(self.nodes[node_id], "reverse_children", []),
-                setattr(self.nodes[node_id], "reverse_cost_to_parent", np.inf),
-                setattr(self.nodes[node_id], "reverse_fam", set()),
-            )
-            for sublist in self.node_ids.values()
-            for node_id in sublist
-        ]
-        [
-            (
-                setattr(self.nodes[node_id], "lb_cost_to_go", math.inf),
-                setattr(self.nodes[node_id], "lb_cost_to_go_expanded", math.inf),
-                setattr(self.nodes[node_id], "reverse_parent", None),
-                setattr(self.nodes[node_id], "reverse_children", []),
-                setattr(self.nodes[node_id], "reverse_cost_to_parent", np.inf),
-                setattr(self.nodes[node_id], "reverse_fam", set()),
-            )
-            for sublist in self.transition_node_ids.values()
-            for node_id in sublist
-        ]  # also includes goal nodes
-        [
-            (
-                setattr(self.nodes[node_id], "lb_cost_to_go", math.inf),
-                setattr(self.nodes[node_id], "lb_cost_to_go_expanded", math.inf),
-                setattr(self.nodes[node_id], "reverse_parent", None),
-                setattr(self.nodes[node_id], "reverse_children", []),
-                setattr(self.nodes[node_id], "reverse_cost_to_parent", np.inf),
-                setattr(self.nodes[node_id], "reverse_fam", set()),
-            )
-            for sublist in self.reverse_transition_node_ids.values()
-            for node_id in sublist
-        ]
-        pass
-
-    def reset_all_goal_nodes_lb_costs_to_go(self):
-        for node in self.goal_nodes:
-            node.lb_cost_to_go = 0
-            node.reverse_cost_to_parent = 0
-            self.reverse_queue.heappush(node)
+        self.unit_n_ball_measure = ((np.pi**0.5) ** self.dim) / math.gamma(self.dim / 2 + 1) 
+        self.new_path = None
 
     def get_num_samples(self) -> int:
         num_samples = 0
@@ -390,46 +520,42 @@ class Graph:
             num_transition_samples += len(v)
 
         return num_samples + num_transition_samples
-
-    def add_node(self, new_node: Node, forward_cost:float = np.inf, lb_cost_to_go:float = np.inf) -> None:
+    
+    def add_node(self, new_node, cost:float = np.inf, lb_cost_to_go:float = np.inf) -> None:
         self.nodes[new_node.id] = new_node
         key = new_node.state.mode
         if key not in self.node_ids:
             self.node_ids[key] = []
         self.node_ids[key].append(new_node.id)
-        self.operation.lb_costs_to_go_expanded = self.operation.ensure_capacity(self.operation.lb_costs_to_go_expanded, new_node.id) 
-        new_node.lb_cost_to_go_expanded = lb_cost_to_go
-        new_node.lb_cost_to_go = lb_cost_to_go
-        self.operation.forward_costs = self.operation.ensure_capacity(self.operation.forward_costs, new_node.id) 
-        new_node.forward_cost = forward_cost
+        self.operation.update(new_node, lb_cost_to_go, cost)
+        
+    def add_vertex_to_tree(self, node: BaseNode) -> None:  
+        mode = node.state.mode
+        if mode not in self.tree: 
+            self.tree[mode] = BaseTree(self.operation, 
+                                       self.dim, 
+                                       batch_dist_fun = self.batch_dist_fun,
+                                       batch_cost_fun = self.batch_cost_fun,
+                                       update_connectivity = self.update_connectivity,
+                                       is_edge_collision_free = self.is_edge_collision_free)
+        self.tree[mode].add_vertex(node)
 
-    def add_vertex(self, node: Node) -> None:  
-        if node.id in self.vertices:
-            return
-        self.vertices.add(node.id)
-    
     def add_states(self, states: List[State]):
         for s in states:
-            self.add_node(Node(self.operation, s))
+            self.add_node(self.node_cls(self.operation, s))
 
-    def add_nodes(self, nodes: List[Node]):  # EXTEND not better??? TODO
+    def add_nodes(self, nodes: List[BaseNode]):
         for n in nodes:
             self.add_node(n)
 
     def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, Mode]):
         
         for q, this_mode, next_mode in transitions:
-            node_this_mode = Node(self.operation, State( q, this_mode), True)
-            node_next_mode = Node(self.operation, State( q, next_mode), True)
-
+            node_this_mode = self.node_cls(self.operation, State( q, this_mode), True)
+            node_next_mode = self.node_cls(self.operation, State( q, next_mode), True)
 
             if this_mode in self.transition_node_ids:
-                if self.transition_is_already_present(node_this_mode):
-                    # if path:
-                    #     print("QQQQQQQQQQQQQQQQQQQQQQQQQQQ")
-                    #     self.add_vertex(node_this_mode)
-                    #     self.add_vertex(node_next_mode)
-                    # continue
+                if self.transition_or_goal_is_already_present(node_this_mode) is not None:
                     return False
             is_goal = True
             if next_mode is not None:
@@ -437,12 +563,13 @@ class Graph:
                 node_next_mode.transition = node_this_mode
                 node_this_mode.transition = node_next_mode
                 assert this_mode.task_ids != next_mode.task_ids
+                self.update_edge_collision_cache(node_this_mode,node_next_mode, True)
 
             self.add_transition_node(node_this_mode, is_goal=is_goal)
             self.add_transition_node(node_next_mode, reverse=True)
             return True
 
-    def add_transition_node(self, node:Node, is_goal:bool = False, reverse:bool = False, forward_cost:float = np.inf, lb_cost_to_go:float = np.inf):
+    def add_transition_node(self, node, is_goal:bool = False, reverse:bool = False, cost:float = np.inf, lb_cost_to_go:float = np.inf):
         mode = node.state.mode
         if mode is None:
             return 
@@ -457,56 +584,24 @@ class Graph:
             else:
                 self.transition_node_ids[mode] = [node.id]
 
-        if reverse: 
+        if reverse:
+            node.is_reverse_transition = True 
             if mode in self.reverse_transition_node_ids:
-                self.reverse_transition_node_ids[mode].append(node.id)  # TODO for nearest neighbor search, correct ??
+                self.reverse_transition_node_ids[mode].append(node.id) 
             else:
                 self.reverse_transition_node_ids[mode] = [node.id]
 
         self.nodes[node.id] = node
-        self.operation.lb_costs_to_go_expanded = self.operation.ensure_capacity(self.operation.lb_costs_to_go_expanded, node.id) 
-        node.lb_cost_to_go_expanded = lb_cost_to_go
-        node.lb_cost_to_go = lb_cost_to_go
-        self.operation.forward_costs = self.operation.ensure_capacity(self.operation.forward_costs, node.id) 
-        node.forward_cost = forward_cost
-        
-    def add_path_node(self, node:Node, parent:Node, edge_cost:float, is_transition:bool, next_mode:Mode, current_best_cost:float): 
-        self.update_connectivity(parent, node, edge_cost)
-        if is_transition:
-            is_goal = True
-            node_next_mode = Node(self.operation, State(node.state.q, next_mode), is_transition)            
-            if next_mode is not None:
-                self.current_best_path_nodes.append(node_next_mode)
-                self.current_best_path.append(node_next_mode.state)
-                is_goal = False
-                self.update_connectivity(node, node_next_mode, 0.0)
-
-                node.transition = node_next_mode
-                node_next_mode.transition = node
-
-            self.add_transition_node(node, is_goal=is_goal, forward_cost=node.forward_cost, lb_cost_to_go=current_best_cost-node.forward_cost)
-            self.add_transition_node(node_next_mode, reverse=True, forward_cost=node.forward_cost, lb_cost_to_go=current_best_cost-node.forward_cost)
-        else:
-            self.add_node(node, node.forward_cost, current_best_cost-node.forward_cost)
-
-    def add_path_states(self, path:List[State], current_best_cost:float):
-        self.current_best_path_nodes = []
-        self.current_best_path = []
-        batch_edge_cost = self.batch_cost_fun(path[:-1], path[1:])
+        self.operation.update(node, lb_cost_to_go, cost)
+    
+    def add_path_states(self, path:List[State], space_extent):
+        self.new_path = []
         parent = self.root
-        self.current_best_path_nodes.append(parent)
-        self.current_best_path.append(parent.state)
-        parent.lb_cost_to_go = current_best_cost
-        parent.lb_cost_to_go_expanded = current_best_cost
         for i in range(len(path)):
             if i == 0:
                 continue
             is_transition = False
             next_mode = None
-            edge_cost = batch_edge_cost[i-1]
-            # if not self.env.is_collision_free(s.q, s.mode):
-            #     continue #TODO needed?
-
             if (
                 i < len(path) - 1
                 and path[i].mode
@@ -516,14 +611,65 @@ class Graph:
                 next_mode = path[i+1].mode
             if i == len(path)-1:
                 is_transition = True
-            node = Node(self.operation, path[i], is_transition)
-            self.current_best_path_nodes.append(node)
-            self.current_best_path.append(node.state)
-            self.add_path_node(node, parent, edge_cost, is_transition, next_mode, current_best_cost)
-            parent = self.current_best_path_nodes[-1]
-        return self.current_best_path, self.current_best_path_nodes
+            node = self.node_cls(self.operation, path[i], is_transition)
+            if is_transition:
+                if parent.is_transition and parent.is_reverse_transition and self.reverse_transition_is_already_present(node):
+                    continue
+                n = self.transition_or_goal_is_already_present(node)
+                if n is not None:
+                    edge_cost = float(self.batch_cost_fun([parent.state], [n.state]))
+                    self.update_connectivity(parent, n, edge_cost, parent.cost + edge_cost)
+                    self.new_path.append(n)
+                    if n.transition is not None:
+                        self.new_path.append(n.transition)
+                        self.update_connectivity(n, n.transition, 0.0, n.cost)
+                        r = self.get_r_star(self.tree[n.transition.state.mode].cnt, space_extent, self.unit_n_ball_measure)
+                        batch_cost, n_near_costs, node_indices = self.tree[n.transition.state.mode].neighbors(n.transition, None, r)
+                        self.tree[n.transition.state.mode].rewire(n.transition, batch_cost, n_near_costs, node_indices)
+                    parent = self.new_path[-1]
+                    continue
 
-    def transition_is_already_present(self, node:Node, is_goal:bool = False):
+            self.add_path_node(node, parent, is_transition, next_mode, space_extent)
+            parent = self.new_path[-1]     
+        return 
+
+    def add_path_node(self, node, parent, is_transition:bool, next_mode:Mode, space_extent): 
+        self.new_path.append(node)
+        if is_transition:
+            edge_cost = float(self.batch_cost_fun([parent.state], [node.state]))
+            self.update_connectivity(parent, node, edge_cost, parent.cost + edge_cost)
+            is_goal = True
+            node_next_mode = self.node_cls(self.operation, State(node.state.q, next_mode), is_transition)   
+            self.add_vertex_to_tree(node)         
+            if next_mode is not None:
+                self.new_path.append(node_next_mode)
+                is_goal = False
+                self.update_connectivity(node, node_next_mode, 0.0, node.cost)
+
+                node.transition = node_next_mode
+                node_next_mode.transition = node
+                
+                r = self.get_r_star(self.tree[node_next_mode.state.mode].cnt, space_extent, self.unit_n_ball_measure)
+                batch_cost, n_near_costs, node_indices = self.tree[node_next_mode.state.mode].neighbors(node_next_mode, None, r) 
+                self.tree[node_next_mode.state.mode].rewire(node_next_mode, batch_cost, n_near_costs, node_indices)
+                self.add_vertex_to_tree(node_next_mode)
+            else:
+                node.set_to_goal_node()
+
+            self.add_transition_node(node, is_goal=is_goal, cost=node.cost)
+            self.add_transition_node(node_next_mode, reverse=True, cost=node.cost)
+            
+            
+        else:
+            r = self.get_r_star(self.tree[node.state.mode].cnt, space_extent, self.unit_n_ball_measure)
+            batch_cost, n_near_costs, node_indices = self.tree[node.state.mode].neighbors(node, parent, r) 
+            true_parent, true_edge_cost = self.tree[node.state.mode].find_parent(node, parent, batch_cost, n_near_costs, node_indices) 
+            self.update_connectivity(true_parent, node, float(true_edge_cost), true_parent.cost + float(true_edge_cost))
+            self.tree[node.state.mode].rewire(node, batch_cost, n_near_costs, node_indices)
+            self.add_node(node, cost=node.cost)
+            self.add_vertex_to_tree(node)
+
+    def transition_or_goal_is_already_present(self, node:BaseNode):  
         if len(self.transition_node_ids[node.state.mode]) > 0:
             configs_list = [
                             self.nodes[id].state.q
@@ -531,11 +677,25 @@ class Graph:
                             ]
         
             dists = self.batch_dist_fun(node.state.q, configs_list)
+            min_index = np.argmin(dists)
+            min_dist = dists[min_index]
 
-            if min(dists) < 1e-6:
+            if min_dist < 1e-6:
+                id = self.transition_node_ids[node.state.mode][min_index]
+                return self.nodes[id]
+        return None
+    
+    def reverse_transition_is_already_present(self, node:BaseNode):  
+        if len(self.transition_node_ids[node.state.mode]) > 0:
+            configs_list = [
+                            self.nodes[id].state.q
+                            for id in self.reverse_transition_node_ids[node.state.mode]
+                            ]
+        
+            dists = self.batch_dist_fun(node.state.q, configs_list)
+
+            if np.min(dists) < 1e-6:
                 return True
-        else:
-            pass
         return False
 
     def update_cache(self, key: Mode):
@@ -573,6 +733,7 @@ class Graph:
 
         # node ids as keys
         self.neighbors_node_ids_cache = {}
+        self.neighbors_batch_cost_cache = {}
         self.neighbors_array_cache = {}
         self.neighbors_fam_ids_cache = {}
         self.tot_neighbors_batch_cost_cache = {}
@@ -580,10 +741,11 @@ class Graph:
         self.transition_node_lb_cache = {}
         self.reverse_transition_node_lb_cache = {}
         self.reverse_transition_node_array_cache = {}
-         
+
+        self.blacklist_cache = {}
+
     def get_r_star(
-        self, number_of_nodes, informed_measure, unit_n_ball_measure, wheight=1
-    ):
+        self, number_of_nodes, informed_measure, unit_n_ball_measure, wheight=1):
         r_star = (
             1.001
             * wheight
@@ -594,13 +756,23 @@ class Graph:
             )
             ** (1 / self.dim)
         )
+
+        # r_star = (
+        #     1.001
+        #     * 2* wheight
+        #     * (
+        #         ((1 + 1 / self.dim))
+        #         * (informed_measure / unit_n_ball_measure)
+        #         * (np.log(number_of_nodes) / number_of_nodes)
+        #     )
+        #     ** (1 / self.dim)
+        # )
         return r_star
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+
     def get_neighbors(
-        self, node: Node, space_extent: float = None, in_closed_set:bool = False
+        self, node: BaseNode, space_extent: float = None, in_closed_set:bool = False
     ) -> set:
-        
-        
+         
         if node.id in self.neighbors_node_ids_cache:
             if in_closed_set:
                 return self.update_neighbors_with_family_of_node(node)
@@ -654,6 +826,7 @@ class Graph:
                 informed_measure,
                 self.unit_n_ball_measure
                
+               
             )
 
             # if len(self.reverse_transition_node_array_cache[key]) == 1:
@@ -690,7 +863,7 @@ class Graph:
 
 
         assert node.id in all_ids, (
-           " ohhh nooooooooooooooo"
+        " ohhh nooooooooooooooo"        
         )
         # if node.id not in all_ids:
         #     pass
@@ -703,15 +876,16 @@ class Graph:
         assert node.id not in self.neighbors_node_ids_cache,("2 already calculated")
         self.neighbors_node_ids_cache[node.id] = all_ids 
         self.neighbors_array_cache[node.id] = arr
-
+        self.neighbors_batch_cost_cache[node.id] = self.batch_cost_fun(node.state.q, arr)
+        self.blacklist_cache[node.id] = set()
         return self.update_neighbors(node)
 
-    def update_neighbors_with_family_of_node(self, node:Node):
+    def update_neighbors_with_family_of_node(self, node:BaseNode, update:bool = False):
         neighbors_fam = set()
         if node.id in self.neighbors_fam_ids_cache:
             neighbors_fam = self.neighbors_fam_ids_cache[node.id]
 
-        combined_fam = node.forward_fam | node.reverse_fam
+        combined_fam = node.forward.fam | node.rev.fam
         blacklist = node.blacklist
         if len(blacklist) > 0 and len(combined_fam) > 0:
             combined_fam =  combined_fam - blacklist
@@ -724,104 +898,252 @@ class Graph:
                 arr = np.array(
                     [self.nodes[id].state.q.q for id in mask_node_ids],
                     dtype=np.float64,
-                )
+                )            
+                self.tot_neighbors_batch_cost_cache[node.id] = np.concatenate((self.batch_cost_fun(node.state.q, arr), self.neighbors_batch_cost_cache[node.id]))
                 arr = np.concatenate((arr, self.neighbors_array_cache[node.id]))
-                self.tot_neighbors_batch_cost_cache[node.id] = self.batch_cost_fun(node.state.q, arr)
                 self.tot_neighbors_id_cache[node.id] = np.concatenate((mask_node_ids, self.neighbors_node_ids_cache[node.id]))
                 assert len(self.tot_neighbors_id_cache[node.id]) == len(self.tot_neighbors_batch_cost_cache[node.id]),(
                     "forward not right"
                 )
                 return self.tot_neighbors_id_cache[node.id]
-        if node.id not in self.tot_neighbors_id_cache:
+        if update or node.id not in self.tot_neighbors_id_cache:
             arr = self.neighbors_array_cache[node.id]
-            self.tot_neighbors_batch_cost_cache[node.id] = self.batch_cost_fun(node.state.q, arr)
+            self.tot_neighbors_batch_cost_cache[node.id] = self.neighbors_batch_cost_cache[node.id]
             self.tot_neighbors_id_cache[node.id] = self.neighbors_node_ids_cache[node.id]
         assert len(self.tot_neighbors_id_cache[node.id]) == len(self.tot_neighbors_batch_cost_cache[node.id]),(
             "forward not right"
         )
         return self.tot_neighbors_id_cache[node.id]
 
-    def update_neighbors(self, node:Node): # only needed for forward
+    def update_neighbors(self, node:BaseNode): # only needed for forward
         blacklist = node.blacklist
-        if len(blacklist) > 0:
+        diff = blacklist -  self.blacklist_cache[node.id]
+        if len(diff) > 0:
+            self.blacklist_cache[node.id] = set(blacklist)
             node_ids = self.neighbors_node_ids_cache[node.id]
             arr =  self.neighbors_array_cache[node.id]
-            mask_node_ids =  ~np.isin(node_ids, blacklist)
+            # mask_node_ids =  ~np.isin(node_ids, list(diff))
+            mask_node_ids =  np.fromiter((id_ not in diff for id_ in node_ids), dtype=bool)
             if not mask_node_ids.all():
                 node_ids = node_ids[mask_node_ids]
                 arr = arr[mask_node_ids]
                 self.neighbors_node_ids_cache[node.id] = node_ids
                 self.neighbors_array_cache[node.id] = arr
+                self.neighbors_batch_cost_cache[node.id] = self.neighbors_batch_cost_cache[node.id][mask_node_ids]
 
-        return self.update_neighbors_with_family_of_node(node)
+        return self.update_neighbors_with_family_of_node(node, True)
             
-    def update_forward_cost(self, n: Node) -> None:
+    def update_forward_cost_of_children(self, n: BaseNode, start_nodes_to_update:set[int]) -> set[int]:
         stack = [n.id]
         while stack:
             current_id = stack.pop()
             current_node = self.nodes[current_id]
-            children = current_node.forward_children
+            children = current_node.forward.children
             if children:
                 for _, id in enumerate(children):
                     child = self.nodes[id]
-                    new_cost = current_node.forward_cost + child.forward_cost_to_parent
-                    child.forward_cost = new_cost
-                    self.forward_queue.heappush((child.forward_cost_to_parent, (current_node, child)))
-                    # child.agent_dists = current_node.agent_dists + child.agent_dists_to_parent
+                    new_cost = current_node.cost + child.forward.cost_to_parent
+                    child.cost = new_cost
+                    start_nodes_to_update.add(child.id)
                 stack.extend(children)
+        return start_nodes_to_update
+    
+    def update_forward_cost(self, node:BaseNode):
+        start_nodes_to_update = set()
+        start_nodes_to_update.add(node.id)
+        if len(node.forward.children) > 0:
+            start_nodes_to_update = self.update_forward_cost_of_children(node, start_nodes_to_update)
+        self.update_forward_queue_keys('start', start_nodes_to_update)
+        
+    @abstractmethod
+    def update_forward_queue_keys(self, node_ids:Optional[Set[BaseNode]], type:str):
+        pass
 
-    def update_connectivity(self, n0: Node, n1: Node, edge_cost, tree: str = "forward"):
+    def update_connectivity(self, n0: BaseNode, n1: BaseNode, edge_cost, updated_cost, tree: str = "forward", is_transition:bool = False):
         if tree == "forward":
-            if n1.forward_parent is not None and n1.forward_parent.id != n0.id:
-                n1.forward_parent.forward_children.remove(n1.id)
-                n1.forward_parent.forward_fam.remove(n1.id)
-                n1.forward_fam.remove(n1.forward_parent.id)
-            n1.forward_parent = n0
-            updated_cost = n0.forward_cost + edge_cost
-            n1.forward_cost_to_parent = edge_cost
-            n0.forward_children.append(n1.id)
-            if updated_cost != n1.forward_cost:
-                n1.forward_cost = updated_cost
-                if len(n1.forward_children) > 0:
-                    self.update_forward_cost(n1)
-            else:
-                print("uhhh")
-            self.add_vertex(n1)
-            self.add_vertex(n0)
-            n1.forward_fam.add(n0.id)
-            n0.forward_fam.add(n1.id)
+            if n1.forward.parent is None: 
+                n0.forward.children.append(n1.id)
+            elif n1.forward.parent.id != n0.id:
+                n1.forward.parent.forward.children.remove(n1.id)
+                n1.forward.parent.forward.fam.remove(n1.id)
+                n1.forward.fam.remove(n1.forward.parent.id)
+                n0.forward.children.append(n1.id)
+            n1.forward.parent = n0
+            # assert (n1.lb_cost_to_come - updated_cost)<=1e-15, (
+            #         "ohhhhhhhhhhhhhh something is wrong with the lb cost to go"
+            #     )
+            n1.forward.cost_to_parent = edge_cost
+            assert n1.id in n0.forward.children, (
+                "not a child")
+            
+            
+            if updated_cost != n1.cost:
+                n1.cost = updated_cost
+                self.update_forward_cost(n1)
+                
+                
+            # else:
+            #     print("uhhh")
+            self.add_vertex_to_tree(n1)
+            self.add_vertex_to_tree(n0)
+            n1.forward.fam.add(n0.id)
+            n0.forward.fam.add(n1.id)
+            if is_transition and n1.transition.forward.parent is None:
+                self.update_connectivity(n1, n1.transition, 0.0, n1.cost ,"forward")
+
         else:
-            n1.lb_cost_to_go = n0.lb_cost_to_go_expanded + edge_cost
-            if n1.reverse_parent is not None:
-                if n1.reverse_parent.id == n0.id:
+            n1.lb_cost_to_go = updated_cost
+            if n1.rev.parent is not None:
+                if n1.rev.parent.id == n0.id:
+                    if is_transition:
+                        self.update_connectivity(n1, n1.transition, 0.0, n1.lb_cost_to_go,"reverse", False)
                     return
-                if n1.reverse_parent.id != n0.id:
-                    assert [
-                                (self.nodes[child].reverse_parent, child)
-                                for child in n1.reverse_parent.reverse_children
-                                if self.nodes[child].reverse_parent is None
-                                or self.nodes[child].reverse_parent.id != n1.reverse_parent.id
-                            ] == [], "parent and children not correct"
+                if n1.rev.parent.id != n0.id:
+                    # assert [
+                    #             (self.nodes[child].rev.parent, child)
+                    #             for child in n1.rev.parent.rev.children
+                    #             if self.nodes[child].rev.parent is None
+                    #             or self.nodes[child].rev.parent.id != n1.rev.parent.id
+                    #         ] == [], "parent and children not correct"
 
-                    n1.reverse_parent.reverse_children.remove(n1.id)
-                    n1.reverse_parent.reverse_fam.remove(n1.id)
-                    n1.reverse_fam.remove(n1.reverse_parent.id)
+                    n1.rev.parent.rev.children.remove(n1.id)
+                    n1.rev.parent.rev.fam.remove(n1.id)
+                    n1.rev.fam.remove(n1.rev.parent.id)
+                    n0.rev.children.append(n1.id)
+            else:
+                n0.rev.children.append(n1.id)
 
+            # assert (n1.lb_cost_to_go != n0.lb_cost_to_go_expanded + edge_cost), (
+            # "asdf")
+            n1.rev.parent = n0
+            assert n1.id in n0.rev.children, (
+                "not a child")
+            
+            n1.rev.cost_to_parent = edge_cost
+            # assert [
+            #             (self.nodes[child].rev.parent, child)
+            #             for child in n1.rev.parent.rev.children
+            #             if self.nodes[child].rev.parent is None
+            #             or self.nodes[child].rev.parent.id != n1.rev.parent.id
+            #         ] == [], (
+            #             "new parent and new children not correct")
+            if n0.state.mode.next_modes == []:
+                assert n1.lb_cost_to_go >= float(self.batch_cost_fun([n1.state], [n0.state])), (
+                "something is wrong with the lb cost to go"
+            )
+            else:
+                goal_nodes = np.array([n.state.q.state() for n in self.goal_nodes])
+                assert min((self.batch_cost_fun(n1.state.q, goal_nodes))) - n1.lb_cost_to_go <=1e-15 , (
+                    "something is wrong with the lb cost to go"
+                )
 
-            n1.reverse_parent = n0
-            assert n1.id not in n0.reverse_children, (
-                "already a child")
-            n0.reverse_children.append(n1.id)
-            n1.reverse_cost_to_parent = edge_cost
-            assert [
-                        (self.nodes[child].reverse_parent, child)
-                        for child in n1.reverse_parent.reverse_children
-                        if self.nodes[child].reverse_parent is None
-                        or self.nodes[child].reverse_parent.id != n1.reverse_parent.id
-                    ] == [], (
-                        "new parent and new children not correct")
-            n1.reverse_fam.add(n0.id)
-            n0.reverse_fam.add(n1.id)
+            # if (n1.test - n1.lb_cost_to_go )>1e-15:
+            #     return
+            # if not np.isinf(n1.test):
+            #     assert (n1.test - n1.lb_cost_to_go )<=1e-15, (
+            #             "ohhhhhhhhhhhhhh something is wrong with the lb cost to go"
+            #         )
+            # if not n1.is_transition:
+            #     assert not np.isinf(n1.lb_cost_to_go), (
+            #         "wrongg update"
+            #     )
+            n1.rev.fam.add(n0.id)
+            n0.rev.fam.add(n1.id)
+            if is_transition:
+                self.update_connectivity(n1, n1.transition, 0.0, n1.lb_cost_to_go, "reverse", False)
+
+    def compute_transition_lb_cost_to_come(self):
+        # run a reverse search on the transition nodes without any collision checking
+        costs = {}
+        transition_nodes = {}
+        processed = 0
+
+        closed_set = set()
+
+        queue = []
+        heapq.heappush(queue, (0, self.root))
+        costs[self.root.id] = 0
+
+        while len(queue) > 0:
+            _, node = heapq.heappop(queue)
+            mode = node.state.mode
+            if node.id in closed_set:
+                continue
+            closed_set.add(node.id)
+            if mode not in self.transition_node_ids:
+                continue
+            if mode not in transition_nodes:
+                if mode.task_ids == self.goal_nodes[0].state.mode.task_ids:
+                    transition_nodes[mode] = self.goal_nodes
+                else:
+                    transition_nodes[mode] = [self.nodes[id].transition for id in self.transition_node_ids[mode]]
+
+            if len(transition_nodes[mode]) == 0:
+                continue
+            self.update_cache(mode)
+            
+            if mode not in self.transition_node_array_cache:
+                continue
+
+            # add neighbors to open_queue
+            edge_costs = self.batch_cost_fun(
+                node.state.q,
+                self.transition_node_array_cache[mode],
+            )
+
+            parent_cost = costs[node.id]
+            for edge_cost, n in zip(edge_costs, transition_nodes[mode]):
+                cost = parent_cost + edge_cost
+                id = n.id
+                if id not in costs or cost < costs[id]:
+                    costs[id] = cost
+                    n.lb_cost_to_come = cost
+                    if n.transition is not None:
+                        n.transition.lb_cost_to_come = cost
+                    processed += 1
+                    heapq.heappush(queue, (cost, n))
+        print(processed)
+        
+    def compute_node_lb_cost_to_come(self):
+        processed = 0
+        reverse_transition_node_lb_cache = {}
+        for mode in self.node_ids:
+            for id in self.node_ids[mode]:
+                n = self.nodes[id]
+                mode = n.state.mode
+                if mode not in self.reverse_transition_node_array_cache:
+                    continue
+
+                if mode not in reverse_transition_node_lb_cache:
+                    reverse_transition_node_lb_cache[mode] = np.array(
+                        [
+                            self.nodes[id].lb_cost_to_come
+                            for id in self.reverse_transition_node_ids[mode]
+                        ],
+                        dtype=np.float64,
+                    )
+
+                costs_to_transitions = self.batch_cost_fun(
+                    n.state.q,
+                    self.reverse_transition_node_array_cache[mode],
+                )
+
+                min_cost = np.min(
+                    reverse_transition_node_lb_cache[mode] + costs_to_transitions
+                )
+                n.lb_cost_to_come = min_cost
+                processed +=1
+        print(processed)
+
+    def update_edge_collision_cache(
+            self, n0: BaseNode, n1: BaseNode, is_edge_collision_free: bool
+        ):
+            if is_edge_collision_free:
+                n1.whitelist.add(n0.id)
+                n0.whitelist.add(n1.id)
+            else:
+                n0.blacklist.add(n1.id)
+                n1.blacklist.add(n0.id)
 
 class Informed():
     def __init__(self, env:BaseProblem, sample_mode, conf_type, informed_with_lb):
@@ -929,7 +1251,7 @@ class Informed():
         if state.mode not in g.reverse_transition_node_lb_cache:
             g.reverse_transition_node_lb_cache[state.mode] = np.array(
                 [
-                    g.nodes[id].forward_cost
+                    g.nodes[id].lb_cost_to_come
                     for id in g.reverse_transition_node_ids[state.mode]
                 ],
                 dtype=np.float64,
@@ -1588,7 +1910,8 @@ class BaseITstar(ABC):
         try_informed_transitions: bool = True,
         try_shortcutting: bool = True,
         try_direct_informed_sampling: bool = True,
-        informed_with_lb:bool = True
+        informed_with_lb:bool = True,
+        remove_based_on_modes:bool = False
     ):
         self.env = env
         self.ptc = ptc
@@ -1608,6 +1931,7 @@ class BaseITstar(ABC):
         self.try_shortcutting = try_shortcutting
         self.try_direct_informed_sampling = try_direct_informed_sampling
         self.informed_with_lb = informed_with_lb
+        self.remove_based_on_modes = remove_based_on_modes
 
         self.reached_modes = []
         self.start_time = time.time()
@@ -1621,12 +1945,17 @@ class BaseITstar(ABC):
         self.current_best_path = None
         self.current_best_path_nodes = None
         self.cnt = 0
-        self.operation = Operation()
+        self.operation = self._create_operation()
+        self.consistent_nodes = set()
+    
+    def _create_operation(self) -> BaseOperation:
+        return BaseOperation()
 
     def sample_valid_uniform_batch(self, batch_size: int, cost: float) -> List[State]:
         new_samples = []
         num_attempts = 0
         num_valid = 0
+        failed_attemps = 0
 
         if len(self.g.goal_nodes) > 0:
             focal_points = np.array(
@@ -1635,6 +1964,8 @@ class BaseITstar(ABC):
             )
 
         while len(new_samples) < batch_size:
+            # if failed_attemps > 10000000:
+            #     break
             num_attempts += 1
             # print(len(new_samples))
             # sample mode
@@ -1664,11 +1995,14 @@ class BaseITstar(ABC):
 
             if cost is not None:
                 if sum(self.env.batch_config_cost(q, focal_points)) > cost:
+                    failed_attemps += 1
                     continue
 
             if self.env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
                 num_valid += 1
+            else:
+                 failed_attemps += 1
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
 
@@ -1676,6 +2010,7 @@ class BaseITstar(ABC):
 
     def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
         transitions = []
+        failed_attemps = 0
 
         if len(self.g.goal_nodes) > 0:
             focal_points = np.array(
@@ -1685,7 +2020,8 @@ class BaseITstar(ABC):
         added_transitions = 0
         # while len(transitions) < transistion_batch_size:
         while added_transitions < transistion_batch_size:
-
+            # if failed_attemps > 100000000:
+            #     break
             # sample mode
             mode = self.sample_mode(self.reached_modes, "uniform_reached", None)
 
@@ -1741,6 +2077,7 @@ class BaseITstar(ABC):
 
             if cost is not None:
                 if sum(self.env.batch_config_cost(q, focal_points)) > cost:
+                    failed_attemps +=1
                     continue
 
             if self.env.is_collision_free(q, mode):
@@ -1758,10 +2095,16 @@ class BaseITstar(ABC):
 
                 if self.g.add_transition_nodes(transitions):
                     added_transitions +=1
+                else:
+                    failed_attemps+=1
                 transitions = []
+            else:
+                failed_attemps +=1
             # else:
             #     if mode.task_ids == [3, 8]:
             #         self.env.show(True)
+            
+        
         print(f"Adding {added_transitions} transitions")
         return
 
@@ -1796,7 +2139,7 @@ class BaseITstar(ABC):
                     else:
                         qr_mean = state.q[i] * 1.0
 
-                        qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+                        qr = np.random.rand(len(qr_mean)) * 0.2 + qr_mean
 
                         lims = self.env.limits[:, self.env.robot_idx[r]]
                         if lims[0, 0] < lims[1, 0]:
@@ -1816,7 +2159,7 @@ class BaseITstar(ABC):
                     r = self.env.robots[i]
                     qr_mean = state.q[i]
 
-                    qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+                    qr = np.random.rand(len(qr_mean)) * 0.2 + qr_mean
 
                     lims = self.env.limits[:, self.env.robot_idx[r]]
                     if lims[0, 0] < lims[1, 0]:
@@ -2059,9 +2402,9 @@ class BaseITstar(ABC):
     
     def prune_set_of_expanded_nodes(self):
         if not self.remove_nodes:
-            return self.g.vertices, []
+            return BaseTree.all_vertices, []
 
-        vertices = []
+        vertices_node_ids = []
         stack = [self.g.root.id]
         children_to_be_removed = []
         focal_points = {}
@@ -2071,16 +2414,15 @@ class BaseITstar(ABC):
         while len(stack) > 0:
             id = stack.pop()
             node = self.g.nodes[id]
-            key = node.state.mode
+            key = node.state.mode           
+            if node.is_transition and node.is_reverse_transition:
+                if node.transition.id in vertices_node_ids:
+                    vertices_node_ids.append(id)
+                    stack.extend(node.forward.children)
+                    count +=1
+                continue
             
-            if node.is_transition:
-                if key in self.g.reverse_transition_node_ids:
-                    if node.id in self.g.reverse_transition_node_ids[key]:
-                        stack.extend(node.forward_children)
-                        count +=1
-                        continue
-            
-            if key not in self.start_transition_arrays:
+            if not self.remove_based_on_modes or key not in self.start_transition_arrays:
                 if key not in focal_points:
                     focal_points[key] = np.array(
                     [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
@@ -2107,53 +2449,54 @@ class BaseITstar(ABC):
             elif not node.is_transition:
                 flag = sum(self.env.batch_config_cost(node.state.q, focal_points[key])) > inter_costs[key]
                 if not flag:
-                        if node.id not in self.g.vertices:
-                            flag = True
+                    #not in the current expanded tree
+                    if node.id not in BaseTree.all_vertices:
+                        flag = True
             else:
                 flag = sum(self.env.batch_config_cost(node.state.q, focal_points_transition[key])) > inter_costs[key]
                 
             if flag:
                 children = [node.id]
-                if node.forward_parent is not None:
-                    node.forward_parent.forward_children.remove(node.id)
-                    node.forward_parent.forward_fam.remove(node.id)
-                    node.forward_fam.remove(node.forward_parent.id)
-                    node.forward_parent = None
+                if node.forward.parent is not None:
+                    node.forward.parent.forward.children.remove(node.id)
+                    node.forward.parent.forward.fam.remove(node.id)
+                    node.forward.fam.remove(node.forward.parent.id)
+                    node.forward.parent = None
                 to_be_removed = []
                 while len(children) > 0:
                     child_id = children.pop()
                     to_be_removed.append(child_id)
-                    children.extend(self.g.nodes[child_id].forward_children)
+                    children.extend(self.g.nodes[child_id].forward.children)
                 children_to_be_removed.extend(to_be_removed)
             else:
-                vertices.append(id)
-                stack.extend(node.forward_children)
+                vertices_node_ids.append(id)
+                stack.extend(node.forward.children)
 
         goal_mask = np.array([item in children_to_be_removed for item in self.g.goal_node_ids])
         goal_nodes = np.array(self.g.goal_node_ids)[goal_mask]
         if goal_nodes.size > 0:
             for goal in goal_nodes:
                 goal_node = self.g.nodes[goal]
-                goal_node.forward_cost = np.inf
-                goal_node.forward_cost_to_parent = np.inf
-                goal_node.forward_children = []
-                goal_node.forward_parent = None
-                goal_node.forward_fam = set()
+                goal_node.cost = np.inf
+                goal_node.forward.cost_to_parent = np.inf
+                goal_node.forward.children = []
+                goal_node.forward.parent = None
+                goal_node.forward.fam = set()
                 children_to_be_removed.remove(goal)
                 key = goal_node.state.mode
-                vertices.append(goal)
+                vertices_node_ids.append(goal)
         
-        return vertices, children_to_be_removed
+        return vertices_node_ids, children_to_be_removed
 
     def remove_nodes_in_graph(self):
         num_pts_for_removal = 0
         vertices_to_keep, vertices_to_be_removed = self.prune_set_of_expanded_nodes()
-        # vertices_to_keep = list(chain.from_iterable(self.g.vertices.values()))
+        # vertices_to_keep = list(chain.from_iterable(self.g.vertices_node_ids.values()))
         # Remove elements from g.nodes_ids
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
             # start = random.choice(self.g.reverse_transition_node_ids[mode])
             # goal = random.choice(self.g.re)
-            if mode not in self.start_transition_arrays:
+            if not self.remove_based_on_modes or mode not in self.start_transition_arrays:
                 focal_points = np.array(
                 [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
                 dtype=np.float64,
@@ -2170,7 +2513,7 @@ class BaseITstar(ABC):
             self.g.node_ids[mode] = [
                 id
                 for id in self.g.node_ids[mode]
-                if id in vertices_to_keep or (id not in vertices_to_be_removed and sum(
+                if id == self.g.root.id or id in vertices_to_keep or (id not in vertices_to_be_removed and sum(
                     self.env.batch_config_cost(self.g.nodes[id].state.q, focal_points))
                 <= cost)
             ]
@@ -2182,11 +2525,10 @@ class BaseITstar(ABC):
         self.g.reverse_transition_node_ids = {}
 
         for mode in list(self.g.transition_node_ids.keys()):
-            self.g.reverse_transition_node_ids[mode] = []
             if self.env.is_terminal_mode(mode):
                 continue
             
-            if mode not in self.start_transition_arrays:
+            if not self.remove_based_on_modes or mode not in self.start_transition_arrays:
                 focal_points = np.array(
                 [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
                 dtype=np.float64,
@@ -2218,26 +2560,47 @@ class BaseITstar(ABC):
         reverse_transition_ids = [node.transition.id for node in valid_nodes]
         reverse_transition_modes =[node.transition.state.mode for node in valid_nodes]
         for mode, t_id in zip(reverse_transition_modes, reverse_transition_ids):
+            if mode not in self.g.reverse_transition_node_ids:
+                self.g.reverse_transition_node_ids[mode] = []
             self.g.reverse_transition_node_ids[mode].append(t_id)
         if self.remove_nodes:
-            self.g.vertices = set()
-            self.g.vertices.add(self.g.root.id)
+            self.g.tree = {}
+            BaseTree.all_vertices.clear()
+            self.g.add_vertex_to_tree(self.g.root)
         print(f"Removed {num_pts_for_removal} nodes")
 
-    def process_valid_path(self, valid_path):
+    def process_valid_path(self, 
+                           valid_path, 
+                           with_queue_update:bool = True, 
+                           with_shortcutting:bool = False, 
+                           force_update:bool = False):
         path = [node.state for node in valid_path]
         new_path_cost = path_cost(path, self.env.batch_config_cost)
-        if self.current_best_cost is None or new_path_cost < self.current_best_cost:
+        update_forward_queue = False
+        if self.current_best_cost is None:
+            update_forward_queue = True
+        if force_update or self.current_best_cost is None or new_path_cost < self.current_best_cost:
             self.alpha = 1.0
+            print()
+            print([n.id for n in valid_path])
             self.current_best_path = path
             self.current_best_cost = new_path_cost
             self.current_best_path_nodes = valid_path
             self.remove_nodes = True
+            self.dynamic_reverse_search_update = True
+            if not with_shortcutting and with_queue_update:
+                # self.g.add_path_states(path, self.approximate_space_extent)   
+                # self.current_best_path_nodes = self.generate_path(force_generation=True)
+                # self.current_best_path = [node.state for node in self.current_best_path_nodes]
+                # self.g.initialize_cache()
+                self.add_reverse_connectivity_to_path(self.current_best_path_nodes, with_queue_update)
+            if update_forward_queue:
+                self.g.update_forward_queue_keys('target')
 
             print(f"New cost: {new_path_cost} at time {time.time() - self.start_time}")
             self.update_results_tracking(new_path_cost, path)
 
-            if self.try_shortcutting:
+            if self.try_shortcutting and with_shortcutting:
                 print("Shortcutting path")
                 shortcut_path, _ = shortcutting.robot_mode_shortcut(
                     self.env,
@@ -2248,7 +2611,6 @@ class BaseITstar(ABC):
                 )
 
                 shortcut_path = shortcutting.remove_interpolated_nodes(shortcut_path)
-
                 shortcut_path_cost = path_cost(
                     shortcut_path, self.env.batch_config_cost
                 )
@@ -2261,106 +2623,119 @@ class BaseITstar(ABC):
                     self.current_best_cost = shortcut_path_cost
 
                     interpolated_path = shortcut_path
-                    self.current_best_path, self.current_best_path_nodes = self.g.add_path_states(interpolated_path, self.current_best_cost)   
+                    self.g.add_path_states(interpolated_path, self.approximate_space_extent)   
+                    self.current_best_path_nodes = self.generate_path(force_generation=True)
+                    self.current_best_path = [node.state for node in self.current_best_path_nodes]
+                    self.g.initialize_cache()
+                    # self.g.compute_transition_lb_cost_to_come()
+                    # self.g.compute_node_lb_cost_to_come() 
+                    self.add_reverse_connectivity_to_path(self.current_best_path_nodes, with_queue_update)
                     self.current_best_cost = path_cost(self.current_best_path, self.env.batch_config_cost) 
+                    print("new cost: " ,self.current_best_cost)
             if not self.optimize and self.current_best_cost is not None:
                 return  
-            # extract modes
-            self.start_transition_arrays, self.end_transition_arrays, self.intermediate_mode_costs = {}, {}, {}
-            self.start_transition_arrays[self.current_best_path_nodes[0].state.mode] = self.g.root.state.q.state()
-            modes = [self.current_best_path_nodes[0].state.mode]
-            start_cost = 0
-            for n in self.current_best_path_nodes:
-                if n.state.mode != modes[-1]:
-                    self.end_transition_arrays[modes[-1]] = n.state.q.state()
-                    self.start_transition_arrays[n.state.mode] = n.state.q.state()
-                    self.intermediate_mode_costs[modes[-1]] = n.forward_cost - start_cost
-                    start_cost = n.forward_cost
-                    modes.append(n.state.mode)
-            self.end_transition_arrays[modes[-1]] = self.current_best_path_nodes[-1].state.q.state()
-            self.intermediate_mode_costs[modes[-1]] = self.current_best_path_nodes[-1].forward_cost - start_cost
-            print("Modes of new path")
-            print([m.task_ids for m in modes])
+            print([n.id for n in self.current_best_path_nodes])
+            # extract modes for removal strategy
+    
+    def update_removal_conditions(self):
+        self.start_transition_arrays, self.end_transition_arrays, self.intermediate_mode_costs = {}, {}, {}
+        self.start_transition_arrays[self.current_best_path_nodes[0].state.mode] = self.g.root.state.q.state()
+        modes = [self.current_best_path_nodes[0].state.mode]
+        start_cost = 0
+        for n in self.current_best_path_nodes:
+            if n.state.mode != modes[-1]:
+                self.end_transition_arrays[modes[-1]] = n.state.q.state()
+                self.start_transition_arrays[n.state.mode] = n.state.q.state()
+                self.intermediate_mode_costs[modes[-1]] = n.cost - start_cost
+                start_cost = n.cost
+                modes.append(n.state.mode)
+        self.end_transition_arrays[modes[-1]] = self.current_best_path_nodes[-1].state.q.state()
+        self.intermediate_mode_costs[modes[-1]] = self.current_best_path_nodes[-1].cost - start_cost
+        print("Modes of new path")
+        print([m.task_ids for m in modes])     
+            
+    def add_reverse_connectivity_to_path(self, path, with_queue_update):
+        parent = path[-1]
+        to_update = set()
+        to_update.add(parent.id)
+        for node in reversed(path[1:-1]):
+            edge_cost = parent.forward.cost_to_parent
+            # lb_cost_to_go_expanded = lb_cost_to_go for AIT*
+            self.g.update_connectivity(parent, node, edge_cost , parent.lb_cost_to_go + edge_cost,'reverse')
+            node.close(self.env.collision_resolution)
+            if with_queue_update:
+                if node.is_transition and not node.is_reverse_transition:
+                    self.expand_node_forward(node.transition)
+                else:
+                    self.expand_node_forward(node)
+            self.consistent_nodes.add(node.id)
+            to_update.add(node.id)
+            parent = node
+        to_update.add(path[0].id)
+        if with_queue_update:
+            self.g.update_forward_queue_keys('target', to_update)
 
-            self.initialize_samples_and_forward_queue()       
-
-    def generate_path(self) -> List[Node]:
+    def generate_path(self, force_generation:bool = False) -> List[BaseNode]:
         path = []
         goal, cost = self.get_lb_goal_node_and_cost()
-        if math.isinf(cost) or goal is None or (self.current_best_cost is not None and cost >= self.current_best_cost):
+        if not force_generation and (math.isinf(cost) or goal is None or (self.current_best_cost is not None and cost >= self.current_best_cost)):
             return path
         path.append(goal)
 
         n = goal
 
-        while n.forward_parent is not None:
-            path.append(n.forward_parent)
-            n = n.forward_parent
+        while n.forward.parent is not None:
+            path.append(n.forward.parent)
+            n = n.forward.parent
 
-        path.append(n)
+        # path.append(n)
         path = path[::-1]
         return path
-
-    def expand(self, node: Optional[Node] = None) -> None:
-        if node is None:
-            node = self.g.root
-            self.g.forward_queue = ForwarrdQueue(self.alpha)
-            self.forward_closed_set = set()
-            assert node.forward_cost == 0 ,(
-                " root node wrong"
-            )
-            print("Restart reverse search ...")
-            self.update_heuristic()
-            print("... finished")
-            
-        neighbors = self.g.get_neighbors(node, space_extent=self.approximate_space_extent)
-        if len(neighbors) == 0:
-            return
-        # add neighbors to open_queue
-        # assert all([(self.g.nodes[id].state.mode in node.state.mode.next_modes or self.g.nodes[id].state.mode == node.state.mode) for id in neighbors]),  (
-        #     "Not good"
-        # )
-        edge_costs = self.g.tot_neighbors_batch_cost_cache[node.id]
-        for id, edge_cost in zip(neighbors, edge_costs):
-            n = self.g.nodes[id]
-            assert (n.forward_parent == node) == (n.id in node.forward_children), (
-                    f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
-                    )
-            if n.id in node.blacklist or n.forward_parent == node:
-                continue
-            if node.state.mode in n.state.mode.next_modes:
-                continue
-            if n.is_transition:
-                if n.transition is not None and n.id in self.g.reverse_transition_node_ids[node.state.mode]: 
-                    if node.id != n.transition.id:
-                        continue
-            edge = (node, n)
-            if n.id != node.id and edge:
-                self.g.forward_queue.heappush((edge_cost, edge))
-    
-    def update_edge_collision_cache(
-        self, n0: Node, n1: Node, is_edge_collision_free: bool
-    ):
-        if is_edge_collision_free:
-            n1.whitelist.add(n0.id)
-            n0.whitelist.add(n1.id)
-        else:
-            n0.blacklist.add(n1.id)
-            n1.blacklist.add(n0.id)
 
     def update_results_tracking(self, cost, path):
         self.costs.append(cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(path)
 
-    def get_lb_goal_node_and_cost(self) -> Node:
-        min_id = np.argmin(self.operation.forward_costs[self.g.goal_node_ids], axis=0)
-        best_cost = self.operation.forward_costs[self.g.goal_node_ids][min_id]
+    def get_lb_goal_node_and_cost(self) -> BaseNode:
+        min_id = np.argmin(self.operation.costs[self.g.goal_node_ids], axis=0)
+        best_cost = self.operation.costs[self.g.goal_node_ids][min_id]
         best_node = self.g.goal_nodes[min_id]
         return best_node, best_cost
+    
+    def expand_node_forward(self, node: Optional[BaseNode] = None) -> None:
+        self.forward_closed_set.add(node.id)
+        if node in self.g.goal_nodes:
+            return   
+        neighbors = self.g.get_neighbors(node, space_extent=self.approximate_space_extent)
+        if neighbors.size == 0:
+            return
+        
+        edge_costs = self.g.tot_neighbors_batch_cost_cache[node.id]
+        for id, edge_cost in zip(neighbors, edge_costs):
+            n = self.g.nodes[id]
+            if n.id in self.forward_closed_set:
+                continue
+            assert (n.forward.parent == node) == (n.id in node.forward.children), (
+                    f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
+                    )
+            if n.id == self.g.root.id:
+                continue
+            assert(n.id not in node.blacklist), (
+            "neighbors are wrong")
+            if node.forward.parent is not None and node.forward.parent.id == n.id:
+                continue
+            if n.is_transition and n.is_reverse_transition:
+                continue
+            edge = (node, n)
+            self.update_forward_queue(edge_cost, edge)
 
     @abstractmethod
-    def initialize_samples_and_forward_queue(self):
+    def update_forward_queue(self, edge_cost, edge):
+        pass
+
+    @abstractmethod
+    def initialize_search(self):
         pass
 
     @abstractmethod

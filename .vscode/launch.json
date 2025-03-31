@@ -15,6 +15,20 @@
                 "PYTHONPATH": "${workspaceFolder}/src"
             }
         },
+         {
+            "name": "- test_0",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/run_experiment.py",
+            "args": [
+                "/home/tirza/multirobot-pathplanning-benchmark/configs/demo/test_0.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
         {
             "name": "- analysis samples",
             "type": "debugpy",

@@ -1,20 +1,20 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "box_stacking",
+  "environment": "box_stacking_dep",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 1000,
-  "num_runs": 3,
+  "max_planning_time": 200,
+  "num_runs": 1,
   "seed": 1,
   "optimize": true,
   "planners": [
     {
-      "name": "aitstar_remove_based_on_mode",
-      "type": "aitstar",
+      "name": "eitstar",
+      "type": "eitstar",
       "options": {
         "batch_size": 100,
         "transition_batch_size": 100,
-        "informed_batch_size": 250,
+        "informed_batch_size": 300,
         "informed_transition_batch_size": 300,
         "path_batch_size": 0,
         "distance_function": "max_euclidean",
@@ -26,7 +26,7 @@
         "shortcutting": true,
         "direct_informed_sampling": true,
         "informed_with_lb":false,
-        "remove_based_on_modes":false
+        "remove_based_on_modes":true
       }
     }
   ]
