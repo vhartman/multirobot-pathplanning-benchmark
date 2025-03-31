@@ -504,7 +504,7 @@ def main():
     parser.add_argument(
         "--info",
         action="store_true",
-        help="Add to the legend general info to the plot (default: False)",
+        help="Add general information to the plot legend (default: False)",
     )
     parser.add_argument(
         "--no_display",
