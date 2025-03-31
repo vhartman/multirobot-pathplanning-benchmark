@@ -191,10 +191,9 @@ def setup_planner(
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
                 locally_informed_sampling = options["locally_informed_sampling"],
-                informed_batch_size = options["informed_batch_size"],
-                optimize=optimize
+                informed_batch_size = options["informed_batch_size"]
                 # gaussian=options["gaussian"]
-            ).Plan()
+            ).Plan(optimize)
     elif planner_config["type"] == "birrtstar":
 
         def planner(env):
@@ -215,9 +214,8 @@ def setup_planner(
                 # gaussian=options["gaussian"],
                 transition_nodes=options["transition_nodes"],
                 birrtstar_version=options["birrtstar_version"], 
-                informed_batch_size = options["informed_batch_size"],
-                optimize=optimize
-            ).Plan()
+                informed_batch_size = options["informed_batch_size"]
+            ).Plan(optimize)
 
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")

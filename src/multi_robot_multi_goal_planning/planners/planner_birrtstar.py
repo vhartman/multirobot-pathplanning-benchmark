@@ -50,13 +50,10 @@ class BidirectionalRRTstar(BaseRRTstar):
                  locally_informed_sampling: bool = True, 
                  remove_redundant_nodes: bool = True, 
                  informed_batch_size: int = 500,
-                 optimize: bool = True
-
                 ):
         super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
                     p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                    informed_batch_size = informed_batch_size, optimize = optimize )
+                    gaussian = gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, informed_batch_size = informed_batch_size )
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
         self.swap = True
@@ -300,7 +297,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
 
-    def Plan(self) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def Plan(self, optimize:bool=True)  ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0
         self.PlannerInitialization()
         while True:
@@ -334,7 +331,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if self.swap:
                 self.trees[active_mode].swap()
             
-            if not self.optimize and self.operation.init_sol:
+            if not optimize and self.operation.init_sol:
                 break
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
