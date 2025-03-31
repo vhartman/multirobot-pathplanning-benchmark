@@ -1844,7 +1844,8 @@ class BaseRRTstar(ABC):
                  locally_informed_sampling:bool = True,
                  remove_redundant_nodes:bool = True,
                  informed_batch_size: int = 500,
-                 optimize: bool = True
+                 test_mode_sampling:bool = False,
+                 optimize: bool = True,
 
                  ):
         self.env = env
@@ -1875,6 +1876,7 @@ class BaseRRTstar(ABC):
         self.times = []
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
+        self. test_mode_sampling = test_mode_sampling,
         self.optimize = optimize
 
     def add_tree(self, 
@@ -2876,7 +2878,7 @@ class BaseRRTstar(ABC):
         if num_modes == 1:
             return np.random.choice(self.modes)
         # if self.operation.task_sequence == [] and self.mode_sampling != 0:
-        elif self.operation.init_sol and self.mode_sampling != 0:
+        elif self.operation.init_sol and self.mode_sampling != 0 and not self.test_mode_sampling:
                 p = [1/num_modes] * num_modes
         
         elif self.mode_sampling is None:
@@ -2902,7 +2904,6 @@ class BaseRRTstar(ABC):
             p =   [
                 inv_prob / total_inverse for inv_prob in inverse_probabilities
             ]
-
         # else:
         #     # manually set
         #     total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes[:-1]) 
@@ -2924,32 +2925,84 @@ class BaseRRTstar(ABC):
         #         ] + [self.mode_sampling]
 
         else:
-            frontier_modes = []
+            if not self.operation.init_sol:
+                frontier_modes = []
 
-            for m in self.modes:
-                if len(m.next_modes) == 0:
-                    frontier_modes.append(m)
+                for m in self.modes:
+                    if len(m.next_modes) == 0:
+                        frontier_modes.append(m)
 
-            p_frontier = self.mode_sampling
-            p_remaining = 1 - p_frontier
+                p_frontier = self.mode_sampling
+                p_remaining = 1 - p_frontier
 
-            total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
-            # Calculate probabilities inversely proportional to node counts
-            inverse_probabilities = [
-                1 - (len(self.trees[mode].subtree) / total_nodes)
-                for mode in self.modes if mode not in frontier_modes
-            ]
-            total_inverse = sum(inverse_probabilities)
+                total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
+                # Calculate probabilities inversely proportional to node counts
+                inverse_probabilities = [
+                    1 - (len(self.trees[mode].subtree) / total_nodes)
+                    for mode in self.modes if mode not in frontier_modes
+                ]
+                total_inverse = sum(inverse_probabilities)
 
-            p = []
+                p = []
 
-            for m in self.modes:
-                if m in frontier_modes:
-                    tmp = p_frontier / len(frontier_modes)
-                else:
-                    tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
-                
-                p.append(tmp)
+                for m in self.modes:
+                    if m in frontier_modes:
+                        tmp = p_frontier / len(frontier_modes)
+                    else:
+                        tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
+                    
+                    p.append(tmp)
+            else:
+                frontier_modes = []
+                prev_mode = []
+                for m in self.modes:
+                    if len(m.next_modes) > 1:
+                        for next_mode in m.next_modes:
+                            if next_mode not in self.modes:
+                                prev_mode.append(m)
+                            if next_mode not in frontier_modes:
+                                frontier_modes.append(next_mode)
+                if len(prev_mode) > 0:
+                    frontier_modes = prev_mode
+                #     for next_mode in m.next_modes:
+                #         if next_mode not in next_modes:
+                #             next_modes[next_mode] = 0
+                #         next_modes[next_mode] +=1
+
+                # for m in self.modes:
+                #     add = False
+                #     if len(m.next_modes) == 0 and not self.env.is_terminal_mode(m):
+                #         add = True
+                #     for next_mode in m.next_modes:
+                #         if next_modes[next_mode] > 1:
+                #             add = True
+                #             break
+                #         if add:
+                #             frontier_modes.append(m)
+                if len(frontier_modes) == 0:
+                     p = [1/num_modes] * num_modes
+                     return np.random.choice(self.modes, p = p)
+
+                p_frontier = len(frontier_modes)/len(self.modes)
+                p_remaining = 1 - p_frontier
+
+                total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
+                # Calculate probabilities inversely proportional to node counts
+                inverse_probabilities = [
+                    1 - (len(self.trees[mode].subtree) / total_nodes)
+                    for mode in self.modes if mode not in frontier_modes
+                ]
+                total_inverse = sum(inverse_probabilities)
+
+                p = []
+
+                for m in self.modes:
+                    if m in frontier_modes:
+                        tmp = p_frontier / len(frontier_modes)
+                    else:
+                        tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
+                    
+                    p.append(tmp)
         
         return np.random.choice(self.modes, p = p)
 
