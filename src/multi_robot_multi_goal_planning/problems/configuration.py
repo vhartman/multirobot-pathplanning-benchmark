@@ -116,7 +116,7 @@ def compute_sliced_dists_transpose(squared_diff: NDArray, slices: NDArray) -> ND
 
 
 class NpConfiguration(Configuration):
-    __slots__ = "array_slice", "q", "_num_agents"
+    __slots__ = "array_slice", "q", "_num_agents", "_robot_state_optimized"#, "robot_views"
 
     array_slice: NDArray
     # slice: List[Tuple[int, int]]
@@ -128,7 +128,14 @@ class NpConfiguration(Configuration):
         self.q = q.astype(np.float64)
         # self.q = q
 
+        # self.robot_views = [self.q[start:end] for start, end in self.array_slice]
+
         self._num_agents = len(self.array_slice)
+
+        if self._num_agents == 1:
+            self._robot_state_optimized = self._robot_state_single
+        else:
+            self._robot_state_optimized = self._robot_state_multi
 
     def num_agents(self):
         return self._num_agents
@@ -156,12 +163,15 @@ class NpConfiguration(Configuration):
     def from_numpy(cls, arr: NDArray):
         return cls(arr, [(0, len(arr))])
 
-    def robot_state(self, ind: int) -> NDArray:
-        if self._num_agents == 1:
-            return self.q
+    def _robot_state_single(self, ind: int) -> NDArray:
+        return self.q
 
+    def _robot_state_multi(self, ind: int) -> NDArray:
         start, end = self.array_slice[ind]
         return self.q[start:end]
+
+    def robot_state(self, ind: int) -> NDArray:
+        return self._robot_state_optimized(ind)
 
     def state(self) -> NDArray:
         return self.q
