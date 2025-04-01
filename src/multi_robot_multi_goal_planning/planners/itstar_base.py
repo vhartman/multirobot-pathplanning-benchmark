@@ -1899,7 +1899,6 @@ class BaseITstar(ABC):
         mode_sampling_type: str = "greedy",
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
-        use_k_nearest: bool = True,
         try_informed_sampling: bool = True,
         uniform_batch_size: int = 200,
         uniform_transition_batch_size: int = 500,
@@ -1919,7 +1918,6 @@ class BaseITstar(ABC):
         self.mode_sampling_type = mode_sampling_type
         self.distance_metric = distance_metric
         self.try_sampling_around_path = try_sampling_around_path
-        self.use_k_nearest = use_k_nearest
         self.try_informed_sampling = try_informed_sampling
         self.uniform_batch_size = uniform_batch_size
         self.uniform_transition_batch_size = uniform_transition_batch_size
@@ -2190,8 +2188,8 @@ class BaseITstar(ABC):
                 sample_batch_size = 350
                 transition_batch_size = 350
             else:
-                sample_batch_size = 250
-                transition_batch_size = 250
+                sample_batch_size = 150
+                transition_batch_size = 100
 
 
 
@@ -2632,8 +2630,6 @@ class BaseITstar(ABC):
                     self.add_reverse_connectivity_to_path(self.current_best_path_nodes, with_queue_update)
                     self.current_best_cost = path_cost(self.current_best_path, self.env.batch_config_cost) 
                     print("new cost: " ,self.current_best_cost)
-            if not self.optimize and self.current_best_cost is not None:
-                return  
             print([n.id for n in self.current_best_path_nodes])
             # extract modes for removal strategy
     

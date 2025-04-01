@@ -1,5 +1,4 @@
 import numpy as np
-import random
 
 from typing import (
     List,
@@ -13,28 +12,21 @@ from typing import (
     Generic,
     TypeVar,
 )
-from numpy.typing import NDArray
-from collections import defaultdict
 
 import heapq
 import time
 import math
-from abc import ABC, abstractmethod
 from itertools import chain
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
-    Mode,
 )
 from multi_robot_multi_goal_planning.problems.configuration import (
-    Configuration,
     batch_config_dist,
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.itstar_base import Informed
-from multi_robot_multi_goal_planning.planners.rrtstar_base import find_nearest_indices
 from multi_robot_multi_goal_planning.planners.rrtstar_base import save_data
 from multi_robot_multi_goal_planning.planners.itstar_base import (
     BaseITstar,
@@ -65,7 +57,7 @@ class Operation(BaseOperation):
             float: Cost associated with the specified node."""
         return self.lb_costs_to_go_expanded[idx]
 
-    def update(self, node:"BaseNode", lb_cost_to_go:float = np.inf, cost:float = np.inf, lb_cost_to_come:float = np.inf):
+    def update(self, node:"Node", lb_cost_to_go:float = np.inf, cost:float = np.inf, lb_cost_to_come:float = np.inf):
         self.lb_costs_to_go_expanded = self.ensure_capacity(self.lb_costs_to_go_expanded, node.id) 
         node.lb_cost_to_go_expanded = lb_cost_to_go
         node.lb_cost_to_go = lb_cost_to_go
@@ -326,11 +318,9 @@ class AITstar(BaseITstar):
         self,
         env: BaseProblem,
         ptc: PlannerTerminationCondition,
-        optimize: bool = True,
         mode_sampling_type: str = "greedy",
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
-        use_k_nearest: bool = True,
         try_informed_sampling: bool = True,
         uniform_batch_size: int = 200,
         uniform_transition_batch_size: int = 500,
@@ -345,13 +335,12 @@ class AITstar(BaseITstar):
         remove_based_on_modes:bool = False
         ):
         super().__init__(
-            env, ptc, optimize, mode_sampling_type, distance_metric, 
-            try_sampling_around_path, use_k_nearest, try_informed_sampling, 
-            uniform_batch_size, uniform_transition_batch_size, informed_batch_size, 
-            informed_transition_batch_size, path_batch_size, locally_informed_sampling, 
-            try_informed_transitions, try_shortcutting, try_direct_informed_sampling, 
-            informed_with_lb,remove_based_on_modes
-        )
+            env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
+            try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
+            uniform_batch_size = uniform_batch_size, uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
+            informed_transition_batch_size = informed_transition_batch_size, path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
+            try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
+            informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes)
 
         self.alpha = 2.5
         self.start_transition_arrays = {}
@@ -414,8 +403,6 @@ class AITstar(BaseITstar):
         # Process the reverse queue until stopping conditions are met.
         num_iter = 0
         while self.continue_reverse_search(): 
-            if not self.optimize and self.current_best_cost is not None:
-                break
             if self.ptc.should_terminate(self.cnt, time.time() - self.start_time):
                 break
             n = self.g.reverse_queue.heappop()
@@ -742,7 +729,7 @@ class AITstar(BaseITstar):
         self.initialize_search()
 
     def Plan(
-        self,
+        self, optimize:bool = True
     ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         self.collision_cache = set()
         self.PlannerInitialization()
@@ -839,7 +826,7 @@ class AITstar(BaseITstar):
                 self.initialize_search()
                 
 
-            if not self.optimize and self.current_best_cost is not None:
+            if not optimize and self.current_best_cost is not None:
                 break
 
             if self.ptc.should_terminate(self.cnt, time.time() - self.start_time):

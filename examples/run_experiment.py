@@ -198,9 +198,9 @@ def setup_planner(
                 mode_sampling=options["mode_sampling"],
                 locally_informed_sampling = options["locally_informed_sampling"],
                 informed_batch_size = options["informed_batch_size"],
-                test_mode_sampling = options["test_mode_sampling"],
                 sample_near_path=options["sample_near_path"],
-                remove_redundant_nodes = options["remove_redundant_nodes"]
+                remove_redundant_nodes = options["remove_redundant_nodes"],
+                test_mode_sampling = options["test_mode_sampling"],
             ).Plan(optimize)
     elif planner_config["type"] == "birrtstar":
 
@@ -223,8 +223,8 @@ def setup_planner(
                 transition_nodes=options["transition_nodes"],
                 birrtstar_version=options["birrtstar_version"], 
                 informed_batch_size = options["informed_batch_size"],
-                 test_mode_sampling = options["test_mode_sampling"],
-                remove_redundant_nodes = options["remove_redundant_nodes"]
+                remove_redundant_nodes = options["remove_redundant_nodes"],
+                test_mode_sampling = options["test_mode_sampling"]
             ).Plan(optimize)
     elif planner_config["type"] == "drrtstar":
 
@@ -277,50 +277,45 @@ def setup_planner(
             return AITstar(
                 env,
                 ptc=RuntimeTerminationCondition(runtime),
-                optimize=optimize,
+                mode_sampling_type = options["mode_sampling_type"],
                 distance_metric=options["distance_function"],
                 try_sampling_around_path=options["sample_near_path"],
-                use_k_nearest=options["connection_strategy"] == "k_nearest",
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],
                 uniform_batch_size=options["batch_size"],
                 uniform_transition_batch_size=options["transition_batch_size"],
                 informed_batch_size=options["informed_batch_size"],
-                informed_transition_batch_size=options[
-                    "informed_transition_batch_size"
-                ],
+                informed_transition_batch_size=options["informed_transition_batch_size" ],
                 path_batch_size=options["path_batch_size"],
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
                 informed_with_lb = options["informed_with_lb"],
                 remove_based_on_modes = options["remove_based_on_modes"]
-            ).Plan()
+            ).Plan(optimize)
+        
     elif planner_config["type"] == "eitstar":
         def planner(env):
             options = planner_config["options"]
             return EITstar(
                 env,
                 ptc=RuntimeTerminationCondition(runtime),
-                optimize=optimize,
+                mode_sampling_type = options["mode_sampling_type"],
                 distance_metric=options["distance_function"],
                 try_sampling_around_path=options["sample_near_path"],
-                use_k_nearest=options["connection_strategy"] == "k_nearest",
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],
                 uniform_batch_size=options["batch_size"],
                 uniform_transition_batch_size=options["transition_batch_size"],
                 informed_batch_size=options["informed_batch_size"],
-                informed_transition_batch_size=options[
-                    "informed_transition_batch_size"
-                ],
+                informed_transition_batch_size=options["informed_transition_batch_size" ],
                 path_batch_size=options["path_batch_size"],
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
                 informed_with_lb = options["informed_with_lb"],
                 remove_based_on_modes = options["remove_based_on_modes"]
-            ).Plan()
+            ).Plan(optimize)
 
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")

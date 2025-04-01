@@ -127,7 +127,7 @@ class Operation(BaseOperation):
     def __init__(self) -> None:
         super().__init__()
 
-    def update(self, node:"BaseNode", lb_cost_to_go:float = np.inf, cost:float = np.inf, lb_cost_to_come:float = np.inf):
+    def update(self, node:"Node", lb_cost_to_go:float = np.inf, cost:float = np.inf, lb_cost_to_come:float = np.inf):
         node.lb_cost_to_go = lb_cost_to_go
         self.lb_costs_to_come = self.ensure_capacity(self.lb_costs_to_come, node.id) 
         node.lb_cost_to_come = lb_cost_to_come
@@ -191,11 +191,9 @@ class EITstar(BaseITstar):
         self,
         env: BaseProblem,
         ptc: PlannerTerminationCondition,
-        optimize: bool = True,
         mode_sampling_type: str = "greedy",
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
-        use_k_nearest: bool = True,
         try_informed_sampling: bool = True,
         uniform_batch_size: int = 200,
         uniform_transition_batch_size: int = 500,
@@ -210,13 +208,13 @@ class EITstar(BaseITstar):
         remove_based_on_modes:bool = False
         ):
         super().__init__(
-            env, ptc, optimize, mode_sampling_type, distance_metric, 
-            try_sampling_around_path, use_k_nearest, try_informed_sampling, 
-            uniform_batch_size, uniform_transition_batch_size, informed_batch_size, 
-            informed_transition_batch_size, path_batch_size, locally_informed_sampling, 
-            try_informed_transitions, try_shortcutting, try_direct_informed_sampling, 
-            informed_with_lb,remove_based_on_modes
-        )
+            env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
+            try_sampling_around_path = try_sampling_around_path, try_informed_sampling = try_informed_sampling, 
+            uniform_batch_size = uniform_batch_size, uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
+            informed_transition_batch_size = informed_transition_batch_size, path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
+            try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
+            informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes)
+
 
         self.start_transition_arrays = {}
         self.end_transition_arrays = {}
@@ -583,7 +581,7 @@ class EITstar(BaseITstar):
         self.g.cost_estimate_queue.remove((edge_cost, (n0, n1)))
 
     def Plan(
-        self,
+        self,optimize:bool = True
     ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         self.collision_cache = set()
         self.PlannerInitialization()
@@ -682,7 +680,7 @@ class EITstar(BaseITstar):
                 self.initialize_search()
                 
 
-            if not self.optimize and self.current_best_cost is not None:
+            if not optimize and self.current_best_cost is not None:
                 break
 
             if self.ptc.should_terminate(self.cnt, time.time() - self.start_time):
