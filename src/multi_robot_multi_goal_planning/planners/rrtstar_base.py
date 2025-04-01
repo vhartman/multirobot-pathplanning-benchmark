@@ -1848,6 +1848,7 @@ class BaseRRTstar(ABC):
                  locally_informed_sampling:bool = True,
                  remove_redundant_nodes:bool = True,
                  informed_batch_size: int = 500,
+                 test_mode_sampling:bool = False
 
                  ):
         self.env = env
@@ -1878,6 +1879,7 @@ class BaseRRTstar(ABC):
         self.times = []
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
+        self.test_mode_sampling = test_mode_sampling
 
     def add_tree(self, 
                  mode: Mode, 
