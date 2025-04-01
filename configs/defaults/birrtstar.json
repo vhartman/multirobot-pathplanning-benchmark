@@ -1,0 +1,20 @@
+{
+  "type": "birrtstar",
+  "options": {
+    "general_goal_sampling": false,
+    "informed_sampling": true,
+    "informed_sampling_version": 6,  
+    "distance_metric": "max_euclidean",
+    "p_goal": 0.4,
+    "p_stay": 0.0,
+    "p_uniform": 0.2,
+    "shortcutting": true,
+    "mode_sampling": 1, 
+    "sample_near_path": false,
+    "locally_informed_sampling": true,
+    "informed_batch_size": 300,
+    "remove_redundant_nodes": true,
+    "transition_nodes": 50,
+    "birrtstar_version": 2
+    }
+}

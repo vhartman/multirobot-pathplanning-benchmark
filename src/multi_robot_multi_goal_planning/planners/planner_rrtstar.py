@@ -31,19 +31,17 @@ class RRTstar(BaseRRTstar):
                  p_uniform: float = 0.2, 
                  shortcutting: bool = False, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = False,
+                 sample_near_path: bool = False,
                  locally_informed_sampling:bool = True, 
                  remove_redundant_nodes:bool = True,
                  informed_batch_size: int = 500,
-                 test_mode_sampling:bool =False,
-                 optimize: bool = True
                  
                 ):
-        super().__init__(env, ptc, general_goal_sampling, informed_sampling, informed_sampling_version, distance_metric,
-                    p_goal, p_stay, p_uniform, shortcutting, mode_sampling, 
-                    gaussian, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                    informed_batch_size = informed_batch_size, optimize = optimize, test_mode_sampling = test_mode_sampling)
-        
+        super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
+                         informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
+                         p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
+                         sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
+                         informed_batch_size = informed_batch_size )
      
     def UpdateCost(self, mode:Mode, n:Node) -> None:
         stack = [n]
@@ -80,7 +78,7 @@ class RRTstar(BaseRRTstar):
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
     
-    def Plan(self) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def Plan(self, optimize:bool=True) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0
         self.PlannerInitialization()
         while True:
@@ -107,9 +105,7 @@ class RRTstar(BaseRRTstar):
                     self.UpdateCost(active_mode, n_new) 
                 self.ManageTransition(active_mode, n_new)
 
-            # if self.operation.init_sol and True:
-            #     break
-            if not self.optimize and self.operation.init_sol:
+            if not optimize and self.operation.init_sol:
                 break
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):

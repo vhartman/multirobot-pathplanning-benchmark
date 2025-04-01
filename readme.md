@@ -6,15 +6,16 @@ There are also some utilities for visualizing plans, and plotting convergence an
 The corresponding paper can be found [here](https://vhartmann.com/assets/mrmg/a_benchmark_for_mr_mg_pf.pdf), and more videos can be seen on the [paper website](https://vhartmann.com/mrmg-planning/).
 
 # Installation
-The problems we propose here are built on top of [rai](https://marctoussaint.github.io/robotic/index.html) ([github](https://github.com/MarcToussaint/robotic)). We would recommend using the virtual environment of your choice to make sure nothing break with rai.
+Most of the problems we propose here are originally built on top of [rai](https://marctoussaint.github.io/robotic/index.html) ([github](https://github.com/MarcToussaint/robotic)). We would recommend using the virtual environment of your choice to make sure nothing break with rai.
 
 After cloning, and setting up the virtual env, the installation of all the required dependencies can be done with
 
 ```
-python3 -m pip install -e .
+python3 -m pip install -e .[all]
 ```
 
-which also installs this module
+which also installs this module.
+You can choose whatever backends you want from the start - [all] gives you al of them, but [pin] or [rai] is possible as well.
 
 # Overview and Usage
 
@@ -121,6 +122,8 @@ There are two main requirements:
 
 To implement your own problem, you need to implement the required functions of the `env` base-class.
 
+There are two examples that implement other environments than the rai-based ones. There is an abstract environment, which is _extremely_basic, and a slightly more complex version that shows how [pinocchio](https://github.com/stack-of-tasks/pinocchio) can be used.
+
 #### Specifying your own problems
 
 A problem consists of the initial scene, and a task sequence or a dependency graph.
@@ -142,3 +145,15 @@ Similarly as above, the formulation we propose here allows for kinodynamic motio
 In the moment, we only support formulating the task structure as dependency graph or as sequence.
 It would theoretically be possible to use the formulation we propse here to implement and benchmark task and motion planning solvers.
 This would require minor changes in how the starting mode is currently used.
+
+# Citation
+If you use this codebase in your research, please cite the paper:
+
+```
+@article{hartmann2025benchmark,
+  title={A Benchmark for Optimal Multi-Modal Multi-Robot Multi-Goal Path Planning with Given Robot Assignment},
+  author={Hartmann, Valentin N and Heinle, Tirza and Coros, Stelian},
+  journal={arXiv preprint arXiv:2503.03509},
+  year={2025}
+}
+```

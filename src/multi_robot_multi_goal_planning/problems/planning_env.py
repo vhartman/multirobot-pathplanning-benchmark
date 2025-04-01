@@ -27,6 +27,15 @@ class Goal(ABC):
     def sample(self, mode: "Mode") -> NDArray:
         pass
 
+    @abstractmethod
+    def serialize(self):
+        pass
+
+    @classmethod
+    @abstractmethod
+    def from_data(cls, data):
+        pass
+
 
 # class DummyGoal(ABC):
 #     def __init__(self):
@@ -54,6 +63,13 @@ class GoalRegion(Goal):
             + self.limits[0, :]
         )
         return q
+
+    def serialize(self):
+        return self.limits.tolist()
+    
+    @classmethod
+    def from_data(cls, data):
+        return GoalRegion(np.array(data))
 
 
 # TODO: implement sampler to sample a goal
@@ -83,6 +99,15 @@ class ConditionalGoal(Goal):
 
         raise ValueError("No feasible goal in mode")
 
+    def serialize(self):
+        print("This is not yet implemented")
+        raise NotImplementedError
+    
+    @classmethod
+    def from_data(cls, data):
+        print("This is not yet implemented")
+        raise NotImplementedError
+    
 
 class GoalSet(Goal):
     def __init__(self, goals):
@@ -99,7 +124,13 @@ class GoalSet(Goal):
         rnd = np.random.randint(0, len(self.goals))
         return self.goals[rnd]
 
+    def serialize(self):
+        return [goal.tolist() for goal in self.goals]
 
+    @classmethod
+    def from_data(cls, data):
+        return GoalSet([np.array(goal) for goal in data])
+    
 class SingleGoal(Goal):
     def __init__(self, goal: NDArray):
         self.goal = goal
@@ -114,6 +145,13 @@ class SingleGoal(Goal):
 
     def sample(self, mode: "Mode") -> NDArray:
         return self.goal
+
+    def serialize(self):
+        return self.goal.tolist()
+    
+    @classmethod
+    def from_data(cls, data):
+        return SingleGoal(np.array(data))
 
 
 class Task:
@@ -176,12 +214,15 @@ class Mode:
     def __hash__(self):
         if self.cached_hash is None:
             entry_hash = 0
-            sg_hash = hash(frozenset(self.sg.items()))
+            sg_fitered = {
+                k: (v[0], v[1], v[2]) if len(v) > 2 else v for k, v in self.sg.items()
+            }
+            sg_hash = hash(frozenset(sg_fitered.items()))
             task_hash = hash(tuple(self.task_ids))
             self.cached_hash = hash((entry_hash, sg_hash, task_hash))
-        
+
         return self.cached_hash
-        
+
 
 class State:
     q: Configuration
@@ -192,10 +233,7 @@ class State:
         self.mode = m
 
     def to_dict(self):
-        return {
-            "q": self.q.state().tolist(),
-            "mode": self.mode.task_ids
-        }        
+        return {"q": self.q.state().tolist(), "mode": self.mode.task_ids}
 
 
 def state_dist(start: State, end: State) -> float:
@@ -354,9 +392,7 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if terminal_task.goal.satisfies_constraints(
-            q_concat, mode=m, tolerance=1e-8
-        ):
+        if terminal_task.goal.satisfies_constraints(q_concat, mode=m, tolerance=1e-8):
             return True
 
         return False
@@ -576,10 +612,10 @@ class DependencyGraphMixin(BaseModeLogic):
                     ):
                         tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
-                        
+
                         sg = self.get_scenegraph_info_for_mode(tmp)
                         tmp.sg = sg
-                        
+
                         for nm in mode.next_modes:
                             if hash(nm) == hash(tmp):
                                 return nm
@@ -676,6 +712,70 @@ class BaseProblem(ABC):
     start_mode: Mode
     _terminal_task_ids: List[int]
 
+    # misc
+    # collision_tolerance: float
+    # collision_resolution: float
+
+    # def __init__(self):
+    #     self.collision_tolerance = 0.01
+    #     self.collision_resolution = 0.01
+
+    def serialize_tasks(self):
+        #open file
+        task_list = []
+
+        for t in self.tasks:
+            task_data = {
+                "name": t.name,
+                "robots": t.robots,
+                "goal_type": type(t.goal).__name__,
+                "goal": t.goal.serialize(),
+                "type": t.type,
+                "frames": t.frames,
+                "side_effect": t.side_effect,
+            }
+
+            task_list.append(task_data)
+
+        return task_list
+                
+    def export_tasks(self, path):
+        task_list = self.serialize_tasks()
+        with open(path, "w") as file:
+            for task_data in task_list:
+                file.write(f"{task_data}\n")
+
+    def import_tasks(self, path):
+        with open(path, "r") as file:
+            task_list = []
+            for line in file:
+                task_data = eval(line.strip())  # Convert string representation back to dictionary
+                goal_type = task_data["goal_type"]
+                
+                goal = None
+                if goal_type == "SingleGoal":
+                    goal = SingleGoal.from_data(task_data["goal"])
+                elif goal_type == "GoalRegion":
+                    goal = GoalRegion.from_data(task_data["goal"])
+                elif goal_type == "GoalSet":
+                    goal = GoalSet.from_data(task_data["goal"])
+                elif goal_type == "ConditionalGoal":
+                    goal = ConditionalGoal.from_data(task_data["goal"])
+                elif goal_type == "ConstrainedGoal":
+                    goal = ConstrainedGoal.from_data(task_data["goal"])
+
+                task = Task(
+                    robots=task_data["robots"],
+                    goal=goal,
+                    type=task_data["type"],
+                    frames=task_data["frames"],
+                    side_effect=task_data["side_effect"],
+                )
+                task.name = task_data["name"]
+                task_list.append(task)
+
+            self.tasks = task_list
+
     # visualization
     @abstractmethod
     def show_config(self, q: Configuration):
@@ -746,7 +846,7 @@ class BaseProblem(ABC):
         q2: Configuration,
         mode: Mode,
         resolution: float = 0.1,
-        tolerance: float = 0.01
+        tolerance: float = 0.01,
     ) -> bool:
         pass
 

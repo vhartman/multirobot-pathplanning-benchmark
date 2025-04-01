@@ -11,6 +11,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import State
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
+
 def single_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
     new_path = interpolate_path(path, 0.05)
 
@@ -101,17 +102,20 @@ def robot_mode_shortcut(
 
     cnt = 0
     # for iter in range(max_iter):
+    max_attempts = max_iter * 10
+    iter = 0
     while True:
-        if cnt >= max_iter:
+        iter += 1
+        if cnt >= max_iter or iter >= max_attempts:
             break
 
         i = np.random.randint(0, len(new_path))
         j = np.random.randint(0, len(new_path))
 
         if i > j:
-            tmp = i
+            q = i
             i = j
-            j = tmp
+            j = q
 
         if abs(j - i) < 2:
             continue
@@ -138,30 +142,43 @@ def robot_mode_shortcut(
         q0 = new_path[i].q
         q1 = new_path[j].q
 
+        config_dim = len(q0.state())
+
         # constuct pth element for the shortcut
         path_element = []
         for k in range(j - i + 1):
-            q = []
+            q = np.zeros(config_dim)
+
+            r_cnt = 0
             for r in range(len(env.robots)):
                 # print(r, i, j, k)
+                dim = env.robot_dims[env.robots[r]]
                 if r in robots_to_shortcut:
                     q_interp = q0[r] + (q1[r] - q0[r]) / (j - i) * k
-                    q.append(q_interp)
+                    q[r_cnt : r_cnt + dim] = q_interp
                 else:
-                    q.append(new_path[i + k].q[r])
+                    q[r_cnt : r_cnt + dim] = new_path[i + k].q[r]
+
+                r_cnt += dim
+
+            # print(tmp)
+            # print(q)
 
             # print(q)
-            path_element.append(State(config_type.from_list(q), new_path[i + k].mode))
+            path_element.append(
+                State(config_type(q, q0.array_slice), new_path[i + k].mode)
+            )
+            # path_element.append(State(config_type.from_list(q), new_path[i + k].mode))
 
         # check if the shortcut improves cost
         if path_cost(path_element, env.batch_config_cost) >= path_cost(
             new_path[i : j + 1], env.batch_config_cost
         ):
-            # print(f"{iter} does not improve cost")
+            # print(f"{cnt} does not improve cost")
             continue
 
-        assert(np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6)
-        assert(np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6)
+        assert np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6
+        assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
 
         cnt += 1
 

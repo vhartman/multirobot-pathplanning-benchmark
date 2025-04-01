@@ -7,7 +7,6 @@ import os
 import random
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
-from multi_robot_multi_goal_planning.problems.rai_envs import display_path
 
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
@@ -29,6 +28,10 @@ from multi_robot_multi_goal_planning.planners.shortcutting import (
 from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
+from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BidirectionalRRTstar,
+)
 
 from run_experiment import export_planner_data
 
@@ -41,15 +44,16 @@ def main():
         action="store_true",
         help="Enable optimization (default: True)",
     )
+    parser.add_argument("--seed", type=int, default=1, help="Seed")
     parser.add_argument(
-        "--seed", type=int, default=1, help="Seed"
+        "--num_iters", type=int, help="Maximum number of iterations for termination."
     )
     parser.add_argument(
-        "--num_iters", type=int, default=2000, help="Number of iterations"
+        "--max_time", type=float, help="Maximum runtime (in seconds) for termination."
     )
     parser.add_argument(
         "--planner",
-        choices=["joint_prm", "tensor_prm", "prioritized"],
+        choices=["joint_prm", "tensor_prm", "prioritized", "rrt_star"],
         default="joint_prm",
         help="Planner to use (default: joint_prm)",
     )
@@ -110,6 +114,9 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.num_iters is not None and args.max_time is not None:
+        raise ValueError("Cannot specify both num_iters and max_time.")
+
     np.random.seed(args.seed)
     random.seed(args.seed)
 
@@ -119,10 +126,16 @@ def main():
 
     env.show()
 
+    termination_condition = None
+    if args.num_iters is not None:
+        termination_condition = IterationTerminationCondition(args.num_iters)
+    elif args.max_time is not None:
+        termination_condition = RuntimeTerminationCondition(args.max_time)
+
     if args.planner == "joint_prm":
         path, info = joint_prm_planner(
             env,
-            IterationTerminationCondition(args.num_iters),
+            ptc=termination_condition,
             optimize=args.optimize,
             mode_sampling_type=None,
             distance_metric=args.distance_metric,
@@ -147,7 +160,25 @@ def main():
 
             planner_folder = experiment_folder + args.planner + "/"
             export_planner_data(planner_folder, 0, info)
-
+    elif args.planner == "rrt_star":
+        path, info = RRTstar(
+            env,
+            ptc=termination_condition,
+            general_goal_sampling=False,
+            informed_sampling=True,
+            informed_sampling_version=6,
+            distance_metric=args.distance_metric,
+            p_goal=0.4,
+            p_stay=0,
+            p_uniform=0.2,
+            shortcutting=True,
+            mode_sampling=1,
+            sample_near_path=False,
+            locally_informed_sampling=True,
+            informed_batch_size=300,
+            remove_redundant_nodes = True
+            
+        ).Plan(args.optimize)
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
             env,
@@ -256,12 +287,12 @@ def main():
     plt.show()
 
     print("displaying path from planner")
-    display_path(
-        env, interpolated_path, stop=False, stop_at_end=True, adapt_to_max_distance=True
+    env.display_path(
+        interpolated_path, stop=False, stop_at_end=True, adapt_to_max_distance=True
     )
 
     print("displaying path from shortcut path")
-    display_path(env, shortcut_discretized_path, stop=False, adapt_to_max_distance=True)
+    env.display_path(shortcut_discretized_path, stop=False, adapt_to_max_distance=True)
 
 
 if __name__ == "__main__":

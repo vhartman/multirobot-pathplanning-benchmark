@@ -286,6 +286,9 @@ class DictIndexHeap:
 
     def __len__(self) -> int:
         return len(self.queue)
+    
+    def __bool__(self):
+        return bool(self.queue)
 
     # def heappush_list(self, items: List[Tuple[float, Any]]) -> None:
     #     """Push a list of items into the heap."""
@@ -526,7 +529,7 @@ class Graph:
             costs[g.id] = 0
             # parents[hash(g)] = None
 
-        while len(queue) > 0:
+        while queue:
             # node = queue.pop(0)
             _, node = heapq.heappop(queue)
             # print(node)
@@ -542,7 +545,7 @@ class Graph:
                 n.neighbors[0] for n in self.reverse_transition_nodes[node.state.mode]
             ]
 
-            if len(neighbors) == 0:
+            if not neighbors:
                 continue
 
             if node.state.mode not in self.reverse_transition_node_array_cache:
@@ -623,7 +626,7 @@ class Graph:
 
             neighbors = [n.neighbors[0] for n in self.transition_nodes[node.state.mode]]
 
-            if len(neighbors) == 0:
+            if not neighbors:
                 continue
 
             if node.state.mode not in self.transition_node_array_cache:
@@ -1004,7 +1007,7 @@ class Graph:
         processed_edges = 0
 
         num_iter = 0
-        while len(queue) > 0:
+        while queue:
             # while len(open_queue) > 0:
             num_iter += 1
 
@@ -1106,7 +1109,7 @@ class Graph:
                 n1, space_extent=approximate_space_extent
             )
 
-            if len(neighbors) == 0:
+            if not neighbors:
                 continue
 
             # add neighbors to open_queue
@@ -1239,7 +1242,7 @@ class Graph:
         heapq.heappush(open_queue, (0, start_node))
 
         num_iter = 0
-        while len(open_queue) > 0:
+        while open_queue:
             num_iter += 1
 
             if num_iter % 1000 == 0:
@@ -1637,7 +1640,7 @@ def joint_prm_planner(
         in_between_modes.add(start_mode)
         in_between_modes.add(end_mode)
 
-        while len(open_paths) > 0:
+        while open_paths:
             p = open_paths.pop()
             last_mode = p[-1]
 
@@ -1646,7 +1649,7 @@ def joint_prm_planner(
                     in_between_modes.add(m)
                 continue
 
-            if len(last_mode.next_modes) > 0:
+            if last_mode.next_modes:
                 for mode in last_mode.next_modes:
                     new_path = p.copy()
                     new_path.append(mode)
@@ -1748,20 +1751,7 @@ def joint_prm_planner(
                 had_to_be_clipped = False
                 if not try_direct_sampling or env.cost_metric != "euclidean":
                     # completely random sample configuration from the (valid) domain robot by robot
-                    q = []
-                    for i in range(len(env.robots)):
-                        r = env.robots[i]
-                        lims = env.limits[:, env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = (
-                                np.random.rand(env.robot_dims[r])
-                                * (lims[1, :] - lims[0, :])
-                                + lims[0, :]
-                            )
-                        else:
-                            qr = np.random.rand(env.robot_dims[r]) * 6 - 3
-
-                        q.append(qr)
+                    q = env.sample_config_uniform_in_limits()
                 else:
                     # sample by sampling each agent separately
                     q = []
@@ -1842,8 +1832,9 @@ def joint_prm_planner(
                                 #     print("AAAAAAAAA")
                                 #     print(np.linalg.norm(path[start_ind].q[i] - qr) + np.linalg.norm(path[end_ind].q[i] - qr), c_robot_bound)
 
-                                clipped = np.clip(qr, lims[0, :], lims[1, :])
-                                if not np.array_equal(clipped, qr):
+                                # clipped = np.clip(qr, lims[0, :], lims[1, :])
+                                # if not np.array_equal(clipped, qr):
+                                if np.any((qr < lims[0, :]) | (qr > lims[1, :])):
                                     had_to_be_clipped = True
                                     break
                                     # print("AAA")
@@ -1853,7 +1844,10 @@ def joint_prm_planner(
                 if had_to_be_clipped:
                     continue
 
-                q = conf_type.from_list(q)
+                if not isinstance(q, Configuration):
+                    # q = conf_type.from_list(q)
+                    q = conf_type(np.concatenate(q), env.start_pos.array_slice)
+
 
                 if sum(env.batch_config_cost(q, focal_points)) > current_cost:
                     # print(path[start_ind].mode, path[end_ind].mode, m)
@@ -2103,6 +2097,10 @@ def joint_prm_planner(
 
             goal_sample = active_task.goal.sample(mode)
 
+            focal_points = np.array(
+                [path[start_ind].q.state(), path[end_ind].q.state()], dtype=np.float64
+            )
+            
             for k in range(max_attempts_per_sample):
                 # completely random sample configuration from the (valid) domain robot by robot
                 q = []
@@ -2132,13 +2130,9 @@ def joint_prm_planner(
 
                         q.append(qr)
 
-                q = conf_type.from_list(q)
+                q = conf_type(np.concatenate(q), env.start_pos.array_slice)
 
-                if (
-                    env.config_cost(path[start_ind].q, q)
-                    + env.config_cost(path[end_ind].q, q)
-                    > current_cost
-                ):
+                if sum(env.batch_config_cost(q, focal_points)) > current_cost:
                     continue
 
                 if env.is_terminal_mode(mode):
@@ -2247,7 +2241,7 @@ def joint_prm_planner(
         num_attempts = 0
         num_valid = 0
 
-        if len(g.goal_nodes) > 0:
+        if g.goal_nodes:
             focal_points = np.array(
                 [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
                 dtype=np.float64,
@@ -2262,21 +2256,7 @@ def joint_prm_planner(
             # print(m)
 
             # sample configuration
-            q = []
-            for i in range(len(env.robots)):
-                r = env.robots[i]
-                lims = env.limits[:, env.robot_idx[r]]
-                if lims[0, 0] < lims[1, 0]:
-                    qr = (
-                        np.random.rand(env.robot_dims[r]) * (lims[1, :] - lims[0, :])
-                        + lims[0, :]
-                    )
-                else:
-                    qr = np.random.rand(env.robot_dims[r]) * 6 - 3
-
-                q.append(qr)
-
-            q = conf_type.from_list(q)
+            q = env.sample_config_uniform_in_limits()
 
             if cost is not None:
                 if sum(env.batch_config_cost(q, focal_points)) > cost:
@@ -2293,7 +2273,7 @@ def joint_prm_planner(
     def sample_valid_uniform_transitions(transistion_batch_size, cost):
         transitions = []
 
-        if len(g.goal_nodes) > 0:
+        if g.goal_nodes:
             focal_points = np.array(
                 [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
                 dtype=np.float64,
@@ -2316,11 +2296,20 @@ def joint_prm_planner(
                 active_task = env.get_active_task(mode, None)
 
             goals_to_sample = active_task.robots
-
             goal_sample = active_task.goal.sample(mode)
 
             # if mode.task_ids == [3, 8]:
             #     print(active_task.name)
+
+            # q = env.sample_config_uniform_in_limits()
+
+            # for i in range(len(env.robots)):
+            #     r = env.robots[i]
+            #     if r in goals_to_sample:
+            #         offset = 0
+            #         for _, task_robot in enumerate(active_task.robots):
+            #             if task_robot == r:
+            #                 q[i] = goal_sample[offset : offset + env.robot_dims[task_robot]]
 
             q = []
             for i in range(len(env.robots)):
@@ -2349,7 +2338,7 @@ def joint_prm_planner(
 
                     q.append(qr)
 
-            q = conf_type.from_list(q)
+            q = conf_type(np.concatenate(q), env.start_pos.array_slice)
 
             if cost is not None:
                 if sum(env.batch_config_cost(q, focal_points)) > cost:
@@ -2438,7 +2427,7 @@ def joint_prm_planner(
             print(f"Removed {num_pts_for_removal} nodes")
 
         print()
-        print(f"Samples: {cnt}; {ptc}")
+        print(f"Samples: {cnt}; time: {time.time() - start_time:.2f}s; {ptc}")
 
         samples_in_graph_before = g.get_num_samples()
 
@@ -2451,18 +2440,21 @@ def joint_prm_planner(
                 uniform_transition_batch_size if current_best_cost is not None else 500
             )
 
+            # if env.terminal_mode not in reached_modes:
+            print("Sampling transitions")
+            new_transitions = sample_valid_uniform_transitions(
+                transistion_batch_size=effective_uniform_transition_batch_size,
+                cost=current_best_cost,
+            )
+            g.add_transition_nodes(new_transitions)
+            print(f"Adding {len(new_transitions)} transitions")
+
             print("Sampling uniform")
             new_states, required_attempts_this_batch = sample_valid_uniform_batch(
                 batch_size=effective_uniform_batch_size, cost=current_best_cost
             )
             g.add_states(new_states)
             print(f"Adding {len(new_states)} new states")
-
-            approximate_space_extent = (
-                np.prod(np.diff(env.limits, axis=0))
-                * len(new_states)
-                / required_attempts_this_batch
-            )
 
             # nodes_per_state = []
             # for m in reached_modes:
@@ -2475,19 +2467,17 @@ def joint_prm_planner(
 
             # plt.figure("Uniform states")
             # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
+            # plt.show()
 
-            # if env.terminal_mode not in reached_modes:
-            print("Sampling transitions")
-            new_transitions = sample_valid_uniform_transitions(
-                transistion_batch_size=effective_uniform_transition_batch_size,
-                cost=current_best_cost,
+            approximate_space_extent = (
+                np.prod(np.diff(env.limits, axis=0))
+                * len(new_states)
+                / required_attempts_this_batch
             )
-            g.add_transition_nodes(new_transitions)
-            print(f"Adding {len(new_transitions)} transitions")
 
             # print(reached_modes)
 
-            if len(g.goal_nodes) == 0:
+            if not g.goal_nodes:
                 continue
 
             # g.compute_lower_bound_to_goal(env.batch_config_cost)
@@ -2600,7 +2590,7 @@ def joint_prm_planner(
             # )
 
             # 2. in case this found a path, search with dense check from the other side
-            if len(sparsely_checked_path) > 0:
+            if sparsely_checked_path:
                 add_new_batch = False
 
                 is_valid_path = True

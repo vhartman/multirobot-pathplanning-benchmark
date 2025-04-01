@@ -5,10 +5,25 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 
+import multi_robot_multi_goal_planning.problems.abstract_env as ae
+
+import multi_robot_multi_goal_planning.problems.pinocchio_env as pe
 
 def get_all_environments():
     # fmt: off
     environment_configs = {
+        "abstract_test": lambda: ae.abstract_env_two_dim_middle_obs(),
+        "2d_center_rect": lambda: ae.abstract_env_center_rect_nd(2),
+        "10d_center_rect": lambda: ae.abstract_env_center_rect_nd(10),
+
+        # pinocchio
+        "pin_middle": lambda: pe.pinocchio_middle_obs(),
+        "pin_other_hallway": lambda: pe.pinocchio_other_hallway(),
+        "pin_2d_handover": lambda: pe.pinocchio_handover_two_dim(),
+        "pin_piano": lambda: pe.pinocchio_piano_two_dim(),
+        "pin_random_ur5": lambda: pe.pin_random_dual_ur5_env(),
+        "pin_reorientation": lambda: pe.pin_reorientation_dual_ur5_env(),
+
         # 2D Environments
         "piano": lambda: re.rai_two_dim_simple_manip(),
         "simple_2d": lambda: re.rai_two_dim_env(),

@@ -7,7 +7,11 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Union, List, Dict
 from numpy.typing import NDArray
 from numba import njit
-from scipy.stats.qmc import Halton
+
+try:
+    from scipy.stats.qmc import Halton
+except ImportError:
+    Halton = None
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
@@ -1209,7 +1213,7 @@ class InformedVersion6():
         in_between_modes.add(start_mode)
         in_between_modes.add(end_mode)
 
-        while len(open_paths) > 0:
+        while open_paths:
             p = open_paths.pop()
             last_mode = p[-1]
 
@@ -1218,7 +1222,7 @@ class InformedVersion6():
                     in_between_modes.add(m)
                 continue
 
-            if len(last_mode.next_modes) > 0:
+            if last_mode.next_modes:
                 for mode in last_mode.next_modes:
                     new_path = p.copy()
                     new_path.append(mode)
@@ -1658,7 +1662,7 @@ class InformedVersion6():
 
             # sample transition at the end of this mode
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-            if len(possible_next_task_combinations) > 0:
+            if possible_next_task_combinations:
                 ind = random.randint(0, len(possible_next_task_combinations) - 1)
                 active_task = self.env.get_active_task(
                     mode, possible_next_task_combinations[ind]
@@ -1838,14 +1842,12 @@ class BaseRRTstar(ABC):
                  p_uniform: float = 0.2, 
                  shortcutting: bool = True, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = True,
+                 sample_near_path: bool = True,
                  shortcutting_dim_version:int = 2, 
                  shortcutting_robot_version:int = 1, 
                  locally_informed_sampling:bool = True,
                  remove_redundant_nodes:bool = True,
                  informed_batch_size: int = 500,
-                 test_mode_sampling:bool = False,
-                 optimize: bool = True,
 
                  ):
         self.env = env
@@ -1858,7 +1860,7 @@ class BaseRRTstar(ABC):
         self.shortcutting = shortcutting
         self.mode_sampling = mode_sampling
         self.p_uniform = p_uniform
-        self.gaussian = gaussian
+        self.sample_near_path = sample_near_path
         self.p_stay = p_stay
         self.shortcutting_dim_version = shortcutting_dim_version
         self.shortcutting_robot_version = shortcutting_robot_version
@@ -1876,8 +1878,6 @@ class BaseRRTstar(ABC):
         self.times = []
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
-        self. test_mode_sampling = test_mode_sampling,
-        self.optimize = optimize
 
     def add_tree(self, 
                  mode: Mode, 
@@ -2056,8 +2056,11 @@ class BaseRRTstar(ABC):
             total_volume *= np.prod(lims[1] - lims[0])  # Compute volume product
 
         # Generate Halton sequence samples
-        halton_sampler = Halton(self.d, scramble=False)
-        halton_samples = halton_sampler.random(num_samples)  # Scaled [0,1] samples
+        try:
+            halton_sampler = Halton(self.d, scramble=False)
+            halton_samples = halton_sampler.random(num_samples)  # Scaled [0,1] samples
+        except ImportError:
+            halton_samples = np.random.rand(num_samples, self.d)  # Fallback to uniform random sampling
 
         # Map Halton samples to configuration space
         free_samples = 0
@@ -2074,7 +2077,7 @@ class BaseRRTstar(ABC):
             #     idx+=1
 
             # Check if sample is collision-free
-            if self.env.is_collision_free_without_mode(q):
+            if self.env.is_collision_free(q, self.env.start_mode):
                 free_samples += 1
         # Estimate C_free measure
         self.c_free = (free_samples / num_samples) * total_volume
@@ -2107,7 +2110,7 @@ class BaseRRTstar(ABC):
         """
 
         possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        if len(possible_next_task_combinations) == 0:
+        if not possible_next_task_combinations:
             return None
         return random.choice(possible_next_task_combinations)
 
@@ -2232,7 +2235,7 @@ class BaseRRTstar(ABC):
         is_goal_sampling = sampling_type == "goal"
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
-        is_gaussian_sampling = sampling_type == "gaussian"
+        sample_near_path = sampling_type == "sample_near_path"
         constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
         attemps = 0  # needed if home poses are in collision
 
@@ -2330,7 +2333,7 @@ class BaseRRTstar(ABC):
                         # continue
                         return
             #gaussian noise
-            if is_gaussian_sampling: 
+            if sample_near_path: 
                 path_state = np.random.choice(self.operation.path)
                 standar_deviation = np.random.uniform(0, 5.0)
                 # standar_deviation = 0.5
@@ -3056,8 +3059,8 @@ class BaseRRTstar(ABC):
                 #informed_sampling
                 return self.sample_configuration(mode, "informed")
             # gaussian sampling
-            if self.gaussian and self.operation.init_sol: 
-                return self.sample_configuration(mode, "gaussian")
+            if self.sample_near_path and self.operation.init_sol: 
+                return self.sample_configuration(mode, "sample_near_path")
             # home pose sampling
             if np.random.uniform(0, 1) < self.p_stay: 
                 return self.sample_configuration(mode, "home_pose")
@@ -3473,7 +3476,7 @@ class BaseRRTstar(ABC):
         """
         pass
     @abstractmethod
-    def Plan(self) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def Plan(self, optimize:bool=True) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         """
         Executes planning process using an RRT* framework.
 
