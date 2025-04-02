@@ -330,7 +330,39 @@ class rai_env(BaseProblem):
         q = NpConfiguration(rnd, self.start_pos.array_slice)
 
         return q
-    
+
+    def sample_goal_configuration(self, mode, task):
+        goals_to_sample = task.robots
+        goal_sample = task.goal.sample(mode)
+
+        q = []
+        for i in range(len(self.robots)):
+            r = self.robots[i]
+            if r in goals_to_sample:
+                offset = 0
+                for _, task_robot in enumerate(task.robots):
+                    if task_robot == r:
+                        q.append(
+                            goal_sample[offset : offset + self.robot_dims[task_robot]]
+                        )
+                        break
+                    offset += self.robot_dims[task_robot]
+            else:  # uniform sample
+                lims = self.limits[:, self.robot_idx[r]]
+                if lims[0, 0] < lims[1, 0]:
+                    qr = (
+                        np.random.rand(self.robot_dims[r]) * (lims[1, :] - lims[0, :])
+                        + lims[0, :]
+                    )
+                else:
+                    qr = np.random.rand(self.robot_dims[r]) * 6 - 3
+
+                q.append(qr)
+
+        q = NpConfiguration.from_list(q)
+
+        return q
+
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
@@ -380,7 +412,7 @@ class rai_env(BaseProblem):
             return False
 
         return True
-    
+
     def is_collision_free_np(
         self,
         q: Optional[Configuration],
@@ -730,9 +762,7 @@ class rai_env(BaseProblem):
             self.set_to_mode(path[i].mode)
             for k in range(len(self.robots)):
                 q = path[i].q[k]
-                self.C.setJointState(
-                    q, get_robot_joints(self.C, self.robots[k])
-                )
+                self.C.setJointState(q, get_robot_joints(self.C, self.robots[k]))
 
                 # print(q)
 

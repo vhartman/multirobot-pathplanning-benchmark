@@ -100,6 +100,9 @@ def robot_mode_shortcut(
 
     config_type = type(env.get_start_pos())
 
+    config_dim = len(env.get_start_pos().state())
+
+
     cnt = 0
     # for iter in range(max_iter):
     max_attempts = max_iter * 10
@@ -142,22 +145,28 @@ def robot_mode_shortcut(
         q0 = new_path[i].q
         q1 = new_path[j].q
 
-        config_dim = len(q0.state())
+        q0_tmp = {}
+        q1_tmp = {}
+        diff_tmp = {}
+        for r in robots_to_shortcut:
+            q0_tmp[r] = q0[r] * 1
+            q1_tmp[r] = q1[r] * 1
+            diff_tmp[r] = (q1_tmp[r] - q0_tmp[r]) / (j - i)
 
         # constuct pth element for the shortcut
         path_element = []
         for k in range(j - i + 1):
-            q = np.zeros(config_dim)
+            q = new_path[i + k].q.state() * 1.
 
             r_cnt = 0
             for r in range(len(env.robots)):
                 # print(r, i, j, k)
                 dim = env.robot_dims[env.robots[r]]
                 if r in robots_to_shortcut:
-                    q_interp = q0[r] + (q1[r] - q0[r]) / (j - i) * k
+                    q_interp = q0_tmp[r] + diff_tmp[r] * k
                     q[r_cnt : r_cnt + dim] = q_interp
-                else:
-                    q[r_cnt : r_cnt + dim] = new_path[i + k].q[r]
+                # else:
+                #     q[r_cnt : r_cnt + dim] = new_path[i + k].q[r]
 
                 r_cnt += dim
 

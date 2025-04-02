@@ -78,3 +78,9 @@ coverage/
 *.bak/
 temp/
 cache/
+
+/build/
+/CMakeCache.txt
+/CMakeFiles/
+/Makefile
+cmake_install.cmake

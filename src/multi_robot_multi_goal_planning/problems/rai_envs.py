@@ -1726,6 +1726,8 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
 
 
 class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
@@ -1890,6 +1892,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.01
+        # self.collision_resolution = 0.1
 
 
 # best cost found (max): 21.45
