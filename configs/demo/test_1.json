@@ -1,12 +1,12 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "hallway",
+  "environment": "random_2d_three_goals",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 1000,
-  "num_runs": 6,
+  "num_runs": 1,
   "seed": 7,
-  "optimize": true,
+  "optimize": false,
   "planners": [
     {
       "name": "aitstar",

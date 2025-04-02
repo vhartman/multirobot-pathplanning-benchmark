@@ -31,13 +31,16 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 
-def save_data(data:dict):
+def save_data(data:dict, tree:bool= False):
         import os
         import pickle
         # Directory Handling: Ensure directory exists
         home_dir = os.path.expanduser("~")
         directory = os.path.join(home_dir, 'multirobot-pathplanning-benchmark/out')
-        dir = os.path.join(directory, 'Analysis')
+        if tree:
+            dir = os.path.join(directory, 'Analysis/Tree')
+        else:
+            dir = os.path.join(directory, 'Analysis')
         os.makedirs(dir, exist_ok=True)
 
         # Determine Next File Number: Use generator expressions for efficiency

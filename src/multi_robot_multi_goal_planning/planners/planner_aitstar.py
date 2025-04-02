@@ -322,6 +322,8 @@ class AITstar(BaseITstar):
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
         try_informed_sampling: bool = True,
+        first_uniform_batch_size: int = 100,
+        first_transition_batch_size:int = 100,
         uniform_batch_size: int = 200,
         uniform_transition_batch_size: int = 500,
         informed_batch_size: int = 500,
@@ -332,15 +334,17 @@ class AITstar(BaseITstar):
         try_shortcutting: bool = True,
         try_direct_informed_sampling: bool = True,
         informed_with_lb:bool = True,
-        remove_based_on_modes:bool = False
+        remove_based_on_modes:bool = False,
+        with_tree_visualization:bool = False
         ):
         super().__init__(
             env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
             try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
+            first_uniform_batch_size=first_uniform_batch_size, first_transition_batch_size=first_transition_batch_size,
             uniform_batch_size = uniform_batch_size, uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
             informed_transition_batch_size = informed_transition_batch_size, path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
             try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
-            informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes)
+            informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
 
         self.alpha = 2.5
         self.start_transition_arrays = {}

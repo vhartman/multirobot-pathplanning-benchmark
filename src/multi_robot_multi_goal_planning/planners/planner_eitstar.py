@@ -24,7 +24,6 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.rrtstar_base import save_data
 from multi_robot_multi_goal_planning.planners.itstar_base import (
     BaseITstar,
     BaseGraph,
@@ -72,7 +71,6 @@ class InadmissibleHeuristics():
         self.lb_cost_to_go = np.inf
         self.effort = np.inf
         self.effort_to_parent = np.inf
-
 
 class Graph(BaseGraph):
     def __init__(self, 
@@ -195,6 +193,8 @@ class EITstar(BaseITstar):
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
         try_informed_sampling: bool = True,
+        first_uniform_batch_size: int = 100,
+        first_transition_batch_size:int = 100,
         uniform_batch_size: int = 200,
         uniform_transition_batch_size: int = 500,
         informed_batch_size: int = 500,
@@ -205,16 +205,17 @@ class EITstar(BaseITstar):
         try_shortcutting: bool = True,
         try_direct_informed_sampling: bool = True,
         informed_with_lb:bool = True,
-        remove_based_on_modes:bool = False
+        remove_based_on_modes:bool = False,
+        with_tree_visualization:bool = False
         ):
         super().__init__(
             env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
-            try_sampling_around_path = try_sampling_around_path, try_informed_sampling = try_informed_sampling, 
+            try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
+            first_uniform_batch_size=first_uniform_batch_size, first_transition_batch_size=first_transition_batch_size,
             uniform_batch_size = uniform_batch_size, uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
             informed_transition_batch_size = informed_transition_batch_size, path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
             try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
-            informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes)
-
+            informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
 
         self.start_transition_arrays = {}
         self.end_transition_arrays = {}
@@ -222,31 +223,12 @@ class EITstar(BaseITstar):
         self.inconsistent_target_nodes = set()
         self.sparse_number_of_points = 2
         self.epsilon = np.inf
+        self.forward_closed_set = None
+        self.reverse_closed_set = None
 
     def _create_operation(self) -> BaseOperation:
         return Operation()
-        
-    # def continue_reverse_search(self) -> bool:
-    #     if len(self.g.reverse_queue) == 0 or len(self.g.cost_bound_queue) == 0:
-    #         return False
-    #     forward_key, item = self.g.cost_bound_queue.peek_first_element()
-    #     reverse_key, node = self.g.reverse_queue.peek_first_element()
-    #     # reverse_key_forward_edge_target = self.g.reverse_queue.key((item[0], item[1], self.sparse_number_of_points))
-    #     if forward_key <= reverse_key[0]:
-    #         return False
-    #     if not self.g.cost_bound_queue.nodes:
-    #         return False
-        
-    #         #need to check that for all in forward queue
-    #         # if reverse_key_forward_edge_target <= reverse_key:
-    #         #     return False
-    #     # if  <= reverse_key:elf.g.reverse_queue.key(self.g.root):
-    #     #     return False
-        
-    #     # if self.g.root.lb_cost_to_go_expanded == self.g.root.lb_cost_to_go:
-    #     #     return False
-    #     return True
-    
+           
     def continue_reverse_search(self) -> bool:
         if len(self.g.reverse_queue) == 0 or len(self.g.cost_bound_queue) == 0:
             return False
@@ -288,7 +270,6 @@ class EITstar(BaseITstar):
                 edge = (node, n)
                 self.g.reverse_queue.heappush((edge_cost, edge))
                 
-
     def initialize_search(self):
         # if self.g.get_num_samples() >200:
         #     q_samples = []
@@ -365,6 +346,8 @@ class EITstar(BaseITstar):
         self.expand_node_forward(self.g.root)
 
     def initialize_reverse_search(self, reset:bool = True):
+        if self.reverse_closed_set is not None and self.with_tree_visualization:
+            self.save_tree_data(self.reverse_closed_set, 'reverse')
         self.forward_closed_set = set()
         self.reverse_closed_set = set()
         self.g.reverse_queue = ReverseQueue()
@@ -448,11 +431,14 @@ class EITstar(BaseITstar):
                     "ghjklö"
                 )
                 if is_transition:
+                    self.reverse_closed_set.add(n1.id)
                     self.expand_node_reverse([n1.transition])
                     continue
                 self.expand_node_reverse([n1])
 
         self.g.update_forward_queue_keys('target', self.updated_target_nodes)
+        if self.reverse_closed_set is not None and self.with_tree_visualization:
+            self.save_tree_data(self.reverse_closed_set, 'reverse')
                 
     def compute_transition_lb_effort_to_come(self, env:BaseProblem):
         # run a reverse search on the transition nodes without any collision checking

@@ -77,6 +77,8 @@ def load_experiment_config(filepath: str) -> Dict[str, Any]:
     planner_default_config_paths["prm"] = "configs/defaults/composite_prm.json"
     planner_default_config_paths["rrtstar"] = "configs/defaults/rrtstar.json"
     planner_default_config_paths["birrtstar"] = "configs/defaults/birrtstar.json"
+    planner_default_config_paths["aitstar"] = "configs/defaults/aitstar.json"
+    planner_default_config_paths["eitstar"] = "configs/defaults/eitstar.json"
 
 
     for planner_type, default_config_path in planner_default_config_paths.items():
@@ -291,7 +293,8 @@ def setup_planner(
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
                 informed_with_lb = options["informed_with_lb"],
-                remove_based_on_modes = options["remove_based_on_modes"]
+                remove_based_on_modes = options["remove_based_on_modes"],
+                with_tree_visualization = options["with_tree_visualization"]
             ).Plan(optimize)
         
     elif planner_config["type"] == "eitstar":
@@ -314,7 +317,8 @@ def setup_planner(
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
                 informed_with_lb = options["informed_with_lb"],
-                remove_based_on_modes = options["remove_based_on_modes"]
+                remove_based_on_modes = options["remove_based_on_modes"],
+                with_tree_visualization = options["with_tree_visualization"]
             ).Plan(optimize)
 
     else:

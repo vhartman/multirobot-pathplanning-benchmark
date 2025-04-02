@@ -1895,11 +1895,12 @@ class BaseITstar(ABC):
         self,
         env: BaseProblem,
         ptc: PlannerTerminationCondition,
-        optimize: bool = True,
         mode_sampling_type: str = "greedy",
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
         try_informed_sampling: bool = True,
+        first_uniform_batch_size: int = 100,
+        first_transition_batch_size:int = 100,
         uniform_batch_size: int = 200,
         uniform_transition_batch_size: int = 500,
         informed_batch_size: int = 500,
@@ -1910,15 +1911,17 @@ class BaseITstar(ABC):
         try_shortcutting: bool = True,
         try_direct_informed_sampling: bool = True,
         informed_with_lb:bool = True,
-        remove_based_on_modes:bool = False
+        remove_based_on_modes:bool = False,
+        with_tree_visualization:bool = False
     ):
         self.env = env
         self.ptc = ptc
-        self.optimize = optimize
         self.mode_sampling_type = mode_sampling_type
         self.distance_metric = distance_metric
         self.try_sampling_around_path = try_sampling_around_path
         self.try_informed_sampling = try_informed_sampling
+        self.first_uniform_batch_size = first_uniform_batch_size,
+        self.first_transition_batch_size = first_transition_batch_size,
         self.uniform_batch_size = uniform_batch_size
         self.uniform_transition_batch_size = uniform_transition_batch_size
         self.informed_batch_size = informed_batch_size
@@ -1930,6 +1933,7 @@ class BaseITstar(ABC):
         self.try_direct_informed_sampling = try_direct_informed_sampling
         self.informed_with_lb = informed_with_lb
         self.remove_based_on_modes = remove_based_on_modes
+        self.with_tree_visualization = with_tree_visualization
 
         self.reached_modes = []
         self.start_time = time.time()
@@ -1995,6 +1999,10 @@ class BaseITstar(ABC):
                 if sum(self.env.batch_config_cost(q, focal_points)) > cost:
                     failed_attemps += 1
                     continue
+            s = q.state()
+            if s[0] > 0.5 and s[0] < 1 and s[1]< 0 and s[1]>-0.09:
+                if self.env.is_collision_free(q, m):
+                    pass
 
             if self.env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
@@ -2185,8 +2193,8 @@ class BaseITstar(ABC):
         while True:
             
             if len(self.g.nodes) > 1:
-                sample_batch_size = 350
-                transition_batch_size = 350
+                sample_batch_size = 150
+                transition_batch_size = 100
             else:
                 sample_batch_size = 150
                 transition_batch_size = 100
@@ -2725,6 +2733,31 @@ class BaseITstar(ABC):
                 continue
             edge = (node, n)
             self.update_forward_queue(edge_cost, edge)
+
+    def save_tree_data(self, nodes:set, type:str = 'forward') -> None:
+        data = {}
+        data['all_nodes'] = [self.g.nodes[id].state.q.state() for id in list(chain.from_iterable(self.g.node_ids.values()))]
+        data['all_transition_nodes'] = [self.g.nodes[id].state.q.state() for id in list(chain.from_iterable(self.g.transition_node_ids.values()))]
+        # data['all_nodes_mode'] = [self.g.nodes[id].state.mode_task_ids for id in list(chain.from_iterable(self.g.node_ids.values()))]
+        # data['all_transition_nodes_mode'] = [self.g.nodes[id].state.mode.task_ids for id in list(chain.from_iterable(self.g.transition_node_ids.values()))]
+        data['nodes'] = []
+        data['parents'] = []
+        data['modes'] = []
+        data['type'] = type
+        for id in nodes:
+            node = self.g.nodes[id]
+            data["nodes"].append(node.state.q.state())
+            data['modes'].append(node.state.mode.task_ids)
+            if type == 'forward':
+                parent = node.forward.parent
+            else:
+                parent = node.rev.parent
+            if parent is not None:
+                data["parents"].append(parent.state.q.state())
+            else:
+                data["parents"].append(None)
+        save_data(data, True)
+
 
     @abstractmethod
     def update_forward_queue(self, edge_cost, edge):

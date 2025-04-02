@@ -1,12 +1,12 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "box_stacking_dep",
+  "environment": "simple_2d",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 200,
   "num_runs": 1,
   "seed": 1,
-  "optimize": true,
+  "optimize": false,
   "planners": [
     {
       "name": "eitstar",
@@ -26,7 +26,8 @@
         "shortcutting": true,
         "direct_informed_sampling": true,
         "informed_with_lb":false,
-        "remove_based_on_modes":true
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": true
       }
     }
   ]

@@ -30,6 +30,25 @@
             }
         },
         {
+            "name": "- dispaly",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/disp_path_2d.py",
+            "args": [
+                "/media/tirza/tirza/MasterThesis/out/20250401_170447_planner_demo_random_2d_three_goals/rrtstar/0/path_3.json",
+                "random_2d_three_goals",
+                "--interpolate",
+                "True",
+                "--plot"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        
+        {
             "name": "- analysis samples",
             "type": "debugpy",
             "request": "launch",
@@ -38,6 +57,26 @@
                 "samples",
                 "simple_2d",
                 "1"
+                
+
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+         {
+            "name": "- analysis tree",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/run_analysis.py",
+            "args": [
+                "tree",
+                "simple_2d",
+                "1",
+                "--path_to_folder",
+                "/media/tirza/tirza/MasterThesis/out/20250402_150006_planner_demo_simple_2d"
                 
 
             ],

@@ -7,14 +7,14 @@ import shutil
 
 def colors_plotly():
     return [
-    'blue', 'green', 'purple', 'orange', 'cyan', 'magenta', 
-    'brown', 'lime', 'olive', 'navy', 'teal', 'coral', 'turquoise', 'gold', 'violet',
+    'cyan', 'magenta', 
+    'brown','orange', 'olive', 'navy', 'teal', 'coral', 'turquoise', 'gold', 'violet',
     'indigo', 'salmon', 'maroon', 'plum', 'orchid', 'tan', 'crimson', 'lavender',
     'chartreuse', 'azure', 'beige', 'khaki', 'slateblue', 'forestgreen', 'darkorange',
-    'steelblue', 'deepskyblue', 'tomato', 'lightcoral', 'wheat', 'lightseagreen',
+    'steelblue', 'deepskyblue', 'tomato', 'lightcoral', 'wheat', 'lightseagreen','blue', 'green', 'purple', 
     'mediumslateblue', 'peru', 'darkviolet', 'firebrick', 'dodgerblue', 'mediumorchid',
     'mistyrose', 'sienna', 'darkkhaki', 'peachpuff', 'lightgoldenrodyellow', 'skyblue', 'palegreen',
-    'rosybrown', 'midnightblue', 'lightpink', 'lavenderblush', 'darkgoldenrod', 'sandybrown',
+    'rosybrown', 'midnightblue', 'lightpink', 'lavenderblush', 'darkgoldenrod', 'sandybrown','lime',
     'slategray', 'mediumturquoise', 'orchid', 'seashell', 'mediumseagreen', 'royalblue',
     'darkseagreen', 'cornflowerblue', 'burlywood', 'mediumaquamarine', 'hotpink', 'palevioletred',
     'darkslategray', 'darksalmon', 'lightsteelblue', 'cadetblue', 'mediumvioletred', 'mediumspringgreen',
@@ -26,12 +26,40 @@ def colors_plotly():
 
 def colors_ry():
     return [
+        [0, 1, 1],  # cyan
+        [1, 0, 1],  # magenta
+        [0.53, 0.81, 0.98],  # skyblue
+        [0.6, 0.98, 0.6],  # palegreen
+        [0.74, 0.56, 0.56],  # rosybrown
+        [0.1, 0.1, 0.44],  # midnightblue
+        [1, 0.71, 0.76],  # lightpink
+        [1, 0.94, 0.96],  # lavenderblush
+        [0.72, 0.53, 0.04],  # darkgoldenrod
+        [0.96, 0.64, 0.38],  # sandybrown
+        [0.44, 0.5, 0.56],  # slategray
+        [0.28, 0.82, 0.8],  # mediumturquoise
+        [0.85, 0.44, 0.84],  # orchid (duplicate)
+        [1, 0.96, 0.93],  # seashell
+        [0.24, 0.7, 0.44],  # mediumseagreen
+        [0.25, 0.41, 0.88],  # royalblue
+        [0.56, 0.74, 0.56],  # darkseagreen
+        [0.39, 0.58, 0.93],  # cornflowerblue
+        [0.87, 0.72, 0.53],  # burlywood
+        [0.4, 0.8, 0.67],  # mediumaquamarine
+        [1, 0.41, 0.71],  # hotpink
+        [0.86, 0.44, 0.58],  # palevioletred
+        [0.18, 0.31, 0.31],  # darkslategray
+        [0.91, 0.59, 0.48],  # darksalmon
+        [0.69, 0.77, 0.87],  # lightsteelblue
+        [0.37, 0.62, 0.63],  # cadetblue
+        [0.78, 0.08, 0.52],  # mediumvioletred
+        [0, 0.98, 0.6],  # mediumspringgreen
+        [0, 0.81, 0.82],  # darkturquoise
+        [1, 0.63, 0.48],  # lightsalmon
         [0, 0, 1],  # blue
         [0, 0.5, 0],  # green
         [0.5, 0, 0.5],  # purple
         [1, 0.65, 0],  # orange
-        [0, 1, 1],  # cyan
-        [1, 0, 1],  # magenta
         [1, 0.75, 0.8],  # pink
         [0.6, 0.4, 0.2],  # brown
         [0, 1, 0],  # lime

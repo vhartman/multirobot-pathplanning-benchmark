@@ -15,6 +15,7 @@
     "try_shortcutting":  true,
     "try_direct_informed_sampling": true,
     "informed_with_lb": true,
-    "remove_based_on_modes": false
+    "remove_based_on_modes": false,
+    "with_tree_visualization": false
   }
 }
