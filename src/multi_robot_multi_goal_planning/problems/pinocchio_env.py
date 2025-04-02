@@ -53,9 +53,8 @@ class PinocchioEnvironment(BaseProblem):
     collision_tolerance: float
     collision_resolution: float
 
-    def __init__(self, model, collision_model, visual_model):
+    def __init__(self, model, collision_model, visual_model, start_pos, robots, root_name="table"):
         self.limits = np.vstack([model.lowerPositionLimit, model.upperPositionLimit])
-        self.start_pos = None
 
         self.model = model
         self.collision_model = collision_model
@@ -63,6 +62,18 @@ class PinocchioEnvironment(BaseProblem):
 
         self.data = self.model.createData()
         self.geom_data = pin.GeometryData(self.collision_model)
+
+        self.start_pos = start_pos
+        self.robots = robots
+
+        offset = 0
+        self.robot_idx = {}
+        self.robot_dims = {}
+        for i, r in enumerate(self.robots):
+            dim = len(self.start_pos[i])
+            self.robot_idx[r] = [i + offset for i in range(dim)]
+            self.robot_dims[r] = dim
+            offset += dim
 
         self.viz = None
 
@@ -75,7 +86,7 @@ class PinocchioEnvironment(BaseProblem):
 
         ids = range(len(collision_model.geometryObjects))
 
-        self.root_name = "table"
+        self.root_name = root_name
 
         for i, id_1 in enumerate(ids):
             obj_name = collision_model.geometryObjects[id_1].name
@@ -96,7 +107,7 @@ class PinocchioEnvironment(BaseProblem):
         n = len(self.collision_model.geometryObjects)
         mat = np.zeros((n, n)) - self.collision_tolerance
 
-        # self.geom_data.setSecurityMargins(self.collision_model, mat)
+        self.geom_data.setSecurityMargins(self.collision_model, mat)
 
     def setup_visualization(self):
         self.viz = MeshcatVisualizer(
@@ -591,15 +602,11 @@ def make_pin_middle_obstacle_two_dim_env():
 class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
     def __init__(self, agents_can_rotate=True):
         model, collision_model, visual_model = make_pin_middle_obstacle_two_dim_env()
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
-        self.start_pos = NpConfiguration.from_list([[0, -0.8, 0], [0, 0.8, 0]])
+        start_pos = NpConfiguration.from_list([[0, -0.8, 0], [0, 0.8, 0]])
+        robots = ["a1", "a2"]
 
-        self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
-        self.robot_dims = {"a1": 3, "a2": 3}
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2"]
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots)
 
         self.tasks = [
             # r1
@@ -670,18 +677,15 @@ def make_pin_other_hallway_two_dim_env():
 class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
     def __init__(self):
         model, collision_model, visual_model = make_pin_other_hallway_two_dim_env()
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
-        self.root_name = "table_0"
+        root_name = "table_0"
 
-        self.start_pos = NpConfiguration.from_list([[1.5, 0.0, 0], [-1.5, 0.0, 0]])
+        start_pos = NpConfiguration.from_list([[1.5, 0.0, 0], [-1.5, 0.0, 0]])
+        robots = ["a1", "a2"]
 
-        self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
-        self.robot_dims = {"a1": 3, "a2": 3}
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots, root_name)
+
         # self.C.view(True)
-
-        self.robots = ["a1", "a2"]
-
         self.tasks = [
             # r1
             Task(["a1"], SingleGoal(np.array([-1.5, 1, np.pi / 2]))),
@@ -753,19 +757,15 @@ def make_2d_handover():
 class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
     def __init__(self):
         model, collision_model, visual_model = make_2d_handover()
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
+    
+        start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
 
-        self.root_name = "table_0"
+        robots = ["a1", "a2"]
+        root_name = "table_0"
+
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots, root_name)
 
         self.manipulating_env = True
-
-        self.start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
-
-        self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
-        self.robot_dims = {"a1": 3, "a2": 3}
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2"]
 
         for obj in self.collision_model.geometryObjects:
             if obj.name[-2:] == "_0":
@@ -837,19 +837,14 @@ def make_piano():
 class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
     def __init__(self):
         model, collision_model, visual_model = make_piano()
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
+
+        start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
+        root_name = "table_0"
+        robots = ["a1", "a2"]
+
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots, root_name)
 
         self.manipulating_env = True
-
-        self.start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
-
-        self.robot_idx = {"a1": [0, 1, 2], "a2": [3, 4, 5]}
-        self.robot_dims = {"a1": 3, "a2": 3}
-        # self.C.view(True)
-
-        self.root_name = "table_0"
-
-        self.robots = ["a1", "a2"]
 
         task_1_pose = np.array([0.47685958, 0.22499656, 0.00066826])
         task_2_pose = np.array([-5.23035087e-01, -7.74943558e-01, 7.45490689e-04])
@@ -1101,18 +1096,15 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
     def __init__(self):
         model, collision_model, visual_model = make_dual_ur5_waypoint_env()
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
+
+        # dummy start_pose to set the env up
+        q = NpConfiguration.from_list([np.zeros(6), np.zeros(6)])
+        robots = ["a1", "a2"]
+
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, q, robots, "table")
 
         q_rnd_start = self.sample_random_valid_state()
         self.start_pos = q_rnd_start
-
-        self.robots = ["a1", "a2"]
-
-        self.robot_idx = {"a1": [i for i in range(6)], "a2": [i + 6 for i in range(6)]}
-        self.robot_dims = {"a1": 6, "a2": 6}
-
-        self.tasks = []
-        self.sequence = []
 
         q_inter = self.sample_random_valid_state()
         q_goal = self.sample_random_valid_state()
@@ -1323,9 +1315,9 @@ def make_dual_ur5_reorientation_env():
 
     with open("src/multi_robot_multi_goal_planning/problems/desc/box_poses.json", "r") as f:
         loaded_box_data = json.load(f)
-        print("Loaded box data:")
+        # print("Loaded box data:")
         for box in loaded_box_data:
-            print(f"Position: {box['position']}, Quaternion: {box['quaternion']}")
+            # print(f"Position: {box['position']}, Quaternion: {box['quaternion']}")
 
             geom1_name = box['name']
             shape1 = fcl.Box(0.1, 0.1, 0.1)
@@ -1415,22 +1407,12 @@ class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
     def __init__(self):
         model, collision_model, visual_model = make_dual_ur5_reorientation_env()
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model)
 
         q = np.array([0, -2, 1.0, -1, -1.57, 1])
-        self.start_pos = NpConfiguration.from_list([q, q])
-
-        self.robots = ["a1_", "a2_"]
-
-        self.robot_idx = {
-            "a1_": [i for i in range(6)],
-            "a2_": [i + 6 for i in range(6)],
-        }
-        self.robot_dims = {"a1_": 6, "a2_": 6}
-
-        self.tasks = []
-        self.sequence = []
-
+        start_pos = NpConfiguration.from_list([q, q])
+        robots = ["a1_", "a2_"]
+        
+        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots)
 
         self.import_tasks("src/multi_robot_multi_goal_planning/problems/desc/box_reorientation_tasks.txt")
         self.sequence = self._make_sequence_from_names(

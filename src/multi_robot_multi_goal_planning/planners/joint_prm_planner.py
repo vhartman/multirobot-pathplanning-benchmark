@@ -29,7 +29,9 @@ from multi_robot_multi_goal_planning.planners import shortcutting
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-
+from multi_robot_multi_goal_planning.planners.sampling_phs import (
+    sample_phs_with_given_matrices, compute_PHS_matrices,
+)
 
 class Node:
     __slots__ = [
@@ -286,7 +288,7 @@ class DictIndexHeap:
 
     def __len__(self) -> int:
         return len(self.queue)
-    
+
     def __bool__(self):
         return bool(self.queue)
 
@@ -713,7 +715,7 @@ class Graph:
                     [n.state.q for n in self.transition_nodes[this_mode]],
                 )
                 if min(dists) < 1e-6:
-                    is_in_goal_nodes_already = True
+                    is_in_transition_nodes_already = True
                 # for n in self.transition_nodes[this_mode]:
                 #     if (
                 #         np.linalg.norm(
@@ -726,6 +728,9 @@ class Graph:
 
                 if is_in_transition_nodes_already:
                     continue
+
+            # if this_mode in self.transition_nodes:
+                # print(len(self.transition_nodes[this_mode]))
 
             if next_mode is not None:
                 if this_mode in self.transition_nodes:
@@ -1006,6 +1011,9 @@ class Graph:
         wasted_pops = 0
         processed_edges = 0
 
+        queue_pop = queue.heappop
+        queue_push = queue.heappush
+
         num_iter = 0
         while queue:
             # while len(open_queue) > 0:
@@ -1018,7 +1026,7 @@ class Graph:
                 print(len(queue))
 
             # f_pred, edge_cost, (n0, n1) = heapq.heappop(open_queue)
-            f_pred, edge_cost, (n0, n1) = queue.heappop()
+            f_pred, edge_cost, (n0, n1) = queue_pop()
             # print(open_queue[-1])
             # print(open_queue[-2])
             # f_pred, edge_cost, edge = open_queue.pop()
@@ -1151,7 +1159,7 @@ class Graph:
 
                     # if n not in closed_list:
                     # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
-                    queue.heappush((f_node, edge_cost, (n1, n)))
+                    queue_push((f_node, edge_cost, (n1, n)))
                     # new_edges.append((f_node, edge_cost, (n1, n)))
 
                     # added_edge = True
@@ -1325,115 +1333,6 @@ class Graph:
             path = path[::-1]
 
         return path
-
-
-# taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
-# needed adaption to work.
-def sample_unit_ball(dim) -> np.array:
-    """Samples a point uniformly from the unit ball. This is used to sample points from the Prolate HyperSpheroid (PHS).
-
-    Returns:
-        Sampled Point (np.array): The sampled point from the unit ball.
-    """
-    # u = np.random.uniform(-1, 1, dim)
-    # norm = np.linalg.norm(u)
-    # r = np.random.random() ** (1.0 / dim)
-    # return r * u / norm
-    u = np.random.normal(0, 1, dim)
-    norm = np.linalg.norm(u)
-    # Generate radius with correct distribution
-    r = np.random.random() ** (1.0 / dim)
-    return (r / norm) * u
-
-
-def samplePHS(a: np.ndarray, b: np.ndarray, c: float) -> np.ndarray:
-    """Samples a point from the Prolate HyperSpheroid (PHS) with vectorized operations."""
-    dim = len(a)
-    diff = b - a
-
-    # Calculate the center of the PHS.
-    center = (a + b) / 2
-    # The transverse axis in the world frame.
-    c_min = np.linalg.norm(diff)
-
-    if c_min == 0:
-        x_ball = sample_unit_ball(dim) * c / 2
-        return x_ball + center  # Avoid division by zero if a == b
-
-    # The first column of the identity matrix.
-    # one_1 = np.eye(a1.shape[0])[:, 0]
-    a1 = diff / c_min
-    e1 = np.zeros(dim)
-    e1[0] = 1.0
-
-    # Optimized rotation matrix calculation
-    U, S, Vt = np.linalg.svd(np.outer(a1, e1))
-    # Sigma = np.diag(S)
-    # lam = np.eye(Sigma.shape[0])
-    lam = np.eye(dim)
-    lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
-    # Calculate the rotation matrix.
-    # cwe = np.matmul(U, np.matmul(lam, Vt))
-    cwe = U @ lam @ Vt
-    # Get the radius of the first axis of the PHS.
-    # r1 = c / 2
-    # Get the radius of the other axes of the PHS.
-    # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
-    # Create a vector of the radii of the PHS.
-    # r = np.diag(np.array([r1] + rn))
-    r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
-
-    # Sample a point from the PHS.
-    # Sample a point from the unit ball.
-    x_ball = sample_unit_ball(dim)
-    # Transform the point from the unit ball to the PHS.
-    # op = np.matmul(np.matmul(cwe, r), x_ball) + center
-    op = cwe @ r @ x_ball + center
-
-    return op
-
-
-def compute_PHS_matrices(a, b, c):
-    dim = len(a)
-    diff = b - a
-
-    # Calculate the center of the PHS.
-    center = (a + b) / 2
-    # The transverse axis in the world frame.
-    c_min = np.linalg.norm(diff)
-
-    # The first column of the identity matrix.
-    # one_1 = np.eye(a1.shape[0])[:, 0]
-    a1 = diff / c_min
-    e1 = np.zeros(dim)
-    e1[0] = 1.0
-
-    # Optimized rotation matrix calculation
-    U, S, Vt = np.linalg.svd(np.outer(a1, e1))
-    # Sigma = np.diag(S)
-    # lam = np.eye(Sigma.shape[0])
-    lam = np.eye(dim)
-    lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
-    # Calculate the rotation matrix.
-    # cwe = np.matmul(U, np.matmul(lam, Vt))
-    cwe = U @ lam @ Vt
-    # Get the radius of the first axis of the PHS.
-    # r1 = c / 2
-    # Get the radius of the other axes of the PHS.
-    # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
-    # Create a vector of the radii of the PHS.
-    # r = np.diag(np.array([r1] + rn))
-    r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
-
-    return cwe @ r, center
-
-
-def sample_phs_with_given_matrices(rot, center):
-    dim = len(center)
-    x_ball = sample_unit_ball(dim)
-    # Transform the point from the unit ball to the PHS.
-    # op = np.matmul(np.matmul(cwe, r), x_ball) + center
-    return rot @ x_ball + center
 
 
 # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
@@ -1744,19 +1643,21 @@ def joint_prm_planner(
             precomputed_phs_matrices = {}
             precomputed_robot_cost_bounds = {}
 
+            is_almost_the_same = {}
+
             obv_inv_attempts = 0
             sample_in_collision = 0
 
-            for k in range(max_attempts_per_sample):
-                had_to_be_clipped = False
+            num_samples_at_a_time = 10
+
+            for k in range(max_attempts_per_sample // num_samples_at_a_time):
                 if not try_direct_sampling or env.cost_metric != "euclidean":
                     # completely random sample configuration from the (valid) domain robot by robot
                     q = env.sample_config_uniform_in_limits()
                 else:
                     # sample by sampling each agent separately
                     q = []
-                    for i in range(len(env.robots)):
-                        r = env.robots[i]
+                    for i, r in enumerate(env.robots):
                         lims = env.limits[:, env.robot_idx[r]]
                         if lims[0, 0] < lims[1, 0]:
                             if i not in precomputed_robot_cost_bounds:
@@ -1777,16 +1678,17 @@ def joint_prm_planner(
                                 else:
                                     precomputed_robot_cost_bounds[i] = current_cost
 
-                            if (
-                                np.linalg.norm(
-                                    path[start_ind].q[i] - path[end_ind].q[i]
+                            if i not in is_almost_the_same:
+                                is_almost_the_same[i] = (
+                                    np.linalg.norm(
+                                        path[start_ind].q[i] - path[end_ind].q[i]
+                                    )
+                                    < 1e-3
                                 )
-                                < 1e-3
-                            ):
+
+                            if is_almost_the_same[i]:
                                 qr = (
-                                    np.random.rand(env.robot_dims[r])
-                                    * (lims[1, :] - lims[0, :])
-                                    + lims[0, :]
+                                    np.random.uniform(size=(num_samples_at_a_time, env.robot_dims[r]), low=lims[0, :], high = lims[1, :]).T
                                 )
                             else:
                                 # print("cost", current_cost)
@@ -1805,7 +1707,7 @@ def joint_prm_planner(
                                     )
 
                                 qr = sample_phs_with_given_matrices(
-                                    *precomputed_phs_matrices[i]
+                                    *precomputed_phs_matrices[i], n=num_samples_at_a_time
                                 )
 
                                 # plt.figure()
@@ -1834,46 +1736,63 @@ def joint_prm_planner(
 
                                 # clipped = np.clip(qr, lims[0, :], lims[1, :])
                                 # if not np.array_equal(clipped, qr):
-                                if np.any((qr < lims[0, :]) | (qr > lims[1, :])):
-                                    had_to_be_clipped = True
-                                    break
-                                    # print("AAA")
+                                # if np.any((qr < lims[0, :]) | (qr > lims[1, :])):
+                                #     had_to_be_clipped = True
+                                #     break
+                                # print("AAA")
 
                         q.append(qr)
 
-                if had_to_be_clipped:
-                    continue
+                if isinstance(q, list):
+                    qs = []
+                    for i in range(num_samples_at_a_time):
+                        q_config = []
+                        for j in range(len(env.robots)):
+                            q_config.append(q[j][:, i])
 
-                if not isinstance(q, Configuration):
-                    # q = conf_type.from_list(q)
-                    q = conf_type(np.concatenate(q), env.start_pos.array_slice)
+                        qnp = np.concatenate(q_config)
+                        qs.append(conf_type(qnp, env.start_pos.array_slice))
+                else:
+                    qs = [q]
 
+                found_a_sample = False
+                for q in qs:
+                    if not isinstance(q, Configuration):
+                        # q = conf_type.from_list(q)
+                        qnp = np.concatenate(q)
+                        if np.any((qnp < env.limits[0, :]) | (qnp > env.limits[1, :])):
+                            continue
+                        q = conf_type(qnp, env.start_pos.array_slice)
 
-                if sum(env.batch_config_cost(q, focal_points)) > current_cost:
-                    # print(path[start_ind].mode, path[end_ind].mode, m)
-                    # print(
-                    #     current_cost,
-                    #     env.config_cost(path[start_ind].q, q)
-                    #     + env.config_cost(path[end_ind].q, q),
-                    # )
+                    if sum(env.batch_config_cost(q, focal_points)) > current_cost:
+                        # print(path[start_ind].mode, path[end_ind].mode, m)
+                        # print(
+                        #     current_cost,
+                        #     env.config_cost(path[start_ind].q, q)
+                        #     + env.config_cost(path[end_ind].q, q),
+                        # )
+                        # if can_improve(State(q, m), path, start_ind, end_ind):
+                        #     assert False
+
+                        obv_inv_attempts += 1
+
+                        continue
+
+                    # if can_improve(State(q, m), path, 0, len(path)-1):
                     # if can_improve(State(q, m), path, start_ind, end_ind):
-                    #     assert False
+                    # if not env.is_collision_free(q, m):
+                    #     sample_in_collision += 1
+                    #     continue
 
-                    obv_inv_attempts += 1
+                    if can_improve(
+                        State(q, m), path, start_ind, end_ind, path_segment_costs
+                    ) and env.is_collision_free(q, m):
+                        # if env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
+                        new_samples.append(State(q, m))
+                        found_a_sample = True
+                        # break
 
-                    continue
-
-                # if can_improve(State(q, m), path, 0, len(path)-1):
-                # if can_improve(State(q, m), path, start_ind, end_ind):
-                if not env.is_collision_free(q, m):
-                    sample_in_collision += 1
-                    continue
-
-                if can_improve(
-                    State(q, m), path, start_ind, end_ind, path_segment_costs
-                ):
-                    # if env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
-                    new_samples.append(State(q, m))
+                if found_a_sample:
                     break
 
             # print("inv attempt", obv_inv_attempts)
@@ -2100,7 +2019,7 @@ def joint_prm_planner(
             focal_points = np.array(
                 [path[start_ind].q.state(), path[end_ind].q.state()], dtype=np.float64
             )
-            
+
             for k in range(max_attempts_per_sample):
                 # completely random sample configuration from the (valid) domain robot by robot
                 q = []

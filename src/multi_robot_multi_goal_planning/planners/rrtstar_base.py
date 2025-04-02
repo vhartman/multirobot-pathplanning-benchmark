@@ -29,7 +29,9 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-
+from multi_robot_multi_goal_planning.planners.sampling_phs import (
+    sample_phs_with_given_matrices, compute_PHS_matrices
+)
 
 class Operation:
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
@@ -44,6 +46,7 @@ class Operation:
         self.costs = np.empty(10000000, dtype=np.float64)
         self.paths_inter = []
         self.path_shortcutting = []
+        self.path_shortcutting_interpolated = []
     
     def get_cost(self, idx:int) -> float:
         """
@@ -778,95 +781,7 @@ class InformedVersion6():
         self.modes = modes
         self.conf_type = type(self.env.get_start_pos())
         self.locally_informed_sampling = locally_informed_sampling
-        
-    def sample_unit_ball(self, dim:int) -> NDArray:
-        """ 
-        Samples a point uniformly from a n-dimensional unit ball centered at the origin.
 
-        Args: 
-            n (int): Dimension of the ball.
-
-        Returns: 
-            NDArray: Sampled point from the unit ball. """
-        # u = np.random.uniform(-1, 1, dim)
-        # norm = np.linalg.norm(u)
-        # r = np.random.random() ** (1.0 / dim)
-        # return r * u / norm
-        u = np.random.normal(0, 1, dim)
-        norm = np.linalg.norm(u)
-        # Generate radius with correct distribution
-        r = np.random.random() ** (1.0 / dim)
-        return (r / norm) * u
-
-    def compute_PHS_matrices(self, a:NDArray, b:NDArray, c:float) -> Tuple[NDArray, NDArray]:
-        """
-        Computes transformation matrix and center for a Prolate Hyperspheroid (PHS) defined by endpoints a and b and cost parameter c.
-
-        Args:
-            a (NDArray): Start point of the PHS.
-            b (NDArray): End point of the PHS.
-            c (float): Cost parameter defining scaling of the PHS.
-
-        Returns:
-            Tuple:    
-                - NDArray: Transformation matrix (rotation and scaling) of the PHS.
-                - NDArray: Center of the PHS, calculated as the midpoint between a and b.
-               
-        """
-
-        dim = len(a)
-        diff = b - a
-
-        # Calculate the center of the PHS.
-        center = (a + b) / 2
-        # The transverse axis in the world frame.
-        c_min = np.linalg.norm(diff)
-
-        # The first column of the identity matrix.
-        # one_1 = np.eye(a1.shape[0])[:, 0]
-        a1 = diff / c_min
-        e1 = np.zeros(dim)
-        e1[0] = 1.0
-
-        # Optimized rotation matrix calculation
-        U, S, Vt = np.linalg.svd(np.outer(a1, e1))
-        # Sigma = np.diag(S)
-        # lam = np.eye(Sigma.shape[0])
-        lam = np.eye(dim)
-        lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
-        # Calculate the rotation matrix.
-        # cwe = np.matmul(U, np.matmul(lam, Vt))
-        cwe = U @ lam @ Vt
-        # Get the radius of the first axis of the PHS.
-        # r1 = c / 2
-        # Get the radius of the other axes of the PHS.
-        # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
-        # Create a vector of the radii of the PHS.
-        # r = np.diag(np.array([r1] + rn))
-        # sqrt_term = c**2 - c_min**2
-
-        # if sqrt_term < 0 or np.isnan(sqrt_term):
-        #     print("hallo")
-        r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
-
-
-        return cwe @ r, center
-
-    def sample_phs_with_given_matrices(self, rot:NDArray, center:NDArray) -> NDArray:
-        """
-        Samples point from a prolate hyperspheroid (PHS) defined by the given rotation matrix and center.
-
-        Args:
-            rot (NDArray): Transformation matrix (rotation and scaling) for the PHS.
-            center (NDArray): Center point of the PHS.
-
-        Returns:
-            NDArray: Sampled point from the PHS.
-        """
-
-        dim = len(center)
-        x_ball = self.sample_unit_ball(dim)
-        return rot @ x_ball + center
 
     def sample_mode(self,
         mode_sampling_type: str = "uniform_reached"
@@ -1030,8 +945,7 @@ class InformedVersion6():
             Configuration: Configuration within the informed set that satisfies the specified limits for the robots. 
         """
         # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
-        path = mrmgp.joint_prm_planner.interpolate_path(path)
-        new_samples = []
+        # path = mrmgp.joint_prm_planner.interpolate_path(path)
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
         
         in_between_mode_cache = {}
@@ -1114,24 +1028,15 @@ class InformedVersion6():
             obv_inv_attempts = 0
             sample_in_collision = 0
 
-            for k in range(max_attempts_per_sample):
+            num_samples_at_a_time = 10
+
+            per_robot_index_diff = {}
+
+            for k in range(max_attempts_per_sample // num_samples_at_a_time):
                 had_to_be_clipped = False
                 if not try_direct_sampling or self.env.cost_metric != "euclidean":
                     # completely random sample configuration from the (valid) domain robot by robot
-                    q = []
-                    for i in range(len(self.env.robots)):
-                        r = self.env.robots[i]
-                        lims = self.env.limits[:, self.env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = (
-                                np.random.rand(self.env.robot_dims[r])
-                                * (lims[1, :] - lims[0, :])
-                                + lims[0, :]
-                            )
-                        else:
-                            qr = np.random.rand(self.env.robot_dims[r]) * 6 - 3
-
-                        q.append(qr)
+                    q = self.env.sample_config_uniform_in_limits()
                 else:
                     # sample by sampling each agent separately
                     q = []
@@ -1156,16 +1061,17 @@ class InformedVersion6():
                                     )
                                 else:
                                     precomputed_robot_cost_bounds[i] = current_cost
-
-                            norm = np.linalg.norm(
-                                    path[start_ind].q[i] - path[end_ind].q[i]
+                            
+                            if i not in per_robot_index_diff:
+                                per_robot_index_diff[i] = (
+                                    np.linalg.norm(
+                                        path[start_ind].q[i] - path[end_ind].q[i]
+                                    )
                                 )
-                            if (norm < 1e-3 or norm > precomputed_robot_cost_bounds[i]
-                            ):
+
+                            if (per_robot_index_diff[i] < 1e-3 or per_robot_index_diff[i] > precomputed_robot_cost_bounds[i]):
                                 qr = (
-                                    np.random.rand(self.env.robot_dims[r])
-                                    * (lims[1, :] - lims[0, :])
-                                    + lims[0, :]
+                                    np.random.uniform(size=(num_samples_at_a_time, self.env.robot_dims[r]), low=lims[0, :], high = lims[1, :]).T
                                 )
                             else:
                                 # print("cost", current_cost)
@@ -1177,14 +1083,14 @@ class InformedVersion6():
                                 # )
 
                                 if i not in precomputed_phs_matrices:
-                                    precomputed_phs_matrices[i] =self.compute_PHS_matrices(
+                                    precomputed_phs_matrices[i] = compute_PHS_matrices(
                                         path[start_ind].q[i],
                                         path[end_ind].q[i],
                                         precomputed_robot_cost_bounds[i],
                                     )
 
-                                qr = self.sample_phs_with_given_matrices(
-                                    *precomputed_phs_matrices[i]
+                                qr = sample_phs_with_given_matrices(
+                                    *precomputed_phs_matrices[i], n=num_samples_at_a_time
                                 )
                                 # plt.figure()
                                 # samples = []
@@ -1210,47 +1116,83 @@ class InformedVersion6():
                                 #     print("AAAAAAAAA")
                                 #     print(np.linalg.norm(path[start_ind].q[i] - qr) + np.linalg.norm(path[end_ind].q[i] - qr), c_robot_bound)
 
-                                clipped = np.clip(qr, lims[0, :], lims[1, :])
-                                if not np.array_equal(clipped, qr):
-                                    had_to_be_clipped = True
-                                    break
-                                    # print("AAA")
-
                         q.append(qr)
 
-                if had_to_be_clipped:
-                    continue
+                if isinstance(q, list):
+                    conf_type = type(self.env.get_start_pos())
 
-                q = self.conf_type.from_list(q)
+                    qs = []
+                    for i in range(num_samples_at_a_time):
+                        q_config = []
+                        for j in range(len(self.env.robots)):
+                            q_config.append(q[j][:, i])
 
-                if sum(self.env.batch_config_cost(q, focal_points)) > current_cost:
-                    # print(path[start_ind].mode, path[end_ind].mode, m)
-                    # print(
-                    #     current_cost,
-                    #     env.config_cost(path[start_ind].q, q)
-                    #     + env.config_cost(path[end_ind].q, q),
-                    # )
+                        qnp = np.concatenate(q_config)
+                        qs.append(conf_type(qnp, self.env.start_pos.array_slice))
+                else:
+                    qs = [q]
+
+                for q in qs:
+                    if not isinstance(q, Configuration):
+                        # q = conf_type.from_list(q)
+                        qnp = np.concatenate(q)
+                        if np.any((qnp < self.env.limits[0, :]) | (qnp > self.env.limits[1, :])):
+                            continue
+                        q = conf_type(qnp, self.env.start_pos.array_slice)
+
+                    if sum(self.env.batch_config_cost(q, focal_points)) > current_cost:
+                        # print(path[start_ind].mode, path[end_ind].mode, m)
+                        # print(
+                        #     current_cost,
+                        #     env.config_cost(path[start_ind].q, q)
+                        #     + env.config_cost(path[end_ind].q, q),
+                        # )
+                        # if can_improve(State(q, m), path, start_ind, end_ind):
+                        #     assert False
+
+                        obv_inv_attempts += 1
+
+                        continue
+
+                    # if can_improve(State(q, m), path, 0, len(path)-1):
                     # if can_improve(State(q, m), path, start_ind, end_ind):
-                    #     assert False
+                    # if not env.is_collision_free(q, m):
+                    #     sample_in_collision += 1
+                    #     continue
 
-                    obv_inv_attempts += 1
-
-                    continue
-
-                # if can_improve(State(q, m), path, 0, len(path)-1):
-                # if can_improve(State(q, m), path, start_ind, end_ind):
-                if not self.env.is_collision_free(q, m):
-                    sample_in_collision += 1
-                    continue
-
-                if self.can_improve(
-                    State(q, m), path, start_ind, end_ind, path_segment_costs
-                ):
-                    # if env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
-                    if m == mode:
+                    if self.can_improve(
+                        State(q, m), path, start_ind, end_ind, path_segment_costs
+                    ) and self.env.is_collision_free(q, m):
                         return q
-                    new_samples.append(State(q, m))
-                    break
+
+
+                # if sum(self.env.batch_config_cost(q, focal_points)) > current_cost:
+                #     # print(path[start_ind].mode, path[end_ind].mode, m)
+                #     # print(
+                #     #     current_cost,
+                #     #     env.config_cost(path[start_ind].q, q)
+                #     #     + env.config_cost(path[end_ind].q, q),
+                #     # )
+                #     # if can_improve(State(q, m), path, start_ind, end_ind):
+                #     #     assert False
+
+                #     obv_inv_attempts += 1
+
+                #     continue
+
+                # # if can_improve(State(q, m), path, 0, len(path)-1):
+                # # if can_improve(State(q, m), path, start_ind, end_ind):
+                # if not self.env.is_collision_free(q, m):
+                #     sample_in_collision += 1
+                #     continue
+
+                # if self.can_improve(
+                #     State(q, m), path, start_ind, end_ind, path_segment_costs
+                # ):
+                #     # if env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
+                #     if m == mode:
+                #         return q
+                #     break
 
             # print("inv attempt", obv_inv_attempts)
             # print("coll", sample_in_collision)
@@ -1374,7 +1316,7 @@ class InformedVersion6():
             Configuration: Transiiton configuration within the informed set that satisfies the specified limits for the robots. 
         """
         # path = mrmgp.shortcutting.remove_interpolated_nodes(path)
-        path =  mrmgp.joint_prm_planner.interpolate_path(path)
+        # path =  mrmgp.joint_prm_planner.interpolate_path(path)
         if len(self.env.tasks) == 1:
             return []
 
@@ -2031,7 +1973,7 @@ class BaseRRTstar(ABC):
                     if self.informed_sampling_version == 6 and not self.env.is_terminal_mode(mode):
                         q = self.informed[mode].generate_informed_transitions(
                             self.informed_batch_size,
-                            self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
+                            self.operation.path_shortcutting_interpolated, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                         if q is None:
                             return
@@ -2073,7 +2015,7 @@ class BaseRRTstar(ABC):
                 if self.informed_sampling_version == 6:
                     q = self.informed[mode].generate_informed_samples(
                         self.informed_batch_size,
-                        self.operation.path_shortcutting, mode, locally_informed_sampling = self.locally_informed_sampling
+                        self.operation.path_shortcutting_interpolated, mode, locally_informed_sampling = self.locally_informed_sampling
                         )
                     if q is None:
                         return
@@ -2513,6 +2455,7 @@ class BaseRRTstar(ABC):
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
         self.operation.path_shortcutting = path_shortcutting[::-1] # includes transiiton node twice
+        self.operation.path_shortcutting_interpolated = mrmgp.joint_prm_planner.interpolate_path(path_shortcutting)
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             shortcut_path_, result = mrmgp.shortcutting.robot_mode_shortcut(
@@ -3020,7 +2963,7 @@ class BaseRRTstar(ABC):
                             q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
 
             q_list = [q[indices[i]] for i in range(len(indices))]
-            edge.append(State(NpConfiguration.from_list(q_list),path[i].mode))
+            edge.append(State(NpConfiguration(q_list, self.env.start_pos.array_slice),path[i].mode))
             if i == 0:
                 continue  
             edge_a, edge_b = edge[:-1], edge[1:]
