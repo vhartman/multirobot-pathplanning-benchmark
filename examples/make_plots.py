@@ -218,12 +218,13 @@ def make_cost_plots(
     foldername: Optional[str] = None,
     save_as_png: bool = False,
     add_legend: bool = True,
-    baseline_cost=None
+    baseline_cost=None,
+    add_info: bool = False
 ):
     plt.figure("Cost plot")
 
     max_time = 0
-
+    colors = {}
     for planner_name, results in all_experiment_data.items():
         all_initial_solution_times = []
         all_initial_solution_costs = []
@@ -265,6 +266,7 @@ def make_cost_plots(
             color = planner_name_to_color[planner_name]
         else:
             color = np.random.rand(3,)
+        colors[planner_name] = color
 
         plt.errorbar(
             [median_initial_solution_time],
@@ -343,10 +345,11 @@ def make_cost_plots(
 
         ub_solution_cost[~np.isfinite(ub_solution_cost)] = 1e6
 
-        if planner_name in planner_name_to_color:
-            color = planner_name_to_color[planner_name]
-        else:
-            color = np.random.rand(3,)
+        # if planner_name in planner_name_to_color:
+        #     color = planner_name_to_color[planner_name]
+        # else:
+        #     color = np.random.rand(3,)
+        color = colors[planner_name]
 
         ls = "-"
         if planner_name in planner_name_to_style:
@@ -392,7 +395,13 @@ def make_cost_plots(
     #     plt.spines[side].set(lw=0.2)
 
     if add_legend:
-        plt.legend()
+        if add_info:
+            legend_title = f"Environment: {config['environment']}\nNumber of runs: {config['num_runs']}"
+            existing_handles, _ = plt.gca().get_legend_handles_labels()
+            plt.legend(handles=existing_handles, title=legend_title, title_fontsize='medium', loc='best', alignment='left')
+        else:
+
+            plt.legend()
 
     if save:
         if foldername is None:
@@ -493,6 +502,11 @@ def main():
         help="Add the legend to the plot (default: False)",
     )
     parser.add_argument(
+        "--info",
+        action="store_true",
+        help="Add general information to the plot legend (default: False)",
+    )
+    parser.add_argument(
         "--no_display",
         action="store_true",
         help="Display the resulting plots at the end. (default: False)",
@@ -520,6 +534,7 @@ def main():
         save_as_png=args.png,
         add_legend=args.legend,
         baseline_cost=args.baseline_cost,
+        add_info = args.info
     )
     make_success_plot(all_experiment_data, config)
 

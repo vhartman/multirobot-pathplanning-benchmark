@@ -1553,7 +1553,7 @@ class BaseRRTstar(ABC):
                  p_uniform: float = 0.2, 
                  shortcutting: bool = True, 
                  mode_sampling: Optional[Union[int, float]] = None, 
-                 gaussian: bool = True,
+                 sample_near_path: bool = True,
                  shortcutting_dim_version:int = 2, 
                  shortcutting_robot_version:int = 1, 
                  locally_informed_sampling:bool = True,
@@ -1571,7 +1571,7 @@ class BaseRRTstar(ABC):
         self.shortcutting = shortcutting
         self.mode_sampling = mode_sampling
         self.p_uniform = p_uniform
-        self.gaussian = gaussian
+        self.sample_near_path = sample_near_path
         self.p_stay = p_stay
         self.shortcutting_dim_version = shortcutting_dim_version
         self.shortcutting_robot_version = shortcutting_robot_version
@@ -1947,7 +1947,7 @@ class BaseRRTstar(ABC):
         is_goal_sampling = sampling_type == "goal"
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
-        is_gaussian_sampling = sampling_type == "gaussian"
+        sample_near_path = sampling_type == "sample_near_path"
         constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
         attemps = 0  # needed if home poses are in collision
 
@@ -2026,7 +2026,7 @@ class BaseRRTstar(ABC):
                 elif not self.informed_sampling_version == 6:
                     q = self.sample_informed(mode)
             #gaussian noise
-            if is_gaussian_sampling: 
+            if sample_near_path: 
                 path_state = np.random.choice(self.operation.path)
                 standar_deviation = np.random.uniform(0, 5.0)
                 # standar_deviation = 0.5
@@ -2661,8 +2661,8 @@ class BaseRRTstar(ABC):
                 #informed_sampling
                 return self.sample_configuration(mode, "informed")
             # gaussian sampling
-            if self.gaussian and self.operation.init_sol: 
-                return self.sample_configuration(mode, "gaussian")
+            if self.sample_near_path and self.operation.init_sol: 
+                return self.sample_configuration(mode, "sample_near_path")
             # home pose sampling
             if np.random.uniform(0, 1) < self.p_stay: 
                 return self.sample_configuration(mode, "home_pose")
