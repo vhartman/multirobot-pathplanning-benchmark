@@ -115,6 +115,9 @@ class AbstractEnvironment(BaseProblem):
         self.ax = None
         self.key_pressed = False
 
+        self.cost_metric = "euclidean"
+        self.cost_reduction = "max"
+
     def display_path(
         self,
         path: List[State],
@@ -142,6 +145,12 @@ class AbstractEnvironment(BaseProblem):
 
         if stop_at_end:
             self.show_config(path[-1].q, True)
+
+    def sample_config_uniform_in_limits(self):
+        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
+        q = NpConfiguration(rnd, self.start_pos.array_slice)
+
+        return q
 
     def get_scenegraph_info_for_mode(self, mode: Mode):
         return {}
@@ -172,7 +181,7 @@ class AbstractEnvironment(BaseProblem):
     def show_config(self, q, blocking=True):
         if len(self.start_pos[0]) > 2:
             return
-        
+
         if self.fig is None or self.ax is None:
             self.fig, self.ax = plt.subplots()
             # Set up the key press event handler only once
@@ -288,14 +297,14 @@ class AbstractEnvironment(BaseProblem):
 
         if tolerance is None:
             tolerance = self.collision_tolerance
-            
+
         N = config_dist(q1, q2) / resolution
         N = max(5, N)
 
         idx = list(range(int(N)))
         if randomize_order:
             # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(int(N)).copy()
+            idx = generate_binary_search_indices(int(N))
 
         qs = []
 
@@ -431,11 +440,12 @@ def make_center_rectangle_nd(dim, num_agents=2):
     start_poses[0] = -0.8
     start_poses[dim] = 0.8
 
-    rect_obs = Rectangle(np.zeros(dim), np.ones(dim)*.5)
+    rect_obs = Rectangle(np.zeros(dim), np.ones(dim) * 0.5)
 
     obstacles = [rect_obs]
 
     return start_poses, joint_limits, obstacles
+
 
 class abstract_env_center_rect_nd(SequenceMixin, AbstractEnvironment):
     def __init__(self, n=2):
@@ -452,7 +462,7 @@ class abstract_env_center_rect_nd(SequenceMixin, AbstractEnvironment):
 
         self.agent_radii = [0.1, 0.1]
 
-        self.robot_idx = {"a1": [i for i in range(n)], "a2": [n+i for i in range(n)]}
+        self.robot_idx = {"a1": [i for i in range(n)], "a2": [n + i for i in range(n)]}
         self.robot_dims = {"a1": n, "a2": n}
         # self.C.view(True)
 
