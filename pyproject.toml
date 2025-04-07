@@ -9,6 +9,7 @@ description = "A benchmarking framework for multi-robot path planning"
 readme = "readme.md"
 requires-python = ">=3.8"
 dependencies = [
+    "pytest",
     "scipy",
     "networkx",
     "numba",
