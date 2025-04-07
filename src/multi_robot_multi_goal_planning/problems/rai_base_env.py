@@ -504,6 +504,54 @@ class rai_env(BaseProblem):
 
         return True
 
+    def is_edge_collision_free_for_indices(
+        self,
+        q1: Configuration,
+        q2: Configuration,
+        m: Mode,
+        resolution: float = None,
+        tolerance: float = None,
+        N_start: int = 0,
+        N_max: int = None,
+    ):
+        if resolution is None:
+            resolution = self.collision_resolution
+
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+
+        # print('q1', q1)
+        # print('q2', q2)
+        N = int(config_dist(q1, q2, "max") / resolution)
+        N = max(2, N)
+
+        if N_start > N:
+            return None
+
+        N_max = min(N, N_max)
+
+        # for a distance < resolution * 2, we do not do collision checking
+        # if N == 0:
+        #     return True
+
+        idx = generate_binary_search_indices(N)
+
+        is_collision_free = self.is_collision_free_np
+
+        q1_state = q1.state()
+        q2_state = q2.state()
+        dir = (q2_state - q1_state) / (N - 1)
+
+        for i in idx[N_start:N_max]:
+            # print(i / (N-1))
+            q = q1_state + dir * (i)
+            # q_conf = NpConfiguration(q, q1.array_slice)
+            if not is_collision_free(q, m, collision_tolerance=tolerance):
+                # print('coll')
+                return False
+
+        return True
+
     # @silence_function
     def is_edge_collision_free(
         self,
@@ -552,7 +600,7 @@ class rai_env(BaseProblem):
         return True
 
     def is_path_collision_free(
-        self, path: List[State], randomize_order=True, resolution=None, tolerance=None
+        self, path: List[State], randomize_order=True, resolution=None, tolerance=None, check_edges_in_order=False
     ) -> bool:
         if tolerance is None:
             tolerance = self.collision_tolerance
@@ -560,23 +608,61 @@ class rai_env(BaseProblem):
         if resolution is None:
             resolution = self.collision_resolution
 
-        idx = list(range(len(path) - 1))
         if randomize_order:
-            np.random.shuffle(idx)
+            # idx = list(range(len(path) - 1))
+            # np.random.shuffle(idx)
+            idx = generate_binary_search_indices(len(path) - 1)
+        else:
+            idx = list(range(len(path) - 1))
 
-        for i in idx:
-            # skip transition nodes
-            # if path[i].mode != path[i + 1].mode:
-            #     continue
+        valid_edges = 0
 
-            q1 = path[i].q
-            q2 = path[i + 1].q
-            mode = path[i].mode
+        if check_edges_in_order:
+            for i in idx:
+                # skip transition nodes
+                # if path[i].mode != path[i + 1].mode:
+                #     continue
 
-            if not self.is_edge_collision_free(
-                q1, q2, mode, resolution=resolution, tolerance=tolerance
-            ):
-                return False
+                q1 = path[i].q
+                q2 = path[i + 1].q
+                mode = path[i].mode
+
+                if not self.is_edge_collision_free(
+                    q1, q2, mode, resolution=resolution, tolerance=tolerance
+                ):
+                    return False
+
+                valid_edges += 1
+
+            print("checked edges in shortcutting: ", valid_edges)
+        else:
+            edge_queue = list(idx)
+            N_max = 2
+            N_start = 0
+            checks_per_iteration = 10
+            while edge_queue:
+                edges_to_remove = []
+                for i in edge_queue:       
+                    q1 = path[i].q
+                    q2 = path[i + 1].q
+                    mode = path[i].mode
+
+                    res = self.is_edge_collision_free_for_indices(
+                        q1, q2, mode, resolution=resolution, tolerance=tolerance, N_start=N_start, N_max=N_max
+                    )
+                    
+                    if res is None:
+                        edges_to_remove.append(i)
+                        continue
+                    
+                    if not res:
+                        return False
+
+                for i in edges_to_remove:
+                    edge_queue.remove(i)
+
+                N_start += checks_per_iteration
+                N_max += checks_per_iteration
 
         return True
 
