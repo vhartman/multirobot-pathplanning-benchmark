@@ -26,14 +26,21 @@ def test_binary_indices(n, expected):
     assert generate_binary_search_indices(n) == expected
 
 
-@pytest.mark.parametrize("planner_fn", [
-    lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
-    lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
-])
-def test_start_state_correct(planner_fn):
+@pytest.mark.parametrize(
+    "planner_fn",
+    [
+        lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
+        lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
+    ],
+)
+def test_planner_on_abstract_env(planner_fn):
     env = get_env_by_name("abstract_test")
-    ptc = RuntimeTerminationCondition(5)
+    ptc = RuntimeTerminationCondition(10)
 
     path, _ = planner_fn(env, ptc)
 
+    assert path is not None
+
     assert np.array_equal(path[0].q.state(), env.start_pos.state())
+    assert env.is_terminal_mode(path[-1].mode)
+    assert env.is_valid_plan(path)

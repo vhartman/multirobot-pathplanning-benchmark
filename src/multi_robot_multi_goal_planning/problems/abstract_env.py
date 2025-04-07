@@ -289,7 +289,6 @@ class AbstractEnvironment(BaseProblem):
         q2: Configuration,
         mode: Mode,
         resolution: float = None,
-        randomize_order: bool = True,
         tolerance: float = None,
     ):
         if resolution is None:
@@ -301,10 +300,7 @@ class AbstractEnvironment(BaseProblem):
         N = config_dist(q1, q2) / resolution
         N = max(5, N)
 
-        idx = list(range(int(N)))
-        if randomize_order:
-            # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(int(N))
+        idx = generate_binary_search_indices(int(N))
 
         qs = []
 
@@ -366,8 +362,6 @@ def make_middle_obstacle_n_dim_env(dim=2):
 
     joint_limits = np.ones((2, num_agents * dim)) * 2
     joint_limits[0, :] = -2
-
-    print(joint_limits)
 
     start_poses = np.zeros(num_agents * dim)
     start_poses[0] = -0.8
@@ -433,8 +427,6 @@ def make_wall_gap_two_dim():
 def make_center_rectangle_nd(dim, num_agents=2):
     joint_limits = np.ones((2, num_agents * dim)) * 2
     joint_limits[0, :] = -2
-
-    print(joint_limits)
 
     start_poses = np.zeros(num_agents * dim)
     start_poses[0] = -0.8

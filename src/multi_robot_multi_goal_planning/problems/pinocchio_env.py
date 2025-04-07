@@ -524,7 +524,6 @@ class PinocchioEnvironment(BaseProblem):
         q2: Configuration,
         mode: Mode,
         resolution: float = None,
-        randomize_order: bool = True,
         tolerance: float = None,
     ) -> bool:
         if resolution is None:
@@ -538,10 +537,7 @@ class PinocchioEnvironment(BaseProblem):
         N = int(config_dist(q1, q2, "max") / resolution)
         N = max(2, N)
 
-        idx = list(range(int(N)))
-        if randomize_order:
-            # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(int(N))
+        idx = generate_binary_search_indices(int(N))
 
         q1_state = q1.state()
         q2_state = q2.state()
