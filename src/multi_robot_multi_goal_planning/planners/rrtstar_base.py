@@ -1019,7 +1019,7 @@ class InformedVersion6():
         return m_rnd
     
     def can_improve(self, 
-        rnd_state: State, path: List[State], start_index:int, end_index:int, path_segment_costs:NDArray, current_cost
+        rnd_state: State, path: List[State], start_index:int, end_index:int, path_segment_costs:NDArray
     ) -> bool:
         """
         Determines if a segment of the path can be improved by comparing its cost to a lower-bound estimate.

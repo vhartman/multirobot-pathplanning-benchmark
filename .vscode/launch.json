@@ -72,11 +72,11 @@
             "request": "launch",
             "program": "${workspaceFolder}/examples/run_analysis.py",
             "args": [
-                "tree",
-                "simple_2d",
+                "tree_html",
+                "hallway_single_robot",
                 "1",
                 "--path_to_folder",
-                "/media/tirza/tirza/MasterThesis/out/20250402_150006_planner_demo_simple_2d"
+                "/media/tirza/tirza/MasterThesis/out/20250404_211655_planner_demo_hallway_single_robot"
                 
 
             ],
@@ -93,7 +93,7 @@
             "program": "${workspaceFolder}/examples/run_postprocess.py",
             "args": [
                 "--path_filename",
-                "/home/tirza/multirobot-pathplanning-benchmark/out/20250309_152800_planner_demo_simple_2d/locally_informed_prm_shortcutting/0/path_2.json",
+                "/home/tirza/multirobot-pathplanning-benchmark/out/20250404_205050_planner_demo_hallway_single_robot/eitstar/0/path_2.json",
                 "--do",
                 "single_path_html"
                 

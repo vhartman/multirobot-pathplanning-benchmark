@@ -1,21 +1,45 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "simple_2d",
+  "environment": "hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 200,
-  "num_runs": 1,
-  "seed": 1,
-  "optimize": false,
+  "max_planning_time": 500,
+  "num_runs": 4,
+  "seed": 5,
+  "optimize": true,
   "planners": [
+    
+    {
+      "name": "aitstar",
+      "type": "aitstar",
+      "options": {
+        "batch_size": 100,
+        "transition_batch_size": 50,
+        "informed_batch_size": 300,
+        "informed_transition_batch_size": 250,
+        "path_batch_size": 0,
+        "distance_function": "max_euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "informed_with_lb":false,
+        "remove_based_on_modes":false, 
+        "with_tree_visualization": false
+
+      }
+    },
     {
       "name": "eitstar",
       "type": "eitstar",
       "options": {
         "batch_size": 100,
-        "transition_batch_size": 100,
+        "transition_batch_size": 50,
         "informed_batch_size": 300,
-        "informed_transition_batch_size": 300,
+        "informed_transition_batch_size": 250,
         "path_batch_size": 0,
         "distance_function": "max_euclidean",
         "connection_strategy": "radius",
@@ -27,7 +51,43 @@
         "direct_informed_sampling": true,
         "informed_with_lb":false,
         "remove_based_on_modes":true, 
-        "with_tree_visualization": true
+        "with_tree_visualization": false
+      }
+    },
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+
+      }
+    },
+    {
+      "name": "locally_informed_prm_shortcutting",
+      "type": "prm",
+      "options": {
+        "batch_size": 100,
+        "transition_batch_size": 50,
+        "informed_batch_size": 300,
+        "informed_transition_batch_size": 250,
+        "path_batch_size": 0,
+        "distance_function": "euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true
       }
     }
   ]

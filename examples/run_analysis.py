@@ -814,7 +814,7 @@ def visualize_tree_2d_with_color(env, path_to_folder,env_path, html:bool = False
 
 def visualize_tree_2d_paper(env, path_to_folder):
     #TODO need to add forward_tree
-    color = 'grey'
+    colors =["magenta", "grey"]
     dir = os.path.join(os.path.dirname(path_to_folder),'tree_vis')
     os.makedirs(dir, exist_ok=True)
     obstacles, table_size = get_infos_of_obstacles_and_table_2d(env)
@@ -835,13 +835,12 @@ def visualize_tree_2d_paper(env, path_to_folder):
     for filename in os.listdir(path_to_folder):
         pkl_file = os.path.join(path_to_folder, filename)
         with open(pkl_file, 'rb') as file:
-            data = dill.load(file)
-            nodes = data['nodes']
-            parents = data['parents']
-            modes = data['modes']
-            all_nodes = data['all_nodes']
-            all_transition_nodes = data['all_transition_nodes']
+            all_data = dill.load(file)
+            all_nodes = all_data['all_nodes']
+            all_transition_nodes = all_data['all_transition_nodes']  
             all = all_nodes + all_transition_nodes
+        
+            
 
         fig, ax = plt.subplots()
         ax.set_xlim(1*table_size[0], -1*table_size[0])
@@ -851,6 +850,7 @@ def visualize_tree_2d_paper(env, path_to_folder):
         ax.set_yticks([])
         ax.set_xticklabels([])
         ax.set_yticklabels([])
+
         
         # Draw obstacles
         for obs in obstacles:
@@ -858,40 +858,51 @@ def visualize_tree_2d_paper(env, path_to_folder):
             w, h = obs["size"]
             rect = patches.Rectangle((x - w / 2, y - h / 2), w, h, color="black")
             ax.add_patch(rect)
+        for idx, type in enumerate(['forward', 'reverse']):
+            if idx == 0:
+                zorder = 1
+            if idx == 1:
+                zorder = 0
+            data = all_data[type]
+            nodes = data['nodes']
+            parents = data['parents']
+            modes = data['modes']
+            color = colors[idx]
+            #tree
+            lines = {'x': [], 'y': []}
+            for robot_idx, robot in enumerate(env.robots):
+                indices = env.robot_idx[robot]
+                for node, parent, mode in zip(nodes, parents, modes):                
+                    x0 = node[indices][0]
+                    y0 = node[indices][1]
 
-        #tree
-        lines = {'x': [], 'y': []}
-        for robot_idx, robot in enumerate(env.robots):
-            indices = env.robot_idx[robot]
-            for node, parent, mode in zip(nodes, parents, modes):                
-                x0 = node[indices][0]
-                y0 = node[indices][1]
+                    if parent is not None:
+                        x1 = parent[indices][0]
+                        y1 = parent[indices][1]
+                    else:
+                        x1 = x0
+                        y1 = y0
 
-                if parent is not None:
-                    x1 = parent[indices][0]
-                    y1 = parent[indices][1]
-                else:
-                    x1 = x0
-                    y1 = y0
+                    lines['x'].extend([x0, x1, None])
+                    lines['y'].extend([y0, y1, None])
 
-                lines['x'].extend([x0, x1, None])
-                lines['y'].extend([y0, y1, None])
-
-        ax.plot(
-            lines['x'],
-            lines['y'],
-            color=color,
-            linewidth=0.5,
-            alpha=1
-        )
-        ax.scatter(
-            lines['x'],
-            lines['y'],
-            color=color,
-            alpha=1,
-            s=2,  
-            edgecolors='none'
-        )
+            ax.plot(
+                lines['x'],
+                lines['y'],
+                color=color,
+                linewidth=0.5,
+                alpha=1,
+                zorder=zorder
+            )
+            ax.scatter(
+                lines['x'],
+                lines['y'],
+                color=color,
+                alpha=1,
+                s=2,  
+                edgecolors='none',
+                zorder=zorder
+            )
 
 
         all_dict = {'x': [], 'y':[]}
@@ -904,10 +915,11 @@ def visualize_tree_2d_paper(env, path_to_folder):
         ax.scatter(
             all_dict['x'],
             all_dict['y'],
-            color=color,
+            color='grey',
             alpha=1,
             s=2,  
-            edgecolors='none'
+            edgecolors='none',
+            zorder=0
         )
 
         for robot_idx, robot in enumerate(env.robots):
@@ -942,8 +954,7 @@ def visualize_tree_2d_paper(env, path_to_folder):
                 if file.endswith('.png') and file.split('.')[0].isdigit()),
                 default=-1
             ) + 1
-        plt.savefig(os.path.join(dir,f"{next_file_number:04d}.png"), dpi=300, bbox_inches='tight')
-        plt.show()  
+        plt.savefig(os.path.join(dir,f"{next_file_number:04d}.png"), dpi=300, bbox_inches='tight') 
 
 def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
 
@@ -1014,19 +1025,23 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
             )
 
     for robot_idx, robot in enumerate(env.robots):
-        legend_group = robot
-        static_traces.append(
-        go.Mesh3d(
-            x=[0],  # X-coordinates of the exterior points
-            y=[0],  # Y-coordinates of the exterior points
-            z=[0] ,  # Flat surface at z = 0
-            color=colors[len(reached_modes)+robot_idx],  # Fill color from the agent's properties
-            opacity=1,  # Transparency level
-            name=legend_group,
-            legendgroup=legend_group,
-            showlegend=True
+        for type in ['forward', 'reverse', '']:
+            if type == '':
+                legend_group = robot
+            else:
+                legend_group = type + ' ' + robot
+            static_traces.append(
+            go.Mesh3d(
+                x=[0],  # X-coordinates of the exterior points
+                y=[0],  # Y-coordinates of the exterior points
+                z=[0] ,  # Flat surface at z = 0
+                color=colors[len(reached_modes)+robot_idx],  # Fill color from the agent's properties
+                opacity=1,  # Transparency level
+                name=legend_group,
+                legendgroup=legend_group,
+                showlegend=True
+            )
         )
-    )
     # if with_tree:
     legends = []
     for idx in range(len(reached_modes)):
@@ -1047,53 +1062,61 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
     # dynamic_traces
     for pkl_file in pkl_files:
         with open(pkl_file, 'rb') as file:
-            data = dill.load(file)
+            all_data = dill.load(file)
+            all_nodes = all_data['all_nodes']
+            all_transition_nodes = all_data['all_transition_nodes']
+        frame_traces = []    
+        for type in ['forward', 'reverse']:
+            data = all_data[type]
             nodes = data['nodes']
             parents = data['parents']
             modes = data['modes']
-            all_nodes = data['all_nodes']
-            all_transition_nodes = data['all_transition_nodes']
-
-        frame_traces = []
-        
-        for robot_idx, robot in enumerate(env.robots):
-            lines_by_color = {}
-            indices = env.robot_idx[robot]
-            for node, parent, m in zip(nodes, parents, modes):    
-                mode_idx = reached_modes.index(m)            
-                color_idx = colors[mode_idx]
-                x0 = node[indices][0]
-                y0 = node[indices][1]
-
-                if parent is not None:
-                    x1 = parent[indices][0]
-                    y1 = parent[indices][1]
-                else:
-                    x1 = x0
-                    y1 = y0
-
-                if color_idx not in lines_by_color:
-                    lines_by_color[color_idx] = {'x': [], 'y': [], 'legend_group': legends[mode_idx]}
-                lines_by_color[color_idx]['x'].extend([x0, x1, None])
-                lines_by_color[color_idx]['y'].extend([y0, y1, None])
-
-            for color, line_data in lines_by_color.items():
-                legend_group = line_data['legend_group']
-                frame_traces.append(
-                    go.Scatter3d(
-                        x=line_data['x'],
-                        y=line_data['y'],
-                        z = [1] * len(line_data['x']),
-                        mode='markers+lines',
-                        marker=dict(size=5, color=color),
-                        line=dict(color=color, width=6),
-                        opacity=0.5,
-                        name=robot,
-                        legendgroup=robot,
-                        showlegend=False
-                    )
-                )
+            # if type == 'reverse':
+            #     continue
             
+            #forward and reverse tree
+            for robot_idx, robot in enumerate(env.robots):
+                lines_by_color = {}
+                indices = env.robot_idx[robot]
+                for node, parent, m in zip(nodes, parents, modes):    
+                    mode_idx = reached_modes.index(m)            
+                    color_idx = colors[mode_idx]
+                    if type == 'forward':
+                        color_idx = 'grey'
+                    x0 = node[indices][0]
+                    y0 = node[indices][1]
+
+                    if parent is not None:
+                        x1 = parent[indices][0]
+                        y1 = parent[indices][1]
+                    else:
+                        x1 = x0
+                        y1 = y0
+
+                    if color_idx not in lines_by_color:
+                        lines_by_color[color_idx] = {'x': [], 'y': [], 'legend_group': legends[mode_idx]}
+                    lines_by_color[color_idx]['x'].extend([x0, x1, None])
+                    lines_by_color[color_idx]['y'].extend([y0, y1, None])
+
+                for color, line_data in lines_by_color.items():
+                    legend_group = line_data['legend_group']
+                    frame_traces.append(
+                        go.Scatter3d(
+                            x=line_data['x'],
+                            y=line_data['y'],
+                            z = [1] * len(line_data['x']),
+                            mode='markers+lines',
+                            marker=dict(size=5, color=color),
+                            line=dict(color=color, width=6),
+                            opacity=0.5,
+                            name=type + ' ' + robot,
+                            legendgroup=type + ' ' + robot,
+                            showlegend=False
+                        )
+                    )
+
+        for robot_idx, robot in enumerate(env.robots):
+            indices = env.robot_idx[robot]
             all_dict = {'x': [], 'y':[]}
             for n in all_nodes:
                 all_dict['x'].append(n[indices][0])
@@ -1131,7 +1154,7 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
                     showlegend=False
                 )
             )
-        
+            
         for robot_idx, robot in enumerate(env.robots):
             indices = env.robot_idx[robot]
             x_start = q_start[indices][0]
@@ -1147,7 +1170,7 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
                     z=[1],
                     mode='markers',
                     marker=dict(
-                        size=6,
+                        size=10,
                         color='white',
                         line=dict(color='black', width=2)
                     ),
@@ -1166,7 +1189,7 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
                     z=[1],
                     mode='markers',
                     marker=dict(
-                        size=4,
+                        size=8,
                         color='black',
                         line=dict(color='black', width=0)
                     ),

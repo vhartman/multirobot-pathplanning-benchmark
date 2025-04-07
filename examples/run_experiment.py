@@ -318,7 +318,8 @@ def setup_planner(
                 try_direct_informed_sampling=options["direct_informed_sampling"],
                 informed_with_lb = options["informed_with_lb"],
                 remove_based_on_modes = options["remove_based_on_modes"],
-                with_tree_visualization = options["with_tree_visualization"]
+                with_tree_visualization = options["with_tree_visualization"],
+                use_max_distance_metric_effort = options["use_max_distance_metric_effort"]
             ).Plan(optimize)
 
     else:

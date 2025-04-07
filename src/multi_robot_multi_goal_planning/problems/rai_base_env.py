@@ -20,7 +20,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     batch_config_cost,
 )
 
-from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices, generate_binary_search_indices_wo_start_and_end
 
 import time
 
@@ -511,19 +511,23 @@ class rai_env(BaseProblem):
         q2: Configuration,
         m: Mode,
         resolution: float = None,
+        N:int = None,
         randomize_order: bool = True,
         tolerance: float = None,
+        with_start_and_end:bool = False
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
+        if N is None:
+            N = int(config_dist(q1, q2, "max") / resolution)
+            N = max(2, N)
 
         if tolerance is None:
             tolerance = self.collision_tolerance
 
         # print('q1', q1)
         # print('q2', q2)
-        N = int(config_dist(q1, q2, "max") / resolution)
-        N = max(2, N)
+        
 
         # for a distance < resolution * 2, we do not do collision checking
         # if N == 0:
@@ -531,7 +535,11 @@ class rai_env(BaseProblem):
 
         if randomize_order:
             # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(N)
+            
+            if with_start_and_end:
+                idx = generate_binary_search_indices(N)
+            else:
+                idx = generate_binary_search_indices_wo_start_and_end(N)
         else:
             idx = list(range(N))
 
@@ -540,7 +548,6 @@ class rai_env(BaseProblem):
         q1_state = q1.state()
         q2_state = q2.state()
         dir = (q2_state - q1_state) / (N - 1)
-
         for i in idx:
             # print(i / (N-1))
             q = q1_state + dir * (i)
@@ -552,7 +559,7 @@ class rai_env(BaseProblem):
         return True
 
     def is_path_collision_free(
-        self, path: List[State], randomize_order=True, resolution=None, tolerance=None
+        self, path: List[State], randomize_order=True, resolution=None, tolerance=None, with_start_and_end=False
     ) -> bool:
         if tolerance is None:
             tolerance = self.collision_tolerance
@@ -574,7 +581,7 @@ class rai_env(BaseProblem):
             mode = path[i].mode
 
             if not self.is_edge_collision_free(
-                q1, q2, mode, resolution=resolution, tolerance=tolerance
+                q1, q2, mode, resolution=resolution, tolerance=tolerance, with_start_and_end=with_start_and_end
             ):
                 return False
 

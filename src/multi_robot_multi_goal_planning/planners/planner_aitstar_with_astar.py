@@ -297,7 +297,7 @@ class Node(BaseNode):
             None: This method does not return any value."""
         self.operation.lb_costs_to_go_expanded[self.id] = value
 
-class ForwardQueue(DictIndexHeap[Tuple[Any]]):
+class EdgeQueue(DictIndexHeap[Tuple[Any]]):
     def __init__(self, alpha = 1.0):
         super().__init__()
         self.alpha = alpha
@@ -324,7 +324,7 @@ class ForwardQueue(DictIndexHeap[Tuple[Any]]):
         if node.lb_cost_to_go == node.lb_cost_to_go_expanded:
             self.nodes.discard(node.id)
 
-class ReverseQueue(DictIndexHeap[Node]):
+class VertexQueue(DictIndexHeap[Node]):
     def __init__(self):
         super().__init__()
 
@@ -413,7 +413,7 @@ class AITstar(BaseITstar):
         self.reversed_closed_set = set()
         self.reversed_updated_set =set()
         if edge is None:
-            self.g.reverse_queue = ReverseQueue()
+            self.g.reverse_queue = VertexQueue()
             self.g.reset_reverse_tree()
             self.g.reset_all_goal_nodes_lb_costs_to_go()
         else:
@@ -613,7 +613,7 @@ class AITstar(BaseITstar):
         if node is None:
             start_reverse_search = True
             node = self.g.root
-            self.g.forward_queue = ForwardQueue(self.alpha)
+            self.g.forward_queue = EdgeQueue(self.alpha)
             self.forward_closed_set = set()
             assert node.cost == 0 ,(
                 " root node wrong"
@@ -653,7 +653,7 @@ class AITstar(BaseITstar):
     def initialize_search(self):
         self.sample_manifold()
         self.g.compute_transition_lb_cost_to_come(self.env)
-        self.g.compute_node_lb_cost_to_come(self.env)
+        self.g.compute_node_lb_to_come(self.env)
         self.g.compute_transition_lb_cost_to_go()
         self.g.compute_node_lb_cost_to_go()
         self.expand_node_forward()
@@ -731,8 +731,7 @@ class AITstar(BaseITstar):
                         collision_free = self.env.is_edge_collision_free(
                             n0.state.q,
                             n1.state.q,
-                            n0.state.mode,
-                            self.env.collision_resolution,
+                            n0.state.mode
                         )
                         self.update_edge_collision_cache(n0, n1, collision_free)
                         if not collision_free:

@@ -527,7 +527,7 @@ def shortcutting_agent(dir, env, env_path, pkl_folder, config,  output_html, ver
                 edge, edge_cost =  interpolate(discretized_path[idx1:idx2+1].copy(), 
                                                             discretized_costs[idx1], discretized_modes[idx1:idx2+1], indices, dim, version, robot, env.robots)
                
-                if edge_cost[-1] < discretized_costs[idx2] and env.is_path_collision_free(edge): #what when two different modes??? (possible for one task) 
+                if edge_cost[-1] < discretized_costs[idx2] and env.is_path_collision_free(edge, with_start_and_end =True): #what when two different modes??? (possible for one task) 
                     print(j)
                     discretized_path[idx1:idx2+1] = edge
                     discretized_costs[idx1:idx2+1] = edge_cost

@@ -6,14 +6,10 @@ from typing import (
     Tuple,
     Optional,
     Set,
-    ClassVar,
     Any,
     Union,
-    Generic,
-    TypeVar,
 )
 
-import heapq
 import time
 import math
 from itertools import chain
@@ -33,7 +29,8 @@ from multi_robot_multi_goal_planning.planners.itstar_base import (
     BaseOperation,
     BaseGraph,
     DictIndexHeap,
-    BaseNode
+    BaseNode, 
+    BaseTree
 )
 
 # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
@@ -67,14 +64,18 @@ class Operation(BaseOperation):
         node.cost = cost
 class Graph(BaseGraph):
     def __init__(self, 
-                 root, 
+                 root_state, 
                  operation, 
                  batch_dist_fun, 
                  batch_cost_fun, 
-                 is_edge_collision_free, 
+                 is_edge_collision_free,
+                 collision_resolution, 
                  node_cls):
-        super().__init__(root, operation, batch_dist_fun, batch_cost_fun, is_edge_collision_free, node_cls)
+        super().__init__(root_state, operation, batch_dist_fun, batch_cost_fun, is_edge_collision_free, collision_resolution, node_cls)
     
+        self.reverse_queue = None
+        self.forward_queue = None
+
     def reset_reverse_tree(self):
         [
             (
@@ -107,91 +108,20 @@ class Graph(BaseGraph):
             node.rev.cost_to_parent = 0
             self.reverse_queue.heappush(node)
 
-    def compute_transition_lb_cost_to_go(self):
-        # run a reverse search on the transition nodes without any collision checking
-        costs = {}
-        closed_set = set()
-
-        queue = []
-        for g in self.goal_nodes:
-            heapq.heappush(queue, (0, g))
-            g.test = 0.0
-            costs[g.id] = 0
-            # parents[hash(g)] = None
-
-        while len(queue) > 0:
-            # node = queue.pop(0)
-            _, node = heapq.heappop(queue)
-            # print(node)
-
-            # error happens at start node
-            if node.state.mode == self.root.state.mode:
-                continue
-
-            if node.id in closed_set:
-                continue
-            if node.state.mode not in self.reverse_transition_node_ids:
-                continue
-            neighbors = [
-                self.nodes[id].transition for id in self.reverse_transition_node_ids[node.state.mode]
-            ]
-
-            if len(neighbors) == 0:
-                continue
-
-            self.update_cache(node.state.mode)
-
-            closed_set.add(node.id)
-            # add neighbors to open_queue
-            edge_costs = self.batch_cost_fun(
-                node.state.q,
-                self.reverse_transition_node_array_cache[node.state.mode],
-            )
-
-            parent_cost = costs[node.id]
-            for edge_cost, n in zip(edge_costs, neighbors):
-                cost = parent_cost + edge_cost
-                id = n.id
-                if id not in costs or cost < costs[id]:
-                    costs[id] = cost
-                    n.test = cost
-                    if n.transition is not None:
-                        n.transition.test = cost
-                    heapq.heappush(queue, (cost, n))
-
-    def compute_node_lb_cost_to_go(self):
-        processed = 0
-        transition_node_lb_cache = {}
-        for mode in self.node_ids:
-            for id in self.node_ids[mode]:
-                n = self.nodes[id]
-                mode = n.state.mode
-                if mode not in self.transition_node_array_cache:
-                    continue
-
-                if mode not in transition_node_lb_cache:
-                    transition_node_lb_cache[mode] = np.array(
-                        [
-                            self.nodes[id].test
-                            for id in self.transition_node_ids[mode]
-                        ],
-                        dtype=np.float64,
-                    )
-
-                costs_to_transitions = self.batch_cost_fun(
-                    n.state.q,
-                    self.transition_node_array_cache[mode],
-                )
-
-                min_cost = np.min(
-                    transition_node_lb_cache[mode] + costs_to_transitions
-                )
-                n.test = min_cost
-                processed +=1
-        print(processed)
-
+    def update_forward_queue(self, edge_cost, edge):
+        self.forward_queue.heappush((edge_cost, edge))
+           
     def update_forward_queue_keys(self, type:str ,node_ids:Optional[Set[BaseNode]] = None):
         self.forward_queue.update(node_ids, type)
+    
+    def update_reverse_queue_keys(self, type:str, node_ids:Optional[Set[BaseNode]] = None):
+        if type == "start":
+            return
+        self.reverse_queue.update(node_ids, type)
+
+    def remove_forward_queue(self, edge_cost, n0, n1):
+        self.forward_queue.remove((edge_cost, (n1, n0))) 
+        self.forward_queue.remove((edge_cost, (n0, n1))) 
 
 class Node(BaseNode):
     def __init__(self, operation: "BaseOperation", state: "State", is_transition: bool = False) -> None:
@@ -219,9 +149,9 @@ class Node(BaseNode):
     def set_to_goal_node(self):
         self.lb_cost_to_go = 0.0
         self.lb_cost_to_go_expanded = 0.0
-class ForwardQueue(DictIndexHeap[Tuple[Any]]):
-    def __init__(self, alpha = 1.0):
-        super().__init__()
+class EdgeQueue(DictIndexHeap[Tuple[Any]]):
+    def __init__(self, alpha = 1.0, collision_resolution: Optional[float] = None):
+        super().__init__(collision_resolution)
         self.alpha = alpha
         self.target_nodes = set()
         self.start_nodes = set()
@@ -237,27 +167,15 @@ class ForwardQueue(DictIndexHeap[Tuple[Any]]):
             item[1][0].cost + item[0],
             item[1][0].cost,
         )
-
-    def push_and_sync(self, item):
-        self.items[DictIndexHeap.idx] = item  # Store only valid items
-        priority = self.key(item)
-        self.current_entries[item] = (priority, DictIndexHeap.idx) # always up to date with the newest one!
-        self.add_and_sync(item)
-        return priority
-    
+   
     def add_and_sync(self, item):
-        node = item[1][1]
-        start_node = item[1][0]
+        start_node, node = item[1]
+
         self.target_nodes.add(node.id)
         self.start_nodes.add(start_node.id)
 
-        if node.id not in self.target_nodes_with_item:
-            self.target_nodes_with_item[node.id] = set()
-        self.target_nodes_with_item[node.id].add(item)
-
-        if start_node.id not in self.start_nodes_with_item:
-            self.start_nodes_with_item[start_node.id] = set()
-        self.start_nodes_with_item[start_node.id].add(item)
+        self.target_nodes_with_item.setdefault(node.id, set()).add(item)
+        self.start_nodes_with_item.setdefault(start_node.id, set()).add(item)
     
     def remove(self, item, in_current_entries:bool = False):
         if not in_current_entries and item not in self.current_entries:
@@ -273,19 +191,20 @@ class ForwardQueue(DictIndexHeap[Tuple[Any]]):
             self.start_nodes.remove(start_node.id)
 
     def update(self, node_ids:Optional[Set[BaseNode]], type:str):
-        if node_ids is None:
-            if type == 'target':
-                node_ids = self.target_nodes
-            elif type == 'start':
-                node_ids = self.start_nodes
-        if len(node_ids) == 0:
+        if node_ids is not None and len(node_ids) == 0:
             return
         cnt = 0
         before = (len(self.current_entries))
         if type == 'start':
-            for id in self.start_nodes:
-                 if id not in node_ids:
-                     continue
+            if len(self.start_nodes) == 0:
+                return
+            if node_ids is None:
+                update = self.start_nodes
+            else:
+                update = node_ids & self.start_nodes
+            if not update:
+                return
+            for id in update:
                  items = set(self.start_nodes_with_item[id])
                  for item in items: 
                     assert item in self.current_entries, (
@@ -293,9 +212,15 @@ class ForwardQueue(DictIndexHeap[Tuple[Any]]):
                     self.heappush(item)
                     cnt +=1
         if type == 'target':
-            for id in self.target_nodes:
-                if id not in node_ids:
-                    continue
+            if len(self.target_nodes) == 0:
+                return
+            if node_ids is None:
+                update = self.target_nodes
+            else:
+                update = node_ids & self.target_nodes
+            if not update:
+                return
+            for id in update:
                 items = set(self.target_nodes_with_item[id])
                 for item in items: 
                     assert item in self.current_entries, (
@@ -304,14 +229,42 @@ class ForwardQueue(DictIndexHeap[Tuple[Any]]):
                     cnt +=1
         assert before == len(self.current_entries), (
         "hjk,l")
-class ReverseQueue(DictIndexHeap[Node]):
+class VertexQueue(DictIndexHeap[Node]):
     def __init__(self):
         super().__init__()
         self.nodes = set()
+        self.nodes_with_item = dict()
+    
+    def add_and_sync(self, item: Node):
+        self.nodes.add(item.id)
+        self.nodes_with_item[item.id] = item
+    
+    def remove(self, item, in_current_entries:bool = False):
+        if not in_current_entries and item not in self.current_entries:
+           return
+        del self.current_entries[item]
+        self.nodes.remove(item.id)
+        del self.nodes_with_item[item.id]
 
     def key(self, node: Node) -> float:
         min_lb = min(node.lb_cost_to_go, node.lb_cost_to_go_expanded) 
         return (min_lb + node.lb_cost_to_come, min_lb)
+
+    def update(self, node_ids:Optional[Set[BaseNode]], type:str):
+        if node_ids is None:
+            node_ids = self.nodes
+        if len(node_ids) == 0:
+            return
+        cnt = 0
+        before = (len(self.current_entries))
+        for id in self.nodes:
+            if id not in node_ids:
+                continue
+            item = self.nodes_with_item[id]
+            self.heappush(item)
+            cnt +=1
+        assert before == len(self.current_entries), (
+        "hjk,l")
 
 class AITstar(BaseITstar):
     def __init__(
@@ -346,24 +299,49 @@ class AITstar(BaseITstar):
             try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
             informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
 
-        self.alpha = 2.5
-        self.start_transition_arrays = {}
-        self.end_transition_arrays = {}
-        self.remove_nodes = False
-        self.dynamic_reverse_search_update = False
-        
+        self.alpha = 3
+        self.consistent_nodes = set() #lb_cost_to_go_expanded == lb_cost_to_go
+        self.no_available_parent_in_this_batch = set() #nodes that have no available parent in this batch
+        self.init_rev_search = True
+        self.reduce_neighbors = True
+
     def _create_operation(self) -> BaseOperation:
         return Operation()
+    
+    def _create_graph(self,root_state) -> BaseGraph:
+        return Graph(
+            root_state=root_state,
+            operation=self.operation,
+            batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.distance_metric),
+            batch_cost_fun= lambda a, b: self.env.batch_config_cost(a, b),
+            is_edge_collision_free = self.env.is_edge_collision_free,
+            collision_resolution = self.env.collision_resolution,
+            node_cls=Node
+            )
         
     def inconcistency_check(self, node: Node):  
         self.g.reverse_queue.remove(node)
         if node.lb_cost_to_go != node.lb_cost_to_go_expanded:
             self.g.reverse_queue.heappush(node)
    
-    def continue_reverse_search(self) -> bool:
+    def continue_reverse_search(self, iter) -> bool:
         if len(self.g.reverse_queue) == 0 or len(self.g.forward_queue) == 0:
             return False
+        if iter > 0 and len(self.updated_target_nodes) == 0:
+            return True
+        self.g.update_forward_queue_keys('target', self.updated_target_nodes)
+        self.reverse_tree_set.update(self.updated_target_nodes)
+        self.updated_target_nodes = set()
+
         forward_key, item = self.g.forward_queue.peek_first_element()
+        # if not self.dynamic_reverse_search_update :
+        #     if not np.isinf(item[1][1].lb_cost_to_go):
+        #         return False
+        if not self.dynamic_reverse_search_update and not self.init_rev_search:
+            target_nodes_in_reverse_tree = self.g.forward_queue.target_nodes - self.reverse_tree_set
+            if len(target_nodes_in_reverse_tree) != len(self.g.forward_queue.target_nodes):
+                return False
+
         reverse_key, node = self.g.reverse_queue.peek_first_element()
         if item[1][1].lb_cost_to_go == item[1][1].lb_cost_to_go_expanded:
             if forward_key[0] <= reverse_key[0]:
@@ -378,45 +356,76 @@ class AITstar(BaseITstar):
             return False
         return True
         
-    def invalidate_rev_branch(self, node:Node):
-        if node.is_transition and not node.is_reverse_transition:
-            pass
-        self.update_node_without_available_reverse_parent(node)
-        for id in node.rev.children:
-            self.invalidate_rev_branch(self.g.nodes[id])
-        self.update_state(node)
-      
+    def invalidate_rev_branch(self, n: Node, nodes_to_update) -> set[int]:
+        # Only reset if not a goal node
+        if n not in self.g.goal_nodes:
+            # Reset cost values
+            n.lb_cost_to_go = np.inf
+            n.lb_cost_to_go_expanded = np.inf
+        else:
+            n.lb_cost_to_go = 0.0
+            n.lb_cost_to_go_expanded = 0.0
+
+        # Remove from various tracking sets
+        self.reverse_closed_set.discard(n.id)
+        self.reverse_tree_set.discard(n.id)
+        self.consistent_nodes.discard(n.id)
+        self.g.reverse_queue.remove(n)
+
+        # Disconnect from parent's children/family (if parent exists)
+        if n.rev.parent:
+            if n.id in n.rev.parent.rev.children:
+                n.rev.parent.rev.children.remove(n.id)
+            n.rev.parent.rev.fam.discard(n.id)
+
+        nodes_to_update.add(n.id)
+
+        # Recurse on children
+        for child_id in list(n.rev.children):
+            child = self.g.nodes[child_id]
+            child_nodes = self.invalidate_rev_branch(child, nodes_to_update)
+            nodes_to_update.update(child_nodes)
+
+        # Reset current node's reverse state (after children handled)
+        n.rev.reset()
+
+        # Update current node
+        # if self.dynamic_reverse_search_update:
+        self.update_state(n)
+
+        return nodes_to_update
+
     def reverse_search(self, edge: Optional[Tuple[Node, Node]] = None) -> float:
-        self.reversed_closed_set = set()
-        self.reversed_updated_set =set()
-        self.reverse_udpated_lb_cost_to_go_set = set()
+        self.reverse_closed_set = set() # node was visited in reverse search
+        self.reverse_tree_set.update(self.updated_target_nodes)
+        self.updated_target_nodes = set()
         if edge is not None:
+            nodes_to_update = set()
+            if self.with_tree_visualization:
+                self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
             if edge[0].rev.parent == edge[1]:
-                self.invalidate_rev_branch(edge[0])
+                nodes_to_update = self.invalidate_rev_branch(edge[0], nodes_to_update)
             elif edge[1].rev.parent == edge[0]:
-                self.invalidate_rev_branch(edge[1])
+                nodes_to_update = self.invalidate_rev_branch(edge[1], nodes_to_update)
             else: #doesn't effect reverse search
                 return
-            self.g.forward_queue.update(self.reverse_udpated_lb_cost_to_go_set, 'target')
-            self.reverse_udpated_lb_cost_to_go_set = set()
-            if self.current_best_cost is None:
-                return
-            if not self.dynamic_reverse_search_update:
-                return
+            self.g.update_forward_queue_keys('target', nodes_to_update) 
+            self.reverse_tree_set.update(nodes_to_update)
+            if self.with_tree_visualization:
+                self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+            # if not self.dynamic_reverse_search_update:
+            #     return
 
         # Process the reverse queue until stopping conditions are met.
         num_iter = 0
-        while self.continue_reverse_search(): 
+        while self.continue_reverse_search(num_iter): 
             if self.ptc.should_terminate(self.cnt, time.time() - self.start_time):
                 break
             n = self.g.reverse_queue.heappop()
-            self.reversed_closed_set.add(n.id)
+            self.reverse_closed_set.add(n.id)
             num_iter += 1
             if num_iter % 100000 == 0:
                 print(num_iter, ": Reverse Queue: ", len(self.g.reverse_queue))
-            # if the connected cost is lower than the expanded cost
-            # if n.id == 1162:
-            #     pass
             is_rev_transition = False
             if n.lb_cost_to_go < n.lb_cost_to_go_expanded:
                 self.consistent_nodes.add(n.id)
@@ -435,7 +444,6 @@ class AITstar(BaseITstar):
                     self.consistent_nodes.discard(n.transition.id)
                 self.update_state(n)
 
-
             assert  n.lb_cost_to_go_expanded == n.lb_cost_to_go or (np.isinf(n.lb_cost_to_go_expanded)), (
                 "lb_cost_to_go_expanded should not be finite and different from lb_cost_to_go"
             )
@@ -447,43 +455,35 @@ class AITstar(BaseITstar):
                 assert(n.lb_cost_to_go == n.lb_cost_to_go_expanded), ("ohhh")
                 # print(n.state.mode, n.transition.state.mode)
                 self.update_heuristic_of_neihgbors(n.transition)
-        self.g.update_forward_queue_keys('target', self.reverse_udpated_lb_cost_to_go_set)
-
+        if self.with_tree_visualization and num_iter > 0:
+            self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+        self.init_rev_search = False
+        
     def update_heuristic_of_neihgbors(self, n):
-        in_updated_set = n.id in self.reversed_updated_set 
-        neighbors = self.g.get_neighbors(n, self.approximate_space_extent, in_updated_set)
-        self.reversed_updated_set.add(n.id)
-        for id in neighbors:  #node itself is not included in neighbors
+        neighbors = self.g.get_neighbors(n, self.approximate_space_extent)
+        # batch_cost = self.g.tot_neighbors_batch_cost_cache[n.id]
+        for idx, id in enumerate(neighbors):  #node itself is not included in neighbors
             nb = self.g.nodes[id]
             if nb in self.g.goal_nodes:
                 continue
-            if nb.id in self.reversed_closed_set and nb.id in self.consistent_nodes:
+            if nb.id in self.reverse_closed_set and nb.id in self.consistent_nodes:
                 continue
-                # if nb.rev.parent is None:
-                #     pass
-                # parent_before = nb.rev.parent.id
-                # lb_cost_to_go_before = nb.lb_cost_to_go
-                # self.update_state(nb)
-                # assert(nb.rev.parent.id == parent_before and lb_cost_to_go_before == nb.lb_cost_to_go), (
-                # "asdklföä")
-            else:
-                self.update_state(nb)
+            if nb in self.no_available_parent_in_this_batch:
+                continue
+            self.update_state(nb)
                         
     def update_state(self, node: Node) -> None:
-        in_updated_set = node.id in self.reversed_updated_set
-        self.reversed_updated_set.add(node.id)
-        
         if node.id == self.g.root.id or node in self.g.goal_nodes:
             return
         if node.is_transition and not node.is_reverse_transition:
             return
         # node was already expanded in current heuristic call
-        if node.lb_cost_to_go == node.lb_cost_to_go_expanded and node.id in self.reversed_closed_set:
+        if node.lb_cost_to_go == node.lb_cost_to_go_expanded and node.id in self.reverse_closed_set:
             self.g.reverse_queue.remove(node)
             return
     
-        
-        neighbors = list(self.g.get_neighbors(node, self.approximate_space_extent, in_closed_set= in_updated_set))
+        # in_updated_set = True
+        neighbors = list(self.g.get_neighbors(node, self.approximate_space_extent))
         if len(neighbors) == 0:
             self.update_node_without_available_reverse_parent(node)
             return
@@ -516,10 +516,10 @@ class AITstar(BaseITstar):
                 return          
         if node.rev.parent is not None and best_parent.id == node.rev.parent.id:
             if best_lb_cost_to_go != node.lb_cost_to_go:
-                self.reverse_udpated_lb_cost_to_go_set.add(node.id)
+                self.updated_target_nodes.add(node.id)
                 node.lb_cost_to_go = best_lb_cost_to_go
                 if node.is_reverse_transition: 
-                    self.reverse_udpated_lb_cost_to_go_set.add(node.transition.id)
+                    self.updated_target_nodes.add(node.transition.id)
                     node.transition.lb_cost_to_go = best_lb_cost_to_go
             self.inconcistency_check(node)
             return
@@ -553,6 +553,7 @@ class AITstar(BaseITstar):
             break
 
         if best_parent is None: 
+            self.no_available_parent_in_this_batch.add(node.id) 
             self.update_node_without_available_reverse_parent(node)
             return
         
@@ -576,9 +577,9 @@ class AITstar(BaseITstar):
                 f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
             )
         if candidates[idx] != node.lb_cost_to_go:
-            self.reverse_udpated_lb_cost_to_go_set.add(node.id)
+            self.updated_target_nodes.add(node.id)
             if is_rev_transition:
-                self.reverse_udpated_lb_cost_to_go_set.add(node.transition.id)
+                self.updated_target_nodes.add(node.transition.id)
         self.g.update_connectivity(
             best_parent, node, best_edge_cost, best_parent.lb_cost_to_go_expanded + best_edge_cost , "reverse", is_rev_transition
         ) 
@@ -597,14 +598,15 @@ class AITstar(BaseITstar):
         )
 
     def update_node_without_available_reverse_parent(self, node:Node):
+        if len(node.rev.fam) == 0 and np.isinf(node.lb_cost_to_go) and node.id not in self.consistent_nodes:
+            return
         self.consistent_nodes.discard(node.id)
         if not np.isinf(node.lb_cost_to_go):
-            self.reverse_udpated_lb_cost_to_go_set.add(node.id)
-
+            self.updated_target_nodes.add(node.id)
         if node not in self.g.goal_nodes:
             node.lb_cost_to_go = np.inf
             node.lb_cost_to_go_expanded = np.inf
-            node.rev.cost_to_parent = np.inf
+            node.rev.cost_to_parent = None
         if node.rev.parent is not None:
             node.rev.parent.rev.children.remove(node.id)
             node.rev.parent.rev.fam.remove(node.id)
@@ -613,83 +615,23 @@ class AITstar(BaseITstar):
         self.g.reverse_queue.remove(node)
         if node.is_transition and node.is_reverse_transition:
             self.update_node_without_available_reverse_parent(node.transition)
-        
-    def update_forward_queue(self, edge_cost, edge):
-        self.g.forward_queue.heappush((edge_cost, edge))
-               
-    def initialize_search(self):
-        # if self.g.get_num_samples() >200:
-        #     q_samples = []
-        #     modes = []
-        #     for mode in self.reached_modes:
-        #         q_samples.extend([self.g.nodes[id].state.q.state() for id in self.g.node_ids[mode]])
-        #         modes.extend([self.g.nodes[id].state.mode.task_ids for id in self.g.node_ids[mode]])
-        #     for mode in self.reached_modes:
-        #         q_samples.extend([self.g.nodes[id].state.q.state() for id in self.g.transition_node_ids[mode]])
-        #         modes.extend([self.g.nodes[id].state.mode.task_ids for id in self.g.transition_node_ids[mode]])
-        #     data = {
-        #         "q_samples": q_samples,
-        #         "modes": modes,
-        #         "path": self.current_best_path
-        #     }
-        #     save_data(data)
-        #     print()
-        #     q_samples = []
-        #     modes = []
-        #     vertices = list(self.g.vertices)
-        #     q_samples.extend([self.g.nodes[id].state.q.state() for id in vertices])
-        #     modes.extend([self.g.nodes[id].state.mode.task_ids for id in vertices])
-        #     data = {
-        #         "q_samples": q_samples,
-        #         "modes": modes,
-        #         "path": self.current_best_path
-        #     }
-        #     save_data(data)
-        #     print()
-        # self.sample_manifold()
-        # q_samples = []
-        # modes = []
-        # for mode in self.reached_modes:
-        #     q_samples.extend([self.g.nodes[id].state.q.state() for id in self.g.node_ids[mode]])
-        #     modes.extend([self.g.nodes[id].state.mode.task_ids for id in self.g.node_ids[mode]])
-        # for mode in self.reached_modes:
-        #     q_samples.extend([self.g.nodes[id].state.q.state() for id in self.g.transition_node_ids[mode]])
-        #     modes.extend([self.g.nodes[id].state.mode.task_ids for id in self.g.transition_node_ids[mode]])
-        # data = {
-        #     "q_samples": q_samples,
-        #     "modes": modes,
-        #     "path": self.current_best_path
-        # }
-        # save_data(data)
-        # print()
-        # if self.current_best_cost is not None:
-        #     path = self.generate_path(True)
-        #     if len(path) > 0:
-        #         self.process_valid_path(path, force_update = True, update_queues=False )
-        if self.current_best_cost is not None:
-            self.current_best_path_nodes = self.generate_path(True)
-            self.process_valid_path(self.current_best_path_nodes, False, True, True)
-
-        if self.current_best_cost is not None:
-            self.update_removal_conditions()        
-        self.sample_manifold()
-        self.g.compute_transition_lb_cost_to_come()
-        self.g.compute_node_lb_cost_to_come()
-        #just for comparison #TODO
-        self.g.compute_transition_lb_cost_to_go()
-        self.g.compute_node_lb_cost_to_go()
-
-        self.initialze_forward_search()
-        self.initialize_reverse_search()
-        self.dynamic_reverse_search_update = False
+         
+    def initialize_lb(self):    
+        self.g.compute_transition_lb_to_come()
+        self.g.compute_node_lb_to_come()
 
     def initialze_forward_search(self):
-        self.g.forward_queue = ForwardQueue(self.alpha)
-        self.forward_closed_set = set()
+        if self.current_best_cost is not None:
+            self.g.weight = 0.5
+        else:
+            self.g.weight = 0.5
+        self.init_rev_search = True
+        self.no_available_parent_in_this_batch = set()
+        self.g.forward_queue = EdgeQueue(self.alpha)
         self.expand_node_forward(self.g.root)
 
-    def initialize_reverse_search(self):
-        self.g.reverse_queue = ReverseQueue()
+    def initialize_reverse_search(self, reset:bool=True):
+        self.g.reverse_queue = VertexQueue()
         # if len(self.consistent_nodes) > 0:
         #     consistent_nodes = list(self.consistent_nodes)
         #     q_samples = []
@@ -706,31 +648,19 @@ class AITstar(BaseITstar):
         #     print()
             
 
-        self.consistent_nodes = set()
+        self.consistent_nodes = set() 
+        self.reverse_tree_set = set()
         self.g.reset_reverse_tree()
         self.g.reset_all_goal_nodes_lb_costs_to_go()
         print("Restart reverse search ...")
         self.reverse_search()
         print("... finished")
+        self.g.update_forward_queue_keys('target') 
     
-    def PlannerInitialization(self) -> None:
-        q0 = self.env.get_start_pos()
-        m0 = self.env.get_start_mode()
-
-        self.reached_modes.append(m0)
-        root = Node(self.operation, State(q0, m0))
-
-        self.g = Graph(
-            root=root,
-            operation=self.operation,
-            batch_dist_fun=lambda a, b: batch_config_dist(a, b, self.distance_metric),
-            batch_cost_fun= lambda a, b: self.env.batch_config_cost(a, b),
-            is_edge_collision_free = self.env.is_edge_collision_free,
-            node_cls=Node
-            )
-        # initialize all queues (edge-queues)   
-        self.g.add_vertex_to_tree(self.g.root) 
-        self.initialize_search()
+    def update_reverse_sets(self, node):
+        self.reverse_closed_set.add(node.id)
+        self.consistent_nodes.add(node.id)
+        self.reverse_tree_set.add(node.id)
 
     def Plan(
         self, optimize:bool = True
@@ -741,10 +671,10 @@ class AITstar(BaseITstar):
         n1 = None
         while True:
             num_iter += 1
+            # self.reverse_search()
             if num_iter % 100000 == 0:
                 print("Forward Queue: ", len(self.g.forward_queue))
             if len(self.g.forward_queue) < 1:
-                print("------------------------",n1.state.mode.task_ids)
                 self.initialize_search()
                 continue
             edge_cost, (n0, n1) = self.g.forward_queue.heappop()
@@ -758,12 +688,14 @@ class AITstar(BaseITstar):
             #     assert not np.isinf(n0.lb_cost_to_go), (
             #         "hjklö"
             #     )
+            # if num_iter == 59874:
+            #     pass
             if np.isinf(n1.lb_cost_to_go):
                 assert not [self.g.forward_queue.key(item)[0] for item in self.g.forward_queue.current_entries if not np.isinf(self.g.forward_queue.key(item)[0])], (
                 "Forward queue contains non-infinite keys!")
             # already found best possible parent
-            if n1.id in self.forward_closed_set:
-                continue
+            if n1 in BaseTree.all_vertices:
+                    continue
             if (not np.isinf(n1.lb_cost_to_go) and (self.current_best_cost is None 
                 or n0.cost + edge_cost + n1.lb_cost_to_go
                 < self.current_best_cost)
@@ -787,20 +719,15 @@ class AITstar(BaseITstar):
                             collision_free = self.env.is_edge_collision_free(
                                 n0.state.q,
                                 n1.state.q,
-                                n0.state.mode,
-                                self.env.collision_resolution,
+                                n0.state.mode
                             )
                             self.g.update_edge_collision_cache(n0, n1, collision_free)
                         else:
                             pass
                         if not collision_free:
-                            self.g.forward_queue.remove((edge_cost, (n1, n0)))
-                            assert (n0.id, n1.id) not in self.collision_cache, (
-                                "kl,dö.fäghjk"
-                            )
-                            self.collision_cache.add((n0.id, n1.id))
-                            self.collision_cache.add((n1.id, n0.id))
+                            self.g.remove_forward_queue(edge_cost, n0, n1)
                             self.reverse_search((n0, n1))
+                            # self.manage_edge_in_collision(n0, n1)
                             continue
                     self.g.update_connectivity(n0, n1, edge_cost, n0.cost + edge_cost ,"forward", is_transition)
                     if self.current_best_cost is not None: 
@@ -812,14 +739,18 @@ class AITstar(BaseITstar):
                         self.expand_node_forward(n1.transition)
                     else:
                         self.expand_node_forward(n1)
-                    with_shortcutting = False
+                    update = False
                     if n1 in self.g.goal_nodes:
-                        with_shortcutting = True
+                        update = True
                     if self.dynamic_reverse_search_update or n1 in self.g.goal_nodes:
                         path = self.generate_path()
                         if len(path) > 0:
-                            self.process_valid_path(path, with_shortcutting= with_shortcutting)
-                            
+                            if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
+                                self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+                            self.process_valid_path(path, with_shortcutting= update, with_queue_update=update)
+                            if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
+                                self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+           
             else:
                 if np.isinf(n1.lb_cost_to_go):
                     assert (len(self.g.forward_queue.target_nodes - self.consistent_nodes) == len(self.g.forward_queue.target_nodes)), (

@@ -40,6 +40,11 @@ def get_all_environments():
         "2d_handover": lambda: re.rai_two_dim_handover(),
         "three_agents": lambda: re.rai_two_dim_three_agent_env(),
 
+        "simple_2d_single_robot_single_goal": lambda: re.rai_two_dim_env_single(),
+        "simple_2d_single_robot_single_goal_no_rot": lambda: re.rai_two_dim_env_single(agents_can_rotate=False),
+        "hallway_single_robot": lambda: re.rai_hallway_two_dim_single(),
+        "hallway_single_robot_single_goal": lambda: re.rai_hallway_two_dim_single_(),
+        "hallway_single_robot_single_goal_no_rot": lambda: re.rai_hallway_two_dim_single_(agents_can_rotate=False),
         # 2D with neighborhood
         "single_agent_mover": lambda: re.rai_two_dim_single_agent_neighbourhood(),
         

@@ -52,7 +52,6 @@ def interpolate_path(path: List[State], resolution: float = 0.1):
 
     return new_path
 
-
 @cache
 def generate_binary_search_indices(N):
     sequence = []
@@ -65,4 +64,19 @@ def generate_binary_search_indices(N):
         sequence.append(int(mid))
         queue.append((start, mid - 1))
         queue.append((mid + 1, end))
+    return tuple(sequence)
+@cache
+def generate_binary_search_indices_wo_start_and_end(N):
+    sequence = []
+    queue = deque([(0, N - 1)])
+    while queue:
+        start, end = queue.popleft()
+        if start > end:
+            continue
+        mid = (start + end) // 2
+        queue.append((start, mid - 1))
+        queue.append((mid + 1, end))
+        if mid == 0 or mid == N - 1:
+            continue
+        sequence.append(int(mid))
     return tuple(sequence)

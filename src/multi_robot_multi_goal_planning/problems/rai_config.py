@@ -219,7 +219,6 @@ def make_2d_rai_env_no_obs_three_agents(view: bool = False, agents_can_rotate=Tr
 
     return C
 
-
 def make_2d_rai_env(view: bool = False, agents_can_rotate=True):
     if not isinstance(agents_can_rotate, list):
         agents_can_rotate = [agents_can_rotate] * 2
@@ -347,6 +346,99 @@ def make_2d_rai_env(view: bool = False, agents_can_rotate=True):
     # print(keyframes)
 
     return C, keyframes
+
+
+def make_2d_rai_env_sinlge(view: bool = False, agents_can_rotate=True):
+    if not isinstance(agents_can_rotate, list):
+        agents_can_rotate = [agents_can_rotate] * 1
+    else:
+        assert len(agents_can_rotate) == 1
+
+    C = make_table_with_walls(2, 2)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    if agents_can_rotate[0]:
+        C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
+        ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+        ).setJointState([0, -0.5, 0])
+    else:
+        C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
+        ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXY, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+        ).setJointState([0, -0.5])
+
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([+0.5, +0.5, 0.07])
+
+    C.addFrame("obs1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.75, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.5, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [-0.75, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.5, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs3").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.1, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.3, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    # pairs = C.getCollidablePairs()
+
+    # for i in range(0, len(pairs), 2):
+    #     print(pairs[i], pairs[i + 1])
+
+    if view:
+        C.view(True)
+
+    komo = ry.KOMO(C, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1])
+    komo.addControlObjective([], 0, 1e-1)
+    # komo.addControlObjective([], 1, 1e0)
+    # komo.addControlObjective([], 2, 1e0)
+
+    komo.addObjective([1, -1], ry.FS.poseDiff, ["a1", "goal1"], ry.OT.eq, [1e1])
+
+    # komo.addObjective([3, -1], ry.FS.poseDiff, ['a1', 'goal2'], ry.OT.eq, [1e1])
+
+
+    solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+    # options.nonStrictSteps = 50;
+
+    solver.setOptions(damping=0.01, wolfe=0.001)
+    solver.solve()
+
+    if view:
+        komo.view(True, "IK solution")
+
+    keyframes = komo.getPath()
+    # print(keyframes)
+
+    return C, keyframes
+
+
+
 
 
 def make_random_two_dim(
@@ -1226,6 +1318,163 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
     # print(komo.nlp().getBounds())
 
     return C, keyframes
+
+def make_two_dim_tunnel_env_single(view: bool = False, agents_can_rotate=True):
+    if not isinstance(agents_can_rotate, list):
+        agents_can_rotate = [agents_can_rotate] * 2
+    else:
+        assert len(agents_can_rotate) == 2
+
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    if agents_can_rotate[0]:
+        C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[0.06, 0.15]
+        ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+        ).setJointState([1.5, -0.0, 0])
+    else:
+        C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[0.06, 0.15]
+        ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXY, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+        ).setJointState([1.5, -0.0])
+
+    C.addFrame("obs1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, 0.3, 0.07]
+    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, -0.3, 0.07]
+    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs3").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, -0.86, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 0.9, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs4").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, 1.2, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 1.55, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    if view:
+        C.view(True)
+    
+    if agents_can_rotate[0]:
+        g1_state = np.array([-1.5, 0.5, 0])
+        # g1_state = np.array([-1.5, -0.5, 0])
+    else:
+        g1_state = np.array([-1.5, 0.5])
+        # g1_state = np.array([-1.5, -0.5, 0])
+
+    keyframes = [g1_state, C.getJointState()]
+
+    print(keyframes)
+    print(agents_can_rotate)
+
+    # print(C.getJointLimits())
+
+    # komo = ry.KOMO(C, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    # print(komo.nlp().getBounds())
+
+    return C, keyframes
+
+def make_two_dim_tunnel_env_single_(view: bool = False, agents_can_rotate=True):
+    if not isinstance(agents_can_rotate, list):
+        agents_can_rotate = [agents_can_rotate] * 2
+    else:
+        assert len(agents_can_rotate) == 2
+
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    if agents_can_rotate[0]:
+        C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[0.06, 0.15]
+        ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+        ).setJointState([1.5, -0.0, 0])
+    else:
+        C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[0.06, 0.15]
+        ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXY, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+        ).setJointState([1.5, -0.0])
+
+    C.addFrame("obs1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, 0.3, 0.07]
+    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, -0.3, 0.07]
+    ).setShape(ry.ST.box, size=[2, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs3").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, -0.86, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 0.9, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs4").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, 1.2, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 1.55, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    if view:
+        C.view(True)
+    
+    if agents_can_rotate[0]:
+        g1_state = np.array([-1.5, 0.5, 0])
+        # g1_state = np.array([-1.5, -0.5, 0])
+    else:
+        g1_state = np.array([-1.5, 0.5])
+        # g1_state = np.array([-1.5, -0.5, 0])
+
+    keyframes = [g1_state]
+
+    print(keyframes)
+    print(agents_can_rotate)
+
+    # print(C.getJointLimits())
+
+    # komo = ry.KOMO(C, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    # print(komo.nlp().getBounds())
+
+    return C, keyframes
+
 
 
 # environment to test informed sampling
