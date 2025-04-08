@@ -18,6 +18,9 @@ from multi_robot_multi_goal_planning.problems.dependency_graph import Dependency
 from functools import cache
 from collections import deque
 
+from itertools import product
+
+
 @cache
 def generate_binary_search_indices(N):
     sequence = []
@@ -333,7 +336,144 @@ class BaseModeLogic(ABC):
 
 class UnorderedButAssignedMixin(BaseModeLogic):
     tasks: List[int]
-    per_robot_tasks: List[int]
+    per_robot_tasks: List[List[int]]
+    terminal_task: int
+
+    def make_start_mode(self):
+        ids = [-1, -1]
+        m = Mode(ids, self.start_pos)
+        return m
+
+    def make_symbolic_end(self):
+        return self.terminal_task
+
+    def get_valid_next_task_combinations(self, mode: Mode):
+        # check which tasks have been done, return all possible next combinations
+        unfinished_tasks_per_robot = self.per_robot_tasks.copy()
+
+        # ther emight be a problem that until now we assumed that the mode is markov
+        # (i.e it doe snot matter what we did before for the current task)
+        # m.prev_mode
+
+        if mode.prev_mode is None:
+            return False
+
+        pm = mode.prev_mode
+        while pm:
+            task_ids = pm.task_ids
+            for i, task_id in enumerate(task_ids):
+                unfinished_tasks_per_robot[i].remove(task_id)
+
+            pm = pm.prev_mode
+
+        has_unifinished_tasks = False
+        for tasks in unfinished_tasks_per_robot:
+            if len(tasks) > 0:
+                has_unifinished_tasks = True
+
+        if has_unifinished_tasks:
+            valid_combinations = list(product(*unfinished_tasks_per_robot))
+            return valid_combinations
+
+        return self.terminal_task
+
+    def is_terminal_mode(self, mode: Mode):
+        # check if all task shave been done
+        if mode.task_ids == self.terminal_task:
+            return True
+
+        return False
+
+    def done(self, q: Configuration, m: Mode) -> bool:
+        if not self.is_terminal_mode(m):
+            return False
+
+        # check if this configuration fulfills the final goals
+        terminal_task = self.tasks(self.terminal_task)
+        involved_robots = terminal_task.robots
+
+        q_concat = []
+        for r in involved_robots:
+            r_idx = self.robots.index(r)
+            q_concat.append(q.robot_state(r_idx))
+
+        q_concat = np.concatenate(q_concat)
+
+        if terminal_task.goal.satisfies_constraints(q_concat, mode=m, tolerance=1e-8):
+            return True
+
+        return False
+
+    def get_next_mode(self, q: Configuration, mode: Mode):
+        # needs to be changed to get next modes
+        valid_next_combinations = self.get_valid_next_task_combinations(mode)
+        
+        possible_next_mode_ids = []
+        for next_mode_ids in valid_next_combinations:
+            for i in range(len(self.robots)):
+                if next_mode_ids[i] != mode.task_ids[i]:
+                    # need to check if the goal conditions for this task are fulfilled in the current state
+                    task = self.tasks[mode.task_ids[i]]
+                    q_concat = []
+                    for r in task.robots:
+                        r_idx = self.robots.index(r)
+                        q_concat.append(q.robot_state(r_idx))
+
+                    q_concat = np.concatenate(q_concat)
+
+                    if task.goal.satisfies_constraints(
+                        q_concat, mode=mode, tolerance=1e-8
+                    ):
+                        possible_next_mode_ids.append(next_mode_ids)
+
+        random_next_mode_id = random.choice(possible_next_mode_ids)
+        next_mode = Mode(random_next_mode_id, q)
+
+        return next_mode
+
+    def is_transition(self, q: Configuration, m: Mode) -> bool:
+        if self.is_terminal_mode(m):
+            return False
+
+        # check if any of the robots is fulfilling its goal constraints
+        next_mode_ids = self.get_valid_next_task_combinations(m)
+
+        for next_mode in next_mode_ids:
+            for i in range(len(self.robots)):
+                if next_mode[i] != m.task_ids[i]:
+                    # need to check if the goal conditions for this task are fulfilled in the current state
+                    task = self.tasks[m.task_ids[i]]
+                    q_concat = []
+                    for r in task.robots:
+                        r_idx = self.robots.index(r)
+                        q_concat.append(q.robot_state(r_idx))
+
+                    q_concat = np.concatenate(q_concat)
+
+                    if task.goal.satisfies_constraints(
+                        q_concat, mode=m, tolerance=1e-8
+                    ):
+                        return True
+
+        return False
+
+    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+        if next_task_ids is None:
+            # we should return the terminal task here
+            return self.tasks[self._terminal_task_ids[0]]
+        else:
+            different_tasks = []
+            for i, task_id in enumerate(current_mode.task_ids):
+                if task_id != next_task_ids[i]:
+                    different_tasks.append(task_id)
+
+            # print("next", next_task_ids)
+            # print("current", current_mode.task_ids)
+            # print("changing task_ids", different_tasks)
+            different_tasks = list(set(different_tasks))
+            assert len(different_tasks) == 1
+
+            return self.tasks[different_tasks[0]]
 
 
 class FreeMixin(BaseModeLogic):
@@ -937,7 +1077,12 @@ class BaseProblem(ABC):
                 mode = path[i].mode
 
                 if not self.is_edge_collision_free(
-                    q1, q2, mode, resolution=resolution, tolerance=tolerance, include_endpoints=True
+                    q1,
+                    q2,
+                    mode,
+                    resolution=resolution,
+                    tolerance=tolerance,
+                    include_endpoints=True,
                 ):
                     return False
 

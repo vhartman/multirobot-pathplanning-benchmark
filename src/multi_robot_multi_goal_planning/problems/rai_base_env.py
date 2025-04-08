@@ -253,7 +253,6 @@ class rai_env(BaseProblem):
     sequence: List[int]
     tasks: List[Task]
     start_mode: Mode
-    _terminal_task_ids: List[int]
 
     # misc
     collision_tolerance: float
