@@ -547,7 +547,7 @@ class rai_env(BaseProblem):
         q2_state = q2.state()
         dir = (q2_state - q1_state) / (N - 1)
 
-        for i in idx:
+        for i in idx[N_start:N_max]:
             if not include_endpoints and (i == 0 or i == N - 1):
                 continue
 
