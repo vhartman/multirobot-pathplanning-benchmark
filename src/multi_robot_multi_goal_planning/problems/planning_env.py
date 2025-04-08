@@ -12,6 +12,25 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     config_dist,
 )
 from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
+# from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
+
+
+from functools import cache
+from collections import deque
+
+@cache
+def generate_binary_search_indices(N):
+    sequence = []
+    queue = deque([(0, N - 1)])
+    while queue:
+        start, end = queue.popleft()
+        if start > end:
+            continue
+        mid = (start + end) // 2
+        sequence.append(int(mid))
+        queue.append((start, mid - 1))
+        queue.append((mid + 1, end))
+    return tuple(sequence)
 
 
 class Goal(ABC):
@@ -869,9 +888,84 @@ class BaseProblem(ABC):
     ) -> bool:
         pass
 
-    @abstractmethod
-    def is_path_collision_free(self, path: List[State]) -> bool:
-        pass
+    def is_path_collision_free(
+        self,
+        path: List[State],
+        binary_order=True,
+        resolution=None,
+        tolerance=None,
+        check_edges_in_order=False,
+    ) -> bool:
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+
+        if resolution is None:
+            resolution = self.collision_resolution
+
+        if binary_order:
+            # idx = list(range(len(path) - 1))
+            # np.random.shuffle(idx)
+            idx = generate_binary_search_indices(len(path) - 1)
+        else:
+            idx = list(range(len(path) - 1))
+
+        # valid_edges = 0
+
+        if check_edges_in_order:
+            for i in idx:
+                # skip transition nodes
+                # if path[i].mode != path[i + 1].mode:
+                #     continue
+
+                q1 = path[i].q
+                q2 = path[i + 1].q
+                mode = path[i].mode
+
+                if not self.is_edge_collision_free(
+                    q1, q2, mode, resolution=resolution, tolerance=tolerance, include_endpoints=True
+                ):
+                    return False
+
+                # valid_edges += 1
+
+            # print("checked edges in shortcutting: ", valid_edges)
+        else:
+            edge_queue = list(idx)
+            N_max = 2
+            N_start = 0
+            checks_per_iteration = 10
+            while edge_queue:
+                edges_to_remove = []
+                for i in edge_queue:
+                    q1 = path[i].q
+                    q2 = path[i + 1].q
+                    mode = path[i].mode
+
+                    res = self.is_edge_collision_free(
+                        q1,
+                        q2,
+                        mode,
+                        resolution=resolution,
+                        tolerance=tolerance,
+                        include_endpoints=True,
+                        N_start=N_start,
+                        N_max=N_max,
+                    )
+
+                    if res is None:
+                        edges_to_remove.append(i)
+                        continue
+
+                    if not res:
+                        return False
+
+                for i in edges_to_remove:
+                    edge_queue.remove(i)
+
+                N_start += checks_per_iteration
+                N_max += checks_per_iteration
+
+        return True
 
     def is_valid_plan(self, path: List[State]) -> bool:
         # check if it is collision free and if all modes are passed in order

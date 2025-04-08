@@ -3,7 +3,7 @@ import numpy as np
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
 
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
@@ -331,39 +331,12 @@ class AbstractEnvironment(BaseProblem):
             # print(i / (N-1))
             q = q1_state + dir * (i)
             q = NpConfiguration(q, q1.array_slice)
-
         
             if not self.is_collision_free(q, mode):
                 return False
 
         return True
 
-    def is_path_collision_free(
-        self, path: List[State], randomize_order=True, resolution=None, tolerance=None
-    ) -> bool:
-        if tolerance is None:
-            tolerance = self.collision_tolerance
-
-        if resolution is None:
-            resolution = self.collision_resolution
-
-        idx = list(range(len(path) - 1))
-        if randomize_order:
-            np.random.shuffle(idx)
-
-        for i in idx:
-            # skip transition nodes
-            # if path[i].mode != path[i + 1].mode:
-            #     continue
-
-            q1 = path[i].q
-            q2 = path[i + 1].q
-            mode = path[i].mode
-
-            if not self.is_edge_collision_free(q1, q2, mode, resolution=resolution):
-                return False
-
-        return True
 
     def set_to_mode(self, m: List[int]):
         return
