@@ -242,7 +242,7 @@ class Mode:
 
 class State:
     q: Configuration
-    m: Mode
+    mode: Mode
 
     def __init__(self, q: Configuration, m: Mode):
         self.q = q
