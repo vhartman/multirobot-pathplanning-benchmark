@@ -3,7 +3,7 @@ import numpy as np
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
 
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
@@ -39,6 +39,7 @@ import time
 import sys
 import numba
 
+
 @numba.jit((numba.float64[:, :], numba.float64[:, :]), nopython=True)
 def multiply_4x4_matrices(mat1, mat2):
     result = np.zeros((4, 4))
@@ -48,12 +49,15 @@ def multiply_4x4_matrices(mat1, mat2):
                 result[i, j] += mat1[i, k] * mat2[k, j]
     return result
 
+
 class PinocchioEnvironment(BaseProblem):
     # misc
     collision_tolerance: float
     collision_resolution: float
 
-    def __init__(self, model, collision_model, visual_model, start_pos, robots, root_name="table"):
+    def __init__(
+        self, model, collision_model, visual_model, start_pos, robots, root_name="table"
+    ):
         self.limits = np.vstack([model.lowerPositionLimit, model.upperPositionLimit])
 
         self.model = model
@@ -185,7 +189,9 @@ class PinocchioEnvironment(BaseProblem):
         pass
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def _set_to_scenegraph(self, sg, update_visual: bool = False, update_collision_pairs = False):
+    def _set_to_scenegraph(
+        self, sg, update_visual: bool = False, update_collision_pairs=False
+    ):
         # update object positions
         # placement = pin.SE3.Identity()
         for frame_id, (parent, parent_joint, pose, placement) in sg.items():
@@ -199,7 +205,7 @@ class PinocchioEnvironment(BaseProblem):
                 and parent == self.root_name
                 and self.current_scenegraph[frame_id][2] == pose
             ):
-            #     # print("A")
+                #     # print("A")
                 continue
 
             frame_pose = self.data.oMi[parent_joint].act(placement)
@@ -212,10 +218,15 @@ class PinocchioEnvironment(BaseProblem):
                 vis_frame_id = self.visual_model.getGeometryId(frame_name)
                 self.visual_model.geometryObjects[vis_frame_id].placement = frame_pose
 
-            if update_collision_pairs and self.current_scenegraph[frame_id][0] != sg[frame_id][0]:
+            if (
+                update_collision_pairs
+                and self.current_scenegraph[frame_id][0] != sg[frame_id][0]
+            ):
                 # disable collisions for the objects that are linked together
                 new_parent_id = self.collision_model.getGeometryId(parent)
-                old_parent_id = self.collision_model.getGeometryId(self.current_scenegraph[frame_id][0])
+                old_parent_id = self.collision_model.getGeometryId(
+                    self.current_scenegraph[frame_id][0]
+                )
 
                 # print(self.collision_model.geometryObjects[frame_id].name, parent)
                 # print("removing", frame_id, new_parent_id)
@@ -223,13 +234,21 @@ class PinocchioEnvironment(BaseProblem):
                 # print(self.collision_model.geometryObjects[frame_id].name, self.current_scenegraph[frame_id][0])
                 # print("adding", frame_id, old_parent_id)
 
-                if self.collision_model.existCollisionPair(pin.CollisionPair(frame_id, new_parent_id)):
-                    new_pair_id = self.collision_model.findCollisionPair(pin.CollisionPair(frame_id, new_parent_id))
+                if self.collision_model.existCollisionPair(
+                    pin.CollisionPair(frame_id, new_parent_id)
+                ):
+                    new_pair_id = self.collision_model.findCollisionPair(
+                        pin.CollisionPair(frame_id, new_parent_id)
+                    )
                     self.geom_data.deactivateCollisionPair(new_pair_id)
 
                 # re-enable them for the objects that are not linked together anymore
-                if self.collision_model.existCollisionPair(pin.CollisionPair(frame_id, old_parent_id)):
-                    old_pair_id = self.collision_model.findCollisionPair(pin.CollisionPair(frame_id, old_parent_id))
+                if self.collision_model.existCollisionPair(
+                    pin.CollisionPair(frame_id, old_parent_id)
+                ):
+                    old_pair_id = self.collision_model.findCollisionPair(
+                        pin.CollisionPair(frame_id, old_parent_id)
+                    )
                     self.geom_data.activateCollisionPair(old_pair_id)
 
             self.current_scenegraph[frame_id] = sg[frame_id]
@@ -412,13 +431,13 @@ class PinocchioEnvironment(BaseProblem):
 
         if blocking:
             input("Press Enter to continue...")
-    
+
     def sample_config_uniform_in_limits(self):
         rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
         q = NpConfiguration(rnd, self.start_pos.array_slice)
 
         return q
-    
+
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
@@ -465,7 +484,9 @@ class PinocchioEnvironment(BaseProblem):
 
         if False:
             for i in range(len(self.collision_model.collisionPairs)):
-                in_collision = pin.computeCollision(self.collision_model, self.geom_data, i)
+                in_collision = pin.computeCollision(
+                    self.collision_model, self.geom_data, i
+                )
                 if in_collision:
                     cr = self.geom_data.collisionResults[i]
                     cp = self.collision_model.collisionPairs[i]
@@ -524,8 +545,10 @@ class PinocchioEnvironment(BaseProblem):
         q2: Configuration,
         mode: Mode,
         resolution: float = None,
-        randomize_order: bool = True,
         tolerance: float = None,
+        include_endpoints: bool = False,
+        N_start: int = 0,
+        N_max: int = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
@@ -538,16 +561,28 @@ class PinocchioEnvironment(BaseProblem):
         N = int(config_dist(q1, q2, "max") / resolution)
         N = max(2, N)
 
-        idx = list(range(int(N)))
-        if randomize_order:
-            # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(int(N))
+        if N_start > N:
+            return None
+
+        if N_max is None:
+            N_max = N
+
+        N_max = min(N, N_max)
+
+        # for a distance < resolution * 2, we do not do collision checking
+        # if N == 0:
+        #     return True
+
+        idx = generate_binary_search_indices(N)
 
         q1_state = q1.state()
         q2_state = q2.state()
         dir = (q2_state - q1_state) / (N - 1)
 
-        for i in idx:
+        for i in idx[N_start:N_max]:
+            if not include_endpoints and (i == 0 or i == N - 1):
+                continue
+
             # print(i / (N-1))
             q = q1_state + dir * (i)
             q = NpConfiguration(q, q1.array_slice)
@@ -559,33 +594,6 @@ class PinocchioEnvironment(BaseProblem):
                 return False
 
         # print(mode)
-
-        return True
-
-    def is_path_collision_free(
-        self, path: List[State], randomize_order=True, resolution=None, tolerance=None
-    ) -> bool:
-        if tolerance is None:
-            tolerance = self.collision_tolerance
-
-        if resolution is None:
-            resolution = self.collision_resolution
-
-        idx = list(range(len(path) - 1))
-        if randomize_order:
-            np.random.shuffle(idx)
-
-        for i in idx:
-            # skip transition nodes
-            # if path[i].mode != path[i + 1].mode:
-            #     continue
-
-            q1 = path[i].q
-            q2 = path[i + 1].q
-            mode = path[i].mode
-
-            if not self.is_edge_collision_free(q1, q2, mode, resolution=resolution):
-                return False
 
         return True
 
@@ -606,7 +614,9 @@ class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
         start_pos = NpConfiguration.from_list([[0, -0.8, 0], [0, 0.8, 0]])
         robots = ["a1", "a2"]
 
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots)
+        PinocchioEnvironment.__init__(
+            self, model, collision_model, visual_model, start_pos, robots
+        )
 
         self.tasks = [
             # r1
@@ -683,7 +693,9 @@ class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
         start_pos = NpConfiguration.from_list([[1.5, 0.0, 0], [-1.5, 0.0, 0]])
         robots = ["a1", "a2"]
 
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots, root_name)
+        PinocchioEnvironment.__init__(
+            self, model, collision_model, visual_model, start_pos, robots, root_name
+        )
 
         # self.C.view(True)
         self.tasks = [
@@ -757,13 +769,15 @@ def make_2d_handover():
 class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
     def __init__(self):
         model, collision_model, visual_model = make_2d_handover()
-    
+
         start_pos = NpConfiguration.from_list([[-0.5, 0.8, 0], [0.0, -0.5, 0]])
 
         robots = ["a1", "a2"]
         root_name = "table_0"
 
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots, root_name)
+        PinocchioEnvironment.__init__(
+            self, model, collision_model, visual_model, start_pos, robots, root_name
+        )
 
         self.manipulating_env = True
 
@@ -842,7 +856,9 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
         root_name = "table_0"
         robots = ["a1", "a2"]
 
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots, root_name)
+        PinocchioEnvironment.__init__(
+            self, model, collision_model, visual_model, start_pos, robots, root_name
+        )
 
         self.manipulating_env = True
 
@@ -939,18 +955,30 @@ def make_dual_ur5_waypoint_env():
     # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained_coll_primitives.urdf"
     urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained.urdf"
 
-    coll_mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur5e/collision/"
-    visual_mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur5e/visual/"
+    coll_mesh_dir = (
+        Path(urdf_path).resolve().parent / "ur_description/meshes/ur5e/collision/"
+    )
+    visual_mesh_dir = (
+        Path(urdf_path).resolve().parent / "ur_description/meshes/ur5e/visual/"
+    )
 
     # mesh_dir = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/"
 
     robot_1 = pin.buildModelFromUrdf(urdf_path)
-    r1_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir)
-    r1_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir)
+    r1_coll = pin.buildGeomFromUrdf(
+        robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir
+    )
+    r1_viz = pin.buildGeomFromUrdf(
+        robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir
+    )
 
     robot_2 = pin.buildModelFromUrdf(urdf_path)
-    r2_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir)
-    r2_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir)
+    r2_coll = pin.buildGeomFromUrdf(
+        robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir
+    )
+    r2_viz = pin.buildGeomFromUrdf(
+        robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir
+    )
 
     # robot_1, r1_coll, r1_viz = pin.buildModelsFromUrdf(urdf_path)
     # robot_2, r2_coll, r2_viz = pin.buildModelsFromUrdf(urdf_path)
@@ -1101,7 +1129,9 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         q = NpConfiguration.from_list([np.zeros(6), np.zeros(6)])
         robots = ["a1", "a2"]
 
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, q, robots, "table")
+        PinocchioEnvironment.__init__(
+            self, model, collision_model, visual_model, q, robots, "table"
+        )
 
         q_rnd_start = self.sample_random_valid_state()
         self.start_pos = q_rnd_start
@@ -1175,20 +1205,34 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
 
 def make_dual_ur5_reorientation_env():
-    urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
+    urdf_path = (
+        "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
+    )
     # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_meshes.urdf"
     # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_primitives.urdf"
 
-    coll_mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/collision/"
-    visual_mesh_dir = Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/visual/"
+    coll_mesh_dir = (
+        Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/collision/"
+    )
+    visual_mesh_dir = (
+        Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/visual/"
+    )
 
     robot_1 = pin.buildModelFromUrdf(urdf_path)
-    r1_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir)
-    r1_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir)
+    r1_coll = pin.buildGeomFromUrdf(
+        robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir
+    )
+    r1_viz = pin.buildGeomFromUrdf(
+        robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir
+    )
 
     robot_2 = pin.buildModelFromUrdf(urdf_path)
-    r2_coll = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir)
-    r2_viz = pin.buildGeomFromUrdf(robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir)
+    r2_coll = pin.buildGeomFromUrdf(
+        robot_1, urdf_path, pin.GeometryType.COLLISION, coll_mesh_dir
+    )
+    r2_viz = pin.buildGeomFromUrdf(
+        robot_1, urdf_path, pin.GeometryType.VISUAL, visual_mesh_dir
+    )
 
     # robot_3, r3_coll, r3_viz = pin.buildModelsFromUrdf(urdf_path)
     # robot_4, r4_coll, r4_viz = pin.buildModelsFromUrdf(urdf_path)
@@ -1313,19 +1357,23 @@ def make_dual_ur5_reorientation_env():
         np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
     )
 
-    with open("src/multi_robot_multi_goal_planning/problems/desc/box_poses.json", "r") as f:
+    with open(
+        "src/multi_robot_multi_goal_planning/problems/desc/box_poses.json", "r"
+    ) as f:
         loaded_box_data = json.load(f)
         # print("Loaded box data:")
         for box in loaded_box_data:
             # print(f"Position: {box['position']}, Quaternion: {box['quaternion']}")
 
-            geom1_name = box['name']
+            geom1_name = box["name"]
             shape1 = fcl.Box(0.1, 0.1, 0.1)
             placement = pin.SE3.Identity()
             placement.translation = np.array(box["position"])
             placement.translation[2] += 0.048
             placement.rotation = quaternion_to_rotation_matrix(box["quaternion"])
-            geom1_obj = pin.GeometryObject(geom1_name, 0, transformation_z_180 * placement, shape1)
+            geom1_obj = pin.GeometryObject(
+                geom1_name, 0, transformation_z_180 * placement, shape1
+            )
             color = np.random.rand(4)
             color[3] = 1
             geom1_obj.meshColor = color
@@ -1353,11 +1401,17 @@ def make_dual_ur5_reorientation_env():
                 continue
             if (
                 (
-                    "base_link" in collision_model.geometryObjects[id_1].name and ((
-                    "ur5_1" in collision_model.geometryObjects[id_1].name
-                    and "ur5_1" in collision_model.geometryObjects[id_2].name) or (
-                    "ur5_2" in collision_model.geometryObjects[id_1].name
-                    and "ur5_2" in collision_model.geometryObjects[id_2].name))
+                    "base_link" in collision_model.geometryObjects[id_1].name
+                    and (
+                        (
+                            "ur5_1" in collision_model.geometryObjects[id_1].name
+                            and "ur5_1" in collision_model.geometryObjects[id_2].name
+                        )
+                        or (
+                            "ur5_2" in collision_model.geometryObjects[id_1].name
+                            and "ur5_2" in collision_model.geometryObjects[id_2].name
+                        )
+                    )
                 )
                 or (
                     collision_model.geometryObjects[id_1].parentJoint
@@ -1411,10 +1465,14 @@ class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         q = np.array([0, -2, 1.0, -1, -1.57, 1])
         start_pos = NpConfiguration.from_list([q, q])
         robots = ["a1_", "a2_"]
-        
-        PinocchioEnvironment.__init__(self, model, collision_model, visual_model, start_pos, robots)
 
-        self.import_tasks("src/multi_robot_multi_goal_planning/problems/desc/box_reorientation_tasks.txt")
+        PinocchioEnvironment.__init__(
+            self, model, collision_model, visual_model, start_pos, robots
+        )
+
+        self.import_tasks(
+            "src/multi_robot_multi_goal_planning/problems/desc/box_reorientation_tasks.txt"
+        )
         self.sequence = self._make_sequence_from_names(
             [
                 "a2_pick_box0_0",

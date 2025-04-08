@@ -3,7 +3,7 @@ import numpy as np
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
 
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
@@ -115,6 +115,9 @@ class AbstractEnvironment(BaseProblem):
         self.ax = None
         self.key_pressed = False
 
+        self.cost_metric = "euclidean"
+        self.cost_reduction = "max"
+
     def display_path(
         self,
         path: List[State],
@@ -142,6 +145,12 @@ class AbstractEnvironment(BaseProblem):
 
         if stop_at_end:
             self.show_config(path[-1].q, True)
+
+    def sample_config_uniform_in_limits(self):
+        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
+        q = NpConfiguration(rnd, self.start_pos.array_slice)
+
+        return q
 
     def get_scenegraph_info_for_mode(self, mode: Mode):
         return {}
@@ -172,7 +181,7 @@ class AbstractEnvironment(BaseProblem):
     def show_config(self, q, blocking=True):
         if len(self.start_pos[0]) > 2:
             return
-        
+
         if self.fig is None or self.ax is None:
             self.fig, self.ax = plt.subplots()
             # Set up the key press event handler only once
@@ -274,77 +283,60 @@ class AbstractEnvironment(BaseProblem):
 
         return True
 
+
     def is_edge_collision_free(
         self,
         q1: Configuration,
         q2: Configuration,
         mode: Mode,
         resolution: float = None,
-        randomize_order: bool = True,
         tolerance: float = None,
-    ):
-        if resolution is None:
-            resolution = self.collision_resolution
-
-        if tolerance is None:
-            tolerance = self.collision_tolerance
-            
-        N = config_dist(q1, q2) / resolution
-        N = max(5, N)
-
-        idx = list(range(int(N)))
-        if randomize_order:
-            # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(int(N)).copy()
-
-        qs = []
-
-        for i in idx:
-            # print(i / (N-1))
-            q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
-            q = NpConfiguration(q, q1.array_slice)
-            qs.append(q)
-
-        # is_in_collision = self.batch_is_collision_free(qs, mode)
-        is_collision_free = True
-
-        for q in qs:
-            if not self.is_collision_free(q, mode):
-                is_collision_free = False
-                break
-
-        if is_collision_free:
-            # print('coll')
-            return True
-
-        return False
-
-    def is_path_collision_free(
-        self, path: List[State], randomize_order=True, resolution=None, tolerance=None
+        include_endpoints: bool = False,
+        N_start: int = 0,
+        N_max: int = None,
     ) -> bool:
-        if tolerance is None:
-            tolerance = self.collision_tolerance
-
         if resolution is None:
             resolution = self.collision_resolution
 
-        idx = list(range(len(path) - 1))
-        if randomize_order:
-            np.random.shuffle(idx)
+        if tolerance is None:
+            tolerance = self.collision_tolerance
 
-        for i in idx:
-            # skip transition nodes
-            # if path[i].mode != path[i + 1].mode:
-            #     continue
+        # print('q1', q1)
+        # print('q2', q2)
+        N = int(config_dist(q1, q2, "max") / resolution)
+        N = max(2, N)
 
-            q1 = path[i].q
-            q2 = path[i + 1].q
-            mode = path[i].mode
+        if N_start > N:
+            return None
+        
+        if N_max is None:
+            N_max = N
 
-            if not self.is_edge_collision_free(q1, q2, mode, resolution=resolution):
+        N_max = min(N, N_max)
+
+        # for a distance < resolution * 2, we do not do collision checking
+        # if N == 0:
+        #     return True
+
+        idx = generate_binary_search_indices(N)
+        
+        q1_state = q1.state()
+        q2_state = q2.state()
+        dir = (q2_state - q1_state) / (N - 1)
+
+        for i in idx[N_start:N_max]:
+            if not include_endpoints and (i == 0 or i == N - 1):
+                continue
+
+            # print(i / (N-1))
+            q = q1_state + dir * (i)
+            q = NpConfiguration(q, q1.array_slice)
+        
+            if not self.is_collision_free(q, mode):
                 return False
 
         return True
+
 
     def set_to_mode(self, m: List[int]):
         return
@@ -357,8 +349,6 @@ def make_middle_obstacle_n_dim_env(dim=2):
 
     joint_limits = np.ones((2, num_agents * dim)) * 2
     joint_limits[0, :] = -2
-
-    print(joint_limits)
 
     start_poses = np.zeros(num_agents * dim)
     start_poses[0] = -0.8
@@ -425,17 +415,16 @@ def make_center_rectangle_nd(dim, num_agents=2):
     joint_limits = np.ones((2, num_agents * dim)) * 2
     joint_limits[0, :] = -2
 
-    print(joint_limits)
-
     start_poses = np.zeros(num_agents * dim)
     start_poses[0] = -0.8
     start_poses[dim] = 0.8
 
-    rect_obs = Rectangle(np.zeros(dim), np.ones(dim)*.5)
+    rect_obs = Rectangle(np.zeros(dim), np.ones(dim) * 0.5)
 
     obstacles = [rect_obs]
 
     return start_poses, joint_limits, obstacles
+
 
 class abstract_env_center_rect_nd(SequenceMixin, AbstractEnvironment):
     def __init__(self, n=2):
@@ -452,7 +441,7 @@ class abstract_env_center_rect_nd(SequenceMixin, AbstractEnvironment):
 
         self.agent_radii = [0.1, 0.1]
 
-        self.robot_idx = {"a1": [i for i in range(n)], "a2": [n+i for i in range(n)]}
+        self.robot_idx = {"a1": [i for i in range(n)], "a2": [n + i for i in range(n)]}
         self.robot_dims = {"a1": n, "a2": n}
         # self.C.view(True)
 
