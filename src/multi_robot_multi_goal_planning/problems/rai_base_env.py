@@ -563,7 +563,7 @@ class rai_env(BaseProblem):
     def is_path_collision_free(
         self,
         path: List[State],
-        randomize_order=True,
+        binary_order=True,
         resolution=None,
         tolerance=None,
         check_edges_in_order=False,
@@ -574,7 +574,7 @@ class rai_env(BaseProblem):
         if resolution is None:
             resolution = self.collision_resolution
 
-        if randomize_order:
+        if binary_order:
             # idx = list(range(len(path) - 1))
             # np.random.shuffle(idx)
             idx = generate_binary_search_indices(len(path) - 1)

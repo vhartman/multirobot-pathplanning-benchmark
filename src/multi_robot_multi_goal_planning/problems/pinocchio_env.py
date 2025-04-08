@@ -525,6 +525,9 @@ class PinocchioEnvironment(BaseProblem):
         mode: Mode,
         resolution: float = None,
         tolerance: float = None,
+        include_endpoints: bool = False,
+        N_start: int = 0,
+        N_max: int = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
@@ -537,13 +540,28 @@ class PinocchioEnvironment(BaseProblem):
         N = int(config_dist(q1, q2, "max") / resolution)
         N = max(2, N)
 
-        idx = generate_binary_search_indices(int(N))
+        if N_start > N:
+            return None
+        
+        if N_max is None:
+            N_max = N
+
+        N_max = min(N, N_max)
+
+        # for a distance < resolution * 2, we do not do collision checking
+        # if N == 0:
+        #     return True
+
+        idx = generate_binary_search_indices(N)
 
         q1_state = q1.state()
         q2_state = q2.state()
         dir = (q2_state - q1_state) / (N - 1)
 
-        for i in idx:
+        for i in idx[N_start:N_max]:
+            if not include_endpoints and (i == 0 or i == N - 1):
+                continue
+            
             # print(i / (N-1))
             q = q1_state + dir * (i)
             q = NpConfiguration(q, q1.array_slice)

@@ -860,9 +860,12 @@ class BaseProblem(ABC):
         self,
         q1: Configuration,
         q2: Configuration,
-        mode: Mode,
-        resolution: float = 0.1,
-        tolerance: float = 0.01,
+        m: Mode,
+        resolution: float = None,
+        tolerance: float = None,
+        include_endpoints: bool = False,
+        N_start: int = 0,
+        N_max: int = None,
     ) -> bool:
         pass
 
