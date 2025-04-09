@@ -407,7 +407,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
     def get_next_modes(self, q: Configuration, mode: Mode):
         # needs to be changed to get next modes
         valid_next_combinations = self.get_valid_next_task_combinations(mode)
-        
+
         possible_next_mode_ids = []
         for next_mode_ids in valid_next_combinations:
             for i in range(len(self.robots)):
@@ -1076,24 +1076,30 @@ class BaseProblem(ABC):
                 q2 = path[i + 1].q
                 mode = path[i].mode
 
+                if not self.is_collision_free(q1, mode):
+                    return False
+
                 if not self.is_edge_collision_free(
                     q1,
                     q2,
                     mode,
                     resolution=resolution,
                     tolerance=tolerance,
-                    include_endpoints=True,
+                    include_endpoints=False,
                 ):
                     return False
 
                 # valid_edges += 1
 
+            if not self.is_collision_free(path[-1].q, path[-1].mode):
+                return False
+
             # print("checked edges in shortcutting: ", valid_edges)
         else:
             edge_queue = list(idx)
-            N_max = 2
-            N_start = 0
             checks_per_iteration = 10
+            N_start = 0
+            N_max = N_start + checks_per_iteration
             while edge_queue:
                 edges_to_remove = []
                 for i in edge_queue:
@@ -1101,13 +1107,17 @@ class BaseProblem(ABC):
                     q2 = path[i + 1].q
                     mode = path[i].mode
 
+                    if N_start == 0:
+                        if not self.is_collision_free(q1, mode):
+                            return False
+
                     res = self.is_edge_collision_free(
                         q1,
                         q2,
                         mode,
                         resolution=resolution,
                         tolerance=tolerance,
-                        include_endpoints=True,
+                        include_endpoints=False,
                         N_start=N_start,
                         N_max=N_max,
                     )
@@ -1125,6 +1135,9 @@ class BaseProblem(ABC):
                 N_start += checks_per_iteration
                 N_max += checks_per_iteration
 
+            if not self.is_collision_free(path[-1].q, path[-1].mode):
+                return False
+            
         return True
 
     def is_valid_plan(self, path: List[State]) -> bool:

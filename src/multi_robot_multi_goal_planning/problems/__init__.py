@@ -2,6 +2,8 @@ import os, sys
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
+from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
+
 import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 
@@ -119,7 +121,7 @@ def get_all_environments():
     return environment_configs
 
 
-def get_env_by_name(name):
+def get_env_by_name(name: str) -> BaseProblem:
     environment_configs = get_all_environments()
 
     if name not in environment_configs:

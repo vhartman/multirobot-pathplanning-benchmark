@@ -303,7 +303,7 @@ class AbstractEnvironment(BaseProblem):
 
         # print('q1', q1)
         # print('q2', q2)
-        N = int(config_dist(q1, q2, "max") / resolution)
+        N = int(config_dist(q1, q2, "max") / resolution) + 1
         N = max(2, N)
 
         if N_start > N:
