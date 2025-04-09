@@ -24,7 +24,6 @@ def interpolate_path(path: List[State], resolution: float = 0.1):
         #     continue
 
         dist = config_dist(q0, q1, "euclidean")
-        # dist = config_dist(q0, q1, "max")
         N = int(dist / resolution)
         N = max(1, N)
 
@@ -38,9 +37,9 @@ def interpolate_path(path: List[State], resolution: float = 0.1):
             #     qr = q0.robot_state(k) + (q1.robot_state(k) - q0.robot_state(k)) / N * j
             #     q.append(qr)
 
-                # env.C.setJointState(qr, get_robot_joints(env.C, env.robots[k]))
+            # env.C.setJointState(qr, get_robot_joints(env.C, env.robots[k]))
 
-                # env.C.setJointState(qr, [env.robots[k]])
+            # env.C.setJointState(qr, [env.robots[k]])
 
             # env.C.view(True)
 

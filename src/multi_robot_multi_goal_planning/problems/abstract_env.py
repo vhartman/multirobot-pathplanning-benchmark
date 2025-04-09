@@ -3,7 +3,7 @@ import numpy as np
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
 
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
@@ -283,6 +283,7 @@ class AbstractEnvironment(BaseProblem):
 
         return True
 
+
     def is_edge_collision_free(
         self,
         q1: Configuration,
@@ -290,66 +291,52 @@ class AbstractEnvironment(BaseProblem):
         mode: Mode,
         resolution: float = None,
         tolerance: float = None,
-    ):
-        if resolution is None:
-            resolution = self.collision_resolution
-
-        if tolerance is None:
-            tolerance = self.collision_tolerance
-
-        N = config_dist(q1, q2) / resolution
-        N = max(5, N)
-
-        idx = generate_binary_search_indices(int(N))
-
-        qs = []
-
-        for i in idx:
-            # print(i / (N-1))
-            q = q1.state() + (q2.state() - q1.state()) * (i) / (N - 1)
-            q = NpConfiguration(q, q1.array_slice)
-            qs.append(q)
-
-        # is_in_collision = self.batch_is_collision_free(qs, mode)
-        is_collision_free = True
-
-        for q in qs:
-            if not self.is_collision_free(q, mode):
-                is_collision_free = False
-                break
-
-        if is_collision_free:
-            # print('coll')
-            return True
-
-        return False
-
-    def is_path_collision_free(
-        self, path: List[State], randomize_order=True, resolution=None, tolerance=None
+        include_endpoints: bool = False,
+        N_start: int = 0,
+        N_max: int = None,
     ) -> bool:
-        if tolerance is None:
-            tolerance = self.collision_tolerance
-
         if resolution is None:
             resolution = self.collision_resolution
 
-        idx = list(range(len(path) - 1))
-        if randomize_order:
-            np.random.shuffle(idx)
+        if tolerance is None:
+            tolerance = self.collision_tolerance
 
-        for i in idx:
-            # skip transition nodes
-            # if path[i].mode != path[i + 1].mode:
-            #     continue
+        # print('q1', q1)
+        # print('q2', q2)
+        N = int(config_dist(q1, q2, "max") / resolution)
+        N = max(2, N)
 
-            q1 = path[i].q
-            q2 = path[i + 1].q
-            mode = path[i].mode
+        if N_start > N:
+            return None
+        
+        if N_max is None:
+            N_max = N
 
-            if not self.is_edge_collision_free(q1, q2, mode, resolution=resolution):
+        N_max = min(N, N_max)
+
+        # for a distance < resolution * 2, we do not do collision checking
+        # if N == 0:
+        #     return True
+
+        idx = generate_binary_search_indices(N)
+        
+        q1_state = q1.state()
+        q2_state = q2.state()
+        dir = (q2_state - q1_state) / (N - 1)
+
+        for i in idx[N_start:N_max]:
+            if not include_endpoints and (i == 0 or i == N - 1):
+                continue
+
+            # print(i / (N-1))
+            q = q1_state + dir * (i)
+            q = NpConfiguration(q, q1.array_slice)
+        
+            if not self.is_collision_free(q, mode):
                 return False
 
         return True
+
 
     def set_to_mode(self, m: List[int]):
         return

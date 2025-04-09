@@ -20,6 +20,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     batch_config_cost,
 )
 
+from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
 from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices, generate_binary_search_indices_wo_start_and_end
 
 import time
