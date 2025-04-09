@@ -42,6 +42,7 @@ from multi_robot_multi_goal_planning.planners.rrtstar_base import save_data
 # from multi_robot_multi_goal_planning.planners.sampling_phs import (
 #     sample_phs_with_given_matrices, compute_PHS_matrices
 # )
+from numba import njit
 T = TypeVar("T")
 class BaseOperation(ABC):
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
@@ -230,14 +231,12 @@ class DictIndexHeap(ABC, Generic[T]):
     current_entries: Dict[T, Tuple[float, int]]
     nodes: set
     idx = 0
-    closed_set: set
     def __init__(self, collision_resolution: Optional[float] = None) -> None:
         self.queue = []
         self.items = {}
         self.current_entries = {}  
         heapq.heapify(self.queue)
         self.collision_resolution = collision_resolution
-        self.closed_set = set()
 
     def __len__(self):
         return len(self.current_entries)
@@ -253,18 +252,19 @@ class DictIndexHeap(ABC, Generic[T]):
         """Push a single item into the heap."""
         # idx = len(self.items)
         priority = self.key(item)
-        if item in self.current_entries:
-            if self.current_entries[item][0] == priority:
-                return
+        # if item in self.current_entries:
+        #     latest_priority, idx = self.current_entries[item]
+        #     # if latest_priority == priority:
+        #     #     return
+        #     if latest_priority < priority:
+        #         # _, _ = heapq.heappop(self.queue)
+        #         del self.items[idx]
+
         self.push_and_sync(item, priority)
         # self.nodes_in_queue[item[1]] = (priority, DictIndexHeap.idx)
         heapq.heappush(self.queue, (priority, DictIndexHeap.idx))
         DictIndexHeap.idx += 1
-
-    def pop_and_sync(self, idx:int):
-        item = self.items.pop(idx)
-        return item
-    
+  
     def add_and_sync(self, item: T) -> None:
         pass
 
@@ -276,11 +276,17 @@ class DictIndexHeap(ABC, Generic[T]):
     def peek_first_element(self) -> Any:
         while self.current_entries:
             priority, idx = self.queue[0]
+            if idx not in self.items:
+                _, _ = heapq.heappop(self.queue)
+                continue
             item = self.items[idx]
             if item in self.current_entries:
                 current_priority, current_idx = self.current_entries[item]
                 # new_priority = self.key(item)
-                if current_priority == priority and current_idx == idx:
+                if current_idx == idx:
+                    assert(current_priority == priority), (
+                        "queue wrong"
+                    )
                     # if new_priority != priority: #needed if reverse search changed priorities
                     #     _, idx = heapq.heappop(self.queue)
                     #     item = self.pop_and_sync(idx)
@@ -288,7 +294,7 @@ class DictIndexHeap(ABC, Generic[T]):
                     #     continue
                     return priority, item
             _, idx = heapq.heappop(self.queue)
-            _ = self.pop_and_sync(idx)
+            _ = self.items.pop(idx)
             continue
 
     def remove(self, item, in_current_entries:bool = False):
@@ -304,14 +310,16 @@ class DictIndexHeap(ABC, Generic[T]):
          # Remove from dictionary (Lazy approach)
         while self.current_entries:
             priority, idx = heapq.heappop(self.queue)
-            item = self.pop_and_sync(idx)
+            if idx not in self.items:
+                continue
+            item = self.items.pop(idx)
             if item in self.current_entries:
                 current_priority, current_idx = self.current_entries[item]
                 # new_priority = self.key(item)
-                if current_priority == priority and current_idx == idx:
-                    # assert(new_priority == priority), (
-                    #     "queue wrong"
-                    # )
+                if current_idx == idx:
+                    assert(current_priority == priority), (
+                        "queue wrong"
+                    )
                     # if new_priority != priority: #needed if reverse search changed priorities
                     #     if type(item) is BaseNode:
                     #         pass
@@ -481,10 +489,37 @@ class BaseTree():
                 if n_near == node.forward.parent or n_near.cost == np.inf or n_near.id == node.id:
                     continue
                 if node.state.mode == n_near.state.mode or node.state.mode == n_near.state.mode.prev_mode:
+                    if (node.id == 510 or node.id == 511) and (n_near.id == 510 or n_near.id == 511):
+                            pass
                     if self.is_edge_collision_free(node.state.q, n_near.state.q, node.state.mode):
+                        if (node.id == 510 or node.id == 511) and (n_near.id == 510 or n_near.id == 511):
+                            pass
+                        
                         edge_cost = float(batch_cost[idx])
                         self.update_connectivity(node, n_near, edge_cost, node.cost + edge_cost)
 
+
+@njit
+def create_mask(node_ids, blacklist_ids):
+    mask = np.ones(len(node_ids), dtype=np.bool_)
+    for i in range(len(node_ids)):
+        for j in range(len(blacklist_ids)):
+            if node_ids[i] == blacklist_ids[j]:
+                mask[i] = False
+                break
+    return mask
+
+@njit
+def create_mask_boolmap_auto(node_ids, blacklist_ids):
+    max_id = max(np.max(node_ids), np.max(blacklist_ids))
+    lookup = np.zeros(max_id + 1, dtype=np.bool_)
+    for i in range(len(blacklist_ids)):
+        lookup[blacklist_ids[i]] = True
+
+    mask = np.empty(len(node_ids), dtype=np.bool_)
+    for i in range(len(node_ids)):
+        mask[i] = not lookup[node_ids[i]]
+    return mask
 class BaseGraph(ABC):
     root: BaseNode
     nodes: Dict
@@ -627,6 +662,8 @@ class BaseGraph(ABC):
             if i == len(path)-1:
                 is_transition = True
             node = self.node_cls(self.operation, path[i], is_transition)
+            if node.id == 2316 or node.id == 2317:
+                pass
             if is_transition:
                 if parent.is_transition and parent.is_reverse_transition and self.reverse_transition_is_already_present(node):
                     continue
@@ -743,16 +780,16 @@ class BaseGraph(ABC):
 
     def initialize_cache(self):
         # modes as keys
-        self.node_array_cache = {}
+        self.node_array_cache = {} 
         self.transition_node_array_cache = {}
 
         # node ids as keys
-        self.neighbors_node_ids_cache = {}
+        self.neighbors_node_ids_cache = {} #neighbors received by radius
         self.neighbors_batch_cost_cache = {}
-        self.neighbors_array_cache = {}
         self.neighbors_fam_ids_cache = {}
         self.tot_neighbors_batch_cost_cache = {}
-        self.tot_neighbors_id_cache = {}
+        # self.tot_neighbors_batch_effort_cache = {} #only needed for EIT*
+        self.tot_neighbors_id_cache = {} #neighbors including family
         self.transition_node_lb_cache = {}
         self.reverse_transition_node_lb_cache = {}
         self.reverse_transition_node_array_cache = {}
@@ -790,11 +827,16 @@ class BaseGraph(ABC):
     ) -> set:
          
         if node.id in self.neighbors_node_ids_cache:
+            return self.update_neighbors(node)
             # if node.id not in self.invalid_neighbors:
             #     return self.update_neighbors_with_family_of_node(node)
             # else:
             #     self.invalid_neighbors.remove(node.id)
-            return self.update_neighbors(node)
+            if node.id in self.invalid_neighbors:
+                self.invalid_neighbors.remove(node.id)
+                return self.update_neighbors(node)
+            return self.update_neighbors_with_family_of_node(node)
+            
 
         key = node.state.mode
         self.update_cache(key)
@@ -898,63 +940,130 @@ class BaseGraph(ABC):
 
         assert node.id not in self.neighbors_node_ids_cache,("2 already calculated")
         self.neighbors_node_ids_cache[node.id] = all_ids 
-        self.neighbors_array_cache[node.id] = arr
         self.neighbors_batch_cost_cache[node.id] = self.batch_cost_fun(node.state.q, arr)
         self.blacklist_cache[node.id] = set()
-        return self.update_neighbors(node)
+        return self.update_neighbors(node, True)
 
-    def update_neighbors_with_family_of_node(self, node:BaseNode, update:bool = False):
-        neighbors_fam = set()
-        if node.id in self.neighbors_fam_ids_cache:
-            neighbors_fam = self.neighbors_fam_ids_cache[node.id]
+    # def update_neighbors_with_family_of_node(self, node:BaseNode, update:bool = False):
+    #     node_id = node.id
+    #     blacklist = node.blacklist
 
-        combined_fam = node.forward.fam | node.rev.fam
+    #     # Get latest family from cache or empty set
+    #     latest_fam = self.neighbors_fam_ids_cache.get(node_id, set())
+
+    #     # Compute current family (forward + reverse)
+    #     current_fam = node.forward.fam | node.rev.fam
+
+    #     # Validate no blacklisted overlap
+    #     assert not (current_fam & blacklist), (
+    #         "items from the set are in the array"
+    #     )
+    #     new_ids = []
+    #     diff = current_fam - latest_fam
+    #     if diff:
+    #         self.neighbors_fam_ids_cache[node.id] = current_fam 
+    #         node_ids = self.neighbors_node_ids_cache[node.id]
+    #         node_ids_set = set(node_ids)
+    #         new_ids = list(current_fam - node_ids_set)
+    #         if new_ids:
+
+    #             new_arr = np.array(
+    #                 [self.nodes[id_].state.q.q for id_ in new_ids],
+    #                 dtype=np.float64,
+    #             )   
+    #             new_costs = self.batch_cost_fun(node.state.q, new_arr)        
+    #             self.tot_neighbors_batch_cost_cache[node.id] = np.concatenate(
+    #                 (new_costs, self.neighbors_batch_cost_cache[node.id])
+    #                 )
+    #             self.tot_neighbors_id_cache[node.id] = np.concatenate(
+    #                 (new_ids, self.neighbors_node_ids_cache[node.id])
+    #                 )
+    #             ids = self.tot_neighbors_id_cache[node_id]
+    #             costs = self.tot_neighbors_batch_cost_cache[node_id]
+    #             assert len(ids) == len(costs), (
+    #                 "forward not right")
+    #             assert not (set(ids) & blacklist), (
+
+    #                 "items from the set are in the array"
+    #             )
+    #             return self.tot_neighbors_id_cache[node.id]
+            
+    #      # Handle full update or first-time init
+    #     if update or node_id not in self.tot_neighbors_id_cache:
+    #         self.tot_neighbors_batch_cost_cache[node_id] = self.neighbors_batch_cost_cache[node_id]
+    #         self.tot_neighbors_id_cache[node_id] = self.neighbors_node_ids_cache[node_id]
+
+    #     ids = self.tot_neighbors_id_cache[node_id]
+    #     costs = self.tot_neighbors_batch_cost_cache[node_id]
+    #     assert len(ids) == len(costs), (
+    #                 "forward not right")
+    #     assert not (set(ids) & blacklist), (
+
+    #         "items from the set are in the array"
+    #     )
+    #     return self.tot_neighbors_id_cache[node.id]
+
+    def update_neighbors_with_family_of_node(self, node: BaseNode, update: bool = False):
+        node_id = node.id
         blacklist = node.blacklist
-        if len(blacklist) > 0 and len(combined_fam) > 0:
-            combined_fam =  combined_fam - blacklist
-        if  neighbors_fam != combined_fam:
-            self.neighbors_fam_ids_cache[node.id] = combined_fam 
-            node_ids = self.neighbors_node_ids_cache[node.id]
-            arr = self.neighbors_array_cache[node.id]
-            mask_node_ids =  np.array(list(combined_fam - set(node_ids)))
-            if mask_node_ids.size > 0:
-                arr = np.array(
-                    [self.nodes[id].state.q.q for id in mask_node_ids],
-                    dtype=np.float64,
-                )            
-                self.tot_neighbors_batch_cost_cache[node.id] = np.concatenate((self.batch_cost_fun(node.state.q, arr), self.neighbors_batch_cost_cache[node.id]))
-                arr = np.concatenate((arr, self.neighbors_array_cache[node.id]))
-                self.tot_neighbors_id_cache[node.id] = np.concatenate((mask_node_ids, self.neighbors_node_ids_cache[node.id]))
-                assert len(self.tot_neighbors_id_cache[node.id]) == len(self.tot_neighbors_batch_cost_cache[node.id]),(
-                    "forward not right"
-                )
-                return self.tot_neighbors_id_cache[node.id]
-        if update or node.id not in self.tot_neighbors_id_cache:
-            arr = self.neighbors_array_cache[node.id]
-            self.tot_neighbors_batch_cost_cache[node.id] = self.neighbors_batch_cost_cache[node.id]
-            self.tot_neighbors_id_cache[node.id] = self.neighbors_node_ids_cache[node.id]
-        assert len(self.tot_neighbors_id_cache[node.id]) == len(self.tot_neighbors_batch_cost_cache[node.id]),(
-            "forward not right"
+
+        # Compute current family (forward + reverse)
+        current_fam = node.forward.fam | node.rev.fam
+        assert not (current_fam & blacklist), (
+           "items from the set are in the array" 
         )
-        return self.tot_neighbors_id_cache[node.id]
 
-    def update_neighbors(self, node:BaseNode): # only needed for forward
+        latest_fam = self.neighbors_fam_ids_cache.get(node_id, set())
+
+        # Check if there's any change in the family or forced update
+        fam_changed = current_fam != latest_fam
+        if not update and not fam_changed:
+            return self.tot_neighbors_id_cache.get(node_id, self.neighbors_node_ids_cache[node_id])
+
+        # Save new family state
+        self.neighbors_fam_ids_cache[node_id] = current_fam
+
+        # Base neighbor list (already filtered by blacklist in update_neighbors)
+        base_ids = self.neighbors_node_ids_cache[node_id]
+        base_cost = self.neighbors_batch_cost_cache[node_id]
+        base_set = set(base_ids)
+
+        # New family members not already in base
+        new_ids = np.array(list(current_fam - base_set), dtype=np.int64)
+        if new_ids.size > 0:
+            new_arr = np.array([self.nodes[id_].state.q.q for id_ in new_ids], dtype=np.float64)
+            new_costs = self.batch_cost_fun(node.state.q, new_arr)
+            self.tot_neighbors_id_cache[node_id] = np.concatenate((new_ids, base_ids))
+            self.tot_neighbors_batch_cost_cache[node_id] = np.concatenate((new_costs, base_cost))
+        else:
+            self.tot_neighbors_id_cache[node_id] = base_ids
+            self.tot_neighbors_batch_cost_cache[node_id] = base_cost
+
+        assert len(self.tot_neighbors_id_cache[node_id]) == len(self.tot_neighbors_batch_cost_cache[node_id]), "forward not right"
+        assert len(self.tot_neighbors_id_cache[node_id]) >= len(self.neighbors_batch_cost_cache[node_id]), "sth not right"
+        assert not (set(self.tot_neighbors_id_cache[node_id]) & blacklist), "items from the set are in the array"
+        assert (set(self.tot_neighbors_id_cache[node_id]) & current_fam) == current_fam, (
+          "items from the set are not in the array"  
+        )
+        return self.tot_neighbors_id_cache[node_id]
+
+
+    def update_neighbors(self, node:BaseNode, update:bool =False): # only needed for forward
         blacklist = node.blacklist
-        diff = blacklist -  self.blacklist_cache[node.id]
-        if len(diff) > 0:
-            self.blacklist_cache[node.id] = set(blacklist)
+        blacklist_diff = blacklist -  self.blacklist_cache[node.id]
+        if blacklist_diff:
+            update=True
+            self.neighbors_fam_ids_cache[node.id] = set()
+            self.blacklist_cache[node.id] = blacklist.copy()
             node_ids = self.neighbors_node_ids_cache[node.id]
-            arr =  self.neighbors_array_cache[node.id]
-            # mask_node_ids =  ~np.isin(node_ids, list(diff))
-            mask_node_ids =  np.fromiter((id_ not in diff for id_ in node_ids), dtype=bool)
-            if not mask_node_ids.all():
-                node_ids = node_ids[mask_node_ids]
-                arr = arr[mask_node_ids]
-                self.neighbors_node_ids_cache[node.id] = node_ids
-                self.neighbors_array_cache[node.id] = arr
-                self.neighbors_batch_cost_cache[node.id] = self.neighbors_batch_cost_cache[node.id][mask_node_ids]
-
-        return self.update_neighbors_with_family_of_node(node, True)
+            mask = create_mask_boolmap_auto(node_ids, np.array(list(blacklist_diff)))
+            if np.any(~mask):
+                self.neighbors_node_ids_cache[node.id] = node_ids[mask]
+                self.neighbors_batch_cost_cache[node.id] = self.neighbors_batch_cost_cache[node.id][mask]
+            assert not (set(self.neighbors_node_ids_cache[node.id]) & node.blacklist), (
+                                "items from the set are in the array"
+                            )
+        return self.update_neighbors_with_family_of_node(node, update)
             
     def update_forward_cost_of_children(self, n: BaseNode, start_nodes_to_update:set[int]) -> set[int]:
         stack = [n.id]
@@ -1127,7 +1236,7 @@ class BaseGraph(ABC):
                             n.transition.lb_effort_to_come = n.lb_effort_to_come
                     processed += 1
                     heapq.heappush(queue, (cost, n))
-        print(processed)
+        # print(processed)
 
     def compute_transition_lb_effort_to_come(self):
         # run a reverse search on the transition nodes without any collision checking
@@ -1178,7 +1287,7 @@ class BaseGraph(ABC):
                         n.transition.lb_effort_to_come = effort
                     processed += 1
                     heapq.heappush(queue, (effort, n))
-        print(processed) 
+        # print(processed) 
 
     def compute_node_lb_to_come(self, compute_lb_effort_to_go:bool = False):
         processed = 0
@@ -1248,8 +1357,12 @@ class BaseGraph(ABC):
                 n1.whitelist.add(n0.id)
                 n0.whitelist.add(n1.id)
             else:
+                if n1.id == 4961 or n0.id == 4961:
+                    if n0.id == 4960 or n1.id == 4960:
+                        pass
                 n0.blacklist.add(n1.id)
                 n1.blacklist.add(n0.id)
+                
                 self.invalid_neighbors.add(n1.id)
                 self.invalid_neighbors.add(n0.id)
 
@@ -3388,8 +3501,6 @@ class BaseITstar(ABC):
         new_path_cost = path_cost(path, self.env.batch_config_cost)
         if force_update or self.current_best_cost is None or new_path_cost < self.current_best_cost:
             self.alpha = 1.0
-            print()
-            print([n.id for n in valid_path])
             self.current_best_path = path
             self.current_best_cost = new_path_cost
             self.current_best_path_nodes = valid_path
@@ -3397,27 +3508,65 @@ class BaseITstar(ABC):
             self.dynamic_reverse_search_update = True
             # if not with_shortcutting:
             #     self.add_reverse_connectivity_to_path(self.current_best_path_nodes, False)
-
-            print(f"New cost: {new_path_cost} at time {time.time() - self.start_time}")
+            print()
+            print(f"found cost: {new_path_cost} at time {time.time() - self.start_time}")
+            print('found path:', [n.id for n in valid_path])
             self.update_results_tracking(new_path_cost, path)
 
             if self.try_shortcutting and with_shortcutting:
-                print("Shortcutting path")
+                print("--- shortcutting ---")
+                if new_path_cost == 11.100602710370104:
+                    pass
                 shortcut_path, _ = shortcutting.robot_mode_shortcut(
                     self.env,
                     path,
                     250,
                     resolution=self.env.collision_resolution,
-                    tolerance=self.env.collision_tolerance,
+                    tolerance=self.env.collision_tolerance
                 )
+                assert all([
+                        self.env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode) 
+                        for i in range(len(path) - 1)
+                    ]), (
+                        "hjsfdgklöäsjdk$"
+                    )
+
+
+                if not all([
+                        self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode) 
+                        for i in range(len(shortcut_path) - 1)
+                    ]):
+                        for i in range(len(shortcut_path)-1):
+                            if not self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode):
+                                self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode)
+                                print()
+                
+                if not self.env.is_path_collision_free(
+                    shortcut_path):
+                    pass
+                
 
                 shortcut_path = shortcutting.remove_interpolated_nodes(shortcut_path)
                 shortcut_path_cost = path_cost(
                     shortcut_path, self.env.batch_config_cost
                 )
+                if not self.env.is_path_collision_free(
+                    shortcut_path):
+                    pass
+                if not all([
+                        self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode) 
+                        for i in range(len(shortcut_path) - 1)
+                    ]):
+                        for i in range(len(shortcut_path)-1):
+                            if not self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode):
+                                self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode)
+
+                    
+                    
+
+                    
 
                 if shortcut_path_cost < self.current_best_cost:
-                    print("New cost: ", shortcut_path_cost)
                     self.update_results_tracking(shortcut_path_cost, shortcut_path)
 
                     self.current_best_path = shortcut_path
@@ -3427,6 +3576,7 @@ class BaseITstar(ABC):
                     self.g.add_path_states(interpolated_path, self.approximate_space_extent)   
                     self.current_best_path_nodes = self.generate_path(force_generation=True)
                     self.current_best_path = [node.state for node in self.current_best_path_nodes]
+
                     self.g.initialize_cache()
                     if with_queue_update:
                     #     self.initialize
@@ -3438,10 +3588,19 @@ class BaseITstar(ABC):
                         self.add_reverse_connectivity_to_path(self.current_best_path_nodes, True)
                         
                     self.current_best_cost = path_cost(self.current_best_path, self.env.batch_config_cost) 
-                    print("new cost: " ,self.current_best_cost)
+                    print("rewired cost: " ,self.current_best_cost)
+                    print('new path: ', [n.id for n in self.current_best_path_nodes])
+                    if not all([
+                        self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode) 
+                        for i in range(len(self.current_best_path) - 1)
+                    ]):
+                        for i in range(len(self.current_best_path)-1):
+                            if not self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode):
+                                self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode)
+            
             else:
                 pass
-            print([n.id for n in self.current_best_path_nodes])
+            
             # extract modes for removal strategy
              
     def update_removal_conditions(self):

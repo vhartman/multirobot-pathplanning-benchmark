@@ -169,26 +169,27 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
         )
    
     def add_and_sync(self, item):
-        start_node, node = item[1]
+        start_node, target_node = item[1]
 
-        self.target_nodes.add(node.id)
+        self.target_nodes.add(target_node.id)
         self.start_nodes.add(start_node.id)
 
-        self.target_nodes_with_item.setdefault(node.id, set()).add(item)
+        self.target_nodes_with_item.setdefault(target_node.id, set()).add(item)
         self.start_nodes_with_item.setdefault(start_node.id, set()).add(item)
     
     def remove(self, item, in_current_entries:bool = False):
         if not in_current_entries and item not in self.current_entries:
            return
-        node = item[1][1]
-        start_node = item[1][0]
-        self.target_nodes_with_item[node.id].remove(item)
-        self.start_nodes_with_item[start_node.id].remove(item)
+        start_node_id, target_node_id = item[1][0].id, item[1][1].id
+        self.target_nodes_with_item[target_node_id].remove(item)
+        self.start_nodes_with_item[start_node_id].remove(item)
         del self.current_entries[item]
-        if not self.target_nodes_with_item[node.id]:
-            self.target_nodes.remove(node.id)
-        if not self.start_nodes_with_item[start_node.id]:
-            self.start_nodes.remove(start_node.id)
+
+        if not self.target_nodes_with_item[target_node_id]:
+            self.target_nodes.discard(target_node_id)
+
+        if not self.start_nodes_with_item[start_node_id]:
+            self.start_nodes.discard(start_node_id)
 
     def update(self, node_ids:Optional[Set[BaseNode]], type:str):
         if node_ids is not None and len(node_ids) == 0:

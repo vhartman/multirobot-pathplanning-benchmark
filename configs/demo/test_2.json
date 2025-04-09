@@ -1,53 +1,13 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "simple_2d",
+  "environment": "hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 100,
-  "num_runs": 10,
-  "seed": 1,
-  "optimize": true,
+  "max_planning_time": 500,
+  "num_runs": 1,
+  "seed": 5,
+  "optimize": false,
   "planners": [
-    {
-      "name": "fastdrrtstar",
-      "type": "fastdrrtstar",
-      "options": {
-        "informed_sampling": true,
-        "informed_sampling_version": 6,  
-        "distance_metric": "max_euclidean",
-        "p_goal": 0.4,
-        "p_stay": 0.0,
-        "p_uniform": 0.05,
-        "shortcutting": true,
-        "mode_sampling": 1, 
-        "locally_informed_sampling": true,
-        "informed_batch_size":300,
-        "sample_batch_size_per_task": 500,
-        "transistion_batch_size_per_mode":500, 
-        "expand_iter":100
-
-      }
-    },
-    {
-      "name": "drrtstar",
-      "type": "drrtstar",
-      "options": {
-        "informed_sampling": true,
-        "informed_sampling_version": 6,  
-        "distance_metric": "max_euclidean",
-        "p_goal": 0.4,
-        "p_stay": 0.0,
-        "p_uniform": 0.05,
-        "shortcutting": true,
-        "mode_sampling": 1, 
-        "locally_informed_sampling": true,
-        "informed_batch_size":300,
-        "sample_batch_size_per_task": 500,
-        "transistion_batch_size_per_mode":500, 
-        "expand_iter":100
-
-      }
-    },
     {
       "name": "rrtstar",
       "type": "rrtstar",
@@ -55,13 +15,13 @@
         "informed_sampling": true,
         "informed_sampling_version": 6,  
         "distance_metric": "max_euclidean",
-        "p_goal": 0.4,
+        "p_goal": 0.1,
         "p_stay": 0.0,
-        "p_uniform": 0.05,
-        "shortcutting": true,
+        "p_uniform": 0.2,
+        "shortcutting": false,
         "mode_sampling": 1, 
         "locally_informed_sampling": true,
-        "informed_batch_size":300
+        "informed_batch_size": 300
 
       }
     }

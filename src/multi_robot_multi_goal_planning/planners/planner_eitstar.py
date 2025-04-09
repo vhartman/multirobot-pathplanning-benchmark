@@ -29,7 +29,7 @@ from multi_robot_multi_goal_planning.planners.itstar_base import (
     BaseNode,
     BaseTree
     )
-from functools import lru_cache
+from functools import cache
 from multi_robot_multi_goal_planning.planners.planner_aitstar import EdgeQueue
 # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
 # needed adaption to work.
@@ -207,10 +207,10 @@ class ReverseQueue(EdgeQueue):
     def key(self, item: Tuple[Any]) -> float:
         # item[0]: edge_cost from n0 to n1
         # item[1]: edge (n0, n1)
-        first_entry = item[1][0].lb_cost_to_go + item[0] + item[1][1].lb_cost_to_come
-        second_entry = item[1][0].inad.effort +  item[0]/self.collision_resolution + item[1][1].lb_effort_to_come
-        return (first_entry, second_entry)
-           
+        start_node, target_node = item[1] 
+        return (start_node.inad.lb_cost_to_go + item[0] + target_node.lb_cost_to_come,
+                start_node.inad.effort + item[0]/self.collision_resolution + target_node.lb_effort_to_come)
+          
 class EffortEstimateQueue(EdgeQueue):
     def __init__(self, alpha =1.0, collision_resolution: Optional[float] = None):
         super().__init__(alpha, collision_resolution)
@@ -218,13 +218,14 @@ class EffortEstimateQueue(EdgeQueue):
     def key(self, item: Tuple[Any]) -> float:
         # item[0]: cost from n0 to n1
         # item[1]: edge (n0, n1)
-        return (item[0]/self.collision_resolution)
+        return item[0]/self.collision_resolution
     
 class CostBoundQueue(EdgeQueue):
     def key(self, item: Tuple[Any]) -> float:
         # item[0]: edge_cost from n0 to n1
         # item[1]: edge (n0, n1)
-        return (item[1][0].cost + item[0] + item[1][1].lb_cost_to_go)
+        start_node, target_node = item[1] 
+        return start_node.cost + item[0] + target_node.lb_cost_to_go
 
 # class CostEstimateQueue(EdgeQueue):
 #     def key(self, item: Tuple[Any]) -> float:
@@ -371,7 +372,7 @@ class EITstar(BaseITstar):
         else:
             self.g.epsilon = 1
 
-    @lru_cache(maxsize=None)  
+    @cache
     def get_sparse_num_of_collision_checks(self, edge_cost, N) -> float:
         r = edge_cost/N
         if r < self.env.collision_resolution:
@@ -406,6 +407,7 @@ class EITstar(BaseITstar):
                                 n0.state.mode,
                                 N =sparse_num_of_collision_checks
                             )
+                    #TODO if already checked with env resolution add to whitelist!
                     if edge not in self.sparesly_checked_edges:
                         self.sparesly_checked_edges[edge] = 0
                     self.sparesly_checked_edges[edge] += 1

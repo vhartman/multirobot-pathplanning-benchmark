@@ -1,6 +1,21 @@
 {
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "Debug Shortcutting Test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/test.py",  // update path if needed
+            "args": [
+                "-k", "test_shortcutting"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        },
+        
          {
             "name": "- test",
             "type": "debugpy",
@@ -55,8 +70,8 @@
             "program": "${workspaceFolder}/examples/run_analysis.py",
             "args": [
                 "samples",
-                "simple_2d",
-                "1"
+                "hallway",
+                "5"
                 
 
             ],

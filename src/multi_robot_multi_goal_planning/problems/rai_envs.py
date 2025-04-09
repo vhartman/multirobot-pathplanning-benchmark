@@ -863,6 +863,7 @@ class rai_hallway_two_dim_single(SequenceMixin, rai_env):
         self.collision_resolution = 0.005
 
 
+
 class rai_hallway_two_dim_single_(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_two_dim_tunnel_env_single_(

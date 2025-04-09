@@ -85,9 +85,39 @@ def robot_mode_shortcut(
     max_iter: int = 1000,
     resolution=0.001,
     tolerance=0.01,
+    check_edges_in_order:bool = False,
+    seed:int = None,
+
 ):
+    if seed is not None:
+        np.random.seed(seed)
+        random.seed(seed)
+    
     non_redundant_path = remove_interpolated_nodes(path)
     new_path = interpolate_path(non_redundant_path, 0.1)
+    if not all([
+            env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode) 
+            for i in range(len(path) - 1)
+        ]):
+            for i in range(len(path)-1):
+                if not env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode):
+                    env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode)
+    
+    if not all([
+            env.is_edge_collision_free(non_redundant_path[i].q, non_redundant_path[i+1].q, non_redundant_path[i].mode) 
+            for i in range(len(non_redundant_path) - 1)
+        ]):
+            for i in range(len(non_redundant_path)-1):
+                if not env.is_edge_collision_free(non_redundant_path[i].q, non_redundant_path[i+1].q, non_redundant_path[i].mode):
+                    env.is_edge_collision_free(non_redundant_path[i].q, non_redundant_path[i+1].q, non_redundant_path[i].mode)
+
+    if not all([
+            env.is_edge_collision_free(new_path[i].q, new_path[i+1].q, new_path[i].mode) 
+            for i in range(len(new_path) - 1)
+        ]):
+            for i in range(len(new_path)-1):
+                if not env.is_edge_collision_free(new_path[i].q, new_path[i+1].q, new_path[i].mode):
+                    env.is_edge_collision_free(new_path[i].q, new_path[i+1].q, new_path[i].mode)
 
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
@@ -193,7 +223,7 @@ def robot_mode_shortcut(
 
         # this is wrong for partial shortcuts atm.
         if env.is_path_collision_free(
-            path_element, resolution=resolution, tolerance=tolerance, with_start_and_end =True
+            path_element, resolution=resolution, tolerance=tolerance, check_edges_in_order=check_edges_in_order
         ):
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q

@@ -585,7 +585,13 @@ def samples(env, env_path, pkl_file):
             for robot_idx, robot in enumerate(env.robots):
                 legend_group = robot
                 r_indices = env.robot_idx[robot]
+                i = 0
                 for idx, q in enumerate(q_samples):
+                    if i == 45 or i == 45:
+                        s = 8
+                    else:
+                        s = 5
+                    i +=1
                     mode = modes_samples[idx]
                     mode_idx = modes.index(mode)
                     if mode_idx is None:
@@ -599,7 +605,7 @@ def samples(env, env_path, pkl_file):
                     z = [1],
                     mode='markers',
                     opacity=0.6,
-                    marker=dict(size=5, color=color),
+                    marker=dict(size=s, color=color),
                     legendgroup = legend_group,
                     showlegend = False,
                 ))
@@ -615,9 +621,9 @@ def samples(env, env_path, pkl_file):
                             mode="lines+markers",
                             line=dict(color=colors[len(modes)+robot_idx], width=6),
                             marker=dict(
-                                size=3,  # Very small markers
+                                size=5,  # Very small markers
                                 color=colors[len(modes)+robot_idx],  # Match marker color with line
-                                opacity=1
+                                opacity=0.8
                             ),
                             opacity=1,
                             legendgroup=robot,

@@ -30,8 +30,10 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 from multi_robot_multi_goal_planning.planners.sampling_phs import (
-    sample_phs_with_given_matrices, compute_PHS_matrices,
+    sample_phs_with_given_matrices,
+    compute_PHS_matrices,
 )
+
 
 class Node:
     __slots__ = [
@@ -730,7 +732,7 @@ class Graph:
                     continue
 
             # if this_mode in self.transition_nodes:
-                # print(len(self.transition_nodes[this_mode]))
+            # print(len(self.transition_nodes[this_mode]))
 
             if next_mode is not None:
                 if this_mode in self.transition_nodes:
@@ -1687,9 +1689,11 @@ def joint_prm_planner(
                                 )
 
                             if is_almost_the_same[i]:
-                                qr = (
-                                    np.random.uniform(size=(num_samples_at_a_time, env.robot_dims[r]), low=lims[0, :], high = lims[1, :]).T
-                                )
+                                qr = np.random.uniform(
+                                    size=(num_samples_at_a_time, env.robot_dims[r]),
+                                    low=lims[0, :],
+                                    high=lims[1, :],
+                                ).T
                             else:
                                 # print("cost", current_cost)
                                 # print("robot cst", c_robot_bound)
@@ -1707,7 +1711,8 @@ def joint_prm_planner(
                                     )
 
                                 qr = sample_phs_with_given_matrices(
-                                    *precomputed_phs_matrices[i], n=num_samples_at_a_time
+                                    *precomputed_phs_matrices[i],
+                                    n=num_samples_at_a_time,
                                 )
 
                                 # plt.figure()
@@ -2524,7 +2529,11 @@ def joint_prm_planner(
                         continue
 
                     if not env.is_edge_collision_free(
-                        s0.q, s1.q, s0.mode, resolution=0.001
+                        s0.q,
+                        s1.q,
+                        s0.mode,
+                        resolution=env.collision_resolution,
+                        tolerance=env.collision_tolerance,
                     ):
                         print("Path is in collision")
                         is_valid_path = False
