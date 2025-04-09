@@ -37,7 +37,10 @@ def convert_to_path(env, path_data):
         q = type(env.get_start_pos())(q_np, start_conf.array_slice)
 
         if a["mode"] != prev_mode_ids:
-            next_mode = env.get_next_mode(prev_config, modes[-1])
+            next_modes = env.get_next_modes(prev_config, modes[-1])
+            assert len(next_modes) == 1
+            next_mode = next_modes[0]
+
             modes.append(next_mode)
 
         real_path.append(State(q, modes[-1]))

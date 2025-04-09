@@ -322,7 +322,7 @@ class BaseModeLogic(ABC):
         pass
 
     @abstractmethod
-    def get_next_mode(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode):
         pass
 
     @abstractmethod
@@ -404,7 +404,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         return False
 
-    def get_next_mode(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode):
         # needs to be changed to get next modes
         valid_next_combinations = self.get_valid_next_task_combinations(mode)
         
@@ -429,7 +429,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         random_next_mode_id = random.choice(possible_next_mode_ids)
         next_mode = Mode(random_next_mode_id, q)
 
-        return next_mode
+        return [next_mode]
 
     def is_transition(self, q: Configuration, m: Mode) -> bool:
         if self.is_terminal_mode(m):
@@ -625,7 +625,7 @@ class SequenceMixin(BaseModeLogic):
 
         return [next_task_ids]
 
-    def get_next_mode(self, q: Optional[Configuration], mode: Mode) -> Mode:
+    def get_next_modes(self, q: Optional[Configuration], mode: Mode) -> Mode:
         next_task_ids = self.get_valid_next_task_combinations(mode)[0]
 
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
@@ -636,11 +636,11 @@ class SequenceMixin(BaseModeLogic):
 
         for nm in mode.next_modes:
             if hash(nm) == hash(next_mode):
-                return nm
+                return [nm]
 
         mode.next_modes.append(next_mode)
 
-        return next_mode
+        return [next_mode]
 
     def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
         seq_idx = self.get_current_seq_index(current_mode)
@@ -777,7 +777,7 @@ class DependencyGraphMixin(BaseModeLogic):
             if robot in involved_robots:
                 return name
 
-    def get_next_mode(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode):
         next_mode_ids = self.get_valid_next_task_combinations(mode)
 
         # all of this is duplicated with the method below
@@ -806,12 +806,12 @@ class DependencyGraphMixin(BaseModeLogic):
 
                         for nm in mode.next_modes:
                             if hash(nm) == hash(tmp):
-                                return nm
+                                return [nm]
 
                         mode.next_modes.append(tmp)
                         # print(mode.next_modes)
 
-                        return tmp
+                        return [tmp]
 
         raise ValueError("This does not fulfill the constraints to reach a new mode.")
 
@@ -1000,7 +1000,7 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def get_next_mode(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode):
         pass
 
     @abstractmethod

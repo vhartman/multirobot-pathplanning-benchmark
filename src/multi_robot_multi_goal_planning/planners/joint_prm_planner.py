@@ -2062,7 +2062,9 @@ def joint_prm_planner(
                 if env.is_terminal_mode(mode):
                     assert False
                 else:
-                    next_mode = env.get_next_mode(q, mode)
+                    next_modes = env.get_next_modes(q, mode)
+                    assert len(next_modes) == 1
+                    next_mode = next_modes[0]
 
                 if can_transition_improve(
                     (q, mode, next_mode), path, start_ind, end_ind
@@ -2272,7 +2274,9 @@ def joint_prm_planner(
                 if env.is_terminal_mode(mode):
                     next_mode = None
                 else:
-                    next_mode = env.get_next_mode(q, mode)
+                    next_modes = env.get_next_modes(q, mode)
+                    assert len(next_modes) == 1
+                    next_mode = next_modes[0]
 
                 transitions.append((q, mode, next_mode))
 

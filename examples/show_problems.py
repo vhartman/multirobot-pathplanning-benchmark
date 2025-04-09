@@ -79,7 +79,10 @@ def visualize_modes(env: rai_env, export_images: bool = False):
         if env.is_terminal_mode(m):
             break
 
-        m = env.get_next_mode(type(env.get_start_pos()).from_list(q), m)
+        ms = env.get_next_modes(type(env.get_start_pos()).from_list(q), m)
+        assert len(ms) == 1
+        m = ms[0]
+
 
 
 def benchmark_collision_checking(env: rai_env, N=10000):
@@ -133,7 +136,10 @@ def benchmark_collision_checking(env: rai_env, N=10000):
             q = conf_type.from_list(q)
 
             if env.is_collision_free(q, mode):                
-                next_mode = env.get_next_mode(q, mode)
+                next_modes = env.get_next_modes(q, mode)
+                assert len(next_modes) == 1
+                next_mode = next_modes[0]
+
                 return next_mode
 
     # create list of modes that we can reach
