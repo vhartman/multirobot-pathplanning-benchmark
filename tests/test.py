@@ -1,8 +1,7 @@
 import pytest
 import numpy as np
-import random
 
-from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
 from multi_robot_multi_goal_planning.planners.joint_prm_planner import joint_prm_planner

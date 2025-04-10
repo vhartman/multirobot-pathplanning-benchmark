@@ -579,8 +579,9 @@ class EITstar(BaseITstar):
                                 n0.state.mode,
                                 self.env.collision_resolution,
                             )
-                            self.g.update_edge_collision_cache(n0, n1, collision_free)
+                            
                         if not collision_free:
+                            self.g.update_edge_collision_cache(n0, n1, collision_free)
                             self.g.remove_forward_queue(edge_cost, n0, n1)
                             self.manage_edge_in_collision(n0, n1)
                             continue

@@ -453,6 +453,9 @@ class BaseTree():
                     c_min_to_parent = batch_cost[idx]      
                     n_min = n                            
                     break
+                else:
+                    node.blacklist.add(n.id)
+                    n.blacklist.add(node.id)
         return n_min, c_min_to_parent
 
     def rewire(self, 
@@ -489,14 +492,13 @@ class BaseTree():
                 if n_near == node.forward.parent or n_near.cost == np.inf or n_near.id == node.id:
                     continue
                 if node.state.mode == n_near.state.mode or node.state.mode == n_near.state.mode.prev_mode:
-                    if (node.id == 510 or node.id == 511) and (n_near.id == 510 or n_near.id == 511):
-                            pass
                     if self.is_edge_collision_free(node.state.q, n_near.state.q, node.state.mode):
-                        if (node.id == 510 or node.id == 511) and (n_near.id == 510 or n_near.id == 511):
-                            pass
-                        
                         edge_cost = float(batch_cost[idx])
                         self.update_connectivity(node, n_near, edge_cost, node.cost + edge_cost)
+                    else:
+                        node.blacklist.add(n_near.id)
+                        n_near.blacklist.add(node.id)
+
 
 
 @njit
@@ -559,7 +561,6 @@ class BaseGraph(ABC):
         self.unit_n_ball_measure = ((np.pi**0.5) ** self.dim) / math.gamma(self.dim / 2 + 1) 
         self.new_path = None
         self.weight = 1
-        self.invalid_neighbors = set()
 
     def get_num_samples(self) -> int:
         num_samples = 0
@@ -662,8 +663,6 @@ class BaseGraph(ABC):
             if i == len(path)-1:
                 is_transition = True
             node = self.node_cls(self.operation, path[i], is_transition)
-            if node.id == 2316 or node.id == 2317:
-                pass
             if is_transition:
                 if parent.is_transition and parent.is_reverse_transition and self.reverse_transition_is_already_present(node):
                     continue
@@ -795,7 +794,6 @@ class BaseGraph(ABC):
         self.reverse_transition_node_array_cache = {}
 
         self.blacklist_cache = {}
-        self.invalid_neighbors = set()
 
     def get_r_star(
         self, number_of_nodes, informed_measure, unit_n_ball_measure, wheight=1):
@@ -827,19 +825,12 @@ class BaseGraph(ABC):
     ) -> set:
          
         if node.id in self.neighbors_node_ids_cache:
-            return self.update_neighbors(node)
-            # if node.id not in self.invalid_neighbors:
-            #     return self.update_neighbors_with_family_of_node(node)
-            # else:
-            #     self.invalid_neighbors.remove(node.id)
-            if node.id in self.invalid_neighbors:
-                self.invalid_neighbors.remove(node.id)
-                return self.update_neighbors(node)
-            return self.update_neighbors_with_family_of_node(node)
-            
+            return self.update_neighbors(node)            
 
         key = node.state.mode
         self.update_cache(key)
+        if node.id == 1931:
+            pass
 
         best_nodes_arr, best_transitions_arr= np.zeros((0, self.dim)), np.zeros((0, self.dim))
         informed_measure = 1
@@ -944,65 +935,6 @@ class BaseGraph(ABC):
         self.blacklist_cache[node.id] = set()
         return self.update_neighbors(node, True)
 
-    # def update_neighbors_with_family_of_node(self, node:BaseNode, update:bool = False):
-    #     node_id = node.id
-    #     blacklist = node.blacklist
-
-    #     # Get latest family from cache or empty set
-    #     latest_fam = self.neighbors_fam_ids_cache.get(node_id, set())
-
-    #     # Compute current family (forward + reverse)
-    #     current_fam = node.forward.fam | node.rev.fam
-
-    #     # Validate no blacklisted overlap
-    #     assert not (current_fam & blacklist), (
-    #         "items from the set are in the array"
-    #     )
-    #     new_ids = []
-    #     diff = current_fam - latest_fam
-    #     if diff:
-    #         self.neighbors_fam_ids_cache[node.id] = current_fam 
-    #         node_ids = self.neighbors_node_ids_cache[node.id]
-    #         node_ids_set = set(node_ids)
-    #         new_ids = list(current_fam - node_ids_set)
-    #         if new_ids:
-
-    #             new_arr = np.array(
-    #                 [self.nodes[id_].state.q.q for id_ in new_ids],
-    #                 dtype=np.float64,
-    #             )   
-    #             new_costs = self.batch_cost_fun(node.state.q, new_arr)        
-    #             self.tot_neighbors_batch_cost_cache[node.id] = np.concatenate(
-    #                 (new_costs, self.neighbors_batch_cost_cache[node.id])
-    #                 )
-    #             self.tot_neighbors_id_cache[node.id] = np.concatenate(
-    #                 (new_ids, self.neighbors_node_ids_cache[node.id])
-    #                 )
-    #             ids = self.tot_neighbors_id_cache[node_id]
-    #             costs = self.tot_neighbors_batch_cost_cache[node_id]
-    #             assert len(ids) == len(costs), (
-    #                 "forward not right")
-    #             assert not (set(ids) & blacklist), (
-
-    #                 "items from the set are in the array"
-    #             )
-    #             return self.tot_neighbors_id_cache[node.id]
-            
-    #      # Handle full update or first-time init
-    #     if update or node_id not in self.tot_neighbors_id_cache:
-    #         self.tot_neighbors_batch_cost_cache[node_id] = self.neighbors_batch_cost_cache[node_id]
-    #         self.tot_neighbors_id_cache[node_id] = self.neighbors_node_ids_cache[node_id]
-
-    #     ids = self.tot_neighbors_id_cache[node_id]
-    #     costs = self.tot_neighbors_batch_cost_cache[node_id]
-    #     assert len(ids) == len(costs), (
-    #                 "forward not right")
-    #     assert not (set(ids) & blacklist), (
-
-    #         "items from the set are in the array"
-    #     )
-    #     return self.tot_neighbors_id_cache[node.id]
-
     def update_neighbors_with_family_of_node(self, node: BaseNode, update: bool = False):
         node_id = node.id
         blacklist = node.blacklist
@@ -1056,6 +988,8 @@ class BaseGraph(ABC):
             self.neighbors_fam_ids_cache[node.id] = set()
             self.blacklist_cache[node.id] = blacklist.copy()
             node_ids = self.neighbors_node_ids_cache[node.id]
+            if node_ids.size == 0:
+                return self.update_neighbors_with_family_of_node(node, update)
             mask = create_mask_boolmap_auto(node_ids, np.array(list(blacklist_diff)))
             if np.any(~mask):
                 self.neighbors_node_ids_cache[node.id] = node_ids[mask]
@@ -1112,6 +1046,7 @@ class BaseGraph(ABC):
                 
             # else:
             #     print("uhhh")
+            self.update_edge_collision_cache(n1, n0, True)
             self.add_vertex_to_tree(n1)
             self.add_vertex_to_tree(n0)
             n1.forward.fam.add(n0.id)
@@ -1319,7 +1254,7 @@ class BaseGraph(ABC):
                 if compute_lb_effort_to_go:
                     n.lb_effort_to_come = n.lb_cost_to_come /self.collision_resolution
                 processed +=1
-        print(processed)
+        # print(processed)
 
     def compute_node_lb_effort_to_come(self):
         processed = 0
@@ -1357,14 +1292,11 @@ class BaseGraph(ABC):
                 n1.whitelist.add(n0.id)
                 n0.whitelist.add(n1.id)
             else:
-                if n1.id == 4961 or n0.id == 4961:
-                    if n0.id == 4960 or n1.id == 4960:
-                        pass
+                if n1.id == 2214 or n0.id == 2214:
+                    if n1.id == 2054 or n0.id == 2054:
+                        print("collision")
                 n0.blacklist.add(n1.id)
                 n1.blacklist.add(n0.id)
-                
-                self.invalid_neighbors.add(n1.id)
-                self.invalid_neighbors.add(n0.id)
 
     @abstractmethod
     def update_forward_queue(self, edge_cost, edge):
@@ -3524,42 +3456,42 @@ class BaseITstar(ABC):
                     resolution=self.env.collision_resolution,
                     tolerance=self.env.collision_tolerance
                 )
-                assert all([
-                        self.env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode) 
-                        for i in range(len(path) - 1)
-                    ]), (
-                        "hjsfdgklöäsjdk$"
-                    )
+                # assert all([
+                #         self.env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode) 
+                #         for i in range(len(path) - 1)
+                #     ]), (
+                #         "hjsfdgklöäsjdk$"
+                #     )
 
 
-                if not all([
-                        self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode) 
-                        for i in range(len(shortcut_path) - 1)
-                    ]):
-                        for i in range(len(shortcut_path)-1):
-                            if not self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode):
-                                self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode)
-                                print()
+                # if not all([
+                #         self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode) 
+                #         for i in range(len(shortcut_path) - 1)
+                #     ]):
+                #         for i in range(len(shortcut_path)-1):
+                #             if not self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode):
+                #                 self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode)
+                #                 print()
                 
-                if not self.env.is_path_collision_free(
-                    shortcut_path):
-                    pass
+                # if not self.env.is_path_collision_free(
+                #     shortcut_path):
+                #     pass
                 
 
                 shortcut_path = shortcutting.remove_interpolated_nodes(shortcut_path)
                 shortcut_path_cost = path_cost(
                     shortcut_path, self.env.batch_config_cost
                 )
-                if not self.env.is_path_collision_free(
-                    shortcut_path):
-                    pass
-                if not all([
-                        self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode) 
-                        for i in range(len(shortcut_path) - 1)
-                    ]):
-                        for i in range(len(shortcut_path)-1):
-                            if not self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode):
-                                self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode)
+                # if not self.env.is_path_collision_free(
+                #     shortcut_path):
+                #     pass
+                # if not all([
+                #         self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode) 
+                #         for i in range(len(shortcut_path) - 1)
+                #     ]):
+                #         for i in range(len(shortcut_path)-1):
+                #             if not self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode):
+                #                 self.env.is_edge_collision_free(shortcut_path[i].q, shortcut_path[i+1].q, shortcut_path[i].mode)
 
                     
                     
@@ -3590,13 +3522,13 @@ class BaseITstar(ABC):
                     self.current_best_cost = path_cost(self.current_best_path, self.env.batch_config_cost) 
                     print("rewired cost: " ,self.current_best_cost)
                     print('new path: ', [n.id for n in self.current_best_path_nodes])
-                    if not all([
-                        self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode) 
-                        for i in range(len(self.current_best_path) - 1)
-                    ]):
-                        for i in range(len(self.current_best_path)-1):
-                            if not self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode):
-                                self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode)
+                    # if not all([
+                    #     self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode) 
+                    #     for i in range(len(self.current_best_path) - 1)
+                    # ]):
+                    #     for i in range(len(self.current_best_path)-1):
+                    #         if not self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode):
+                    #             self.env.is_edge_collision_free(self.current_best_path[i].q, self.current_best_path[i+1].q, self.current_best_path[i].mode)
             
             else:
                 pass
@@ -3785,7 +3717,8 @@ class BaseITstar(ABC):
         #         self.process_valid_path(path, force_update = True, update_queues=False )
         # print("edges sparsely checked several times", [self.sparesly_checked_edges[key] for key in self.sparesly_checked_edges.keys() if self.sparesly_checked_edges[key] > 1])
         if self.current_best_cost is not None:
-            print("Shortcut latest path")
+            print()
+            print("Shortcutting before new batch")
             self.current_best_path_nodes = self.generate_path(True)
             self.process_valid_path(self.current_best_path_nodes, False, True, True)
             self.update_removal_conditions() 
