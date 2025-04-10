@@ -11,6 +11,9 @@ from multi_robot_multi_goal_planning.problems.planning_env import State
 
 from multi_robot_multi_goal_planning.planners.joint_prm_planner import joint_prm_planner
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BidirectionalRRTstar,
+)
 
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
@@ -111,6 +114,7 @@ def test_path_collision_checking(mocker):
     [
         lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
         lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
+        lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
     ],
 )
 def test_planner_on_abstract_env(planner_fn):
@@ -131,6 +135,7 @@ def test_planner_on_abstract_env(planner_fn):
     [
         lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
         lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
+        lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
     ],
 )
 def test_planner_on_hallway_dependency_env(planner_fn):

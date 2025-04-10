@@ -546,7 +546,7 @@ class Graph:
                 continue
 
             neighbors = [
-                n.neighbors[0] for n in self.reverse_transition_nodes[node.state.mode]
+                neighbor for n in self.reverse_transition_nodes[node.state.mode] for neighbor in n.neighbors
             ]
 
             if not neighbors:
