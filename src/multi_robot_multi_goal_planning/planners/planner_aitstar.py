@@ -66,12 +66,13 @@ class Graph(BaseGraph):
     def __init__(self, 
                  root_state, 
                  operation, 
+                 distance_metric,
                  batch_dist_fun, 
                  batch_cost_fun, 
                  is_edge_collision_free,
                  collision_resolution, 
                  node_cls):
-        super().__init__(root_state, operation, batch_dist_fun, batch_cost_fun, is_edge_collision_free, collision_resolution, node_cls)
+        super().__init__(root_state, operation, distance_metric, batch_dist_fun, batch_cost_fun, is_edge_collision_free, collision_resolution, node_cls, including_effort=False)
     
         self.reverse_queue = None
         self.forward_queue = None
@@ -313,6 +314,7 @@ class AITstar(BaseITstar):
         return Graph(
             root_state=root_state,
             operation=self.operation,
+            distance_metric=self.distance_metric,
             batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.distance_metric),
             batch_cost_fun= lambda a, b: self.env.batch_config_cost(a, b),
             is_edge_collision_free = self.env.is_edge_collision_free,

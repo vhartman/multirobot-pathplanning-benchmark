@@ -12,6 +12,7 @@ from typing import (
 import time
 import math
 from itertools import chain
+import heapq
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
@@ -47,11 +48,11 @@ class InadmissibleHeuristics():
         self.lb_cost_to_go = np.inf
         self.effort = np.inf
 
-    def update(self, pot_parent:"Node", edge_cost:float, resolution:float):
+    def update(self, pot_parent:"Node", edge_cost:float, edge_effort:float):
         self.lb_cost_to_go = min(self.lb_cost_to_go, pot_parent.inad.lb_cost_to_go + edge_cost)
         if np.isinf(self.lb_cost_to_go):
             pass
-        new_effort = pot_parent.inad.effort + edge_cost/resolution
+        new_effort = pot_parent.inad.effort + edge_effort
         if new_effort < self.effort:
             self.effort = new_effort
 
@@ -67,18 +68,18 @@ class Graph(BaseGraph):
     def __init__(self, 
                  root_state, 
                  operation, 
+                 distance_metric,
                  batch_dist_fun, 
                  batch_cost_fun, 
                  is_edge_collision_free,
                  collision_resolution, 
                  node_cls):
-        super().__init__(root_state, operation, batch_dist_fun, batch_cost_fun, is_edge_collision_free, collision_resolution, node_cls)
+        super().__init__(root_state, operation, distance_metric, batch_dist_fun, batch_cost_fun, is_edge_collision_free, collision_resolution, node_cls, including_effort=True)
     
         self.reverse_queue = None
         self.effort_estimate_queue = None
         self.cost_bound_queue = None
         self.epsilon = np.inf
-        # self.g.cost_estimate_queue = None
 
     def reset_reverse_tree(self):
         [
@@ -112,9 +113,10 @@ class Graph(BaseGraph):
             node.rev.cost_to_parent = 0
             node.inad.reset_goal_nodes()
 
-    def update_forward_queue(self, edge_cost, edge):
-        self.effort_estimate_queue.heappush((edge_cost, edge))
-        self.cost_bound_queue.heappush((edge_cost, edge))
+    def update_forward_queue(self, edge_cost, edge, edge_effort):
+        item = (edge_cost, edge, edge_effort)
+        self.effort_estimate_queue.heappush(item)
+        self.cost_bound_queue.heappush(item)
         # self.g.cost_estimate_queue.heappush((edge_cost, edge)) 
 
     def update_forward_queue_keys(self, type:str, node_ids:Optional[Set[BaseNode]] = None):
@@ -124,45 +126,69 @@ class Graph(BaseGraph):
         #     self.effort_estimate_queue.update(node_ids, type)
         # self.cost_estimate_queue.update(node_ids, type)
         self.cost_bound_queue.update(node_ids, type)
+        if type == 'target':
+            self.effort_estimate_queue.update(node_ids, type)
     
     def update_reverse_queue_keys(self, type:str, node_ids:Optional[Set[BaseNode]] = None):
         if node_ids is not None and len(node_ids) == 0:
             return
         self.reverse_queue.update(node_ids, type)
 
-    def remove_forward_queue(self, edge_cost, n0, n1):
-        self.cost_bound_queue.remove((edge_cost, (n1, n0))) 
-        self.effort_estimate_queue.remove((edge_cost, (n1, n0)))
+    def remove_forward_queue(self, edge_cost, n0, n1, edge_effort):
+        item1 = (edge_cost, (n1, n0), edge_effort)
+        item2 = (edge_cost, (n0, n1), edge_effort)
+        self.cost_bound_queue.remove(item1) 
+        self.effort_estimate_queue.remove(item1)
         # self.g.cost_estimate_queue.remove((edge_cost, (n1, n0)))
-        self.cost_bound_queue.remove((edge_cost, (n0, n1))) 
-        self.effort_estimate_queue.remove((edge_cost, (n0, n1)))
+        self.cost_bound_queue.remove(item2) 
+        self.effort_estimate_queue.remove(item2)
         # self.g.cost_estimate_queue.remove((edge_cost, (n0, n1)))
 
+    # def get_best_forward_edge(self):
+    #     # key_ce, (edge_cost_ce,(ce0, ce1)) = self.cost_estimate_queue.peek_first_element()
+    #     key_cb, (edge_cost_cb,(cb0, cb1)) = self.cost_bound_queue.peek_first_element()
+    #     bound = key_cb * self.epsilon
+    #     key_ee, (edge_cost_ee,(ee0, ee1)) = self.effort_estimate_queue.peek_first_element(self.cost_bound_queue.key, bound)
+    #     if np.isinf(cb1.lb_cost_to_go): 
+    #         # if not np.isinf(key_cb):
+    #         #     pass
+    #         assert(np.isinf(key_cb)), (
+    #             "key_cb is not inf"
+    #         )
+    #     item = (edge_cost_ee, (ee0, ee1))
+    #     key_ee = self.cost_bound_queue.key(item)
+    #     if key_ee >= bound:
+    #         item = (edge_cost_cb, (cb0, cb1))
+    #     # elif key_ce < key_cb:
+    #     #     item = (edge_cost_ce, (ce0, ce1)
+                
+    #     self.effort_estimate_queue.remove(item)
+    #     # self.g.cost_estimate_queue.remove(item)
+    #     self.cost_bound_queue.remove(item)
+    #     # assert(key_ce == key_cb), (
+    #     #     "ghjklö"
+    #     # )
+    #     return item
+    
     def get_best_forward_edge(self):
-        key, (edge_cost_ee,(ee0, ee1)) = self.effort_estimate_queue.peek_first_element()
-        # key_ce, (edge_cost_ce,(ce0, ce1)) = self.cost_estimate_queue.peek_first_element()
-        key_cb, (edge_cost_cb,(cb0, cb1)) = self.cost_bound_queue.peek_first_element()
-        if np.isinf(cb1.lb_cost_to_go): 
-            # if not np.isinf(key_cb):
-            #     pass
+        key_cb, item_cb = self.cost_bound_queue.peek_first_element()
+        bound = key_cb * self.epsilon
+        _, item_ee = self.effort_estimate_queue.peek_first_element()
+        if np.isinf(item_cb[1][1].lb_cost_to_go): 
             assert(np.isinf(key_cb)), (
                 "key_cb is not inf"
             )
-        item = (edge_cost_ee, (ee0, ee1))
-        key_ee = self.cost_bound_queue.key(item)
-        if key_ee < self.epsilon*key_cb:
-            item = (edge_cost_ee, (ee0, ee1))
-        # elif key_ce < key_cb:
-        #     item = (edge_cost_ce, (ce0, ce1))
+        item = item_cb
+        if np.isinf(self.epsilon):     
+            key_ee = self.cost_bound_queue.key(item_ee)
+            if key_ee <=bound:
+                item = item_ee
         else:
-            item = (edge_cost_cb, (cb0, cb1))
+            pass
 
         self.effort_estimate_queue.remove(item)
-        # self.g.cost_estimate_queue.remove(item)
         self.cost_bound_queue.remove(item)
-        # assert(key_ce == key_cb), (
-        #     "ghjklö"
-        # )
+
         return item
 
 class Operation(BaseOperation):
@@ -207,18 +233,39 @@ class ReverseQueue(EdgeQueue):
     def key(self, item: Tuple[Any]) -> float:
         # item[0]: edge_cost from n0 to n1
         # item[1]: edge (n0, n1)
+        # item[2]: edge effort from n0, n1
+        
         start_node, target_node = item[1] 
         return (start_node.inad.lb_cost_to_go + item[0] + target_node.lb_cost_to_come,
-                start_node.inad.effort + item[0]/self.collision_resolution + target_node.lb_effort_to_come)
+                start_node.inad.effort + item[2] + target_node.lb_effort_to_come)
           
 class EffortEstimateQueue(EdgeQueue):
     def __init__(self, alpha =1.0, collision_resolution: Optional[float] = None):
         super().__init__(alpha, collision_resolution)
+        self.cost_bound = {}
     #remaining effort through an edge
     def key(self, item: Tuple[Any]) -> float:
-        # item[0]: cost from n0 to n1
+        # item[0]: edge cost from n0 to n1
         # item[1]: edge (n0, n1)
-        return item[0]/self.collision_resolution
+        #item[2]: edge effort from n0, n1
+        return item[1][1].inad.effort + item[2]
+    
+    def add_and_sync(self, item):
+        target_node_id = item[1][1].id
+
+        self.target_nodes.add(target_node_id)
+        self.target_nodes_with_item.setdefault(target_node_id, set()).add(item)
+    
+    def remove(self, item, in_current_entries:bool = False):
+        if not in_current_entries and item not in self.current_entries:
+           return
+        target_node_id = item[1][1].id
+        self.target_nodes_with_item[target_node_id].remove(item)
+        del self.current_entries[item]
+
+        if not self.target_nodes_with_item[target_node_id]:
+            self.target_nodes.discard(target_node_id)
+
     
 class CostBoundQueue(EdgeQueue):
     def key(self, item: Tuple[Any]) -> float:
@@ -268,12 +315,13 @@ class EITstar(BaseITstar):
             try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
             informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
 
-        self.sparse_number_of_points = 3
+        self.sparse_number_of_points = 1
         self.use_max_distance_metric_effort = use_max_distance_metric_effort
         self.reverse_tree_set = set()
         self.reduce_neighbors = False
         self.sparesly_checked_edges = {}
         self.check = set()
+        self.first_search = False
 
     def _create_operation(self) -> BaseOperation:
         return Operation()
@@ -282,6 +330,7 @@ class EITstar(BaseITstar):
         return Graph(
             root_state=root_state,
             operation=self.operation,
+            distance_metric = self.distance_metric,
             batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.distance_metric),
             batch_cost_fun= lambda a, b: self.env.batch_config_cost(a, b),
             is_edge_collision_free = self.env.is_edge_collision_free,
@@ -316,7 +365,7 @@ class EITstar(BaseITstar):
         self.reverse_closed_set.add(node.id)
         self.reverse_tree_set.add(node.id)
            
-    def expand_node_reverse(self, nodes: List[Node]) -> None:
+    def expand_node_reverse(self, nodes: List[Node], first_search:bool = False) -> None:
         for node in nodes:
             if node.id == self.g.root.id:
                 return  
@@ -325,11 +374,15 @@ class EITstar(BaseITstar):
             #     return
             self.reverse_tree_set.add(node.id)
             self.updated_target_nodes.add(node.id)
-            neighbors = self.g.get_neighbors(node, space_extent=self.approximate_space_extent)
+            neighbors = self.g.get_neighbors(node, space_extent=self.approximate_space_extent, first_search=first_search)
             if neighbors.size == 0:
                 return          
             edge_costs = self.g.tot_neighbors_batch_cost_cache[node.id]
-            for id, edge_cost in zip(neighbors, edge_costs):
+            edge_efforts = self.g.tot_neighbors_batch_effort_cache[node.id]
+            assert (len(edge_costs) == len(edge_efforts)), (
+                "neighbors and edge_costs are not the same length"
+            )
+            for id, edge_cost, edge_effort in zip(neighbors, edge_costs, edge_efforts):
                 n = self.g.nodes[id]
                 assert (n.forward.parent == node) == (n.id in node.forward.children), (
                         f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
@@ -358,12 +411,7 @@ class EITstar(BaseITstar):
                     if node.lb_cost_to_go + edge_cost + n.lb_cost_to_come > self.current_best_cost:
                         continue
                 edge = (node, n)
-                # print(node.id, n.id)
-                if edge in self.check:
-                    pass
-                self.check.add(edge)
-
-                self.g.reverse_queue.heappush((edge_cost, edge))
+                self.g.reverse_queue.heappush((edge_cost, edge, edge_effort))
                  
     def update_inflation_factor(self):
         # if self.current_best_cost is None:
@@ -371,13 +419,9 @@ class EITstar(BaseITstar):
             self.g.epsilon = np.inf
         else:
             self.g.epsilon = 1
-
     @cache
-    def get_sparse_num_of_collision_checks(self, edge_cost, N) -> float:
-        r = edge_cost/N
-        if r < self.env.collision_resolution:
-            return None
-        return N
+    def get_collision_start_and_max_index(self, sparse_N):
+        return sum(range(1, sparse_N)), sum(range(1, sparse_N + 1))
 
     def reverse_search(self):
         self.updated_target_nodes = set()
@@ -387,7 +431,7 @@ class EITstar(BaseITstar):
             #     self.save_tree_data((BaseTerree.all_vertices, self.reverse_tree_set))
             # print(iter, self.reverse_tree_set)
             iter +=1
-            edge_cost, edge = self.g.reverse_queue.heappop()
+            edge_cost, edge, edge_effort = self.g.reverse_queue.heappop()
             n0, n1 = edge
             # if not self.dynamic_reverse_search_update and n1.id in self.reverse_tree_set:
             #     continue
@@ -400,30 +444,52 @@ class EITstar(BaseITstar):
             if n0.id not in n1.whitelist:
                 sparsely_collision_free = False
                 if n0.id not in n1.blacklist:
-                    sparse_num_of_collision_checks = self.get_sparse_num_of_collision_checks(edge_cost, self.sparse_number_of_points)
-                    sparsely_collision_free = self.env.is_edge_collision_free(
-                                n1.state.q,
-                                n0.state.q,
-                                n0.state.mode,
-                                N =sparse_num_of_collision_checks
-                            )
-                    #TODO if already checked with env resolution add to whitelist!
-                    if edge not in self.sparesly_checked_edges:
-                        self.sparesly_checked_edges[edge] = 0
-                    self.sparesly_checked_edges[edge] += 1
+                    if n1.id > n0.id:
+                            n_start = n0
+                            n_end = n1
+                    else:
+                        n_start = n1
+                        n_end = n0
+                    N_start, N_max = self.get_collision_start_and_max_index(self.sparse_number_of_points)
+                    N = max(2, int(edge_effort))
+                    if N_start != 1 and N_start != 0:
+                        pass
+                    edge_id = (n_start.id, n_end.id)
+                    previously_checked = edge_id in self.sparesly_checked_edges
+                    valid_check = (previously_checked and (
+                                    self.sparesly_checked_edges[edge_id] >= N_max))
+                    if valid_check:
+                        sparsely_collision_free = True
+                    else:
+                        sparsely_collision_free = self.env.is_edge_collision_free(
+                                    n_start.state.q,
+                                    n_end.state.q,
+                                    n_start.state.mode,
+                                    N_start= N_start,
+                                    N_max= N_max,
+                                    N = N
+                                )
+                        self.sparesly_checked_edges[edge_id] = N_max
                 if not sparsely_collision_free:
-                    self.g.remove_forward_queue(edge_cost, n0, n1)
+                    self.g.remove_forward_queue(edge_cost, n0, n1, edge_effort)
                     self.g.update_edge_collision_cache(n0, n1, False)
+                    self.manage_edge_in_collision(n0, n1, clear = True)
                     continue
-            n1.inad.update(n0, edge_cost, self.env.collision_resolution)
+                if N_max >= N:
+                    #checked it already with env resolution
+                    self.g.update_edge_collision_cache(n0, n1, True)
+
+            n1.inad.update(n0, edge_cost, edge_effort)
             if is_transition:
-                n1.transition.inad.update(n1, 0.0, self.env.collision_resolution)
+                n1.transition.inad.update(n1, 0.0, 0.0)
             potential_lb_cost_to_go = n0.lb_cost_to_go + edge_cost
             if n1.lb_cost_to_go > potential_lb_cost_to_go:
                 self.g.update_connectivity(n0, n1, edge_cost, potential_lb_cost_to_go,"reverse", is_transition)
-
                 assert (n1.lb_cost_to_go == n1.inad.lb_cost_to_go), (
                     "ghjklö"
+                )
+                assert(n1.inad.effort != np.inf), (
+                    "effort is inf"
                 )
                 if is_transition:
                     self.reverse_tree_set.add(n1.id)
@@ -480,32 +546,33 @@ class EITstar(BaseITstar):
                 stack.extend(children)
         return nodes_to_update
 
-    def manage_edge_in_collision(self, n0, n1):
+    def manage_edge_in_collision(self, n0, n1, clear:bool =False):
         if n0.rev.parent == n1 or n1.rev.parent == n0:
-            if not self.dynamic_reverse_search_update:
+            if not self.dynamic_reverse_search_update or clear:
                 self.clear_reverse_edge_in_collision(n0, n1)
+                # self.initialize_reverse_search(False)
                 return
             self.sparse_number_of_points +=1
             # self.clear_reverse_edge_in_collision(n0, n1)
             self.initialize_reverse_search(False)    
 
     def initialize_lb(self):
-        calculate_effort = True
-        if self.use_max_distance_metric_effort:
-            calculate_effort = False
-            self.g.compute_transition_lb_effort_to_come()
-            self.g.compute_node_lb_effort_to_come()
-        self.g.compute_transition_lb_to_come(calculate_effort)
-        self.g.compute_node_lb_to_come(calculate_effort)
+        # calculate_effort = True
+        # if self.use_max_distance_metric_effort:
+        #     calculate_effort = False
+        #     self.g.compute_transition_lb_effort_to_come()
+        #     self.g.compute_node_lb_effort_to_come()
+        self.g.compute_transition_lb_to_come()
+        self.g.compute_transition_lb_effort_to_come()
+        self.g.compute_node_lb_to_come()
+        # self.g.compute_node_lb_effort_to_come()
 
     def initialze_forward_search(self):
-        if self.current_best_cost is not None:
-            self.g.weight = 0.5
         self.update_inflation_factor()
         self.g.effort_estimate_queue = EffortEstimateQueue(collision_resolution=self.env.collision_resolution)
         self.g.cost_bound_queue = CostBoundQueue()
         # self.g.cost_estimate_queue = CostEstimateQueue()
-        self.expand_node_forward(self.g.root)
+        self.expand_node_forward(self.g.root, first_search=self.first_search)
 
     def initialize_reverse_search(self, reset:bool = True):
         if len(BaseTree.all_vertices) > 1:
@@ -518,10 +585,10 @@ class EITstar(BaseITstar):
         self.g.reset_all_goal_nodes_lb_costs_to_go()
         self.updated_target_nodes = set() #lb_cost_to_go was updated in reverse search
         if reset:
-            self.sparse_number_of_points = 3
-        self.expand_node_reverse(self.g.goal_nodes) 
+            self.sparse_number_of_points = 1
+        self.expand_node_reverse(self.g.goal_nodes, first_search = self.first_search) 
         self.g.update_forward_queue_keys('target') 
- 
+         
     def Plan(
         self,optimize:bool = True
     ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
@@ -541,7 +608,10 @@ class EITstar(BaseITstar):
             
             key, _ = self.g.cost_bound_queue.peek_first_element()
             if self.current_best_cost is None or key < self.current_best_cost:
-                edge_cost, (n0, n1) = self.g.get_best_forward_edge()
+                edge_cost, (n0, n1), edge_effort = self.g.get_best_forward_edge()
+                if n0.id in n1.blacklist:
+                    #needed because of rewiring
+                    continue
                 assert n0.id not in n1.blacklist, (
                     "askdflö"
                 )
@@ -573,16 +643,18 @@ class EITstar(BaseITstar):
                     if n0.id not in n1.whitelist:
                         collision_free = False
                         if n0.id not in n1.blacklist:
+                            N = max(2, int(edge_effort))
                             collision_free = self.env.is_edge_collision_free(
                                 n0.state.q,
                                 n1.state.q,
                                 n0.state.mode,
                                 self.env.collision_resolution,
+                                N=N,
                             )
                             
                         if not collision_free:
                             self.g.update_edge_collision_cache(n0, n1, collision_free)
-                            self.g.remove_forward_queue(edge_cost, n0, n1)
+                            self.g.remove_forward_queue(edge_cost, n0, n1, edge_effort)
                             self.manage_edge_in_collision(n0, n1)
                             continue
                     self.g.update_connectivity(n0, n1, edge_cost, n0.cost + edge_cost,"forward", is_transition)
