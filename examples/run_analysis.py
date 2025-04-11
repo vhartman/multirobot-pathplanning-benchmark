@@ -20,6 +20,39 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from examples.disp_path_2d import get_infos_of_obstacles_and_table_2d
 import matplotlib.lines as mlines
+import subprocess
+
+def generate_gif(dir, framerate = 2):
+    palette_file = os.path.join(dir, "palette.png")
+    output_gif = os.path.join(dir, "output.gif")
+
+    # Command 1: Generate palette
+    palette_command = [
+        "ffmpeg",
+        "-framerate", str(framerate),
+        "-i", os.path.join(dir, "%04d.png"),
+        "-vf", "scale=iw:-1:flags=lanczos,palettegen",
+        palette_file
+    ]
+
+    # Command 2: Create gif using palette
+    gif_command = [
+        "ffmpeg",
+        "-framerate", str(framerate),
+        "-i", os.path.join(dir, "%04d.png"),
+        "-i", palette_file,
+        "-lavfi", "scale=iw:-1:flags=lanczos [scaled]; [scaled][1:v] paletteuse=dither=bayer:bayer_scale=5",
+        output_gif
+    ]
+
+    print(f"Generating GIF for: {dir}")
+
+    # Run commands
+    subprocess.run(palette_command, check=True)
+    subprocess.run(gif_command, check=True)
+
+    print(f"GIF saved to: {output_gif}")
+
 def process_all_frame_traces_to_figure(env, all_frame_traces, static_traces):
     # Determine the maximum number of dynamic traces needed
     try:
@@ -822,7 +855,11 @@ def visualize_tree_2d_paper(env, path_to_folder):
     #TODO need to add forward_tree
     colors =["magenta", "grey"]
     dir = os.path.join(os.path.dirname(path_to_folder),'tree_vis')
-    os.makedirs(dir, exist_ok=True)
+    if os.path.exists(dir):
+        shutil.rmtree(dir)
+
+    # Recreate the directory
+    os.makedirs(dir)
     obstacles, table_size = get_infos_of_obstacles_and_table_2d(env)
     reached_modes = []
     mode = env.start_mode
@@ -961,6 +998,7 @@ def visualize_tree_2d_paper(env, path_to_folder):
                 default=-1
             ) + 1
         plt.savefig(os.path.join(dir,f"{next_file_number:04d}.png"), dpi=300, bbox_inches='tight') 
+    generate_gif(dir)
 
 def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
 
