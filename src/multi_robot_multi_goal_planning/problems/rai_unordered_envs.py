@@ -154,7 +154,7 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
 
         r2_goals = []
 
-        N = 5
+        N = 2
         r = 0.5
 
         for i in range(N):
@@ -192,6 +192,65 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
         self.tasks[1].name = "a1_goal"
 
         self.per_robot_tasks = [[1], [2 + i for i in range(len(r2_goals))]]
+        self.terminal_task = len(self.tasks) - 1
+
+        self.collision_tolerance = 0.01
+
+        BaseModeLogic.__init__(self)
+
+
+class rai_two_dim_circle_single_agent(UnorderedButAssignedMixin, rai_env):
+    def __init__(self, agents_can_rotate=False):
+        self.C, keyframes = make_random_two_dim_single_goal(
+            num_agents=1,
+            num_obstacles=0,
+            agents_can_rotate=agents_can_rotate,
+        )
+        # self.C.view(True)
+
+        self.robots = [f"a{i}" for i in range(1)]
+
+        rai_env.__init__(self)
+
+        state = self.C.getJointState()[self.robot_idx["a0"]]
+
+        goals = []
+
+        N = 5
+        r = 1.0
+
+        for i in range(N):
+            goal = state * 1.0
+            goal[:2] = [
+                np.sin(1.0 * i / N * np.pi * 2) * r,
+                np.cos(1.0 * i / N * np.pi * 2) * r,
+            ]
+            goals.append(goal)
+
+        self.tasks = [
+            Task(
+                ["a0"],
+                GoalRegion(self.C.getJointLimits()),
+            ),
+        ]
+
+        for i, g in enumerate(goals):
+            self.tasks.append(
+                Task(["a0"], SingleGoal(g)),
+            )
+            self.tasks[-1].name = f"a2_goal_{i}"
+
+        self.tasks.append(  # terminal mode
+            Task(
+                ["a0"],
+                SingleGoal(self.C.getJointState()),
+            ),
+        )
+        self.tasks[-1].name = "terminal"
+
+        self.tasks[0].name = "dummy_start"
+
+        self.per_robot_tasks = [[1 + i for i in range(len(goals))]]
         self.terminal_task = len(self.tasks) - 1
 
         self.collision_tolerance = 0.01

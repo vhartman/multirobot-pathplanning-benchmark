@@ -545,9 +545,19 @@ class Graph:
             if node.id in closed_set:
                 continue
 
-            neighbors = [
-                neighbor for n in self.reverse_transition_nodes[node.state.mode] for neighbor in n.neighbors
-            ]
+            neighbors = []
+
+            if node.state.mode not in self.reverse_transition_nodes:
+                print("AAA")
+                continue
+
+            for n in self.reverse_transition_nodes[node.state.mode]:
+                for q in n.neighbors:
+                    neighbors.append(q)
+
+            # neighbors = [
+            #     neighbor for n in self.reverse_transition_nodes[node.state.mode] for neighbor in n.neighbors
+            # ]
 
             if not neighbors:
                 continue
@@ -743,7 +753,7 @@ class Graph:
                 else:
                     self.transition_nodes[this_mode] = [node_this_mode]
             else:
-                print("attempting goal node")
+                # print("attempting goal node")
                 is_in_goal_nodes_already = False
                 for g in self.goal_nodes:
                     if (
@@ -2295,7 +2305,8 @@ def joint_prm_planner(
                 if next_mode not in reached_modes and next_mode is not None:
                     reached_modes.append(next_mode)
 
-                    # print("reached modes", reached_modes)
+                    print("reached modes", len(reached_modes))
+                    print(reached_modes)
             # else:
             #     print("not collfree")
             #     print(mode)
@@ -2365,6 +2376,16 @@ def joint_prm_planner(
                     <= current_best_cost
                 ]
                 num_pts_for_removal += original_count - len(g.transition_nodes[mode])
+
+            for mode in list(g.reverse_transition_nodes.keys()):
+                original_count = len(g.reverse_transition_nodes[mode])
+                g.reverse_transition_nodes[mode] = [
+                    n
+                    for n in g.reverse_transition_nodes[mode]
+                    if sum(env.batch_config_cost(n.state.q, focal_points))
+                    <= current_best_cost
+                ]
+                # num_pts_for_removal += original_count - len(g.reverse_transition_nodes[mode])
 
             print(f"Removed {num_pts_for_removal} nodes")
 
