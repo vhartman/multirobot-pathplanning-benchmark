@@ -176,6 +176,7 @@ def setup_planner(
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
+                inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"]
             )
     elif planner_config["type"] == "rrtstar":
 
