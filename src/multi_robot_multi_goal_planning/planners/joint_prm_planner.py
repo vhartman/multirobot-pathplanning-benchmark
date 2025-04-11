@@ -30,7 +30,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 from multi_robot_multi_goal_planning.planners.sampling_informed import (
-    Informed
+    InformedSampling
 )
 
 
@@ -1377,7 +1377,7 @@ def joint_prm_planner(
     reached_modes = [m0]
 
     conf_type = type(env.get_start_pos())
-    informed = Informed(env, 
+    informed = InformedSampling(env, 
                         'graph_based',   
                         locally_informed_sampling,
                         include_lb=inlcude_lb_in_informed_sampling

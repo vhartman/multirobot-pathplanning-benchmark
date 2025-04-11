@@ -30,7 +30,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 
-from multi_robot_multi_goal_planning.planners.sampling_informed import Informed
+from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
 
 
 class Operation:
@@ -894,7 +894,7 @@ class BaseRRTstar(ABC):
         self.times = []
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
-        self.informed = Informed(self.env, 'sampling_based', self.locally_informed_sampling)
+        self.informed = InformedSampling(self.env, 'sampling_based', self.locally_informed_sampling)
 
     def add_tree(self, 
                  mode: Mode, 

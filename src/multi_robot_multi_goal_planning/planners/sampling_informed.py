@@ -8,10 +8,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
 )
-from multi_robot_multi_goal_planning.problems.configuration import (
-    Configuration
-)
-
+from multi_robot_multi_goal_planning.problems.configuration import Configuration
 
 
 # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
@@ -31,6 +28,7 @@ def sample_unit_ball(dim, n=1) -> np.ndarray:
     # Generate radii with correct distribution
     r = np.random.random(n) ** (1.0 / dim)
     return (r[None, :] / norms) * u
+
 
 def compute_PHS_matrices(a, b, c):
     dim = len(a)
@@ -66,6 +64,7 @@ def compute_PHS_matrices(a, b, c):
 
     return cwe @ r, center
 
+
 def sample_phs_with_given_matrices(rot, center, n=1):
     dim = len(center)
     x_ball = sample_unit_ball(dim, n)
@@ -73,24 +72,26 @@ def sample_phs_with_given_matrices(rot, center, n=1):
     # op = np.matmul(np.matmul(cwe, r), x_ball) + center
     return rot @ x_ball + center[:, None]
 
-class Informed():
+
+class InformedSampling:
     """Locally and globally informed sampling"""
-    def __init__(self, 
-                 env: BaseProblem, 
-                 planning_approach: str,
-                 locally_informed_sampling: bool = False,
-                 include_lb: bool = False):
+
+    def __init__(
+        self,
+        env: BaseProblem,
+        planning_approach: str,
+        locally_informed_sampling: bool = False,
+        include_lb: bool = False,
+    ):
         self.env = env
         self.planning_approach = planning_approach
         self.locally_informed_sampling = locally_informed_sampling
         self.include_lb = include_lb
         self.conf_type = type(self.env.get_start_pos())
-        
+
     def sample_mode(
-            self, 
-            reached_modes:List[Mode], 
-            mode_sampling_type: str = "uniform_reached"
-            ) -> Mode:
+        self, reached_modes: List[Mode], mode_sampling_type: str = "uniform_reached"
+    ) -> Mode:
         """
         Selects a mode based on the specified sampling strategy.
 
@@ -101,11 +102,11 @@ class Informed():
         Returns:
             Mode: Sampled mode according to the specified strategy.
         """
-    
+
         if mode_sampling_type == "uniform_reached":
             return random.choice(reached_modes)
 
-    def get_inbetween_modes(self, start_mode:Mode, end_mode:Mode) ->List[Mode]:
+    def get_inbetween_modes(self, start_mode: Mode, end_mode: Mode) -> List[Mode]:
         """
         Find all possible paths from start_mode to end_mode.
 
@@ -141,7 +142,9 @@ class Informed():
 
         return list(in_between_modes)
 
-    def lb_cost_from_start(self, state:State, g, lb_attribute_name="lb_cost_from_start"):
+    def lb_cost_from_start(
+        self, state: State, g, lb_attribute_name="lb_cost_from_start"
+    ):
         if state.mode not in g.reverse_transition_node_array_cache:
             g.reverse_transition_node_array_cache[state.mode] = np.array(
                 [o.state.q.q for o in g.reverse_transition_nodes[state.mode]],
@@ -168,7 +171,7 @@ class Informed():
 
         return min_cost
 
-    def lb_cost_from_goal(self, state:State, g, lb_attribute_name="lb_cost_to_goal"):
+    def lb_cost_from_goal(self, state: State, g, lb_attribute_name="lb_cost_to_goal"):
         if state.mode not in g.transition_nodes:
             return np.inf
 
@@ -189,20 +192,18 @@ class Informed():
             g.transition_node_array_cache[state.mode],
         )
 
-        min_cost = np.min(
-            g.transition_node_lb_cache[state.mode] + costs_to_transitions
-        )
+        min_cost = np.min(g.transition_node_lb_cache[state.mode] + costs_to_transitions)
 
         return min_cost
 
     def can_improve(
         self,
-        rnd_state: State, 
-        path: List[State], 
-        start_index:int, 
-        end_index:int, 
+        rnd_state: State,
+        path: List[State],
+        start_index: int,
+        end_index: int,
         path_segment_costs: NDArray,
-        g = None
+        g=None,
     ) -> bool:
         """
         Determines if a segment of the path can be improved by comparing its cost to a lower-bound estimate.
@@ -238,11 +239,11 @@ class Informed():
         lb_cost_from_start_index_to_state = self.env.config_cost(
             rnd_state.q, path[start_index].q
         )
-        if self.planning_approach == 'graph_based' and self.include_lb:
+        if self.planning_approach == "graph_based" and self.include_lb:
             if path[start_index].mode != rnd_state.mode:
                 start_state = path[start_index]
                 lb_cost_from_start_to_state = self.lb_cost_from_start(rnd_state, g)
-                lb_cost_from_start_to_index = self.lb_cost_from_start(start_state,g)
+                lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
 
                 lb_cost_from_start_index_to_state = max(
                     (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
@@ -252,12 +253,12 @@ class Informed():
         lb_cost_from_state_to_end_index = self.env.config_cost(
             rnd_state.q, path[end_index].q
         )
-        
-        if self.planning_approach == 'graph_based' and self.include_lb:
+
+        if self.planning_approach == "graph_based" and self.include_lb:
             if path[end_index].mode != rnd_state.mode:
                 goal_state = path[end_index]
-                lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state,g)
-                lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state,g)
+                lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state, g)
+                lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
 
                 lb_cost_from_state_to_end_index = max(
                     (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
@@ -290,12 +291,13 @@ class Informed():
         return False
 
     def can_transition_improve(
-            self, 
-            transition:Tuple[Configuration, Mode, Mode], 
-            path:List[State], 
-            start_index:int, 
-            end_index:int,
-            g = None):
+        self,
+        transition: Tuple[Configuration, Mode, Mode],
+        path: List[State],
+        start_index: int,
+        end_index: int,
+        g=None,
+    ):
         """
         Determines if current path segment can be improved by comparing its actual cost to a lower-bound estimate.
 
@@ -330,10 +332,12 @@ class Informed():
         lb_cost_from_start_index_to_state = self.env.config_cost(
             rnd_state_mode_1.q, path[start_index].q
         )
-        if self.planning_approach == 'graph_based' and self.include_lb:
+        if self.planning_approach == "graph_based" and self.include_lb:
             if path[start_index].mode != rnd_state_mode_1.mode:
                 start_state = path[start_index]
-                lb_cost_from_start_to_state = self.lb_cost_from_start(rnd_state_mode_1, g)
+                lb_cost_from_start_to_state = self.lb_cost_from_start(
+                    rnd_state_mode_1, g
+                )
                 lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
 
                 lb_cost_from_start_index_to_state = max(
@@ -344,7 +348,7 @@ class Informed():
         lb_cost_from_state_to_end_index = self.env.config_cost(
             rnd_state_mode_2.q, path[end_index].q
         )
-        if self.planning_approach == 'graph_based' and self.include_lb:
+        if self.planning_approach == "graph_based" and self.include_lb:
             if path[end_index].mode != rnd_state_mode_2.mode:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state_mode_2, g)
@@ -383,18 +387,18 @@ class Informed():
     def generate_samples(
         self,
         reached_modes: List[Mode],
-        batch_size:int,
+        batch_size: int,
         path: List[State],
-        max_attempts_per_sample:int = 200,
-        try_direct_sampling:bool = True,
-        g = None,
-        active_mode:Optional[Mode] = None,
-        seed:Optional[int] = None
+        max_attempts_per_sample: int = 200,
+        try_direct_sampling: bool = True,
+        g=None,
+        active_mode: Optional[Mode] = None,
+        seed: Optional[int] = None,
     ) -> Optional[Union[Configuration, List[Configuration]]]:
-        """ 
+        """
         Samples configuration from informed set for given mode.
 
-        Args: 
+        Args:
             reached_modes (List[Mode]): List of modes that have been reached.
             batch_size (int): Number of samples to generate in a batch.
             path (List[State]): Current path used to guide the informed sampling.
@@ -404,8 +408,8 @@ class Informed():
             active_mode (Optional[Mode]): Current operational mode.
             seed (Optional[int]): Random seed for reproducibility.
 
-        Returns: 
-            Configuration, List[Configuration]: One or several configurations within the informed set that satisfies the specified limits for the robots. 
+        Returns:
+            Configuration, List[Configuration]: One or several configurations within the informed set that satisfies the specified limits for the robots.
         """
         if seed is not None:
             random.seed(seed)
@@ -431,7 +435,9 @@ class Informed():
                     if end_ind - start_ind > 2:
                         # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
                         current_cost = sum(path_segment_costs[start_ind:end_ind])
-                        lb_cost = self.env.config_cost(path[start_ind].q, path[end_ind].q)
+                        lb_cost = self.env.config_cost(
+                            path[start_ind].q, path[end_ind].q
+                        )
 
                         if lb_cost < current_cost:
                             break
@@ -461,7 +467,7 @@ class Informed():
                 start_ind = 0
                 end_ind = len(path) - 1
                 m = self.sample_mode(reached_modes=reached_modes)
-            if self.planning_approach == 'sampling_based' and active_mode != m:
+            if self.planning_approach == "sampling_based" and active_mode != m:
                 continue
 
             # print(m)
@@ -537,7 +543,10 @@ class Informed():
 
                             if is_almost_the_same[i]:
                                 qr = np.random.uniform(
-                                    size=(num_samples_at_a_time, self.env.robot_dims[r]),
+                                    size=(
+                                        num_samples_at_a_time,
+                                        self.env.robot_dims[r],
+                                    ),
                                     low=lims[0, :],
                                     high=lims[1, :],
                                 ).T
@@ -612,10 +621,13 @@ class Informed():
                     if not isinstance(q, Configuration):
                         # q = conf_type.from_list(q)
                         qnp = np.concatenate(q)
-                        if np.any((qnp < self.env.limits[0, :]) | (qnp > self.env.limits[1, :])):
+                        if np.any(
+                            (qnp < self.env.limits[0, :])
+                            | (qnp > self.env.limits[1, :])
+                        ):
                             continue
                         q = self.conf_type(qnp, self.env.start_pos.array_slice)
-                    
+
                     if sum(self.env.batch_config_cost(q, focal_points)) > current_cost:
                         # print(path[start_ind].mode, path[end_ind].mode, m)
                         # print(
@@ -637,10 +649,10 @@ class Informed():
                     #     continue
 
                     if self.can_improve(
-                        State(q, m), path, start_ind, end_ind, path_segment_costs,g
+                        State(q, m), path, start_ind, end_ind, path_segment_costs, g
                     ) and self.env.is_collision_free(q, m):
                         # if self.env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
-                        if self.planning_approach == 'sampling_based':
+                        if self.planning_approach == "sampling_based":
                             return q
                         new_samples.append(State(q, m))
                         found_a_sample = True
@@ -667,21 +679,21 @@ class Informed():
         # plt.show()
 
         return new_samples
- 
+
     def generate_transitions(
         self,
         reached_modes: List[Mode],
-        batch_size:int,
+        batch_size: int,
         path: List[State],
-        max_attempts_per_sample:int = 100,
-        g = None,
-        active_mode:Optional[Mode] = None,
-        seed:Optional[int] = None
-    )-> Optional[Union[Configuration, List[Configuration]]]:
-        """ 
+        max_attempts_per_sample: int = 100,
+        g=None,
+        active_mode: Optional[Mode] = None,
+        seed: Optional[int] = None,
+    ) -> Optional[Union[Configuration, List[Configuration]]]:
+        """
         Samples transition configuration from informed set for the given mode.
 
-        Args: 
+        Args:
             reached_modes (List[Mode]): List of modes that have been reached.
             batch_size (int): Number of samples to generate in a batch.
             path (List[State]): Current path used to guide the informed sampling.
@@ -690,8 +702,8 @@ class Informed():
             active_mode (Optional[Mode]): Current operational mode.
             seed (Optional[int]): Random seed for reproducibility.
 
-        Returns: 
-            Configuration, List[Configuration]: One or several configurations within the informed set that satisfies the specified limits for the robots. 
+        Returns:
+            Configuration, List[Configuration]: One or several configurations within the informed set that satisfies the specified limits for the robots.
         """
         if seed is not None:
             random.seed(seed)
@@ -724,7 +736,9 @@ class Informed():
                     ):
                         # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
                         current_cost = sum(path_segment_costs[start_ind:end_ind])
-                        lb_cost = self.env.config_cost(path[start_ind].q, path[end_ind].q)
+                        lb_cost = self.env.config_cost(
+                            path[start_ind].q, path[end_ind].q
+                        )
 
                         if lb_cost < current_cost:
                             break
@@ -752,7 +766,7 @@ class Informed():
                 start_ind = 0
                 end_ind = len(path) - 1
                 mode = self.sample_mode(reached_modes=reached_modes)
-            if self.planning_approach == 'sampling_based' and active_mode != mode:
+            if self.planning_approach == "sampling_based" and active_mode != mode:
                 continue
 
             # print(m)
@@ -760,7 +774,9 @@ class Informed():
             current_cost = sum(path_segment_costs[start_ind:end_ind])
 
             # sample transition at the end of this mode
-            possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
+            possible_next_task_combinations = self.env.get_valid_next_task_combinations(
+                mode
+            )
             if len(possible_next_task_combinations) > 0:
                 ind = random.randint(0, len(possible_next_task_combinations) - 1)
                 active_task = self.env.get_active_task(
@@ -788,7 +804,8 @@ class Informed():
                             if task_robot == r:
                                 q.append(
                                     goal_sample[
-                                        offset : offset + self.env.robot_dims[task_robot]
+                                        offset : offset
+                                        + self.env.robot_dims[task_robot]
                                     ]
                                 )
                                 break
@@ -819,9 +836,9 @@ class Informed():
                     next_mode = next_modes[0]
 
                 if self.can_transition_improve(
-                    (q, mode, next_mode), path, start_ind, end_ind,g
+                    (q, mode, next_mode), path, start_ind, end_ind, g
                 ) and self.env.is_collision_free(q, mode):
-                    if self.planning_approach == 'sampling_based':
+                    if self.planning_approach == "sampling_based":
                         return q
                     new_transitions.append((q, mode, next_mode))
                     break
