@@ -1283,7 +1283,7 @@ class BaseRRTstar(ABC):
                             self.informed_batch_size,
                             self.operation.path_shortcutting_interpolated,
                             active_mode = mode)
-                        if q is None:
+                        if q == []:
                             return
                             q = self.sample_transition_configuration(mode)
                             if random.choice([0,1]) == 0:
@@ -1326,7 +1326,7 @@ class BaseRRTstar(ABC):
                             self.informed_batch_size,
                             self.operation.path_shortcutting_interpolated,
                             active_mode = mode)
-                    if q is None:
+                    if q == []:
                         return
                         is_informed_sampling = False
                         continue
