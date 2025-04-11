@@ -109,6 +109,7 @@ class RRTstar(BaseRRTstar):
                 break
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
+                print('Number of iterations: ', i)
                 break
         self.costs.append(self.operation.cost)
         self.times.append(time.time() - self.start_time)
