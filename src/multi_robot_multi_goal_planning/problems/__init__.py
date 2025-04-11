@@ -6,6 +6,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
 
 import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
+import multi_robot_multi_goal_planning.problems.rai_unordered_envs as rue
 
 import multi_robot_multi_goal_planning.problems.abstract_env as ae
 
@@ -115,6 +116,10 @@ def get_all_environments():
         "box_reorientation_dep": lambda: re.rai_ur10_box_pile_cleanup_env_dep(),
         "box_reorientation_handover_set_dep": lambda: re.rai_ur10_box_pile_cleanup_env_dep(make_many_handover_poses=True),
 
+        ##### UNORDERED ENVS
+        "unordered": lambda: rue.rai_two_dim_env(),
+        "unordered_square": lambda: rue.rai_two_dim_square_env(),
+        "unordered_circle": lambda: rue.rai_two_dim_circle_env(),
     }
     # fmt: on
 

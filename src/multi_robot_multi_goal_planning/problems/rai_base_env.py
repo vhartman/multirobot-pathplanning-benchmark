@@ -700,7 +700,8 @@ class rai_env(BaseProblem):
             if stop_at_mode and i < len(path) - 1:
                 if path[i].mode != path[i + 1].mode:
                     print(i)
-                    print(path[i].mode)
+                    print("Current mode:", path[i].mode)
+                    print("Next mode:", path[i+1].mode)
                     self.C.view(True)
 
             self.C.view(stop)

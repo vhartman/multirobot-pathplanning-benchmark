@@ -710,12 +710,15 @@ class Graph:
 
                 assert this_mode.task_ids != next_mode.task_ids
 
-            if this_mode in self.transition_nodes:
+            if this_mode in self.transition_nodes and len(self.transition_nodes[this_mode]) > 0:
                 is_in_transition_nodes_already = False
+                # print("A", this_mode, len(self.transition_nodes[this_mode]))
                 dists = self.batch_dist_fun(
                     node_this_mode.state.q,
                     [n.state.q for n in self.transition_nodes[this_mode]],
                 )
+                # print("B")
+
                 if min(dists) < 1e-6:
                     is_in_transition_nodes_already = True
                 # for n in self.transition_nodes[this_mode]:
@@ -740,6 +743,7 @@ class Graph:
                 else:
                     self.transition_nodes[this_mode] = [node_this_mode]
             else:
+                print("attempting goal node")
                 is_in_goal_nodes_already = False
                 for g in self.goal_nodes:
                     if (
@@ -1367,7 +1371,10 @@ def joint_prm_planner(
     def sample_mode(
         mode_sampling_type: str = "uniform_reached", found_solution: bool = False
     ) -> Mode:
+        # m_rnd = reached_modes[-1]
+        # return m_rnd
         if mode_sampling_type == "uniform_reached":
+            # print(len(reached_modes))
             m_rnd = random.choice(reached_modes)
         elif mode_sampling_type == "weighted":
             # sample such that we tend to get similar number of pts in each mode
@@ -1392,6 +1399,7 @@ def joint_prm_planner(
         #     # sample very greedily and only expand the newest mode
         #     m_rnd = reached_modes[-1]
 
+        # print(m_rnd)
         return m_rnd
 
     # we are checking here if a sample can imrpove a part of the path
@@ -2274,9 +2282,11 @@ def joint_prm_planner(
                 if env.is_terminal_mode(mode):
                     next_mode = None
                 else:
+                    # print("coll free mode trans: ", mode)
                     next_modes = env.get_next_modes(q, mode)
                     assert len(next_modes) == 1
                     next_mode = next_modes[0]
+                    # print("next mode", next_mode)
 
                 transitions.append((q, mode, next_mode))
 
@@ -2284,9 +2294,13 @@ def joint_prm_planner(
 
                 if next_mode not in reached_modes and next_mode is not None:
                     reached_modes.append(next_mode)
+
+                    # print("reached modes", reached_modes)
             # else:
-            #     if mode.task_ids == [3, 8]:
-            #         env.show(True)
+            #     print("not collfree")
+            #     print(mode)
+            #     # env.show(True)
+
 
         return transitions
 
