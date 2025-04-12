@@ -181,6 +181,7 @@ def setup_planner(
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
+                inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"]
             )
     elif planner_config["type"] == "rrtstar":
 
@@ -284,6 +285,8 @@ def setup_planner(
                 try_sampling_around_path=options["sample_near_path"],
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],
+                init_uniform_batch_size = options["init_uniform_batch_size"],
+                init_transition_batch_size = options["init_transition_batch_size"],
                 uniform_batch_size=options["batch_size"],
                 uniform_transition_batch_size=options["transition_batch_size"],
                 informed_batch_size=options["informed_batch_size"],
@@ -292,7 +295,7 @@ def setup_planner(
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
-                informed_with_lb = options["informed_with_lb"],
+                inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
                 remove_based_on_modes = options["remove_based_on_modes"],
                 with_tree_visualization = options["with_tree_visualization"]
             ).Plan(optimize)
@@ -308,6 +311,8 @@ def setup_planner(
                 try_sampling_around_path=options["sample_near_path"],
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],
+                init_uniform_batch_size = options["init_uniform_batch_size"],
+                init_transition_batch_size = options["init_transition_batch_size"],
                 uniform_batch_size=options["batch_size"],
                 uniform_transition_batch_size=options["transition_batch_size"],
                 informed_batch_size=options["informed_batch_size"],
@@ -316,7 +321,7 @@ def setup_planner(
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
-                informed_with_lb = options["informed_with_lb"],
+                inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
                 remove_based_on_modes = options["remove_based_on_modes"],
                 with_tree_visualization = options["with_tree_visualization"],
                 use_max_distance_metric_effort = options["use_max_distance_metric_effort"]

@@ -277,8 +277,8 @@ class AITstar(BaseITstar):
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
         try_informed_sampling: bool = True,
-        first_uniform_batch_size: int = 100,
-        first_transition_batch_size:int = 100,
+        init_uniform_batch_size: int = 100,
+        init_transition_batch_size:int = 100,
         uniform_batch_size: int = 200,
         uniform_transition_batch_size: int = 500,
         informed_batch_size: int = 500,
@@ -288,20 +288,20 @@ class AITstar(BaseITstar):
         try_informed_transitions: bool = True,
         try_shortcutting: bool = True,
         try_direct_informed_sampling: bool = True,
-        informed_with_lb:bool = True,
+        inlcude_lb_in_informed_sampling:bool = True,
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False
         ):
         super().__init__(
             env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
             try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
-            first_uniform_batch_size=first_uniform_batch_size, first_transition_batch_size=first_transition_batch_size,
+            init_uniform_batch_size=init_uniform_batch_size, init_transition_batch_size=init_transition_batch_size,
             uniform_batch_size = uniform_batch_size, uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
             informed_transition_batch_size = informed_transition_batch_size, path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
             try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
-            informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
+            inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
 
-        self.alpha = 3
+        self.alpha = 3.0
         self.consistent_nodes = set() #lb_cost_to_go_expanded == lb_cost_to_go
         self.no_available_parent_in_this_batch = set() #nodes that have no available parent in this batch
         self.init_rev_search = True
@@ -326,6 +326,8 @@ class AITstar(BaseITstar):
         self.g.reverse_queue.remove(node)
         if node.lb_cost_to_go != node.lb_cost_to_go_expanded:
             self.g.reverse_queue.heappush(node)
+        else:
+            pass
    
     def continue_reverse_search(self, iter) -> bool:
         if len(self.g.reverse_queue) == 0 or len(self.g.forward_queue) == 0:
@@ -464,6 +466,8 @@ class AITstar(BaseITstar):
         
     def update_heuristic_of_neihgbors(self, n):
         neighbors = self.g.get_neighbors(n, self.approximate_space_extent)
+        if 1 not in neighbors:
+            pass
         # batch_cost = self.g.tot_neighbors_batch_cost_cache[n.id]
         for idx, id in enumerate(neighbors):  #node itself is not included in neighbors
             nb = self.g.nodes[id]
@@ -624,10 +628,10 @@ class AITstar(BaseITstar):
         self.g.compute_node_lb_to_come()
 
     def initialze_forward_search(self):
-        if self.current_best_cost is not None:
-            self.g.weight = 0.5
-        else:
-            self.g.weight = 0.5
+        # if self.current_best_cost is not None:
+        #     self.g.weight = 0.5
+        # else:
+        #     self.g.weight = 1
         self.init_rev_search = True
         self.no_available_parent_in_this_batch = set()
         self.g.forward_queue = EdgeQueue(self.alpha)

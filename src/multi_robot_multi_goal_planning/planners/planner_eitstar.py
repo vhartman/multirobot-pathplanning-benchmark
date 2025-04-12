@@ -143,33 +143,7 @@ class Graph(BaseGraph):
         self.cost_bound_queue.remove(item2) 
         self.effort_estimate_queue.remove(item2)
         # self.g.cost_estimate_queue.remove((edge_cost, (n0, n1)))
-
-    # def get_best_forward_edge(self):
-    #     # key_ce, (edge_cost_ce,(ce0, ce1)) = self.cost_estimate_queue.peek_first_element()
-    #     key_cb, (edge_cost_cb,(cb0, cb1)) = self.cost_bound_queue.peek_first_element()
-    #     bound = key_cb * self.epsilon
-    #     key_ee, (edge_cost_ee,(ee0, ee1)) = self.effort_estimate_queue.peek_first_element(self.cost_bound_queue.key, bound)
-    #     if np.isinf(cb1.lb_cost_to_go): 
-    #         # if not np.isinf(key_cb):
-    #         #     pass
-    #         assert(np.isinf(key_cb)), (
-    #             "key_cb is not inf"
-    #         )
-    #     item = (edge_cost_ee, (ee0, ee1))
-    #     key_ee = self.cost_bound_queue.key(item)
-    #     if key_ee >= bound:
-    #         item = (edge_cost_cb, (cb0, cb1))
-    #     # elif key_ce < key_cb:
-    #     #     item = (edge_cost_ce, (ce0, ce1)
-                
-    #     self.effort_estimate_queue.remove(item)
-    #     # self.g.cost_estimate_queue.remove(item)
-    #     self.cost_bound_queue.remove(item)
-    #     # assert(key_ce == key_cb), (
-    #     #     "ghjklö"
-    #     # )
-    #     return item
-    
+   
     def get_best_forward_edge(self):
         key_cb, item_cb = self.cost_bound_queue.peek_first_element()
         bound = key_cb * self.epsilon
@@ -290,8 +264,8 @@ class EITstar(BaseITstar):
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
         try_informed_sampling: bool = True,
-        first_uniform_batch_size: int = 100,
-        first_transition_batch_size:int = 100,
+        init_uniform_batch_size: int = 100,
+        init_transition_batch_size:int = 100,
         uniform_batch_size: int = 200,
         uniform_transition_batch_size: int = 500,
         informed_batch_size: int = 500,
@@ -301,7 +275,7 @@ class EITstar(BaseITstar):
         try_informed_transitions: bool = True,
         try_shortcutting: bool = True,
         try_direct_informed_sampling: bool = True,
-        informed_with_lb:bool = True,
+        inlcude_lb_in_informed_sampling:bool = True,
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False,
         use_max_distance_metric_effort:bool = False,
@@ -309,11 +283,11 @@ class EITstar(BaseITstar):
         super().__init__(
             env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
             try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
-            first_uniform_batch_size=first_uniform_batch_size, first_transition_batch_size=first_transition_batch_size,
+            init_uniform_batch_size=init_uniform_batch_size, init_transition_batch_size=init_transition_batch_size,
             uniform_batch_size = uniform_batch_size, uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
             informed_transition_batch_size = informed_transition_batch_size, path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
             try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
-            informed_with_lb = informed_with_lb,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
+            inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
 
         self.sparse_number_of_points = 1
         self.use_max_distance_metric_effort = use_max_distance_metric_effort
@@ -421,7 +395,11 @@ class EITstar(BaseITstar):
             self.g.epsilon = 1
     @cache
     def get_collision_start_and_max_index(self, sparse_N):
-        return sum(range(1, sparse_N)), sum(range(1, sparse_N + 1))
+        if sparse_N >1:
+            start = int(sparse_N/2)
+        else:
+            start = 0
+        return start, int(sparse_N)
 
     def reverse_search(self):
         self.updated_target_nodes = set()
@@ -452,8 +430,6 @@ class EITstar(BaseITstar):
                         n_end = n0
                     N_start, N_max = self.get_collision_start_and_max_index(self.sparse_number_of_points)
                     N = max(2, int(edge_effort))
-                    if N_start != 1 and N_start != 0:
-                        pass
                     edge_id = (n_start.id, n_end.id)
                     previously_checked = edge_id in self.sparesly_checked_edges
                     valid_check = (previously_checked and (
@@ -552,7 +528,7 @@ class EITstar(BaseITstar):
                 self.clear_reverse_edge_in_collision(n0, n1)
                 # self.initialize_reverse_search(False)
                 return
-            self.sparse_number_of_points +=1
+            self.sparse_number_of_points *=2
             # self.clear_reverse_edge_in_collision(n0, n1)
             self.initialize_reverse_search(False)    
 

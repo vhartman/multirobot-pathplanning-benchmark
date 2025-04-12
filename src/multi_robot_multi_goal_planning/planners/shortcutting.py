@@ -223,7 +223,7 @@ def robot_mode_shortcut(
 
         # this is wrong for partial shortcuts atm.
         if env.is_path_collision_free(
-            path_element, resolution=resolution, tolerance=tolerance, check_edges_in_order=check_edges_in_order
+            path_element, resolution=resolution, tolerance=tolerance, check_edges_in_order=True
         ):
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q

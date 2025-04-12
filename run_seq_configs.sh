@@ -2,8 +2,8 @@
 
 # List of config paths
 configs=(
-    "./configs/experiments/2d_handover_benchmark.json"
-    "./configs/experiments/box_stacking_benchmark.json"
+    "./configs/experiments/demo/box_stacking_dep.json"
+    "./configs/experiments/demo/hallway.json"
 )
 
 # Base command

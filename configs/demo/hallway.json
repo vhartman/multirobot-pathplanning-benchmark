@@ -1,18 +1,18 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "box_stacking_dep",
+  "environment": "hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 400,
   "num_runs": 30,
   "seed": 0,
-  "optimize": false,
+  "optimize": true,
   "planners": [
     {
       "name": "eitstar",
       "type": "eitstar",
       "options": {
-        "init_uniform_batch_size": 350,
+        "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
         "batch_size": 100,
         "transition_batch_size": 50,
@@ -36,7 +36,7 @@
       "name": "aitstar",
       "type": "aitstar",
       "options": {
-        "init_uniform_batch_size": 350,
+        "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
         "batch_size": 100,
         "transition_batch_size": 50,
