@@ -710,7 +710,7 @@ class Graph:
         for q, this_mode, next_modes in transitions:
             node_this_mode = Node(State(q, this_mode), True)
 
-            if ( 
+            if (
                 this_mode in self.transition_nodes
                 and len(self.transition_nodes[this_mode]) > 0
             ):
@@ -739,7 +739,7 @@ class Graph:
 
             if next_modes is None:
                 # the current mode is a terminal node. deal with it accordingly
-                 # print("attempting goal node")
+                # print("attempting goal node")
                 is_in_goal_nodes_already = False
                 for g in self.goal_nodes:
                     if (
@@ -775,7 +775,6 @@ class Graph:
 
                     assert this_mode.task_ids != next_mode.task_ids
 
-                
                 # if this_mode in self.transition_nodes:
                 # print(len(self.transition_nodes[this_mode]))
 
@@ -783,7 +782,6 @@ class Graph:
                     self.transition_nodes[this_mode].append(node_this_mode)
                 else:
                     self.transition_nodes[this_mode] = [node_this_mode]
-                
 
                 # add the same things to the rev transition nodes
                 for next_mode, next_node in zip(next_modes, next_nodes):
@@ -1634,7 +1632,7 @@ def joint_prm_planner(
                         if next_mode not in reached_modes:
                             reached_modes.append(next_mode)
 
-                    print("reached modes", len(reached_modes))
+                    # print("reached modes", len(reached_modes))
                     # print(reached_modes)
             # else:
             #     print("not collfree")

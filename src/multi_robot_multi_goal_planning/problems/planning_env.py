@@ -264,7 +264,9 @@ class Mode:
             }
             sg_hash = hash(frozenset(sg_fitered.items()))
             task_hash = hash(tuple(self.task_ids))
-            self._cached_hash = hash((entry_hash, sg_hash, task_hash, self.additional_hash_info))
+            self._cached_hash = hash(
+                (entry_hash, sg_hash, task_hash, self.additional_hash_info)
+            )
 
         return self._cached_hash
 
@@ -358,7 +360,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         # print(f"called get valid next with {mode.task_ids}")
         if self.is_terminal_mode(mode):
             return []
-        
+
         # check which tasks have been done, return all possible next combinations
         unfinished_tasks_per_robot = copy.deepcopy(self.per_robot_tasks)
         # for i in range(len(unfinished_tasks_per_robot)):
@@ -419,7 +421,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
             # print()
 
             return next_states
-        
+
         return [[self.terminal_task] * self.start_pos.num_agents()]
 
     def is_terminal_mode(self, mode: Mode):
@@ -487,12 +489,12 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         # for tasks in possible_next_mode_ids:
         #     if tasks not in [m.task_ids for m in mode.next_modes]:
         #         print("not found", tasks)
-        
+
         next_modes = []
 
         for next_id in possible_next_mode_ids:
             next_mode = Mode(next_id, q)
-            
+
             next_mode.prev_mode = mode
             tmp = tuple(tuple(sublist) for sublist in valid_next_combinations)
             next_mode.additional_hash_info = tmp
@@ -572,12 +574,12 @@ class FreeMixin(BaseModeLogic):
     terminal_task: int
 
     def make_start_mode(self):
-        ids = [-1] * self.start_pos.num_agents()
+        ids = [0] * self.start_pos.num_agents()
         m = Mode(ids, self.start_pos)
         return m
 
     def make_symbolic_end(self):
-        return self.terminal_task
+        return [self.terminal_task] * self.start_pos.num_agents()
 
     def get_valid_next_task_combinations(self, mode: Mode):
         # check which tasks have been done, return all possible next combinations
@@ -613,7 +615,7 @@ class FreeMixin(BaseModeLogic):
 
     def is_terminal_mode(self, mode: Mode):
         # check if all task shave been done
-        if mode.task_ids == self.terminal_task:
+        if all([t == self.terminal_task for t in mode.task_ids]):
             return True
 
         return False
@@ -623,7 +625,7 @@ class FreeMixin(BaseModeLogic):
             return False
 
         # check if this configuration fulfills the final goals
-        terminal_task = self.tasks(self.terminal_task)
+        terminal_task = self.tasks[self.terminal_task]
         involved_robots = terminal_task.robots
 
         q_concat = []
