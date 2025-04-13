@@ -8,7 +8,7 @@ import shutil
 def colors_plotly():
     return [
     'cyan', 'magenta', 
-    'brown','orange', 'olive', 'navy', 'teal', 'coral', 'turquoise', 'gold', 'violet',
+    'brown','orange', 'olive', 'teal', 'coral', 'turquoise', 'gold', 'violet',
     'indigo', 'salmon', 'maroon', 'plum', 'orchid', 'tan', 'crimson', 'lavender',
     'chartreuse', 'azure', 'beige', 'khaki', 'slateblue', 'forestgreen', 'darkorange',
     'steelblue', 'deepskyblue', 'tomato', 'lightcoral', 'wheat', 'lightseagreen','blue', 'green', 'purple', 
@@ -21,19 +21,20 @@ def colors_plotly():
     'darkturquoise', 'lightsalmon', 'darkred', 'goldenrod', 'darkgreen', 'lightcyan', 'springgreen',
     'powderblue', 'lightblue', 'slategrey', 'darkorchid', 'silver', 'fuchsia', 'lightgreen', 
     'papayawhip', 'blanchedalmond', 'antiquewhite', 'bisque', 'honeydew', 'gainsboro', 'thistle',
-    'peach', 'mintcream', 'aliceblue', 'ghostwhite'
+    'peach', 'mintcream', 'aliceblue', 'ghostwhite', 'black'
 ]
 
 def colors_ry():
     return [
         [0, 1, 1],  # cyan
-        [1, 0, 1],  # magenta
-        [0.53, 0.81, 0.98],  # skyblue
+        [0.1, 0.1, 0.44],  # midnightblue
         [0.6, 0.98, 0.6],  # palegreen
         [0.74, 0.56, 0.56],  # rosybrown
-        [0.1, 0.1, 0.44],  # midnightblue
+        [0.6, 0.4, 0.2],  # brown
+        [1, 0, 1],  # magenta
         [1, 0.71, 0.76],  # lightpink
-        [1, 0.94, 0.96],  # lavenderblush
+        [1, 0.94, 0.96],  # lavenderblush        
+        [0.53, 0.81, 0.98],  # skyblue
         [0.72, 0.53, 0.04],  # darkgoldenrod
         [0.96, 0.64, 0.38],  # sandybrown
         [0.44, 0.5, 0.56],  # slategray
@@ -61,7 +62,6 @@ def colors_ry():
         [0.5, 0, 0.5],  # purple
         [1, 0.65, 0],  # orange
         [1, 0.75, 0.8],  # pink
-        [0.6, 0.4, 0.2],  # brown
         [0, 1, 0],  # lime
         [0.5, 0.5, 0],  # olive
         [0, 0, 0.5],  # navy

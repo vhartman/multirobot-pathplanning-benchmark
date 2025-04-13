@@ -21,6 +21,7 @@ import matplotlib.patches as patches
 from examples.disp_path_2d import get_infos_of_obstacles_and_table_2d
 import matplotlib.lines as mlines
 import subprocess
+from matplotlib.collections import LineCollection
 
 def generate_gif(dir, framerate = 2):
     palette_file = os.path.join(dir, "palette.png")
@@ -678,7 +679,7 @@ def visualize_tree_2d_with_color(env, path_to_folder,env_path, html:bool = False
     os.makedirs(dir, exist_ok=True)
     obstacles, table_size = get_infos_of_obstacles_and_table_2d(env)
     colors = colors_ry()
-    reached_modes = []
+    reached_task_ids = []
     mode = env.start_mode
     time.sleep(10)
     color = {}
@@ -687,15 +688,17 @@ def visualize_tree_2d_with_color(env, path_to_folder,env_path, html:bool = False
     # goal = 
     #get all mods of this environment
     while True:     
-        reached_modes.append(mode.task_ids)
-        color[f'{mode.task_ids}'] = list(range(counter, counter + len(env.robots)))
-        counter += len(env.robots)
+        reached_task_ids.append(mode.task_ids)
+        # color[f'{mode.task_ids}'] = list(range(counter, counter + len(env.robots)))
+        color[f'{mode.task_ids}'] = list(range(counter))
+        # counter += len(env.robots)
+        counter +=1
         if env.is_terminal_mode(mode):
             break
         mode = env.get_next_mode(None, mode)
 
     q_start = env.get_start_pos().state()
-    q_goal = env.tasks[env.sequence[-1]].goal.sample(reached_modes[-1])
+    q_goal = env.tasks[env.sequence[-1]].goal.sample(reached_task_ids[-1])
 
     for filename in os.listdir(path_to_folder):
         pkl_file = os.path.join(path_to_folder, filename)
@@ -729,7 +732,7 @@ def visualize_tree_2d_with_color(env, path_to_folder,env_path, html:bool = False
         legend_handles = []
 
         for robot_idx, robot in enumerate(env.robots):
-            for task_ids in reached_modes:
+            for task_ids in reached_task_ids:
                 color_idx = color[f'{task_ids}'][robot_idx]
                 name = f"R{robot_idx}, Mode: {task_ids}"
                 
@@ -829,7 +832,7 @@ def visualize_tree_2d_with_color(env, path_to_folder,env_path, html:bool = False
                 color='white',
                 s=30,  # size of the circle
                 edgecolors='black',
-                zorder=5
+                zorder=7
             )
 
             # Plot a circle marker at the start point
@@ -839,7 +842,7 @@ def visualize_tree_2d_with_color(env, path_to_folder,env_path, html:bool = False
                 color='black',
                 s=13,  # size of the circle
                 edgecolors='none',
-                zorder=6
+                zorder=7
             )
 
     
@@ -860,20 +863,25 @@ def visualize_tree_2d_paper(env, path_to_folder):
 
     # Recreate the directory
     os.makedirs(dir)
+    colors = colors_ry()
     obstacles, table_size = get_infos_of_obstacles_and_table_2d(env)
-    reached_modes = []
+    reached_task_ids, reached_modes = [], []
     mode = env.start_mode
     time.sleep(10)
     counter = 0
+    color = {}
     while True:     
-        reached_modes.append(mode.task_ids)
+        reached_task_ids.append(mode.task_ids)
+        reached_modes.append(mode)
+        color[f'{mode.task_ids}'] = list(range(counter, counter + len(env.robots)))
         counter += len(env.robots)
-        if env.is_terminal_mode(mode):
+        if env.is_terminal_mode(mode):  
             break
+        
         mode = env.get_next_mode(None, mode)
     
     q_start = env.get_start_pos().state()
-    q_goal = env.tasks[env.sequence[-1]].goal.sample(reached_modes[-1])
+    q_goal = env.tasks[env.sequence[-1]].goal.sample(reached_task_ids[-1])
 
     for filename in os.listdir(path_to_folder):
         pkl_file = os.path.join(path_to_folder, filename)
@@ -881,7 +889,9 @@ def visualize_tree_2d_paper(env, path_to_folder):
             all_data = dill.load(file)
             all_nodes = all_data['all_nodes']
             all_transition_nodes = all_data['all_transition_nodes']  
-            all = all_nodes + all_transition_nodes
+            all_nodes_modes = all_data['all_nodes_mode']
+            all_transition_nodes_modes = all_data['all_transition_nodes_mode']
+            
         
             
 
@@ -910,12 +920,18 @@ def visualize_tree_2d_paper(env, path_to_folder):
             nodes = data['nodes']
             parents = data['parents']
             modes = data['modes']
-            color = colors[idx]
+            # color = colors[idx]
+            colors_plot, segments = [], []
             #tree
             lines = {'x': [], 'y': []}
             for robot_idx, robot in enumerate(env.robots):
                 indices = env.robot_idx[robot]
-                for node, parent, mode in zip(nodes, parents, modes):                
+                for node, parent, mode in zip(nodes, parents, modes):   
+                    if idx == 1:  
+                        color_idx = color[f'{mode}'][robot_idx]     
+                        c = colors[color_idx]      
+                    else:
+                        c = 'red'
                     x0 = node[indices][0]
                     y0 = node[indices][1]
 
@@ -925,45 +941,77 @@ def visualize_tree_2d_paper(env, path_to_folder):
                     else:
                         x1 = x0
                         y1 = y0
-
+                    segments.append([[x0, y0], [x1, y1]])
                     lines['x'].extend([x0, x1, None])
                     lines['y'].extend([y0, y1, None])
+                    colors_plot.append(c)
 
-            ax.plot(
-                lines['x'],
-                lines['y'],
-                color=color,
-                linewidth=0.5,
-                alpha=1,
-                zorder=zorder
-            )
+            segments = np.array(segments)
+
+            # Plot lines with individual colors
+            lc = LineCollection(segments, colors=colors_plot, linewidths=0.5, alpha=1, zorder=zorder)
+            ax.add_collection(lc)
+
+            # Optional: Scatter plot the same points
+            x_vals = segments[:, 0, 0]
+            y_vals = segments[:, 0, 1]
             ax.scatter(
-                lines['x'],
-                lines['y'],
-                color=color,
+                x_vals,
+                y_vals,
+                color=colors_plot,
                 alpha=1,
-                s=2,  
+                s=2,
                 edgecolors='none',
                 zorder=zorder
             )
 
 
-        all_dict = {'x': [], 'y':[]}
+        all_points = []
+        all_colors = []
+
         for robot_idx, robot in enumerate(env.robots):
             indices = env.robot_idx[robot]
-            for n in all:
-                all_dict['x'].append(n[indices][0])
-                all_dict['y'].append(n[indices][1])
-            
+            for n, mode in zip(all_nodes, all_nodes_modes):  # <- all_modes must match length of 'all'
+                x = n[indices][0]
+                y = n[indices][1]
+                all_points.append((x, y))
+                color_idx = color[f'{mode}'][robot_idx]
+                all_colors.append(colors[color_idx])
+
+        all_points = np.array(all_points)
         ax.scatter(
-            all_dict['x'],
-            all_dict['y'],
-            color='grey',
-            alpha=1,
-            s=2,  
+            all_points[:, 0],
+            all_points[:, 1],
+            color=all_colors,
+            alpha=0.5,
+            s=3,
             edgecolors='none',
-            zorder=0
+            zorder=0,
         )
+        all_points = []
+        all_colors = []
+
+        for robot_idx, robot in enumerate(env.robots):
+            indices = env.robot_idx[robot]
+            for n, mode in zip(all_transition_nodes, all_transition_nodes_modes):  # all_nodes and all_nodes_modes must match
+                x = n[indices][0]
+                y = n[indices][1]
+                all_points.append((x, y))
+                color_idx = color[f'{mode}'][robot_idx]
+                all_colors.append(colors[color_idx])
+
+        all_points = np.array(all_points)
+        ax.scatter(
+            all_points[:, 0],
+            all_points[:, 1],
+            color=all_colors,
+            alpha=0.5,
+            s=3,  # slightly larger dots
+            edgecolors='black',
+            linewidths=0.35,  # thinner edge
+            zorder=5
+        )
+
 
         for robot_idx, robot in enumerate(env.robots):
             indices = env.robot_idx[robot]
@@ -973,14 +1021,14 @@ def visualize_tree_2d_paper(env, path_to_folder):
             y_goal = q_goal[indices][1]
 
             # Plot a circle marker at the start point
-            ax.scatter(
-                [x_goal],
-                [y_goal],
-                color='white',
-                s=30,  # size of the circle
-                edgecolors='black',
-                zorder=5
-            )
+            # ax.scatter(
+            #     [x_goal],
+            #     [y_goal],
+            #     color='white',
+            #     s=30,  # size of the circle
+            #     edgecolors=colors[color[f'{reached_modes[-1].task_ids}'][robot_idx]],
+            #     zorder=5
+            # )
 
             # Plot a circle marker at the start point
             ax.scatter(
@@ -991,6 +1039,41 @@ def visualize_tree_2d_paper(env, path_to_folder):
                 edgecolors='none',
                 zorder=6
             )
+            # #plot transition nodes
+        for m in reached_modes:
+            possible_next_task_combinations = env.get_valid_next_task_combinations(m)
+            if not possible_next_task_combinations:
+                for robot_idx, robot in enumerate(env.robots):
+                    indices = env.robot_idx[robot]
+                    ax.scatter(
+                    [q_goal[indices][0]],
+                    [q_goal[indices][1]],
+                    color='white',
+                    s=30,  # size of the circle
+                    edgecolors=colors[color[f'{m.task_ids}'][robot_idx]],
+                    zorder=5
+                )
+                continue
+            next_ids = random.choice(possible_next_task_combinations)
+            constrained_robot = env.get_active_task(m, next_ids).robots
+            goal = env.get_active_task(m, next_ids).goal.sample(m)
+            q = []
+            end_idx = 0
+            for robot_idx, robot in enumerate(env.robots):
+                if robot in constrained_robot:
+                    dim = env.robot_dims[robot]
+                    indices = list(range(end_idx, end_idx + dim))
+                    q = goal[indices]
+                    ax.scatter(
+                        [q[0]],
+                        [q[1]],
+                        color=colors[color[f'{m.task_ids}'][robot_idx]],
+                        s=30,  # size of the circle
+                        edgecolors='black',
+                        zorder=6
+                    )
+                    end_idx += dim 
+                    continue
 
         next_file_number = max(
                 (int(file.split('.')[0]) for file in os.listdir(dir)
@@ -1013,7 +1096,7 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
         [os.path.join(pkl_folder, f) for f in os.listdir(pkl_folder) if f.endswith('.pkl')],
         key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
     )
-    reached_modes = []
+    reached_task_ids = []
     mode = env.start_mode
     time.sleep(10)
     color = {}
@@ -1022,7 +1105,7 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
     # goal = 
     #get all mods of this environment
     while True:     
-        reached_modes.append(mode.task_ids)
+        reached_task_ids.append(mode.task_ids)
         color[f'{mode.task_ids}'] = list(range(counter, counter + len(env.robots)))
         counter += len(env.robots)
         if env.is_terminal_mode(mode):
@@ -1030,7 +1113,7 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
         mode = env.get_next_mode(None, mode)
 
     q_start = env.get_start_pos().state()
-    q_goal = env.tasks[env.sequence[-1]].goal.sample(reached_modes[-1])
+    q_goal = env.tasks[env.sequence[-1]].goal.sample(reached_task_ids[-1])
 
     # Initialize figure and static elements
     fig = go.Figure()
@@ -1079,7 +1162,7 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
                 x=[0],  # X-coordinates of the exterior points
                 y=[0],  # Y-coordinates of the exterior points
                 z=[0] ,  # Flat surface at z = 0
-                color=colors[len(reached_modes)+robot_idx],  # Fill color from the agent's properties
+                color=colors[len(reached_task_ids)+robot_idx],  # Fill color from the agent's properties
                 opacity=1,  # Transparency level
                 name=legend_group,
                 legendgroup=legend_group,
@@ -1088,8 +1171,8 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
         )
     # if with_tree:
     legends = []
-    for idx in range(len(reached_modes)):
-        name = f"Mode: {reached_modes[idx]}"
+    for idx in range(len(reached_task_ids)):
+        name = f"Mode: {reached_task_ids[idx]}"
         legends.append(name)
         static_traces.append(
             go.Mesh3d(
@@ -1123,7 +1206,7 @@ def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
                 lines_by_color = {}
                 indices = env.robot_idx[robot]
                 for node, parent, m in zip(nodes, parents, modes):    
-                    mode_idx = reached_modes.index(m)            
+                    mode_idx = reached_task_ids.index(m)            
                     color_idx = colors[mode_idx]
                     if type == 'forward':
                         color_idx = 'grey'
