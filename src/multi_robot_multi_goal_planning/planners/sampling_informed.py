@@ -832,15 +832,22 @@ class InformedSampling:
                     assert False
                 else:
                     next_modes = self.env.get_next_modes(q, mode)
-                    assert len(next_modes) == 1
-                    next_mode = next_modes[0]
 
-                if self.can_transition_improve(
-                    (q, mode, next_mode), path, start_ind, end_ind, g
-                ) and self.env.is_collision_free(q, mode):
-                    if self.planning_approach == "sampling_based":
-                        return q
-                    new_transitions.append((q, mode, next_mode))
+                if not self.env.is_collision_free(q, mode):
+                    continue
+                    
+                improving_modes = []
+                for next_mode in next_modes:
+                    if self.can_transition_improve(
+                        (q, mode, next_mode), path, start_ind, end_ind, g
+                    ):
+                        if self.planning_approach == "sampling_based":
+                            return q
+                        
+                        improving_modes.append(next_mode)
+                        
+                if len(improving_modes) > 0:
+                    new_transitions.append((q, mode, improving_modes))
                     break
 
         print(len(new_transitions) / num_attempts)
