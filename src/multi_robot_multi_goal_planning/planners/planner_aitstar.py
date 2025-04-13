@@ -395,8 +395,8 @@ class AITstar(BaseITstar):
         n.rev.reset()
 
         # Update current node
-        # if self.dynamic_reverse_search_update:
-        self.update_state(n)
+        if self.current_best_cost is not None:
+            self.update_state(n)
 
         return nodes_to_update
 

@@ -4,7 +4,7 @@
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 400,
-  "num_runs": 30,
+  "num_runs": 20,
   "seed": 0,
   "optimize": true,
   "planners": [

@@ -648,8 +648,6 @@ class BaseGraph(ABC):
             if i == len(path)-1:
                 is_transition = True
             node = self.node_cls(self.operation, path[i], is_transition)
-            if node.id == 1810:
-                pass
             if is_transition:
                 if parent.is_transition and parent.is_reverse_transition and self.reverse_transition_is_already_present(node):
                     continue
@@ -2283,8 +2281,8 @@ class BaseITstar(ABC):
         data = {}
         data['all_nodes'] = [self.g.nodes[id].state.q.state() for id in list(chain.from_iterable(self.g.node_ids.values()))]
         data['all_transition_nodes'] = [self.g.nodes[id].state.q.state() for id in list(chain.from_iterable(self.g.transition_node_ids.values()))]
-        # data['all_nodes_mode'] = [self.g.nodes[id].state.mode_task_ids for id in list(chain.from_iterable(self.g.node_ids.values()))]
-        # data['all_transition_nodes_mode'] = [self.g.nodes[id].state.mode.task_ids for id in list(chain.from_iterable(self.g.transition_node_ids.values()))]
+        data['all_nodes_mode'] = [self.g.nodes[id].state.mode.task_ids for id in list(chain.from_iterable(self.g.node_ids.values()))]
+        data['all_transition_nodes_mode'] = [self.g.nodes[id].state.mode.task_ids for id in list(chain.from_iterable(self.g.transition_node_ids.values()))]
         for i, type in enumerate(['forward', 'reverse']):
             data[type] = {}
             data[type]['nodes'] = []
