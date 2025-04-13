@@ -710,23 +710,6 @@ class Graph:
         for q, this_mode, next_modes in transitions:
             node_this_mode = Node(State(q, this_mode), True)
 
-            if not isinstance(next_modes, list) and next_modes is not None:
-                next_modes = [next_modes]
-
-            if next_modes is not None:
-                next_nodes = []
-                for next_mode in next_modes:
-                    node_next_mode = Node(State(q, next_mode), True)
-                    next_nodes.append(node_next_mode)
-
-            if next_modes is not None:
-                node_this_mode.neighbors = next_nodes
-
-                for node_next_mode, next_mode in zip(next_nodes, next_modes):
-                    node_next_mode.neighbors = [node_this_mode]
-
-                    assert this_mode.task_ids != next_mode.task_ids
-
             if ( 
                 this_mode in self.transition_nodes
                 and len(self.transition_nodes[this_mode]) > 0
@@ -754,16 +737,9 @@ class Graph:
                 if is_in_transition_nodes_already:
                     continue
 
-            # if this_mode in self.transition_nodes:
-            # print(len(self.transition_nodes[this_mode]))
-
-            if next_modes is not None:
-                if this_mode in self.transition_nodes:
-                    self.transition_nodes[this_mode].append(node_this_mode)
-                else:
-                    self.transition_nodes[this_mode] = [node_this_mode]
-            else:
-                # print("attempting goal node")
+            if next_modes is None:
+                # the current mode is a terminal node. deal with it accordingly
+                 # print("attempting goal node")
                 is_in_goal_nodes_already = False
                 for g in self.goal_nodes:
                     if (
@@ -783,9 +759,33 @@ class Graph:
                         self.transition_nodes[this_mode].append(node_this_mode)
                     else:
                         self.transition_nodes[this_mode] = [node_this_mode]
+            else:
+                if not isinstance(next_modes, list):
+                    next_modes = [next_modes]
 
-            # add the same things to the rev transition nodes
-            if next_modes is not None:
+                next_nodes = []
+                for next_mode in next_modes:
+                    node_next_mode = Node(State(q, next_mode), True)
+                    next_nodes.append(node_next_mode)
+
+                node_this_mode.neighbors = next_nodes
+
+                for node_next_mode, next_mode in zip(next_nodes, next_modes):
+                    node_next_mode.neighbors = [node_this_mode]
+
+                    assert this_mode.task_ids != next_mode.task_ids
+
+                
+                # if this_mode in self.transition_nodes:
+                # print(len(self.transition_nodes[this_mode]))
+
+                if this_mode in self.transition_nodes:
+                    self.transition_nodes[this_mode].append(node_this_mode)
+                else:
+                    self.transition_nodes[this_mode] = [node_this_mode]
+                
+
+                # add the same things to the rev transition nodes
                 for next_mode, next_node in zip(next_modes, next_nodes):
                     if next_mode in self.reverse_transition_nodes:
                         self.reverse_transition_nodes[next_mode].append(next_node)
