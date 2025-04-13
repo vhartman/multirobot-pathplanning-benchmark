@@ -136,7 +136,7 @@ class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
 
 
 class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
-    def __init__(self, agents_can_rotate=True):
+    def __init__(self, agents_can_rotate=False):
         self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
@@ -154,7 +154,7 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
 
         r2_goals = []
 
-        N = 2
+        N = 6
         r = 0.5
 
         for i in range(N):

@@ -29,9 +29,7 @@ from multi_robot_multi_goal_planning.planners import shortcutting
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.sampling_informed import (
-    InformedSampling
-)
+from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
 
 
 class Node:
@@ -702,24 +700,37 @@ class Graph:
         for n in nodes:
             self.add_node(n)
 
-    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, Mode]):
+    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, List[Mode]]):
         self.transition_node_array_cache = {}
         self.reverse_transition_node_array_cache = {}
 
         self.transition_node_lb_cache = {}
         self.rev_transition_node_lb_cache = {}
 
-        for q, this_mode, next_mode in transitions:
+        for q, this_mode, next_modes in transitions:
             node_this_mode = Node(State(q, this_mode), True)
-            node_next_mode = Node(State(q, next_mode), True)
 
-            if next_mode is not None:
-                node_next_mode.neighbors = [node_this_mode]
-                node_this_mode.neighbors = [node_next_mode]
+            if not isinstance(next_modes, list) and next_modes is not None:
+                next_modes = [next_modes]
 
-                assert this_mode.task_ids != next_mode.task_ids
+            if next_modes is not None:
+                next_nodes = []
+                for next_mode in next_modes:
+                    node_next_mode = Node(State(q, next_mode), True)
+                    next_nodes.append(node_next_mode)
 
-            if this_mode in self.transition_nodes and len(self.transition_nodes[this_mode]) > 0:
+            if next_modes is not None:
+                node_this_mode.neighbors = next_nodes
+
+                for node_next_mode, next_mode in zip(next_nodes, next_modes):
+                    node_next_mode.neighbors = [node_this_mode]
+
+                    assert this_mode.task_ids != next_mode.task_ids
+
+            if ( 
+                this_mode in self.transition_nodes
+                and len(self.transition_nodes[this_mode]) > 0
+            ):
                 is_in_transition_nodes_already = False
                 # print("A", this_mode, len(self.transition_nodes[this_mode]))
                 dists = self.batch_dist_fun(
@@ -746,7 +757,7 @@ class Graph:
             # if this_mode in self.transition_nodes:
             # print(len(self.transition_nodes[this_mode]))
 
-            if next_mode is not None:
+            if next_modes is not None:
                 if this_mode in self.transition_nodes:
                     self.transition_nodes[this_mode].append(node_this_mode)
                 else:
@@ -774,11 +785,12 @@ class Graph:
                         self.transition_nodes[this_mode] = [node_this_mode]
 
             # add the same things to the rev transition nodes
-            if next_mode is not None:
-                if next_mode in self.reverse_transition_nodes:
-                    self.reverse_transition_nodes[next_mode].append(node_next_mode)
-                else:
-                    self.reverse_transition_nodes[next_mode] = [node_next_mode]
+            if next_modes is not None:
+                for next_mode, next_node in zip(next_modes, next_nodes):
+                    if next_mode in self.reverse_transition_nodes:
+                        self.reverse_transition_nodes[next_mode].append(next_node)
+                    else:
+                        self.reverse_transition_nodes[next_mode] = [next_node]
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_neighbors(
@@ -1377,11 +1389,12 @@ def joint_prm_planner(
     reached_modes = [m0]
 
     conf_type = type(env.get_start_pos())
-    informed = InformedSampling(env, 
-                        'graph_based',   
-                        locally_informed_sampling,
-                        include_lb=inlcude_lb_in_informed_sampling
-                        )
+    informed = InformedSampling(
+        env,
+        "graph_based",
+        locally_informed_sampling,
+        include_lb=inlcude_lb_in_informed_sampling,
+    )
 
     def sample_mode(
         mode_sampling_type: str = "uniform_reached", found_solution: bool = False
@@ -1604,28 +1617,29 @@ def joint_prm_planner(
 
             if env.is_collision_free(q, mode):
                 if env.is_terminal_mode(mode):
-                    next_mode = None
+                    next_modes = None
                 else:
                     # print("coll free mode trans: ", mode)
                     next_modes = env.get_next_modes(q, mode)
-                    assert len(next_modes) == 1
-                    next_mode = next_modes[0]
+                    # assert len(next_modes) == 1
+                    # next_mode = next_modes[0]
                     # print("next mode", next_mode)
 
-                transitions.append((q, mode, next_mode))
+                transitions.append((q, mode, next_modes))
 
                 # print(mode, mode.next_modes)
 
-                if next_mode not in reached_modes and next_mode is not None:
-                    reached_modes.append(next_mode)
+                if next_modes is not None:
+                    for next_mode in next_modes:
+                        if next_mode not in reached_modes:
+                            reached_modes.append(next_mode)
 
                     print("reached modes", len(reached_modes))
-                    print(reached_modes)
+                    # print(reached_modes)
             # else:
             #     print("not collfree")
             #     print(mode)
             #     # env.show(True)
-
 
         return transitions
 
@@ -1773,7 +1787,7 @@ def joint_prm_planner(
                         informed_batch_size,
                         interpolated_path,
                         try_direct_sampling=try_direct_informed_sampling,
-                        g=g
+                        g=g,
                     )
                     g.add_states(new_informed_states)
 
@@ -1785,7 +1799,7 @@ def joint_prm_planner(
                         reached_modes,
                         informed_transition_batch_size,
                         interpolated_path,
-                        g=g
+                        g=g,
                     )
                     g.add_transition_nodes(new_informed_transitions)
                     print(
