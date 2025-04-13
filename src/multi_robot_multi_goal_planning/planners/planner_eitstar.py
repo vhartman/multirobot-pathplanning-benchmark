@@ -295,7 +295,6 @@ class EITstar(BaseITstar):
         self.reduce_neighbors = False
         self.sparesly_checked_edges = {}
         self.check = set()
-        self.first_search = False
 
     def _create_operation(self) -> BaseOperation:
         return Operation()
