@@ -477,8 +477,8 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         # print(possible_next_mode_ids)
 
-        random_next_mode_ids = random.choice(possible_next_mode_ids)
-        next_mode = Mode(random_next_mode_ids, q)
+        # random_next_mode_ids = random.choice(possible_next_mode_ids)
+        # next_mode = Mode(random_next_mode_ids, q)
 
         # print("randomly chosen ids", random_next_mode_ids)
         # print()
@@ -487,26 +487,37 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         # for tasks in possible_next_mode_ids:
         #     if tasks not in [m.task_ids for m in mode.next_modes]:
         #         print("not found", tasks)
+        
+        next_modes = []
 
-        next_mode.prev_mode = mode
-        tmp = tuple(tuple(sublist) for sublist in valid_next_combinations)
-        next_mode.additional_hash_info = tmp
+        for next_id in possible_next_mode_ids:
+            next_mode = Mode(next_id, q)
+            
+            next_mode.prev_mode = mode
+            tmp = tuple(tuple(sublist) for sublist in valid_next_combinations)
+            next_mode.additional_hash_info = tmp
 
-        sg = self.get_scenegraph_info_for_mode(next_mode)
-        next_mode.sg = sg
+            sg = self.get_scenegraph_info_for_mode(next_mode)
+            next_mode.sg = sg
 
-        for nm in mode.next_modes:
-            if hash(nm) == hash(next_mode):
-                # print("AAAAAAAAAA")
-                return [nm]
+            mode_exists = False
+            for nm in mode.next_modes:
+                if hash(nm) == hash(next_mode):
+                    # print("AAAAAAAAAA")
+                    next_modes.append(nm)
+                    mode_exists = True
 
-        mode.next_modes.append(next_mode)
+                    break
+
+            if not mode_exists:
+                mode.next_modes.append(next_mode)
+                next_modes.append(next_mode)
 
         # print(mode)
         # print(mode.next_modes)
         # print()
 
-        return [next_mode]
+        return next_modes
 
     def is_transition(self, q: Configuration, m: Mode) -> bool:
         if self.is_terminal_mode(m):
