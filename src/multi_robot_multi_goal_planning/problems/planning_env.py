@@ -284,6 +284,7 @@ class BaseModeLogic(ABC):
     _task_id_dict: Dict[str, int]
 
     def __init__(self):
+        self.prev_mode = None
         self.start_mode = self.make_start_mode()
         self._terminal_task_ids = self.make_symbolic_end()
 
@@ -366,6 +367,8 @@ class SequenceMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode = True)
+        start_mode.sg = sg
         return start_mode
 
     def make_symbolic_end(self) -> List[int]:
@@ -528,6 +531,8 @@ class DependencyGraphMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode = True)
+        start_mode.sg = sg
         return start_mode
 
     def _make_terminal_mode_from_sequence(self, sequence) -> Mode:
@@ -858,7 +863,7 @@ class BaseProblem(ABC):
 
     # Collision checking and environment related methods
     @abstractmethod
-    def get_scenegraph_info_for_mode(self, mode: Mode):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
         pass
 
     @abstractmethod

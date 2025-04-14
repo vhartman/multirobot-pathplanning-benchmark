@@ -255,12 +255,14 @@ class PinocchioEnvironment(BaseProblem):
 
         # self.viz.display()
 
-    def get_scenegraph_info_for_mode(self, mode: Mode):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
         if not self.manipulating_env:
             return {}
 
         # self.set_to_mode(mode)
         prev_mode = mode.prev_mode
+        if prev_mode is None:
+            return {}
         sg = prev_mode.sg.copy()
 
         active_task = self.get_active_task(prev_mode, mode.task_ids)

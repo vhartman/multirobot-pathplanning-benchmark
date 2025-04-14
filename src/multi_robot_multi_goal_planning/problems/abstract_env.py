@@ -152,7 +152,7 @@ class AbstractEnvironment(BaseProblem):
 
         return q
 
-    def get_scenegraph_info_for_mode(self, mode: Mode):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
         return {}
 
     def show(self, blocking=True):
