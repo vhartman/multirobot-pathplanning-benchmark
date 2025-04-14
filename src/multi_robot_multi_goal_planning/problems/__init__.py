@@ -120,7 +120,8 @@ def get_all_environments():
         "unordered": lambda: rue.rai_two_dim_env(),
         "unordered_square": lambda: rue.rai_two_dim_square_env(),
         "unordered_circle": lambda: rue.rai_two_dim_circle_env(),
-        "unordered_single_agent_circle": lambda: rue.rai_two_dim_circle_single_agent()
+        "unordered_single_agent_circle": lambda: rue.rai_two_dim_circle_single_agent(),
+        "unordered_box_reorientation": lambda: rue.rai_unordered_ur10_box_pile_cleanup_env(),
     }
     # fmt: on
 

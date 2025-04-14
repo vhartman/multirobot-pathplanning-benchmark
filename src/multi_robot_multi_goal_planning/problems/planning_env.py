@@ -345,6 +345,7 @@ class BaseModeLogic(ABC):
 class UnorderedButAssignedMixin(BaseModeLogic):
     tasks: List[int]
     per_robot_tasks: List[List[int]]
+    task_dependencies: Dict[int, List[int]]
 
     terminal_task: int
 
@@ -363,8 +364,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         # check which tasks have been done, return all possible next combinations
         unfinished_tasks_per_robot = copy.deepcopy(self.per_robot_tasks)
-        # for i in range(len(unfinished_tasks_per_robot)):
-        #     unfinished_tasks_per_robot[i].append(self.terminal_task)
+        finished_tasks = []
 
         # there might be a problem that until now we assumed that the mode is markov
         # (i.e it does not matter what we did before for the current task)
@@ -388,6 +388,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                     ):
                         # print(f"trying to remove {task_id}")
                         unfinished_tasks_per_robot[i].remove(task_id)
+                        finished_tasks.append(task_id)
 
                 pm = pm.prev_mode
 
@@ -411,6 +412,18 @@ class UnorderedButAssignedMixin(BaseModeLogic):
             for i in range(num_agents):
                 current_task = mode.task_ids[i]
                 for t in unfinished_tasks_per_robot[i]:
+                    task_requirements_fulfilled = True
+                    if t in self.task_dependencies:
+                        for dependency in self.task_dependencies[t]:
+                            if dependency not in finished_tasks and dependency != mode.task_ids[i]:
+                                task_requirements_fulfilled = False
+
+                    if not task_requirements_fulfilled:
+                        # print(f"dependency unfulfilled for task {t}")
+                        continue
+
+                    # print(f"dependency done for task {t}")
+
                     if t != current_task:
                         new_state = copy.deepcopy(mode.task_ids)
                         new_state[i] = t

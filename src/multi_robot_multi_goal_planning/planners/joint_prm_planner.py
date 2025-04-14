@@ -1727,6 +1727,7 @@ def joint_prm_planner(
 
         print()
         print(f"Samples: {cnt}; time: {time.time() - start_time:.2f}s; {ptc}")
+        print(f"Currently {len(reached_modes)} modes")
 
         samples_in_graph_before = g.get_num_samples()
 

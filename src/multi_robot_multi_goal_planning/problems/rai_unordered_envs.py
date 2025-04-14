@@ -9,7 +9,6 @@ from numpy.typing import NDArray
 from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseModeLogic,
-    SequenceMixin,
     UnorderedButAssignedMixin,
     State,
     Task,
@@ -18,6 +17,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     GoalRegion,
 )
 from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
+import multi_robot_multi_goal_planning.problems.rai_config as rai_config
 
 
 class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
@@ -71,6 +71,7 @@ class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
 
         self.per_robot_tasks = [[1], [2, 3, 4, 5]]
         self.terminal_task = 6
+        self.task_dependencies = {}
 
         self.collision_tolerance = 0.01
 
@@ -131,6 +132,7 @@ class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
         self.terminal_task = 5
 
         self.collision_tolerance = 0.01
+        self.task_dependencies = {}
 
         BaseModeLogic.__init__(self)
 
@@ -139,6 +141,14 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=False):
         self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
+
+        self.C.addFrame("obs0").setParent(self.C.getFrame("table")).setPosition(
+            self.C.getFrame("table").getPosition() + [0.0, 0, 0.07]
+        ).setShape(ry.ST.box, size=[0.4, 0.4, 0.06, 0.005]).setContact(1).setColor(
+            [0, 0, 0]
+        ).setJoint(ry.JT.rigid)
+
+        self.C.view(True)
 
         self.robots = ["a1", "a2"]
 
@@ -193,6 +203,7 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
 
         self.per_robot_tasks = [[1], [2 + i for i in range(len(r2_goals))]]
         self.terminal_task = len(self.tasks) - 1
+        self.task_dependencies = {}
 
         self.collision_tolerance = 0.01
 
@@ -252,7 +263,85 @@ class rai_two_dim_circle_single_agent(UnorderedButAssignedMixin, rai_env):
 
         self.per_robot_tasks = [[1 + i for i in range(len(goals))]]
         self.terminal_task = len(self.tasks) - 1
+        self.task_dependencies = {}
 
         self.collision_tolerance = 0.01
 
         BaseModeLogic.__init__(self)
+
+
+class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env):
+    def __init__(self, num_boxes=6):
+        self.C, keyframes = rai_config.make_box_pile_env(
+            num_boxes=num_boxes, random_orientation=False
+        )
+
+        self.robots = ["a1_", "a2_"]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = [
+            Task(
+                ["a1_", "a2_"],
+                GoalRegion(self.limits),
+            ),
+        ]
+        self.tasks[-1].name = "dummy_start"
+
+        pick_task_names = ["pick", "place"]
+        handover_task_names = ["pick", "handover", "place"]
+
+        self.per_robot_tasks = [[], []]
+        self.task_dependencies = {}
+
+        cnt = 0
+        for primitive_type, robots, box_index, qs in keyframes:
+            box_name = "box" + str(box_index)
+
+            robot_index = 0
+            if robots[0] == "a2_":
+                robot_index = 1
+            
+            # print("robot index", robot_index)
+
+            print(primitive_type)
+            if primitive_type == "pick":
+                for t, k in zip(pick_task_names, qs[0]):
+                    print(robots)
+                    print(k)
+                    if t == "pick":
+                        ee_name = robots[0] + "ur_vacuum"
+                        self.tasks.append(
+                            Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
+                        )
+                    else:
+                        self.tasks.append(
+                            Task(robots, SingleGoal(k), t, frames=["tray", box_name])
+                        )
+                        self.task_dependencies[len(self.tasks) - 1] = [
+                            len(self.tasks) - 2
+                        ]
+
+                    self.per_robot_tasks[robot_index].append(len(self.tasks) - 1)
+
+                    self.tasks[-1].name = (
+                        robots[0] + t + "_" + box_name + "_" + str(cnt)
+                    )
+                    cnt += 1
+            else:
+                assert False
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        self.terminal_task = len(self.tasks) - 1
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01

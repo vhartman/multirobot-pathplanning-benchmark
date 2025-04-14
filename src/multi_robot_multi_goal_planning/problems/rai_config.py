@@ -3871,7 +3871,10 @@ def is_z_axis_up(quaternion):
 
 
 def make_box_pile_env(
-    num_boxes=6, compute_multiple_keyframes: bool = False, view: bool = False
+    num_boxes=6,
+    compute_multiple_keyframes: bool = False,
+    random_orientation: bool = True,
+    view: bool = False,
 ):
     assert num_boxes <= 9
 
@@ -3948,7 +3951,11 @@ def make_box_pile_env(
         if pos[0] > -0.3 and pos[0] < 0.3 and pos[1] < 0.3 and pos[1] > -0.3:
             continue
 
-        keep_z_aligned = np.random.rand() > 0.8
+        if random_orientation:
+            keep_z_aligned = np.random.rand() > 0.8
+        else:
+            keep_z_aligned = True
+            
         quat = generate_rnd_axis_quaternion(keep_z_aligned)
 
         color = np.random.rand(3)
@@ -4016,7 +4023,9 @@ def make_box_pile_env(
 
     keyframes = []
 
-    def handover(r1, r2, box_num, num_keyframes=1, relative_pose_at_handover=None, ref_pose=None):
+    def handover(
+        r1, r2, box_num, num_keyframes=1, relative_pose_at_handover=None, ref_pose=None
+    ):
         c_tmp = ry.Config()
         c_tmp.addConfigurationCopy(C)
 
@@ -4087,8 +4096,15 @@ def make_box_pile_env(
         )
 
         if relative_pose_at_handover is not None:
-            komo.addObjective([1,1], ry.FS.qItself, [], ry.OT.eq, [1e1], ref_pose[0])
-            komo.addObjective([2,2], ry.FS.poseDiff, [r2 + "ur_ee_marker", r1 + "ur_ee_marker"], ry.OT.eq, [1e1], relative_pose_at_handover)
+            komo.addObjective([1, 1], ry.FS.qItself, [], ry.OT.eq, [1e1], ref_pose[0])
+            komo.addObjective(
+                [2, 2],
+                ry.FS.poseDiff,
+                [r2 + "ur_ee_marker", r1 + "ur_ee_marker"],
+                ry.OT.eq,
+                [1e1],
+                relative_pose_at_handover,
+            )
 
         komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
         komo.addObjective([3, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
@@ -4112,7 +4128,7 @@ def make_box_pile_env(
                     # x_init = q_home + np.random.randn(len(q_home)) * 0.1
                     # komo.initWithConstant(x_init)
 
-                if relative_pose_at_handover is not None :
+                if relative_pose_at_handover is not None:
                     p = komo.getPath()
                     p += np.random.randn(p.shape[0], p.shape[1]) * 0.1
                     komo.initWithPath(p)
@@ -4137,7 +4153,7 @@ def make_box_pile_env(
 
                 if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                     # komo.view(True, "IK solution")
-                    
+
                     all_keyframes.append(keyframes[:-1, :])
                     break
                     # return keyframes[:-1, :]
@@ -4258,7 +4274,14 @@ def make_box_pile_env(
 
                         print(relative_pose)
 
-                        keyframes_with_same_relative_pose = handover(r1, r2, i, num_keyframes=10, relative_pose_at_handover=relative_pose, ref_pose=poses[0])
+                        keyframes_with_same_relative_pose = handover(
+                            r1,
+                            r2,
+                            i,
+                            num_keyframes=10,
+                            relative_pose_at_handover=relative_pose,
+                            ref_pose=poses[0],
+                        )
 
                         poses = poses + keyframes_with_same_relative_pose
 
