@@ -832,6 +832,64 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.005
 
+class rai_shelves_switch_places_two_dim(SequenceMixin, rai_env):
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = rai_config.make_shelves_env_switch_places(
+            agents_can_rotate=agents_can_rotate
+        )
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        self.tasks = []
+        self.sequence = []
+
+        self.tasks = [
+            Task(["a1"], SingleGoal(keyframes[0])),
+            Task(["a2"], SingleGoal(keyframes[1])),
+            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+        ]
+
+        self.tasks[0].name = "a1_goal_1"
+        self.tasks[1].name = "a2_goal_1"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = [0, 1, 2]
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+class rai_shelves_two_dim(SequenceMixin, rai_env):
+    def __init__(self, agents_can_rotate=True):
+        self.C, keyframes = rai_config.make_shelves_env(
+            agents_can_rotate=agents_can_rotate
+        )
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        self.tasks = []
+        self.sequence = []
+
+        self.tasks = [
+            Task(["a1", "a2"], SingleGoal(keyframes[0])),
+        ]
+
+        self.tasks[0].name = "terminal"
+
+        self.sequence = [0]
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
 
 class rai_hallway_two_dim_single(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):

@@ -3,16 +3,16 @@
   "environment": "hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 400,
+  "max_planning_time": 200,
   "num_runs": 1,
-  "seed": 0,
+  "seed": 10,
   "optimize": false,
   "planners": [
     {
-      "name": "eitstar",
-      "type": "eitstar",
+      "name": "aitstar",
+      "type": "aitstar",
       "options": {
-        "init_uniform_batch_size": 200,
+        "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
         "batch_size": 100,
         "transition_batch_size": 50,
@@ -32,5 +32,6 @@
         "with_tree_visualization": false
       }
     }
+
   ]
 }

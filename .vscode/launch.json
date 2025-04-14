@@ -87,11 +87,11 @@
             "request": "launch",
             "program": "${workspaceFolder}/examples/run_analysis.py",
             "args": [
-                "tree_html",
-                "hallway_single_robot",
+                "tree_paper",
+                "shelves_no_rot",
                 "1",
                 "--path_to_folder",
-                "/media/tirza/tirza/MasterThesis/out/20250404_211655_planner_demo_hallway_single_robot"
+                "/media/tirza/tirza/MasterThesis/out/20250413_215528_planner_demo_shelves_no_rot"
                 
 
             ],

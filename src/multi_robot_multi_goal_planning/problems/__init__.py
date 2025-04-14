@@ -45,6 +45,8 @@ def get_all_environments():
         "hallway_single_robot": lambda: re.rai_hallway_two_dim_single(),
         "hallway_single_robot_single_goal": lambda: re.rai_hallway_two_dim_single_(),
         "hallway_single_robot_single_goal_no_rot": lambda: re.rai_hallway_two_dim_single_(agents_can_rotate=False),
+        "shelves_switch_place": lambda: re.rai_shelves_switch_places_two_dim(),
+        "shelves_no_rot": lambda: re.rai_shelves_two_dim(agents_can_rotate=False),
         # 2D with neighborhood
         "single_agent_mover": lambda: re.rai_two_dim_single_agent_neighbourhood(),
         
