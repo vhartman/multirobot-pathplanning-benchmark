@@ -262,7 +262,7 @@ class PinocchioEnvironment(BaseProblem):
         # self.set_to_mode(mode)
         prev_mode = mode.prev_mode
         if prev_mode is None:
-            return {}
+            return self.initial_sg
         sg = prev_mode.sg.copy()
 
         active_task = self.get_active_task(prev_mode, mode.task_ids)
@@ -803,12 +803,12 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
         BaseModeLogic.__init__(self)
 
-        self.start_mode.sg = self.initial_sg
+        # self.start_mode.sg = self.initial_sg
 
-    def make_start_mode(self):
-        start_mode = super().make_start_mode()
-        start_mode.sg = self.initial_sg
-        return start_mode
+    # def make_start_mode(self):
+    #     start_mode = super().make_start_mode()
+    #     start_mode.sg = self.initial_sg
+    #     return start_mode
 
 
 def make_piano():
@@ -926,12 +926,12 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
         BaseModeLogic.__init__(self)
 
-        self.start_mode.sg = self.initial_sg
+        # self.start_mode.sg = self.initial_sg
 
-    def make_start_mode(self):
-        start_mode = super().make_start_mode()
-        start_mode.sg = self.initial_sg
-        return start_mode
+    # def make_start_mode(self):
+    #     start_mode = super().make_start_mode()
+    #     start_mode.sg = self.initial_sg
+    #     return start_mode
 
 
 def add_namespace_prefix_to_models(model, collision_model, visual_model, namespace):
@@ -1514,7 +1514,7 @@ class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
         self.manipulating_env = True
 
-    def make_start_mode(self):
-        start_mode = super().make_start_mode()
-        start_mode.sg = self.initial_sg
-        return start_mode
+    # def make_start_mode(self):
+    #     start_mode = super().make_start_mode()
+    #     start_mode.sg = self.initial_sg
+    #     return start_mode
