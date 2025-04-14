@@ -84,6 +84,9 @@ class PinocchioEnvironment(BaseProblem):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
 
+        self.cost_metric = "euclidean"
+        self.cost_reduction = "max"
+
         self.manipulating_env = False
 
         self.initial_sg = {}

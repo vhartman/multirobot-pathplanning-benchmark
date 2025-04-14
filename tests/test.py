@@ -146,6 +146,48 @@ def test_planner_on_abstract_env(planner_fn):
         lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
     ],
 )
+def test_planner_on_rai_manip_env(planner_fn):
+    env = get_env_by_name("piano")
+    ptc = RuntimeTerminationCondition(10)
+
+    path, _ = planner_fn(env, ptc)
+
+    assert path is not None
+
+    assert np.array_equal(path[0].q.state(), env.start_pos.state())
+    assert env.is_terminal_mode(path[-1].mode)
+    assert env.is_valid_plan(path)
+
+
+@pytest.mark.parametrize(
+    "planner_fn",
+    [
+        lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
+        lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
+        lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
+    ],
+)
+def test_planner_on_pinocchio_manip_env(planner_fn):
+    env = get_env_by_name("pin_piano")
+    ptc = RuntimeTerminationCondition(10)
+
+    path, _ = planner_fn(env, ptc)
+
+    assert path is not None
+
+    assert np.array_equal(path[0].q.state(), env.start_pos.state())
+    assert env.is_terminal_mode(path[-1].mode)
+    assert env.is_valid_plan(path)
+
+
+@pytest.mark.parametrize(
+    "planner_fn",
+    [
+        lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
+        lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
+        lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
+    ],
+)
 def test_planner_on_hallway_dependency_env(planner_fn):
     env = get_env_by_name("other_hallway_dep")
     ptc = RuntimeTerminationCondition(10)
