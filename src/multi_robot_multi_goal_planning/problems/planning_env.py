@@ -232,7 +232,6 @@ class Mode:
         self.task_ids = task_list
         self.entry_configuration = entry_configuration
 
-        # TODO: set in constructor?
         self.prev_mode = None
         self.sg = {}
         self.next_modes = []
@@ -750,7 +749,7 @@ class SequenceMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
-        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode = True)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)
         start_mode.sg = sg
         return start_mode
 
@@ -914,7 +913,7 @@ class DependencyGraphMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
-        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode = True)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)
         start_mode.sg = sg
         return start_mode
 
@@ -1248,7 +1247,7 @@ class BaseProblem(ABC):
 
     # Collision checking and environment related methods
     @abstractmethod
-    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         pass
 
     @abstractmethod

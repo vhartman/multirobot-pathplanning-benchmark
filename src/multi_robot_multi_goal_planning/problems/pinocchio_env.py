@@ -3,7 +3,9 @@ import numpy as np
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    generate_binary_search_indices,
+)
 
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
@@ -258,7 +260,7 @@ class PinocchioEnvironment(BaseProblem):
 
         # self.viz.display()
 
-    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         if not self.manipulating_env:
             return {}
 
@@ -1510,12 +1512,12 @@ class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
             ]
         )
 
+        self.manipulating_env = True
+
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
         # self.collision_resolution = 0.05
-
-        self.manipulating_env = True
 
     # def make_start_mode(self):
     #     start_mode = super().make_start_mode()
