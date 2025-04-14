@@ -472,7 +472,7 @@ class DiscreteBucketIndexHeap:
         return value
 
 
-class Graph:
+class MultimodalGraph:
     root: State
     nodes: Dict
 
@@ -518,10 +518,17 @@ class Graph:
         return num_samples + num_transition_samples
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def compute_lower_bound_to_goal(self, batch_cost):
+    def compute_lower_bound_to_goal(self, batch_cost, best_found_cost):
         # run a reverse search on the transition nodes without any collision checking
         costs = {}
         closed_set = set()
+
+        for mode in self.nodes.keys():
+            for i in range(len(self.nodes[mode])):
+                self.nodes[mode][i].lb_cost_to_goal = np.inf
+
+        if best_found_cost is None:
+            best_found_cost = np.inf
 
         queue = []
         for g in self.goal_nodes:
@@ -542,15 +549,14 @@ class Graph:
             if node.id in closed_set:
                 continue
 
-            neighbors = []
+            closed_set.add(node.id)
 
-            if node.state.mode not in self.reverse_transition_nodes:
-                print("AAA")
-                continue
+            # neighbors = []
 
-            for n in self.reverse_transition_nodes[node.state.mode]:
-                for q in n.neighbors:
-                    neighbors.append(q)
+            # for n in self.reverse_transition_nodes[node.state.mode]:
+            #     for q in n.neighbors:
+            #         neighbors.append(q)
+            neighbors = [q for n in self.reverse_transition_nodes[node.state.mode] for q in n.neighbors]
 
             # neighbors = [
             #     neighbor for n in self.reverse_transition_nodes[node.state.mode] for neighbor in n.neighbors
@@ -564,17 +570,18 @@ class Graph:
                     [n.state.q.state() for n in neighbors], dtype=np.float64
                 )
 
-            closed_set.add(node.id)
-
             # add neighbors to open_queue
             edge_costs = batch_cost(
                 node.state.q,
                 self.reverse_transition_node_array_cache[node.state.mode],
             )
-
             parent_cost = costs[node.id]
             for edge_cost, n in zip(edge_costs, neighbors):
                 cost = parent_cost + edge_cost
+
+                if cost > best_found_cost:
+                    continue
+
                 id = n.id
                 # current_cost = costs.get(id, float('inf'))
                 # if cost < current_cost:
@@ -957,6 +964,9 @@ class Graph:
         goal = None
         h_cache = {}
 
+        if best_cost is None:
+            best_cost = np.inf
+
         def h(node):
             # return 0
             if node.id in h_cache:
@@ -1179,7 +1189,7 @@ class Graph:
                     f_node = g_new + h(n)
                     # fs[(n1, n)] = f_node
 
-                    if best_cost is not None and f_node > best_cost:
+                    if f_node > best_cost:
                         continue
 
                     # if n not in closed_list:
@@ -1641,7 +1651,7 @@ def joint_prm_planner(
 
         return transitions
 
-    g = Graph(
+    g = MultimodalGraph(
         State(q0, m0),
         lambda a, b: batch_config_dist(a, b, distance_metric),
         use_k_nearest=use_k_nearest,
@@ -1817,7 +1827,7 @@ def joint_prm_planner(
                 g.add_transition_nodes(path_transitions)
                 print(f"Adding {len(path_transitions)} path transitions")
 
-            g.compute_lower_bound_to_goal(env.batch_config_cost)
+            g.compute_lower_bound_to_goal(env.batch_config_cost, current_best_cost)
 
         samples_in_graph_after = g.get_num_samples()
         cnt += samples_in_graph_after - samples_in_graph_before
