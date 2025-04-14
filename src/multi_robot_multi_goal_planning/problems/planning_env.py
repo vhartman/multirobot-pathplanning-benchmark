@@ -18,6 +18,7 @@ from multi_robot_multi_goal_planning.problems.dependency_graph import Dependency
 from functools import cache
 from collections import deque
 
+
 @cache
 def generate_binary_search_indices(N):
     sequence = []
@@ -85,7 +86,7 @@ class GoalRegion(Goal):
 
     def serialize(self):
         return self.limits.tolist()
-    
+
     @classmethod
     def from_data(cls, data):
         return GoalRegion(np.array(data))
@@ -121,12 +122,12 @@ class ConditionalGoal(Goal):
     def serialize(self):
         print("This is not yet implemented")
         raise NotImplementedError
-    
+
     @classmethod
     def from_data(cls, data):
         print("This is not yet implemented")
         raise NotImplementedError
-    
+
 
 class GoalSet(Goal):
     def __init__(self, goals):
@@ -149,7 +150,8 @@ class GoalSet(Goal):
     @classmethod
     def from_data(cls, data):
         return GoalSet([np.array(goal) for goal in data])
-    
+
+
 class SingleGoal(Goal):
     def __init__(self, goal: NDArray):
         self.goal = goal
@@ -167,7 +169,7 @@ class SingleGoal(Goal):
 
     def serialize(self):
         return self.goal.tolist()
-    
+
     @classmethod
     def from_data(cls, data):
         return SingleGoal(np.array(data))
@@ -201,15 +203,15 @@ class Task:
 
 class Mode:
     __slots__ = (
-        'task_ids', 
-        'entry_configuration', 
-        'sg', 
-        'id', 
-        'prev_mode', 
-        'next_modes', 
-        '_cached_hash'
+        "task_ids",
+        "entry_configuration",
+        "sg",
+        "id",
+        "prev_mode",
+        "next_modes",
+        "_cached_hash",
     )
-        
+
     task_ids: List[int]
     entry_configuration: Configuration
     sg: Dict[str, tuple]
@@ -224,7 +226,6 @@ class Mode:
         self.task_ids = task_list
         self.entry_configuration = entry_configuration
 
-        # TODO: set in constructor?
         self.prev_mode = None
         self.sg = {}
         self.next_modes = []
@@ -242,7 +243,7 @@ class Mode:
             return False
 
         if self.task_ids == other.task_ids:
-            return True 
+            return True
 
         return hash(self) == hash(other)
 
@@ -367,7 +368,7 @@ class SequenceMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
-        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode = True)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)
         start_mode.sg = sg
         return start_mode
 
@@ -390,7 +391,7 @@ class SequenceMixin(BaseModeLogic):
     def is_terminal_mode(self, mode: Mode):
         if mode.task_ids == self._terminal_task_ids:
             return True
-        
+
         return False
 
     def get_current_seq_index(self, mode: Mode) -> int:
@@ -531,7 +532,7 @@ class DependencyGraphMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
-        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode = True)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)
         start_mode.sg = sg
         return start_mode
 
@@ -761,7 +762,7 @@ class BaseProblem(ABC):
     #     self.collision_resolution = 0.01
 
     def serialize_tasks(self):
-        #open file
+        # open file
         task_list = []
 
         for t in self.tasks:
@@ -778,7 +779,7 @@ class BaseProblem(ABC):
             task_list.append(task_data)
 
         return task_list
-                
+
     def export_tasks(self, path):
         task_list = self.serialize_tasks()
         with open(path, "w") as file:
@@ -789,9 +790,11 @@ class BaseProblem(ABC):
         with open(path, "r") as file:
             task_list = []
             for line in file:
-                task_data = eval(line.strip())  # Convert string representation back to dictionary
+                task_data = eval(
+                    line.strip()
+                )  # Convert string representation back to dictionary
                 goal_type = task_data["goal_type"]
-                
+
                 goal = None
                 if goal_type == "SingleGoal":
                     goal = SingleGoal.from_data(task_data["goal"])
@@ -863,7 +866,7 @@ class BaseProblem(ABC):
 
     # Collision checking and environment related methods
     @abstractmethod
-    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         pass
 
     @abstractmethod
@@ -927,7 +930,12 @@ class BaseProblem(ABC):
                 mode = path[i].mode
 
                 if not self.is_edge_collision_free(
-                    q1, q2, mode, resolution=resolution, tolerance=tolerance, include_endpoints=True
+                    q1,
+                    q2,
+                    mode,
+                    resolution=resolution,
+                    tolerance=tolerance,
+                    include_endpoints=True,
                 ):
                     return False
 
