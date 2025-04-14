@@ -559,11 +559,11 @@ class rai_env(BaseProblem):
 
         return True
 
-    def get_scenegraph_info_for_mode(self, mode: Mode):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
         if not self.manipulating_env:
             return {}
 
-        self.set_to_mode(mode)
+        self.set_to_mode(mode, place_in_cache= (not is_start_mode))
 
         # TODO: should we simply list the movable objects manually?
         # collect all movable objects and collect parents and relative transformations
@@ -577,7 +577,7 @@ class rai_env(BaseProblem):
                     frame.getParent().name,
                     np.round(frame.getRelativeTransform(), 3).tobytes(),
                 )
-
+        mode._cached_hash = None
         return sg
 
     def set_to_mode(

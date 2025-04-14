@@ -940,7 +940,7 @@ class BaseRRTstar(ABC):
         """
 
         if mode is None: 
-            new_mode = self.env.make_start_mode()
+            new_mode = self.env.get_start_mode()
             new_mode.prev_mode = None
         else:
             new_modes = self.env.get_next_modes(q, mode)
