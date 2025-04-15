@@ -940,20 +940,16 @@ class BaseRRTstar(ABC):
         """
 
         if mode is None: 
-            new_mode = self.env.get_start_mode()
-            new_mode.prev_mode = None
+            new_modes = [self.env.get_start_mode()]
         else:
             new_modes = self.env.get_next_modes(q, mode)
-            assert len(new_modes) == 1
-            new_mode = new_modes[0]
-
-            new_mode.prev_mode = mode
-        if new_mode in self.modes:
-            return 
-        self.modes.append(new_mode)
-        self.add_tree(new_mode, tree_instance)
-        if self.informed_sampling_version != 6:
-            self.InformedInitialization(new_mode)
+        for new_mode in new_modes:
+            if new_mode in self.modes:
+                continue 
+            self.modes.append(new_mode)
+            self.add_tree(new_mode, tree_instance)
+            if self.informed_sampling_version != 6:
+                self.InformedInitialization(new_mode)
 
     def mark_node_as_transition(self, mode:Mode, n:Node) -> None:
         """
@@ -988,29 +984,27 @@ class BaseRRTstar(ABC):
         if self.env.is_terminal_mode(mode):
             return
         next_modes = self.env.get_next_modes(n.state.q, mode)
-        assert len(next_modes) == 1
-        next_mode = next_modes[0]
+        for next_mode in next_modes:
+            if next_mode not in self.modes:
+                tree_type = type(self.trees[mode])
+                if tree_type == BidirectionalTree:
+                    self.trees[mode].connected = True
+                self.add_new_mode(n.state.q, mode, tree_type)
+            self.trees[next_mode].add_transition_node_as_start_node(n)
+            if self.trees[next_mode].order == 1:
+                index = len(self.trees[next_mode].subtree)-1
+                tree = 'A'
+            else:
+                index = len(self.trees[next_mode].subtree_b)-1
+                tree = 'B'
+            # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
 
-        if next_mode not in self.modes:
-            tree_type = type(self.trees[mode])
-            if tree_type == BidirectionalTree:
-                self.trees[mode].connected = True
-            self.add_new_mode(n.state.q, mode, tree_type)
-        self.trees[next_mode].add_transition_node_as_start_node(n)
-        if self.trees[next_mode].order == 1:
-            index = len(self.trees[next_mode].subtree)-1
-            tree = 'A'
-        else:
-            index = len(self.trees[next_mode].subtree_b)-1
-            tree = 'B'
-        # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
-
-        #need to rewire tree of next mode as well
-        if index != 0:
-            N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
-            batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
-            if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
-                self.UpdateCost(next_mode, n)
+            #need to rewire tree of next mode as well
+            if index != 0:
+                N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
+                batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
+                if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
+                    self.UpdateCost(next_mode, n)
 
     def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
         """
