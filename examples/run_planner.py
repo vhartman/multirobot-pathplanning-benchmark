@@ -112,6 +112,11 @@ def main():
         action="store_true",
         help="Try shortcutting the solution.",
     )
+    parser.add_argument(
+        "--stop_at_mode",
+        action="store_true",
+        help="Generate samples near a previously found path (default: False)",
+    )
     args = parser.parse_args()
 
     if args.num_iters is not None and args.max_time is not None:
@@ -176,8 +181,7 @@ def main():
             sample_near_path=False,
             locally_informed_sampling=True,
             informed_batch_size=300,
-            remove_redundant_nodes = True
-            
+            remove_redundant_nodes=True,
         ).Plan(args.optimize)
     elif args.planner == "tensor_prm":
         path, info = tensor_prm_planner(
@@ -288,11 +292,20 @@ def main():
 
     print("displaying path from planner")
     env.display_path(
-        interpolated_path, stop=False, stop_at_end=True, adapt_to_max_distance=True
+        interpolated_path,
+        stop=False,
+        stop_at_end=True,
+        adapt_to_max_distance=True,
+        stop_at_mode=args.stop_at_mode,
     )
 
     print("displaying path from shortcut path")
-    env.display_path(shortcut_discretized_path, stop=False, adapt_to_max_distance=True)
+    env.display_path(
+        shortcut_discretized_path,
+        stop=False,
+        adapt_to_max_distance=True,
+        stop_at_mode=args.stop_at_mode,
+    )
 
 
 if __name__ == "__main__":

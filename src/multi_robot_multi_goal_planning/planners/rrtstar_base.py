@@ -30,7 +30,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 
-from multi_robot_multi_goal_planning.planners.sampling_informed import Informed
+from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
 
 
 class Operation:
@@ -894,7 +894,7 @@ class BaseRRTstar(ABC):
         self.times = []
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
-        self.informed = Informed(self.env, 'sampling_based', self.locally_informed_sampling)
+        self.informed = InformedSampling(self.env, 'sampling_based', self.locally_informed_sampling)
 
     def add_tree(self, 
                  mode: Mode, 
@@ -943,7 +943,10 @@ class BaseRRTstar(ABC):
             new_mode = self.env.get_start_mode()
             new_mode.prev_mode = None
         else:
-            new_mode = self.env.get_next_mode(q, mode)
+            new_modes = self.env.get_next_modes(q, mode)
+            assert len(new_modes) == 1
+            new_mode = new_modes[0]
+
             new_mode.prev_mode = mode
         if new_mode in self.modes:
             return 
@@ -984,7 +987,10 @@ class BaseRRTstar(ABC):
         self.mark_node_as_transition(mode,n)
         if self.env.is_terminal_mode(mode):
             return
-        next_mode = self.env.get_next_mode(n.state.q, mode)
+        next_modes = self.env.get_next_modes(n.state.q, mode)
+        assert len(next_modes) == 1
+        next_mode = next_modes[0]
+
         if next_mode not in self.modes:
             tree_type = type(self.trees[mode])
             if tree_type == BidirectionalTree:

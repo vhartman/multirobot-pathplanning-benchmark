@@ -2,6 +2,8 @@ import robotic as ry
 import numpy as np
 import random
 
+import copy
+
 from abc import ABC, abstractmethod
 
 from typing import List, Dict, Optional
@@ -17,6 +19,9 @@ from multi_robot_multi_goal_planning.problems.dependency_graph import Dependency
 
 from functools import cache
 from collections import deque
+
+from itertools import product
+
 
 @cache
 def generate_binary_search_indices(N):
@@ -71,7 +76,7 @@ class GoalRegion(Goal):
     def __init__(self, limits: NDArray):
         self.limits = limits
 
-    def satisfies_constraints(self, q: NDArray, mode: "Mode", _) -> bool:
+    def satisfies_constraints(self, q: NDArray, mode: "Mode", tolerance: float) -> bool:
         if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
             return True
 
@@ -85,7 +90,7 @@ class GoalRegion(Goal):
 
     def serialize(self):
         return self.limits.tolist()
-    
+
     @classmethod
     def from_data(cls, data):
         return GoalRegion(np.array(data))
@@ -121,12 +126,12 @@ class ConditionalGoal(Goal):
     def serialize(self):
         print("This is not yet implemented")
         raise NotImplementedError
-    
+
     @classmethod
     def from_data(cls, data):
         print("This is not yet implemented")
         raise NotImplementedError
-    
+
 
 class GoalSet(Goal):
     def __init__(self, goals):
@@ -149,7 +154,8 @@ class GoalSet(Goal):
     @classmethod
     def from_data(cls, data):
         return GoalSet([np.array(goal) for goal in data])
-    
+
+
 class SingleGoal(Goal):
     def __init__(self, goal: NDArray):
         self.goal = goal
@@ -167,7 +173,7 @@ class SingleGoal(Goal):
 
     def serialize(self):
         return self.goal.tolist()
-    
+
     @classmethod
     def from_data(cls, data):
         return SingleGoal(np.array(data))
@@ -201,15 +207,16 @@ class Task:
 
 class Mode:
     __slots__ = (
-        'task_ids', 
-        'entry_configuration', 
-        'sg', 
-        'id', 
-        'prev_mode', 
-        'next_modes', 
-        '_cached_hash'
+        "task_ids",
+        "entry_configuration",
+        "sg",
+        "id",
+        "prev_mode",
+        "next_modes",
+        "additional_hash_info",
+        "_cached_hash",
     )
-        
+
     task_ids: List[int]
     entry_configuration: Configuration
     sg: Dict[str, tuple]
@@ -217,6 +224,7 @@ class Mode:
     id: int
     prev_mode: "Mode"
     next_modes: List["Mode"]
+    additional_hash_info: any
 
     id_counter = 0
 
@@ -224,7 +232,6 @@ class Mode:
         self.task_ids = task_list
         self.entry_configuration = entry_configuration
 
-        # TODO: set in constructor?
         self.prev_mode = None
         self.sg = {}
         self.next_modes = []
@@ -234,6 +241,8 @@ class Mode:
 
         self._cached_hash = None
 
+        self.additional_hash_info = None
+
     def __repr__(self):
         return f"Tasks: {self.task_ids}, id: {self.id}"
 
@@ -241,8 +250,8 @@ class Mode:
         if not isinstance(other, Mode):
             return False
 
-        if self.task_ids == other.task_ids:
-            return True 
+        if self.task_ids != other.task_ids:
+            return False
 
         return hash(self) == hash(other)
 
@@ -254,7 +263,9 @@ class Mode:
             }
             sg_hash = hash(frozenset(sg_fitered.items()))
             task_hash = hash(tuple(self.task_ids))
-            self._cached_hash = hash((entry_hash, sg_hash, task_hash))
+            self._cached_hash = hash(
+                (entry_hash, sg_hash, task_hash, self.additional_hash_info)
+            )
 
         return self._cached_hash
 
@@ -319,7 +330,7 @@ class BaseModeLogic(ABC):
         pass
 
     @abstractmethod
-    def get_next_mode(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode):
         pass
 
     @abstractmethod
@@ -329,6 +340,390 @@ class BaseModeLogic(ABC):
     @abstractmethod
     def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
         pass
+
+
+class UnorderedButAssignedMixin(BaseModeLogic):
+    tasks: List[int]
+    per_robot_tasks: List[List[int]]
+    task_dependencies: Dict[int, List[int]]
+
+    terminal_task: int
+
+    def make_start_mode(self):
+        ids = [0] * self.start_pos.num_agents()
+        m = Mode(ids, self.start_pos)
+        return m
+
+    def make_symbolic_end(self):
+        return [self.terminal_task] * self.start_pos.num_agents()
+
+    def get_valid_next_task_combinations(self, mode: Mode):
+        # print(f"called get valid next with {mode.task_ids}")
+        if self.is_terminal_mode(mode):
+            return []
+
+        # check which tasks have been done, return all possible next combinations
+        unfinished_tasks_per_robot = copy.deepcopy(self.per_robot_tasks)
+        finished_tasks = []
+
+        # there might be a problem that until now we assumed that the mode is markov
+        # (i.e it does not matter what we did before for the current task)
+        # m.prev_mode
+
+        # print(f"current mode {mode.task_ids}")
+        # print("unfinished tasks", unfinished_tasks_per_robot)
+
+        if mode.prev_mode is None:
+            has_unfinished_tasks = True
+        else:
+            pm = mode.prev_mode
+            # print("prev ids")
+            while pm:
+                # print(pm.task_ids)
+                task_ids = pm.task_ids
+                for i, task_id in enumerate(task_ids):
+                    if (
+                        task_id in unfinished_tasks_per_robot[i]
+                        and task_id != mode.task_ids[i]
+                    ):
+                        # print(f"trying to remove {task_id}")
+                        unfinished_tasks_per_robot[i].remove(task_id)
+                        finished_tasks.append(task_id)
+
+                pm = pm.prev_mode
+
+            has_unfinished_tasks = False
+            for i, tasks in enumerate(unfinished_tasks_per_robot):
+                # print(i, tasks)
+                if len(tasks) > 0:
+                    # unfinished_tasks_per_robot[i].append(self.terminal_task)
+                    has_unfinished_tasks = True
+                if len(tasks) == 1 and tasks[0] == mode.task_ids[i]:
+                    unfinished_tasks_per_robot[i].append(self.terminal_task)
+                    # print(f"ADDED TERMINAL TO {i}")
+
+        # print("Unfinished tasks", unfinished_tasks_per_robot)
+
+        if has_unfinished_tasks:
+            # print("Unfinished tasks", unfinished_tasks_per_robot)
+            next_states = []  # No switch, all agents continue
+            num_agents = len(mode.task_ids)
+
+            for i in range(num_agents):
+                current_task = mode.task_ids[i]
+                for t in unfinished_tasks_per_robot[i]:
+                    task_requirements_fulfilled = True
+                    if t in self.task_dependencies:
+                        for dependency in self.task_dependencies[t]:
+                            if dependency not in finished_tasks and dependency != mode.task_ids[i]:
+                                task_requirements_fulfilled = False
+
+                    if not task_requirements_fulfilled:
+                        # print(f"dependency unfulfilled for task {t}")
+                        continue
+
+                    # print(f"dependency done for task {t}")
+
+                    if t != current_task:
+                        new_state = copy.deepcopy(mode.task_ids)
+                        new_state[i] = t
+                        next_states.append(new_state)
+
+            # print("current task ids", mode.task_ids)
+            # print("possible next tasks:", next_states)
+            # print()
+
+            return next_states
+
+        return [[self.terminal_task] * self.start_pos.num_agents()]
+
+    def is_terminal_mode(self, mode: Mode):
+        # check if all task shave been done
+        if all([t == self.terminal_task for t in mode.task_ids]):
+            return True
+
+        return False
+
+    def done(self, q: Configuration, m: Mode) -> bool:
+        if not self.is_terminal_mode(m):
+            return False
+
+        # check if this configuration fulfills the final goals
+        terminal_task = self.tasks[self.terminal_task]
+        involved_robots = terminal_task.robots
+
+        q_concat = []
+        for r in involved_robots:
+            r_idx = self.robots.index(r)
+            q_concat.append(q.robot_state(r_idx))
+
+        q_concat = np.concatenate(q_concat)
+
+        if terminal_task.goal.satisfies_constraints(q_concat, mode=m, tolerance=1e-8):
+            return True
+
+        return False
+
+    def get_next_modes(self, q: Configuration, mode: Mode):
+        # needs to be changed to get next modes
+        valid_next_combinations = self.get_valid_next_task_combinations(mode)
+
+        # print(valid_next_combinations)
+
+        possible_next_mode_ids = []
+        for next_mode_ids in valid_next_combinations:
+            for i in range(len(self.robots)):
+                if next_mode_ids[i] != mode.task_ids[i]:
+                    # need to check if the goal conditions for this task are fulfilled in the current state
+                    task = self.tasks[mode.task_ids[i]]
+                    q_concat = []
+                    for r in task.robots:
+                        r_idx = self.robots.index(r)
+                        q_concat.append(q.robot_state(r_idx))
+
+                    q_concat = np.concatenate(q_concat)
+
+                    if task.goal.satisfies_constraints(
+                        q_concat, mode=mode, tolerance=1e-8
+                    ):
+                        possible_next_mode_ids.append(next_mode_ids)
+
+        # assert(False)
+
+        # print(possible_next_mode_ids)
+
+        # random_next_mode_ids = random.choice(possible_next_mode_ids)
+        # next_mode = Mode(random_next_mode_ids, q)
+
+        # print("randomly chosen ids", random_next_mode_ids)
+        # print()
+
+        # # check if there is a mode that is not yet in the next_modes
+        # for tasks in possible_next_mode_ids:
+        #     if tasks not in [m.task_ids for m in mode.next_modes]:
+        #         print("not found", tasks)
+
+        next_modes = []
+
+        for next_id in possible_next_mode_ids:
+            next_mode = Mode(next_id, q)
+
+            next_mode.prev_mode = mode
+            tmp = tuple(tuple(sublist) for sublist in valid_next_combinations)
+            next_mode.additional_hash_info = tmp
+
+            sg = self.get_scenegraph_info_for_mode(next_mode)
+            next_mode.sg = sg
+
+            mode_exists = False
+            for nm in mode.next_modes:
+                if hash(nm) == hash(next_mode):
+                    # print("AAAAAAAAAA")
+                    next_modes.append(nm)
+                    mode_exists = True
+
+                    break
+
+            if not mode_exists:
+                mode.next_modes.append(next_mode)
+                next_modes.append(next_mode)
+
+        # print(mode)
+        # print(mode.next_modes)
+        # print()
+
+        return next_modes
+
+    def is_transition(self, q: Configuration, m: Mode) -> bool:
+        if self.is_terminal_mode(m):
+            return False
+
+        # check if any of the robots is fulfilling its goal constraints
+        next_mode_ids = self.get_valid_next_task_combinations(m)
+
+        for next_mode in next_mode_ids:
+            for i in range(len(self.robots)):
+                if next_mode[i] != m.task_ids[i]:
+                    # need to check if the goal conditions for this task are fulfilled in the current state
+                    task = self.tasks[m.task_ids[i]]
+                    q_concat = []
+                    for r in task.robots:
+                        r_idx = self.robots.index(r)
+                        q_concat.append(q.robot_state(r_idx))
+
+                    q_concat = np.concatenate(q_concat)
+
+                    if task.goal.satisfies_constraints(
+                        q_concat, mode=m, tolerance=1e-8
+                    ):
+                        return True
+
+        return False
+
+    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+        if next_task_ids is None:
+            # we should return the terminal task here
+            return self.tasks[self._terminal_task_ids[0]]
+        else:
+            different_tasks = []
+            for i, task_id in enumerate(current_mode.task_ids):
+                if task_id != next_task_ids[i]:
+                    different_tasks.append(task_id)
+
+            # print("next", next_task_ids)
+            # print("current", current_mode.task_ids)
+            # print("changing task_ids", different_tasks)
+            different_tasks = list(set(different_tasks))
+            assert len(different_tasks) == 1
+
+            return self.tasks[different_tasks[0]]
+
+
+class FreeMixin(BaseModeLogic):
+    tasks: List[int]
+    task_groups: List[
+        List[int]
+    ]  # describes groups of tasks of which one has to be done
+    terminal_task: int
+
+    def make_start_mode(self):
+        ids = [0] * self.start_pos.num_agents()
+        m = Mode(ids, self.start_pos)
+        return m
+
+    def make_symbolic_end(self):
+        return [self.terminal_task] * self.start_pos.num_agents()
+
+    def get_valid_next_task_combinations(self, mode: Mode):
+        # check which tasks have been done, return all possible next combinations
+        unfinished_tasks = []
+
+        # there might be a problem that until now we assumed that the mode is markov
+        # (i.e it does not matter what we did before for the current task)
+        # m.prev_mode
+
+        if mode.prev_mode is None:
+            return []
+
+        pm = mode.prev_mode
+        while pm:
+            task_ids = pm.task_ids
+            for i, task_id in enumerate(task_ids):
+                unfinished_tasks.remove(task_id)
+
+            pm = pm.prev_mode
+
+        has_unifinished_tasks = False
+        for tasks in unfinished_tasks:
+            if len(tasks) > 0:
+                has_unifinished_tasks = True
+
+        if has_unifinished_tasks:
+            valid_combinations = list(
+                product(*[[unfinished_tasks] * self.start_pos.num_agents()])
+            )
+            return valid_combinations
+
+        return self.terminal_task
+
+    def is_terminal_mode(self, mode: Mode):
+        # check if all task shave been done
+        if all([t == self.terminal_task for t in mode.task_ids]):
+            return True
+
+        return False
+
+    def done(self, q: Configuration, m: Mode) -> bool:
+        if not self.is_terminal_mode(m):
+            return False
+
+        # check if this configuration fulfills the final goals
+        terminal_task = self.tasks[self.terminal_task]
+        involved_robots = terminal_task.robots
+
+        q_concat = []
+        for r in involved_robots:
+            r_idx = self.robots.index(r)
+            q_concat.append(q.robot_state(r_idx))
+
+        q_concat = np.concatenate(q_concat)
+
+        if terminal_task.goal.satisfies_constraints(q_concat, mode=m, tolerance=1e-8):
+            return True
+
+        return False
+
+    def get_next_modes(self, q: Configuration, mode: Mode):
+        # needs to be changed to get next modes
+        valid_next_combinations = self.get_valid_next_task_combinations(mode)
+
+        possible_next_mode_ids = []
+        for next_mode_ids in valid_next_combinations:
+            for i in range(len(self.robots)):
+                if next_mode_ids[i] != mode.task_ids[i]:
+                    # need to check if the goal conditions for this task are fulfilled in the current state
+                    task = self.tasks[mode.task_ids[i]]
+                    q_concat = []
+                    for r in task.robots:
+                        r_idx = self.robots.index(r)
+                        q_concat.append(q.robot_state(r_idx))
+
+                    q_concat = np.concatenate(q_concat)
+
+                    if task.goal.satisfies_constraints(
+                        q_concat, mode=mode, tolerance=1e-8
+                    ):
+                        possible_next_mode_ids.append(next_mode_ids)
+
+        assert False
+        random_next_mode_id = random.choice(possible_next_mode_ids)
+        next_mode = Mode(random_next_mode_id, q)
+
+        return [next_mode]
+
+    def is_transition(self, q: Configuration, m: Mode) -> bool:
+        if self.is_terminal_mode(m):
+            return False
+
+        # check if any of the robots is fulfilling its goal constraints
+        next_mode_ids = self.get_valid_next_task_combinations(m)
+
+        for next_mode in next_mode_ids:
+            for i in range(len(self.robots)):
+                if next_mode[i] != m.task_ids[i]:
+                    # need to check if the goal conditions for this task are fulfilled in the current state
+                    task = self.tasks[m.task_ids[i]]
+                    q_concat = []
+                    for r in task.robots:
+                        r_idx = self.robots.index(r)
+                        q_concat.append(q.robot_state(r_idx))
+
+                    q_concat = np.concatenate(q_concat)
+
+                    if task.goal.satisfies_constraints(
+                        q_concat, mode=m, tolerance=1e-8
+                    ):
+                        return True
+
+        return False
+
+    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+        if next_task_ids is None:
+            # we should return the terminal task here
+            return self.tasks[self._terminal_task_ids[0]]
+        else:
+            different_tasks = []
+            for i, task_id in enumerate(current_mode.task_ids):
+                if task_id != next_task_ids[i]:
+                    different_tasks.append(task_id)
+
+            # print("next", next_task_ids)
+            # print("current", current_mode.task_ids)
+            # print("changing task_ids", different_tasks)
+            different_tasks = list(set(different_tasks))
+            assert len(different_tasks) == 1
+
+            return self.tasks[different_tasks[0]]
 
 
 # concrete implementations of the required abstract classes for the sequence-setting.
@@ -367,7 +762,7 @@ class SequenceMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
-        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode = True)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)
         start_mode.sg = sg
         return start_mode
 
@@ -390,7 +785,7 @@ class SequenceMixin(BaseModeLogic):
     def is_terminal_mode(self, mode: Mode):
         if mode.task_ids == self._terminal_task_ids:
             return True
-        
+
         return False
 
     def get_current_seq_index(self, mode: Mode) -> int:
@@ -475,7 +870,7 @@ class SequenceMixin(BaseModeLogic):
 
         return [next_task_ids]
 
-    def get_next_mode(self, q: Optional[Configuration], mode: Mode) -> Mode:
+    def get_next_modes(self, q: Optional[Configuration], mode: Mode) -> Mode:
         next_task_ids = self.get_valid_next_task_combinations(mode)[0]
 
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
@@ -486,11 +881,11 @@ class SequenceMixin(BaseModeLogic):
 
         for nm in mode.next_modes:
             if hash(nm) == hash(next_mode):
-                return nm
+                return [nm]
 
         mode.next_modes.append(next_mode)
 
-        return next_mode
+        return [next_mode]
 
     def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
         seq_idx = self.get_current_seq_index(current_mode)
@@ -531,7 +926,7 @@ class DependencyGraphMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
-        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode = True)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)
         start_mode.sg = sg
         return start_mode
 
@@ -629,7 +1024,7 @@ class DependencyGraphMixin(BaseModeLogic):
             if robot in involved_robots:
                 return name
 
-    def get_next_mode(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode):
         next_mode_ids = self.get_valid_next_task_combinations(mode)
 
         # all of this is duplicated with the method below
@@ -658,12 +1053,12 @@ class DependencyGraphMixin(BaseModeLogic):
 
                         for nm in mode.next_modes:
                             if hash(nm) == hash(tmp):
-                                return nm
+                                return [nm]
 
                         mode.next_modes.append(tmp)
                         # print(mode.next_modes)
 
-                        return tmp
+                        return [tmp]
 
         raise ValueError("This does not fulfill the constraints to reach a new mode.")
 
@@ -761,7 +1156,7 @@ class BaseProblem(ABC):
     #     self.collision_resolution = 0.01
 
     def serialize_tasks(self):
-        #open file
+        # open file
         task_list = []
 
         for t in self.tasks:
@@ -778,7 +1173,7 @@ class BaseProblem(ABC):
             task_list.append(task_data)
 
         return task_list
-                
+
     def export_tasks(self, path):
         task_list = self.serialize_tasks()
         with open(path, "w") as file:
@@ -789,9 +1184,11 @@ class BaseProblem(ABC):
         with open(path, "r") as file:
             task_list = []
             for line in file:
-                task_data = eval(line.strip())  # Convert string representation back to dictionary
+                task_data = eval(
+                    line.strip()
+                )  # Convert string representation back to dictionary
                 goal_type = task_data["goal_type"]
-                
+
                 goal = None
                 if goal_type == "SingleGoal":
                     goal = SingleGoal.from_data(task_data["goal"])
@@ -850,7 +1247,7 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def get_next_mode(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode):
         pass
 
     @abstractmethod
@@ -863,7 +1260,7 @@ class BaseProblem(ABC):
 
     # Collision checking and environment related methods
     @abstractmethod
-    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         pass
 
     @abstractmethod
@@ -926,19 +1323,30 @@ class BaseProblem(ABC):
                 q2 = path[i + 1].q
                 mode = path[i].mode
 
+                if not self.is_collision_free(q1, mode):
+                    return False
+
                 if not self.is_edge_collision_free(
-                    q1, q2, mode, resolution=resolution, tolerance=tolerance, include_endpoints=True
+                    q1,
+                    q2,
+                    mode,
+                    resolution=resolution,
+                    tolerance=tolerance,
+                    include_endpoints=False,
                 ):
                     return False
 
                 # valid_edges += 1
 
+            if not self.is_collision_free(path[-1].q, path[-1].mode):
+                return False
+
             # print("checked edges in shortcutting: ", valid_edges)
         else:
             edge_queue = list(idx)
-            N_max = 2
-            N_start = 0
             checks_per_iteration = 10
+            N_start = 0
+            N_max = N_start + checks_per_iteration
             while edge_queue:
                 edges_to_remove = []
                 for i in edge_queue:
@@ -946,13 +1354,17 @@ class BaseProblem(ABC):
                     q2 = path[i + 1].q
                     mode = path[i].mode
 
+                    if N_start == 0:
+                        if not self.is_collision_free(q1, mode):
+                            return False
+
                     res = self.is_edge_collision_free(
                         q1,
                         q2,
                         mode,
                         resolution=resolution,
                         tolerance=tolerance,
-                        include_endpoints=True,
+                        include_endpoints=False,
                         N_start=N_start,
                         N_max=N_max,
                     )
@@ -969,6 +1381,9 @@ class BaseProblem(ABC):
 
                 N_start += checks_per_iteration
                 N_max += checks_per_iteration
+
+            if not self.is_collision_free(path[-1].q, path[-1].mode):
+                return False
 
         return True
 

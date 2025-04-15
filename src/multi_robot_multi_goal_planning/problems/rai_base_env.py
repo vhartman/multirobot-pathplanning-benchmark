@@ -253,7 +253,6 @@ class rai_env(BaseProblem):
     sequence: List[int]
     tasks: List[Task]
     start_mode: Mode
-    _terminal_task_ids: List[int]
 
     # misc
     collision_tolerance: float
@@ -524,7 +523,7 @@ class rai_env(BaseProblem):
 
         # print('q1', q1)
         # print('q2', q2)
-        N = int(config_dist(q1, q2, "max") / resolution)
+        N = int(config_dist(q1, q2, "max") / resolution) + 1
         N = max(2, N)
 
         if N_start > N:
@@ -701,7 +700,8 @@ class rai_env(BaseProblem):
             if stop_at_mode and i < len(path) - 1:
                 if path[i].mode != path[i + 1].mode:
                     print(i)
-                    print(path[i].mode)
+                    print("Current mode:", path[i].mode)
+                    print("Next mode:", path[i+1].mode)
                     self.C.view(True)
 
             self.C.view(stop)

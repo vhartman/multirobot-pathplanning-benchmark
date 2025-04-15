@@ -54,7 +54,10 @@ def convert_to_path(env, path_data):
                 # print(q)
                 # try:
                 # print(prev_config.state(), modes[-1])
-                next_mode = env.get_next_mode(prev_config, modes[-1])
+                next_modes = env.get_next_modes(prev_config, modes[-1])
+                assert len(next_modes) == 1
+                next_mode = next_modes[0]
+
 
                 if next_mode.task_ids == a["mode"]:
                     modes.append(next_mode)
