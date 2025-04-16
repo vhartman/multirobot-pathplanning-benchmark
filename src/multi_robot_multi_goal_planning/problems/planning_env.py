@@ -622,8 +622,26 @@ class FreeMixin(BaseModeLogic):
     def make_symbolic_end(self):
         return [self.terminal_task] * self.start_pos.num_agents()
 
+    def _get_finished_groups(self, mode: Mode) -> List[int]:
+        finished_task_groups = []
+        if mode.prev_mode is None:
+            return []
+        else:
+            pm = mode.prev_mode
+            while pm:
+                task_ids = pm.task_ids
+                for i, task_id in enumerate(task_ids):
+
+                    for j in range(len(self.task_groups)):
+                        if task_id in [id for _, id in self.task_groups[j]]:
+                            finished_task_groups.append(j)
+
+                pm = pm.prev_mode
+
+        return list(set(sorted(finished_task_groups)))
+
     @cache
-    def get_valid_next_task_combinations(self, mode: Mode):
+    def get_valid_next_task_combinations(self, mode: Mode) -> List[List[int]]:
         if self.is_terminal_mode(mode):
             return []
 
@@ -763,6 +781,9 @@ class FreeMixin(BaseModeLogic):
 
                 next_states.append(new_state)
 
+            # if len(next_states) == 0:
+            #     print("AAAAAAAA")
+
         # print("current state", mode)
         # print(len(unfinished_tasks))
         # print(unfinished_tasks)
@@ -803,6 +824,11 @@ class FreeMixin(BaseModeLogic):
         # print(q.state(), mode)
         valid_next_combinations = self.get_valid_next_task_combinations(mode)
 
+        # for next_mode_ids in valid_next_combinations:
+        #     print(next_mode_ids, mode.task_ids)
+        #     if mode.task_ids == next_mode_ids:
+        #         print("WTFWTFWTW")
+
         # print(valid_next_combinations)
 
         possible_next_mode_ids = []
@@ -829,8 +855,8 @@ class FreeMixin(BaseModeLogic):
             next_mode = Mode(next_id, q)
 
             next_mode.prev_mode = mode
-            tmp = tuple(tuple(sublist) for sublist in valid_next_combinations)
-            next_mode.additional_hash_info = tmp
+            tmp = tuple(self._get_finished_groups(next_mode))
+            next_mode.additional_hash_info = copy.deepcopy(tmp)
 
             sg = self.get_scenegraph_info_for_mode(next_mode)
             next_mode.sg = sg
