@@ -245,6 +245,7 @@ class DummyClass(UnorderedButAssignedMixin):
 
         self.per_robot_tasks = [[1], [2, 3, 4]]
         self.terminal_task = 5
+        self.task_dependencies = {}
 
         self.collision_tolerance = 0.01
 
