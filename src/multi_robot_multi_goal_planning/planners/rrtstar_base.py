@@ -895,6 +895,8 @@ class BaseRRTstar(ABC):
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
         self.informed = InformedSampling(self.env, 'sampling_based', self.locally_informed_sampling)
+        self.num_next_modes = 1
+        self.blacklist_mode = []
 
     def add_tree(self, 
                  mode: Mode, 
@@ -943,8 +945,9 @@ class BaseRRTstar(ABC):
             new_modes = [self.env.get_start_mode()]
         else:
             new_modes = self.env.get_next_modes(q, mode)
+            self.num_next_modes = len(new_modes)
         for new_mode in new_modes:
-            if new_mode in self.modes:
+            if new_mode in self.modes or new_mode.task_ids in self.blacklist_mode:
                 continue 
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
@@ -985,6 +988,8 @@ class BaseRRTstar(ABC):
             return
         next_modes = self.env.get_next_modes(n.state.q, mode)
         for next_mode in next_modes:
+            if next_mode.task_ids in self.blacklist_mode:
+                continue
             if next_mode not in self.modes:
                 tree_type = type(self.trees[mode])
                 if tree_type == BidirectionalTree:
@@ -1129,9 +1134,28 @@ class BaseRRTstar(ABC):
         """
 
         possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
+        mode_task_ids = [m.task_ids for m in mode.next_modes]
         if not possible_next_task_combinations:
-            return None
-        return random.choice(possible_next_task_combinations)
+            return
+        if set(map(tuple, possible_next_task_combinations)).issubset(set(map(tuple, self.blacklist_mode))):
+            if mode.task_ids not in self.blacklist_mode:
+                self.blacklist_mode.append(mode.task_ids)
+            self.modes.remove(mode)
+            return
+        blacklist = []
+        while True:
+            next_task = random.choice(possible_next_task_combinations)
+            if next_task in blacklist:
+                continue
+            if next_task not in mode_task_ids:
+                return next_task
+            idx = mode_task_ids.index(next_task)
+            if mode.next_modes[idx].task_ids not in self.blacklist_mode:
+                return next_task
+            blacklist.append(next_task)
+            
+
+        return 
 
     def get_home_poses(self, mode:Mode) -> List[NDArray]:
         """
@@ -1213,9 +1237,15 @@ class BaseRRTstar(ABC):
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
 
-        
+        failed_attemps = 0
         while True:
+            if failed_attemps > 10000:
+                self.blacklist_mode.append(mode.task_ids)
+                self.modes.remove(mode)
+                return
             next_ids = self.get_next_ids(mode)
+            if not next_ids:
+                return
             constrained_robot = self.env.get_active_task(mode, next_ids).robots
             goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
             q = []
@@ -1232,6 +1262,7 @@ class BaseRRTstar(ABC):
             q = type(self.env.get_start_pos()).from_list(q)   
             if self.env.is_collision_free(q, mode):
                 return q
+            failed_attemps+=1
     
     def sample_configuration(self, 
                              mode:Mode, 
@@ -1255,7 +1286,10 @@ class BaseRRTstar(ABC):
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
         sample_near_path = sampling_type == "sample_near_path"
-        constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+        next_ids = self.get_next_ids(mode)
+        if not next_ids:
+            return
+        constrained_robots = self.env.get_active_task(mode, next_ids).robots
         attemps = 0  # needed if home poses are in collision
 
         while True:
@@ -1307,6 +1341,8 @@ class BaseRRTstar(ABC):
                             return q
                         continue
                 q = self.sample_transition_configuration(mode)
+                if q is None:
+                    return
                 if random.choice([0,1]) == 0:
                     return q
                 while True:
@@ -1849,6 +1885,14 @@ class BaseRRTstar(ABC):
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
             probability[-1] = 1
+            # if self.num_next_modes[-1] == 1:
+            #     try:
+            #         probability[-1] = 1
+            #     except:
+            #         pass
+            # else:
+            #     #otherwise planner could be stuck in an invalid mode
+            #     probability[-self.num_next_modes:] = [1/self.num_next_modes]*self.num_next_modes
             p =  probability
 
         elif self.mode_sampling == 0:

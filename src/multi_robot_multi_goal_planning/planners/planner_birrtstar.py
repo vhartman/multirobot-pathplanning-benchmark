@@ -98,7 +98,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         else:
             new_modes = self.env.get_next_modes(q, mode)
         for new_mode in new_modes:
-            if new_mode in self.modes:
+            if new_mode in self.modes or new_mode.task_ids in self.blacklist_mode:
                 continue 
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
@@ -108,6 +108,8 @@ class BidirectionalRRTstar(BaseRRTstar):
             node = None
             for i in range(self.transition_nodes):                 
                 q = self.sample_transition_configuration(new_mode)
+                if q is None:
+                    break
                 if i > 0 and np.equal(q.state(), node.state.q.state()).all():
                     break
                 node = Node(State(q, new_mode), self.operation)
