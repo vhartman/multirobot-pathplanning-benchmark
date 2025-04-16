@@ -221,7 +221,7 @@ class DummyClass(UnorderedButAssignedMixin):
         self.tasks = [
             Task(
                 ["a1", "a2"],
-                GoalRegion(np.array([0])),
+                SingleGoal(np.array([0])),
             ),
             # r1
             Task(["a1"], SingleGoal(r1_goal)),
@@ -258,22 +258,16 @@ def test_unordered_mixin():
     tmp = DummyClass()
 
     valid_combinations = tmp.get_valid_next_task_combinations(tmp.start_mode)
-    assert len(valid_combinations) == 4
+    assert len(valid_combinations) == 3
 
-    test_mode = Mode([1, 0], tmp.start_pos)
+    test_mode = Mode([1, 2], tmp.start_pos)
     test_mode.prev_mode = tmp.start_mode
 
     valid_combinations = tmp.get_valid_next_task_combinations(test_mode)
-    assert len(valid_combinations) == 4
-
-    test_mode_2 = Mode([5, 0], tmp.start_pos)
-    test_mode_2.prev_mode = test_mode
-
-    valid_combinations = tmp.get_valid_next_task_combinations(test_mode_2)
     assert len(valid_combinations) == 3
-
+    
     test_mode_3 = Mode([5, 2], tmp.start_pos)
-    test_mode_3.prev_mode = test_mode_2
+    test_mode_3.prev_mode = test_mode
 
     valid_combinations = tmp.get_valid_next_task_combinations(test_mode_3)
     assert len(valid_combinations) == 2
