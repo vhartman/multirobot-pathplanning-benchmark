@@ -767,9 +767,13 @@ class MultimodalGraph:
                     else:
                         self.transition_nodes[this_mode] = [node_this_mode]
             else:
+                
                 if not isinstance(next_modes, list):
                     next_modes = [next_modes]
-
+                
+                if len(next_modes) == 0:
+                    continue
+                
                 next_nodes = []
                 for next_mode in next_modes:
                     node_next_mode = Node(State(q, next_mode), True)
@@ -986,6 +990,10 @@ class MultimodalGraph:
                     [o.lb_cost_to_goal for o in self.transition_nodes[node.state.mode]],
                     dtype=np.float64,
                 )
+
+            # print(len(self.transition_node_array_cache[node.state.mode]))
+            if len(self.transition_node_array_cache[node.state.mode]) == 0:
+                return np.inf
 
             costs_to_transitions = env.batch_config_cost(
                 node.state.q,
@@ -1394,7 +1402,7 @@ def joint_prm_planner(
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
 
-    reached_modes = [m0]
+    reached_modes = set([m0])
 
     conf_type = type(env.get_start_pos())
     informed = InformedSampling(
@@ -1411,7 +1419,7 @@ def joint_prm_planner(
         # return m_rnd
         if mode_sampling_type == "uniform_reached":
             # print(len(reached_modes))
-            m_rnd = random.choice(reached_modes)
+            m_rnd = random.choice(tuple(reached_modes))
         elif mode_sampling_type == "weighted":
             # sample such that we tend to get similar number of pts in each mode
             w = []
@@ -1422,7 +1430,7 @@ def joint_prm_planner(
                 if m in g.transition_nodes:
                     num_nodes += len(g.transition_nodes[m])
                 w.append(1 / max(1, num_nodes))
-            m_rnd = random.choices(reached_modes, weights=w)[0]
+            m_rnd = random.choices(tuple(reached_modes), weights=w)[0]
         # elif mode_sampling_type == "greedy_until_first_sol":
         #     if found_solution:
         #         m_rnd = reached_modes[-1]
@@ -1633,14 +1641,18 @@ def joint_prm_planner(
                     # next_mode = next_modes[0]
                     # print("next mode", next_mode)
 
-                transitions.append((q, mode, next_modes))
+                
+                if next_modes is None or len(next_modes) > 0:
+                    transitions.append((q, mode, next_modes))
 
                 # print(mode, mode.next_modes)
 
-                if next_modes is not None:
-                    for next_mode in next_modes:
-                        if next_mode not in reached_modes:
-                            reached_modes.append(next_mode)
+                if next_modes is not None and len(next_modes) > 0:
+                    reached_modes.update(next_modes)
+                    # for next_mode in next_modes:
+                    # #     reached_modes.add(next_mode)
+                        # if next_mode not in reached_modes:
+                        #     reached_modes.append(next_mode)
 
                     # print("reached modes", len(reached_modes))
                     # print(reached_modes)
@@ -1729,6 +1741,24 @@ def joint_prm_planner(
         print(f"Samples: {cnt}; time: {time.time() - start_time:.2f}s; {ptc}")
         print(f"Currently {len(reached_modes)} modes")
 
+        # for mode in reached_modes:
+        #     # items = [v[0] for k,v  in mode.sg.items()]
+        #     # transforms = [np.frombuffer(v[1]) for k,v  in mode.sg.items()]
+        #     # print(mode, mode.additional_hash_info, mode.task_ids)
+        #     print(mode, mode.additional_hash_info, mode.task_ids, hash(mode))
+        #     if mode.task_ids == [9,9]:
+        #         print(hash(frozenset(mode.sg)))
+        #         mode._cached_hash = None
+        #         print(hash(mode))
+        #         sg_fitered = {
+        #             k: (v[0], v[1], v[2]) if len(v) > 2 else v for k, v in mode.sg.items()
+        #         }
+        #         sg_hash = hash(frozenset(sg_fitered.items()))
+        #         print(mode.sg)
+        #         print(sg_fitered)
+        #         print(sg_hash)
+            # print(mode, mode.additional_hash_info, mode.task_ids, transforms)
+
         samples_in_graph_before = g.get_num_samples()
 
         if add_new_batch:
@@ -1792,7 +1822,7 @@ def joint_prm_planner(
                 if try_informed_sampling:
                     print("Generating informed samples")
                     new_informed_states = informed.generate_samples(
-                        reached_modes,
+                        tuple(reached_modes),
                         informed_batch_size,
                         interpolated_path,
                         try_direct_sampling=try_direct_informed_sampling,
@@ -1805,7 +1835,7 @@ def joint_prm_planner(
                 if try_informed_transitions:
                     print("Generating informed transitions")
                     new_informed_transitions = informed.generate_transitions(
-                        reached_modes,
+                        tuple(reached_modes),
                         informed_transition_batch_size,
                         interpolated_path,
                         g=g,

@@ -45,7 +45,8 @@ class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
         self.tasks = [
             Task(
                 ["a1", "a2"],
-                GoalRegion(self.C.getJointLimits()),
+                # GoalRegion(self.C.getJointLimits()),
+                SingleGoal(self.C.getJointState())
             ),
             # r1
             Task(["a1"], SingleGoal(r1_goal)),
@@ -105,7 +106,8 @@ class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
         self.tasks = [
             Task(
                 ["a1", "a2"],
-                GoalRegion(self.C.getJointLimits()),
+                # GoalRegion(self.C.getJointLimits()),
+                SingleGoal(self.C.getJointState())
             ),
             # r1
             Task(["a1"], SingleGoal(r1_goal)),
@@ -178,7 +180,8 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
         self.tasks = [
             Task(
                 ["a1", "a2"],
-                GoalRegion(self.C.getJointLimits()),
+                # GoalRegion(self.C.getJointLimits()),
+                SingleGoal(self.C.getJointState())
             ),
             # r1
             Task(["a1"], SingleGoal(r1_goal)),
@@ -241,7 +244,8 @@ class rai_two_dim_circle_single_agent(UnorderedButAssignedMixin, rai_env):
         self.tasks = [
             Task(
                 ["a0"],
-                GoalRegion(self.C.getJointLimits()),
+                # GoalRegion(self.C.getJointLimits()),
+                SingleGoal(self.C.getJointState())
             ),
         ]
 
@@ -285,7 +289,8 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
         self.tasks = [
             Task(
                 ["a1_", "a2_"],
-                GoalRegion(self.limits),
+                # GoalRegion(self.limits),
+                SingleGoal(self.C.getJointState())
             ),
         ]
         self.tasks[-1].name = "dummy_start"

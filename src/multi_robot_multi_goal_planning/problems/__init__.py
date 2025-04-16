@@ -7,6 +7,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
 import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 import multi_robot_multi_goal_planning.problems.rai_unordered_envs as rue
+import multi_robot_multi_goal_planning.problems.rai_free_envs as rfe
 
 import multi_robot_multi_goal_planning.problems.abstract_env as ae
 
@@ -122,6 +123,10 @@ def get_all_environments():
         "unordered_circle": lambda: rue.rai_two_dim_circle_env(),
         "unordered_single_agent_circle": lambda: rue.rai_two_dim_circle_single_agent(),
         "unordered_box_reorientation": lambda: rue.rai_unordered_ur10_box_pile_cleanup_env(),
+
+        ###### UNASSIGNED ENVS
+        "unassigned": lambda: rfe.rai_two_dim_env(),
+        "unassigned_piano": lambda: rfe.rai_unassigned_piano_mover()
     }
     # fmt: on
 

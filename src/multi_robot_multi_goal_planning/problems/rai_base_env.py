@@ -20,7 +20,9 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     batch_config_cost,
 )
 
-from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    generate_binary_search_indices,
+)
 
 import time
 
@@ -528,7 +530,7 @@ class rai_env(BaseProblem):
 
         if N_start > N:
             return None
-        
+
         if N_max is None:
             N_max = N
 
@@ -559,11 +561,11 @@ class rai_env(BaseProblem):
 
         return True
 
-    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         if not self.manipulating_env:
             return {}
 
-        self.set_to_mode(mode, place_in_cache= (not is_start_mode))
+        self.set_to_mode(mode, place_in_cache=False, use_cached=False)
 
         # TODO: should we simply list the movable objects manually?
         # collect all movable objects and collect parents and relative transformations
@@ -573,9 +575,14 @@ class rai_env(BaseProblem):
         for frame in self.C.getFrames():
             if "obj" in frame.name:
                 movable_objects.append(frame.name)
+                
+                relative_pose = np.round(frame.getRelativeTransform(), 3)
+                relative_pose[abs(relative_pose) < 1e-6] = 0.
+                relative_pose.flags.writeable = False
+                
                 sg[frame.name] = (
                     frame.getParent().name,
-                    np.round(frame.getRelativeTransform(), 3).tobytes(),
+                    relative_pose.tobytes(),
                 )
         mode._cached_hash = None
         return sg
@@ -627,6 +634,10 @@ class rai_env(BaseProblem):
 
         # print(mode_sequence)
 
+        # if m.task_ids == [9,9]:
+        #     print(m.sg)
+        #     print(hash(m))
+
         for i, mode in enumerate(mode_sequence[:-1]):
             next_mode = mode_sequence[i + 1]
 
@@ -651,6 +662,10 @@ class rai_env(BaseProblem):
             q = np.concatenate(q_new)
             tmp.setJointState(q, joint_names)
 
+            # if m.task_ids == [9, 9]:
+            #     print(mode, next_mode, active_task.name, mode_switching_robots, [self.tasks[i].name for i in next_mode.task_ids])
+            #     tmp.view(True)
+            
             if self.tasks[prev_mode_index].type is not None:
                 if self.tasks[prev_mode_index].type == "goto":
                     pass
@@ -674,6 +689,10 @@ class rai_env(BaseProblem):
             viewer = self.C.get_viewer()
             self.C_cache[m].set_viewer(viewer)
             self.C = self.C_cache[m]
+
+            if m.task_ids == [9, 9]:
+                self.C.view()
+
         else:
             viewer = self.C.get_viewer()
             tmp.set_viewer(viewer)
@@ -701,7 +720,7 @@ class rai_env(BaseProblem):
                 if path[i].mode != path[i + 1].mode:
                     print(i)
                     print("Current mode:", path[i].mode)
-                    print("Next mode:", path[i+1].mode)
+                    print("Next mode:", path[i + 1].mode)
                     self.C.view(True)
 
             self.C.view(stop)

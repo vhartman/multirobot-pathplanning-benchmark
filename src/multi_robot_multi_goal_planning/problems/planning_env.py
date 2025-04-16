@@ -250,6 +250,9 @@ class Mode:
         if not isinstance(other, Mode):
             return False
 
+        if self.id == other.id:
+            return True
+
         if self.task_ids != other.task_ids:
             return False
 
@@ -263,6 +266,7 @@ class Mode:
             }
             sg_hash = hash(frozenset(sg_fitered.items()))
             task_hash = hash(tuple(self.task_ids))
+
             self._cached_hash = hash(
                 (entry_hash, sg_hash, task_hash, self.additional_hash_info)
             )
@@ -357,6 +361,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
     def make_symbolic_end(self):
         return [self.terminal_task] * self.start_pos.num_agents()
 
+    @cache
     def get_valid_next_task_combinations(self, mode: Mode):
         # print(f"called get valid next with {mode.task_ids}")
         if self.is_terminal_mode(mode):
@@ -372,9 +377,43 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         # print(f"current mode {mode.task_ids}")
         # print("unfinished tasks", unfinished_tasks_per_robot)
+        num_agents = len(mode.task_ids)
 
         if mode.prev_mode is None:
             has_unfinished_tasks = True
+
+            # this can only be the case for the starting mode.
+            # construct all possible follow up modes.
+            # Important: we want to transition both states here, compared to the case below
+            # where we only transition one at a time.
+            feasible_tasks_per_robot = [[] for _ in range(num_agents)]
+
+            for i in range(num_agents):
+                current_task = mode.task_ids[i]
+                for t in unfinished_tasks_per_robot[i]:
+                    task_requirements_fulfilled = True
+                    if t in self.task_dependencies:
+                        for dependency in self.task_dependencies[t]:
+                            if (
+                                dependency not in finished_tasks
+                                and dependency != mode.task_ids[i]
+                            ):
+                                task_requirements_fulfilled = False
+
+                    if not task_requirements_fulfilled:
+                        # print(f"dependency unfulfilled for task {t}")
+                        continue
+                        
+                    feasible_tasks_per_robot[i].append(t)
+            
+            next_states = [
+                list(combo)
+                for combo in product(*feasible_tasks_per_robot)
+                if combo.count(self.terminal_task) != num_agents
+            ]
+
+            return next_states
+
         else:
             pm = mode.prev_mode
             # print("prev ids")
@@ -406,8 +445,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         if has_unfinished_tasks:
             # print("Unfinished tasks", unfinished_tasks_per_robot)
-            next_states = []  # No switch, all agents continue
-            num_agents = len(mode.task_ids)
+            next_states = []
 
             for i in range(num_agents):
                 current_task = mode.task_ids[i]
@@ -415,7 +453,10 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                     task_requirements_fulfilled = True
                     if t in self.task_dependencies:
                         for dependency in self.task_dependencies[t]:
-                            if dependency not in finished_tasks and dependency != mode.task_ids[i]:
+                            if (
+                                dependency not in finished_tasks
+                                and dependency != mode.task_ids[i]
+                            ):
                                 task_requirements_fulfilled = False
 
                     if not task_requirements_fulfilled:
@@ -487,21 +528,6 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                         q_concat, mode=mode, tolerance=1e-8
                     ):
                         possible_next_mode_ids.append(next_mode_ids)
-
-        # assert(False)
-
-        # print(possible_next_mode_ids)
-
-        # random_next_mode_ids = random.choice(possible_next_mode_ids)
-        # next_mode = Mode(random_next_mode_ids, q)
-
-        # print("randomly chosen ids", random_next_mode_ids)
-        # print()
-
-        # # check if there is a mode that is not yet in the next_modes
-        # for tasks in possible_next_mode_ids:
-        #     if tasks not in [m.task_ids for m in mode.next_modes]:
-        #         print("not found", tasks)
 
         next_modes = []
 
@@ -584,9 +610,11 @@ class FreeMixin(BaseModeLogic):
     task_groups: List[
         List[int]
     ]  # describes groups of tasks of which one has to be done
+    task_dependencies: Dict[int, List[int]]
     terminal_task: int
 
     def make_start_mode(self):
+        # ids = [0, 1]
         ids = [0] * self.start_pos.num_agents()
         m = Mode(ids, self.start_pos)
         return m
@@ -594,37 +622,153 @@ class FreeMixin(BaseModeLogic):
     def make_symbolic_end(self):
         return [self.terminal_task] * self.start_pos.num_agents()
 
+    @cache
     def get_valid_next_task_combinations(self, mode: Mode):
+        if self.is_terminal_mode(mode):
+            return []
+
         # check which tasks have been done, return all possible next combinations
-        unfinished_tasks = []
+        unfinished_tasks = copy.deepcopy(self.task_groups)
 
         # there might be a problem that until now we assumed that the mode is markov
         # (i.e it does not matter what we did before for the current task)
         # m.prev_mode
 
+        finished_task_groups = []
+        finished_tasks = []
+
         if mode.prev_mode is None:
-            return []
+            pass
+        else:
+            pm = mode.prev_mode
+            while pm:
+                task_ids = pm.task_ids
+                for i, task_id in enumerate(task_ids):
+                    if task_id != mode.task_ids[i]:
+                        finished_tasks.append(task_id)
 
-        pm = mode.prev_mode
-        while pm:
-            task_ids = pm.task_ids
-            for i, task_id in enumerate(task_ids):
-                unfinished_tasks.remove(task_id)
+                    for j in range(len(self.task_groups)):
+                        if task_id in [id for _, id in self.task_groups[j]]:
+                            finished_task_groups.append(j)
 
-            pm = pm.prev_mode
+                pm = pm.prev_mode
 
-        has_unifinished_tasks = False
-        for tasks in unfinished_tasks:
-            if len(tasks) > 0:
-                has_unifinished_tasks = True
+            for i in sorted(list(set(finished_task_groups)), reverse=True):
+                unfinished_tasks.pop(i)
 
-        if has_unifinished_tasks:
-            valid_combinations = list(
-                product(*[[unfinished_tasks] * self.start_pos.num_agents()])
-            )
-            return valid_combinations
+            # additionally remove the tasks that are already assigned
+            task_ids = mode.task_ids
+            additional_groups_to_remove = []
+            for task_id in task_ids:
+                for j in range(len(unfinished_tasks)):
+                    if task_id in [id for _, id in unfinished_tasks[j]]:
+                        additional_groups_to_remove.append(j)
 
-        return self.terminal_task
+            for i in sorted(list(set(additional_groups_to_remove)), reverse=True):
+                unfinished_tasks.pop(i)
+
+        # print(mode)
+        # print(unfinished_tasks)
+
+        next_states = []
+        num_agents = len(mode.task_ids)
+
+        if mode.task_ids[0] == 0:
+            # this is the dummy start state
+            feasible_tasks_per_robot = {}
+            for i in range(num_agents):
+                feasible_tasks_per_robot[i] = [self.terminal_task]
+
+            for set_of_tasks in unfinished_tasks:
+                for robot_idx, t in set_of_tasks:
+                    task_requirements_fulfilled = True
+                    if t in self.task_dependencies:
+                        for dependency in self.task_dependencies[t]:
+                            if dependency not in finished_tasks:
+                                task_requirements_fulfilled = False
+
+                    if not task_requirements_fulfilled:
+                        # print(f"dependency unfulfilled for task {t}")
+                        continue
+
+                    feasible_tasks_per_robot[robot_idx].append(t)
+
+            next_states = [
+                list(combo)
+                for combo in product(*feasible_tasks_per_robot.values())
+                if combo.count(self.terminal_task) != num_agents
+            ]
+
+            states_to_remove = []
+            for state in next_states:
+                group_origin = []
+                for task_id in state:
+                    for j, set_of_tasks in enumerate(self.task_groups):
+                        if task_id in [task for r_id, task in set_of_tasks]:
+                            if j in group_origin:
+                                states_to_remove.append(state)
+                            group_origin.append(j)
+
+            for state in states_to_remove:
+                next_states.remove(state)
+                # print("removing")
+
+            # print("possible states from 0")
+            # print(next_states)
+            # for task_ids in next_states:
+            #     for task in task_ids:
+            #         print(self.tasks[task].name)
+            #     print()
+
+        else:
+            for set_of_tasks in unfinished_tasks:
+                for robot_idx, t in set_of_tasks:
+                    current_task = mode.task_ids[robot_idx]
+
+                    if current_task == self.terminal_task:
+                        continue
+
+                    task_requirements_fulfilled = True
+                    if t in self.task_dependencies:
+                        for dependency in self.task_dependencies[t]:
+                            if (
+                                dependency not in finished_tasks
+                                and dependency != current_task
+                            ):
+                                task_requirements_fulfilled = False
+
+                    if not task_requirements_fulfilled:
+                        # print(f"dependency unfulfilled for task {t}")
+                        continue
+
+                    if t != current_task:
+                        new_state = copy.deepcopy(mode.task_ids)
+                        new_state[robot_idx] = t
+                        next_states.append(new_state)
+
+            # append terminal transition for each robot separately
+            for i in range(num_agents):
+                new_state = copy.deepcopy(mode.task_ids)
+
+                if self.terminal_task == new_state[i]:
+                    continue
+
+                new_state[i] = self.terminal_task
+
+                # check if this is the terminal_task_id_state
+                if new_state == self.make_symbolic_end():
+                    # if it is equal to the terminal state, we need to ensure that all tasks are done
+                    if len(unfinished_tasks) != 0:
+                        continue
+
+                next_states.append(new_state)
+
+        # print("current state", mode)
+        # print(len(unfinished_tasks))
+        # print(unfinished_tasks)
+        # print(next_states)
+
+        return next_states
 
     def is_terminal_mode(self, mode: Mode):
         # check if all task shave been done
@@ -653,9 +797,13 @@ class FreeMixin(BaseModeLogic):
 
         return False
 
+    @cache
     def get_next_modes(self, q: Configuration, mode: Mode):
         # needs to be changed to get next modes
+        # print(q.state(), mode)
         valid_next_combinations = self.get_valid_next_task_combinations(mode)
+
+        # print(valid_next_combinations)
 
         possible_next_mode_ids = []
         for next_mode_ids in valid_next_combinations:
@@ -675,11 +823,36 @@ class FreeMixin(BaseModeLogic):
                     ):
                         possible_next_mode_ids.append(next_mode_ids)
 
-        assert False
-        random_next_mode_id = random.choice(possible_next_mode_ids)
-        next_mode = Mode(random_next_mode_id, q)
+        next_modes = []
 
-        return [next_mode]
+        for next_id in possible_next_mode_ids:
+            next_mode = Mode(next_id, q)
+
+            next_mode.prev_mode = mode
+            tmp = tuple(tuple(sublist) for sublist in valid_next_combinations)
+            next_mode.additional_hash_info = tmp
+
+            sg = self.get_scenegraph_info_for_mode(next_mode)
+            next_mode.sg = sg
+
+            mode_exists = False
+            for nm in mode.next_modes:
+                if hash(nm) == hash(next_mode):
+                    # print("AAAAAAAAAA")
+                    next_modes.append(nm)
+                    mode_exists = True
+
+                    break
+
+            if not mode_exists:
+                mode.next_modes.append(next_mode)
+                next_modes.append(next_mode)
+
+        # print(mode)
+        # print(mode.next_modes)
+        # print()
+
+        return next_modes
 
     def is_transition(self, q: Configuration, m: Mode) -> bool:
         if self.is_terminal_mode(m):
