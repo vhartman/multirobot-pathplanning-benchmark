@@ -456,11 +456,9 @@ class rai_env(BaseProblem):
 
         if q is not None:
             self.set_to_mode(m)
-            offset = 0
             for robot in r:
-                dim = self.robot_dims[robot]
-                self.C.setJointState(q[offset : offset + dim], self.robot_joints[robot])
-                offset += dim
+                robot_indices = self.robot_idx[robot]
+                self.C.setJointState(q[robot_indices], self.robot_joints[robot])
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
@@ -479,11 +477,17 @@ class rai_env(BaseProblem):
 
                 # print(c)
                 involves_relevant_robot = False
+                involves_relevant_object = False
                 for robot in r:
+                    task_idx = m.task_ids[self.robots.index(robot)]
+                    task = self.tasks[task_idx]
                     if c[2] < 0 and (robot in c[0] or robot in c[1]):
                         involves_relevant_robot = True
-                        break
-                if not involves_relevant_robot:
+                    elif c[2] < 0 and(c[0] in task.frames or c[1] in task.frames):
+                        involves_relevant_object = True
+                
+                
+                if not involves_relevant_robot and not involves_relevant_object:
                     # print("A")
                     # print(c)
                     continue
