@@ -296,12 +296,51 @@ def config_cost(
     elif reduction == "sum":
         return np.sum(dists)
 
+# @numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
+# def compute_sum_reduction(dists: NDArray) -> NDArray:
+#     """Compute sum reduction across robot distances."""
+#     return np.sum(dists, axis=0)
+
+@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
+def compute_sum_reduction(dists: NDArray) -> NDArray:
+    """Compute sum reduction across robot distances."""
+    num_slices, num_samples = dists.shape
+    result = np.empty(num_samples, dtype=np.float64)
+    
+    # Manually compute sum along axis 0
+    for j in range(num_samples):
+        sum_val = 0.0
+        for i in range(num_slices):
+            sum_val += dists[i, j]
+        result[j] = sum_val
+        
+    return result
+
+
+@numba.jit(numba.float64[:](numba.float64[:, :], numba.float64), nopython=True, fastmath=True)
+def compute_max_sum_reduction(dists: NDArray, w: float) -> NDArray:
+    """Compute max + w*sum reduction across robot distances."""
+    num_slices, num_samples = dists.shape
+    result = np.empty(num_samples, dtype=np.float64)
+    
+    # Manually compute max along axis 0
+    for j in range(num_samples):
+        max_val = dists[0, j]
+        sum_val = dists[0, j]
+        for i in range(1, num_slices):
+            if dists[i, j] > max_val:
+                max_val = dists[i, j]
+            sum_val += dists[i, j]
+        result[j] = max_val + w * sum_val
+        
+    return result
 
 def batch_config_cost(
     starts: List[Configuration],
     batch_other: List[Configuration],
     metric: str = "max",
     reduction: str = "max",
+    w:float = 0.01
 ) -> float:
     if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
         diff = starts.state() - batch_other
@@ -337,6 +376,20 @@ def batch_config_cost(
     # print(all_robot_dists)
 
     if reduction == "max":
-        return np.max(all_robot_dists, axis=0) + 0.01 * np.sum(all_robot_dists, axis=0)
+        # tmp = compute_max_sum_reduction(all_robot_dists, w)
+        # tmp2 = np.max(all_robot_dists, axis=0) + w * np.sum(all_robot_dists, axis=0)
+
+        # assert np.allclose(tmp, tmp2)
+
+        # return np.max(all_robot_dists, axis=0) + w * np.sum(all_robot_dists, axis=0)
+        return compute_max_sum_reduction(all_robot_dists, w)
+        # return np.max(all_robot_dists.T, axis=1) + w * np.sum(all_robot_dists.T, axis=1)
     elif reduction == "sum":
-        return np.sum(all_robot_dists, axis=0)
+        # tmp = np.sum(all_robot_dists, axis=0)
+        # tmp2 = compute_sum_reduction(all_robot_dists)
+
+        # assert np.allclose(tmp, tmp2)
+
+        # return np.sum(all_robot_dists, axis=0)
+        return compute_sum_reduction(all_robot_dists)
+        # return np.sum(all_robot_dists.T, axis=1)
