@@ -98,9 +98,16 @@ class BidirectionalRRTstar(BaseRRTstar):
         else:
             new_modes = self.env.get_next_modes(q, mode)
         for new_mode in new_modes:
+            if new_mode.task_ids == [1,3] and new_mode.prev_mode.task_ids == [11,3]:
+                pass
             if new_mode in self.modes:
                 continue 
             if new_mode in self.blacklist_mode:
+                continue
+            if not self.is_mode_valid(new_mode):
+                continue
+            validy_check_q = self.sample_transition_configuration(new_mode)
+            if validy_check_q is None: 
                 continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
@@ -108,9 +115,19 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.InformedInitialization(new_mode)
             #Initialize transition nodes
             node = None
-            for i in range(self.transition_nodes):                 
-                q = self.sample_transition_configuration(new_mode)
+            for i in range(self.transition_nodes): 
+                if validy_check_q is not None:
+                    q = validy_check_q
+                    validy_check_q = None   
+                else:             
+                    q = self.sample_transition_configuration(new_mode)
                 if q is None:
+                    assert False, "No valid configuration found for transition node"
+                    print("ghjk")
+                    if new_mode.id == 93:
+                        pass
+                    self.blacklist_mode.add(new_mode)
+                    self.modes.remove(new_mode)
                     break
                 if i > 0 and np.equal(q.state(), node.state.q.state()).all():
                     break
@@ -301,6 +318,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         self.trees[mode].add_node(start_node)
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
+        self.ManageTransition(mode, start_node)
 
     def Plan(self, optimize:bool=True)  ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0
