@@ -126,7 +126,8 @@ def get_all_environments():
 
         ###### UNASSIGNED ENVS
         "unassigned": lambda: rfe.rai_two_dim_env(),
-        "unassigned_piano": lambda: rfe.rai_unassigned_piano_mover()
+        "unassigned_piano": lambda: rfe.rai_unassigned_piano_mover(),
+        "unassigned_cleanup": lambda: rfe.rai_unassigned_pile_cleanup(),
     }
     # fmt: on
 

@@ -3874,6 +3874,7 @@ def make_box_pile_env(
     num_boxes=6,
     compute_multiple_keyframes: bool = False,
     random_orientation: bool = True,
+    compute_all_keyframes = False,
     view: bool = False,
 ):
     assert num_boxes <= 9
@@ -4248,7 +4249,9 @@ def make_box_pile_env(
                 if keyframe is None:
                     continue
                 keyframes.append(("pick", [r], i, [keyframe]))
-                break
+
+                if not compute_all_keyframes:
+                    break
         else:
             # otherwise a handover/regrasp is required
             found_sol = False
@@ -4289,7 +4292,7 @@ def make_box_pile_env(
 
                     keyframes.append(("handover", [r1, r2], i, poses))
                     found_sol = True
-                if found_sol:
+                if found_sol and not compute_all_keyframes:
                     break
 
     return C, keyframes

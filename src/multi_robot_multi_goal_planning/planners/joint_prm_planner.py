@@ -767,10 +767,10 @@ class MultimodalGraph:
                     else:
                         self.transition_nodes[this_mode] = [node_this_mode]
             else:
-                
                 if not isinstance(next_modes, list):
                     next_modes = [next_modes]
                 
+                # print(next_modes)
                 if len(next_modes) == 0:
                     continue
                 
@@ -1641,8 +1641,14 @@ def joint_prm_planner(
                     # next_mode = next_modes[0]
                     # print("next mode", next_mode)
 
+                    # if len(next_modes) == 0:
+                    #     print("BBBBB")
+                    #     print(mode)
+
                 
                 if next_modes is None or len(next_modes) > 0:
+                    # print("CC")
+                    # print(mode, next_modes)
                     transitions.append((q, mode, next_modes))
 
                 # print(mode, mode.next_modes)
@@ -1742,10 +1748,10 @@ def joint_prm_planner(
         print(f"Currently {len(reached_modes)} modes")
 
         # for mode in reached_modes:
-        #     # items = [v[0] for k,v  in mode.sg.items()]
-        #     # transforms = [np.frombuffer(v[1]) for k,v  in mode.sg.items()]
-        #     # print(mode, mode.additional_hash_info, mode.task_ids)
-        #     print(mode, mode.additional_hash_info, mode.task_ids, hash(mode))
+            # items = [v[0] for k,v  in mode.sg.items()]
+            # transforms = [np.frombuffer(v[1]) for k,v  in mode.sg.items()]
+            # print(mode, mode.additional_hash_info, mode.task_ids)
+            # print(mode, mode.additional_hash_info, mode.task_ids, hash(mode))
         #     if mode.task_ids == [9,9]:
         #         print(hash(frozenset(mode.sg)))
         #         mode._cached_hash = None
@@ -1968,6 +1974,12 @@ def joint_prm_planner(
 
                         print("Modes of new path")
                         print([m.task_ids for m in modes])
+                        # print([(m, m.additional_hash_info) for m in modes])
+
+                        # prev_mode = modes[-1].prev_mode
+                        # while prev_mode:
+                        #     print(prev_mode, prev_mode.additional_hash_info)
+                        #     prev_mode = prev_mode.prev_mode
 
                         print(
                             f"New cost: {new_path_cost} at time {time.time() - start_time}"
