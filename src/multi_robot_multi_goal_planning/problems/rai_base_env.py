@@ -638,8 +638,14 @@ class rai_env(BaseProblem):
         #     print(m.sg)
         #     print(hash(m))
 
+        show_stuff = False
+
         for i, mode in enumerate(mode_sequence[:-1]):
             next_mode = mode_sequence[i + 1]
+
+            for j in range(2):
+                if mode.task_ids[j] in [1, 3, 5, 7, 11, 9] and next_mode.task_ids[j] == 13 and m.task_ids == [13, 13]:
+                    show_stuff = True
 
             active_task = self.get_active_task(mode, next_mode.task_ids)
 
@@ -681,6 +687,9 @@ class rai_env(BaseProblem):
                     box = self.tasks[prev_mode_index].frames[1]
                     tmp.delFrame(box)
 
+            if show_stuff:
+                tmp.view(True)
+
         if place_in_cache:
             self.C_cache[m] = ry.Config()
             self.C_cache[m].addConfigurationCopy(tmp)
@@ -689,9 +698,6 @@ class rai_env(BaseProblem):
             viewer = self.C.get_viewer()
             self.C_cache[m].set_viewer(viewer)
             self.C = self.C_cache[m]
-
-            if m.task_ids == [9, 9]:
-                self.C.view()
 
         else:
             viewer = self.C.get_viewer()
