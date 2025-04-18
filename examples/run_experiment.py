@@ -32,7 +32,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
     prioritized_planning,
 )
-from multi_robot_multi_goal_planning.planners.joint_prm_planner import joint_prm_planner
+from multi_robot_multi_goal_planning.planners.composite_prm_planner import composite_prm_planner
 from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
@@ -164,7 +164,7 @@ def setup_planner(
 
         def planner(env):
             options = planner_config["options"]
-            return joint_prm_planner(
+            return composite_prm_planner(
                 env,
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,

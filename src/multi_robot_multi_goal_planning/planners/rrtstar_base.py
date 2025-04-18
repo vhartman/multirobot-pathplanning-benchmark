@@ -2069,7 +2069,7 @@ class BaseRRTstar(ABC):
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(self.operation.path)
         self.operation.path_shortcutting = path_shortcutting[::-1] # includes transiiton node twice
-        self.operation.path_shortcutting_interpolated = mrmgp.joint_prm_planner.interpolate_path(path_shortcutting)
+        self.operation.path_shortcutting_interpolated = mrmgp.composite_prm_planner.interpolate_path(path_shortcutting)
         if self.operation.init_sol and self.shortcutting and shortcutting_bool:
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             shortcut_path_, result = mrmgp.shortcutting.robot_mode_shortcut(
