@@ -98,16 +98,15 @@ class BidirectionalRRTstar(BaseRRTstar):
         else:
             new_modes = self.env.get_next_modes(q, mode)
         for new_mode in new_modes:
-            if new_mode.task_ids == [1,3] and new_mode.prev_mode.task_ids == [11,3]:
-                pass
             if new_mode in self.modes:
                 continue 
-            if new_mode in self.blacklist_mode:
-                continue
             if not self.is_mode_valid(new_mode):
+                continue
+            if mode in self.invalid_next_ids and new_mode.task_ids in self.invalid_next_ids[mode]:
                 continue
             validy_check_q = self.sample_transition_configuration(new_mode)
             if validy_check_q is None: 
+                self.track_invalid_modes(new_mode)
                 continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
