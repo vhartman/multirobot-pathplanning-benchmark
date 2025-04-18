@@ -294,15 +294,16 @@ def save_env_as_mesh(env, directory):
             # Access the frame and get its mesh data
             frame = env.C.frame(frame_name)
             mesh = frame.getMesh()
-            vertices, faces, color = mesh
-
+            vertices, faces, _ = mesh
+            # if color.shape[0] > 3:
+            #     color = color[0] 
             # Adjust vertices to absolute position
             absolute_position = absolute_positions[frame_name]
             adjusted_vertices = vertices + absolute_position  # Apply translation
 
             # Prepare vertex data with color
             vertex_data = [
-                (v[0], v[1], v[2], color[0], color[1], color[2])
+                (v[0], v[1], v[2], 255, 255, 255)  # Assuming white color for all vertices
                 for v in adjusted_vertices
             ]
             vertex_array = np.array(
@@ -353,8 +354,7 @@ def mesh_traces_env(folder_path):
     :param folder_path: Path to the folder containing .ply files
     """
     meshes = []
-    color_map = ['grey']  # Distinct colors for each mesh
-    color_idx = 0
+    colors = colors_plotly()
 
     for filename in os.listdir(folder_path):
         if filename.endswith('.ply'):
@@ -368,14 +368,23 @@ def mesh_traces_env(folder_path):
             i, j, k = faces[:, 0], faces[:, 1], faces[:, 2]
 
             # Assign distinct color
-            color = color_map[color_idx % len(color_map)]
-            color_idx += 1
+            if 'table' in filepath:
+                color = 'grey'
+                o = 0.4
+            elif 'goal' in filepath:
+                color = 'black'
+                o = 0.3
+            else:
+                color = 'black'
+                o = 1.0
+            # color = color_map[color_idx % len(color_map)]
+            # color_idx += 1
 
             # Append the mesh
             meshes.append(go.Mesh3d(
                 x=x, y=y, z=z,
                 i=i, j=j, k=k,
-                opacity=0.4,  # Fully opaque
+                opacity=o,  # Fully opaque
                 color=color,
                 name=filename
             ))

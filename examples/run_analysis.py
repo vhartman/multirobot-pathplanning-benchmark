@@ -1499,4 +1499,3 @@ if __name__ == "__main__":
 
     if args.do == "tree_paper":
         visualize_tree_2d_paper(env, dir_out)
-

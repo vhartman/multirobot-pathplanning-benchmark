@@ -65,6 +65,7 @@ def path_as_png(
     for i in range(2*framerate):
         if export:
             env.C.view_savePng(dir)
+    env.C.view_close()
 
 def path_vis(env: BaseProblem, dir:str, path: List[State], framerate:int = 1, generate_png:bool = True, path_original:bool = False):
     if generate_png:
@@ -107,7 +108,11 @@ def single_path_html(env, env_path, path, output_html):
         [env.tasks[idx].name for idx in env.sequence]   
     )
     except Exception:
-         task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
+        try:
+            task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
+        except Exception:
+            task_sequence_text = "No sequence given"
+
 
     # Initialize figure and static elements
     fig = go.Figure()
@@ -128,12 +133,13 @@ def single_path_html(env, env_path, path, output_html):
             )
         )
     modes = []
-    mode = env.start_mode
-    while True:     
+    for s in path:
+        mode = s.mode
+        if mode.task_ids not in modes:
             modes.append(mode.task_ids)
-            if env.is_terminal_mode(mode):
-                break
-            mode = env.get_next_mode(None, mode)
+        if env.is_terminal_mode(mode):
+            break
+
     for robot_idx, robot in enumerate(env.robots):
         legend_group = robot
         static_traces.append(
@@ -279,7 +285,10 @@ def path_evolution_html(env, env_path, dir_run, output_html):
         [env.tasks[idx].name for idx in env.sequence]   
     )
     except Exception:
-         task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
+        try:
+            task_sequence_text = f"Task sequence consists of {len(env.sequence)} tasks"  
+        except Exception:
+            task_sequence_text = "No sequence given" 
 
     # Initialize figure and static elements
     fig = go.Figure()
@@ -299,13 +308,28 @@ def path_evolution_html(env, env_path, dir_run, output_html):
                 showlegend=True  # This will create a single legend entry for each mode
             )
         )
+    files = glob.glob(os.path.join(dir_run, 'path_*.json'))
+
+    sorted_files = sorted(files, key=sort_key)
+    if len(sorted_files) > 50:
+        indices = np.linspace(0, len(sorted_files) - 1, num=50, dtype=int)
+        files_to_process = [sorted_files[i] for i in indices]
+        if files_to_process[-1] != sorted_files[-1]:
+            files_to_process.append(sorted_files[-1])
+        sorted_files = files_to_process
+
     modes = []
-    mode = env.start_mode
-    while True:     
-            modes.append(mode.task_ids)
+    paths = []
+    for dir_path_json in sorted_files:
+        path_data = load_path(dir_path_json)
+        path = convert_to_path(env, path_data)
+        paths.append(path)
+        for s in path:
+            mode = s.mode
+            if mode.task_ids not in modes:
+                modes.append(mode.task_ids)
             if env.is_terminal_mode(mode):
                 break
-            mode = env.get_next_mode(None, mode)
     for robot_idx, robot in enumerate(env.robots):
         legend_group = robot
         static_traces.append(
@@ -320,20 +344,9 @@ def path_evolution_html(env, env_path, dir_run, output_html):
             showlegend=True
         )
     )
-    files = glob.glob(os.path.join(dir_run, 'path_*.json'))
-
-    sorted_files = sorted(files, key=sort_key)
-    if len(sorted_files) > 50:
-        indices = np.linspace(0, len(sorted_files) - 1, num=50, dtype=int)
-        files_to_process = [sorted_files[i] for i in indices]
-        if files_to_process[-1] != sorted_files[-1]:
-            files_to_process.append(sorted_files[-1])
-        sorted_files = files_to_process
-
-    for dir_path_json in sorted_files:
+    
+    for path in paths:
         frame_traces = []
-        path_data = load_path(dir_path_json)
-        path = convert_to_path(env, path_data)
         for robot_idx, robot in enumerate(env.robots):
             indices = env.robot_idx[robot]
             legend_group = robot
@@ -460,40 +473,31 @@ def path_evolution_html(env, env_path, dir_run, output_html):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument(
-        "--path_folder",
-        required=False,
-        help="Select the path of the folder to be processed",
-    )
-    parser.add_argument(
-        "--path_filename",
-        required=False,
-        help="Select the path of the json file to be processed",
-    )
-    parser.add_argument(
-        "--path_run",
-        required=False,
-        help="Select the path of the folder to be processed",
-    )
-    parser.add_argument(
-        "--do",
+        "do",
         choices=["single_path_html", "path_evolution_html", "final_paths", "single_path"],
-        required=True,
         help="Select postprocess to be done",
+    )
+    parser.add_argument(
+        "path",
+        help="Select path to be processed",
     )
    
     args = parser.parse_args()
-    if args.path_folder is not None:
-        dir = args.path_folder
-        dir_path_json = None
-    elif args.path_filename is not None:
-        dir_path_json = args.path_filename
+    if args.path.endswith('.json'):
+        assert args.do == "single_path_html" or args.do == "single_path", "Please give a json file for single path"
+        dir_path_json = args.path
         dir = '/'.join(dir_path_json.split('/')[:6]) 
         run = re.search(r'/(\d+)(?=/)', dir_path_json).group(1)
         dir_run = os.path.join(dir, run)
-    elif args.path_run is not None: 
-        dir_run = args.path_run
+    elif re.search(r"/\d$", args.path): 
+        assert args.do == "path_evolution_html", "Please give a folder for path evolution"
+        dir_run = args.path
         dir = '/'.join(dir_run.split('/')[:6]) 
         run = os.path.basename(dir_run)
+        dir_path_json = None
+    elif args.path is not None:
+        assert args.do == "final_paths", "Please give a folder for final paths"
+        dir = args.path
         dir_path_json = None
     else:
         #get latest created folder
