@@ -1379,7 +1379,7 @@ class MultimodalGraph:
 
 
 # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-def joint_prm_planner(
+def composite_prm_planner(
     env: BaseProblem,
     ptc: PlannerTerminationCondition,
     optimize: bool = True,

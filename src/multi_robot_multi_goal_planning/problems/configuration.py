@@ -24,7 +24,7 @@ class Configuration(ABC):
         pass
 
     @abstractmethod
-    def from_list(cls, q_list: List[NDArray]):
+    def from_list(cls, q_list: List[NDArray]) -> "Configuration":
         pass
 
     @classmethod
@@ -112,7 +112,7 @@ def numba_parallelized_sum(
 #     for i in range(num_slices):
 #         s, e = slices[i]
 #         slice_width = e - s
-        
+
 #         # Optimize the inner loop for better vectorization and cache usage
 #         for j in range(num_samples):
 #             sum_squared = 0.0
@@ -131,10 +131,11 @@ def numba_parallelized_sum(
 #                 # For larger slices, use a regular loop which Numba can vectorize
 #                 for k in range(s, e):
 #                     sum_squared += squared_diff[j, k]
-                    
+
 #             dists[i, j] = np.sqrt(sum_squared)
 
 #     return dists
+
 
 @numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True)
 def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
@@ -157,28 +158,38 @@ def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
             s = starts[i]
             e = ends[i]
             sum_squared = 0.0
-            
+
             # Improved loop unrolling with early exit conditions
             # Unroll by 8 when possible
             idx = s
             while idx + 8 <= e:
-                sum_squared += (squared_diff[j, idx] + squared_diff[j, idx+1] + 
-                               squared_diff[j, idx+2] + squared_diff[j, idx+3] +
-                               squared_diff[j, idx+4] + squared_diff[j, idx+5] +
-                               squared_diff[j, idx+6] + squared_diff[j, idx+7])
+                sum_squared += (
+                    squared_diff[j, idx]
+                    + squared_diff[j, idx + 1]
+                    + squared_diff[j, idx + 2]
+                    + squared_diff[j, idx + 3]
+                    + squared_diff[j, idx + 4]
+                    + squared_diff[j, idx + 5]
+                    + squared_diff[j, idx + 6]
+                    + squared_diff[j, idx + 7]
+                )
                 idx += 8
-                
+
             # Unroll remaining by 4
             while idx + 4 <= e:
-                sum_squared += (squared_diff[j, idx] + squared_diff[j, idx+1] + 
-                               squared_diff[j, idx+2] + squared_diff[j, idx+3])
+                sum_squared += (
+                    squared_diff[j, idx]
+                    + squared_diff[j, idx + 1]
+                    + squared_diff[j, idx + 2]
+                    + squared_diff[j, idx + 3]
+                )
                 idx += 4
-                
+
             # Handle remaining elements
             while idx < e:
                 sum_squared += squared_diff[j, idx]
                 idx += 1
-                
+
             dists[i, j] = np.sqrt(sum_squared)
 
     return dists
@@ -202,29 +213,31 @@ def compute_sliced_dists_transpose(squared_diff: NDArray, slices: NDArray) -> ND
 #     """Compute sum reduction across robot distances."""
 #     return np.sum(dists, axis=0)
 
+
 @numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
 def compute_sum_reduction(dists: NDArray) -> NDArray:
     """Compute sum reduction across robot distances."""
     num_slices, num_samples = dists.shape
     result = np.empty(num_samples, dtype=np.float64)
-    
+
     # Manually compute sum along axis 0
     for j in range(num_samples):
         sum_val = 0.0
         for i in range(num_slices):
             sum_val += dists[i, j]
         result[j] = sum_val
-        
+
     return result
 
 
-
-@numba.jit(numba.float64[:](numba.float64[:, :], numba.float64), nopython=True, fastmath=True)
+@numba.jit(
+    numba.float64[:](numba.float64[:, :], numba.float64), nopython=True, fastmath=True
+)
 def compute_max_sum_reduction(dists: NDArray, w: float) -> NDArray:
     """Compute max + w*sum reduction across robot distances."""
     num_slices, num_samples = dists.shape
     result = np.empty(num_samples, dtype=np.float64)
-    
+
     # Manually compute max along axis 0
     for j in range(num_samples):
         max_val = dists[0, j]
@@ -234,42 +247,45 @@ def compute_max_sum_reduction(dists: NDArray, w: float) -> NDArray:
                 max_val = dists[i, j]
             sum_val += dists[i, j]
         result[j] = max_val + w * sum_val
-        
+
     return result
+
 
 @numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
 def compute_abs_max_reduction(dists: NDArray) -> NDArray:
     """Compute the maximum absolute value along axis 1 for each row."""
     num_rows, num_cols = dists.shape
     result = np.empty(num_rows, dtype=np.float64)
-    
+
     for i in range(num_rows):
         # Start with first element
         max_val = abs(dists[i, 0])
-        
+
         # Find maximum absolute value in the row
         for j in range(1, num_cols):
             abs_val = abs(dists[i, j])
             if abs_val > max_val:
                 max_val = abs_val
-                
+
         result[i] = max_val
-        
+
     return result
+
 
 # @numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
 # def compute_max_reduction(dists: NDArray) -> NDArray:
 #     """Compute max + w*sum reduction across robot distances."""
 #     result = np.max(dists, axis=0)
-    
+
 #     return result
+
 
 @numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
 def compute_max_reduction(dists: NDArray) -> NDArray:
     """Compute max + w*sum reduction across robot distances."""
     num_slices, num_samples = dists.shape
     result = np.empty(num_samples, dtype=np.float64)
-    
+
     # Manually compute max along axis 0
     for j in range(num_samples):
         max_val = dists[0, j]
@@ -277,11 +293,17 @@ def compute_max_reduction(dists: NDArray) -> NDArray:
             if dists[i, j] > max_val:
                 max_val = dists[i, j]
         result[j] = max_val
-        
+
     return result
 
+
 class NpConfiguration(Configuration):
-    __slots__ = "array_slice", "q", "_num_agents", "_robot_state_optimized"#, "robot_views"
+    __slots__ = (
+        "array_slice",
+        "q",
+        "_num_agents",
+        "_robot_state_optimized",
+    )  # , "robot_views"
 
     array_slice: NDArray
     # slice: List[Tuple[int, int]]
@@ -302,7 +324,7 @@ class NpConfiguration(Configuration):
         else:
             self._robot_state_optimized = self._robot_state_multi
 
-    def num_agents(self):
+    def num_agents(self) -> int:
         return self._num_agents
 
     def __setitem__(self, ind, data):
@@ -325,7 +347,7 @@ class NpConfiguration(Configuration):
         return cls(np.concatenate(q_list), slices)
 
     @classmethod
-    def from_numpy(cls, arr: NDArray):
+    def from_numpy(cls, arr: NDArray) -> "NpConfiguration":
         return cls(arr, [(0, len(arr))])
 
     def _robot_state_single(self, ind: int) -> NDArray:
@@ -365,6 +387,7 @@ class NpConfiguration(Configuration):
     #     if cls._preallocated_q is None or cls._preallocated_q.shape != (max_size, q_dim):
     #         cls._preallocated_q = np.empty((max_size, q_dim))  # Preallocate
 
+    # TODO: change into specific function for one against many and many against many
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
     def _batch_dist(
@@ -466,13 +489,14 @@ def config_cost(
     elif reduction == "sum":
         return np.sum(dists)
 
+
 def batch_config_cost(
     starts: List[Configuration],
     batch_other: List[Configuration],
     metric: str = "max",
     reduction: str = "max",
-    w:float = 0.01
-) -> float:
+    w: float = 0.01,
+) -> NDArray:
     if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
         diff = starts.state() - batch_other
         all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))

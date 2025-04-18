@@ -347,7 +347,7 @@ class BaseModeLogic(ABC):
 
 
 class UnorderedButAssignedMixin(BaseModeLogic):
-    tasks: List[int]
+    tasks: List[Task]
     per_robot_tasks: List[List[int]]
     task_dependencies: Dict[int, List[int]]
 
@@ -606,7 +606,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
 
 class FreeMixin(BaseModeLogic):
-    tasks: List[int]
+    tasks: List[Task]
     task_groups: List[
         List[int]
     ]  # describes groups of tasks of which one has to be done
