@@ -29,9 +29,7 @@ from multi_robot_multi_goal_planning.planners import shortcutting
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.sampling_informed import (
-    Informed
-)
+from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
 
 
 class Node:
@@ -474,7 +472,7 @@ class DiscreteBucketIndexHeap:
         return value
 
 
-class Graph:
+class MultimodalGraph:
     root: State
     nodes: Dict
 
@@ -520,10 +518,17 @@ class Graph:
         return num_samples + num_transition_samples
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def compute_lower_bound_to_goal(self, batch_cost):
+    def compute_lower_bound_to_goal(self, batch_cost, best_found_cost):
         # run a reverse search on the transition nodes without any collision checking
         costs = {}
         closed_set = set()
+
+        for mode in self.nodes.keys():
+            for i in range(len(self.nodes[mode])):
+                self.nodes[mode][i].lb_cost_to_goal = np.inf
+
+        if best_found_cost is None:
+            best_found_cost = np.inf
 
         queue = []
         for g in self.goal_nodes:
@@ -544,9 +549,18 @@ class Graph:
             if node.id in closed_set:
                 continue
 
-            neighbors = [
-                n.neighbors[0] for n in self.reverse_transition_nodes[node.state.mode]
-            ]
+            closed_set.add(node.id)
+
+            # neighbors = []
+
+            # for n in self.reverse_transition_nodes[node.state.mode]:
+            #     for q in n.neighbors:
+            #         neighbors.append(q)
+            neighbors = [q for n in self.reverse_transition_nodes[node.state.mode] for q in n.neighbors]
+
+            # neighbors = [
+            #     neighbor for n in self.reverse_transition_nodes[node.state.mode] for neighbor in n.neighbors
+            # ]
 
             if not neighbors:
                 continue
@@ -556,17 +570,18 @@ class Graph:
                     [n.state.q.state() for n in neighbors], dtype=np.float64
                 )
 
-            closed_set.add(node.id)
-
             # add neighbors to open_queue
             edge_costs = batch_cost(
                 node.state.q,
                 self.reverse_transition_node_array_cache[node.state.mode],
             )
-
             parent_cost = costs[node.id]
             for edge_cost, n in zip(edge_costs, neighbors):
                 cost = parent_cost + edge_cost
+
+                if cost > best_found_cost:
+                    continue
+
                 id = n.id
                 # current_cost = costs.get(id, float('inf'))
                 # if cost < current_cost:
@@ -692,29 +707,28 @@ class Graph:
         for n in nodes:
             self.add_node(n)
 
-    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, Mode]):
+    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, List[Mode]]):
         self.transition_node_array_cache = {}
         self.reverse_transition_node_array_cache = {}
 
         self.transition_node_lb_cache = {}
         self.rev_transition_node_lb_cache = {}
 
-        for q, this_mode, next_mode in transitions:
+        for q, this_mode, next_modes in transitions:
             node_this_mode = Node(State(q, this_mode), True)
-            node_next_mode = Node(State(q, next_mode), True)
 
-            if next_mode is not None:
-                node_next_mode.neighbors = [node_this_mode]
-                node_this_mode.neighbors = [node_next_mode]
-
-                assert this_mode.task_ids != next_mode.task_ids
-
-            if this_mode in self.transition_nodes:
+            if (
+                this_mode in self.transition_nodes
+                and len(self.transition_nodes[this_mode]) > 0
+            ):
                 is_in_transition_nodes_already = False
+                # print("A", this_mode, len(self.transition_nodes[this_mode]))
                 dists = self.batch_dist_fun(
                     node_this_mode.state.q,
                     [n.state.q for n in self.transition_nodes[this_mode]],
                 )
+                # print("B")
+
                 if min(dists) < 1e-6:
                     is_in_transition_nodes_already = True
                 # for n in self.transition_nodes[this_mode]:
@@ -730,15 +744,9 @@ class Graph:
                 if is_in_transition_nodes_already:
                     continue
 
-            # if this_mode in self.transition_nodes:
-            # print(len(self.transition_nodes[this_mode]))
-
-            if next_mode is not None:
-                if this_mode in self.transition_nodes:
-                    self.transition_nodes[this_mode].append(node_this_mode)
-                else:
-                    self.transition_nodes[this_mode] = [node_this_mode]
-            else:
+            if next_modes is None:
+                # the current mode is a terminal node. deal with it accordingly
+                # print("attempting goal node")
                 is_in_goal_nodes_already = False
                 for g in self.goal_nodes:
                     if (
@@ -758,13 +766,40 @@ class Graph:
                         self.transition_nodes[this_mode].append(node_this_mode)
                     else:
                         self.transition_nodes[this_mode] = [node_this_mode]
+            else:
+                if not isinstance(next_modes, list):
+                    next_modes = [next_modes]
+                
+                # print(next_modes)
+                if len(next_modes) == 0:
+                    continue
+                
+                next_nodes = []
+                for next_mode in next_modes:
+                    node_next_mode = Node(State(q, next_mode), True)
+                    next_nodes.append(node_next_mode)
 
-            # add the same things to the rev transition nodes
-            if next_mode is not None:
-                if next_mode in self.reverse_transition_nodes:
-                    self.reverse_transition_nodes[next_mode].append(node_next_mode)
+                node_this_mode.neighbors = next_nodes
+
+                for node_next_mode, next_mode in zip(next_nodes, next_modes):
+                    node_next_mode.neighbors = [node_this_mode]
+
+                    assert this_mode.task_ids != next_mode.task_ids
+
+                # if this_mode in self.transition_nodes:
+                # print(len(self.transition_nodes[this_mode]))
+
+                if this_mode in self.transition_nodes:
+                    self.transition_nodes[this_mode].append(node_this_mode)
                 else:
-                    self.reverse_transition_nodes[next_mode] = [node_next_mode]
+                    self.transition_nodes[this_mode] = [node_this_mode]
+
+                # add the same things to the rev transition nodes
+                for next_mode, next_node in zip(next_modes, next_nodes):
+                    if next_mode in self.reverse_transition_nodes:
+                        self.reverse_transition_nodes[next_mode].append(next_node)
+                    else:
+                        self.reverse_transition_nodes[next_mode] = [next_node]
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_neighbors(
@@ -933,6 +968,9 @@ class Graph:
         goal = None
         h_cache = {}
 
+        if best_cost is None:
+            best_cost = np.inf
+
         def h(node):
             # return 0
             if node.id in h_cache:
@@ -952,6 +990,10 @@ class Graph:
                     [o.lb_cost_to_goal for o in self.transition_nodes[node.state.mode]],
                     dtype=np.float64,
                 )
+
+            # print(len(self.transition_node_array_cache[node.state.mode]))
+            if len(self.transition_node_array_cache[node.state.mode]) == 0:
+                return np.inf
 
             costs_to_transitions = env.batch_config_cost(
                 node.state.q,
@@ -1155,7 +1197,7 @@ class Graph:
                     f_node = g_new + h(n)
                     # fs[(n1, n)] = f_node
 
-                    if best_cost is not None and f_node > best_cost:
+                    if f_node > best_cost:
                         continue
 
                     # if n not in closed_list:
@@ -1360,20 +1402,24 @@ def joint_prm_planner(
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
 
-    reached_modes = [m0]
+    reached_modes = set([m0])
 
     conf_type = type(env.get_start_pos())
-    informed = Informed(env, 
-                        'graph_based',   
-                        locally_informed_sampling,
-                        include_lb=inlcude_lb_in_informed_sampling
-                        )
+    informed = InformedSampling(
+        env,
+        "graph_based",
+        locally_informed_sampling,
+        include_lb=inlcude_lb_in_informed_sampling,
+    )
 
     def sample_mode(
         mode_sampling_type: str = "uniform_reached", found_solution: bool = False
     ) -> Mode:
+        # m_rnd = reached_modes[-1]
+        # return m_rnd
         if mode_sampling_type == "uniform_reached":
-            m_rnd = random.choice(reached_modes)
+            # print(len(reached_modes))
+            m_rnd = random.choice(tuple(reached_modes))
         elif mode_sampling_type == "weighted":
             # sample such that we tend to get similar number of pts in each mode
             w = []
@@ -1384,7 +1430,7 @@ def joint_prm_planner(
                 if m in g.transition_nodes:
                     num_nodes += len(g.transition_nodes[m])
                 w.append(1 / max(1, num_nodes))
-            m_rnd = random.choices(reached_modes, weights=w)[0]
+            m_rnd = random.choices(tuple(reached_modes), weights=w)[0]
         # elif mode_sampling_type == "greedy_until_first_sol":
         #     if found_solution:
         #         m_rnd = reached_modes[-1]
@@ -1397,6 +1443,7 @@ def joint_prm_planner(
         #     # sample very greedily and only expand the newest mode
         #     m_rnd = reached_modes[-1]
 
+        # print(m_rnd)
         return m_rnd
 
     # we are checking here if a sample can imrpove a part of the path
@@ -1586,23 +1633,43 @@ def joint_prm_planner(
 
             if env.is_collision_free(q, mode):
                 if env.is_terminal_mode(mode):
-                    next_mode = None
+                    next_modes = None
                 else:
-                    next_mode = env.get_next_mode(q, mode)
+                    # print("coll free mode trans: ", mode)
+                    next_modes = env.get_next_modes(q, mode)
+                    # assert len(next_modes) == 1
+                    # next_mode = next_modes[0]
+                    # print("next mode", next_mode)
 
-                transitions.append((q, mode, next_mode))
+                    # if len(next_modes) == 0:
+                    #     print("BBBBB")
+                    #     print(mode)
+
+                
+                if next_modes is None or len(next_modes) > 0:
+                    # print("CC")
+                    # print(mode, next_modes)
+                    transitions.append((q, mode, next_modes))
 
                 # print(mode, mode.next_modes)
 
-                if next_mode not in reached_modes and next_mode is not None:
-                    reached_modes.append(next_mode)
+                if next_modes is not None and len(next_modes) > 0:
+                    reached_modes.update(next_modes)
+                    # for next_mode in next_modes:
+                    # #     reached_modes.add(next_mode)
+                        # if next_mode not in reached_modes:
+                        #     reached_modes.append(next_mode)
+
+                    # print("reached modes", len(reached_modes))
+                    # print(reached_modes)
             # else:
-            #     if mode.task_ids == [3, 8]:
-            #         env.show(True)
+            #     print("not collfree")
+            #     print(mode)
+            #     # env.show(True)
 
         return transitions
 
-    g = Graph(
+    g = MultimodalGraph(
         State(q0, m0),
         lambda a, b: batch_config_dist(a, b, distance_metric),
         use_k_nearest=use_k_nearest,
@@ -1664,10 +1731,39 @@ def joint_prm_planner(
                 ]
                 num_pts_for_removal += original_count - len(g.transition_nodes[mode])
 
+            for mode in list(g.reverse_transition_nodes.keys()):
+                original_count = len(g.reverse_transition_nodes[mode])
+                g.reverse_transition_nodes[mode] = [
+                    n
+                    for n in g.reverse_transition_nodes[mode]
+                    if sum(env.batch_config_cost(n.state.q, focal_points))
+                    <= current_best_cost
+                ]
+                # num_pts_for_removal += original_count - len(g.reverse_transition_nodes[mode])
+
             print(f"Removed {num_pts_for_removal} nodes")
 
         print()
         print(f"Samples: {cnt}; time: {time.time() - start_time:.2f}s; {ptc}")
+        print(f"Currently {len(reached_modes)} modes")
+
+        # for mode in reached_modes:
+            # items = [v[0] for k,v  in mode.sg.items()]
+            # transforms = [np.frombuffer(v[1]) for k,v  in mode.sg.items()]
+            # print(mode, mode.additional_hash_info, mode.task_ids)
+            # print(mode, mode.additional_hash_info, mode.task_ids, hash(mode))
+        #     if mode.task_ids == [9,9]:
+        #         print(hash(frozenset(mode.sg)))
+        #         mode._cached_hash = None
+        #         print(hash(mode))
+        #         sg_fitered = {
+        #             k: (v[0], v[1], v[2]) if len(v) > 2 else v for k, v in mode.sg.items()
+        #         }
+        #         sg_hash = hash(frozenset(sg_fitered.items()))
+        #         print(mode.sg)
+        #         print(sg_fitered)
+        #         print(sg_hash)
+            # print(mode, mode.additional_hash_info, mode.task_ids, transforms)
 
         samples_in_graph_before = g.get_num_samples()
 
@@ -1732,11 +1828,11 @@ def joint_prm_planner(
                 if try_informed_sampling:
                     print("Generating informed samples")
                     new_informed_states = informed.generate_samples(
-                        reached_modes,
+                        tuple(reached_modes),
                         informed_batch_size,
                         interpolated_path,
                         try_direct_sampling=try_direct_informed_sampling,
-                        g=g
+                        g=g,
                     )
                     g.add_states(new_informed_states)
 
@@ -1745,10 +1841,10 @@ def joint_prm_planner(
                 if try_informed_transitions:
                     print("Generating informed transitions")
                     new_informed_transitions = informed.generate_transitions(
-                        reached_modes,
+                        tuple(reached_modes),
                         informed_transition_batch_size,
                         interpolated_path,
-                        g=g
+                        g=g,
                     )
                     g.add_transition_nodes(new_informed_transitions)
                     print(
@@ -1768,7 +1864,7 @@ def joint_prm_planner(
                 g.add_transition_nodes(path_transitions)
                 print(f"Adding {len(path_transitions)} path transitions")
 
-            g.compute_lower_bound_to_goal(env.batch_config_cost)
+            g.compute_lower_bound_to_goal(env.batch_config_cost, current_best_cost)
 
         samples_in_graph_after = g.get_num_samples()
         cnt += samples_in_graph_after - samples_in_graph_before
@@ -1878,6 +1974,12 @@ def joint_prm_planner(
 
                         print("Modes of new path")
                         print([m.task_ids for m in modes])
+                        # print([(m, m.additional_hash_info) for m in modes])
+
+                        # prev_mode = modes[-1].prev_mode
+                        # while prev_mode:
+                        #     print(prev_mode, prev_mode.additional_hash_info)
+                        #     prev_mode = prev_mode.prev_mode
 
                         print(
                             f"New cost: {new_path_cost} at time {time.time() - start_time}"

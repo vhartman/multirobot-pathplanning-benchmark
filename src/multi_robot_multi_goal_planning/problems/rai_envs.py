@@ -2340,7 +2340,10 @@ def check_all_modes():
             if not is_collision_free:
                 raise ValueError()
 
-            m = env.get_next_mode(None, m)
+            ms = env.get_next_modes(None, m)
+            assert len(ms) == 0
+            m = ms[0]
+
 
 
 def export_env(env: rai_env):

@@ -98,7 +98,10 @@ class BidirectionalRRTstar(BaseRRTstar):
             new_mode = self.env.make_start_mode()
             new_mode.prev_mode = None
         else:
-            new_mode = self.env.get_next_mode(q, mode)
+            new_modes = self.env.get_next_modes(q, mode)
+            assert len(new_modes) == 1
+            new_mode = new_modes[0]
+
             new_mode.prev_mode = mode
         if new_mode in self.modes:
             return 

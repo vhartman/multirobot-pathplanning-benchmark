@@ -1202,7 +1202,10 @@ def prioritized_planning(env: BaseProblem):
         curr_mode = prev_mode.copy()
         for i, r in enumerate(involved_robots):
             curr_mode[i] = task_index
-        next_mode = env.get_next_mode(None, curr_mode)
+        next_modes = env.get_next_modes(None, curr_mode)
+        assert len(next_modes) == 1
+        next_mode = next_modes[0]
+
         next_task_indices = {}
         for i, r in enumerate(involved_robots):
             next_task_indices[r] = next_mode[i]
