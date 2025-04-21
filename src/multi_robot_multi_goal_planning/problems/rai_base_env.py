@@ -454,13 +454,13 @@ class rai_env(BaseProblem):
         if isinstance(r, str):
             r = [r]
 
-        if q is not None:
-            self.set_to_mode(m)
-            offset = 0
-            for robot in r:
-                dim = self.robot_dims[robot]
-                self.C.setJointState(q[offset : offset + dim], self.robot_joints[robot])
-                offset += dim
+        # if q is not None:
+        #     self.set_to_mode(m)
+        #     for robot in r:
+        #         robot_indices = self.robot_idx[robot]
+        #         self.C.setJointState(q[robot_indices], self.robot_joints[robot])
+        self.set_to_mode(m)
+        self.C.setJointState(q)
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
@@ -479,11 +479,17 @@ class rai_env(BaseProblem):
 
                 # print(c)
                 involves_relevant_robot = False
+                involves_relevant_object = False
                 for robot in r:
+                    task_idx = m.task_ids[self.robots.index(robot)]
+                    task = self.tasks[task_idx]
                     if c[2] < 0 and (robot in c[0] or robot in c[1]):
                         involves_relevant_robot = True
-                        break
-                if not involves_relevant_robot:
+                    elif c[2] < 0 and(c[0] in task.frames or c[1] in task.frames):
+                        involves_relevant_object = True
+                
+                
+                if not involves_relevant_robot and not involves_relevant_object:
                     # print("A")
                     # print(c)
                     continue
@@ -516,7 +522,7 @@ class rai_env(BaseProblem):
         include_endpoints: bool = False,
         N_start: int = 0,
         N_max: int = None,
-        N:int = None
+        N: int = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
@@ -527,7 +533,7 @@ class rai_env(BaseProblem):
         # print('q1', q1)
         # print('q2', q2)
         if N is None:
-            N = int(config_dist(q1, q2, "max") / resolution)
+            N = int(config_dist(q1, q2, "max") / resolution) + 1
             N = max(2, N)
 
         if N_start > N:
@@ -562,134 +568,6 @@ class rai_env(BaseProblem):
                 return False
 
         return True
-
-    def is_path_collision_free(
-        self,
-        path: List[State],
-        randomize_order=True,
-        resolution=None,
-        tolerance=None,
-        check_edges_in_order=False,
-    ) -> bool:
-        if tolerance is None:
-            tolerance = self.collision_tolerance
-
-        if resolution is None:
-            resolution = self.collision_resolution
-
-        if randomize_order:
-            # idx = list(range(len(path) - 1))
-            # np.random.shuffle(idx)
-            idx = generate_binary_search_indices(len(path) - 1)
-        else:
-            idx = list(range(len(path) - 1))
-
-        # valid_edges = 0
-
-        if check_edges_in_order:
-            for i in idx:
-                # skip transition nodes
-                # if path[i].mode != path[i + 1].mode:
-                #     continue
-
-                q1 = path[i].q
-                q2 = path[i + 1].q
-                mode = path[i].mode
-
-                if not self.is_edge_collision_free(
-                    q1, q2, mode, resolution=resolution, tolerance=tolerance, include_endpoints=True
-                ):
-                    return False
-
-                # valid_edges += 1
-
-            # print("checked edges in shortcutting: ", valid_edges)
-        else:
-            edge_queue = list(idx)
-            N_max = 2
-            N_start = 0
-            checks_per_iteration = 10
-            while edge_queue:
-                edges_to_remove = []
-                for i in edge_queue:
-                    q1 = path[i].q
-                    q2 = path[i + 1].q
-                    mode = path[i].mode
-
-                    res = self.is_edge_collision_free(
-                        q1,
-                        q2,
-                        mode,
-                        resolution=resolution,
-                        tolerance=tolerance,
-                        include_endpoints=True,
-                        N_start=N_start,
-                        N_max=N_max,
-                    )
-
-                    if res is None:
-                        edges_to_remove.append(i)
-                        continue
-
-                    if not res:
-                        return False
-
-                for i in edges_to_remove:
-                    edge_queue.remove(i)
-
-                # N_start += checks_per_iteration
-                N_start = N_max
-                N_max += checks_per_iteration
-
-        return True
-    
-    def is_robot_env_collision_free(
-        self, r: str, q: NDArray, m: List[int], collision_tolerance=0.01
-    ) -> bool:
-        if isinstance(r, str):
-            r = [r]
-
-        if q is not None:
-            self.set_to_mode(m)
-            offset = 0
-            for robot in r:
-                dim = self.robot_dims[robot]
-                self.C.setJointState(q[offset:offset+dim], self.robot_joints[robot])
-                offset += dim
-
-        binary_collision_free = self.C.getCollisionFree()
-        if binary_collision_free:
-            return True
-
-        col = self.C.getCollisionsTotalPenetration()
-        # print(col)
-        # self.C.view(False)
-        if col > collision_tolerance:
-            # self.C.view(False)
-            colls = self.C.getCollisions()
-            for c in colls:
-                # ignore minor collisions
-                if c[2] > -collision_tolerance / 10:
-                    continue
-                involves_relevant_robot = False
-                relevant_robot = None
-                for robot in r:
-                    if robot in c[0] or robot in c[1]:
-                        involves_relevant_robot = True
-                        relevant_robot = robot
-                        break
-                if not involves_relevant_robot:
-                    continue
-                involves_objects = True
-                for other_robot in self.robots:
-                    if other_robot != relevant_robot:
-                        if other_robot in c[0] or other_robot in c[1]:
-                            involves_objects = False
-                            break
-                if involves_objects:
-                    return False
-            return True
-        return False
 
     def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         if not self.manipulating_env:
