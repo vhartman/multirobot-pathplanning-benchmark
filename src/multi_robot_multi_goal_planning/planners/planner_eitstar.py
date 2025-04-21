@@ -278,15 +278,21 @@ class EITstar(BaseITstar):
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False,
         use_max_distance_metric_effort:bool = False,
+        apply_long_horizon:bool = False,
         ):
         super().__init__(
             env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
             try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
             init_uniform_batch_size=init_uniform_batch_size, init_transition_batch_size=init_transition_batch_size,
-            uniform_batch_size = uniform_batch_size, uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
-            informed_transition_batch_size = informed_transition_batch_size, path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
-            try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
-            inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
+            uniform_batch_size = uniform_batch_size, 
+            uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
+            informed_transition_batch_size = informed_transition_batch_size, 
+            path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
+            try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, 
+            try_direct_informed_sampling = try_direct_informed_sampling, 
+            inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
+            remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
+            apply_long_horizon = apply_long_horizon)
 
         self.sparse_number_of_points = 1
         self.use_max_distance_metric_effort = use_max_distance_metric_effort
@@ -294,6 +300,8 @@ class EITstar(BaseITstar):
         self.reduce_neighbors = False
         self.sparesly_checked_edges = {}
         self.check = set()
+        self.start_mode = None
+        self.intermediate_end_mode = None
 
     def _create_operation(self) -> BaseOperation:
         return Operation()
@@ -572,7 +580,11 @@ class EITstar(BaseITstar):
             self.sparse_number_of_points = 1
         self.expand_node_reverse(self.g.goal_nodes, first_search = self.first_search) 
         self.g.update_forward_queue_keys('target') 
-         
+
+    def init_long_horizon(self):
+
+        pass
+
     def Plan(
         self,optimize:bool = True
     ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:

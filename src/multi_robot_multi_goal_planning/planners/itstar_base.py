@@ -1398,7 +1398,8 @@ class BaseITstar(ABC):
         try_direct_informed_sampling: bool = True,
         inlcude_lb_in_informed_sampling:bool = True,
         remove_based_on_modes:bool = False,
-        with_tree_visualization:bool = False
+        with_tree_visualization:bool = False,
+        apply_long_horizon:bool = False
     ):
         self.env = env
         self.ptc = ptc
@@ -1420,6 +1421,7 @@ class BaseITstar(ABC):
         self.inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling
         self.remove_based_on_modes = remove_based_on_modes
         self.with_tree_visualization = with_tree_visualization
+        self.apply_long_horizon = apply_long_horizon
 
         self.reached_modes = set()
         self.sorted_reached_modes = None
@@ -1776,8 +1778,6 @@ class BaseITstar(ABC):
         # add new batch of nodes
         while True:
 
-                        
-            
             effective_uniform_batch_size = (
                 self.uniform_batch_size if self.current_best_cost is not None or not self.first_search
                 else self.init_uniform_batch_size
@@ -1811,6 +1811,9 @@ class BaseITstar(ABC):
             #     transistion_batch_size=effective_uniform_transition_batch_size,
             #     cost=self.current_best_cost,
             # )
+            if self.apply_long_horizon:
+                self.init_long_horizon()
+
             if len(self.g.goal_nodes) == 0:
                 continue
 
@@ -1990,17 +1993,17 @@ class BaseITstar(ABC):
             samples_in_graph_after = self.g.get_num_samples()
             self.cnt += samples_in_graph_after - samples_in_graph_before
 
-            # search over nodes:
-            # 1. search from goal state with sparse check
-            reached_terminal_mode = False
-            for m in self.reached_modes:
-                if self.env.is_terminal_mode(m):
-                    reached_terminal_mode = True
-                    break
+            # # search over nodes:
+            # # 1. search from goal state with sparse check
+            # reached_terminal_mode = False
+            # for m in self.reached_modes:
+            #     if self.env.is_terminal_mode(m):
+            #         reached_terminal_mode = True
+            #         break
 
-            if reached_terminal_mode:
-                print("====================")
-                break
+            # if reached_terminal_mode:
+            #     print("good to go")
+            #     break
     
     def prune_set_of_expanded_nodes(self):
         if not self.remove_nodes:
@@ -2504,6 +2507,9 @@ class BaseITstar(ABC):
         # initialize all queues (edge-queues)    
         self.g.add_vertex_to_tree(self.g.root)
         self.initialize_search()
+    
+    def init_long_horizon(self):
+        pass
     
     @abstractmethod
     def update_reverse_sets(node):

@@ -293,16 +293,22 @@ class AITstar(BaseITstar):
         try_direct_informed_sampling: bool = True,
         inlcude_lb_in_informed_sampling:bool = True,
         remove_based_on_modes:bool = False,
-        with_tree_visualization:bool = False
+        with_tree_visualization:bool = False,
+        apply_long_horizon:bool = False
         ):
         super().__init__(
             env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
             try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
             init_uniform_batch_size=init_uniform_batch_size, init_transition_batch_size=init_transition_batch_size,
-            uniform_batch_size = uniform_batch_size, uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
-            informed_transition_batch_size = informed_transition_batch_size, path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
-            try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, try_direct_informed_sampling = try_direct_informed_sampling, 
-            inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization)
+            uniform_batch_size = uniform_batch_size, 
+            uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
+            informed_transition_batch_size = informed_transition_batch_size, 
+            path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
+            try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, 
+            try_direct_informed_sampling = try_direct_informed_sampling, 
+            inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
+            remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
+            apply_long_horizon = apply_long_horizon)
 
         self.alpha = 3.0
         self.consistent_nodes = set() #lb_cost_to_go_expanded == lb_cost_to_go
