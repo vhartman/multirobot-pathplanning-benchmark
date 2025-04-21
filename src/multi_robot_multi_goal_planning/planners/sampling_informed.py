@@ -140,7 +140,7 @@ class InformedSampling:
                     new_path.append(mode)
                     open_paths.append(new_path)
 
-        return list(in_between_modes)
+        return  list(sorted(in_between_modes, key=lambda m: m.id))
 
     def lb_cost_from_start(
         self, state: State, g, lb_attribute_name="lb_cost_from_start"
@@ -244,8 +244,10 @@ class InformedSampling:
                 start_state = path[start_index]
                 lb_cost_from_start_to_state = self.lb_cost_from_start(rnd_state, g)
                 lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
-
-                lb_cost_from_start_index_to_state = max(
+                if not np.isinf(lb_cost_from_start_to_state) and not np.isinf(
+                    lb_cost_from_start_to_index
+                ):
+                    lb_cost_from_start_index_to_state = max(
                     (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
                     lb_cost_from_start_index_to_state,
                 )
@@ -259,8 +261,10 @@ class InformedSampling:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state, g)
                 lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
-
-                lb_cost_from_state_to_end_index = max(
+                if not np.isinf(lb_cost_from_goal_to_state) and not np.isinf(
+                    lb_cost_from_goal_to_index
+                ):
+                    lb_cost_from_state_to_end_index = max(
                     (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
                     lb_cost_from_state_to_end_index,
                 )
@@ -340,7 +344,10 @@ class InformedSampling:
                 )
                 lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
 
-                lb_cost_from_start_index_to_state = max(
+                if not np.isinf(lb_cost_from_start_to_state) and not np.isinf(
+                    lb_cost_from_start_to_index
+                ):
+                    lb_cost_from_start_index_to_state = max(
                     (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
                     lb_cost_from_start_index_to_state,
                 )
@@ -353,8 +360,10 @@ class InformedSampling:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state_mode_2, g)
                 lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
-
-                lb_cost_from_state_to_end_index = max(
+                if not np.isinf(lb_cost_from_goal_to_state) and not np.isinf(
+                    lb_cost_from_goal_to_index
+                ):
+                    lb_cost_from_state_to_end_index = max(
                     (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
                     lb_cost_from_state_to_end_index,
                 )
