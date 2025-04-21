@@ -299,7 +299,8 @@ def setup_planner(
                 try_direct_informed_sampling=options["direct_informed_sampling"],
                 inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
                 remove_based_on_modes = options["remove_based_on_modes"],
-                with_tree_visualization = options["with_tree_visualization"]
+                with_tree_visualization = options["with_tree_visualization"],
+                apply_long_horizon=options["apply_long_horizon"],
             ).Plan(optimize)
         
     elif planner_config["type"] == "eitstar":
@@ -326,7 +327,8 @@ def setup_planner(
                 inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
                 remove_based_on_modes = options["remove_based_on_modes"],
                 with_tree_visualization = options["with_tree_visualization"],
-                use_max_distance_metric_effort = options["use_max_distance_metric_effort"]
+                use_max_distance_metric_effort = options["use_max_distance_metric_effort"],
+                apply_long_horizon=options["apply_long_horizon"],
             ).Plan(optimize)
     elif planner_config["type"] == "rh_eitstar":
         def planner(env):

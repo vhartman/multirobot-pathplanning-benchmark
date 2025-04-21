@@ -18,6 +18,7 @@
     "try_direct_informed_sampling": true,
     "inlcude_lb_in_informed_sampling": true,
     "remove_based_on_modes": false,
-    "with_tree_visualization": false
+    "with_tree_visualization": false,
+    "apply_long_horizon":false
   }
 }

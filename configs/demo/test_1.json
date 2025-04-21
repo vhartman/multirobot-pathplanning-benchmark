@@ -1,20 +1,20 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "hallway",
+  "environment": "other_hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 200,
-  "num_runs": 1,
+  "max_planning_time": 350,
+  "num_runs": 10,
   "seed": 10,
-  "optimize": true,
+  "optimize": false,
   "planners": [
     {
-      "name": "rh_eitstar",
-      "type": "rh_eitstar",
+      "name": "eitstar",
+      "type": "eitstar",
       "options": {
         "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
-        "batch_size": 100,
+        "batch_size": 150,
         "transition_batch_size": 50,
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
@@ -29,7 +29,8 @@
         "direct_informed_sampling": true,
         "inlcude_lb_in_informed_sampling":false,
         "remove_based_on_modes":true, 
-        "with_tree_visualization": false
+        "with_tree_visualization": false,
+        "apply_long_horizon":true
       }
     }
 

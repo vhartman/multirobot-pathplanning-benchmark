@@ -95,29 +95,6 @@ def robot_mode_shortcut(
     
     non_redundant_path = remove_interpolated_nodes(path)
     new_path = interpolate_path(non_redundant_path, 0.1)
-    # if not all([
-    #         env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode) 
-    #         for i in range(len(path) - 1)
-    #     ]):
-    #         for i in range(len(path)-1):
-    #             if not env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode):
-    #                 env.is_edge_collision_free(path[i].q, path[i+1].q, path[i].mode)
-    
-    # if not all([
-    #         env.is_edge_collision_free(non_redundant_path[i].q, non_redundant_path[i+1].q, non_redundant_path[i].mode) 
-    #         for i in range(len(non_redundant_path) - 1)
-    #     ]):
-    #         for i in range(len(non_redundant_path)-1):
-    #             if not env.is_edge_collision_free(non_redundant_path[i].q, non_redundant_path[i+1].q, non_redundant_path[i].mode):
-    #                 env.is_edge_collision_free(non_redundant_path[i].q, non_redundant_path[i+1].q, non_redundant_path[i].mode)
-
-    # if not all([
-    #         env.is_edge_collision_free(new_path[i].q, new_path[i+1].q, new_path[i].mode) 
-    #         for i in range(len(new_path) - 1)
-    #     ]):
-    #         for i in range(len(new_path)-1):
-    #             if not env.is_edge_collision_free(new_path[i].q, new_path[i+1].q, new_path[i].mode):
-    #                 env.is_edge_collision_free(new_path[i].q, new_path[i+1].q, new_path[i].mode)
 
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
