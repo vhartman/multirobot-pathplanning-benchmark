@@ -12,7 +12,6 @@ from typing import (
 import time
 import math
 from itertools import chain
-import heapq
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
@@ -50,8 +49,6 @@ class InadmissibleHeuristics():
 
     def update(self, pot_parent:"Node", edge_cost:float, edge_effort:float):
         self.lb_cost_to_go = min(self.lb_cost_to_go, pot_parent.inad.lb_cost_to_go + edge_cost)
-        if np.isinf(self.lb_cost_to_go):
-            pass
         new_effort = pot_parent.inad.effort + edge_effort
         if new_effort < self.effort:
             self.effort = new_effort
@@ -72,9 +69,13 @@ class Graph(BaseGraph):
                  batch_dist_fun, 
                  batch_cost_fun, 
                  is_edge_collision_free,
+                 get_next_modes,
                  collision_resolution, 
                  node_cls):
-        super().__init__(root_state, operation, distance_metric, batch_dist_fun, batch_cost_fun, is_edge_collision_free, collision_resolution, node_cls, including_effort=True)
+        super().__init__(root_state=root_state, operation=operation, distance_metric=distance_metric, 
+                         batch_dist_fun=batch_dist_fun, batch_cost_fun=batch_cost_fun, is_edge_collision_free=is_edge_collision_free, 
+                         get_next_modes=get_next_modes, collision_resolution=collision_resolution, 
+                         node_cls=node_cls, including_effort=True)
     
         self.reverse_queue = None
         self.effort_estimate_queue = None
@@ -157,8 +158,6 @@ class Graph(BaseGraph):
             key_ee = self.cost_bound_queue.key(item_ee)
             if key_ee <=bound:
                 item = item_ee
-        else:
-            pass
 
         self.effort_estimate_queue.remove(item)
         self.cost_bound_queue.remove(item)
@@ -307,6 +306,7 @@ class EITstar(BaseITstar):
             batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.distance_metric),
             batch_cost_fun= lambda a, b: self.env.batch_config_cost(a, b),
             is_edge_collision_free = self.env.is_edge_collision_free,
+            get_next_modes = self.env.get_next_modes,
             collision_resolution = self.env.collision_resolution,
             node_cls=Node
             )
@@ -368,6 +368,11 @@ class EITstar(BaseITstar):
                     continue
                 if n.is_transition and not n.is_reverse_transition:
                     continue
+                if n.is_transition and n.is_reverse_transition:
+                    if node.is_transition:
+                        if node.state.mode != n.state.mode:
+                            continue
+
 
                 if n.id in self.reverse_closed_set and not self.dynamic_reverse_search_update:
                     continue
@@ -414,10 +419,13 @@ class EITstar(BaseITstar):
             #     continue
             self.reverse_closed_set.add(n0.id)
             is_transition = False
-            if n1.is_transition:
-                pass
             if n1.is_transition and n1.is_reverse_transition:
                 is_transition = True
+            potential_lb_cost_to_go = n0.lb_cost_to_go + edge_cost        
+            if is_transition and n1.transition_neighbors[0].lb_cost_to_go < potential_lb_cost_to_go:
+                #don't change the parent
+                self.expand_node_reverse([n1.transition_neighbors[0]])
+                continue
             if n0.id not in n1.whitelist:
                 sparsely_collision_free = False
                 if n0.id not in n1.blacklist:
@@ -453,11 +461,13 @@ class EITstar(BaseITstar):
                 if N_max >= N:
                     #checked it already with env resolution
                     self.g.update_edge_collision_cache(n0, n1, True)
-
             n1.inad.update(n0, edge_cost, edge_effort)
             if is_transition:
-                n1.transition.inad.update(n1, 0.0, 0.0)
-            potential_lb_cost_to_go = n0.lb_cost_to_go + edge_cost
+                assert(len(n1.transition_neighbors) ==1), (
+                        "Transition node has more than one neighbor"
+                    )
+                n1.transition_neighbors[0].inad.update(n1, 0.0, 0.0)
+           
             if n1.lb_cost_to_go > potential_lb_cost_to_go:
                 self.g.update_connectivity(n0, n1, edge_cost, potential_lb_cost_to_go,"reverse", is_transition)
                 assert (n1.lb_cost_to_go == n1.inad.lb_cost_to_go), (
@@ -468,7 +478,7 @@ class EITstar(BaseITstar):
                 )
                 if is_transition:
                     self.reverse_tree_set.add(n1.id)
-                    self.expand_node_reverse([n1.transition])
+                    self.expand_node_reverse([n1.transition_neighbors[0]])
                     continue
                 self.expand_node_reverse([n1])
 
@@ -496,8 +506,10 @@ class EITstar(BaseITstar):
         self.reverse_tree_set.discard(n.id)
         n.rev.parent.rev.children.remove(n.id)
         n.rev.parent.rev.fam.remove(n.id)
-        if n.is_transition and n.transition is not None:
-            nodes_to_update.add(n.transition.id)
+        if n.is_transition and n.transition_neighbors:
+            #need to update the edges in the queue with the transition as well
+            transition_node_ids = [n.id for n in n.transition_neighbors]
+            nodes_to_update.update(transition_node_ids)
         nodes_to_update.add(n.id)
         if len(n.rev.children) == 0:
             n.rev.reset()
@@ -522,6 +534,7 @@ class EITstar(BaseITstar):
         return nodes_to_update
 
     def manage_edge_in_collision(self, n0, n1, clear:bool =False):
+
         if n0.rev.parent == n1 or n1.rev.parent == n0:
             if not self.dynamic_reverse_search_update or clear:
                 self.clear_reverse_edge_in_collision(n0, n1)
@@ -529,25 +542,21 @@ class EITstar(BaseITstar):
                 return
             self.sparse_number_of_points *=2
             # self.clear_reverse_edge_in_collision(n0, n1)
-            self.initialize_reverse_search(False)    
+            self.initialize_reverse_search(False) 
+        # elif len(self.g.reverse_queue) == 0:
+        #     self.initialize_reverse_search(False) 
 
     def initialize_lb(self):
-        # calculate_effort = True
-        # if self.use_max_distance_metric_effort:
-        #     calculate_effort = False
-        #     self.g.compute_transition_lb_effort_to_come()
-        #     self.g.compute_node_lb_effort_to_come()
-        self.g.compute_transition_lb_to_come()
+        self.g.compute_transition_lb_cost_to_come()
         self.g.compute_transition_lb_effort_to_come()
         self.g.compute_node_lb_to_come()
-        # self.g.compute_node_lb_effort_to_come()
 
     def initialze_forward_search(self):
         self.update_inflation_factor()
         self.g.effort_estimate_queue = EffortEstimateQueue(collision_resolution=self.env.collision_resolution)
         self.g.cost_bound_queue = CostBoundQueue()
         # self.g.cost_estimate_queue = CostEstimateQueue()
-        self.expand_node_forward(self.g.root, first_search=self.first_search)
+        self.expand_node_forward(self.g.root, regardless_forward_closed_set = True, first_search=self.first_search)
 
     def initialize_reverse_search(self, reset:bool = True):
         if len(BaseTree.all_vertices) > 1:
@@ -577,7 +586,7 @@ class EITstar(BaseITstar):
             if num_iter % 100000 == 0:
                 print("Forward Queue: ", len(self.g.cost_bound_queue))
             if len(self.g.cost_bound_queue) < 1:
-                print("------------------------",n1.state.mode.task_ids)
+                print("------------------------",n1.state.mode.task_ids, n1.id, num_iter)
                 self.initialize_search()
                 continue
             
@@ -591,7 +600,7 @@ class EITstar(BaseITstar):
                     "askdflö"
                 )
                 is_transition = False
-                if n1.is_transition and not n1.is_reverse_transition and n1.transition is not None:
+                if n1.is_transition and not n1.is_reverse_transition and n1.transition_neighbors:
                     is_transition = True
                 
                 if n1 in BaseTree.all_vertices and not self.dynamic_reverse_search_update:
@@ -601,10 +610,10 @@ class EITstar(BaseITstar):
                 #     assert not [self.g.cost_bound_queue.key(item) for item in self.g.cost_bound_queue.current_entries if not np.isinf(self.g.cost_bound_queue.key(item))], (
                 #     "Forward queue contains non-infinite keys!")
                 # already found best possible parent
-           
                 if n1.forward.parent == n0:  # if its already the parent
                     if is_transition:
-                        self.expand_node_forward(n1.transition)
+                        for transition in n1.transition_neighbors:
+                            self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
                 elif (
@@ -638,8 +647,8 @@ class EITstar(BaseITstar):
                                 "hjklö"
                             )
                     if is_transition:
-                        print(n1.state.mode, n1.transition.state.mode)
-                        self.expand_node_forward(n1.transition)
+                        for transition in n1.transition_neighbors:
+                            self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
                     update = False

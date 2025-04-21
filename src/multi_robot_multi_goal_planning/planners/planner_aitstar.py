@@ -70,10 +70,13 @@ class Graph(BaseGraph):
                  batch_dist_fun, 
                  batch_cost_fun, 
                  is_edge_collision_free,
+                 get_next_modes,
                  collision_resolution, 
                  node_cls):
-        super().__init__(root_state, operation, distance_metric, batch_dist_fun, batch_cost_fun, is_edge_collision_free, collision_resolution, node_cls, including_effort=False)
-    
+        super().__init__(root_state=root_state, operation=operation, distance_metric=distance_metric, 
+                         batch_dist_fun=batch_dist_fun, batch_cost_fun=batch_cost_fun, is_edge_collision_free=is_edge_collision_free, 
+                         get_next_modes=get_next_modes, collision_resolution=collision_resolution, 
+                         node_cls=node_cls, including_effort=False)
         self.reverse_queue = None
         self.forward_queue = None
 
@@ -318,6 +321,7 @@ class AITstar(BaseITstar):
             batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.distance_metric),
             batch_cost_fun= lambda a, b: self.env.batch_config_cost(a, b),
             is_edge_collision_free = self.env.is_edge_collision_free,
+            get_next_modes = self.env.get_next_modes,
             collision_resolution = self.env.collision_resolution,
             node_cls=Node
             )
@@ -395,7 +399,7 @@ class AITstar(BaseITstar):
         n.rev.reset()
 
         # Update current node
-        if self.current_best_cost is not None:
+        if self.dynamic_reverse_search_update:
             self.update_state(n)
 
         return nodes_to_update
@@ -432,21 +436,30 @@ class AITstar(BaseITstar):
             if num_iter % 100000 == 0:
                 print(num_iter, ": Reverse Queue: ", len(self.g.reverse_queue))
             is_rev_transition = False
+            if n.is_transition and n.is_reverse_transition:
+                is_rev_transition = True
+                # if n.transition_neighbors[0].lb_cost_to_go < n.lb_cost_to_go_expanded:
+                #     #don't change the parent
+                #     self.update_heuristic_of_neihgbors(n.transition_neighbors[0])
+                #     continue
+            
             if n.lb_cost_to_go < n.lb_cost_to_go_expanded:
                 self.consistent_nodes.add(n.id)
                 n.lb_cost_to_go_expanded = n.lb_cost_to_go
-                if n.is_transition and n.is_reverse_transition:
-                    is_rev_transition = True
-                    n.transition.lb_cost_to_go_expanded = n.lb_cost_to_go_expanded
-                    self.consistent_nodes.add(n.transition.id)
+                if is_rev_transition:
+                    assert len(n.transition_neighbors) == 1, (
+                        "Transition neighbor should be only one"
+                    )
+                    n.transition_neighbors[0].lb_cost_to_go_expanded = n.lb_cost_to_go_expanded
+                    self.consistent_nodes.add(n.transition_neighbors[0].id)
                 if n.is_transition and not n.is_reverse_transition:
                     pass
             else:
                 self.consistent_nodes.discard(n.id)
                 n.lb_cost_to_go_expanded = np.inf 
-                if n.is_transition and n.is_reverse_transition:
-                    n.transition.lb_cost_to_go_expanded = n.lb_cost_to_go_expanded
-                    self.consistent_nodes.discard(n.transition.id)
+                if is_rev_transition:
+                    n.transition_neighbors[0].lb_cost_to_go_expanded = n.lb_cost_to_go_expanded
+                    self.consistent_nodes.discard(n.transition_neighbors[0].id)
                 self.update_state(n)
 
             assert  n.lb_cost_to_go_expanded == n.lb_cost_to_go or (np.isinf(n.lb_cost_to_go_expanded)), (
@@ -455,11 +468,13 @@ class AITstar(BaseITstar):
 
             self.update_heuristic_of_neihgbors(n)
             if is_rev_transition:
-                assert(n.transition.lb_cost_to_go == n.lb_cost_to_go), ("ohhh")
-                assert(n.transition.lb_cost_to_go_expanded == n.lb_cost_to_go_expanded), ("ohhh")
-                assert(n.lb_cost_to_go == n.lb_cost_to_go_expanded), ("ohhh")
-                # print(n.state.mode, n.transition.state.mode)
-                self.update_heuristic_of_neihgbors(n.transition)
+                # assert math.isclose(n.transition_neighbors[0].lb_cost_to_go, n.lb_cost_to_go, rel_tol=1e-10, abs_tol=1e-5), (
+                # "ohhh")
+                # assert math.isclose(n.transition_neighbors[0].lb_cost_to_go_expanded, n.lb_cost_to_go_expanded, rel_tol=1e-10, abs_tol=1e-5), (
+                # "ohhh")
+
+                # assert(n.lb_cost_to_go == n.lb_cost_to_go_expanded), ("ohhh")
+                self.update_heuristic_of_neihgbors(n.transition_neighbors[0])
         if self.with_tree_visualization and num_iter > 0:
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
         self.init_rev_search = False
@@ -484,6 +499,10 @@ class AITstar(BaseITstar):
             return
         if node.is_transition and not node.is_reverse_transition:
             return
+        is_rev_transition = False
+        if node.is_transition and node.is_reverse_transition:
+            #only want to consider nodes as reverse parent with mode of node or its next modes
+            is_rev_transition = True
         # node was already expanded in current heuristic call
         if node.lb_cost_to_go == node.lb_cost_to_go_expanded and node.id in self.reverse_closed_set:
             self.g.reverse_queue.remove(node)
@@ -496,17 +515,16 @@ class AITstar(BaseITstar):
             return
         
         batch_cost = self.g.tot_neighbors_batch_cost_cache[node.id]
-        is_rev_transition = False
-        if node.is_transition and node.is_reverse_transition:
+        if is_rev_transition:
             #only want to consider nodes as reverse parent with mode of node or its next modes
-            is_rev_transition = True
-            idx = neighbors.index(node.transition.id)
+            idx = neighbors.index(node.transition_neighbors[0].id)
             neighbors.pop(idx)
             batch_cost = np.delete(batch_cost, idx)
 
                 
         lb_costs_to_go_expanded = self.operation.lb_costs_to_go_expanded[neighbors]
         candidates =  lb_costs_to_go_expanded + batch_cost
+
         # if all neighbors are infinity, no need to update node
         if np.all(np.isinf(candidates)):
             self.update_node_without_available_reverse_parent(node)
@@ -526,8 +544,8 @@ class AITstar(BaseITstar):
                 self.updated_target_nodes.add(node.id)
                 node.lb_cost_to_go = best_lb_cost_to_go
                 if node.is_reverse_transition: 
-                    self.updated_target_nodes.add(node.transition.id)
-                    node.transition.lb_cost_to_go = best_lb_cost_to_go
+                    self.updated_target_nodes.add(node.transition_neighbors[0].id)
+                    node.transition_neighbors[0].lb_cost_to_go = best_lb_cost_to_go
             self.inconcistency_check(node)
             return
         best_parent = None
@@ -543,9 +561,10 @@ class AITstar(BaseITstar):
             assert (n.rev.parent == node) == (n.id in node.rev.children), (
                 f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
             )
-            if node.is_transition:
-                if n.is_transition and n.transition is not None and n.transition.state.mode == node.state.mode.prev_mode:
-                    continue
+            if is_rev_transition:
+                if n.is_transition:
+                    if node.state.mode != n.state.mode:
+                        continue
 
             #to avoid inner cycles in reverse tree (can happen when a parent appears on blacklist at some point):
             if n.rev.parent == node:
@@ -563,6 +582,18 @@ class AITstar(BaseITstar):
             self.no_available_parent_in_this_batch.add(node.id) 
             self.update_node_without_available_reverse_parent(node)
             return
+        if is_rev_transition and node.transition_neighbors[0].rev.parent is not None:
+            if node.transition_neighbors[0].rev.parent.id != node.id:
+                potential_cost_to_go = best_parent.lb_cost_to_go_expanded + best_edge_cost
+                if node.transition_neighbors[0].lb_cost_to_go < potential_cost_to_go:
+                    # nodes_to_update = set()
+                    # nodes_to_update = self.invalidate_rev_branch(best_parent, nodes_to_update)
+                    # self.g.update_forward_queue_keys('target', nodes_to_update) 
+                    # self.reverse_tree_set.update(nodes_to_update)
+                    self.update_node_without_available_reverse_parent(node, update_transition=False)
+                    return
+                
+
         
         assert(not np.isinf(best_parent.lb_cost_to_go_expanded)), (
             "fghjksl"
@@ -586,7 +617,7 @@ class AITstar(BaseITstar):
         if candidates[idx] != node.lb_cost_to_go:
             self.updated_target_nodes.add(node.id)
             if is_rev_transition:
-                self.updated_target_nodes.add(node.transition.id)
+                self.updated_target_nodes.add(node.transition_neighbors[0].id)
         self.g.update_connectivity(
             best_parent, node, best_edge_cost, best_parent.lb_cost_to_go_expanded + best_edge_cost , "reverse", is_rev_transition
         ) 
@@ -604,7 +635,7 @@ class AITstar(BaseITstar):
             "lb_cost_to_go_expanded should not be finite and different from lb_cost_to_go"
         )
 
-    def update_node_without_available_reverse_parent(self, node:Node):
+    def update_node_without_available_reverse_parent(self, node:Node, update_transition:bool = True):
         if len(node.rev.fam) == 0 and np.isinf(node.lb_cost_to_go) and node.id not in self.consistent_nodes:
             return
         self.consistent_nodes.discard(node.id)
@@ -620,11 +651,11 @@ class AITstar(BaseITstar):
             node.rev.fam.remove(node.rev.parent.id) 
         node.rev.parent = None
         self.g.reverse_queue.remove(node)
-        if node.is_transition and node.is_reverse_transition:
-            self.update_node_without_available_reverse_parent(node.transition)
+        if node.is_transition and node.is_reverse_transition and update_transition:
+            self.update_node_without_available_reverse_parent(node.transition_neighbors[0])
          
     def initialize_lb(self):    
-        self.g.compute_transition_lb_to_come()
+        self.g.compute_transition_lb_cost_to_come()
         self.g.compute_node_lb_to_come()
 
     def initialze_forward_search(self):
@@ -635,7 +666,7 @@ class AITstar(BaseITstar):
         self.init_rev_search = True
         self.no_available_parent_in_this_batch = set()
         self.g.forward_queue = EdgeQueue(self.alpha)
-        self.expand_node_forward(self.g.root)
+        self.expand_node_forward(self.g.root, regardless_forward_closed_set = True, first_search=self.first_search)
 
     def initialize_reverse_search(self, reset:bool=True):
         self.g.reverse_queue = VertexQueue()
@@ -689,14 +720,8 @@ class AITstar(BaseITstar):
                 "askdflö"
             )
             is_transition = False
-            if n1.is_transition and not n1.is_reverse_transition and n1.transition is not None:
+            if n1.is_transition and not n1.is_reverse_transition and n1.transition_neighbors:
                 is_transition = True
-            # if n0.id != self.g.root.id:
-            #     assert not np.isinf(n0.lb_cost_to_go), (
-            #         "hjklö"
-            #     )
-            # if num_iter == 59874:
-            #     pass
             if np.isinf(n1.lb_cost_to_go):
                 assert not [self.g.forward_queue.key(item)[0] for item in self.g.forward_queue.current_entries if not np.isinf(self.g.forward_queue.key(item)[0])], (
                 "Forward queue contains non-infinite keys!")
@@ -709,7 +734,8 @@ class AITstar(BaseITstar):
                 ):
                 if n1.forward.parent == n0:  # if its already the parent
                     if is_transition:
-                        self.expand_node_forward(n1.transition)
+                        for transition in n1.transition_neighbors:
+                            self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
                 elif (
@@ -742,8 +768,8 @@ class AITstar(BaseITstar):
                                 "hjklö"
                             )
                     if is_transition:
-                        print(n1.state.mode, n1.transition.state.mode)
-                        self.expand_node_forward(n1.transition)
+                        for transition in n1.transition_neighbors:
+                            self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
                     update = False
