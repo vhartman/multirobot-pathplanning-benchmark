@@ -536,6 +536,10 @@ class BaseGraph(ABC):
         self.get_next_modes = get_next_modes
         self.collision_resolution = collision_resolution
         self.including_effort = including_effort
+        #for long horizon planning
+        self.virtual_root = None
+        self.virtual_goal_nodes = []
+        self.virtual_goal_node_ids = []
 
         self.nodes = {}  # contains all the nodes ever created
         self.nodes[self.root.id] = self.root
@@ -659,12 +663,13 @@ class BaseGraph(ABC):
                 if parent.is_transition and parent.is_reverse_transition and self.reverse_transition_is_already_present(node):
                     continue
                 n = self.transition_or_goal_is_already_present(node)
+                
                 if n is not None:
                     edge_cost = float(self.batch_cost_fun([parent.state], [n.state]))
                     self.update_connectivity(parent, n, edge_cost, parent.cost + edge_cost)
                     self.new_path.append(n)
                     self.update_edge_collision_cache(parent, n, True)
-                    if n.transition_neighbors: #TODO need to get right mode
+                    if n.transition_neighbors and n not in self.virtual_goal_nodes: 
                         next_mode = path[i+1].mode
                         mode_idx = n.transition_neighbor_modes.index(next_mode)
                         transition_neighbor = n.transition_neighbors[mode_idx]
@@ -1371,6 +1376,56 @@ class InformedSampling(BaseInformedSampling):
         )
         return min_cost
 
+
+class BaseLongHorizon():
+    counter: ClassVar[int] = 1
+    def __init__(self):
+        self.init = True
+        self.new_section = True
+        self.start_mode = None
+        self.terminal_mode = None
+        self.cost = None #keep track of latest_cost
+        self.overlap_idx = 0
+        self.horizon_idx = 0
+        self.horizon_length = 4
+        self.mode_sequence = None
+        self.reached_terminal_mode = False
+        
+    def init_long_horizon(self, g:BaseGraph, current_best_path_nodes:List[BaseNode], tot_mode_sequence:List[Mode]):
+        if self.reached_terminal_mode:
+            return
+    
+        if self.init :
+            self.start_mode = g.root.state.mode
+            g.virtual_root = g.root
+        else:
+            if not current_best_path_nodes[-1].transition_neighbors:
+                self.start_mode = g.root.state.mode
+                g.virtual_root = g.root
+                self.reached_terminal_mode = True
+                self.mode_sequence = tot_mode_sequence
+                self.new_section = False
+                return
+            else:
+                g.virtual_root = current_best_path_nodes[-1].transition_neighbors[0]
+                self.start_mode = current_best_path_nodes[-1].state.mode
+        end_idx = BaseLongHorizon.counter*self.horizon_length-1
+        if end_idx >= len(tot_mode_sequence)-1 or end_idx + 1 >= len(tot_mode_sequence):
+            end_idx = len(tot_mode_sequence)-1
+            
+        self.terminal_mode = tot_mode_sequence[end_idx]
+        self.mode_sequence = tot_mode_sequence[self.horizon_idx:self.horizon_idx+self.horizon_length]
+        g.virtual_goal_nodes = [g.nodes[id] for id in g.transition_node_ids[self.terminal_mode]]
+        g.virtual_goal_node_ids = g.transition_node_ids[self.terminal_mode]
+
+        self.horizon_idx = self.horizon_length * BaseLongHorizon.counter
+        BaseLongHorizon.counter+=1
+        self.overlap_idx = (self.horizon_length/2) * (BaseLongHorizon.counter -1)
+        self.new_section = False
+    
+    def reset(self):
+        self.new_section = True
+
 # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
 # needed adaption to work.
 class BaseITstar(ABC):
@@ -1442,6 +1497,7 @@ class BaseITstar(ABC):
         self.remove_nodes = False
         self.dynamic_reverse_search_update = False
         self.g = None
+        self.long_horizon = self._create_long_horizon()
 
         self.updated_target_nodes = set()
         self.reverse_closed_set = set()
@@ -1472,7 +1528,10 @@ class BaseITstar(ABC):
             collision_resolution = self.env.collision_resolution,
             node_cls=BaseNode
             )
-    
+
+    def _create_long_horizon(self) -> BaseLongHorizon:
+        return BaseLongHorizon()
+
     def sample_valid_uniform_batch(self, batch_size: int, cost: float) -> List[State]:
         new_samples = []
         num_attempts = 0
@@ -1486,6 +1545,11 @@ class BaseITstar(ABC):
                 dtype=np.float64,
             )
 
+        if self.apply_long_horizon and not self.long_horizon.init:
+            mode_seq = self.long_horizon.mode_sequence
+        else:
+            mode_seq = self.sorted_reached_modes
+
         while len(new_samples) < batch_size:
             # if failed_attemps > 10000000:
             #     break
@@ -1493,7 +1557,7 @@ class BaseITstar(ABC):
             # print(len(new_samples))
             # sample mode
             m = self.sample_mode(
-                self.sorted_reached_modes, "uniform_reached", cost is not None
+                mode_seq, "uniform_reached", cost is not None
             )
 
             # print(m)
@@ -1539,6 +1603,10 @@ class BaseITstar(ABC):
                 [self.g.root.state.q.state(), self.g.goal_nodes[0].state.q.state()],
                 dtype=np.float64,
             )
+        if self.apply_long_horizon and not self.long_horizon.init:
+            mode_seq = self.long_horizon.mode_sequence
+        else:
+            mode_seq = self.sorted_reached_modes
         # while len(transitions) < transistion_batch_size:
         failed_attemps = 0
         while transitions < transistion_batch_size:
@@ -1549,7 +1617,7 @@ class BaseITstar(ABC):
             else:
                 mode_sampling_type = "uniform_reached"
             # sample mode
-            mode = self.sample_mode(self.sorted_reached_modes, mode_sampling_type, None)
+            mode = self.sample_mode(mode_seq, mode_sampling_type, None)
 
             # sample transition at the end of this mode
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
@@ -1626,11 +1694,16 @@ class BaseITstar(ABC):
             if next_modes is not None and len(next_modes) > 0:
                 self.reached_modes.update(next_modes)
                 self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
+                if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.init:
+                    mode_seq = self.sorted_reached_modes
                     
             if self.current_best_cost is None and len(self.g.goal_nodes) > 0:  
                 if self.terminal_mode is None and self.env.is_terminal_mode(mode):
                     self.terminal_mode = mode
                 self.get_modes_init_search(self.terminal_mode)
+                if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.init:
+                    mode_seq = self.sorted_reached_modes
+
         print(f"Adding {transitions} transitions")
         return
     
@@ -1643,7 +1716,7 @@ class BaseITstar(ABC):
                 mode = prev_mode
             else:
                 break
-        self.sorted_reached_modes = init_search_modes
+        self.sorted_reached_modes = init_search_modes[::-1]
 
     def check_mode_validity(self, mode:Mode, q):
         robots = None
@@ -1803,6 +1876,10 @@ class BaseITstar(ABC):
             # if self.env.terminal_mode not in reached_modes:   
             print("--------------------")
             print("Sampling transitions")
+            if self.apply_long_horizon and self.long_horizon.new_section and not self.long_horizon.init:
+                self.long_horizon.init_long_horizon(self.g, self.current_best_path_nodes, self.sorted_reached_modes)
+                if self.long_horizon.reached_terminal_mode:
+                    self.remove_nodes_in_graph()
             self.sample_valid_uniform_transitions(
                 transistion_batch_size=effective_uniform_transition_batch_size,
                 cost=self.current_best_cost,
@@ -1811,11 +1888,14 @@ class BaseITstar(ABC):
             #     transistion_batch_size=effective_uniform_transition_batch_size,
             #     cost=self.current_best_cost,
             # )
-            if self.apply_long_horizon:
-                self.init_long_horizon()
 
             if len(self.g.goal_nodes) == 0:
                 continue
+            
+            if self.apply_long_horizon and self.long_horizon.new_section and self.long_horizon.init:
+                # TODO need to chagne for dependency/unassgined unordered envs
+                self.long_horizon.init_long_horizon(self.g, self.current_best_path_nodes, self.sorted_reached_modes)
+                self.long_horizon.init = False
 
 
             # self.g.add_transition_nodes(new_transitions)
@@ -1845,11 +1925,18 @@ class BaseITstar(ABC):
                 self.try_informed_sampling or self.try_informed_transitions
             ):
                 interpolated_path = interpolate_path(self.current_best_path)
+                if self.apply_long_horizon:
+                    mode_seq = self.long_horizon.mode_sequence
+                else:
+                    mode_seq = self.sorted_reached_modes
+
+
+
                 # interpolated_path = current_best_path
                 if self.try_informed_sampling:
                     print("Generating informed samples")
                     new_informed_states = self.informed.generate_samples(
-                                            self.sorted_reached_modes,
+                                            mode_seq,
                                             self.informed_batch_size,
                                             interpolated_path,
                                             try_direct_sampling=self.try_direct_informed_sampling,
@@ -1863,7 +1950,7 @@ class BaseITstar(ABC):
                 if self.try_informed_transitions:
                     print("Generating informed transitions")
                     new_informed_transitions = self.informed.generate_transitions(
-                                                self.sorted_reached_modes,
+                                                mode_seq,
                                                 self.informed_transition_batch_size,
                                                 interpolated_path,
                                                 g=self.g
@@ -1937,7 +2024,7 @@ class BaseITstar(ABC):
         print("====================")
         while True:
             self.g.initialize_cache()
-            if self.current_best_path is not None:
+            if self.current_best_path is not None and self.current_best_cost is not None:
                 # prune
                 # for mode in self.reached_modes:
                 #     q_samples = [self.g.nodes[id].state.q.state() for id in self.g.node_ids[mode]]
@@ -2000,6 +2087,8 @@ class BaseITstar(ABC):
             #     if self.env.is_terminal_mode(m):
             #         reached_terminal_mode = True
             #         break
+            if len(self.g.goal_node_ids) > 0:
+                break
 
             # if reached_terminal_mode:
             #     print("good to go")
@@ -2080,7 +2169,7 @@ class BaseITstar(ABC):
             else:
                 vertices_node_ids.append(id)
                 stack.extend(node.forward.children)
-
+        #TODO need to adapt that as well for long horizon?
         goal_mask = np.array([item in children_to_be_removed for item in self.g.goal_node_ids])
         goal_nodes = np.array(self.g.goal_node_ids)[goal_mask]
         if goal_nodes.size > 0:
@@ -2101,6 +2190,8 @@ class BaseITstar(ABC):
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
             # start = random.choice(self.g.reverse_transition_node_ids[mode])
             # goal = random.choice(self.g.re)
+            if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
+                continue
             if not self.remove_based_on_modes or mode not in self.start_transition_arrays:
                 focal_points = np.array(
                 [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
@@ -2118,7 +2209,7 @@ class BaseITstar(ABC):
             self.g.node_ids[mode] = [
                 id
                 for id in self.g.node_ids[mode]
-                if id == self.g.root.id or id in vertices_to_keep or (id not in vertices_to_be_removed and sum(
+                if id == self.g.root.id or (self.g.virtual_root is not None and id == self.g.virtual_root.id) or id in vertices_to_keep or (id not in vertices_to_be_removed and sum(
                     self.env.batch_config_cost(self.g.nodes[id].state.q, focal_points))
                 <= cost)
             ]
@@ -2130,7 +2221,9 @@ class BaseITstar(ABC):
         self.g.reverse_transition_node_ids = {}
 
         for mode in list(self.g.transition_node_ids.keys()):
-            if self.env.is_terminal_mode(mode):
+            if self.env.is_terminal_mode(mode) or mode == self.long_horizon.terminal_mode:
+                continue
+            if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
                 continue
             
             if not self.remove_based_on_modes or mode not in self.start_transition_arrays:
@@ -2341,14 +2434,21 @@ class BaseITstar(ABC):
         return path
 
     def update_results_tracking(self, cost, path):
+        if not self.env.is_terminal_mode(path[-1].mode):
+            return
         self.costs.append(cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(path)
 
     def get_lb_goal_node_and_cost(self) -> BaseNode:
-        min_id = np.argmin(self.operation.costs[self.g.goal_node_ids], axis=0)
-        best_cost = self.operation.costs[self.g.goal_node_ids][min_id]
-        best_node = self.g.goal_nodes[min_id]
+        if self.apply_long_horizon:
+            min_id = np.argmin(self.operation.costs[self.g.virtual_goal_node_ids], axis=0)
+            best_cost = self.operation.costs[self.g.virtual_goal_node_ids][min_id]
+            best_node = self.g.virtual_goal_nodes[min_id]
+        else:
+            min_id = np.argmin(self.operation.costs[self.g.goal_node_ids], axis=0)
+            best_cost = self.operation.costs[self.g.goal_node_ids][min_id]
+            best_node = self.g.goal_nodes[min_id]
         return best_node, best_cost
     
     def expand_node_forward(self, 
@@ -2356,8 +2456,10 @@ class BaseITstar(ABC):
                             regardless_forward_closed_set:bool= False, 
                             choose_random_set:bool=False, 
                             first_search:bool = False) -> None:
-        if node in self.g.goal_nodes:
+        if node in self.g.goal_nodes or node in self.g.virtual_goal_nodes:
             return   
+        # if node.id == 1326:
+        #     pass
         neighbors = self.g.get_neighbors(node, space_extent=self.approximate_space_extent, first_search= first_search)
         if neighbors.size == 0:
             return
@@ -2434,7 +2536,7 @@ class BaseITstar(ABC):
                     data[type]["parents"].append(None)
         save_data(data, True)
     
-    def initialize_search(self):
+    def initialize_search(self, num_iter = None) -> None:
         # if self.g.get_num_samples() >200:
         #     q_samples = []
         #     modes = []
@@ -2484,12 +2586,21 @@ class BaseITstar(ABC):
         #     if len(path) > 0:
         #         self.process_valid_path(path, force_update = True, update_queues=False )
         # print("edges sparsely checked several times", [self.sparesly_checked_edges[key] for key in self.sparesly_checked_edges.keys() if self.sparesly_checked_edges[key] > 1])
+        # if num_iter is not None:
+        #     if self.apply_long_horizon and num_iter % 100 == 0:
+        #         if not self.long_horizon.reached_terminal_mode:
+        #             self.long_horizon.reset()
+        #             self.current_best_cost = None
+        
         if self.current_best_cost is not None:
             print()
             print("Shortcutting before new batch")
             self.current_best_path_nodes = self.generate_path(True)
             self.process_valid_path(self.current_best_path_nodes, False, True, True)
             self.update_removal_conditions() 
+        if self.apply_long_horizon and self.current_best_cost is not None and not self.long_horizon.reached_terminal_mode:
+            self.long_horizon.reset()
+            self.current_best_cost = None
         self.sample_manifold()
         self.initialize_lb()
         self.initialze_forward_search()
@@ -2507,9 +2618,6 @@ class BaseITstar(ABC):
         # initialize all queues (edge-queues)    
         self.g.add_vertex_to_tree(self.g.root)
         self.initialize_search()
-    
-    def init_long_horizon(self):
-        pass
     
     @abstractmethod
     def update_reverse_sets(node):

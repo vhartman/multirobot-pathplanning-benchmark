@@ -27,7 +27,8 @@ from multi_robot_multi_goal_planning.planners.itstar_base import (
     BaseGraph,
     BaseOperation, 
     BaseNode,
-    BaseTree
+    BaseTree,
+    BaseLongHorizon
     )
 from functools import cache
 from multi_robot_multi_goal_planning.planners.planner_aitstar import EdgeQueue
@@ -113,6 +114,12 @@ class Graph(BaseGraph):
             node.lb_cost_to_go = 0
             node.rev.cost_to_parent = 0
             node.inad.reset_goal_nodes()
+        #if long horizon planning
+        if self.virtual_goal_nodes:
+            for node in self.virtual_goal_nodes:
+                node.lb_cost_to_go = 0
+                node.rev.cost_to_parent = 0
+                node.inad.reset_goal_nodes()
 
     def update_forward_queue(self, edge_cost, edge, edge_effort):
         item = (edge_cost, edge, edge_effort)
@@ -253,6 +260,14 @@ class CostBoundQueue(EdgeQueue):
 #         # item[1]: edge (n0, n1)
 #         return (item[1][0].cost + item[0] + item[1][1].inad.lb_cost_to_go)
 
+# class LongHorizon(BaseLongHorizon):
+#     def __init__(self):
+#         super().__init__()
+    
+#     def
+
+
+
 class EITstar(BaseITstar):
     
     def __init__(
@@ -348,13 +363,15 @@ class EITstar(BaseITstar):
            
     def expand_node_reverse(self, nodes: List[Node], first_search:bool = False) -> None:
         for node in nodes:
-            if node.id == self.g.root.id:
+            if node.id == self.g.root.id or node == self.g.virtual_root:
                 return  
             # if node.id in self.reverse_tree_set:
             #     self.g.reverse_queue.update({node.id}, 'start')
             #     return
             self.reverse_tree_set.add(node.id)
             self.updated_target_nodes.add(node.id)
+            # if node.id == 1326:
+            #     pass
             neighbors = self.g.get_neighbors(node, space_extent=self.approximate_space_extent, first_search=first_search)
             if neighbors.size == 0:
                 return          
@@ -368,7 +385,7 @@ class EITstar(BaseITstar):
                 assert (n.forward.parent == node) == (n.id in node.forward.children), (
                         f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
                         )
-                if n in self.g.goal_nodes or n.id == self.g.root.id:
+                if n in self.g.goal_nodes or n.id == self.g.root.id or n in self.g.virtual_goal_nodes:
                     continue
                 assert(n.id not in node.blacklist), (
                 "neighbors are wrong")
@@ -432,6 +449,8 @@ class EITstar(BaseITstar):
             potential_lb_cost_to_go = n0.lb_cost_to_go + edge_cost        
             if is_transition and n1.transition_neighbors[0].lb_cost_to_go < potential_lb_cost_to_go:
                 #don't change the parent
+                if self.apply_long_horizon and n1.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
+                    continue
                 self.expand_node_reverse([n1.transition_neighbors[0]])
                 continue
             if n0.id not in n1.whitelist:
@@ -486,8 +505,12 @@ class EITstar(BaseITstar):
                 )
                 if is_transition:
                     self.reverse_tree_set.add(n1.id)
+                    if self.apply_long_horizon and n1.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
+                        continue
                     self.expand_node_reverse([n1.transition_neighbors[0]])
                     continue
+                # if n1.id == 1326:
+                #     pass
                 self.expand_node_reverse([n1])
 
         if self.with_tree_visualization and iter > 0:
@@ -532,7 +555,7 @@ class EITstar(BaseITstar):
                 for _, id in enumerate(children):
                     child = self.g.nodes[id]
                     child.lb_cost_to_go = np.inf
-                    if child in self.g.goal_nodes:
+                    if child in self.g.goal_nodes or child in self.g.virtual_goal_nodes:
                         child.lb_cost_to_go = 0.0
                     child.inad.reset()
                     self.reverse_closed_set.discard(child.id)
@@ -564,7 +587,11 @@ class EITstar(BaseITstar):
         self.g.effort_estimate_queue = EffortEstimateQueue(collision_resolution=self.env.collision_resolution)
         self.g.cost_bound_queue = CostBoundQueue()
         # self.g.cost_estimate_queue = CostEstimateQueue()
-        self.expand_node_forward(self.g.root, regardless_forward_closed_set = True, first_search=self.first_search)
+        if self.apply_long_horizon:
+            start = self.g.virtual_root
+        else:
+            start = self.g.root
+        self.expand_node_forward(start, regardless_forward_closed_set = True, first_search=self.first_search)
 
     def initialize_reverse_search(self, reset:bool = True):
         if len(BaseTree.all_vertices) > 1:
@@ -578,12 +605,12 @@ class EITstar(BaseITstar):
         self.updated_target_nodes = set() #lb_cost_to_go was updated in reverse search
         if reset:
             self.sparse_number_of_points = 1
-        self.expand_node_reverse(self.g.goal_nodes, first_search = self.first_search) 
+        if self.apply_long_horizon:
+            goal_nodes = self.g.virtual_goal_nodes
+        else:
+            goal_nodes = self.g.goal_nodes
+        self.expand_node_reverse(goal_nodes, first_search = self.first_search) 
         self.g.update_forward_queue_keys('target') 
-
-    def init_long_horizon(self):
-
-        pass
 
     def Plan(
         self,optimize:bool = True
@@ -594,12 +621,17 @@ class EITstar(BaseITstar):
         n1 = None
         while True:
             num_iter += 1
+            # if self.apply_long_horizon and num_iter % 50 == 0 and self.current_best_cost is not None:
+            #     if not self.long_horizon.reached_terminal_mode:
+            #         self.long_horizon.reset()
+            #         self.current_best_cost = None
+            #         self.initialize_search()
             self.reverse_search()
             if num_iter % 100000 == 0:
                 print("Forward Queue: ", len(self.g.cost_bound_queue))
             if len(self.g.cost_bound_queue) < 1:
                 print("------------------------",n1.state.mode.task_ids, n1.id, num_iter)
-                self.initialize_search()
+                self.initialize_search(num_iter)
                 continue
             
             key, _ = self.g.cost_bound_queue.peek_first_element()
@@ -664,9 +696,9 @@ class EITstar(BaseITstar):
                     else:
                         self.expand_node_forward(n1)
                     update = False
-                    if n1 in self.g.goal_nodes:
+                    if n1 in self.g.goal_nodes or n1 in self.g.virtual_goal_nodes:
                         update = True
-                    if self.dynamic_reverse_search_update or n1 in self.g.goal_nodes:
+                    if self.dynamic_reverse_search_update or update:
                         path = self.generate_path()
                         if len(path) > 0:
                             if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
@@ -675,11 +707,12 @@ class EITstar(BaseITstar):
                             self.update_inflation_factor()
                             if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
                                 self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+                           
 
-                            
-      
+                
             else:
-                self.initialize_search()
+                self.initialize_search(num_iter)
+  
                 
             if not optimize and self.current_best_cost is not None:
                 break
