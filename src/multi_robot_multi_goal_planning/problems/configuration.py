@@ -137,11 +137,69 @@ def numba_parallelized_sum(
 #     return dists
 
 
+# @numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True)
+# def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
+#     """Compute Euclidean distances for sliced configurations - optimized for sequential execution."""
+#     num_slices = len(slices)
+#     num_samples = squared_diff.shape[0]
+#     dists = np.empty((num_slices, num_samples), dtype=np.float64)
+
+#     # Pre-extract slice bounds for better access patterns
+#     starts = np.empty(num_slices, dtype=np.int64)
+#     ends = np.empty(num_slices, dtype=np.int64)
+#     for i in range(num_slices):
+#         starts[i] = slices[i, 0]
+#         ends[i] = slices[i, 1]
+
+#     # Process samples in the outer loop for better cache locality
+#     for j in range(num_samples):
+#         # Process each slice for this sample
+#         for i in range(num_slices):
+#             s = starts[i]
+#             e = ends[i]
+#             sum_squared = 0.0
+
+#             # Improved loop unrolling with early exit conditions
+#             # Unroll by 8 when possible
+#             idx = s
+#             while idx + 8 <= e:
+#                 sum_squared += (
+#                     squared_diff[j, idx]
+#                     + squared_diff[j, idx + 1]
+#                     + squared_diff[j, idx + 2]
+#                     + squared_diff[j, idx + 3]
+#                     + squared_diff[j, idx + 4]
+#                     + squared_diff[j, idx + 5]
+#                     + squared_diff[j, idx + 6]
+#                     + squared_diff[j, idx + 7]
+#                 )
+#                 idx += 8
+
+#             # Unroll remaining by 4
+#             while idx + 4 <= e:
+#                 sum_squared += (
+#                     squared_diff[j, idx]
+#                     + squared_diff[j, idx + 1]
+#                     + squared_diff[j, idx + 2]
+#                     + squared_diff[j, idx + 3]
+#                 )
+#                 idx += 4
+
+#             # Handle remaining elements
+#             while idx < e:
+#                 sum_squared += squared_diff[j, idx]
+#                 idx += 1
+
+#             dists[i, j] = np.sqrt(sum_squared)
+
+#     return dists
+
+
 @numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True)
-def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
+def compute_sliced_dists(diff: NDArray, slices: NDArray) -> NDArray:
     """Compute Euclidean distances for sliced configurations - optimized for sequential execution."""
     num_slices = len(slices)
-    num_samples = squared_diff.shape[0]
+    num_samples = diff.shape[0]
     dists = np.empty((num_slices, num_samples), dtype=np.float64)
 
     # Pre-extract slice bounds for better access patterns
@@ -164,30 +222,30 @@ def compute_sliced_dists(squared_diff: NDArray, slices: NDArray) -> NDArray:
             idx = s
             while idx + 8 <= e:
                 sum_squared += (
-                    squared_diff[j, idx]
-                    + squared_diff[j, idx + 1]
-                    + squared_diff[j, idx + 2]
-                    + squared_diff[j, idx + 3]
-                    + squared_diff[j, idx + 4]
-                    + squared_diff[j, idx + 5]
-                    + squared_diff[j, idx + 6]
-                    + squared_diff[j, idx + 7]
+                      diff[j, idx] * diff[j, idx]
+                    + diff[j, idx + 1] * diff[j, idx + 1]
+                    + diff[j, idx + 2] * diff[j, idx + 2]
+                    + diff[j, idx + 3] * diff[j, idx + 3]
+                    + diff[j, idx + 4] * diff[j, idx + 4]
+                    + diff[j, idx + 5] * diff[j, idx + 5]
+                    + diff[j, idx + 6] * diff[j, idx + 6]
+                    + diff[j, idx + 7] * diff[j, idx + 7]
                 )
                 idx += 8
 
             # Unroll remaining by 4
             while idx + 4 <= e:
                 sum_squared += (
-                    squared_diff[j, idx]
-                    + squared_diff[j, idx + 1]
-                    + squared_diff[j, idx + 2]
-                    + squared_diff[j, idx + 3]
+                    diff[j, idx] * diff[j, idx]
+                    + diff[j, idx + 1] * diff[j, idx + 1]
+                    + diff[j, idx + 2] * diff[j, idx + 2]
+                    + diff[j, idx + 3] * diff[j, idx + 3]
                 )
                 idx += 4
 
             # Handle remaining elements
             while idx < e:
-                sum_squared += squared_diff[j, idx]
+                sum_squared += diff[j, idx] * diff[j, idx]
                 idx += 1
 
             dists[i, j] = np.sqrt(sum_squared)
@@ -401,13 +459,13 @@ class NpConfiguration(Configuration):
             diff = pt.q - np.array([other.q for other in batch_other], dtype=np.float64)
 
         if metric == "euclidean":
-            squared_diff = diff * diff
+            # squared_diff = diff * diff
             return compute_sliced_dists(
-                squared_diff, np.array([[0, pt.array_slice[-1][-1]]])
+                diff, np.array([[0, pt.array_slice[-1][-1]]])
             )[0]
             # return np.linalg.norm(diff, axis=1)
         elif metric == "sum_euclidean" or metric == "max_euclidean":
-            squared_diff = diff * diff
+            # squared_diff = diff * diff
             # dists = np.zeros((pt._num_agents, diff.shape[0]))
 
             # dists = numba_parallelized_sum(squared_diff, pt.slice, pt._num_agents)
@@ -424,7 +482,7 @@ class NpConfiguration(Configuration):
             #     )
             # )
 
-            dists = compute_sliced_dists(squared_diff, pt.array_slice)
+            dists = compute_sliced_dists(diff, pt.array_slice)
             # dists = compute_sliced_dists_transpose(squared_diff.T, np.array(pt.slice))
 
             # print(tmp - dists)
@@ -433,7 +491,8 @@ class NpConfiguration(Configuration):
             #     dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
             # dists = np.array([np.linalg.norm(diff[:, s:e], axis=1) for s, e in pt.slice])
             if metric == "sum_euclidean":
-                return np.sum(dists, axis=0)
+                return compute_sum_reduction(dists)
+                # return np.sum(dists, axis=0)
             elif metric == "max_euclidean":
                 # return np.max(dists, axis=0) + 0.01 * np.sum(dists, axis=0)
                 # tmp = np.max(dists, axis=0)
@@ -490,6 +549,28 @@ def config_cost(
         return np.sum(dists)
 
 
+def one_to_many_batch_config_cost(
+    starts: Configuration,
+    batch_other: List[Configuration],
+    metric: str = "max",
+    reduction: str = "max",
+    w: float = 0.01,
+) -> NDArray:
+    diff = starts.state() - batch_other
+    agent_slices = starts.array_slice
+
+    if metric == "euclidean":
+        all_robot_dists = compute_sliced_dists(diff, agent_slices)
+    else:
+        for i, (s, e) in enumerate(agent_slices):
+            all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
+
+    if reduction == "max":
+        return compute_max_sum_reduction(all_robot_dists, w)
+    elif reduction == "sum":
+        return compute_sum_reduction(all_robot_dists)
+
+
 def batch_config_cost(
     starts: List[Configuration],
     batch_other: List[Configuration],
@@ -499,13 +580,13 @@ def batch_config_cost(
 ) -> NDArray:
     if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
         diff = starts.state() - batch_other
-        all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
+        # all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
         agent_slices = starts.array_slice
     else:
         diff = np.array([start.q.state() for start in starts]) - np.array(
             [other.q.state() for other in batch_other], dtype=np.float64
         )
-        all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
+        # all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
         agent_slices = starts[0].q.array_slice
 
         # for i, (s, e) in enumerate(agent_slices):
@@ -514,9 +595,16 @@ def batch_config_cost(
     # return np.linalg.norm(diff, axis=1)
 
     if metric == "euclidean":
-        squared_diff = diff * diff
-        all_robot_dists = compute_sliced_dists(squared_diff, agent_slices)
+        # squared_diff = diff * diff
+        all_robot_dists = compute_sliced_dists(diff, agent_slices)
+        
+        # all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
+        # for i, (s, e) in enumerate(starts.array_slice):
+        #     # Use sqrt(sum(x^2)) instead of np.linalg.norm
+        #     # and pre-computed squared differences
+        #     all_robot_dists[i, :] = np.sqrt(np.sum(squared_diff[:, s:e], axis=1))
     else:
+        all_robot_dists = np.zeros((len(agent_slices), diff.shape[0]))
         for i, (s, e) in enumerate(agent_slices):
             all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
 
