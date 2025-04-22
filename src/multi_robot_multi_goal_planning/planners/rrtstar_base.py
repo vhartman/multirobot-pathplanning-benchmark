@@ -2396,7 +2396,7 @@ class BaseRRTstar(ABC):
                 return False
             constrained_robot = self.env.get_active_task(mode, next_ids).robots
             goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
-            q = np.zeros(self.dim)
+            q = self.env.start_pos.state().copy()
             end_idx = 0
             check_collision = False
             for robot in self.env.robots:
@@ -2442,6 +2442,8 @@ class BaseRRTstar(ABC):
             self.invalid_next_ids[mode.prev_mode].append(mode.task_ids) 
         if mode in self.modes:
             self.modes.remove(mode)
+        else:
+            pass
         m = mode.prev_mode
         if not m:
             return
@@ -2458,6 +2460,8 @@ class BaseRRTstar(ABC):
             self.invalid_next_ids[prev_mode].append(m.task_ids)
             if m in self.modes:
                 self.modes.remove(m)
+            else:
+                pass
             m = prev_mode
             
     
