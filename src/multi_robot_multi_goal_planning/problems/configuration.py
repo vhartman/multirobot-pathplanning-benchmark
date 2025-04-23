@@ -529,7 +529,7 @@ def config_cost(
     - Possible values for the metric are ['max', 'euclidean']
     - Possible values for the reduction are ['max', 'sum']
     """
-    return batch_config_cost(q_start, np.array([q_end.state()]), metric, reduction)[0]
+    return batch_config_cost(q_start, q_end.state()[None, :], metric, reduction)[0]
 
 
 def one_to_many_batch_config_cost(

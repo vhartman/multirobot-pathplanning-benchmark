@@ -236,9 +236,15 @@ class InformedSampling:
 
         # print(path_cost_from_index_to_index)
 
-        lb_cost_from_start_index_to_state = self.env.config_cost(
-            rnd_state.q, path[start_index].q
+        tmp = self.env.batch_config_cost(
+            rnd_state.q, np.array([path[start_index].q.state(), path[end_index].q.state()])
         )
+        lb_cost_from_start_index_to_state = tmp[0]
+        lb_cost_from_state_to_end_index = tmp[1]
+
+        # lb_cost_from_start_index_to_state = self.env.config_cost(
+        #     rnd_state.q, path[start_index].q
+        # )
         if self.planning_approach == "graph_based" and self.include_lb:
             if path[start_index].mode != rnd_state.mode:
                 start_state = path[start_index]
@@ -250,9 +256,9 @@ class InformedSampling:
                     lb_cost_from_start_index_to_state,
                 )
 
-        lb_cost_from_state_to_end_index = self.env.config_cost(
-            rnd_state.q, path[end_index].q
-        )
+        # lb_cost_from_state_to_end_index = self.env.config_cost(
+        #     rnd_state.q, path[end_index].q
+        # )
 
         if self.planning_approach == "graph_based" and self.include_lb:
             if path[end_index].mode != rnd_state.mode:
