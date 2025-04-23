@@ -3,7 +3,9 @@ import numpy as np
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.planning_env import generate_binary_search_indices
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    generate_binary_search_indices,
+)
 
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
@@ -104,6 +106,9 @@ class Rectangle:
 
 
 class AbstractEnvironment(BaseProblem):
+    """
+    Simple environment, only supporting rectangle and sphere obstacles, and spherical agents.
+    """
     def __init__(self):
         self.limits = None
         self.agent_radii = None
@@ -152,7 +157,7 @@ class AbstractEnvironment(BaseProblem):
 
         return q
 
-    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode:bool = False):
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         return {}
 
     def show(self, blocking=True):
@@ -283,7 +288,6 @@ class AbstractEnvironment(BaseProblem):
 
         return True
 
-
     def is_edge_collision_free(
         self,
         q1: Configuration,
@@ -308,7 +312,7 @@ class AbstractEnvironment(BaseProblem):
 
         if N_start > N:
             return None
-        
+
         if N_max is None:
             N_max = N
 
@@ -319,7 +323,7 @@ class AbstractEnvironment(BaseProblem):
         #     return True
 
         idx = generate_binary_search_indices(N)
-        
+
         q1_state = q1.state()
         q2_state = q2.state()
         dir = (q2_state - q1_state) / (N - 1)
@@ -331,12 +335,11 @@ class AbstractEnvironment(BaseProblem):
             # print(i / (N-1))
             q = q1_state + dir * (i)
             q = NpConfiguration(q, q1.array_slice)
-        
+
             if not self.is_collision_free(q, mode):
                 return False
 
         return True
-
 
     def set_to_mode(self, m: List[int]):
         return
