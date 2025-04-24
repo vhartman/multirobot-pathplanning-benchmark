@@ -567,7 +567,18 @@ class BaseGraph(ABC):
             num_transition_samples += len(v)
 
         return num_samples + num_transition_samples
+        # return sum(len(v) for v in self.node_ids.values()) + \
+        #     sum(len(v) for v in self.transition_node_ids.values())
     
+    def get_num_samples_in_mode(self, mode:Mode) -> int:
+        num_samples = 0
+        if mode in self.node_ids:
+            num_samples += len(self.node_ids[mode])
+        if mode in self.transition_node_ids:
+            num_samples += len(self.transition_node_ids[mode])
+        return num_samples
+
+
     def add_node(self, new_node, cost:float = np.inf, lb_cost_to_go:float = np.inf) -> None:
         self.nodes[new_node.id] = new_node
         key = new_node.state.mode
@@ -1618,6 +1629,7 @@ class BaseITstar(ABC):
                 mode_sampling_type = "uniform_reached"
             # sample mode
             mode = self.sample_mode(mode_seq, mode_sampling_type, None)
+            
 
             # sample transition at the end of this mode
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
@@ -1669,7 +1681,6 @@ class BaseITstar(ABC):
             if cost is not None:
                 if sum(self.env.batch_config_cost(q, focal_points)) > cost:
                     continue
-
             if self.env.is_collision_free(q, mode):
                 if self.env.is_terminal_mode(mode):
                     next_modes = None
@@ -2002,20 +2013,80 @@ class BaseITstar(ABC):
         if mode_sampling_type == "uniform_reached":
             return random.choice(reached_modes)
         if mode_sampling_type == "greedy":
-            # return random.choices(reached_modes)[0]
+            # # return random.choices(reached_modes)[0]
+            # if len(reached_modes) == 1:
+            #     return reached_modes[0]
+            # frontier_modes, remaining_modes = [], []
+            # # return reached_modes[-1]
+            # for m in reached_modes:
+            #     if len(m.next_modes) == 0:
+            #         frontier_modes.append(m)
+            #     else:
+            #         remaining_modes.append(m)
+            # if len(frontier_modes) == 0:
+            #     frontier_modes = reached_modes
+            # # return random.choice(frontier_modes)
+            # if not remaining_modes:
+            #     return random.choice(reached_modes)
+            # p_frontier = 0.99
+            # p_remaining = 1 - p_frontier
+
+            # # total_nodes = list(chain.from_iterable(self.g.transition_node_ids.values())) + list(chain.from_iterable(self.g.node_ids.values()))
+            # total_nodes = self.g.get_num_samples()
+            # # Calculate probabilities inversely proportional to node counts
+            # inverse_probabilities = [
+            #     1 - (self.g.get_num_samples_in_mode(mode)/ total_nodes)
+            #     for mode in remaining_modes]
+            # total_inverse = sum(inverse_probabilities)
+
+            # p = []
+
+            # for m in reached_modes:
+            #     if m in frontier_modes:
+            #         tmp = p_frontier / len(frontier_modes)
+            #     else:
+            #         tmp = (1 - (self.g.get_num_samples_in_mode(m)/ total_nodes)) / total_inverse * p_remaining
+                
+            #     p.append(tmp)
+            # return np.random.choice(reached_modes, p = p)
+            if len(reached_modes) == 1:
+                return reached_modes[0]
+
+            total_nodes = self.g.get_num_samples()
+            p_frontier = 0.99
+            p_remaining = 1 - p_frontier
+
             frontier_modes = []
-            # return reached_modes[-1]
+            remaining_modes = []
+            sample_counts = {}
+            inv_prob = []
+
             for m in reached_modes:
-                if len(m.next_modes) == 0:
+                sample_count = self.g.get_num_samples_in_mode(m)
+                sample_counts[m] = sample_count
+                if not m.next_modes:
                     frontier_modes.append(m)
-            if len(frontier_modes) == 0:
+                else:
+                    remaining_modes.append(m)
+                    inv_prob.append(1 - (sample_count / total_nodes))
+            
+            if not frontier_modes:
                 frontier_modes = reached_modes
-            try:
-                if frontier_modes[0] != reached_modes[-1]:
-                    pass
-            except:
-                pass
-            return random.choices(frontier_modes)[0]  
+
+            if not remaining_modes:
+                return random.choice(reached_modes)
+
+            total_inverse = sum(1 - (sample_counts[m] / total_nodes) for m in remaining_modes)
+            if total_inverse == 0:
+                return random.choice(reached_modes)
+
+            sorted_reached_modes = frontier_modes + remaining_modes
+            p = [p_frontier / len(frontier_modes)] * len(frontier_modes) 
+            inv_prob = np.array(inv_prob)
+            p.extend((inv_prob / total_inverse) * p_remaining)
+            
+            return np.random.choice(sorted_reached_modes, p=p)
+
      
         return random.choice(reached_modes) 
             # m_rnd = reached_modes[-1]

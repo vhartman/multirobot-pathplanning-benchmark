@@ -440,6 +440,13 @@ class EITstar(BaseITstar):
             iter +=1
             edge_cost, edge, edge_effort = self.g.reverse_queue.heappop()
             n0, n1 = edge
+            # if n0.state.mode.id != n1.state.mode.id:
+            #     if n0.state.mode.prev_mode != n1.state.mode.prev_mode and not self.env.is_terminal_mode(n1.state.mode) :
+            #         if 13 not in n1.state.mode.task_ids:
+            #             pass
+            #         else:
+            #             pass
+            #         pass
             # if not self.dynamic_reverse_search_update and n1.id in self.reverse_tree_set:
             #     continue
             self.reverse_closed_set.add(n0.id)
