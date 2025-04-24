@@ -84,3 +84,7 @@ cache/
 /CMakeFiles/
 /Makefile
 cmake_install.cmake
+
+examples/run_analysis.py
+examples/run_postprocess.py
+examples/analysis_util.py
