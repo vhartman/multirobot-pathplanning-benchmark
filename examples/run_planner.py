@@ -20,7 +20,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
     prioritized_planning,
 )
-from multi_robot_multi_goal_planning.planners.joint_prm_planner import joint_prm_planner
+from multi_robot_multi_goal_planning.planners.composite_prm_planner import composite_prm_planner
 from multi_robot_multi_goal_planning.planners.shortcutting import (
     single_mode_shortcut,
     robot_mode_shortcut,
@@ -138,7 +138,7 @@ def main():
         termination_condition = RuntimeTerminationCondition(args.max_time)
 
     if args.planner == "joint_prm":
-        path, info = joint_prm_planner(
+        path, info = composite_prm_planner(
             env,
             ptc=termination_condition,
             optimize=args.optimize,
