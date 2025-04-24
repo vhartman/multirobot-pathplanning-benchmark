@@ -140,7 +140,8 @@ class InformedSampling:
                     new_path.append(mode)
                     open_paths.append(new_path)
 
-        return list(in_between_modes)
+        # return list(in_between_modes)
+        return list(sorted(in_between_modes, key=lambda m: m.id))
 
     def lb_cost_from_start(
         self, state: State, g, lb_attribute_name="lb_cost_from_start"
