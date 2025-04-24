@@ -1489,6 +1489,7 @@ class BaseProblem(ABC):
         include_endpoints: bool = False,
         N_start: int = 0,
         N_max: int = None,
+        N: int = None,
     ) -> bool:
         pass
 

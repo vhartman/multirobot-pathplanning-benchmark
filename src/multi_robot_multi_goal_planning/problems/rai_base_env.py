@@ -523,6 +523,7 @@ class rai_env(BaseProblem):
         include_endpoints: bool = False,
         N_start: int = 0,
         N_max: int = None,
+        N: int = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
@@ -532,8 +533,9 @@ class rai_env(BaseProblem):
 
         # print('q1', q1)
         # print('q2', q2)
-        N = int(config_dist(q1, q2, "max") / resolution) + 1
-        N = max(2, N)
+        if N is None:
+            N = int(config_dist(q1, q2, "max") / resolution) + 1
+            N = max(2, N)
 
         if N_start > N:
             return None
