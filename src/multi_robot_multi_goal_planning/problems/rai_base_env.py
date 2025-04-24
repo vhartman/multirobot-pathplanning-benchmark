@@ -454,13 +454,14 @@ class rai_env(BaseProblem):
         if isinstance(r, str):
             r = [r]
 
-        if q is not None:
-            self.set_to_mode(m)
-            offset = 0
-            for robot in r:
-                dim = self.robot_dims[robot]
-                self.C.setJointState(q[offset : offset + dim], self.robot_joints[robot])
-                offset += dim
+        # if q is not None:
+        #     self.set_to_mode(m)
+        #     for robot in r:
+        #         robot_indices = self.robot_idx[robot]
+        #         self.C.setJointState(q[robot_indices], self.robot_joints[robot])
+        
+        self.set_to_mode(m)
+        self.C.setJointState(q)
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
@@ -479,11 +480,17 @@ class rai_env(BaseProblem):
 
                 # print(c)
                 involves_relevant_robot = False
+                involves_relevant_object = False
                 for robot in r:
+                    task_idx = m.task_ids[self.robots.index(robot)]
+                    task = self.tasks[task_idx]
                     if c[2] < 0 and (robot in c[0] or robot in c[1]):
                         involves_relevant_robot = True
-                        break
-                if not involves_relevant_robot:
+                    elif c[2] < 0 and(c[0] in task.frames or c[1] in task.frames):
+                        involves_relevant_object = True
+                
+                
+                if not involves_relevant_robot and not involves_relevant_object:
                     # print("A")
                     # print(c)
                     continue
@@ -516,6 +523,7 @@ class rai_env(BaseProblem):
         include_endpoints: bool = False,
         N_start: int = 0,
         N_max: int = None,
+        N: int = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
@@ -525,8 +533,9 @@ class rai_env(BaseProblem):
 
         # print('q1', q1)
         # print('q2', q2)
-        N = int(config_dist(q1, q2, "max") / resolution) + 1
-        N = max(2, N)
+        if N is None:
+            N = int(config_dist(q1, q2, "max") / resolution) + 1
+            N = max(2, N)
 
         if N_start > N:
             return None

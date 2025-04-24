@@ -88,11 +88,14 @@ def visualize_modes(env: rai_env, export_images: bool = False):
 def benchmark_collision_checking(env: rai_env, N=10000):
     conf_type = type(env.get_start_pos())
 
-    def sample_next_mode(mode: Mode):
+    def sample_next_modes(mode: Mode):
         if env.is_terminal_mode(mode):
             return None
-        
+        failed_attemps = 0
         while True:
+            if failed_attemps > 1000:
+                print("Failed to sample next mode")
+                return None
             possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
             if len(possible_next_task_combinations) > 0:
                 ind = random.randint(0, len(possible_next_task_combinations) - 1)
@@ -137,22 +140,24 @@ def benchmark_collision_checking(env: rai_env, N=10000):
 
             if env.is_collision_free(q, mode):                
                 next_modes = env.get_next_modes(q, mode)
-                assert len(next_modes) == 1
-                next_mode = next_modes[0]
-
-                return next_mode
+                # assert len(next_modes) == 1
+                # next_mode = next_modes[0]
+                return next_modes
+            else:
+                failed_attemps += 1
 
     # create list of modes that we can reach
     print("Make mode list")
-    reachable_modes = [env.get_start_mode()]
+    reachable_modes = set([env.get_start_mode()])
     max_iter = 500
     for _ in range(max_iter):
-        m_rnd = random.choice(reachable_modes)
-        next_mode = sample_next_mode(m_rnd)
-
-        if next_mode is not None:
-            reachable_modes.append(next_mode)
-
+        m_rnd = random.choice(tuple(reachable_modes))
+        next_modes = sample_next_modes(m_rnd)
+        print(next_modes)
+        if next_modes is not None:
+            reachable_modes.update(next_modes)
+    reachable_modes = tuple(reachable_modes)
+    print("Found", len(reachable_modes), "reachable modes")
     is_collision_free = env.is_collision_free
 
     # actually do the benchmarking

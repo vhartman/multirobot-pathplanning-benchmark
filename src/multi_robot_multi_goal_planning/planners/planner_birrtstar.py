@@ -94,32 +94,48 @@ class BidirectionalRRTstar(BaseRRTstar):
             None: This method does not return any value.
         """
         if mode is None: 
-            new_mode = self.env.make_start_mode()
-            new_mode.prev_mode = None
+            new_modes = [self.env.get_start_mode()]
         else:
             new_modes = self.env.get_next_modes(q, mode)
-            assert len(new_modes) == 1
-            new_mode = new_modes[0]
-
-            new_mode.prev_mode = mode
-        if new_mode in self.modes:
-            return 
-    
-        self.modes.append(new_mode)
-        self.add_tree(new_mode, tree_instance)
-        self.InformedInitialization(new_mode)
-        #Initialize transition nodes
-        node = None
-        for i in range(self.transition_nodes):                 
-            q = self.sample_transition_configuration(new_mode)
-            if i > 0 and np.equal(q.state(), node.state.q.state()).all():
-                break
-            node = Node(State(q, new_mode), self.operation)
-            node.cost_to_parent = 0.0
-            self.mark_node_as_transition(new_mode, node)
-            self.trees[new_mode].add_node(node, 'B')
-            self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
-            node.cost = np.inf
+        for new_mode in new_modes:
+            if new_mode in self.modes:
+                continue 
+            if not self.is_mode_valid(new_mode):
+                continue
+            if mode in self.invalid_next_ids and new_mode.task_ids in self.invalid_next_ids[mode]:
+                continue
+            validy_check_q = self.sample_transition_configuration(new_mode)
+            if validy_check_q is None: 
+                self.track_invalid_modes(new_mode)
+                continue
+            self.modes.append(new_mode)
+            self.add_tree(new_mode, tree_instance)
+            if self.informed_sampling_version != 6:
+                self.InformedInitialization(new_mode)
+            #Initialize transition nodes
+            node = None
+            for i in range(self.transition_nodes): 
+                if validy_check_q is not None:
+                    q = validy_check_q
+                    validy_check_q = None   
+                else:             
+                    q = self.sample_transition_configuration(new_mode)
+                if q is None:
+                    assert False, "No valid configuration found for transition node"
+                    print("ghjk")
+                    if new_mode.id == 93:
+                        pass
+                    self.blacklist_mode.add(new_mode)
+                    self.modes.remove(new_mode)
+                    break
+                if i > 0 and np.equal(q.state(), node.state.q.state()).all():
+                    break
+                node = Node(State(q, new_mode), self.operation)
+                node.cost_to_parent = 0.0
+                self.mark_node_as_transition(new_mode, node)
+                self.trees[new_mode].add_node(node, 'B')
+                self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
+                node.cost = np.inf
 
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         #check if transition is reached
@@ -301,6 +317,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         self.trees[mode].add_node(start_node)
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
+        self.ManageTransition(mode, start_node)
 
     def Plan(self, optimize:bool=True)  ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0
