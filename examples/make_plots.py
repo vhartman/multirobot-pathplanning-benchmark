@@ -330,13 +330,18 @@ def make_cost_plots(
         # ub_solution_cost = np.quantile(all_solution_costs, 0.9, axis=0)
 
         min_solution_cost = np.min(all_solution_costs, axis=0)
-        max_solution_cost = np.max(all_solution_costs, axis=0)
-
+        # max_solution_cost = np.max(all_solution_costs, axis=0)
+        max_solution_cost = np.max(ub_solution_cost[np.isfinite(ub_solution_cost)])
         if len(max_solution_cost[np.isfinite(max_solution_cost)]) > 0:
+            # max_non_inf_cost = max(
+            #     max_non_inf_cost,
+            #     np.max(max_solution_cost[np.isfinite(max_solution_cost)]),
+            # )
             max_non_inf_cost = max(
                 max_non_inf_cost,
-                np.max(max_solution_cost[np.isfinite(max_solution_cost)]),
+                max_solution_cost
             )
+
         if len(min_solution_cost[np.isfinite(min_solution_cost)]) > 0:
             min_non_inf_cost = min(
                 min_non_inf_cost,

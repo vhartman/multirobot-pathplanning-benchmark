@@ -55,8 +55,12 @@ def convert_to_path(env, path_data):
                 # try:
                 # print(prev_config.state(), modes[-1])
                 next_modes = env.get_next_modes(prev_config, modes[-1])
-                assert len(next_modes) == 1
-                next_mode = next_modes[0]
+                if len(next_modes) == 1:
+                    next_mode = next_modes[0]
+                else:
+                    next_modes_task_ids = [m.task_ids for m in next_modes]
+                    idx = next_modes_task_ids.index(a["mode"])
+                    next_mode = next_modes[idx]
 
 
                 if next_mode.task_ids == a["mode"]:

@@ -514,6 +514,9 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         possible_next_mode_ids = []
         for next_mode_ids in valid_next_combinations:
             for i in range(len(self.robots)):
+                # for dummy start mode
+                if next_mode_ids in possible_next_mode_ids:
+                    continue
                 if next_mode_ids[i] != mode.task_ids[i]:
                     # need to check if the goal conditions for this task are fulfilled in the current state
                     task = self.tasks[mode.task_ids[i]]
@@ -1486,6 +1489,7 @@ class BaseProblem(ABC):
         include_endpoints: bool = False,
         N_start: int = 0,
         N_max: int = None,
+        N: int = None,
     ) -> bool:
         pass
 

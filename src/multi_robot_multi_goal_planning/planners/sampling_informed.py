@@ -140,7 +140,8 @@ class InformedSampling:
                     new_path.append(mode)
                     open_paths.append(new_path)
 
-        return list(in_between_modes)
+        # return list(in_between_modes)
+        return list(sorted(in_between_modes, key=lambda m: m.id))
 
     def lb_cost_from_start(
         self, state: State, g, lb_attribute_name="lb_cost_from_start"
@@ -258,12 +259,13 @@ class InformedSampling:
             if path[start_index].mode != rnd_state.mode:
                 start_state = path[start_index]
                 lb_cost_from_start_to_state = self.lb_cost_from_start(rnd_state, g)
-                lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
-
-                lb_cost_from_start_index_to_state = max(
-                    (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
-                    lb_cost_from_start_index_to_state,
-                )
+                if not np.isinf(lb_cost_from_start_to_state):
+                    lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
+                    if not np.isinf(lb_cost_from_start_to_index):
+                        lb_cost_from_start_index_to_state = max(
+                            (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+                            lb_cost_from_start_index_to_state,
+                        )
 
         # lb_cost_from_state_to_end_index = self.env.config_cost(
         #     rnd_state.q, path[end_index].q
@@ -273,12 +275,13 @@ class InformedSampling:
             if path[end_index].mode != rnd_state.mode:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state, g)
-                lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
-
-                lb_cost_from_state_to_end_index = max(
-                    (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
-                    lb_cost_from_state_to_end_index,
-                )
+                if not np.isinf(lb_cost_from_goal_to_state):
+                    lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
+                    if not np.isinf(lb_cost_from_goal_to_index):
+                        lb_cost_from_state_to_end_index = max(
+                            (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+                            lb_cost_from_state_to_end_index,
+                        )
 
         # print("can_imrpove")
 
@@ -353,12 +356,13 @@ class InformedSampling:
                 lb_cost_from_start_to_state = self.lb_cost_from_start(
                     rnd_state_mode_1, g
                 )
-                lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
-
-                lb_cost_from_start_index_to_state = max(
-                    (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
-                    lb_cost_from_start_index_to_state,
-                )
+                if not np.isinf(lb_cost_from_start_to_state):
+                    lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
+                    if not np.isinf(lb_cost_from_start_to_index):
+                        lb_cost_from_start_index_to_state = max(
+                            (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+                            lb_cost_from_start_index_to_state,
+                        )
 
         lb_cost_from_state_to_end_index = self.env.config_cost(
             rnd_state_mode_2.q, path[end_index].q
@@ -367,12 +371,13 @@ class InformedSampling:
             if path[end_index].mode != rnd_state_mode_2.mode:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state_mode_2, g)
-                lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
-
-                lb_cost_from_state_to_end_index = max(
-                    (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
-                    lb_cost_from_state_to_end_index,
-                )
+                if not np.isinf(lb_cost_from_goal_to_state):
+                    lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
+                    if not np.isinf(lb_cost_from_goal_to_index):
+                        lb_cost_from_state_to_end_index = max(
+                            (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+                            lb_cost_from_state_to_end_index,
+                        )
 
         # print("can_imrpove")
 
