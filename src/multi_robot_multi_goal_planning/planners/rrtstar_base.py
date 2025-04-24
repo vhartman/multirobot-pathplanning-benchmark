@@ -23,8 +23,8 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
-    batch_config_dist,  
-    compute_sliced_dists
+    batch_config_dist,
+    compute_sliced_dists_transpose
 )
 
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
@@ -707,7 +707,8 @@ class InformedVersion0(BaseInformed):
             agent_slices = starts[0].q.array_slice
 
         squared_diff = diff * diff
-        all_robot_dists = compute_sliced_dists(squared_diff, agent_slices)
+        all_robot_dists = compute_sliced_dists_transpose(squared_diff, agent_slices)
+        # all_robot_dists = None
 
         return all_robot_dists[r_idx]   
 
