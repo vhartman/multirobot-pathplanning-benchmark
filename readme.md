@@ -116,13 +116,11 @@ There are two main requirements:
 
 - `rai_envs.py` implements some concrete environments, and some utilities to have a look at them.
 
-- `benchmark.py` gives a test harness for benchmarking algorithms on a set of planning problems.
-
 #### Using your own robot environment
 
 To implement your own problem, you need to implement the required functions of the `env` base-class.
 
-There are two examples that implement other environments than the rai-based ones. There is an abstract environment, which is _extremely_basic, and a slightly more complex version that shows how [pinocchio](https://github.com/stack-of-tasks/pinocchio) can be used.
+There are two examples that implement other environments than the rai-based ones. There is an abstract environment, which is _extremely_ basic, and a slightly more complex version that shows how [pinocchio](https://github.com/stack-of-tasks/pinocchio) can be used.
 
 #### Specifying your own problems
 
@@ -130,7 +128,10 @@ A problem consists of the initial scene, and a task sequence or a dependency gra
 
 #### Implementing your own planner
 
-To implement your own planner, you need to specialize the `planner` base-class.
+Todo: To implement your own planner, you need to specialize the `planner` base-class.
+
+# Tests
+There are initial tests in the `tests/` folder.
 
 # Extension & Future work
 
@@ -147,7 +148,7 @@ It would theoretically be possible to use the formulation we propse here to impl
 This would require minor changes in how the starting mode is currently used.
 
 # Citation
-If you use this codebase in your research, please cite the paper:
+If you use this codebase in your research, please cite:
 
 ```
 @article{hartmann2025benchmark,

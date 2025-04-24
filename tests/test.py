@@ -18,7 +18,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
 )
 
-from multi_robot_multi_goal_planning.planners.joint_prm_planner import joint_prm_planner
+from multi_robot_multi_goal_planning.planners.composite_prm_planner import composite_prm_planner
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
 from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
     BidirectionalRRTstar,
@@ -121,7 +121,7 @@ def test_path_collision_checking(mocker):
 @pytest.mark.parametrize(
     "planner_fn",
     [
-        lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
+        lambda env, ptc: composite_prm_planner(env, ptc=ptc, optimize=False),
         lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
         lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
     ],
@@ -142,7 +142,7 @@ def test_planner_on_abstract_env(planner_fn):
 @pytest.mark.parametrize(
     "planner_fn",
     [
-        lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
+        lambda env, ptc: composite_prm_planner(env, ptc=ptc, optimize=False),
         lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
         lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
     ],
@@ -163,7 +163,7 @@ def test_planner_on_rai_manip_env(planner_fn):
 @pytest.mark.parametrize(
     "planner_fn",
     [
-        lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
+        lambda env, ptc: composite_prm_planner(env, ptc=ptc, optimize=False),
         lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
         lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
     ],
@@ -184,7 +184,7 @@ def test_planner_on_pinocchio_manip_env(planner_fn):
 @pytest.mark.parametrize(
     "planner_fn",
     [
-        lambda env, ptc: joint_prm_planner(env, ptc=ptc, optimize=False),
+        lambda env, ptc: composite_prm_planner(env, ptc=ptc, optimize=False),
         lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
         lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
     ],

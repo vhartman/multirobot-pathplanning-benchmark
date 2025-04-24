@@ -6,11 +6,18 @@ from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 
 def path_cost(path: List[State], batch_cost_fun) -> float:
+    """
+    Computes the path cost via the batch cost function and summing it up.
+    """
     batch_costs = batch_cost_fun(path[:-1], path[1:])
     return np.sum(batch_costs)
 
 
-def interpolate_path(path: List[State], resolution: float = 0.1):
+def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
+    """
+    Takes a path and interpolates it at the given resolution.
+    Uses the euclidean distance between states to do the resolution.
+    """
     config_type = type(path[0].q)
     new_path = []
 
@@ -33,18 +40,9 @@ def interpolate_path(path: List[State], resolution: float = 0.1):
 
         for j in range(N):
             q = q0_state + dir * j
-            # for k in range(q0.num_agents()):
-            #     qr = q0.robot_state(k) + (q1.robot_state(k) - q0.robot_state(k)) / N * j
-            #     q.append(qr)
-
-                # env.C.setJointState(qr, get_robot_joints(env.C, env.robots[k]))
-
-                # env.C.setJointState(qr, [env.robots[k]])
-
-            # env.C.view(True)
-
             new_path.append(State(config_type(q, q0.array_slice), path[i].mode))
 
+    # add the final state (which is not added in the interpolation before)
     new_path.append(State(path[-1].q, path[-1].mode))
 
     return new_path
