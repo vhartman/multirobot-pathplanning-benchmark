@@ -5,8 +5,11 @@ import matplotlib.cm as cm
 import datetime
 import json
 import os
+from pathlib import Path
+import re
 
 import numpy as np
+import random
 
 # from typing import Dict, Any, Callable, Tuple, List
 
@@ -15,7 +18,7 @@ from multi_robot_multi_goal_planning.problems import get_env_by_name
 from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
-
+from run_experiment import load_experiment_config
 
 def load_path(filename):
     with open(filename) as f:
@@ -85,6 +88,16 @@ def main():
     ]
     path_nums = [int(f[5:-5]) for f in files]
     sorted_files = [x for _, x in sorted(zip(path_nums, files))]
+    folder_path = re.match(r'(.*?/out/[^/]+)', args.folder).group(1)
+    potential_config_path = os.path.join(folder_path, 'config.json')
+    if Path(potential_config_path).exists():
+        config = load_experiment_config(potential_config_path)
+        seed = config["seed"]
+    else:
+        seed = 0
+    
+    np.random.seed(seed)
+    random.seed(seed)
 
     env = get_env_by_name(args.env_name)
 
