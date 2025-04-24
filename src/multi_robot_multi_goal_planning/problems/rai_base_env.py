@@ -459,6 +459,7 @@ class rai_env(BaseProblem):
         #     for robot in r:
         #         robot_indices = self.robot_idx[robot]
         #         self.C.setJointState(q[robot_indices], self.robot_joints[robot])
+        
         self.set_to_mode(m)
         self.C.setJointState(q)
 

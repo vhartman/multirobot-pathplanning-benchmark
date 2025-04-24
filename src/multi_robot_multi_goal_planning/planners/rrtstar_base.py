@@ -1294,7 +1294,7 @@ class BaseRRTstar(ABC):
         else:
             return self.trees[mode].subtree_b.get(id)
 
-    def get_lebesgue_measure_of_free_configuration_space(self, num_samples:int=10000) -> None:
+    def get_lebesgue_measure_of_free_configuration_space(self, num_samples:int=1000) -> None:
         """
         Sets the free configuration space parameter by estimating its Lebesgue measure using Halton sequence sampling.
 

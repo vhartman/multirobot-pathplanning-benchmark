@@ -140,7 +140,8 @@ class InformedSampling:
                     new_path.append(mode)
                     open_paths.append(new_path)
 
-        return  list(sorted(in_between_modes, key=lambda m: m.id))
+        # return list(in_between_modes)
+        return list(sorted(in_between_modes, key=lambda m: m.id))
 
     def lb_cost_from_start(
         self, state: State, g, lb_attribute_name="lb_cost_from_start"
@@ -221,9 +222,18 @@ class InformedSampling:
         # path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
 
         # compute the local cost
-        path_cost_from_start_to_index = np.sum(path_segment_costs[:start_index])
-        path_cost_from_goal_to_index = np.sum(path_segment_costs[end_index:])
-        path_cost = np.sum(path_segment_costs)
+        # path_cost_from_start_to_index = np.sum(path_segment_costs[:start_index])
+        # path_cost_from_goal_to_index = np.sum(path_segment_costs[end_index:])
+        # path_cost = np.sum(path_segment_costs)
+
+        path_cost_cumsum = np.cumsum(path_segment_costs)
+        path_cost = path_cost_cumsum[-1]
+
+        path_cost_from_start_to_index = path_cost_cumsum[start_index-1]
+        if start_index == 0:
+            path_cost_from_start_to_index = 0
+
+        path_cost_from_goal_to_index = path_cost - path_cost_cumsum[end_index-1]
 
         if start_index == 0:
             assert path_cost_from_start_to_index == 0
@@ -236,38 +246,42 @@ class InformedSampling:
 
         # print(path_cost_from_index_to_index)
 
-        lb_cost_from_start_index_to_state = self.env.config_cost(
-            rnd_state.q, path[start_index].q
+        tmp = self.env.batch_config_cost(
+            rnd_state.q, np.array([path[start_index].q.state(), path[end_index].q.state()])
         )
+        lb_cost_from_start_index_to_state = tmp[0]
+        lb_cost_from_state_to_end_index = tmp[1]
+
+        # lb_cost_from_start_index_to_state = self.env.config_cost(
+        #     rnd_state.q, path[start_index].q
+        # )
         if self.planning_approach == "graph_based" and self.include_lb:
             if path[start_index].mode != rnd_state.mode:
                 start_state = path[start_index]
                 lb_cost_from_start_to_state = self.lb_cost_from_start(rnd_state, g)
-                lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
-                if not np.isinf(lb_cost_from_start_to_state) and not np.isinf(
-                    lb_cost_from_start_to_index
-                ):
-                    lb_cost_from_start_index_to_state = max(
-                    (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
-                    lb_cost_from_start_index_to_state,
-                )
+                if not np.isinf(lb_cost_from_start_to_state):
+                    lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
+                    if not np.isinf(lb_cost_from_start_to_index):
+                        lb_cost_from_start_index_to_state = max(
+                            (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+                            lb_cost_from_start_index_to_state,
+                        )
 
-        lb_cost_from_state_to_end_index = self.env.config_cost(
-            rnd_state.q, path[end_index].q
-        )
+        # lb_cost_from_state_to_end_index = self.env.config_cost(
+        #     rnd_state.q, path[end_index].q
+        # )
 
         if self.planning_approach == "graph_based" and self.include_lb:
             if path[end_index].mode != rnd_state.mode:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state, g)
-                lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
-                if not np.isinf(lb_cost_from_goal_to_state) and not np.isinf(
-                    lb_cost_from_goal_to_index
-                ):
-                    lb_cost_from_state_to_end_index = max(
-                    (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
-                    lb_cost_from_state_to_end_index,
-                )
+                if not np.isinf(lb_cost_from_goal_to_state):
+                    lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
+                    if not np.isinf(lb_cost_from_goal_to_index):
+                        lb_cost_from_state_to_end_index = max(
+                            (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+                            lb_cost_from_state_to_end_index,
+                        )
 
         # print("can_imrpove")
 
@@ -342,15 +356,13 @@ class InformedSampling:
                 lb_cost_from_start_to_state = self.lb_cost_from_start(
                     rnd_state_mode_1, g
                 )
-                lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
-
-                if not np.isinf(lb_cost_from_start_to_state) and not np.isinf(
-                    lb_cost_from_start_to_index
-                ):
-                    lb_cost_from_start_index_to_state = max(
-                    (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
-                    lb_cost_from_start_index_to_state,
-                )
+                if not np.isinf(lb_cost_from_start_to_state):
+                    lb_cost_from_start_to_index = self.lb_cost_from_start(start_state, g)
+                    if not np.isinf(lb_cost_from_start_to_index):
+                        lb_cost_from_start_index_to_state = max(
+                            (lb_cost_from_start_to_state - lb_cost_from_start_to_index),
+                            lb_cost_from_start_index_to_state,
+                        )
 
         lb_cost_from_state_to_end_index = self.env.config_cost(
             rnd_state_mode_2.q, path[end_index].q
@@ -359,14 +371,13 @@ class InformedSampling:
             if path[end_index].mode != rnd_state_mode_2.mode:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state_mode_2, g)
-                lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
-                if not np.isinf(lb_cost_from_goal_to_state) and not np.isinf(
-                    lb_cost_from_goal_to_index
-                ):
-                    lb_cost_from_state_to_end_index = max(
-                    (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
-                    lb_cost_from_state_to_end_index,
-                )
+                if not np.isinf(lb_cost_from_goal_to_state):
+                    lb_cost_from_goal_to_index = self.lb_cost_from_goal(goal_state, g)
+                    if not np.isinf(lb_cost_from_goal_to_index):
+                        lb_cost_from_state_to_end_index = max(
+                            (lb_cost_from_goal_to_state - lb_cost_from_goal_to_index),
+                            lb_cost_from_state_to_end_index,
+                        )
 
         # print("can_imrpove")
 
@@ -437,13 +448,16 @@ class InformedSampling:
             # print(len(new_samples))
             # sample mode
             if self.locally_informed_sampling:
+                path_segment_costs_cumsum = np.cumsum(path_segment_costs)
+
                 for _ in range(500):
                     start_ind = random.randint(0, len(path) - 1)
                     end_ind = random.randint(0, len(path) - 1)
 
                     if end_ind - start_ind > 2:
                         # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-                        current_cost = sum(path_segment_costs[start_ind:end_ind])
+                        current_cost = path_segment_costs_cumsum[end_ind - 1] - (path_segment_costs_cumsum[start_ind - 1] if start_ind > 0 else 0)
+                        # current_cost = sum(path_segment_costs[start_ind:end_ind])
                         lb_cost = self.env.config_cost(
                             path[start_ind].q, path[end_ind].q
                         )
@@ -735,6 +749,8 @@ class InformedSampling:
             # print(len(new_samples))
             # sample mode
             if self.locally_informed_sampling:
+                path_segment_costs_cumsum = np.cumsum(path_segment_costs)
+
                 while True:
                     start_ind = random.randint(0, len(path) - 1)
                     end_ind = random.randint(0, len(path) - 1)
@@ -744,7 +760,9 @@ class InformedSampling:
                         and end_ind - start_ind > 2
                     ):
                         # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-                        current_cost = sum(path_segment_costs[start_ind:end_ind])
+                        # current_cost = sum(path_segment_costs[start_ind:end_ind])
+                        current_cost = path_segment_costs_cumsum[end_ind - 1] - (path_segment_costs_cumsum[start_ind - 1] if start_ind > 0 else 0)
+
                         lb_cost = self.env.config_cost(
                             path[start_ind].q, path[end_ind].q
                         )
@@ -780,8 +798,6 @@ class InformedSampling:
 
             # print(m)
 
-            current_cost = sum(path_segment_costs[start_ind:end_ind])
-
             # sample transition at the end of this mode
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(
                 mode
@@ -801,6 +817,8 @@ class InformedSampling:
             focal_points = np.array(
                 [path[start_ind].q.state(), path[end_ind].q.state()], dtype=np.float64
             )
+
+            current_cost = sum(path_segment_costs[start_ind:end_ind])
 
             for k in range(max_attempts_per_sample):
                 # completely random sample configuration from the (valid) domain robot by robot
@@ -834,7 +852,8 @@ class InformedSampling:
 
                 q = self.conf_type(np.concatenate(q), self.env.start_pos.array_slice)
 
-                if sum(self.env.batch_config_cost(q, focal_points)) > current_cost:
+                to_q_cost = self.env.batch_config_cost(q, focal_points)
+                if to_q_cost[0] + to_q_cost[1] > current_cost:
                     continue
 
                 if self.env.is_terminal_mode(mode):

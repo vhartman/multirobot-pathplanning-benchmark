@@ -13,6 +13,12 @@ from multi_robot_multi_goal_planning.problems.util import interpolate_path, path
 
 
 def single_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
+    """
+    Shortcutting the composite path a single mode at a time.
+    I.e. we never shortcut over mode transitions, even if it would be possible.
+
+    Works by randomly sampling indices of the path, and attempting to do a shortcut if it is in the same mode.
+    """
     new_path = interpolate_path(path, 0.05)
 
     costs = [path_cost(new_path, env.batch_config_cost)]
@@ -89,10 +95,13 @@ def robot_mode_shortcut(
     seed:int = None,
 
 ):
-    if seed is not None:
-        np.random.seed(seed)
-        random.seed(seed)
-    
+    """
+    Shortcutting the composite path one robot at a time, but allowing shortcutting over the modes as well if the
+    robot we are shortcutting is not active.
+
+    Works by randomly sampling indices, then randomly choosing a robot, and then checking if the direct interpolation is
+    collision free.
+    """
     non_redundant_path = remove_interpolated_nodes(path)
     new_path = interpolate_path(non_redundant_path, 0.1)
 
@@ -106,9 +115,6 @@ def robot_mode_shortcut(
     start_time = time.time()
 
     config_type = type(env.get_start_pos())
-
-    config_dim = len(env.get_start_pos().state())
-
 
     cnt = 0
     # for iter in range(max_iter):
@@ -152,6 +158,7 @@ def robot_mode_shortcut(
         q0 = new_path[i].q
         q1 = new_path[j].q
 
+        # precopmute all the differences
         q0_tmp = {}
         q1_tmp = {}
         diff_tmp = {}
@@ -163,7 +170,7 @@ def robot_mode_shortcut(
         # constuct pth element for the shortcut
         path_element = []
         for k in range(j - i + 1):
-            q = new_path[i + k].q.state() * 1.
+            q = new_path[i + k].q.state() * 1.0
 
             r_cnt = 0
             for r in range(len(env.robots)):
@@ -184,7 +191,6 @@ def robot_mode_shortcut(
             path_element.append(
                 State(config_type(q, q0.array_slice), new_path[i + k].mode)
             )
-            # path_element.append(State(config_type.from_list(q), new_path[i + k].mode))
 
         # check if the shortcut improves cost
         if path_cost(path_element, env.batch_config_cost) >= path_cost(

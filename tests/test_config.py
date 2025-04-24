@@ -2,6 +2,7 @@ import numpy as np
 from multi_robot_multi_goal_planning.problems.configuration import (
     NpConfiguration,
     batch_config_cost,
+    batch_config_dist,
 )
 from typing import List
 
@@ -22,7 +23,7 @@ def generate_test_data(dims: List, num_pts=1000):
 
 @pytest.mark.parametrize("reduction", ["max", "sum"])
 @pytest.mark.parametrize("dims", [[2, 2], [7, 7], [3, 3, 3], [2, 5], [14]])
-@pytest.mark.parametrize("num_points", [10, 100, 1000, 5000])
+@pytest.mark.parametrize("num_points", [1, 10, 100, 1000, 5000])
 def test_batch_config_cost_zero_dist(reduction, dims, num_points):
     cumulative_dimension = sum(dims)
     slices = [(sum(dims[:i]), sum(dims[: i + 1])) for i in range(len(dims))]
@@ -39,7 +40,7 @@ def test_batch_config_cost_zero_dist(reduction, dims, num_points):
 
 @pytest.mark.parametrize("reduction", ["max", "sum"])
 @pytest.mark.parametrize("dims", [[2, 2], [7, 7], [3, 3, 3], [2, 5], [14]])
-@pytest.mark.parametrize("num_points", [10, 100, 1000, 5000])
+@pytest.mark.parametrize("num_points", [1, 10, 100, 1000, 5000])
 def test_batch_config_cost_equal_pts(reduction, dims, num_points):
     cumulative_dimension = sum(dims)
     slices = [(sum(dims[:i]), sum(dims[: i + 1])) for i in range(len(dims))]
@@ -56,7 +57,7 @@ def test_batch_config_cost_equal_pts(reduction, dims, num_points):
 
 @pytest.mark.parametrize("reduction", ["max", "sum"])
 @pytest.mark.parametrize("dims", [[2, 2], [7, 7], [3, 3, 3], [2, 5], [14]])
-@pytest.mark.parametrize("num_points", [10, 100, 1000, 5000])
+@pytest.mark.parametrize("num_points", [1, 10, 100, 1000, 5000])
 def test_batch_config_cost_translation(reduction, dims, num_points):
     single_config, pts = generate_test_data(dims, num_pts=num_points)
 
@@ -75,7 +76,7 @@ def test_batch_config_cost_translation(reduction, dims, num_points):
 
 
 @pytest.mark.parametrize("dims", [[2], [6], [14]])
-@pytest.mark.parametrize("num_points", [10, 100, 1000, 5000])
+@pytest.mark.parametrize("num_points", [1, 10, 100, 1000, 5000])
 def test_batch_config_cost_single_agent(dims, num_points):
     single_config, pts = generate_test_data(dims, num_pts=num_points)
 
@@ -123,3 +124,62 @@ def test_batch_config_cost_max_manual_comparison(dims):
         manual_dist += single_agent_dist
 
     assert dist_from_function[0] == manual_dist
+
+
+@pytest.mark.parametrize(
+    "metric", ["max", "euclidean", "sum_euclidean", "max_euclidean"]
+)
+@pytest.mark.parametrize("dims", [[2, 2], [7, 7], [3, 3, 3], [2, 5], [14]])
+@pytest.mark.parametrize("num_points", [1, 10, 100, 1000, 5000])
+def test_batch_config_dist_zero_dist(metric, dims, num_points):
+    cumulative_dimension = sum(dims)
+    slices = [(sum(dims[:i]), sum(dims[: i + 1])) for i in range(len(dims))]
+    pt = np.zeros(cumulative_dimension)
+    single_config = NpConfiguration(pt, slices)
+
+    _, pts = generate_test_data(dims, num_pts=num_points)
+    pts = pts * 0
+
+    dists = batch_config_dist(single_config, pts, metric=metric)
+
+    assert all(dists == 0)
+
+
+@pytest.mark.parametrize(
+    "metric", ["max", "euclidean", "sum_euclidean", "max_euclidean"]
+)
+@pytest.mark.parametrize("dims", [[2, 2], [7, 7], [3, 3, 3], [2, 5], [14]])
+@pytest.mark.parametrize("num_points", [1, 10, 100, 1000, 5000])
+def test_batch_config_dist_equal_pts(metric, dims, num_points):
+    cumulative_dimension = sum(dims)
+    slices = [(sum(dims[:i]), sum(dims[: i + 1])) for i in range(len(dims))]
+    pt = np.random.rand(cumulative_dimension)
+    single_config = NpConfiguration(pt, slices)
+
+    _, pts = generate_test_data(dims, num_pts=num_points)
+    pts[:, :] = pt
+
+    dists = batch_config_dist(single_config, pts, metric=metric)
+
+    assert all(dists == 0)
+
+@pytest.mark.parametrize(
+    "metric", ["max", "euclidean", "sum_euclidean", "max_euclidean"]
+)
+@pytest.mark.parametrize("dims", [[2, 2], [7, 7], [3, 3, 3], [2, 5], [14]])
+@pytest.mark.parametrize("num_points", [1, 10, 100, 1000, 5000])
+def test_batch_config_dist_translation(metric, dims, num_points):
+    single_config, pts = generate_test_data(dims, num_pts=num_points)
+
+    offset = 1
+    pts_offset = pts + offset
+    single_config_offset = NpConfiguration(
+        single_config.state() + offset, single_config.array_slice
+    )
+
+    dists = batch_config_dist(single_config, pts, metric=metric)
+    dists_translated = batch_config_dist(
+        single_config_offset, pts_offset, metric=metric
+    )
+
+    assert np.allclose(dists, dists_translated)
