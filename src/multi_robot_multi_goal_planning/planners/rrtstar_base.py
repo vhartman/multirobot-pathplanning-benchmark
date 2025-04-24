@@ -882,8 +882,7 @@ class BaseRRTstar(ABC):
         self.shortcutting_robot_version = shortcutting_robot_version
         self.locally_informed_sampling = locally_informed_sampling
         self.remove_redundant_nodes = remove_redundant_nodes
-        self.dim = sum(self.env.robot_dims.values())
-        self.eta = np.sqrt(self.dim)
+        self.eta = np.sqrt(sum(self.env.robot_dims.values()))
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
         self.modes = [] 
@@ -896,8 +895,6 @@ class BaseRRTstar(ABC):
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
         self.informed = InformedSampling(self.env, 'sampling_based', self.locally_informed_sampling)
-        self.whitelist_mode = set()
-        self.invalid_next_ids = {}
 
     def add_tree(self, 
                  mode: Mode, 
@@ -943,24 +940,20 @@ class BaseRRTstar(ABC):
         """
 
         if mode is None: 
-            new_modes = [self.env.get_start_mode()]
+            new_mode = self.env.get_start_mode()
+            new_mode.prev_mode = None
         else:
             new_modes = self.env.get_next_modes(q, mode)
-        for new_mode in new_modes:
-            if new_mode in self.modes:
-                continue 
-            if not self.is_mode_valid(new_mode):
-                continue
-            if mode in self.invalid_next_ids and new_mode.task_ids in self.invalid_next_ids[mode]:
-                continue
-            validy_check_q = self.sample_transition_configuration(new_mode)
-            if validy_check_q is None: 
-                self.track_invalid_modes(new_mode)
-                continue
-            self.modes.append(new_mode)
-            self.add_tree(new_mode, tree_instance)
-            if self.informed_sampling_version != 6:
-                self.InformedInitialization(new_mode)
+            assert len(new_modes) == 1
+            new_mode = new_modes[0]
+
+            new_mode.prev_mode = mode
+        if new_mode in self.modes:
+            return 
+        self.modes.append(new_mode)
+        self.add_tree(new_mode, tree_instance)
+        if self.informed_sampling_version != 6:
+            self.InformedInitialization(new_mode)
 
     def mark_node_as_transition(self, mode:Mode, n:Node) -> None:
         """
@@ -995,29 +988,29 @@ class BaseRRTstar(ABC):
         if self.env.is_terminal_mode(mode):
             return
         next_modes = self.env.get_next_modes(n.state.q, mode)
-        for next_mode in next_modes:
-            if next_mode not in self.modes:
-                tree_type = type(self.trees[mode])
-                if tree_type == BidirectionalTree:
-                    self.trees[mode].connected = True
-                self.add_new_mode(n.state.q, mode, tree_type)
-            if mode in self.invalid_next_ids and next_mode.task_ids in self.invalid_next_ids[mode]:
-                continue
-            self.trees[next_mode].add_transition_node_as_start_node(n)
-            if self.trees[next_mode].order == 1:
-                index = len(self.trees[next_mode].subtree)-1
-                tree = 'A'
-            else:
-                index = len(self.trees[next_mode].subtree_b)-1
-                tree = 'B'
-            # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
+        assert len(next_modes) == 1
+        next_mode = next_modes[0]
 
-            #need to rewire tree of next mode as well
-            if index != 0:
-                N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
-                batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
-                if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
-                    self.UpdateCost(next_mode, n)
+        if next_mode not in self.modes:
+            tree_type = type(self.trees[mode])
+            if tree_type == BidirectionalTree:
+                self.trees[mode].connected = True
+            self.add_new_mode(n.state.q, mode, tree_type)
+        self.trees[next_mode].add_transition_node_as_start_node(n)
+        if self.trees[next_mode].order == 1:
+            index = len(self.trees[next_mode].subtree)-1
+            tree = 'A'
+        else:
+            index = len(self.trees[next_mode].subtree_b)-1
+            tree = 'B'
+        # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
+
+        #need to rewire tree of next mode as well
+        if index != 0:
+            N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
+            batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
+            if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
+                self.UpdateCost(next_mode, n)
 
     def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
         """
@@ -1067,7 +1060,7 @@ class BaseRRTstar(ABC):
         else:
             return self.trees[mode].subtree_b.get(id)
 
-    def get_lebesgue_measure_of_free_configuration_space(self, num_samples:int=1000) -> None:
+    def get_lebesgue_measure_of_free_configuration_space(self, num_samples:int=10000) -> None:
         """
         Sets the free configuration space parameter by estimating its Lebesgue measure using Halton sequence sampling.
 
@@ -1142,17 +1135,9 @@ class BaseRRTstar(ABC):
         """
 
         possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        invalid_next_modes = self.invalid_next_ids[mode]
         if not possible_next_task_combinations:
-            return
-        if len(invalid_next_modes) >= len(possible_next_task_combinations): #TODO
-            self.track_invalid_modes(mode)
-            return
-        while True:
-            next_task = random.choice(possible_next_task_combinations)
-            if next_task in self.invalid_next_ids[mode]:
-                continue
-            return next_task
+            return None
+        return random.choice(possible_next_task_combinations)
 
     def get_home_poses(self, mode:Mode) -> List[NDArray]:
         """
@@ -1233,14 +1218,10 @@ class BaseRRTstar(ABC):
         Returns:
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
-        failed_attemps = 0
+
+        
         while True:
-            if failed_attemps > 10000:
-                self.track_invalid_modes(mode)
-                return
             next_ids = self.get_next_ids(mode)
-            if not next_ids and not self.env.is_terminal_mode(mode):
-                return
             constrained_robot = self.env.get_active_task(mode, next_ids).robots
             goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
             q = []
@@ -1248,16 +1229,15 @@ class BaseRRTstar(ABC):
             for robot in self.env.robots:
                 if robot in constrained_robot:
                     dim = self.env.robot_dims[robot]
-                    q.append(goal[end_idx:end_idx + dim])
+                    indices = list(range(end_idx, end_idx + dim))
+                    q.append(goal[indices])
                     end_idx += dim 
-                else:
-                    r_idx = self.env.robot_idx[robot]
-                    lims = self.env.limits[:, r_idx]
-                    q.append(np.random.uniform(lims[0], lims[1]))
+                    continue
+                lims = self.env.limits[:, self.env.robot_idx[robot]]
+                q.append(np.random.uniform(lims[0], lims[1]))
             q = type(self.env.get_start_pos()).from_list(q)   
             if self.env.is_collision_free(q, mode):
                 return q
-            failed_attemps+=1
     
     def sample_configuration(self, 
                              mode:Mode, 
@@ -1281,10 +1261,7 @@ class BaseRRTstar(ABC):
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
         sample_near_path = sampling_type == "sample_near_path"
-        next_ids = self.get_next_ids(mode)
-        if not next_ids and not self.env.is_terminal_mode(mode):
-            return
-        constrained_robots = self.env.get_active_task(mode, next_ids).robots
+        constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
         attemps = 0  # needed if home poses are in collision
 
         while True:
@@ -1336,8 +1313,6 @@ class BaseRRTstar(ABC):
                             return q
                         continue
                 q = self.sample_transition_configuration(mode)
-                if q is None:
-                    return
                 if random.choice([0,1]) == 0:
                     return q
                 while True:
@@ -1917,21 +1892,19 @@ class BaseRRTstar(ABC):
         #         ] + [self.mode_sampling]
 
         else:
-            #not working for unordered envs
-            frontier_modes = set()
+            frontier_modes = []
 
             for m in self.modes:
                 if not m.next_modes:
-                    frontier_modes.add(m)
+                    frontier_modes.append(m)
 
             p_frontier = self.mode_sampling
             p_remaining = 1 - p_frontier
 
             total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
             # Calculate probabilities inversely proportional to node counts
-            subtree_lengths = {mode: len(self.trees[mode].subtree) for mode in self.modes}
             inverse_probabilities = [
-                1 - (subtree_lengths[mode] / total_nodes)
+                1 - (len(self.trees[mode].subtree) / total_nodes)
                 for mode in self.modes if mode not in frontier_modes
             ]
             total_inverse = sum(inverse_probabilities)
@@ -1942,12 +1915,11 @@ class BaseRRTstar(ABC):
                 if m in frontier_modes:
                     tmp = p_frontier / len(frontier_modes)
                 else:
-                    tmp = (1 - (subtree_lengths[m]  / total_nodes)) / total_inverse * p_remaining
+                    tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
                 
                 p.append(tmp)
         
-        # return np.random.choice(self.modes, p = p)
-        return random.choices(self.modes, weights=p, k=1)[0]
+        return np.random.choice(self.modes, p = p)
 
     def InformedInitialization(self, mode: Mode) -> None: 
         """
@@ -2378,93 +2350,6 @@ class BaseRRTstar(ABC):
         discretized_costs = cumulative_sum(batch_cost)
         return discretized_path, discretized_modes, discretized_costs
 
-    def is_mode_valid(self, mode:Mode) -> bool:
-        #TODO what if its a Goal Region?
-        # only eliminate modes that are geometrically impossible
-        if mode in self.whitelist_mode:
-            return True
-        if mode not in self.invalid_next_ids:
-            self.invalid_next_ids[mode] = []
-        if mode.prev_mode is None:
-            self.whitelist_mode.add(mode)
-            return True
-        whitelist_robots,blacklist_robots  = set(), set()
-        possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        for next_ids in possible_next_task_combinations:
-            if not next_ids and not self.env.is_terminal_mode(mode):
-                self.invalid_next_ids[mode.prev_mode].append(mode.task_ids)
-                return False
-            constrained_robot = self.env.get_active_task(mode, next_ids).robots
-            goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
-            q = self.env.start_pos.state().copy()
-            end_idx = 0
-            check_collision = False
-            for robot in self.env.robots:
-                if robot in constrained_robot:
-                    if robot in whitelist_robots:
-                        continue
-                    if robot in blacklist_robots:
-                        self.invalid_next_ids[mode].append(next_ids)
-                        break
-                    check_collision = True
-                    robot_indices = self.env.robot_idx[robot]
-                    dim = self.env.robot_dims[robot]
-                    indices = list(range(end_idx, end_idx + dim))
-                    q[robot_indices] = goal[indices]
-                    end_idx += dim 
-                    continue
-            if not check_collision:
-                continue
-            for robot in constrained_robot:
-                # checks if the mode itself has a geometrically possible configuration
-                if not self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance):
-                    blacklist_robots.add(robot)
-                    self.invalid_next_ids[mode].append(next_ids)
-                else:
-                    whitelist_robots.add(robot)
-        if len(blacklist_robots) == len(self.env.robots):
-            self.invalid_next_ids[mode.prev_mode].append(mode.task_ids)
-            return False
-        self.whitelist_mode.add(mode)
-        return True
-
-    def track_invalid_modes(self, mode:Mode) -> None:
-        """
-        Tracks invalid modes by adding them to a blacklist.
-
-        Args:
-            mode (Mode): The mode to be tracked as invalid.
-
-        Returns:
-            None: This method does not return any value.
-        """
-        if mode.prev_mode in self.invalid_next_ids:
-            self.invalid_next_ids[mode.prev_mode].append(mode.task_ids) 
-        if mode in self.modes:
-            self.modes.remove(mode)
-        else:
-            pass
-        m = mode.prev_mode
-        if not m:
-            return
-        while True:
-            possible_next_task_combinations = self.env.get_valid_next_task_combinations(m)
-            invalid_next_modes = self.invalid_next_ids[m]
-            if not possible_next_task_combinations:
-                return
-            prev_mode = m.prev_mode
-            if not prev_mode:
-                return
-            if len(invalid_next_modes) < len(possible_next_task_combinations):
-                return
-            self.invalid_next_ids[prev_mode].append(m.task_ids)
-            if m in self.modes:
-                self.modes.remove(m)
-            else:
-                pass
-            m = prev_mode
-            
-    
     @abstractmethod
     def UpdateCost(self, mode:Mode, n: Node) -> None:
         """

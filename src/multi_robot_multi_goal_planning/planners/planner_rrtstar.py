@@ -71,15 +71,12 @@ class RRTstar(BaseRRTstar):
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
         active_mode = self.modes[-1]
-        
         # Create start node
         start_state = State(self.env.start_pos, active_mode)
         start_node = Node(start_state, self.operation)
         self.trees[active_mode].add_node(start_node)
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
-        # in case a dummy start is defined
-        self.ManageTransition(active_mode, start_node)
     
     def Plan(self, optimize:bool=True) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0
