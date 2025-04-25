@@ -84,3 +84,11 @@ cache/
 /CMakeFiles/
 /Makefile
 cmake_install.cmake
+
+examples/run_analysis.py
+examples/run_postprocess.py
+examples/analysis_util.py
+configs/demo/test.json
+configs/demo/test1.json
+.vscode/
+z.log.global
