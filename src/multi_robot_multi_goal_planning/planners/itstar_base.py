@@ -2127,6 +2127,10 @@ class BaseITstar(ABC):
             if not frontier_modes:
                 frontier_modes = reached_modes
 
+            if p_frontier == 1:
+                p = [1 / len(frontier_modes)] * len(frontier_modes) 
+                return random.choices(frontier_modes, weights=p, k=1)[0]
+
             if not remaining_modes:
                 return random.choice(reached_modes)
 
@@ -2139,7 +2143,7 @@ class BaseITstar(ABC):
             inv_prob = np.array(inv_prob)
             p.extend((inv_prob / total_inverse) * p_remaining)
             
-            return np.random.choice(sorted_reached_modes, p=p)
+            return random.choices(sorted_reached_modes, weights=p, k=1)[0]
 
      
         return random.choice(reached_modes) 
