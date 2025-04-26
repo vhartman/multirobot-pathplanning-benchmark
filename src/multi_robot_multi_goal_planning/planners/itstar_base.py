@@ -37,7 +37,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 from multi_robot_multi_goal_planning.planners.rrtstar_base import find_nearest_indices
-from multi_robot_multi_goal_planning.planners.rrtstar_base import save_data
+from multi_robot_multi_goal_planning.planners.rrtstar_base_old import save_data
 # from multi_robot_multi_goal_planning.planners.sampling_phs import (
 #     sample_phs_with_given_matrices, compute_PHS_matrices
 # )
@@ -1515,9 +1515,9 @@ class BaseITstar(ABC):
         self.reverse_tree_set = set()
         self.reduce_neighbors = False
         self.first_search = True
-        self.whitelist_mode = {}
-        self.blacklist_mode = {}
-        self.invalid_mode_tasks = {}
+        self.whitelist_modes = set()
+        self.blacklist_modes = set()
+        self.invalid_next_ids = {}
         self.terminal_mode = None
         self.informed = InformedSampling(env, 
                         'graph_based',   
@@ -1686,6 +1686,11 @@ class BaseITstar(ABC):
                     next_modes = None
                 else:
                     next_modes = self.env.get_next_modes(q, mode)
+                    next_modes = self.remove_invalid_next_modes(next_modes)
+                    if next_modes == []:
+                        self.track_invalid_modes(mode)
+                if mode not in self.reached_modes:
+                    continue
                 self.g.add_transition_nodes([(q, mode, next_modes)])
                 if len(list(chain.from_iterable(self.g.transition_node_ids.values()))) > transitions:
                     transitions +=1
@@ -1698,7 +1703,7 @@ class BaseITstar(ABC):
                     continue
             else:
                 # if self.first_search:
-                self.check_mode_validity(mode, q)
+                # self.check_mode_validity(mode, q)
                 continue
                 # print(mode, mode.next_modes)
 
@@ -1729,61 +1734,103 @@ class BaseITstar(ABC):
                 break
         self.sorted_reached_modes = init_search_modes[::-1]
 
-    def check_mode_validity(self, mode:Mode, q):
-        robots = None
-        for t in mode.task_ids:
-            task = self.env.tasks[t]
-            task_robots = task.robots
-            indices = []
-            for r in task_robots:
-                indices.extend(self.env.robot_idx[r])
-            q_ = self.env.start_pos.state().copy()
-            qr = q.state()[indices]
-            q_[indices] = q.state()[indices]
+    def remove_invalid_next_modes(self, next_modes:List[Mode]) -> bool:
+        #TODO what if its a Goal Region? Does that matter?
+        # only eliminate modes that are logically or geometrically impossible
+        valid_next_modes = []
+        for mode in next_modes:
+            is_in_collision = False
+            if mode in self.whitelist_modes:
+                valid_next_modes.append(mode)
+                continue
+            if mode.prev_mode not in self.invalid_next_ids:
+                self.invalid_next_ids[mode.prev_mode] = set()
+            if mode.prev_mode is None:
+                self.whitelist_modes.add(mode)
+                valid_next_modes.append(mode)
+                continue
+            whitelist_robots = set()
+            possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
+            if not possible_next_task_combinations and not self.env.is_terminal_mode(mode):
+                self.update_cache_of_invalid_modes(mode)
+                return []
+            for next_ids in possible_next_task_combinations:
+                constrained_robots = self.env.get_active_task(mode, next_ids).robots
+                goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
+                q = self.env.start_pos.state().copy()
+                end_idx = 0
+                check_collision = False
+                for robot in self.env.robots:
+                    if robot in constrained_robots:
+                        # if robot in whitelist_robots:
+                        #     continue
+                        check_collision = True
+                        robot_indices = self.env.robot_idx[robot]
+                        dim = self.env.robot_dims[robot]
+                        indices = list(range(end_idx, end_idx + dim))
+                        q[robot_indices] = goal[indices]
+                        end_idx += dim 
 
-            if task.goal.satisfies_constraints(
-                qr, mode=mode, tolerance=1e-8
-            ):
-                robots = task_robots
-                break
-        if mode in self.whitelist_mode and tuple(robots) in self.whitelist_mode[mode]:
-            return True
-        if mode in self.blacklist_mode and tuple(robots) in self.blacklist_mode[mode]:
-            # self.handle_invalid_mode(mode)
-            return False
-        if self.env.is_collision_free_for_robot(robots, q_, mode):
-            if mode not in self.whitelist_mode:
-                self.whitelist_mode[mode] = set()
-            self.whitelist_mode[mode].add(tuple(robots))
-            return 
-        # self.reached_modes.discard(mode)
-        if mode not in self.blacklist_mode:
-            self.blacklist_mode[mode] = set()
-        self.blacklist_mode[mode].add(tuple(robots))
-        self.remove_mode(mode)
-       
-    def remove_mode(self, mode:Mode):
-        robots_num = len(self.env.robots)
-        if len(self.blacklist_mode[mode]) == robots_num:
-            #goal of mode can never be reached
-            self.reached_modes.discard(mode)
-            self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
-        if mode.next_modes:
-            if len(mode.next_modes) == 1:
-                for i in range(robots_num):
-                    if mode.task_ids[i] != mode.next_modes[0].task_ids[i]:
+                if not check_collision:
+                    continue
+                for robot in constrained_robots:
+                    # checks if the mode itself has a possible goal configuration
+                    if not self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance):
+                        self.update_cache_of_invalid_modes(mode)
+                        #when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
+                        is_in_collision = True
                         break
-                r = self.env.robots[i]
-                if r in self.blacklist_mode[mode]:
-                    self.reached_modes.discard(mode)
-                    self.reached_modes.discard(mode.next_modes[0])
-                    self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
-        if mode.prev_mode:
-            if len(mode.prev_mode.next_modes) == 1:
-                self.reached_modes.discard(mode)
-                self.reached_modes.discard(mode.prev_mode)
-                self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
-                        
+                    whitelist_robots.add(robot)
+                if is_in_collision:
+                    break
+            if is_in_collision:
+                continue
+            valid_next_modes.append(mode)
+            self.whitelist_modes.add(mode)
+        return valid_next_modes
+
+    def update_cache_of_invalid_modes(self, mode:Mode) -> None:
+        """
+        Updates the track of invalid modes by adding the current mode to the blacklist of the previous mode.
+
+        Args:
+            mode (Mode): Current operational mode.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        if mode.prev_mode is None:
+            return
+        self.blacklist_modes.add(mode)
+        if mode.prev_mode not in self.invalid_next_ids:
+            self.invalid_next_ids[mode.prev_mode] = set()
+        self.invalid_next_ids[mode.prev_mode].add(tuple(mode.task_ids))      
+
+    def track_invalid_modes(self, mode:Mode) -> None:
+        """
+        Tracks invalid modes by adding them to blacklist.
+
+        Args:
+            mode (Mode): The mode to be tracked as invalid.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        updated = False
+        while True: 
+            invalid_next_ids = self.invalid_next_ids.get(mode, set())
+            possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
+            if len(invalid_next_ids) != len(possible_next_task_combinations):
+                break
+            updated = True
+            self.reached_modes.remove(mode)
+            self.update_cache_of_invalid_modes(mode)
+            if mode.prev_mode is None:
+                break
+            mode = mode.prev_mode
+        if updated:
+            self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
+
     def sample_around_path(self, path):
         # sample index
         interpolated_path = interpolate_path(path)

@@ -23,7 +23,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.rrtstar_base import save_data
+from multi_robot_multi_goal_planning.planners.rrtstar_base_old import save_data
 from multi_robot_multi_goal_planning.planners.itstar_base import (
     BaseITstar,
     BaseOperation,
