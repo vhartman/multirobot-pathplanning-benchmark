@@ -1611,6 +1611,7 @@ class BaseITstar(ABC):
     def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
         transitions = 0
         num_reached_modes = len(self.reached_modes)
+        new_num_reached_modes = num_reached_modes
 
         if len(self.g.goal_nodes) > 0:
             focal_points = np.array(
