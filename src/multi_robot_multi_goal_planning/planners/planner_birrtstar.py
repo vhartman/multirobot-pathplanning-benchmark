@@ -50,13 +50,12 @@ class BidirectionalRRTstar(BaseRRTstar):
                  locally_informed_sampling: bool = True, 
                  remove_redundant_nodes: bool = True, 
                  informed_batch_size: int = 500,
-                 test_mode_sampling: bool = False
                 ):
         super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
                          informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
                          p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
                          sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                         informed_batch_size = informed_batch_size, test_mode_sampling = test_mode_sampling )
+                         informed_batch_size = informed_batch_size )
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
         self.swap = True
@@ -95,8 +94,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             None: This method does not return any value.
         """
         if mode is None: 
-            new_mode = self.env.make_start_mode()
-            new_mode.prev_mode = None
+            new_modes = [self.env.get_start_mode()]
         else:
             new_modes = self.env.get_next_modes(q, mode)
         for new_mode in new_modes:
@@ -316,6 +314,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         self.trees[mode].add_node(start_node)
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
+        self.ManageTransition(mode, start_node)
 
     def Plan(self, optimize:bool=True)  ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0

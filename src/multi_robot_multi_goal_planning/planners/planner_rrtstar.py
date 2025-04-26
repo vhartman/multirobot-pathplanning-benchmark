@@ -35,14 +35,13 @@ class RRTstar(BaseRRTstar):
                  locally_informed_sampling:bool = True, 
                  remove_redundant_nodes:bool = True,
                  informed_batch_size: int = 500,
-                 test_mode_sampling:bool = False
                  
                 ):
         super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
                          informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
                          p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
                          sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                         informed_batch_size = informed_batch_size, test_mode_sampling = test_mode_sampling )
+                         informed_batch_size = informed_batch_size )
      
     def UpdateCost(self, mode:Mode, n:Node) -> None:
         stack = [n]
@@ -72,12 +71,15 @@ class RRTstar(BaseRRTstar):
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
         active_mode = self.modes[-1]
+        
         # Create start node
         start_state = State(self.env.start_pos, active_mode)
         start_node = Node(start_state, self.operation)
         self.trees[active_mode].add_node(start_node)
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
+        # in case a dummy start is defined
+        self.ManageTransition(active_mode, start_node)
     
     def Plan(self, optimize:bool=True) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0

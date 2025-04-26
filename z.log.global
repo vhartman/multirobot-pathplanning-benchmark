@@ -1,6 +1,0 @@
-** compiled at:     Nov 26 2024 16:46:14
-** execution start: 2025-04-09 20:23:26:413024
-graph.cpp:initParameters:1512(3) opening config file 'rai.cfg'
-graph.cpp:initParameters:1519(3)  - failed
-graph.cpp:initParameters:1525(3) opening base config file '/root/local/rai/../local.cfg'
-graph.cpp:initParameters:1531(3)  - failed

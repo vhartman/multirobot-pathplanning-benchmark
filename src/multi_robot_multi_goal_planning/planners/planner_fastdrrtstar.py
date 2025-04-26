@@ -14,9 +14,12 @@ from multi_robot_multi_goal_planning.planners.rrtstar_base import (
     Node, 
     SingleTree,
     BidirectionalTree,
+    
+
+)
+from multi_robot_multi_goal_planning.planners.rrtstar_base_old import ( 
     get_index_of_first_mode_appearance_in_path,
     get_index_of_last_mode_appearance_in_path
-
 )
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import (
     RRTstar

@@ -4,7 +4,7 @@ import math as math
 import random
 import multi_robot_multi_goal_planning.planners as mrmgp
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Union, List, Dict, Callable
+from typing import Tuple, Optional, Union, List, Dict
 from numpy.typing import NDArray
 from numba import njit
 
@@ -23,7 +23,8 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
-    batch_config_dist,  
+    batch_config_dist,
+    compute_sliced_dists_transpose
 )
 
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
@@ -32,6 +33,29 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 
 from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
 
+def save_data(data:dict, tree:bool= False):
+        import os
+        import pickle
+        # Directory Handling: Ensure directory exists
+        home_dir = os.path.expanduser("~")
+        directory = os.path.join(home_dir, 'multirobot-pathplanning-benchmark/out')
+        if tree:
+            dir = os.path.join(directory, 'Analysis/Tree')
+        else:
+            dir = os.path.join(directory, 'Analysis')
+        os.makedirs(dir, exist_ok=True)
+
+        # Determine Next File Number: Use generator expressions for efficiency
+        next_file_number = max(
+            (int(file.split('.')[0]) for file in os.listdir(dir)
+            if file.endswith('.pkl') and file.split('.')[0].isdigit()),
+            default=-1
+        ) + 1
+
+        # Save Data as Pickle File
+        filename = os.path.join(dir, f"{next_file_number:04d}.pkl")
+        with open(filename, 'wb') as file:
+            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
 class Operation:
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
@@ -374,10 +398,31 @@ class BaseInformed(ABC):
     """
     Represents an informed sampling instance, providing methods for sampling within an informed set.
     """
-    def __init__(self):
-        pass
+    def __init__(self, 
+                 env:BaseProblem,
+                 p_goal: float
+                 ):
+        self.env = env
+        self.start_ind = {}
+        self.end_ind = {}
+        self.cmin = {}
+        self.cmax = {}
+        self.C = {}
+        self.start = {}
+        self.end = {}
+        self.center = {}
+        self.n = {}
+        self.L = {}
+        self.cost = np.inf
+        self.active_robots_idx = []
+        self.chosen_active_robot = None
+        self.p_goal = p_goal
+        self.idx1 = {}
+        self.idx2 = {}
+        self.rnd_idx = []
+
     
-    def rotation_to_world_frame(self, start:Configuration, goal:Configuration, n:int) -> Tuple[float, NDArray]:
+    def rotation_to_world_frame(self, start:State, goal:State, r_idx:int) -> bool:
         """
         Computes rotation from the hyperellipsoid-aligned to the world frame based on the difference between the start and goal configs.
 
@@ -390,40 +435,42 @@ class BaseInformed(ABC):
             Tuple:  
                 - float: Norm of difference between goal and start configs 
                 - NDArray: Representing the rotation matrix from the hyperellipsoid-aligned frame to the world frame."""
-        diff = goal.state() - start.state()
+        diff = goal.q[r_idx] - start.q[r_idx]
         norm = np.linalg.norm(diff)
         if norm < 1e-3 :
-            return None, None
+            return False
         a1 = diff / norm 
-
+        self.cmin[r_idx] = norm
         # Create first column of the identity matrix
-        e1 = np.zeros(n)
-        e1[0] = 1
+        e1 = np.zeros(self.n[r_idx])
+        e1[0] = 1.0
 
         # Compute SVD directly on the outer product
         U, _, Vt = np.linalg.svd(np.outer(a1, e1))
-        V = Vt.T
-
         # Construct the rotation matrix C
-        det_factor = np.linalg.det(U) * np.linalg.det(V)
-        C = U @ np.diag([1] * (n - 1) + [det_factor]) @ Vt
+        det_factor = np.linalg.det(U) * np.linalg.det(Vt.T)
+        self.C[r_idx] = U @ np.diag([1] * ( self.n[r_idx] - 1) + [det_factor]) @ Vt
+        return True
 
-        return norm, C
-    
-    def initialize(self) -> None:
+    def initialize(self, mode:Mode, next_ids:List[int])-> None: 
         """ 
         Initializes dimensions of each robot
 
         Args: 
-            None
+            mode (Mode): Current active mode used to determine active tasks. 
+            next_ids (List[int]): List containing next task IDs 
 
         Returns: 
             None: This method does not return any value. """
+        self.active_robots_idx = []
+        active_robots = self.env.get_active_task(mode, next_ids).robots 
         for robot in self.env.robots:
             r_idx = self.env.robots.index(robot)
             self.n[r_idx] = self.env.robot_dims[robot]
+            if robot in active_robots:
+                self.active_robots_idx.append(self.env.robots.index(robot))
             
-    def cholesky_decomposition(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]) -> Optional[NDArray]:
+    def cholesky_decomposition(self, r_idx:int, path:List[State]) -> None:
         """ 
         Computes cholesky decomposition of hyperellipsoid matrix
 
@@ -434,15 +481,63 @@ class BaseInformed(ABC):
 
         Returns: 
             NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None. """
-        cmax = self.get_right_side_of_eq(r_indices, r_idx, path_nodes)
-        if not cmax or self.cmin[r_idx] < 0:
+        if self.get_ub_of_informed_set(r_idx, path):
+            cmax = self.cmax[r_idx]
+            if not cmax or self.cmin[r_idx] < 0 or self.cmin[r_idx] > cmax:
+                self.L[r_idx] = None
+                return
+            r1 = cmax / 2 
+            r2 = np.sqrt(cmax**2 - self.cmin[r_idx]**2) / 2
+            self.L[r_idx] = np.diag(np.concatenate([[r1], np.repeat(r2, self.n[r_idx] - 1)])) 
+        else:
+            self.L[r_idx] = None
             return
-        r1 = cmax / 2 
-        r2 = np.sqrt(cmax**2 - self.cmin[r_idx]**2) / 2
-        return np.diag(np.concatenate([[r1], np.repeat(r2, self.n[r_idx] - 1)])) 
     
+    def sample_unit_n_ball(self, n:int) -> NDArray:
+        """ 
+        Samples a point uniformly from a n-dimensional unit ball centered at the origin.
+
+        Args: 
+            n (int): Dimension of the ball.
+
+        Returns: 
+            NDArray: Sampled point from the unit ball. """
+        x_ball = np.random.normal(0, 1, n) 
+        norm = np.linalg.norm(x_ball)     # Normalize with L2 norm
+        radius = np.random.rand()**(1.0 / n)          # Generate a random radius and apply power
+        return (x_ball/norm) * radius
+    
+    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
+        focal_points = np.array(
+                [self.start[self.chosen_active_robot].q.state(), self.end[self.chosen_active_robot].q.state()], dtype=np.float64
+            )
+        q = type(self.env.get_start_pos()).from_list(q)
+        c_lb = sum(self.env.batch_config_cost(q, focal_points))
+        if c_lb < self.cmax[self.chosen_active_robot]:
+            return True
+        return False
+
+    def sample(self, path, r_indices, r_idx, max_attemps = 100) -> Optional[NDArray]:
+        if self.L[r_idx] is None:
+            if np.random.uniform(0, 1) < self.p_goal:
+                return self.end[r_idx].q[r_idx]
+            if np.linalg.norm(self.start[r_idx].q[r_idx]- self.end[r_idx].q[r_idx]) < 1e-10: #TODO sample with noise
+                return self.end[r_idx].q[r_idx]
+            lims = self.env.limits[:, r_indices]
+            return np.random.uniform(lims[0], lims[1])
+        attemps = 0
+        while attemps < max_attemps:
+            attemps += 1
+            x_ball = self.sample_unit_n_ball(self.n[r_idx])  
+            x_rand = self.C[r_idx] @ (self.L[r_idx] @ x_ball) + self.center[r_idx]
+            # Check if x_rand is within limits
+            lims = self.env.limits[:, r_indices]
+            if np.all((lims[0] <= x_rand) & (x_rand <= lims[1])):  
+                return x_rand
+        return
+
     @abstractmethod
-    def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]) -> float:
+    def get_ub_of_informed_set(self, r_idx:int, path:List[List]) -> bool:
         """
         Computes right-hand side of informed set description
 
@@ -455,322 +550,446 @@ class BaseInformed(ABC):
             float: Value of right-hand side (= cost)
         """
         pass  
+
+# class InformedVersion0(Informed):
+
+#     """
+#     Locally informed sampling for each robot separately (start and goal config are equal to home pose and task).
+#     Upper bound cost is determined by cost of one robot.
+    
+#     """
+#     def __init__(self, env, p_goal):
+#         super().__init__(env, p_goal)
+    
+#     # def is_lb_cost_smaller(self, path:List[State], q:Configuration, s, e) -> float:
+
+#     #     # start_min = min(self.start_ind.values())
+#     #     # end_max = max(self.end_ind.values())
+#     #     focal_points = np.array(
+#     #             [path[s].q.state(), path[e].q.state()], dtype=np.float64
+#     #         )
+#     #     q = type(self.env.get_start_pos()).from_list(q)
+#     #     c_lb = sum(self.env.batch_config_cost(q, focal_points))
+#     #     path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+#     #     cmax = sum(path_segment_costs[s:e])
+#     #     if c_lb < cmax:
+#     #         return True
+#     #     return False
+    
+#     def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
+
+#         start_min = min(self.start_ind.values())
+#         end_max = max(self.end_ind.values())
+#         focal_points = np.array(
+#                 [path[start_min].q.state(), path[end_max].q.state()], dtype=np.float64
+#             )
+#         q = type(self.env.get_start_pos()).from_list(q)
+#         c_lb = sum(self.env.batch_config_cost(q, focal_points))
+#         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+#         cmax = sum(path_segment_costs[start_min:end_max])
+#         if c_lb < cmax:
+#             return True
+#         return False
+
+#     def batch_config_cost_per_robot(self,
+#         starts: List[Configuration],
+#         batch_other: List[Configuration],
+#         r_idx:int
+#     ) -> float:
+#         if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
+#             diff = starts.state() - batch_other
+#             all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
+#             agent_slices = starts.array_slice
+#         else:
+#             diff = np.array([start.q.state() for start in starts]) - np.array(
+#                 [other.q.state() for other in batch_other], dtype=np.float64
+#             )
+#             all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
+#             agent_slices = starts[0].q.array_slice
+
+#         squared_diff = diff * diff
+#         all_robot_dists = compute_sliced_dists(squared_diff, agent_slices)
+
+#         return all_robot_dists[r_idx]   
+
+#     def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
+#         #need to calculate the cost only cnsidering one agent (euclidean distance)
+#         start = path[self.start_ind[r_idx]]
+#         end = path[self.end_ind[r_idx]]
+
+#         self.idx1[r_idx], self.idx2[r_idx] = None, None
+#         path_segment_costs = self.batch_config_cost_per_robot(path[:-1], path[1:], r_idx)
+#         if r_idx not in self.active_robots_idx:
+#             for _ in range(500):
+#                 start_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
+#                 end_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
+
+#                 if end_ind - start_ind > 2:
+#                     # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+#                     current_cost = sum(path_segment_costs[start_ind:end_ind])
+#                     lb_cost = self.batch_config_cost_per_robot([path[start_ind]], [path[end_ind]], r_idx)
+
+#                     if lb_cost < current_cost: 
+#                         self.idx1[r_idx] = start_ind
+#                         self.idx2[r_idx] = end_ind
+#                         break
+
+#         if self.idx1[r_idx] is None: 
+#             self.idx1[r_idx] = self.start_ind[r_idx]
+#             self.idx2[r_idx] = self.end_ind[r_idx]
+
+#         self.start[r_idx] = path[self.idx1[r_idx]]
+#         self.end[r_idx] = path[self.idx2[r_idx]]
+
+#         # self.start[r_idx] = start
+#         # self.end[r_idx] = end
+#         self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
+#         if self.rotation_to_world_frame(self.start[r_idx], self.end[r_idx], r_idx):
+#             self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])          
+#             return True
+#         return False
+
 class InformedVersion0(BaseInformed):
+
     """
     Locally informed sampling for each robot separately (start and goal config are equal to home pose and task).
     Upper bound cost is determined by cost of one robot.
     
     """
-
-    def __init__(self, 
-                 env:BaseProblem, 
-                 cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
+    def __init__(self, env, p_goal):
+        super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]) -> float:
-        #need to calculate the cost only cnsidering one agent (euclidean distance)
-        n1 = NpConfiguration.from_numpy(path_nodes[0].state.q.state()[r_indices])
-        cost = 0
-        if self.mode_task_ids_home_poses[r_idx] == [-1]:
-            start_cost = 0
-            self.start[r_idx] = n1
-        for node in path_nodes[1:]:
-            n2 = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-            cost += self.cost_fct(n1, n2)
-            #need to work with task IDs as same mode can have different configs
-            if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
-                start_cost = cost
-                self.start[r_idx] = n2
-            if node.transition and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]:
-                goal_cost = cost
-                self.goal[r_idx] = n2
-                break 
-            n1 = n2
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
+    # def is_lb_cost_smaller(self, path:List[State], q:Configuration, s, e) -> float:
 
-        if norm is None:
-            return
-        self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
-        return goal_cost-start_cost    
+    #     # start_min = min(self.start_ind.values())
+    #     # end_max = max(self.end_ind.values())
+    #     focal_points = np.array(
+    #             [path[s].q.state(), path[e].q.state()], dtype=np.float64
+    #         )
+    #     q = type(self.env.get_start_pos()).from_list(q)
+    #     c_lb = sum(self.env.batch_config_cost(q, focal_points))
+    #     path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+    #     cmax = sum(path_segment_costs[s:e])
+    #     if c_lb < cmax:
+    #         return True
+    #     return False
+    
+    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
+
+        # start_min = min(self.start_ind.values())
+        # end_max = max(self.end_ind.values())
+        focal_points = np.array(
+                [path[self.rnd_idx[0]].q.state(), path[self.rnd_idx[1]].q.state()], dtype=np.float64
+            )
+        
+        q = type(self.env.get_start_pos()).from_list(q)
+        c_lb = sum(self.env.batch_config_cost(q, focal_points))
+        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        cmax = sum(path_segment_costs[self.rnd_idx[0]:self.rnd_idx[1]])
+        if c_lb < cmax:
+            return True
+        return False
+
+    def batch_config_cost_per_robot(self,
+        starts: List[Configuration],
+        batch_other: List[Configuration],
+        r_idx:int
+    ) -> float:
+        if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
+            diff = starts.state() - batch_other
+            all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
+            agent_slices = starts.array_slice
+        else:
+            diff = np.array([start.q.state() for start in starts]) - np.array(
+                [other.q.state() for other in batch_other], dtype=np.float64
+            )
+            all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
+            agent_slices = starts[0].q.array_slice
+
+        squared_diff = diff * diff
+        all_robot_dists = compute_sliced_dists_transpose(squared_diff, agent_slices)
+        # all_robot_dists = None
+
+        return all_robot_dists[r_idx]   
+
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
+        #need to calculate the cost only cnsidering one agent (euclidean distance)
+        path_segment_costs = self.batch_config_cost_per_robot(path[:-1], path[1:], r_idx)
+        if self.rnd_idx == []:
+            if len(self.active_robots_idx) == 1:
+                idx = self.active_robots_idx[0]
+            else:
+                idx = random.choice(self.active_robots_idx)
+            
+            self.chosen_active_robot = idx
+
+            start = path[self.start_ind[idx]]
+            end = path[self.end_ind[idx]]
+
+            self.idx1[r_idx], self.idx2[r_idx] = None, None
+            
+            # if r_idx not in self.active_robots_idx:
+            for _ in range(500):
+                start_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
+                end_ind = random.randint(self.start_ind[r_idx], self.end_ind[r_idx])
+
+                if end_ind - start_ind > 2:
+                    # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+                    # current_cost = sum(path_segment_costs[start_ind:end_ind])
+                    # lb_cost = self.batch_config_cost_per_robot([path[start_ind]], [path[end_ind]], r_idx)
+
+                    # if lb_cost < current_cost: 
+                    self.idx1[r_idx] = start_ind
+                    self.idx2[r_idx] = end_ind
+                    break
+
+
+            if self.idx1[r_idx] is None: 
+                self.idx1[r_idx] = self.start_ind[r_idx]
+                self.idx2[r_idx] = self.end_ind[r_idx]
+            self.rnd_idx = list([self.idx1[r_idx], self.idx2[r_idx]])
+
+        self.start[r_idx] = path[self.rnd_idx[0]]
+        self.end[r_idx] = path[self.rnd_idx[1]]
+
+        # self.start[r_idx] = start
+        # self.end[r_idx] = end
+        self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
+        if self.rotation_to_world_frame(self.start[r_idx], self.end[r_idx], r_idx):
+            self.cmax[r_idx] = sum(path_segment_costs[self.rnd_idx[0]:self.rnd_idx[1]])          
+            return True
+        return False
+
 class InformedVersion1(BaseInformed):
     """
-    Globally informed sampling considering whole state space.
-    Upper bound cost is determined by subtracting a lower bound from the path cost.
+    Locally informed sampling considering active task.
+    Upper bound cost is determined by actual cost from start(home_pose) to end(active_task).
+    Same start and end idx for all agents
 
     """
 
-    def __init__(self, 
-                 env:BaseProblem, 
-                 cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = []
-        self.cmin = None
-        self.C = None
-        self.start = None
-        self.goal = None
-        self.mode_task_ids_home_poses = []
-        self.center = None
-        self.cost_fct = cost_fct
-        self.n = None
-        self.L = None
-        self.cost = np.inf
-        self.active_robots_idx = []
+    def __init__(self, env, p_goal):
+        super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, path_nodes:List[Node]) -> float:
-        """
-        Computes right-hand side of informed set description
-
-        Args: 
-            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
-
-        Returns:
-            float: Value of right-hand side (= cost)
-        """
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
+        #look for each robot at the home pose and task pose of active task in mode
         if len(self.active_robots_idx) == 1:
             idx = self.active_robots_idx[0]
         else:
             idx = random.choice(self.active_robots_idx)
+        
+        self.chosen_active_robot = idx
 
-        mode_task_ids_home_pose = self.mode_task_ids_home_poses[idx]
-        mode_task_ids_task = self.mode_task_ids_task[idx]
-
-        if mode_task_ids_home_pose == [-1]:
-            self.start = path_nodes[0]
-
-        for node in path_nodes:
-            if node.transition and node.state.mode.task_ids == mode_task_ids_home_pose:
-                self.start = node
-            if node.transition and node.state.mode.task_ids == mode_task_ids_task:
-                self.goal = node
-                break 
-        lb_goal = self.cost_fct(self.goal.state.q, path_nodes[-1].state.q)
-        lb_start = self.cost_fct( path_nodes[0].state.q, self.start.state.q)
-        norm, self.C = self.rotation_to_world_frame(self.start.state.q, self.goal.state.q, self.n)
-        self.cmin = norm-2*self.env.collision_tolerance
-        self.center = (self.goal.state.q.state() + self.start.state.q.state())/2
-        return path_nodes[-1].cost - lb_goal - lb_start
-    
-    def initialize(self, mode:Mode, next_ids:List[int])-> None: 
-        """ 
-        Initializes dimensions of each robot
-
-        Args: 
-            mode (Mode): Current active mode used to determine active tasks. 
-            next_ids (List[int]): List containing next task IDs 
-
-        Returns: 
-            None: This method does not return any value. """
-        active_robots = self.env.get_active_task(mode, next_ids).robots 
-        for robot in self.env.robots:
-            if robot in active_robots:
-                self.active_robots_idx.append(self.env.robots.index(robot))
-        self.n = sum(self.env.robot_dims.values())
-
-    def cholesky_decomposition(self, path_nodes:List[Node]) -> NDArray:
-        """ 
-        Computes cholesky decomposition of hyperellipsoid matrix
-
-        Args: 
-            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
-
-        Returns: 
-            NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None. """
-        cmax = self.get_right_side_of_eq( path_nodes)
-        r1 = cmax / 2
-        r2 = np.sqrt(cmax**2 - self.cmin**2) / 2
-        return np.diag(np.concatenate([np.repeat(r1, 1), np.repeat(r2, self.n - 1)]))   
+        start_ind = self.start_ind[idx]
+        end_ind = self.end_ind[idx]
+        start = path[start_ind]
+        end = path[end_ind]
+        self.start[r_idx] = start
+        self.end[r_idx] = end
+        if self.rotation_to_world_frame(start, end, r_idx):
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
+            path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+            self.cmax[r_idx] = sum(path_segment_costs[self.start_ind[idx]:self.end_ind[idx]])
+            return True                  
 class InformedVersion2(BaseInformed):
     """
-    Globally informed sampling for each agent separately (start and goal config are equal to home pose and task).
-    Upper bound cost is determined by subtracting a lower bound from the path cost.
+    Locally informed sampling for each agent separately (start and goal config are equal to home pose and task).
+    Upper bound cost is determined by actual cost from start(home_pose) to end(active_task).
     """
 
-    def __init__(self, 
-                 env:BaseProblem, 
-                 cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
+    def __init__(self, env, p_goal):
+        super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
-        if self.mode_task_ids_home_poses[r_idx] == [-1]:
-            start_node = path_nodes[0]
-            self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
-        for node in path_nodes[1:]:
-            #need to work with task IDs as same mode can have different configs
-            if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
-                start_node = node
-                self.start[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-            if node.transition and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]:
-                goal_node = node
-                self.goal[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-                break 
-
-        lb_goal = self.cost_fct(goal_node.state.q, path_nodes[-1].state.q)
-        lb_start = self.cost_fct( path_nodes[0].state.q, start_node.state.q)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
-        if norm is None:
-            return
-        self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
-        return path_nodes[-1].cost - lb_goal - lb_start    
+    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
+        if len(self.active_robots_idx) == 1:
+            idx = self.active_robots_idx[0]
+        else:
+            idx = random.choice(self.active_robots_idx)
+        
+        self.chosen_active_robot = idx
+        focal_points = np.array(
+                [self.start[self.chosen_active_robot].q.state(), self.end[self.chosen_active_robot].q.state()], dtype=np.float64
+            )
+        q = type(self.env.get_start_pos()).from_list(q)
+        c_lb = sum(self.env.batch_config_cost(q, focal_points))
+        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        cmax = sum(path_segment_costs[self.start_ind[idx]:self.end_ind[idx]])
+        if c_lb < cmax:
+            return True
+        return False
+    
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
+        #need to calculate the cost only cnsidering one agent (euclidean distance)
+        start = path[self.start_ind[r_idx]]
+        end = path[self.end_ind[r_idx]]
+        self.start[r_idx] = start
+        self.end[r_idx] = end
+        if self.rotation_to_world_frame(start, end, r_idx):
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx] )/2
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
+            path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+            self.cmax[r_idx] = sum(path_segment_costs[self.start_ind[r_idx]:self.end_ind[r_idx]])
+            return True
+        return False    
 class InformedVersion3(BaseInformed):
     """
-    Locally informed sampling for each agent seperately (randomly select start and goal config between home pose and task).
-    Upper bound cost is determined by subtracting a lower bound from the path cost between start and goal config.
+    Locally informed sampling considering active task.
+    Upper bound cost is determined by actual cost from radnom point i to j between start(home_pose) end(active_task).
+    Same start and end idx for all agents
     """
 
-    def __init__(self, 
-                 env:BaseProblem, 
-                 cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
+    def __init__(self, env, p_goal):
+        super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
-        if self.mode_task_ids_home_poses[r_idx] == [-1]:
-            start_node = path_nodes[0]
-            self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
-            start_idx = 0
-        for idx , node in enumerate(path_nodes[1:]):
-            #need to work with task IDs as same mode can have different configs
-            if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
-                start_node = node
-                self.start[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-                start_idx = idx
-            if node.transition and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]:
-                goal_node = node
-                self.goal[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-                goal_idx = idx
-                break 
-        idx1 = np.random.randint(0, start_idx+1)
-        idx2 = np.random.randint(goal_idx, len(path_nodes))
-
-
-        lb_goal = self.cost_fct(goal_node.state.q, path_nodes[idx2].state.q)
-        lb_start = self.cost_fct( path_nodes[idx1].state.q, start_node.state.q)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
-        if norm is None:
-            return
-        self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
+        #need to calculate the cost only cnsidering one agent (euclidean distance)
+        if len(self.active_robots_idx) == 1:
+            idx = self.active_robots_idx[0]
+        else:
+            idx = random.choice(self.active_robots_idx)
         
-        return path_nodes[idx2].cost - path_nodes[idx1].cost - lb_goal - lb_start   
+        self.chosen_active_robot = idx
+        self.idx1[r_idx], self.idx2[r_idx] = None, None
+
+        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        for _ in range(500):
+            start_ind = random.randint(self.start_ind[idx], self.end_ind[idx])
+            end_ind = random.randint(self.start_ind[idx], self.end_ind[idx])
+
+            if end_ind - start_ind > 2:
+                # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+                current_cost = sum(path_segment_costs[start_ind:end_ind])
+                lb_cost = self.env.config_cost(path[start_ind].q, path[end_ind].q)
+
+                if lb_cost < current_cost: 
+                    self.idx1[r_idx] = start_ind
+                    self.idx2[r_idx] = end_ind
+                    break
+
+        if self.idx1[r_idx] is None: 
+            self.idx1[r_idx] = self.start_ind[idx]
+            self.idx2[r_idx] = self.end_ind[idx]
+
+        self.start[r_idx] = path[self.idx1[r_idx]]
+        self.end[r_idx] = path[self.idx2[r_idx]]
+        
+        if self.rotation_to_world_frame( self.start[r_idx], self.end[r_idx], r_idx):
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
+            self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])
+            return True
+        return False   
 class InformedVersion4(BaseInformed):
     """
     Globally informed sampling for each agent separately (randomly select start and end config on whole path).
     Upper bound cost is determined by subtracting a lower bound from the path cost.
     """
 
-    def __init__(self, 
-                 env:BaseProblem, 
-                 cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
+    def __init__(self, env, p_goal):
+        super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]):
-        while True:
-            idx1 = np.random.randint(0, len(path_nodes))
-            idx2 = np.random.randint(0, len(path_nodes))
-            if idx2 < idx1:
-                idx1, idx2 = idx2, idx1
-            if idx2 -idx1 > 2:
-                break
-        goal = path_nodes[idx2]
-        start = path_nodes[idx1]
-        self.start[r_idx] = NpConfiguration.from_numpy(start.state.q.state()[r_indices])
-        self.goal[r_idx] = NpConfiguration.from_numpy(goal.state.q.state()[r_indices])
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
+        #need to calculate the cost only cnsidering one agent (euclidean distance)
+        if len(self.active_robots_idx) == 1:
+            idx = self.active_robots_idx[0]
+        else:
+            idx = random.choice(self.active_robots_idx)
+        
+        self.chosen_active_robot = idx
+        self.idx1[r_idx], self.idx2[r_idx] = None, None
 
-        lb_goal = self.cost_fct(goal.state.q, path_nodes[-1].state.q)
-        lb_start = self.cost_fct( path_nodes[0].state.q, start.state.q)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
-        if norm is None:
-            return
-        self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
-        return path_nodes[-1].cost - lb_goal - lb_start
+        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        for _ in range(500):
+            start_ind = random.randint(self.start_ind[idx], self.end_ind[idx])
+            end_ind = random.randint(self.start_ind[idx], self.end_ind[idx])
+
+            if end_ind - start_ind > 2:
+                # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+                current_cost = sum(path_segment_costs[start_ind:end_ind])
+                lb_cost = self.env.config_cost(path[start_ind].q, path[end_ind].q)
+
+                if lb_cost < current_cost: 
+                    self.idx1[r_idx] = start_ind
+                    self.idx2[r_idx] = end_ind
+                    break
+
+        if self.idx1[r_idx] is None: 
+            self.idx1[r_idx] = self.start_ind[idx]
+            self.idx2[r_idx] = self.end_ind[idx]
+
+        self.start[r_idx] = path[self.idx1[r_idx]]
+        self.end[r_idx] = path[self.idx2[r_idx]]
+        
+        if self.rotation_to_world_frame( self.start[r_idx], self.end[r_idx], r_idx):
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
+            self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])
+            return True
+        return False 
 class InformedVersion5(BaseInformed):
     """
     Globally informed sampling for each agent separately (start and goal config are equal to home pose and task).
     Upper bound cost is determined by the path cost between start and goal node.
     """
 
-    def __init__(self, 
-                 env:BaseProblem, 
-                 cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
+    def __init__(self, env, p_goal):
+        super().__init__(env, p_goal)
     
-    def get_right_side_of_eq(self, r_indices:List[int], r_idx:int, path_nodes:List[Node]) -> float:
-        if self.mode_task_ids_home_poses[r_idx] == [-1]:
-            start_node = path_nodes[0]
-            self.start[r_idx] = NpConfiguration.from_numpy(start_node.state.q.state()[r_indices])
-        for node in path_nodes[1:]:
-            #need to work with task IDs as same mode can have different configs
-            if node.transition and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]:
-                start_node = node
-                self.start[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-            if node.transition and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]:
-                goal_node = node
-                self.goal[r_idx] = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-                break 
+    def is_lb_cost_smaller(self, path:List[State], q:Configuration) -> float:
 
-        norm, self.C[r_idx] = self.rotation_to_world_frame(self.start[r_idx], self.goal[r_idx], self.n[r_idx])
-        if norm is None:
-            return
-        self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
-        return goal_node.cost - start_node.cost
+        start_min = min(self.start_ind.values())
+        end_max = max(self.end_ind.values())
+        focal_points = np.array(
+                [path[start_min].q.state(), path[end_max].q.state()], dtype=np.float64
+            )
+        q = type(self.env.get_start_pos()).from_list(q)
+        c_lb = sum(self.env.batch_config_cost(q, focal_points))
+        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        cmax = sum(path_segment_costs[start_min:end_max])
+        if c_lb < cmax:
+            return True
+        return False
+    
+    def get_ub_of_informed_set(self, r_idx:int, path:List[State]) -> bool:
+        #need to calculate the cost only cnsidering one agent (euclidean distance)
+        if len(self.active_robots_idx) == 1:
+            idx = self.active_robots_idx[0]
+        else:
+            idx = random.choice(self.active_robots_idx)
+        
+        self.chosen_active_robot = idx
+        self.idx1[r_idx], self.idx2[r_idx] = None, None
+
+        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        start_min = min(self.start_ind.values())
+        end_max = max(self.end_ind.values())
+        for _ in range(500):
+            start_ind = random.randint(start_min, end_max)
+            end_ind = random.randint(start_min, end_max)
+
+            if end_ind - start_ind > 2:
+                # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
+                current_cost = sum(path_segment_costs[start_ind:end_ind])
+                lb_cost = self.env.config_cost(path[start_ind].q, path[end_ind].q)
+
+                if lb_cost < current_cost: 
+                    self.idx1[r_idx] = start_ind
+                    self.idx2[r_idx] = end_ind
+                    break
+
+        if self.idx1[r_idx] is None: 
+            self.idx1[r_idx] = start_min
+            self.idx2[r_idx] = end_max
+
+        self.start[r_idx] = path[self.idx1[r_idx]]
+        self.end[r_idx] = path[self.idx2[r_idx]]
+        
+        if self.rotation_to_world_frame( self.start[r_idx], self.end[r_idx], r_idx):
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
+            self.center[r_idx] = (self.start[r_idx].q[r_idx] + self.end[r_idx].q[r_idx])/2
+            self.cmax[r_idx] = sum(path_segment_costs[self.idx1[r_idx]:self.idx2[r_idx]])
+            return True
+        return False 
 
 @njit(fastmath=True, cache=True)
 def find_nearest_indices(set_dists:NDArray, r:float) -> NDArray:
@@ -803,7 +1022,7 @@ def cumulative_sum(batch_cost:NDArray) -> NDArray:
         cost[idx] = np.sum(batch_cost[:idx+1])
     return cost
 @njit
-def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:List[int], r_idx:int) -> List[int]:
+def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:int, r_idx:int) -> int:
     """
     Retrieves mode task ID for the active task in a given path by selecting the last occurrence that matches the specified task id.
 
@@ -820,9 +1039,9 @@ def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:List[int], r_id
     for i in range(len(path_modes)):
         if path_modes[i][r_idx] == task_id:  
             last_index = i 
-    return path_modes[last_index]
+    return last_index
 @njit
-def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:List[int], r_idx:int) -> List[int]:
+def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:int, r_idx:int) -> int:
     """
     Retrieves mode task ID for the active task in a given path by selecting the first occurrence that matches the specified task id.
 
@@ -838,8 +1057,23 @@ def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:List[int], r_idx:
     for i in range(len(path_modes)):
         if path_modes[i][r_idx] == task_id:  
             if i == 0:
-                return np.array([-1]) # if its at the start pose
-            return path_modes[i-1]
+                return i
+            return i-1
+@njit
+def get_index_of_first_mode_appearance_in_path(path_modes, task_id:List[int]) -> int:
+    for i in range(len(path_modes)):
+        if np.equal(path_modes[i],task_id).all():  
+                return i
+@njit
+def get_index_of_last_mode_appearance_in_path(path_modes, task_id:List[int]) -> int:
+    last_index = 0 
+    for i in range(len(path_modes)):
+        if np.equal(path_modes[i],task_id).all(): 
+            last_index = i 
+    return last_index
+
+
+
 
 
 class BaseRRTstar(ABC):
@@ -864,6 +1098,7 @@ class BaseRRTstar(ABC):
                  locally_informed_sampling:bool = True,
                  remove_redundant_nodes:bool = True,
                  informed_batch_size: int = 500,
+                 test_mode_sampling:bool = False
 
                  ):
         self.env = env
@@ -882,8 +1117,7 @@ class BaseRRTstar(ABC):
         self.shortcutting_robot_version = shortcutting_robot_version
         self.locally_informed_sampling = locally_informed_sampling
         self.remove_redundant_nodes = remove_redundant_nodes
-        self.dim = sum(self.env.robot_dims.values())
-        self.eta = np.sqrt(self.dim)
+        self.eta = np.sqrt(sum(self.env.robot_dims.values()))
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
         self.modes = [] 
@@ -895,6 +1129,7 @@ class BaseRRTstar(ABC):
         self.times = []
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
+        self.test_mode_sampling = test_mode_sampling
         self.informed = InformedSampling(self.env, 'sampling_based', self.locally_informed_sampling)
         self.whitelist_modes = set()
         self.blacklist_modes = set()
@@ -944,11 +1179,10 @@ class BaseRRTstar(ABC):
         """
         
         if mode is None: 
-            new_modes = [self.env.get_start_mode()]
+            new_mode = self.env.get_start_mode()
+            new_mode.prev_mode = None
         else:
             new_modes = self.env.get_next_modes(q, mode)
-            if mode.task_ids == [13,4] and mode.id == 55:
-                pass
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue 
@@ -1266,14 +1500,10 @@ class BaseRRTstar(ABC):
         Returns:
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
-        failed_attemps = 0
+
+        
         while True:
-            if failed_attemps > 10000:
-                self.track_invalid_modes(mode)
-                return
             next_ids = self.get_next_ids(mode)
-            if not next_ids and not self.env.is_terminal_mode(mode):
-                return
             constrained_robot = self.env.get_active_task(mode, next_ids).robots
             goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
             q = []
@@ -1281,16 +1511,15 @@ class BaseRRTstar(ABC):
             for robot in self.env.robots:
                 if robot in constrained_robot:
                     dim = self.env.robot_dims[robot]
-                    q.append(goal[end_idx:end_idx + dim])
+                    indices = list(range(end_idx, end_idx + dim))
+                    q.append(goal[indices])
                     end_idx += dim 
-                else:
-                    r_idx = self.env.robot_idx[robot]
-                    lims = self.env.limits[:, r_idx]
-                    q.append(np.random.uniform(lims[0], lims[1]))
+                    continue
+                lims = self.env.limits[:, self.env.robot_idx[robot]]
+                q.append(np.random.uniform(lims[0], lims[1]))
             q = type(self.env.get_start_pos()).from_list(q)   
             if self.env.is_collision_free(q, mode):
                 return q
-            failed_attemps+=1
     
     def sample_configuration(self, 
                              mode:Mode, 
@@ -1314,10 +1543,7 @@ class BaseRRTstar(ABC):
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
         sample_near_path = sampling_type == "sample_near_path"
-        next_ids = self.get_next_ids(mode)
-        if not next_ids and not self.env.is_terminal_mode(mode):
-            return
-        constrained_robots = self.env.get_active_task(mode, next_ids).robots
+        constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
         attemps = 0  # needed if home poses are in collision
 
         while True:
@@ -1362,15 +1588,28 @@ class BaseRRTstar(ABC):
                         if self.env.is_collision_free(q, mode):
                             return q
                         continue
-                    elif not self.informed_sampling_version == 1 and not self.informed_sampling_version == 6:
-                        q = self.sample_informed(mode, True)
+                    elif not self.informed_sampling_version == 6:
+                        q = self.sample_informed(mode, True, max_attemps=self.informed_batch_size)
+                        if q is None:
+                            return
+                            # q = self.sample_transition_configuration(mode)
+                            # if random.choice([0,1]) == 0:
+                            #     return q
+                            # while True:
+                            #     q_noise = []
+                            #     for r in range(len(self.env.robots)):
+                            #         q_robot = q.robot_state(r)
+                            #         noise = np.random.normal(0, 0.1, q_robot.shape)
+                            #         q_noise.append(q_robot + noise)
+                            #     q = type(self.env.get_start_pos()).from_list(q_noise)
+                            #     if self.env.is_collision_free(q, mode):
+                            #         return q
+
                         q = type(self.env.get_start_pos()).from_list(q)
                         if self.env.is_collision_free(q, mode):
                             return q
                         continue
                 q = self.sample_transition_configuration(mode)
-                if q is None:
-                    return
                 if random.choice([0,1]) == 0:
                     return q
                 while True:
@@ -1398,6 +1637,10 @@ class BaseRRTstar(ABC):
                         return q
                 elif not self.informed_sampling_version == 6:
                     q = self.sample_informed(mode)
+                    if q is None:
+                        # is_informed_sampling = False
+                        # continue
+                        return
             #gaussian noise
             if sample_near_path: 
                 path_state = np.random.choice(self.operation.path)
@@ -1419,7 +1662,7 @@ class BaseRRTstar(ABC):
                             q.append(q_home[r_idx])
                             continue
                         if np.array_equal(self.get_task_goal_of_agent(mode, robot), q_home[r_idx]):
-                            if np.random.uniform(0, 1) > self.p_goal: # goal sampling
+                            if np.random.uniform(0, 1) < self.p_goal: # goal sampling
                                 q.append(q_home[r_idx])
                                 continue
                     #uniform sampling
@@ -1431,7 +1674,44 @@ class BaseRRTstar(ABC):
             if attemps > 100: # if home pose causes failed attemps
                 is_home_pose_sampling = False
     
-    def sample_informed(self, mode:Mode, goal_sampling:bool = False) -> None:
+    def interpolate_path(self, path: List[State], resolution: float = 0.1):
+        config_type = type(path[0].q)
+        new_path = []
+        path_modes = []
+        # discretize path
+        for i in range(len(path) - 1):
+            q0 = path[i].q
+            q1 = path[i + 1].q
+
+            # if path[i].mode != path[i + 1].mode:
+            #     new_path.append(State(config_type.from_list(q), path[i].mode))
+            #     continue
+
+            dist = config_dist(q0, q1)
+            N = int(dist / resolution)
+            N = max(1, N)
+
+            for j in range(N):
+                q = []
+                for k in range(q0.num_agents()):
+                    qr = q0.robot_state(k) + (q1.robot_state(k) - q0.robot_state(k)) / N * j
+                    q.append(qr)
+
+                    # env.C.setJointState(qr, get_robot_joints(env.C, env.robots[k]))
+
+                    # env.C.setJointState(qr, [env.robots[k]])
+
+                # env.C.view(True)
+
+                new_path.append(State(config_type.from_list(q), path[i].mode))
+                path_modes.append(path[i].mode.task_ids)
+
+        new_path.append(State(path[-1].q, path[-1].mode))
+        path_modes.append(path[-1].mode.task_ids)
+
+        return new_path, path_modes
+    
+    def sample_informed(self, mode:Mode, goal_sampling:bool = False, max_attemps:int = 300) -> None:
         """ 
         Samples configuration from informed set for the given mode.
 
@@ -1441,148 +1721,157 @@ class BaseRRTstar(ABC):
 
         Returns: 
             Configuration: Configuration within the informed set that satisfies the specified limits for the robots. """
+        path, path_modes = self.interpolate_path(self.operation.path_shortcutting)
+        q_rand = []
+        attemps = 0
+        next_ids = self.get_next_ids(mode)
+        self.informed[mode].initialize(mode, next_ids)
+        if self.operation.cost != self.informed[mode].cost:
+            self.informed[mode].cost = self.operation.cost
+            for robot in self.env.robots:
+                r_idx = self.env.robots.index(robot)
+                if self.informed_sampling_version == 4:
+                    self.informed[mode].start_ind[r_idx] = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+                    self.informed[mode].end_ind[r_idx] = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+                    continue
+                if self.informed_sampling_version == 0:
+                    self.informed[mode].start_ind[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
+                    self.informed[mode].end_ind[r_idx] = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+                    continue
 
-        if not self.informed_sampling_version == 1:
-            q_rand = []
-            update = False
-            if self.operation.cost != self.informed[mode].cost:
-                self.informed[mode].cost = self.operation.cost
-                update = True
+                self.informed[mode].start_ind[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
+                self.informed[mode].end_ind[r_idx] = get_mode_task_ids_of_active_task_in_path(np.array(path_modes), mode.task_ids[r_idx], r_idx)
+        
+        # s = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+        # e = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))        
+        while attemps < max_attemps:
+            attemps += 1
             if goal_sampling:
                 next_ids = self.get_next_ids(mode)
                 constrained_robot = self.env.get_active_task(mode, next_ids).robots
                 goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
-                q_rand = []
-                end_idx = 0
-                for robot in self.env.robots:
-                    r_idx = self.env.robots.index(robot)
-                    r_indices = self.env.robot_idx[robot]
-                    if update:
-                        self.informed[mode].mode_task_ids_home_poses[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()
-                        self.informed[mode].mode_task_ids_task[r_idx] = get_mode_task_ids_of_active_task_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()  
-                        if not self.informed_sampling_version == 4 and not self.informed_sampling_version == 3:
-                            self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
-                    if self.informed_sampling_version == 4 or self.informed_sampling_version == 3:
-                        self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
-                    if robot in constrained_robot:
-                        dim = self.env.robot_dims[robot]
-                        indices = list(range(end_idx, end_idx + dim))
-                        q_rand.append(goal[indices])
-                        end_idx += dim 
-                        continue
-                    if self.informed[mode].L[r_idx] is None:
-                        lims = self.env.limits[:, self.env.robot_idx[robot]]
-                        q_rand.append(np.random.uniform(lims[0], lims[1]))
-                        continue
-
-                        
-                    # amount_of_failed_attemps = 0
-                    while True:
-                        x_ball = self.sample_unit_n_ball(self.informed[mode].n[r_idx])  
-                        x_rand = self.informed[mode].C[r_idx] @ (self.informed[mode].L[r_idx] @ x_ball) + self.informed[mode].center[r_idx]
-                        # Check if x_rand is within limits
-                        lims = self.env.limits[:, r_indices]
-                        if np.all((lims[0] <= x_rand) & (x_rand <= lims[1])):  
-                            q_rand.append(x_rand)
-                            # print(amount_of_failed_attemps)
-                            break
-                return q_rand 
+            q_rand = []
+            end_idx = 0
             for robot in self.env.robots:
                 r_idx = self.env.robots.index(robot)
                 r_indices = self.env.robot_idx[robot]
-                if update:
-                    self.informed[mode].mode_task_ids_home_poses[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()
-                    self.informed[mode].mode_task_ids_task[r_idx] = get_mode_task_ids_of_active_task_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()  
-                    if not self.informed_sampling_version == 4 and not self.informed_sampling_version == 3:
-                        self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
-                if self.informed_sampling_version == 4 or self.informed_sampling_version == 3:
-                    self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
-                if self.informed[mode].L[r_idx] is None:
-                    lims = self.env.limits[:, self.env.robot_idx[robot]]
-                    q_rand.append(np.random.uniform(lims[0], lims[1]))
+                self.informed[mode].cholesky_decomposition(r_idx, path)
+                if goal_sampling and robot in constrained_robot:
+                    dim = self.env.robot_dims[robot]
+                    indices = list(range(end_idx, end_idx + dim))
+                    q_rand.append(goal[indices])
+                    end_idx += dim 
                     continue
+                x_rand = self.informed[mode].sample(path, r_indices, r_idx)
+                # if self.informed_sampling_version == 0:
+                #     cost = np.linalg.norm(x_rand - path[self.informed[mode].start_ind[r_idx]].q[r_idx] ) + np.linalg.norm(x_rand - path[self.informed[mode].end_ind[r_idx]].q[r_idx])
+                    # if cost > self.informed[mode].cmax[r_idx]:
+                    #     print(f"Cost {cost} exceeds maximum allowed {self.informed[mode].cmax[r_idx]}")
+                        # raise AssertionError(f"Cost {cost} exceeds maximum allowed {self.informed[mode].cmax[r_idx]}")
 
+                if x_rand is not None: 
+                    q_rand.append(x_rand)
+                else:
+                    break
+
+            if len(q_rand) == len(self.env.robots): 
+                # import matplotlib.pyplot as plt
+
+                # fig, axes = plt.subplots(2, 1, figsize=(12, 15))
+                # try:
+                #     samples = [q_rand[0], self.informed[mode].start[0].q[0],self.informed[mode].end[0].q[0]]
+                # except:
+                #     samples = [q_rand[0]]
+                # axes[0].scatter([s[0] for s in samples], [s[1] for s in samples])
+                # axes[0].set_title('Agent 1')
+                # try:
+                #     samples = [q_rand[1], self.informed[mode].start[1].q[1],self.informed[mode].end[1].q[1]]
+                # except:
+                #     samples = [q_rand[1]]
+                # axes[1].scatter([s[0] for s in samples], [s[1] for s in samples])
+                # axes[1].set_title('Agent 2')
+
+                # plt.tight_layout()
+                # plt.show()  
+                
+                # s = get_index_of_first_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+                # e = get_index_of_last_mode_appearance_in_path(np.array(path_modes), np.array(mode.task_ids))
+                # i = 0
+                # q_ellipse = {}
+                # while i < 1000:
+                #     q_rand = []
+                #     for robot in self.env.robots:
+                #         if robot not in q_ellipse:
+                #             q_ellipse[robot] = []
+                
+                #         r_idx = self.env.robots.index(robot)
+                #         r_indices = self.env.robot_idx[robot]
+                #         try:
+                #             x_rand = self.informed[mode].sample(path, r_indices, r_idx)
+                #             # q_ellipse[robot].append(x_rand)
+                #             q_rand.append(x_rand)
+                #         except Exception:
+                #             continue
                     
-                # amount_of_failed_attemps = 0
-                while True:
-                    x_ball = self.sample_unit_n_ball(self.informed[mode].n[r_idx])  
-                    x_rand = self.informed[mode].C[r_idx] @ (self.informed[mode].L[r_idx] @ x_ball) + self.informed[mode].center[r_idx]
-                    # Check if x_rand is within limits
-                    lims = self.env.limits[:, r_indices]
-                    if np.all((lims[0] <= x_rand) & (x_rand <= lims[1])):  
-                        q_rand.append(x_rand)
-                        # print(amount_of_failed_attemps)
-                        break
-            #         # amount_of_failed_attemps += 1
-            # i = 0
-            # q_ellipse = []
-            
-            # while i < 800:
-            #     q_ellipse_ = np.empty((1, sum(self.env.robot_dims.values())))
-            #     for robot in self.env.robots:
-            #         r_idx = self.env.robots.index(robot)
-            #         r_indices = self.env.robot_idx[robot]
-            #         try:
-            #             x_ball = self.sample_unit_n_ball(self.informed[mode].n[r_idx])  
-            #             x_rand = self.informed[mode].C[r_idx] @ (self.informed[mode].L[r_idx] @ x_ball) + self.informed[mode].center[r_idx]
-            #             q_ellipse_[0, r_indices] = x_rand
-            #         except:
-            #             q_ellipse_[0, r_indices] = self.get_task_goal_of_agent(mode, robot)
-            #     q_ellipse.append(q_ellipse_[0])
-            #     i+=1 
-            return q_rand
-        else: 
-            next_ids = self.get_next_ids(mode)
-            self.informed[mode].initialize(mode, next_ids)
-            q_rand = []
-            update = False
-            if self.operation.cost != self.informed[mode].cost:
-                self.informed[mode].cost = self.operation.cost
-                update = True
-            if update:
-                for robot in self.env.robots:
-                    r_idx = self.env.robots.index(robot)
-                    self.informed[mode].mode_task_ids_home_poses.append(get_mode_task_ids_of_home_pose_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist())
-                    self.informed[mode].mode_task_ids_task.append(get_mode_task_ids_of_active_task_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()) 
-                #repeat every time because of randomness 
-                self.informed[mode].L = self.informed[mode].cholesky_decomposition(self.operation.path_nodes)
-            while True:
-                x_ball = self.sample_unit_n_ball(self.informed[mode].n)  
-                x_rand = self.informed[mode].C @ (self.informed[mode].L @ x_ball) + self.informed[mode].center
-                # Check if x_rand is within limits
-                for robot in self.env.robots:
-                    r_indices = self.env.robot_idx[robot]
-                    lims = self.env.limits[:, r_indices]
-                    #rejection sampling -> is criteria met?
-                    if np.all((lims[0] <= x_rand[r_indices]) & (x_rand[r_indices] <= lims[1])):  
-                        q_rand.append(x_rand[r_indices])
-                    else:
-                        q_rand = []
-                        break
-                if q_rand != []:
-                    # i = 0
-                    # q_ellipse = []
-                    # while i < 800:
-                    #     x_ball = self.sample_unit_n_ball(self.informed[mode].n)  
-                    #     x_rand = self.informed[mode].C @ (self.informed[mode].L @ x_ball) + self.informed[mode].center
-                    #     q_ellipse.append(x_rand)
-                    #     i+=1 
+                #     if self.informed[mode].is_lb_cost_smaller(path, q_rand):
+                #         for r_idx, robot in enumerate(self.env.robots):
+                #             q_ellipse[robot].append(q_rand[r_idx])
+
+                #     i+=1 
+                # focal_pts = {}
+                # center = {}
+                # for r_idx, robot in enumerate(self.env.robots): 
+                #     focal_pts[robot] = np.array(
+                #                         [self.informed[mode].start[r_idx].q.state(), self.informed[mode].end[r_idx].q.state()], dtype=np.float64
+                #                         )
+                #     try:
+                #         center[robot] = self.informed[mode].center[r_idx]
+                #     except Exception:
+                #         center[robot] = None
+                # p = []
+                # for state in path:
+                #     p.append(state.q.state())
+
+                # data = {
+                #     'ellipse': q_ellipse,
+                #     'mode': mode.task_ids,
+                #     'focal_points':focal_pts,
+                #     'center': center,
+                #     'path':p,
+                #     'C': self.informed[mode].C,
+                #     'L': self.informed[mode].L
+                # }
+                # self.save_data(data)
+                # #     # import matplotlib.pyplot as plt
+
+                    # fig, axes = plt.subplots(2, 1, figsize=(12, 15))
+
+                    # samples = q_ellipse['a1']
+                    # axes[0].scatter([s[0] for s in samples], [s[1] for s in samples])
+                    # axes[0].set_title('Agent 1')
+
+                    # samples = q_ellipse['a2']
+                    # axes[1].scatter([s[0] for s in samples], [s[1] for s in samples])
+                    # axes[1].set_title('Agent 2')
+
+                    # plt.tight_layout()
+                    # plt.show()  
+                # return q_rand
+                
+                if self.informed[mode].is_lb_cost_smaller(path, q_rand):
+                    self.informed[mode].rnd_idx = []
                     return q_rand
-             
-    def sample_unit_n_ball(self, n:int) -> NDArray:
-        """ 
-        Samples a point uniformly from a n-dimensional unit ball centered at the origin.
-
-        Args: 
-            n (int): Dimension of the ball.
-
-        Returns: 
-            NDArray: Sampled point from the unit ball. """
-        x_ball = np.random.normal(0, 1, n) 
-        x_ball /= np.linalg.norm(x_ball, ord=2)     # Normalize with L2 norm
-        radius = np.random.rand()**(1 / n)          # Generate a random radius and apply power
-        return x_ball * radius
-    
+                self.informed[mode].rnd_idx = []
+                
+                # if self.informed_sampling_version != 0:
+                #     if self.informed[mode].is_lb_cost_smaller(path, q_rand):
+                #         return q_rand 
+                # else:
+                #     return q_rand
+                  
+                    
+        return
+ 
     def get_termination_modes(self) -> List[Mode]:
         """ 
         Retrieves a list of modes that are considered terminal based on the environment's criteria.
@@ -1902,7 +2191,7 @@ class BaseRRTstar(ABC):
         if num_modes == 1:
             return np.random.choice(self.modes)
         # if self.operation.task_sequence == [] and self.mode_sampling != 0:
-        elif self.operation.init_sol and self.mode_sampling != 0:
+        elif self.operation.init_sol and self.mode_sampling != 0 and not self.test_mode_sampling:
                 p = [1/num_modes] * num_modes
         
         elif self.mode_sampling is None:
@@ -1928,7 +2217,6 @@ class BaseRRTstar(ABC):
             p =   [
                 inv_prob / total_inverse for inv_prob in inverse_probabilities
             ]
-
         # else:
         #     # manually set
         #     total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes[:-1]) 
@@ -1950,37 +2238,86 @@ class BaseRRTstar(ABC):
         #         ] + [self.mode_sampling]
 
         else:
-            #not working for unordered envs
-            frontier_modes = set()
+            if not self.operation.init_sol:
+                frontier_modes = []
 
-            for m in self.modes:
-                if not m.next_modes:
-                    frontier_modes.add(m)
+                for m in self.modes:
+                    if len(m.next_modes) == 0:
+                        frontier_modes.append(m)
 
-            p_frontier = self.mode_sampling
-            p_remaining = 1 - p_frontier
+                p_frontier = self.mode_sampling
+                p_remaining = 1 - p_frontier
 
-            total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
-            # Calculate probabilities inversely proportional to node counts
-            subtree_lengths = {mode: len(self.trees[mode].subtree) for mode in self.modes}
-            inverse_probabilities = [
-                1 - (subtree_lengths[mode] / total_nodes)
-                for mode in self.modes if mode not in frontier_modes
-            ]
-            total_inverse = sum(inverse_probabilities)
+                total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
+                # Calculate probabilities inversely proportional to node counts
+                inverse_probabilities = [
+                    1 - (len(self.trees[mode].subtree) / total_nodes)
+                    for mode in self.modes if mode not in frontier_modes
+                ]
+                total_inverse = sum(inverse_probabilities)
 
-            p = []
+                p = []
 
-            for m in self.modes:
-                if m in frontier_modes:
-                    tmp = p_frontier / len(frontier_modes)
-                else:
-                    tmp = (1 - (subtree_lengths[m]  / total_nodes)) / total_inverse * p_remaining
-                
-                p.append(tmp)
+                for m in self.modes:
+                    if m in frontier_modes:
+                        tmp = p_frontier / len(frontier_modes)
+                    else:
+                        tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
+                    
+                    p.append(tmp)
+            else:
+                frontier_modes = []
+                prev_mode = []
+                for m in self.modes:
+                    if len(m.next_modes) > 1:
+                        for next_mode in m.next_modes:
+                            if next_mode not in self.modes:
+                                prev_mode.append(m)
+                            if next_mode not in frontier_modes:
+                                frontier_modes.append(next_mode)
+                if len(prev_mode) > 0:
+                    frontier_modes = prev_mode
+                #     for next_mode in m.next_modes:
+                #         if next_mode not in next_modes:
+                #             next_modes[next_mode] = 0
+                #         next_modes[next_mode] +=1
+
+                # for m in self.modes:
+                #     add = False
+                #     if len(m.next_modes) == 0 and not self.env.is_terminal_mode(m):
+                #         add = True
+                #     for next_mode in m.next_modes:
+                #         if next_modes[next_mode] > 1:
+                #             add = True
+                #             break
+                #         if add:
+                #             frontier_modes.append(m)
+                if len(frontier_modes) == 0:
+                     p = [1/num_modes] * num_modes
+                     return np.random.choice(self.modes, p = p)
+
+                p_frontier = len(frontier_modes)/len(self.modes)
+                p_remaining = 1 - p_frontier
+
+                total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
+                # Calculate probabilities inversely proportional to node counts
+                inverse_probabilities = [
+                    1 - (len(self.trees[mode].subtree) / total_nodes)
+                    for mode in self.modes if mode not in frontier_modes
+                ]
+                total_inverse = sum(inverse_probabilities)
+
+                p = []
+
+                for m in self.modes:
+                    if m in frontier_modes:
+                        tmp = p_frontier / len(frontier_modes)
+                    else:
+                        tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
+                    
+                    p.append(tmp)
         
-        # return np.random.choice(self.modes, p = p)
-        return random.choices(self.modes, weights=p, k=1)[0]
+        return np.random.choice(self.modes, p = p)
 
     def InformedInitialization(self, mode: Mode) -> None: 
         """
@@ -1996,19 +2333,15 @@ class BaseRRTstar(ABC):
         if not self.informed_sampling:
             return
         if self.informed_sampling_version == 0:
-            self.informed[mode] = InformedVersion0(self.env, self.env.config_cost)
-            self.informed[mode].initialize()
+            self.informed[mode] = InformedVersion0(self.env, self.p_goal)
         if self.informed_sampling_version == 1:
-            self.informed[mode] = InformedVersion1(self.env, self.env.config_cost)
+            self.informed[mode] = InformedVersion1(self.env, self.p_goal)
         if self.informed_sampling_version == 2:
-            self.informed[mode] = InformedVersion2(self.env, self.env.config_cost)
-            self.informed[mode].initialize()
+            self.informed[mode] = InformedVersion2(self.env, self.p_goal)
         if self.informed_sampling_version == 3:
-            self.informed[mode] = InformedVersion3(self.env, self.env.config_cost)
-            self.informed[mode].initialize()
+            self.informed[mode] = InformedVersion3(self.env, self.p_goal)
         if self.informed_sampling_version == 4:
-            self.informed[mode] = InformedVersion4(self.env, self.env.config_cost)
-            self.informed[mode].initialize()
+            self.informed[mode] = InformedVersion4(self.env, self.p_goal)
         if self.informed_sampling_version == 5:
             self.informed[mode] = InformedVersion5(self.env, self.env.config_cost)
             self.informed[mode].initialize()
@@ -2451,7 +2784,7 @@ class BaseRRTstar(ABC):
                     self.update_cache_of_invalid_modes(mode)
                     #when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
                     return False
-                whitelist_robots.add(robot)
+            whitelist_robots.add(robot)
         self.whitelist_modes.add(mode)
         return True
     
