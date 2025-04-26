@@ -12,7 +12,7 @@
       "name": "aitstar",
       "type": "aitstar",
       "options": {
-        "init_uniform_batch_size": 200,
+        "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
         "batch_size": 150,
         "transition_batch_size": 50,
@@ -36,7 +36,7 @@
       "name": "eitstar",
       "type": "eitstar",
       "options": {
-        "init_uniform_batch_size": 200,
+        "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
         "batch_size": 150,
         "transition_batch_size": 50,

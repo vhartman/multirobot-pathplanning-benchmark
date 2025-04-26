@@ -2107,7 +2107,7 @@ class BaseITstar(ABC):
                 return reached_modes[0]
 
             total_nodes = self.g.get_num_samples()
-            p_frontier = 0.99
+            p_frontier = 1
             p_remaining = 1 - p_frontier
 
             frontier_modes = []
