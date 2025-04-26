@@ -947,7 +947,7 @@ class BaseRRTstar(ABC):
             new_modes = [self.env.get_start_mode()]
         else:
             new_modes = self.env.get_next_modes(q, mode)
-            if mode.task_ids == [13,4] and mode.id == 55:
+            if 7 in mode.task_ids or 1 in mode.task_ids:
                 pass
         for new_mode in new_modes:
             if new_mode in self.modes:

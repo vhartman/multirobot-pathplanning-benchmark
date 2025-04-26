@@ -1519,6 +1519,8 @@ class BaseITstar(ABC):
         self.blacklist_modes = set()
         self.invalid_next_ids = {}
         self.terminal_mode = None
+        self.init_search_modes = None
+        self.valid_next_modes = {}
         self.informed = InformedSampling(env, 
                         'graph_based',   
                         locally_informed_sampling,
@@ -1608,6 +1610,7 @@ class BaseITstar(ABC):
 
     def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
         transitions = 0
+        num_reached_modes = len(self.reached_modes)
 
         if len(self.g.goal_nodes) > 0:
             focal_points = np.array(
@@ -1677,7 +1680,6 @@ class BaseITstar(ABC):
                     q.append(qr)
 
             q = self.conf_type(np.concatenate(q), self.env.start_pos.array_slice)
-
             if cost is not None:
                 if sum(self.env.batch_config_cost(q, focal_points)) > cost:
                     continue
@@ -1686,7 +1688,7 @@ class BaseITstar(ABC):
                     next_modes = None
                 else:
                     next_modes = self.env.get_next_modes(q, mode)
-                    next_modes = self.remove_invalid_next_modes(next_modes)
+                    next_modes = self.remove_invalid_next_modes(mode, next_modes)
                     if next_modes == []:
                         self.track_invalid_modes(mode)
                 if mode not in self.reached_modes:
@@ -1702,62 +1704,67 @@ class BaseITstar(ABC):
                     failed_attemps +=1
                     continue
             else:
-                # if self.first_search:
-                # self.check_mode_validity(mode, q)
                 continue
-                # print(mode, mode.next_modes)
-
+            
             if next_modes is not None and len(next_modes) > 0:
                 self.reached_modes.update(next_modes)
-                self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
-                if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.init:
-                    mode_seq = self.sorted_reached_modes
+                new_num_reached_modes = len(self.reached_modes)
                     
             if self.current_best_cost is None and len(self.g.goal_nodes) > 0:  
-                if self.terminal_mode is None and self.env.is_terminal_mode(mode):
+                if self.env.is_terminal_mode(mode) and mode != self.terminal_mode:
                     self.terminal_mode = mode
-                self.get_modes_init_search(self.terminal_mode)
-                if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.init:
-                    mode_seq = self.sorted_reached_modes
+                    self.get_modes_init_search(self.terminal_mode)
+            else:
+                if new_num_reached_modes != num_reached_modes:
+                    self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
+                    num_reached_modes = new_num_reached_modes
+
+            if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.init:
+                mode_seq = self.sorted_reached_modes
 
         print(f"Adding {transitions} transitions")
         return
     
     def get_modes_init_search(self, mode):
-        init_search_modes = [mode]
+        self.init_search_modes = [mode]
         while True:
             prev_mode = mode.prev_mode
             if prev_mode is not None:
-                init_search_modes.append(prev_mode)
+                self.init_search_modes.append(prev_mode)
                 mode = prev_mode
             else:
                 break
-        self.sorted_reached_modes = init_search_modes[::-1]
+        self.init_search_modes = self.init_search_modes[::-1]
+        self.sorted_reached_modes = self.init_search_modes
 
-    def remove_invalid_next_modes(self, next_modes:List[Mode]) -> bool:
+    def remove_invalid_next_modes(self, prev_mode, next_modes:List[Mode]) -> bool:
         #TODO what if its a Goal Region? Does that matter?
-        # only eliminate modes that are logically or geometrically impossible
+        # only eliminate modes that are logically or geometrically impossible   
+        start_pos = self.env.start_pos.state()        
         valid_next_modes = []
         for mode in next_modes:
-            is_in_collision = False
+            
             if mode in self.whitelist_modes:
                 valid_next_modes.append(mode)
                 continue
-            if mode.prev_mode not in self.invalid_next_ids:
-                self.invalid_next_ids[mode.prev_mode] = set()
             if mode.prev_mode is None:
                 self.whitelist_modes.add(mode)
                 valid_next_modes.append(mode)
                 continue
-            whitelist_robots = set()
+            if mode.prev_mode not in self.invalid_next_ids:
+                self.invalid_next_ids[mode.prev_mode] = set()
+            
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
             if not possible_next_task_combinations and not self.env.is_terminal_mode(mode):
                 self.update_cache_of_invalid_modes(mode)
                 return []
+            is_in_collision = False
+            whitelist_robots = set()
             for next_ids in possible_next_task_combinations:
-                constrained_robots = self.env.get_active_task(mode, next_ids).robots
-                goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
-                q = self.env.start_pos.state().copy()
+                active_task = self.env.get_active_task(mode, next_ids)
+                constrained_robots = active_task.robots
+                goal = active_task.goal.sample(mode)
+                q = start_pos.copy()
                 end_idx = 0
                 check_collision = False
                 for robot in self.env.robots:

@@ -1,20 +1,20 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "hallway",
+  "environment": "unordered_box_reorientation",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 400,
+  "max_planning_time": 200,
   "num_runs": 20,
-  "seed": 0,
-  "optimize": true,
+  "seed": 1,
+  "optimize": false,
   "planners": [
     {
-      "name": "eitstar",
-      "type": "eitstar",
+      "name": "aitstar",
+      "type": "aitstar",
       "options": {
-        "init_uniform_batch_size": 150,
+        "init_uniform_batch_size": 200,
         "init_transition_batch_size":50,
-        "batch_size": 100,
+        "batch_size": 150,
         "transition_batch_size": 50,
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
@@ -33,12 +33,12 @@
       }
     },
     {
-      "name": "aitstar",
-      "type": "aitstar",
+      "name": "eitstar",
+      "type": "eitstar",
       "options": {
-        "init_uniform_batch_size": 150,
+        "init_uniform_batch_size": 200,
         "init_transition_batch_size":50,
-        "batch_size": 100,
+        "batch_size": 150,
         "transition_batch_size": 50,
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
@@ -51,9 +51,10 @@
         "sample_near_path": false,
         "shortcutting": true,
         "direct_informed_sampling": true,
-        "inlcude_lb_in_informed_sampling":true,
-        "remove_based_on_modes":false, 
-        "with_tree_visualization": false
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":false
       }
     },
     {
@@ -71,6 +72,24 @@
         "locally_informed_sampling": true,
         "informed_batch_size": 300
 
+      }
+    },
+    {
+      "name": "birrtstar",
+      "type": "birrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 0.99,
+        "transition_nodes": 50,
+        "birrtstar_version": 2, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
       }
     },
     {
@@ -92,6 +111,8 @@
         "direct_informed_sampling": true
       }
     }
+
+
 
   ]
 }

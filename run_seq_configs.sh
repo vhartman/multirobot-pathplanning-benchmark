@@ -2,8 +2,9 @@
 
 # List of config paths
 configs=(
-    "./configs/demo/hallway.json"
+    "./configs/demo/other_hallway.json"
     "./configs/demo/box_stacking_dep.json"
+    "./configs/demo/unordered_box_reorientation.json"
 )
 
 # Base command

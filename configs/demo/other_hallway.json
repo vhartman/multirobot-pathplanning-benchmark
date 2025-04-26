@@ -1,11 +1,11 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "box_stacking_dep",
+  "environment": "other_hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 200,
   "num_runs": 20,
-  "seed": 1,
+  "seed": 0,
   "optimize": false,
   "planners": [
     {
