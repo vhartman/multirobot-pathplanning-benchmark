@@ -195,45 +195,40 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
         if not self.start_nodes_with_item[start_node_id]:
             self.start_nodes.discard(start_node_id)
 
-    def update(self, node_ids:Optional[Set[BaseNode]], type:str):
-        if node_ids is not None and len(node_ids) == 0:
+    def update(self, node_ids: Optional[Set[BaseNode]], type: str):
+        if node_ids is not None and not node_ids:
             return
+
+        before = len(self.current_entries)
         cnt = 0
-        before = (len(self.current_entries))
+
         if type == 'start':
-            if len(self.start_nodes) == 0:
-                return
-            if node_ids is None:
-                update = self.start_nodes
-            else:
-                update = node_ids & self.start_nodes
-            if not update:
-                return
-            for id in update:
-                 items = set(self.start_nodes_with_item[id])
-                 for item in items: 
-                    assert item in self.current_entries, (
-                    "ijfdlk")
-                    self.heappush(item)
-                    cnt +=1
-        if type == 'target':
-            if len(self.target_nodes) == 0:
-                return
-            if node_ids is None:
-                update = self.target_nodes
-            else:
-                update = node_ids & self.target_nodes
-            if not update:
-                return
-            for id in update:
-                items = set(self.target_nodes_with_item[id])
-                for item in items: 
-                    assert item in self.current_entries, (
-                    "ijfdlk")
-                    self.heappush(item)
-                    cnt +=1
-        assert before == len(self.current_entries), (
-        "hjk,l")
+            node_set = self.start_nodes
+            nodes_with_items = self.start_nodes_with_item
+        elif type == 'target':
+            node_set = self.target_nodes
+            nodes_with_items = self.target_nodes_with_item
+        else:
+            raise ValueError(f"Unknown update type: {type}")
+
+        if not node_set:
+            return
+
+        update_nodes = node_set if node_ids is None else node_ids & node_set
+        if not update_nodes:
+            return
+
+        heappush = self.heappush
+        current_entries = self.current_entries
+
+        for nid in update_nodes:
+            for item in nodes_with_items[nid]:
+                assert item in current_entries, "ijfdlk"
+                heappush(item)
+                cnt += 1
+
+        assert before == len(current_entries), "hjk,l"
+    
 class VertexQueue(DictIndexHeap[Node]):
     def __init__(self):
         super().__init__()
@@ -294,7 +289,8 @@ class AITstar(BaseITstar):
         inlcude_lb_in_informed_sampling:bool = True,
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False,
-        apply_long_horizon:bool = False
+        apply_long_horizon:bool = False,
+        greedy_mode_sampling_probability:float = 1.0,
         ):
         super().__init__(
             env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
@@ -308,7 +304,7 @@ class AITstar(BaseITstar):
             try_direct_informed_sampling = try_direct_informed_sampling, 
             inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
             remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
-            apply_long_horizon = apply_long_horizon)
+            apply_long_horizon = apply_long_horizon, greedy_mode_sampling_probability=greedy_mode_sampling_probability)
 
         self.alpha = 3.0
         self.consistent_nodes = set() #lb_cost_to_go_expanded == lb_cost_to_go

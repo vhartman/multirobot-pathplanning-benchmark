@@ -6,7 +6,7 @@
   "max_planning_time": 200,
   "num_runs": 20,
   "seed": 1,
-  "optimize": false,
+  "optimize": true,
   "planners": [
     {
       "name": "aitstar",

@@ -292,8 +292,8 @@ class EITstar(BaseITstar):
         inlcude_lb_in_informed_sampling:bool = True,
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False,
-        use_max_distance_metric_effort:bool = False,
         apply_long_horizon:bool = False,
+        greedy_mode_sampling_probability:float = 1.0,
         ):
         super().__init__(
             env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
@@ -307,10 +307,9 @@ class EITstar(BaseITstar):
             try_direct_informed_sampling = try_direct_informed_sampling, 
             inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
             remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
-            apply_long_horizon = apply_long_horizon)
+            apply_long_horizon = apply_long_horizon, greedy_mode_sampling_probability= greedy_mode_sampling_probability)
 
         self.sparse_number_of_points = 1
-        self.use_max_distance_metric_effort = use_max_distance_metric_effort
         self.reverse_tree_set = set()
         self.reduce_neighbors = False
         self.sparesly_checked_edges = {}
@@ -362,16 +361,12 @@ class EITstar(BaseITstar):
         self.reverse_tree_set.add(node.id)
            
     def expand_node_reverse(self, nodes: List[Node], first_search:bool = False) -> None:
+        g_nodes = self.g.nodes
         for node in nodes:
             if node.id == self.g.root.id or node == self.g.virtual_root:
                 return  
-            # if node.id in self.reverse_tree_set:
-            #     self.g.reverse_queue.update({node.id}, 'start')
-            #     return
             self.reverse_tree_set.add(node.id)
             self.updated_target_nodes.add(node.id)
-            # if node.id == 1326:
-            #     pass
             neighbors = self.g.get_neighbors(node, space_extent=self.approximate_space_extent, first_search=first_search)
             if neighbors.size == 0:
                 return          
@@ -380,38 +375,47 @@ class EITstar(BaseITstar):
             assert (len(edge_costs) == len(edge_efforts)), (
                 "neighbors and edge_costs are not the same length"
             )
-            for id, edge_cost, edge_effort in zip(neighbors, edge_costs, edge_efforts):
-                n = self.g.nodes[id]
+
+            node_lb_cost_to_go = node.lb_cost_to_go
+            node_rev_parent_id = node.rev.parent.id if node.rev.parent is not None else None
+            node_blacklist = node.blacklist
+            node_is_transition = node.is_transition
+            node_mode = getattr(node.state, 'mode', None)
+
+            if not self.dynamic_reverse_search_update:
+                nodes_to_skip = self.reverse_closed_set | self.reverse_tree_set
+                mask_valid = np.array([nid not in nodes_to_skip for nid in neighbors], dtype=bool)
+                neighbors = neighbors[mask_valid]
+                edge_costs = edge_costs[mask_valid]
+                edge_efforts = edge_efforts[mask_valid]
+
+            for id, edge_cost, edge_effort in zip( neighbors, edge_costs, edge_efforts):
+                n = g_nodes[id]
                 assert (n.forward.parent == node) == (n.id in node.forward.children), (
                         f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
                         )
-                if n in self.g.goal_nodes or n.id == self.g.root.id or n in self.g.virtual_goal_nodes:
+                if n in self.g.goal_nodes or id == self.g.root.id or n in self.g.virtual_goal_nodes:
                     continue
-                assert(n.id not in node.blacklist), (
+                assert(id not in node_blacklist), (
                 "neighbors are wrong")
-                if node.rev.parent is not None and node.rev.parent.id == n.id:
-                    continue
-                if n.is_transition and not n.is_reverse_transition:
-                    continue
-                if n.is_transition and n.is_reverse_transition:
-                    if node.is_transition:
-                        if node.state.mode != n.state.mode:
-                            continue
 
-
-                if n.id in self.reverse_closed_set and not self.dynamic_reverse_search_update:
-                    continue
-                
-                if n.id in self.reverse_tree_set:
-                    if not self.dynamic_reverse_search_update:
+                if n.is_transition:
+                    if not n.is_reverse_transition:
                         continue
-                    if n.lb_cost_to_go < node.lb_cost_to_go + edge_cost:
-                        assert(n.lb_cost_to_go- (node.lb_cost_to_go + edge_cost) < 1e-5), (
-                                    f"{n.id}, {node.id}, qwdfertzj"
+                    else:
+                        if node_is_transition:
+                            if node_mode != n.state.mode:
+                                continue
+                if node_rev_parent_id == id:
+                    continue
+                if id in self.reverse_tree_set:
+                    if n.lb_cost_to_go < node_lb_cost_to_go + edge_cost:
+                        assert(n.lb_cost_to_go- (node_lb_cost_to_go + edge_cost) < 1e-5), (
+                                    f"{id}, {node.id}, qwdfertzj"
                                 )
                         continue
                 if self.current_best_cost is not None:
-                    if node.lb_cost_to_go + edge_cost + n.lb_cost_to_come > self.current_best_cost:
+                    if node_lb_cost_to_go + edge_cost + n.lb_cost_to_come > self.current_best_cost:
                         continue
                 edge = (node, n)
                 self.g.reverse_queue.heappush((edge_cost, edge, edge_effort))
@@ -470,7 +474,7 @@ class EITstar(BaseITstar):
                         n_start = n1
                         n_end = n0
                     N_start, N_max = self.get_collision_start_and_max_index(self.sparse_number_of_points)
-                    N = max(2, int(edge_effort))
+                    N = max(2, int(edge_effort)+1)
                     edge_id = (n_start.id, n_end.id)
                     previously_checked = edge_id in self.sparesly_checked_edges
                     valid_check = (previously_checked and (

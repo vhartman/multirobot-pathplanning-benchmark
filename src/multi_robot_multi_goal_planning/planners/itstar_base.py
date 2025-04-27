@@ -1280,35 +1280,6 @@ class BaseGraph(ABC):
                 n.lb_cost_to_come = np.minimum.reduce(reverse_lb_array + costs_to_transitions)
                 processed +=1
 
-    def compute_node_lb_effort_to_come(self):
-        processed = 0
-        reverse_transition_node_lb_cache = {}
-        for mode in self.node_ids:
-            for id in self.node_ids[mode]:
-                n = self.nodes[id]
-                mode = n.state.mode
-                if mode not in self.reverse_transition_node_array_cache:
-                    continue
-
-                if mode not in reverse_transition_node_lb_cache:
-                    reverse_transition_node_lb_cache[mode] = np.array(
-                        [
-                            self.nodes[id].lb_cost_to_come
-                            for id in self.reverse_transition_node_ids[mode]
-                        ],
-                        dtype=np.float64,
-                    )
-                #use same distance metric as in collision detection
-                efforts_to_transitions = self.batch_dist_fun(
-                    n.state.q,
-                    self.reverse_transition_node_array_cache[mode],
-                    c = 'max'
-                )
-                potential_efforts = reverse_transition_node_lb_cache[mode] + efforts_to_transitions
-                n.lb_effort_to_come = np.min(potential_efforts)/self.collision_resolution
-                processed +=1
-        print(processed)
-
     def update_edge_collision_cache(
             self, n0: BaseNode, n1: BaseNode, is_edge_collision_free: bool
         ):
@@ -1465,7 +1436,8 @@ class BaseITstar(ABC):
         inlcude_lb_in_informed_sampling:bool = True,
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False,
-        apply_long_horizon:bool = False
+        apply_long_horizon:bool = False,
+        greedy_mode_sampling_probability:float = 1.0,
     ):
         self.env = env
         self.ptc = ptc
@@ -1488,6 +1460,7 @@ class BaseITstar(ABC):
         self.remove_based_on_modes = remove_based_on_modes
         self.with_tree_visualization = with_tree_visualization
         self.apply_long_horizon = apply_long_horizon
+        self.greedy_mode_sampling_probability = greedy_mode_sampling_probability
 
         self.reached_modes = set()
         self.sorted_reached_modes = None
@@ -2108,7 +2081,7 @@ class BaseITstar(ABC):
                 return reached_modes[0]
 
             total_nodes = self.g.get_num_samples()
-            p_frontier = 1
+            p_frontier = self.greedy_mode_sampling_probability
             p_remaining = 1 - p_frontier
 
             frontier_modes = []

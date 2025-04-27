@@ -45,7 +45,6 @@ from multi_robot_multi_goal_planning.planners.planner_fastdrrtstar import fastdR
 from make_plots import make_cost_plots
 from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
 from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
-from multi_robot_multi_goal_planning.planners.planner_rh_eitstar import RHEITstar
 # np.random.seed(100)
 
 
@@ -80,7 +79,6 @@ def load_experiment_config(filepath: str) -> Dict[str, Any]:
     planner_default_config_paths["birrtstar"] = "configs/defaults/birrtstar.json"
     planner_default_config_paths["aitstar"] = "configs/defaults/aitstar.json"
     planner_default_config_paths["eitstar"] = "configs/defaults/eitstar.json"
-    planner_default_config_paths["rh_eitstar"] = "configs/defaults/rh_eitstar.json"
 
 
     for planner_type, default_config_path in planner_default_config_paths.items():
@@ -299,6 +297,7 @@ def setup_planner(
                 remove_based_on_modes = options["remove_based_on_modes"],
                 with_tree_visualization = options["with_tree_visualization"],
                 apply_long_horizon=options["apply_long_horizon"],
+                greedy_mode_sampling_probability = options["greedy_mode_sampling_probability"]
             ).Plan(optimize)
         
     elif planner_config["type"] == "eitstar":
@@ -325,35 +324,10 @@ def setup_planner(
                 inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
                 remove_based_on_modes = options["remove_based_on_modes"],
                 with_tree_visualization = options["with_tree_visualization"],
-                use_max_distance_metric_effort = options["use_max_distance_metric_effort"],
                 apply_long_horizon=options["apply_long_horizon"],
+                greedy_mode_sampling_probability = options["greedy_mode_sampling_probability"]
             ).Plan(optimize)
-    elif planner_config["type"] == "rh_eitstar":
-        def planner(env):
-            options = planner_config["options"]
-            return RHEITstar(
-                env,
-                ptc=RuntimeTerminationCondition(runtime),
-                mode_sampling_type = options["mode_sampling_type"],
-                distance_metric=options["distance_function"],
-                try_sampling_around_path=options["sample_near_path"],
-                try_informed_sampling=options["informed_sampling"],
-                try_informed_transitions=options["informed_transition_sampling"],
-                init_uniform_batch_size = options["init_uniform_batch_size"],
-                init_transition_batch_size = options["init_transition_batch_size"],
-                uniform_batch_size=options["batch_size"],
-                uniform_transition_batch_size=options["transition_batch_size"],
-                informed_batch_size=options["informed_batch_size"],
-                informed_transition_batch_size=options["informed_transition_batch_size" ],
-                path_batch_size=options["path_batch_size"],
-                locally_informed_sampling=options["locally_informed_sampling"],
-                try_shortcutting=options["shortcutting"],
-                try_direct_informed_sampling=options["direct_informed_sampling"],
-                inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
-                remove_based_on_modes = options["remove_based_on_modes"],
-                with_tree_visualization = options["with_tree_visualization"],
-                use_max_distance_metric_effort = options["use_max_distance_metric_effort"]
-            ).Plan(optimize)
+
 
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")

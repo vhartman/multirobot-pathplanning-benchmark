@@ -19,6 +19,7 @@
     "inlcude_lb_in_informed_sampling": true,
     "remove_based_on_modes": false,
     "with_tree_visualization": false,
-    "apply_long_horizon":false
+    "apply_long_horizon":false,
+    "greedy_mode_sampling_probability":1.0
   }
 }
