@@ -244,7 +244,7 @@ class VertexQueue(DictIndexHeap[Node]):
            return
         del self.current_entries[item]
         self.nodes.remove(item.id)
-        del self.nodes_with_item[item.id]
+        # del self.nodes_with_item[item.id]
 
     def key(self, node: Node) -> float:
         min_lb = min(node.lb_cost_to_go, node.lb_cost_to_go_expanded) 
@@ -271,7 +271,7 @@ class AITstar(BaseITstar):
         self,
         env: BaseProblem,
         ptc: PlannerTerminationCondition,
-        mode_sampling_type: str = "greedy",
+        init_mode_sampling_type: str = "greedy",
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
         try_informed_sampling: bool = True,
@@ -290,10 +290,11 @@ class AITstar(BaseITstar):
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False,
         apply_long_horizon:bool = False,
-        greedy_mode_sampling_probability:float = 1.0,
+        frontier_mode_sampling_probability:float = 1.0,
+        horizon_length: int = 1,
         ):
         super().__init__(
-            env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
+            env = env, ptc=ptc, init_mode_sampling_type = init_mode_sampling_type, distance_metric = distance_metric, 
             try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
             init_uniform_batch_size=init_uniform_batch_size, init_transition_batch_size=init_transition_batch_size,
             uniform_batch_size = uniform_batch_size, 
@@ -304,7 +305,8 @@ class AITstar(BaseITstar):
             try_direct_informed_sampling = try_direct_informed_sampling, 
             inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
             remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
-            apply_long_horizon = apply_long_horizon, greedy_mode_sampling_probability=greedy_mode_sampling_probability)
+            apply_long_horizon = apply_long_horizon, frontier_mode_sampling_probability=frontier_mode_sampling_probability,
+            horizon_length = horizon_length)
 
         self.alpha = 3.0
         self.consistent_nodes = set() #lb_cost_to_go_expanded == lb_cost_to_go

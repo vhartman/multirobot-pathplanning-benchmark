@@ -274,7 +274,7 @@ class EITstar(BaseITstar):
         self,
         env: BaseProblem,
         ptc: PlannerTerminationCondition,
-        mode_sampling_type: str = "greedy",
+        init_mode_sampling_type: str = "greedy",
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
         try_informed_sampling: bool = True,
@@ -293,10 +293,11 @@ class EITstar(BaseITstar):
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False,
         apply_long_horizon:bool = False,
-        greedy_mode_sampling_probability:float = 1.0,
+        frontier_mode_sampling_probability:float = 1.0,
+        horizon_length: int = 1,
         ):
         super().__init__(
-            env = env, ptc=ptc, mode_sampling_type = mode_sampling_type, distance_metric = distance_metric, 
+            env = env, ptc=ptc, init_mode_sampling_type = init_mode_sampling_type, distance_metric = distance_metric, 
             try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
             init_uniform_batch_size=init_uniform_batch_size, init_transition_batch_size=init_transition_batch_size,
             uniform_batch_size = uniform_batch_size, 
@@ -307,7 +308,8 @@ class EITstar(BaseITstar):
             try_direct_informed_sampling = try_direct_informed_sampling, 
             inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
             remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
-            apply_long_horizon = apply_long_horizon, greedy_mode_sampling_probability= greedy_mode_sampling_probability)
+            apply_long_horizon = apply_long_horizon, frontier_mode_sampling_probability= frontier_mode_sampling_probability,
+            horizon_length = horizon_length)
 
         self.sparse_number_of_points = 1
         self.reverse_tree_set = set()
@@ -438,25 +440,14 @@ class EITstar(BaseITstar):
         self.updated_target_nodes = set()
         iter = 0
         while self.continue_reverse_search(iter):
-            # if self.reverse_tree_set and self.with_tree_visualization:
-            #     self.save_tree_data((BaseTerree.all_vertices, self.reverse_tree_set))
-            # print(iter, self.reverse_tree_set)
+
             iter +=1
             edge_cost, edge, edge_effort = self.g.reverse_queue.heappop()
             n0, n1 = edge
-            # if n0.state.mode.id != n1.state.mode.id:
-            #     if n0.state.mode.prev_mode != n1.state.mode.prev_mode and not self.env.is_terminal_mode(n1.state.mode) :
-            #         if 13 not in n1.state.mode.task_ids:
-            #             pass
-            #         else:
-            #             pass
-            #         pass
-            # if not self.dynamic_reverse_search_update and n1.id in self.reverse_tree_set:
-            #     continue
+
             self.reverse_closed_set.add(n0.id)
-            is_transition = False
-            if n1.is_transition and n1.is_reverse_transition:
-                is_transition = True
+            is_transition = n1.is_transition and n1.is_reverse_transition
+
             potential_lb_cost_to_go = n0.lb_cost_to_go + edge_cost        
             if is_transition and n1.transition_neighbors[0].lb_cost_to_go < potential_lb_cost_to_go:
                 #don't change the parent
@@ -467,18 +458,13 @@ class EITstar(BaseITstar):
             if n0.id not in n1.whitelist:
                 sparsely_collision_free = False
                 if n0.id not in n1.blacklist:
-                    if n1.id > n0.id:
-                            n_start = n0
-                            n_end = n1
-                    else:
-                        n_start = n1
-                        n_end = n0
+                    n_start, n_end = (n0, n1) if n1.id > n0.id else (n1, n0)
                     N_start, N_max = self.get_collision_start_and_max_index(self.sparse_number_of_points)
                     N = max(2, int(edge_effort)+1)
                     edge_id = (n_start.id, n_end.id)
                     previously_checked = edge_id in self.sparesly_checked_edges
-                    valid_check = (previously_checked and (
-                                    self.sparesly_checked_edges[edge_id] >= N_max))
+                    valid_check = previously_checked and (
+                                    self.sparesly_checked_edges[edge_id] >= N_max)
                     if valid_check:
                         sparsely_collision_free = True
                     else:
@@ -520,8 +506,6 @@ class EITstar(BaseITstar):
                         continue
                     self.expand_node_reverse([n1.transition_neighbors[0]])
                     continue
-                # if n1.id == 1326:
-                #     pass
                 self.expand_node_reverse([n1])
 
         if self.with_tree_visualization and iter > 0:

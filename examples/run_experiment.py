@@ -278,7 +278,7 @@ def setup_planner(
             return AITstar(
                 env,
                 ptc=RuntimeTerminationCondition(runtime),
-                mode_sampling_type = options["mode_sampling_type"],
+                init_mode_sampling_type = options["init_mode_sampling_type"],
                 distance_metric=options["distance_function"],
                 try_sampling_around_path=options["sample_near_path"],
                 try_informed_sampling=options["informed_sampling"],
@@ -297,7 +297,9 @@ def setup_planner(
                 remove_based_on_modes = options["remove_based_on_modes"],
                 with_tree_visualization = options["with_tree_visualization"],
                 apply_long_horizon=options["apply_long_horizon"],
-                greedy_mode_sampling_probability = options["greedy_mode_sampling_probability"]
+                frontier_mode_sampling_probability = options["frontier_mode_sampling_probability"],
+                horizon_length = options["horizon_length"],
+
             ).Plan(optimize)
         
     elif planner_config["type"] == "eitstar":
@@ -306,7 +308,7 @@ def setup_planner(
             return EITstar(
                 env,
                 ptc=RuntimeTerminationCondition(runtime),
-                mode_sampling_type = options["mode_sampling_type"],
+                init_mode_sampling_type = options["init_mode_sampling_type"],
                 distance_metric=options["distance_function"],
                 try_sampling_around_path=options["sample_near_path"],
                 try_informed_sampling=options["informed_sampling"],
@@ -325,7 +327,8 @@ def setup_planner(
                 remove_based_on_modes = options["remove_based_on_modes"],
                 with_tree_visualization = options["with_tree_visualization"],
                 apply_long_horizon=options["apply_long_horizon"],
-                greedy_mode_sampling_probability = options["greedy_mode_sampling_probability"]
+                frontier_mode_sampling_probability = options["frontier_mode_sampling_probability"],
+                horizon_length = options["horizon_length"],
             ).Plan(optimize)
 
 

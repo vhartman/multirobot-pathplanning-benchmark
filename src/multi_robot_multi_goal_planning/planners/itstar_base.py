@@ -232,6 +232,7 @@ class DictIndexHeap(ABC, Generic[T]):
     items: Dict[int, Any]  # Dictionary for storing active items
     current_entries: Dict[T, Tuple[float, int]]
     nodes: set
+    items_to_skip: set
     idx = 0
     def __init__(self, collision_resolution: Optional[float] = None) -> None:
         self.queue = []
@@ -239,6 +240,7 @@ class DictIndexHeap(ABC, Generic[T]):
         self.current_entries = {}  
         heapq.heapify(self.queue)
         self.collision_resolution = collision_resolution
+        self.items_to_skip = set()
 
     def __len__(self):
         return len(self.current_entries)
@@ -253,16 +255,16 @@ class DictIndexHeap(ABC, Generic[T]):
     def heappush(self, item: T) -> None:
         """Push a single item into the heap."""
         # idx = len(self.items)
+        item_already_in_heap = item in self.current_entries
         priority = self.key(item)
-        if item in self.current_entries:
+        if item_already_in_heap:
             latest_priority, idx = self.current_entries[item]
             if latest_priority == priority:
                 return
             if latest_priority < priority:
-        #         # _, _ = heapq.heappop(self.queue)
-                del self.items[idx]
+                self.items_to_skip.add(idx)
 
-        self.push_and_sync(item, priority)
+        self.push_and_sync(item, priority, item_already_in_heap)
         # self.nodes_in_queue[item[1]] = (priority, DictIndexHeap.idx)
         heapq.heappush(self.queue, (priority, DictIndexHeap.idx))
         DictIndexHeap.idx += 1
@@ -270,15 +272,16 @@ class DictIndexHeap(ABC, Generic[T]):
     def add_and_sync(self, item: T) -> None:
         pass
 
-    def push_and_sync(self, item, priority) -> float:
+    def push_and_sync(self, item, priority, item_already_in_heap:bool = False) -> float:
         self.items[DictIndexHeap.idx] = item  # Store only valid items
         self.current_entries[item] = (priority, DictIndexHeap.idx) # always up to date with the newest one!
-        self.add_and_sync(item)
+        if not item_already_in_heap:
+            self.add_and_sync(item)
 
     def peek_first_element(self) -> Any:
         while self.current_entries:
             priority, idx = self.queue[0]
-            if idx not in self.items:
+            if idx in self.items_to_skip:
                 _, _ = heapq.heappop(self.queue)
                 continue
             item = self.items[idx]
@@ -312,7 +315,7 @@ class DictIndexHeap(ABC, Generic[T]):
          # Remove from dictionary (Lazy approach)
         while self.current_entries:
             priority, idx = heapq.heappop(self.queue)
-            if idx not in self.items:
+            if idx in self.items_to_skip:
                 continue
             item = self.items.pop(idx)
             if item in self.current_entries:
@@ -1361,7 +1364,7 @@ class InformedSampling(BaseInformedSampling):
 
 class BaseLongHorizon():
     counter: ClassVar[int] = 1
-    def __init__(self):
+    def __init__(self, horizon_length:int = 4):
         self.init = True
         self.new_section = True
         self.start_mode = None
@@ -1369,7 +1372,7 @@ class BaseLongHorizon():
         self.cost = None #keep track of latest_cost
         self.overlap_idx = 0
         self.horizon_idx = 0
-        self.horizon_length = 4
+        self.horizon_length = horizon_length
         self.mode_sequence = None
         self.reached_terminal_mode = False
         
@@ -1418,7 +1421,7 @@ class BaseITstar(ABC):
         self,
         env: BaseProblem,
         ptc: PlannerTerminationCondition,
-        mode_sampling_type: str = "greedy",
+        init_mode_sampling_type: str = "greedy",
         distance_metric: str = "euclidean",
         try_sampling_around_path: bool = True,
         try_informed_sampling: bool = True,
@@ -1437,11 +1440,12 @@ class BaseITstar(ABC):
         remove_based_on_modes:bool = False,
         with_tree_visualization:bool = False,
         apply_long_horizon:bool = False,
-        greedy_mode_sampling_probability:float = 1.0,
+        frontier_mode_sampling_probability:float = 1.0,
+        horizon_length:int = 1,
     ):
         self.env = env
         self.ptc = ptc
-        self.mode_sampling_type = mode_sampling_type
+        self.init_mode_sampling_type = init_mode_sampling_type
         self.distance_metric = distance_metric
         self.try_sampling_around_path = try_sampling_around_path
         self.try_informed_sampling = try_informed_sampling
@@ -1460,7 +1464,8 @@ class BaseITstar(ABC):
         self.remove_based_on_modes = remove_based_on_modes
         self.with_tree_visualization = with_tree_visualization
         self.apply_long_horizon = apply_long_horizon
-        self.greedy_mode_sampling_probability = greedy_mode_sampling_probability
+        self.frontier_mode_sampling_probability = frontier_mode_sampling_probability
+        self.horizon_length = horizon_length
 
         self.reached_modes = set()
         self.sorted_reached_modes = None
@@ -1516,7 +1521,7 @@ class BaseITstar(ABC):
             )
 
     def _create_long_horizon(self) -> BaseLongHorizon:
-        return BaseLongHorizon()
+        return BaseLongHorizon(self.horizon_length)
 
     def sample_valid_uniform_batch(self, batch_size: int, cost: float) -> List[State]:
         new_samples = []
@@ -1585,7 +1590,10 @@ class BaseITstar(ABC):
         transitions = 0
         num_reached_modes = len(self.reached_modes)
         new_num_reached_modes = num_reached_modes
-
+        if len(self.g.goal_node_ids) == 0:
+                mode_sampling_type = self.init_mode_sampling_type
+        else:
+            mode_sampling_type = "uniform_reached"
         if len(self.g.goal_nodes) > 0:
             focal_points = np.array(
                 [self.g.root.state.q.state(), self.g.goal_nodes[0].state.q.state()],
@@ -1600,10 +1608,7 @@ class BaseITstar(ABC):
         while transitions < transistion_batch_size:
             if failed_attemps > 2* transistion_batch_size:
                 break 
-            if len(self.g.goal_node_ids) == 0:
-                mode_sampling_type = "greedy" #TODO!
-            else:
-                mode_sampling_type = "uniform_reached"
+            
             # sample mode
             mode = self.sample_mode(mode_seq, mode_sampling_type, None)
             
@@ -1685,6 +1690,7 @@ class BaseITstar(ABC):
                 new_num_reached_modes = len(self.reached_modes)
                     
             if self.current_best_cost is None and len(self.g.goal_nodes) > 0:  
+                mode_sampling_type = "uniform_reached"
                 if self.env.is_terminal_mode(mode) and mode != self.terminal_mode:
                     self.terminal_mode = mode
                     self.get_modes_init_search(self.terminal_mode)
@@ -2040,48 +2046,12 @@ class BaseITstar(ABC):
     ) -> Mode:
         if mode_sampling_type == "uniform_reached":
             return random.choice(reached_modes)
-        if mode_sampling_type == "greedy":
-            # # return random.choices(reached_modes)[0]
-            # if len(reached_modes) == 1:
-            #     return reached_modes[0]
-            # frontier_modes, remaining_modes = [], []
-            # # return reached_modes[-1]
-            # for m in reached_modes:
-            #     if len(m.next_modes) == 0:
-            #         frontier_modes.append(m)
-            #     else:
-            #         remaining_modes.append(m)
-            # if len(frontier_modes) == 0:
-            #     frontier_modes = reached_modes
-            # # return random.choice(frontier_modes)
-            # if not remaining_modes:
-            #     return random.choice(reached_modes)
-            # p_frontier = 0.99
-            # p_remaining = 1 - p_frontier
-
-            # # total_nodes = list(chain.from_iterable(self.g.transition_node_ids.values())) + list(chain.from_iterable(self.g.node_ids.values()))
-            # total_nodes = self.g.get_num_samples()
-            # # Calculate probabilities inversely proportional to node counts
-            # inverse_probabilities = [
-            #     1 - (self.g.get_num_samples_in_mode(mode)/ total_nodes)
-            #     for mode in remaining_modes]
-            # total_inverse = sum(inverse_probabilities)
-
-            # p = []
-
-            # for m in reached_modes:
-            #     if m in frontier_modes:
-            #         tmp = p_frontier / len(frontier_modes)
-            #     else:
-            #         tmp = (1 - (self.g.get_num_samples_in_mode(m)/ total_nodes)) / total_inverse * p_remaining
-                
-            #     p.append(tmp)
-            # return np.random.choice(reached_modes, p = p)
+        elif mode_sampling_type == "frontier":
             if len(reached_modes) == 1:
                 return reached_modes[0]
 
             total_nodes = self.g.get_num_samples()
-            p_frontier = self.greedy_mode_sampling_probability
+            p_frontier = self.frontier_mode_sampling_probability
             p_remaining = 1 - p_frontier
 
             frontier_modes = []
@@ -2119,7 +2089,9 @@ class BaseITstar(ABC):
             
             return random.choices(sorted_reached_modes, weights=p, k=1)[0]
 
-     
+        elif mode_sampling_type == "greedy":    
+            return reached_modes[-1]
+        
         return random.choice(reached_modes) 
             # m_rnd = reached_modes[-1]
 
