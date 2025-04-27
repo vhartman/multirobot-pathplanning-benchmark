@@ -4757,15 +4757,21 @@ def make_box_pile_env(
 
         return sol
 
+    selected_robots = set()
     for i in range(num_boxes):
         # check how the object is oriented, and if we can grasp and place it directly
         quat = C.getFrame("box" + str(i)).getQuaternion()
         z_up = is_z_axis_up(quat)
         robots = ["a1_", "a2_"]
-        random.shuffle(robots)
+        if i == num_boxes - 1 and len(selected_robots) != len(robots):
+            if "a2_" not in selected_robots:
+                robots = ["a2_", "a1_"]
+        else:
+            random.shuffle(robots)
 
         if z_up:
             for r in robots:
+                selected_robots.add(r)
                 keyframe = pick_and_place(r, i)
                 print(keyframe)
                 if keyframe is None:
