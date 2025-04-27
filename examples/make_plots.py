@@ -158,6 +158,7 @@ planner_name_to_color = {
     # "locally_informed_prm": "tab:green",
     # "locally_informed_prm_shortcutting": "navy",
     "long horizon eitstar":"navy",
+    "long horizon aitstar":"brown",
     "rrtstar_shortcutting": "brown",
     "locally_informed_rrtstar": "lightcoral",
     "prm_shortcutting": "cyan",

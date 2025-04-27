@@ -27,8 +27,7 @@ from multi_robot_multi_goal_planning.planners.itstar_base import (
     BaseGraph,
     BaseOperation, 
     BaseNode,
-    BaseTree,
-    BaseLongHorizon
+    BaseTree
     )
 from functools import cache
 from multi_robot_multi_goal_planning.planners.planner_aitstar import EdgeQueue
@@ -445,6 +444,10 @@ class EITstar(BaseITstar):
             edge_cost, edge, edge_effort = self.g.reverse_queue.heappop()
             n0, n1 = edge
 
+            # assert (n0.state.mode in self.long_horizon.mode_sequence), (
+            #     "fghjklö"
+            # )
+
             self.reverse_closed_set.add(n0.id)
             is_transition = n1.is_transition and n1.is_reverse_transition
 
@@ -616,11 +619,6 @@ class EITstar(BaseITstar):
         n1 = None
         while True:
             num_iter += 1
-            # if self.apply_long_horizon and num_iter % 50 == 0 and self.current_best_cost is not None:
-            #     if not self.long_horizon.reached_terminal_mode:
-            #         self.long_horizon.reset()
-            #         self.current_best_cost = None
-            #         self.initialize_search()
             self.reverse_search()
             if num_iter % 100000 == 0:
                 print("Forward Queue: ", len(self.g.cost_bound_queue))
@@ -652,6 +650,10 @@ class EITstar(BaseITstar):
                 if n1.forward.parent == n0:  # if its already the parent
                     if is_transition:
                         for transition in n1.transition_neighbors:
+                            # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
+                            #     continue
+                            # if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
+                            #     continue  
                             self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
@@ -687,6 +689,10 @@ class EITstar(BaseITstar):
                             )
                     if is_transition:
                         for transition in n1.transition_neighbors:
+                            # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
+                            #     continue
+                            # if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
+                            #     continue 
                             self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
@@ -702,6 +708,8 @@ class EITstar(BaseITstar):
                             self.update_inflation_factor()
                             if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
                                 self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+                            if self.apply_long_horizon and self.current_best_path_nodes[-1].transition_neighbors:
+                                self.initialize_search(num_iter, True)
                            
 
                 
@@ -709,7 +717,9 @@ class EITstar(BaseITstar):
                 self.initialize_search(num_iter)
   
                 
-            if not optimize and self.current_best_cost is not None:
+            if not optimize and self.current_best_cost is not None:                   
+                if self.apply_long_horizon and self.current_best_path_nodes[-1].transition_neighbors:
+                    continue
                 break
 
             if self.ptc.should_terminate(self.cnt, time.time() - self.start_time):
