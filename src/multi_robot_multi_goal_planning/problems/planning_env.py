@@ -1546,6 +1546,7 @@ class BaseProblem(ABC):
 
             # print("checked edges in shortcutting: ", valid_edges)
         else:
+            Ns = {}  
             edge_queue = list(idx)
             checks_per_iteration = 10
             N_start = 0
@@ -1556,7 +1557,8 @@ class BaseProblem(ABC):
                     q1 = path[i].q
                     q2 = path[i + 1].q
                     mode = path[i].mode
-
+                    if i not in Ns:
+                        Ns[i] = int(config_dist(q1, q2, "max") / resolution) + 1
                     if N_start == 0:
                         if not self.is_collision_free(q1, mode):
                             return False
@@ -1570,6 +1572,7 @@ class BaseProblem(ABC):
                         include_endpoints=False,
                         N_start=N_start,
                         N_max=N_max,
+                        # N = Ns[i] 
                     )
 
                     if res is None:
@@ -1579,8 +1582,8 @@ class BaseProblem(ABC):
                     if not res:
                         return False
 
-                for i in edges_to_remove:
-                    edge_queue.remove(i)
+                if edges_to_remove:
+                    edge_queue = [i for i in edge_queue if i not in edges_to_remove]
 
                 N_start += checks_per_iteration
                 N_max += checks_per_iteration
