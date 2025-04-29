@@ -1548,7 +1548,7 @@ def make_box_sorting_env(view: bool = False):
                         i * size[2] * 1.3 + 0.05 + 0.4,
                     ]
                 )
-                C.addFrame("box" + str(i) + str(j) + str(k)).setParent(table).setShape(
+                C.addFrame("obj" + str(i) + str(j) + str(k)).setParent(table).setShape(
                     ry.ST.box, [size[0], size[1], size[2], 0.005]
                 ).setPosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                     np.random.rand(3)
@@ -1603,7 +1603,7 @@ def make_box_sorting_env(view: bool = False):
     # komo.addControlObjective([], 1, 1e-1)
     # komo.addControlObjective([], 2, 1e-1)
 
-    box = "box100"
+    box = "obj100"
     robot_prefix = "a1_"
 
     komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
@@ -1664,7 +1664,7 @@ def make_box_sorting_env(view: bool = False):
     # komo.addControlObjective([], 1, 1e-1)
     # komo.addControlObjective([], 2, 1e-1)
 
-    box = "box101"
+    box = "obj101"
     robot_prefix = "a2_"
 
     komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
@@ -1774,7 +1774,7 @@ def make_egg_carton_env(num_boxes=9, view: bool = False):
                         i * size[2] * 1.3 + 0.05 + 0.1,
                     ]
                 )
-                box_name = "box" + str(i) + str(j) + str(k)
+                box_name = "obj" + str(i) + str(j) + str(k)
                 all_boxes.append(box_name)
                 C.addFrame(box_name).setParent(table).setShape(
                     ry.ST.box, [size[0], size[1], size[2], 0.005]
@@ -2037,7 +2037,7 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
         if crl_logo[2 - k, j] == 0:
             color = [1, 1, 1, 1]
 
-        C.addFrame("box" + str(j_rnd) + str(k_rnd)).setParent(table).setShape(
+        C.addFrame("obj" + str(j_rnd) + str(k_rnd)).setParent(table).setShape(
             ry.ST.box, [size[0], size[1], size[2], 0.5]
         ).setRelativePosition([rnd_pos[0], rnd_pos[1], rnd_pos[2]]).setMass(
             0.1
@@ -2049,7 +2049,7 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
             0
         ).setJoint(ry.JT.rigid)
 
-        boxes.append("box" + str(j_rnd) + str(k_rnd))
+        boxes.append("obj" + str(j_rnd) + str(k_rnd))
         goals.append("goal" + str(j) + str(k))
 
     intermediate_goals = []
@@ -2399,7 +2399,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
                     0.085,
                 ]
             )
-            C.addFrame("box" + str(j) + str(k)).setParent(table).setShape(
+            C.addFrame("obj" + str(j) + str(k)).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.5]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 np.random.rand(3)
@@ -2411,7 +2411,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
                 [0, 0, 0.1, 0.5]
             ).setContact(0).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
 
-            boxes.append("box" + str(j) + str(k))
+            boxes.append("obj" + str(j) + str(k))
             goals.append("goal" + str(j) + str(k))
 
             cnt += 1
@@ -2842,7 +2842,7 @@ def make_box_stacking_env(
 
             pos = get_pos(j, k)
 
-            C.addFrame("box" + str(j) + str(k)).setParent(table).setShape(
+            C.addFrame("obj" + str(j) + str(k)).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 np.random.rand(3)
@@ -2856,7 +2856,7 @@ def make_box_stacking_env(
                 perturbation_quaternion
             ).setJoint(ry.JT.rigid)
 
-            boxes.append("box" + str(j) + str(k))
+            boxes.append("obj" + str(j) + str(k))
             goals.append("goal" + str(j) + str(k))
 
             cnt += 1
@@ -3962,7 +3962,7 @@ def make_box_pile_env(
         color = np.random.rand(3)
 
         box = (
-            c_coll_tmp.addFrame("box" + str(added_boxes))
+            c_coll_tmp.addFrame("obj" + str(added_boxes))
             .setParent(c_coll_tmp.getFrame("table"))
             .setShape(ry.ST.box, [size[0], size[1], size[2], 0.005])
             .setPosition([pos[0], pos[1], pos[2]])
@@ -3973,7 +3973,7 @@ def make_box_pile_env(
             .setJoint(ry.JT.rigid)
         )
 
-        c_coll_tmp.addFrame("marker_box" + str(added_boxes)).setParent(box).setShape(
+        c_coll_tmp.addFrame("marker_obj" + str(added_boxes)).setParent(box).setShape(
             ry.ST.marker, [0.1]
         ).setContact(0).setJoint(ry.JT.rigid)
 
@@ -4030,7 +4030,7 @@ def make_box_pile_env(
         c_tmp = ry.Config()
         c_tmp.addConfigurationCopy(C)
 
-        box = "box" + str(box_num)
+        box = "obj" + str(box_num)
         goal = "goal" + str(box_num)
 
         q_home = c_tmp.getJointState()
@@ -4165,7 +4165,7 @@ def make_box_pile_env(
         c_tmp = ry.Config()
         c_tmp.addConfigurationCopy(C)
 
-        box = "box" + str(box_num)
+        box = "obj" + str(box_num)
         goal = "goal" + str(box_num)
 
         robot_base = robot_prefix + "ur_base"
@@ -4237,7 +4237,7 @@ def make_box_pile_env(
 
     for i in range(num_boxes):
         # check how the object is oriented, and if we can grasp and place it directly
-        quat = C.getFrame("box" + str(i)).getQuaternion()
+        quat = C.getFrame("obj" + str(i)).getQuaternion()
         z_up = is_z_axis_up(quat)
         robots = ["a1_", "a2_"]
         random.shuffle(robots)
@@ -4356,7 +4356,7 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
             )
 
             color = np.random.rand(3)
-            box_name = "box_" + str(i) + str(j)
+            box_name = "obj_" + str(i) + str(j)
             all_boxes.append(box_name)
             C.addFrame(box_name).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
@@ -4371,7 +4371,7 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
                     (1 - i) * size[2] * 1.01 + 0.05 + 0.1,
                 ]
             )
-            goal_name = "box_goal_" + str(i) + str(j)
+            goal_name = "obj_goal_" + str(i) + str(j)
             C.addFrame(goal_name).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition(goal_pos).setMass(0.1).setColor(
@@ -4482,8 +4482,8 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
             c_tmp_2.addConfigurationCopy(c_tmp)
             # c_tmp_2.computeCollisions()
 
-            box = f"box_{j}{i}"
-            box_goal = f"box_goal_{j}{i}"
+            box = f"obj_{j}{i}"
+            box_goal = f"obj_goal_{j}{i}"
 
             for g in bottom_goal_names:
                 if g != box_goal:
@@ -4532,7 +4532,7 @@ def make_depalletizing_env():
 
     size = np.array([0.2, 0.1, 0.1])
 
-    C.addFrame("box").setParent(C.getFrame("floor")).setShape(
+    C.addFrame("obj").setParent(C.getFrame("floor")).setShape(
         ry.ST.box, [size[0], size[1], size[2], 0.005]
     ).setRelativePosition([0, 0, 0.1]).setMass(0.1).setColor(
         np.random.rand(3)
@@ -4624,7 +4624,7 @@ def make_depalletizing_env():
                 keyframes = komo.getPath()
                 return keyframes
 
-    box = "box"
+    box = "obj"
     robot_prefix = "a1_"
     compute_pick_and_place(box, "goal", robot_prefix)
 
