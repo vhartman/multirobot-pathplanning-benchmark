@@ -303,7 +303,7 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
 
         cnt = 0
         for primitive_type, robots, box_index, qs in keyframes:
-            box_name = "box" + str(box_index)
+            box_name = "obj" + str(box_index)
 
             robot_index = 0
             if robots[0] == "a2_":

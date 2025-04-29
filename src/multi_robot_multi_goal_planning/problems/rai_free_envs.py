@@ -342,7 +342,7 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
 
       cnt = 0
       for primitive_type, robots, box_index, qs in keyframes:
-          box_name = "box" + str(box_index)
+          box_name = "obj" + str(box_index)
 
           if box_name not in pick_tasks:
               pick_tasks[box_name] = []

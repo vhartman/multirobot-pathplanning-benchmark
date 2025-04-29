@@ -1392,7 +1392,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
 
 class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
     def __init__(self):
-        rai_env.__init__(self)
+        super().__init__()
 
         self.manipulating_env = True
 
@@ -1401,26 +1401,26 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
                 ["a1"],
                 SingleGoal(self.keyframes[0][self.robot_idx["a1"]]),
                 type="pick",
-                frames=["a1_ur_vacuum", "box100"],
+                frames=["a1_ur_vacuum", "obj100"],
             ),
             Task(
                 ["a1"],
                 SingleGoal(self.keyframes[1][self.robot_idx["a1"]]),
                 type="place",
-                frames=["table", "box100"],
+                frames=["table", "obj100"],
                 side_effect="remove",
             ),
             Task(
                 ["a2"],
                 SingleGoal(self.keyframes[3][self.robot_idx["a2"]]),
                 type="pick",
-                frames=["a2_ur_vacuum", "box101"],
+                frames=["a2_ur_vacuum", "obj101"],
             ),
             Task(
                 ["a2"],
                 SingleGoal(self.keyframes[4][self.robot_idx["a2"]]),
                 type="place",
-                frames=["table", "box101"],
+                frames=["table", "obj101"],
                 side_effect="remove",
             ),
             Task(
@@ -1797,7 +1797,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
 
         cnt = 0
         for primitive_type, robots, box_index, qs in keyframes:
-            box_name = "box" + str(box_index)
+            box_name = "obj" + str(box_index)
             print(primitive_type)
             if primitive_type == "pick":
                 for t, k in zip(pick_task_names, qs[0]):
@@ -1911,7 +1911,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
 
         cnt = 0
         for primitive_type, robots, box_index, qs in keyframes:
-            box_name = "box" + str(box_index)
+            box_name = "obj" + str(box_index)
             print(primitive_type)
             prev_task = None
 
