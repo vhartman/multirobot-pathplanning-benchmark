@@ -102,6 +102,9 @@ def robot_mode_shortcut(
     Works by randomly sampling indices, then randomly choosing a robot, and then checking if the direct interpolation is
     collision free.
     """
+    if seed is not None:
+        np.random.seed(seed)
+        random.seed(seed)
     non_redundant_path = remove_interpolated_nodes(path)
     new_path = interpolate_path(non_redundant_path, 0.1)
 
@@ -206,7 +209,7 @@ def robot_mode_shortcut(
 
         # this is wrong for partial shortcuts atm.
         if env.is_path_collision_free(
-            path_element, resolution=resolution, tolerance=tolerance, check_edges_in_order=True
+            path_element, resolution=resolution, tolerance=tolerance, check_edges_in_order=check_edges_in_order
         ):
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q

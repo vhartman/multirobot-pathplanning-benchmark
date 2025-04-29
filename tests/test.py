@@ -518,4 +518,7 @@ def test_shortcutting(planner_fn_no_shurtcutting, run_idx):
     assert all(np.allclose(a1, a2) for a1, a2 in zip(list1, list2))
     assert cost1 == cost2
     assert len(shortcut_path_checked_edge_in_order) == len(shortcut_path_checked_edge_not_in_order)
-    # assert time2[-1] < time1[-1]
+    print("time checked edge in order: ", time1[-1])
+    print("time checked edge not in order: ", time2[-1])
+    print(time2[-1] < time1[-1])
+    # assert 
