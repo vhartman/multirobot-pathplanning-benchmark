@@ -773,7 +773,10 @@ class FreeMixin(BaseModeLogic):
 
                 if self.terminal_task == new_state[i]:
                     continue
-
+                # Check if there are any remaining dependencies for this task
+                if [new_state[i]] in self.task_dependencies.values():
+                    if next(k for k, v in self.task_dependencies.items() if v == [new_state[i]]) not in finished_tasks:
+                        continue
                 new_state[i] = self.terminal_task
 
                 # check if this is the terminal_task_id_state
