@@ -14,7 +14,9 @@
     "locally_informed_sampling": true,
     "informed_batch_size": 300,
     "remove_redundant_nodes": true,
-    "test_mode_sampling":false
+    "test_mode_sampling":false,
+    "apply_long_horizon":false,
+    "horizon_length": 1
     }
 }
 

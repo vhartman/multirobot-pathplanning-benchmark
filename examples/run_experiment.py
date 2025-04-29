@@ -202,7 +202,9 @@ def setup_planner(
                 locally_informed_sampling = options["locally_informed_sampling"],
                 informed_batch_size = options["informed_batch_size"],
                 sample_near_path=options["sample_near_path"],
-                remove_redundant_nodes = options["remove_redundant_nodes"]
+                remove_redundant_nodes = options["remove_redundant_nodes"],
+                apply_long_horizon=options["apply_long_horizon"],
+                horizon_length = options["horizon_length"],
             ).Plan(optimize)
     elif planner_config["type"] == "birrtstar":
 
@@ -225,7 +227,9 @@ def setup_planner(
                 transition_nodes=options["transition_nodes"],
                 birrtstar_version=options["birrtstar_version"], 
                 informed_batch_size = options["informed_batch_size"],
-                remove_redundant_nodes = options["remove_redundant_nodes"]
+                remove_redundant_nodes = options["remove_redundant_nodes"],
+                apply_long_horizon=options["apply_long_horizon"],
+                horizon_length = options["horizon_length"],
             ).Plan(optimize)
     elif planner_config["type"] == "drrtstar":
 
