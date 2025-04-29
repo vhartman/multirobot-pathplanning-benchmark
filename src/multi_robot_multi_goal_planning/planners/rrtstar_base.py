@@ -4,7 +4,7 @@ import math as math
 import random
 import multi_robot_multi_goal_planning.planners as mrmgp
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Union, List, Dict, Callable
+from typing import Tuple, Optional, Union, List, Dict, Callable, ClassVar
 from numpy.typing import NDArray
 from numba import njit
 
@@ -842,6 +842,35 @@ def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:List[int], r_idx:
             return path_modes[i-1]
 
 
+class BaseLongHorizon():
+    counter: ClassVar[int] = 1
+    def __init__(self, horizon_length:int = 4):
+        self.reached_terminal_mode = False
+        self.reached_modes = set()
+        self.new_section = True
+        self.reached_horizon = False
+        self.horizon_length = horizon_length
+        self.horizon_idx = BaseLongHorizon.counter*self.horizon_length
+        self.terminal_mode = None
+    
+    def update(self, mode:Mode, init):
+        if mode not in self.reached_modes:
+            self.reached_modes.add(mode)
+
+            
+        if len(self.reached_modes) >= self.horizon_idx:
+            BaseLongHorizon.counter+=1
+            self.horizon_idx = BaseLongHorizon.counter*self.horizon_length
+            self.reached_horizon = True
+            self.terminal_mode = mode
+        if init:
+            self.reached_terminal_mode = True
+        
+    def reset(self):
+        if not self.reached_terminal_mode:
+            self.reached_horizon = False
+
+    
 class BaseRRTstar(ABC):
     """
     Represents the base class for RRT*-based algorithms, providing core functionalities for motion planning.
@@ -864,6 +893,9 @@ class BaseRRTstar(ABC):
                  locally_informed_sampling:bool = True,
                  remove_redundant_nodes:bool = True,
                  informed_batch_size: int = 500,
+                 apply_long_horizon:bool = False,
+                 horizon_length:int = 1,
+                 
 
                  ):
         self.env = env
@@ -899,6 +931,9 @@ class BaseRRTstar(ABC):
         self.whitelist_modes = set()
         self.blacklist_modes = set()
         self.invalid_next_ids = {}
+        self.apply_long_horizon = apply_long_horizon
+        self.horizon_length = horizon_length
+        self.long_horizon = BaseLongHorizon(self.horizon_length)
 
     def add_tree(self, 
                  mode: Mode, 
@@ -946,9 +981,10 @@ class BaseRRTstar(ABC):
         if mode is None: 
             new_modes = [self.env.get_start_mode()]
         else:
-            new_modes = self.env.get_next_modes(q, mode)
-            if 7 in mode.task_ids or 1 in mode.task_ids:
+            if 7 in mode.task_ids and 1 not in mode.task_ids:
                 pass
+            new_modes = self.env.get_next_modes(q, mode)
+            
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue 
@@ -965,6 +1001,8 @@ class BaseRRTstar(ABC):
                 self.InformedInitialization(new_mode)
         if mode is not None:
             self.track_invalid_modes(mode)
+        if self.apply_long_horizon and mode in self.modes:
+            self.long_horizon.update(mode, self.operation.init_sol)
 
     def update_cache_of_invalid_modes(self, mode:Mode) -> None:
         """
@@ -1692,8 +1730,11 @@ class BaseRRTstar(ABC):
         vertices = self.trees[mode].get_number_of_nodes_in_tree()
         r = np.minimum(self.gamma_rrtstar*(np.log(vertices)/vertices)**(1/self.d), self.eta)
         indices = find_nearest_indices(set_dists, r) # indices of batch_subtree
-        if n_nearest_idx not in indices:
-            indices = np.insert(indices, 0, n_nearest_idx)
+        try:
+            if n_nearest_idx not in indices:
+                indices = np.insert(indices, 0, n_nearest_idx)
+        except:
+            pass
         node_indices = self.trees[mode].get_node_ids_subtree(tree)[indices]
         n_near_costs = self.operation.costs[node_indices]
         N_near_batch = batch_subtree[indices]
@@ -1790,7 +1831,15 @@ class BaseRRTstar(ABC):
                         if n_near.children != []:
                             rewired = True
         return rewired
-      
+    
+
+    def update_results_tracking(self, cost, path):
+        if not self.env.is_terminal_mode(path[-1].mode):
+            return
+        self.costs.append(cost)
+        self.times.append(time.time() - self.start_time)
+        self.all_paths.append(path)
+
     def GeneratePath(self, 
                      mode:Mode, 
                      n: Node, 
@@ -1824,12 +1873,10 @@ class BaseRRTstar(ABC):
         self.operation.path = path_in_order  
         self.operation.path_nodes = path_nodes[::-1]
         self.operation.cost = self.operation.path_nodes[-1].cost
-        self.costs.append(self.operation.cost)
-        self.times.append(time.time() - self.start_time)
-        self.all_paths.append(self.operation.path)
+        self.update_results_tracking(self.operation.cost, self.operation.path)
         self.operation.path_shortcutting = path_shortcutting[::-1] # includes transiiton node twice
         self.operation.path_shortcutting_interpolated = mrmgp.composite_prm_planner.interpolate_path(path_shortcutting)
-        if self.operation.init_sol and self.shortcutting and shortcutting_bool:
+        if (self.operation.init_sol or self.apply_long_horizon and self.long_horizon.reached_horizon) and self.shortcutting and shortcutting_bool:
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             shortcut_path_, result = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
@@ -1882,10 +1929,12 @@ class BaseRRTstar(ABC):
             # shortcut_path_costs = cumulative_sum(batch_cost)
             # shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
             if result[0][-1] < self.operation.cost:
-                self.costs.append(result[0][-1])
-                self.times.append(time.time() - self.start_time)
-                self.all_paths.append(shortcut_path)
+                self.update_results_tracking(result[0][-1], shortcut_path)
                 self.TreeExtension(shortcut_path)
+            
+            if self.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
+                self.long_horizon.reset()
+                self.operation.cost = np.inf 
 
     def RandomMode(self) -> Mode:
         """
@@ -1912,7 +1961,10 @@ class BaseRRTstar(ABC):
         elif self.mode_sampling == 1: 
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
-            probability[-1] = 1
+            try:
+                probability[-1] = 1
+            except:
+                pass
             p =  probability
 
         elif self.mode_sampling == 0:
@@ -2054,8 +2106,10 @@ class BaseRRTstar(ABC):
             None: This method does not return any value.
         """
 
-        if self.operation.init_sol: 
+        if self.operation.init_sol or self.apply_long_horizon and self.long_horizon.reached_horizon: 
             modes = self.get_termination_modes()     
+            if self.apply_long_horizon and self.long_horizon.reached_horizon and not self.operation.init_sol:
+                modes = [self.long_horizon.terminal_mode]
             result, mode = self.get_lb_transition_node_id(modes) 
             if not result:
                 return
@@ -2414,6 +2468,8 @@ class BaseRRTstar(ABC):
     def is_next_mode_valid(self, mode:Mode) -> bool:
         #TODO what if its a Goal Region? Does that matter?
         # only eliminate modes that are logically or geometrically impossible
+        if mode in self.blacklist_modes:
+            return False
         if mode in self.whitelist_modes:
             return True
         if mode.prev_mode not in self.invalid_next_ids:
@@ -2447,6 +2503,11 @@ class BaseRRTstar(ABC):
                 continue
             for robot in constrained_robots:
                 # checks if the mode itself has a possible goal configuration
+                # if ((mode.task_ids == [6,1] and mode.prev_mode.task_ids == [6,7]) or (mode.task_ids == [11,1] and mode.prev_mode.task_ids == [11,7])) and robot == "a2_":
+                #     print(q)
+                #     noise = np.random.normal(loc=0.0, scale=0.005)  # Mean 0, stddev 0.05
+                #     print(noise)
+                #     q[8] += noise
                 if not self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance):
                     self.update_cache_of_invalid_modes(mode)
                     #when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)

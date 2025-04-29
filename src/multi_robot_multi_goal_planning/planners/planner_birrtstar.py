@@ -50,12 +50,14 @@ class BidirectionalRRTstar(BaseRRTstar):
                  locally_informed_sampling: bool = True, 
                  remove_redundant_nodes: bool = True, 
                  informed_batch_size: int = 500,
+                 apply_long_horizon:bool = False,
+                 horizon_length:int = 1,
                 ):
         super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
                          informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
                          p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
                          sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                         informed_batch_size = informed_batch_size )
+                         informed_batch_size = informed_batch_size, apply_long_horizon = apply_long_horizon, horizon_length = horizon_length)
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
         self.swap = True
@@ -355,9 +357,8 @@ class BidirectionalRRTstar(BaseRRTstar):
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
                 break
-        self.costs.append(self.operation.cost)
-        self.times.append(time.time() - self.start_time)
-        self.all_paths.append(self.operation.path)
+            
+        self.update_results_tracking(self.operation.cost, self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
         return self.operation.path, info      
 
