@@ -310,7 +310,7 @@ class EITstar(BaseITstar):
             apply_long_horizon = apply_long_horizon, frontier_mode_sampling_probability= frontier_mode_sampling_probability,
             horizon_length = horizon_length)
 
-        self.sparse_number_of_points = 1
+        self.sparse_number_of_points = 2
         self.reverse_tree_set = set()
         self.reduce_neighbors = False
         self.sparesly_checked_edges = {}
@@ -337,17 +337,13 @@ class EITstar(BaseITstar):
     def continue_reverse_search(self, iter) -> bool:
         if len(self.g.reverse_queue) == 0 or len(self.g.cost_bound_queue) == 0:
             return False
-        if iter > 0 and len(self.updated_target_nodes) == 0:
+        if iter > 0 and not self.updated_target_nodes:
             return True
         #update forward queue
         self.g.update_forward_queue_keys('target', self.updated_target_nodes)
         self.updated_target_nodes = set()
-        if len(self.g.reverse_queue) == 0 or len(self.g.cost_bound_queue) == 0:
+        if np.isinf(self.g.epsilon) and not self.g.cost_bound_queue.target_nodes.isdisjoint(self.reverse_tree_set):
             return False
-        if np.isinf(self.g.epsilon):
-            target_nodes_in_reverse_tree = self.g.cost_bound_queue.target_nodes - self.reverse_tree_set
-            if len(target_nodes_in_reverse_tree) != len(self.g.cost_bound_queue.target_nodes):
-                return False
         not_closed_nodes = self.g.cost_bound_queue.target_nodes - self.reverse_closed_set
         if len(not_closed_nodes) == 0:
             return False
@@ -392,6 +388,11 @@ class EITstar(BaseITstar):
 
             for id, edge_cost, edge_effort in zip( neighbors, edge_costs, edge_efforts):
                 n = g_nodes[id]
+                
+                # if self.current_best_cost is None and edge in self.check:
+                #     continue
+                    # if edge in self.check:
+                    # print(node.id, n.id)
                 assert (n.forward.parent == node) == (n.id in node.forward.children), (
                         f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
                         )
@@ -429,7 +430,7 @@ class EITstar(BaseITstar):
             self.g.epsilon = 1
     @cache
     def get_collision_start_and_max_index(self, sparse_N):
-        if sparse_N >1:
+        if sparse_N >2:
             start = int(sparse_N/2)
         else:
             start = 0
@@ -464,13 +465,18 @@ class EITstar(BaseITstar):
                     n_start, n_end = (n0, n1) if n1.id > n0.id else (n1, n0)
                     N_start, N_max = self.get_collision_start_and_max_index(self.sparse_number_of_points)
                     N = max(2, int(edge_effort)+1)
+                    
                     edge_id = (n_start.id, n_end.id)
+                    
                     previously_checked = edge_id in self.sparesly_checked_edges
                     valid_check = previously_checked and (
                                     self.sparesly_checked_edges[edge_id] >= N_max)
                     if valid_check:
                         sparsely_collision_free = True
                     else:
+                        if edge_id in self.check:
+                            print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                        self.check.add(edge_id)
                         sparsely_collision_free = self.env.is_edge_collision_free(
                                     n_start.state.q,
                                     n_end.state.q,
@@ -602,7 +608,7 @@ class EITstar(BaseITstar):
         self.g.reset_all_goal_nodes_lb_costs_to_go()
         self.updated_target_nodes = set() #lb_cost_to_go was updated in reverse search
         if reset:
-            self.sparse_number_of_points = 1
+            self.sparse_number_of_points = 2
         if self.apply_long_horizon:
             goal_nodes = self.g.virtual_goal_nodes
         else:
@@ -668,14 +674,20 @@ class EITstar(BaseITstar):
                     if n0.id not in n1.whitelist:
                         collision_free = False
                         if n0.id not in n1.blacklist:
+                            n_start, n_end = (n0, n1) if n1.id > n0.id else (n1, n0)
+                            edge_id = (n_start.id, n_end.id)
+                            N_start = 0
+                            if edge_id in self.sparesly_checked_edges:
+                                _, N_start = self.get_collision_start_and_max_index(self.sparse_number_of_points)
                             N = max(2, int(edge_effort))
                             collision_free = self.env.is_edge_collision_free(
-                                n0.state.q,
-                                n1.state.q,
-                                n0.state.mode,
-                                self.env.collision_resolution,
-                                N=N,
-                            )
+                                n_start.state.q,
+                                n_end.state.q,
+                                n_start.state.mode,
+                                N_start= N_start,
+                                N_max= N,
+                                N = N
+                                )
                             
                         if not collision_free:
                             self.g.update_edge_collision_cache(n0, n1, collision_free)
@@ -727,4 +739,5 @@ class EITstar(BaseITstar):
         if self.costs != []:
             self.update_results_tracking(self.costs[-1], self.current_best_path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
+        print(self.mode_validation.counter)
         return self.current_best_path, info

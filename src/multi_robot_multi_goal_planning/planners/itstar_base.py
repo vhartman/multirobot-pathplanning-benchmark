@@ -42,6 +42,7 @@ from multi_robot_multi_goal_planning.planners.rrtstar_base_old import save_data
 #     sample_phs_with_given_matrices, compute_PHS_matrices
 # )
 from multi_robot_multi_goal_planning.planners.sampling_informed import (InformedSampling as BaseInformedSampling)
+from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
 T = TypeVar("T")
 class BaseOperation(ABC):
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
@@ -261,8 +262,7 @@ class DictIndexHeap(ABC, Generic[T]):
             latest_priority, idx = self.current_entries[item]
             if latest_priority == priority:
                 return
-            if latest_priority < priority:
-                self.items_to_skip.add(idx)
+            self.items_to_skip.add(idx)
 
         self.push_and_sync(item, priority, item_already_in_heap)
         # self.nodes_in_queue[item[1]] = (priority, DictIndexHeap.idx)
@@ -456,22 +456,20 @@ class BaseTree():
                     continue
                 if n.id  in goal_node_ids:
                     continue
-                if self.is_edge_collision_free(n.state.q, node.state.q, node.state.mode):
+                if n in node.whitelist or self.is_edge_collision_free(n.state.q, node.state.q, node.state.mode):
                     c_min = c_new_tensor[idx]
                     c_min_to_parent = batch_cost[idx]      
-                    n_min = n                            
+                    n_min = n  
+                    node.whitelist.add(n.id)   
+                    n.whitelist.add(node.id)                          
                     break
-                # else:
-                #     #TODO remove from forward queue
-                #     node.blacklist.add(n.id)
-                #     n.blacklist.add(node.id)
         return n_min, c_min_to_parent
 
     def rewire(self, 
                 node: BaseNode, 
                 batch_cost: NDArray, 
                 n_near_costs: NDArray,
-                node_indices: NDArray,
+                node_indices: NDArray
                ) -> bool:
         """
         Rewires neighboring nodes by updating their parent connection to n_new if a lower-cost path is established.
@@ -501,14 +499,15 @@ class BaseTree():
                     continue
                 if n_near == node.forward.parent or n_near.cost == np.inf or n_near.id == node.id:
                     continue
+                if node in n_near.forward.children:
+                    pass
                 if node.state.mode == n_near.state.mode or node.state.mode == n_near.state.mode.prev_mode:
-                    if self.is_edge_collision_free(node.state.q, n_near.state.q, node.state.mode):
+                    if node in n_near.whitelist or self.is_edge_collision_free(node.state.q, n_near.state.q, node.state.mode):
                         edge_cost = float(batch_cost[idx])
                         self.update_connectivity(node, n_near, edge_cost, node.cost + edge_cost)
-                    # else:
-                    #     #TODO need to remove form forward queue
-                    #     node.blacklist.add(n_near.id)
-                    #     n_near.blacklist.add(node.id)
+                        node.whitelist.add(n_near.id)   
+                        n_near.whitelist.add(node.id)
+                  
 
 class BaseGraph(ABC):
     root: BaseNode
@@ -546,9 +545,7 @@ class BaseGraph(ABC):
 
         self.nodes = {}  # contains all the nodes ever created
         self.nodes[self.root.id] = self.root
-        
-        self.node_ids = {}
-        self.node_ids[self.root.state.mode] = [self.root.id]
+        self.create_node_ids()
         self.tree = {}
         self.transition_node_ids = {}  # contains the transitions at the end of the mode
         self.reverse_transition_node_ids = {}
@@ -559,7 +556,12 @@ class BaseGraph(ABC):
         self.unit_n_ball_measure = ((np.pi**0.5) ** self.dim) / math.gamma(self.dim / 2 + 1) 
         self.new_path = None
         self.weight = 1
-        
+        self.search_init_sol = True
+
+    def create_node_ids(self):
+        self.node_ids = {}
+        self.node_ids[self.root.state.mode] = [self.root.id]
+
     def get_num_samples(self) -> int:
         num_samples = 0
         for k, v in self.node_ids.items():
@@ -655,7 +657,7 @@ class BaseGraph(ABC):
         self.nodes[node.id] = node
         self.operation.update(node, lb_cost_to_go, cost)
     
-    def add_path_states(self, path:List[State], space_extent):
+    def add_path_states(self, path:List[State], space_extent, rewire:bool = True):
         self.new_path = []
         parent = self.root
         for i in range(len(path)): 
@@ -677,29 +679,30 @@ class BaseGraph(ABC):
                 if parent.is_transition and parent.is_reverse_transition and self.reverse_transition_is_already_present(node):
                     continue
                 n = self.transition_or_goal_is_already_present(node)
-                
                 if n is not None:
-                    edge_cost = float(self.batch_cost_fun([parent.state], [n.state]))
-                    self.update_connectivity(parent, n, edge_cost, parent.cost + edge_cost)
-                    self.new_path.append(n)
-                    self.update_edge_collision_cache(parent, n, True)
-                    if n.transition_neighbors and n not in self.virtual_goal_nodes: 
-                        next_mode = path[i+1].mode
-                        mode_idx = n.transition_neighbor_modes.index(next_mode)
-                        transition_neighbor = n.transition_neighbors[mode_idx]
-                        self.new_path.append(transition_neighbor)
-                        self.update_connectivity(n, transition_neighbor, 0.0, n.cost)
-                        r = self.get_r_star(self.tree[next_mode].cnt, space_extent, self.unit_n_ball_measure)
-                        batch_cost, n_near_costs, node_indices = self.tree[next_mode].neighbors(transition_neighbor, None, r)
-                        self.tree[next_mode].rewire(transition_neighbor, batch_cost, n_near_costs, node_indices)
-                    parent = self.new_path[-1]
-                    continue
-            self.add_path_node(node, parent, is_transition, next_mode, space_extent)
+                    if parent.id not in n.forward.fam:
+                        edge_cost = float(self.batch_cost_fun([parent.state], [n.state]))
+                        self.update_connectivity(parent, n, edge_cost, parent.cost + edge_cost)
+                        self.new_path.append(n)
+                        self.update_edge_collision_cache(parent, n, True)
+                        if n.transition_neighbors and n not in self.virtual_goal_nodes: 
+                            next_mode = path[i+1].mode
+                            mode_idx = n.transition_neighbor_modes.index(next_mode)
+                            transition_neighbor = n.transition_neighbors[mode_idx]
+                            self.new_path.append(transition_neighbor)
+                            self.update_connectivity(n, transition_neighbor, 0.0, n.cost)
+                            if rewire:
+                                r = self.get_r_star(self.tree[next_mode].cnt, space_extent, self.unit_n_ball_measure)
+                                batch_cost, n_near_costs, node_indices = self.tree[next_mode].neighbors(transition_neighbor, None, r)
+                                self.tree[next_mode].rewire(transition_neighbor, batch_cost, n_near_costs, node_indices)
+                        parent = self.new_path[-1]
+                        continue
+            self.add_path_node(node, parent, is_transition, next_mode, space_extent, rewire = rewire)
             self.update_edge_collision_cache(parent, node, True)
             parent = self.new_path[-1]     
         return 
 
-    def add_path_node(self, node:BaseNode, parent, is_transition:bool, next_mode:Mode, space_extent): 
+    def add_path_node(self, node:BaseNode, parent, is_transition:bool, next_mode:Mode, space_extent, rewire:bool = True): 
         self.new_path.append(node)
         if is_transition:
             edge_cost = float(self.batch_cost_fun([parent.state], [node.state]))
@@ -721,7 +724,7 @@ class BaseGraph(ABC):
                     node_next_mode.transition_neighbors.append(node)
                     node_next_mode.transition_neighbor_modes.append(node.state.mode)
 
-                    if all_next_mode in self.tree: 
+                    if all_next_mode in self.tree and rewire: 
                         r = self.get_r_star(self.tree[all_next_mode].cnt, space_extent, self.unit_n_ball_measure)
                         batch_cost, n_near_costs, node_indices = self.tree[node_next_mode.state.mode].neighbors(node_next_mode, None, r) 
                         self.tree[all_next_mode].rewire(node_next_mode, batch_cost, n_near_costs, node_indices)
@@ -736,9 +739,11 @@ class BaseGraph(ABC):
             
             
         else:
-            if node.state.mode in self.tree:
+            if node.state.mode in self.tree and rewire:
                 r = self.get_r_star(self.tree[node.state.mode].cnt, space_extent, self.unit_n_ball_measure)
                 batch_cost, n_near_costs, node_indices = self.tree[node.state.mode].neighbors(node, parent, r) 
+                # true_parent = parent
+                # true_edge_cost = float(self.batch_cost_fun([parent.state], [node.state]))
                 true_parent, true_edge_cost = self.tree[node.state.mode].find_parent(node, parent, batch_cost, n_near_costs, node_indices, self.goal_node_ids) 
                 self.update_connectivity(true_parent, node, float(true_edge_cost), true_parent.cost + float(true_edge_cost))
                 self.tree[node.state.mode].rewire(node, batch_cost, n_near_costs, node_indices)
@@ -816,10 +821,10 @@ class BaseGraph(ABC):
         self.blacklist_cache = {}
 
     def get_r_star(
-        self, number_of_nodes, informed_measure, unit_n_ball_measure, wheight=1):
+        self, number_of_nodes, informed_measure, unit_n_ball_measure, weight=1):
         # r_star = (
         #     1.001
-        #     * wheight
+        #     * weight
         #     * (
         #         (2 * (1 + 1 / self.dim))
         #         * (informed_measure / unit_n_ball_measure)
@@ -829,7 +834,7 @@ class BaseGraph(ABC):
         # )
         r_star = (
             1.001
-            * 2* wheight
+            * 2* weight
             * (
                 ((1 + 1 / self.dim))
                 * (informed_measure / unit_n_ball_measure)
@@ -947,6 +952,13 @@ class BaseGraph(ABC):
 
     def update_neighbors_with_family_of_node(self, node: BaseNode, update: bool = False):
         node_id = node.id
+        if self.search_init_sol:
+            if update:
+                self.tot_neighbors_id_cache[node_id] = self.neighbors_node_ids_cache[node_id]
+                self.tot_neighbors_batch_cost_cache[node_id] = self.neighbors_batch_cost_cache[node_id]
+                if self.including_effort:
+                    self.tot_neighbors_batch_effort_cache[node_id] = self.neighbors_batch_effort_cache[node_id]
+            return  self.tot_neighbors_id_cache[node_id]
         blacklist = node.blacklist
 
         # Compute current family (forward + reverse)
@@ -1363,7 +1375,6 @@ class InformedSampling(BaseInformedSampling):
 
 
 class BaseLongHorizon():
-    counter: ClassVar[int] = 1
     def __init__(self, horizon_length:int = 4):
         self.init = True
         self.new_section = True
@@ -1373,16 +1384,19 @@ class BaseLongHorizon():
         self.horizon_length = horizon_length
         self.mode_sequence = None
         self.reached_terminal_mode = False
+        self.shortcutting_iter = 0
+        self.counter = 1
         
     def init_long_horizon(self, g:BaseGraph, current_best_path_nodes:List[BaseNode], tot_mode_sequence:List[Mode]):
         if self.reached_terminal_mode:
             return
-        end_idx = BaseLongHorizon.counter*self.horizon_length-1
+        end_idx = self.counter*self.horizon_length-1
         if end_idx >= len(tot_mode_sequence)-1 or end_idx + 1 >= len(tot_mode_sequence)-1:
             end_idx = len(tot_mode_sequence)-1
             
         self.terminal_mode = tot_mode_sequence[end_idx]
         self.mode_sequence = tot_mode_sequence[self.horizon_idx:end_idx+1]
+        self.shortcutting_iter = self.counter * self.horizon_length *2
     
         if self.init :
             g.virtual_root = g.root
@@ -1397,7 +1411,7 @@ class BaseLongHorizon():
                 self.update_virtual_root(g, current_best_path_nodes, tot_mode_sequence)
         
         self.horizon_idx = end_idx+1
-        BaseLongHorizon.counter+=1
+        self.counter+=1
         self.new_section = False
 
     def update_virtual_goal_nodes(self, g:BaseGraph, tot_mode_sequence):
@@ -1506,9 +1520,6 @@ class BaseITstar(ABC):
         self.reverse_tree_set = set()
         self.reduce_neighbors = False
         self.first_search = True
-        self.whitelist_modes = set()
-        self.blacklist_modes = set()
-        self.invalid_next_ids = {}
         self.terminal_mode = None
         self.init_search_modes = None
         self.valid_next_modes = {}
@@ -1517,6 +1528,10 @@ class BaseITstar(ABC):
                         locally_informed_sampling,
                         include_lb=inlcude_lb_in_informed_sampling
                         )
+        self.mode_validation = ModeValidation(self.env)
+        self.init_next_ids = {}
+        self.found_init_mode_sequence = False
+        self.init_next_modes = {}
         
     def _create_operation(self) -> BaseOperation:
         return BaseOperation()
@@ -1549,22 +1564,16 @@ class BaseITstar(ABC):
                 dtype=np.float64,
             )
 
-        if self.apply_long_horizon and not self.long_horizon.init:
+        if self.apply_long_horizon and not self.long_horizon.init and not self.long_horizon.reached_terminal_mode:
             mode_seq = self.long_horizon.mode_sequence
         else:
             mode_seq = self.sorted_reached_modes
+        
+        found_solution = (cost is not None)
 
         while len(new_samples) < batch_size:
-            # if failed_attemps > 10000000:
-            #     break
             num_attempts += 1
-            # print(len(new_samples))
-            # sample mode
-            m = self.sample_mode(
-                mode_seq, "uniform_reached", cost is not None
-            )
-
-            # print(m)
+            m = self.sample_mode(mode_seq, "uniform_reached", found_solution)
 
             # sample configuration
             q = []
@@ -1598,11 +1607,11 @@ class BaseITstar(ABC):
         print("Percentage of succ. attempts", num_valid / num_attempts)
 
         return new_samples, num_attempts
-
+  
     def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
-        transitions = 0
-        num_reached_modes = len(self.reached_modes)
-        new_num_reached_modes = num_reached_modes
+        transitions, failed_attemps = 0, 0
+        reached_terminal_mode = False
+        update = (not self.apply_long_horizon or self.apply_long_horizon and (self.long_horizon.init or self.long_horizon.reached_terminal_mode))
         if len(self.g.goal_node_ids) == 0:
                 mode_sampling_type = self.init_mode_sampling_type
         else:
@@ -1612,79 +1621,76 @@ class BaseITstar(ABC):
                 [self.g.root.state.q.state(), self.g.goal_nodes[0].state.q.state()],
                 dtype=np.float64,
             )
-        if self.apply_long_horizon and not self.long_horizon.init:
+        if self.apply_long_horizon and not self.long_horizon.init and not self.long_horizon.reached_terminal_mode:
             mode_seq = self.long_horizon.mode_sequence
+            reached_terminal_mode = True
         else:
+            if self.current_best_cost is None and len(self.g.goal_nodes) > 0:  
+                reached_terminal_mode = True
+            if len(self.reached_modes) != len(self.sorted_reached_modes):
+                if update and not reached_terminal_mode:
+                    self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))  
             mode_seq = self.sorted_reached_modes
-        # while len(transitions) < transistion_batch_size:
-        failed_attemps = 0
-        while transitions < transistion_batch_size:
-            if failed_attemps > 2* transistion_batch_size:
-                break 
+        
+        while transitions < transistion_batch_size and failed_attemps < 5* transistion_batch_size:
             
             # sample mode
             mode = self.sample_mode(mode_seq, mode_sampling_type, None)
-            
-
+        
             # sample transition at the end of this mode
-            possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-            # print(mode, possible_next_task_combinations)
-
-            if len(possible_next_task_combinations) > 0:
-                ind = random.randint(0, len(possible_next_task_combinations) - 1)
-                active_task = self.env.get_active_task(
-                    mode, possible_next_task_combinations[ind]
-                )
+            if reached_terminal_mode:
+                next_ids = self.init_next_ids[mode]
             else:
-                active_task = self.env.get_active_task(mode, None)
-
-            goals_to_sample = active_task.robots
+                possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
+                if len(possible_next_task_combinations) > 0:
+                    next_ids = self.mode_validation.get_valid_next_ids(mode)
+                else:
+                    next_ids = None
+                        
+            active_task = self.env.get_active_task(mode, next_ids)
+            constrained_robot = active_task.robots
             goal_sample = active_task.goal.sample(mode)
 
-            # if mode.task_ids == [3, 8]:
-            #     print(active_task.name)
-
             q = []
-            for i in range(len(self.env.robots)):
-                r = self.env.robots[i]
-                if r in goals_to_sample:
-                    offset = 0
-                    for _, task_robot in enumerate(active_task.robots):
-                        if task_robot == r:
-                            q.append(
-                                goal_sample[
-                                    offset : offset + self.env.robot_dims[task_robot]
-                                ]
-                            )
-                            break
-                        offset += self.env.robot_dims[task_robot]
-                else:  # uniform sample
-                    lims = self.env.limits[:, self.env.robot_idx[r]]
-                    if lims[0, 0] < lims[1, 0]:
-                        qr = (
-                            np.random.rand(self.env.robot_dims[r])
-                            * (lims[1, :] - lims[0, :])
-                            + lims[0, :]
-                        )
-                    else:
-                        qr = np.random.rand(self.env.robot_dims[r]) * 6 - 3
+            end_idx = 0
+            for robot in self.env.robots:
+                if robot in constrained_robot:
+                    dim = self.env.robot_dims[robot]
+                    q.append(goal_sample[end_idx:end_idx + dim])
+                    end_idx += dim 
+                else:
+                    r_idx = self.env.robot_idx[robot]
+                    lims = self.env.limits[:, r_idx]
+                    q.append(np.random.uniform(lims[0], lims[1]))
+            q = self.conf_type.from_list(q)
 
-                    q.append(qr)
-
-            q = self.conf_type(np.concatenate(q), self.env.start_pos.array_slice)
             if cost is not None:
                 if sum(self.env.batch_config_cost(q, focal_points)) > cost:
                     continue
+
             if self.env.is_collision_free(q, mode):
                 if self.env.is_terminal_mode(mode):
                     next_modes = None
                 else:
-                    next_modes = self.env.get_next_modes(q, mode)
-                    next_modes = self.remove_invalid_next_modes(mode, next_modes)
-                    if next_modes == []:
-                        self.track_invalid_modes(mode)
+                    
+                    if reached_terminal_mode:
+                        if mode not in self.init_next_modes:
+                            next_modes = self.env.get_next_modes(q, mode)
+                            next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
+                            self.init_next_modes[mode] = next_modes
+                        next_modes = self.init_next_modes[mode]
+                    else:
+                        next_modes = self.env.get_next_modes(q, mode)
+                        next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
+                        assert not (set(next_modes) & self.mode_validation.invalid_next_ids.get(mode, set())), (
+                            "items from the set are in the array"
+                        )
+                        if next_modes == []:
+                            self.reached_modes, _ = self.mode_validation.track_invalid_modes(mode, self.reached_modes)
+                        
                 if mode not in self.reached_modes:
-                    if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.init:
+                    if update and not reached_terminal_mode:
+                        self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
                         mode_seq = self.sorted_reached_modes
                     continue
                 self.g.add_transition_nodes([(q, mode, next_modes)])
@@ -1698,144 +1704,57 @@ class BaseITstar(ABC):
                     failed_attemps +=1
                     continue
             else:
+                failed_attemps +=1
                 continue
             
             if next_modes is not None and len(next_modes) > 0:
                 self.reached_modes.update(next_modes)
-                new_num_reached_modes = len(self.reached_modes)
-                    
-            if self.current_best_cost is None and len(self.g.goal_nodes) > 0:  
-                mode_sampling_type = "uniform_reached"
-                if self.env.is_terminal_mode(mode) and mode != self.terminal_mode:
-                    self.terminal_mode = mode
-                    self.get_modes_init_search(self.terminal_mode)
-                # if self.apply_long_horizon and self.first_search:
-                #     return
-            else:
-                if new_num_reached_modes != num_reached_modes:
+
+            init_mode_seq =  self.get_init_mode_sequence(mode)
+            if init_mode_seq:
+                mode_seq = init_mode_seq
+                reached_terminal_mode = True
+                mode_sampling_type = "uniform_reached"    
+            elif len(self.reached_modes) != len(self.sorted_reached_modes):
+                if update and not reached_terminal_mode:
                     self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
-                    num_reached_modes = new_num_reached_modes
-
-            if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.init:
-                mode_seq = self.sorted_reached_modes
+                    mode_seq = self.sorted_reached_modes                   
             
-
         print(f"Adding {transitions} transitions")
+        print(self.mode_validation.counter)
         return
     
-    def get_modes_init_search(self, mode):
+    def get_init_mode_sequence(self, mode):
+        if self.found_init_mode_sequence:
+            return []
+        mode_seq = []
+        if self.current_best_cost is None and len(self.g.goal_nodes) > 0: 
+            self.found_init_mode_sequence = True
+            self.terminal_mode = mode
+            self.create_mode_init_sequence(mode)
+            if self.apply_long_horizon and self.long_horizon.init:
+                self.long_horizon.init_long_horizon(self.g, self.current_best_path_nodes, self.sorted_reached_modes)
+                self.long_horizon.init = False
+                mode_seq = self.long_horizon.mode_sequence
+            else:
+                mode_seq = self.sorted_reached_modes
+        return mode_seq
+   
+    def create_mode_init_sequence(self, mode):
         self.init_search_modes = [mode]
+        self.init_next_ids[mode] = None
         while True:
             prev_mode = mode.prev_mode
             if prev_mode is not None:
                 self.init_search_modes.append(prev_mode)
+                self.init_next_ids[prev_mode] = mode.task_ids
                 mode = prev_mode
+                
             else:
                 break
         self.init_search_modes = self.init_search_modes[::-1]
         self.sorted_reached_modes = self.init_search_modes
-
-    def remove_invalid_next_modes(self, prev_mode, next_modes:List[Mode]) -> bool:
-        #TODO what if its a Goal Region? Does that matter?
-        # only eliminate modes that are logically or geometrically impossible   
-        start_pos = self.env.start_pos.state()        
-        valid_next_modes = []
-        for mode in next_modes:
-            if mode in self.blacklist_modes:
-                continue
-            if mode in self.whitelist_modes:
-                valid_next_modes.append(mode)
-                continue
-            if mode.prev_mode is None:
-                self.whitelist_modes.add(mode)
-                valid_next_modes.append(mode)
-                continue
-            if mode.prev_mode not in self.invalid_next_ids:
-                self.invalid_next_ids[mode.prev_mode] = set()
-            
-            possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-            if not possible_next_task_combinations and not self.env.is_terminal_mode(mode):
-                self.update_cache_of_invalid_modes(mode)
-                return []
-            is_in_collision = False
-            whitelist_robots = set()
-            for next_ids in possible_next_task_combinations:
-                active_task = self.env.get_active_task(mode, next_ids)
-                constrained_robots = active_task.robots
-                goal = active_task.goal.sample(mode)
-                q = start_pos.copy()
-                end_idx = 0
-                check_collision = False
-                for robot in self.env.robots:
-                    if robot in constrained_robots:
-                        # if robot in whitelist_robots:
-                        #     continue
-                        check_collision = True
-                        robot_indices = self.env.robot_idx[robot]
-                        dim = self.env.robot_dims[robot]
-                        indices = list(range(end_idx, end_idx + dim))
-                        q[robot_indices] = goal[indices]
-                        end_idx += dim 
-
-                if not check_collision:
-                    continue
-                for robot in constrained_robots:
-                    # checks if the mode itself has a possible goal configuration
-                    if not self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance):
-                        self.update_cache_of_invalid_modes(mode)
-                        #when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
-                        is_in_collision = True
-                        break
-                    whitelist_robots.add(robot)
-                if is_in_collision:
-                    break
-            if is_in_collision:
-                continue
-            valid_next_modes.append(mode)
-            self.whitelist_modes.add(mode)
-        return valid_next_modes
-
-    def update_cache_of_invalid_modes(self, mode:Mode) -> None:
-        """
-        Updates the track of invalid modes by adding the current mode to the blacklist of the previous mode.
-
-        Args:
-            mode (Mode): Current operational mode.
-
-        Returns:
-            None: This method does not return any value.
-        """
-        if mode.prev_mode is None:
-            return
-        self.blacklist_modes.add(mode)
-        if mode.prev_mode not in self.invalid_next_ids:
-            self.invalid_next_ids[mode.prev_mode] = set()
-        self.invalid_next_ids[mode.prev_mode].add(tuple(mode.task_ids))      
-
-    def track_invalid_modes(self, mode:Mode) -> None:
-        """
-        Tracks invalid modes by adding them to blacklist.
-
-        Args:
-            mode (Mode): The mode to be tracked as invalid.
-
-        Returns:
-            None: This method does not return any value.
-        """
-        updated = False
-        while True: 
-            invalid_next_ids = self.invalid_next_ids.get(mode, set())
-            possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-            if len(invalid_next_ids) != len(possible_next_task_combinations):
-                break
-            updated = True
-            self.reached_modes.remove(mode)
-            self.update_cache_of_invalid_modes(mode)
-            if mode.prev_mode is None:
-                break
-            mode = mode.prev_mode
-        if updated:
-            self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))
+        print(self.sorted_reached_modes)
 
     def sample_around_path(self, path):
         # sample index
@@ -1915,21 +1834,19 @@ class BaseITstar(ABC):
         # add new batch of nodes
         while True:
 
+            uniform_batch_size = (self.current_best_cost is not None or not self.first_search 
+                                  or self.apply_long_horizon 
+                                  and self.first_search and not self.long_horizon.init)
             
             effective_uniform_batch_size = (
-                self.uniform_batch_size if self.current_best_cost is not None or not self.first_search
+                self.uniform_batch_size if uniform_batch_size
                 else self.init_uniform_batch_size
             )
             effective_uniform_transition_batch_size = (
                 self.uniform_transition_batch_size
-                if self.current_best_cost is not None or not self.first_search
+                if uniform_batch_size
                 else self.init_transition_batch_size
-            )
-            if self.apply_long_horizon and self.long_horizon.new_section and not self.long_horizon.init:
-                self.first_search = True
-                self.long_horizon.init_long_horizon(self.g, self.current_best_path_nodes, self.sorted_reached_modes)
-                if self.long_horizon.reached_terminal_mode:
-                    self.remove_nodes_in_graph()
+            ) 
 
             # nodes_per_state = []
             # for m in reached_modes:
@@ -1959,11 +1876,6 @@ class BaseITstar(ABC):
             if len(self.g.goal_nodes) == 0:
                 continue
             
-            if self.apply_long_horizon and self.long_horizon.new_section and self.long_horizon.init:
-                # TODO need to chagne for dependency/unassgined unordered envs
-                self.long_horizon.init_long_horizon(self.g, self.current_best_path_nodes, self.sorted_reached_modes)
-                self.long_horizon.init = False
-
             if self.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
                 self.long_horizon.update_virtual_goal_nodes(self.g, self.sorted_reached_modes)
 
@@ -2128,6 +2040,14 @@ class BaseITstar(ABC):
         print("====================")
         while True:
             self.g.initialize_cache()
+            if not self.apply_long_horizon and self.current_best_cost is None and not self.first_search:
+                    self.remove_nodes_in_graph_before_init_sol()
+            if self.apply_long_horizon and not self.long_horizon.new_section and not self.long_horizon.reached_terminal_mode:
+                self.remove_nodes_in_graph_before_init_sol()
+            if self.apply_long_horizon and self.long_horizon.new_section and not self.long_horizon.init:
+                self.long_horizon.init_long_horizon(self.g, self.current_best_path_nodes, self.sorted_reached_modes)
+                if not self.long_horizon.reached_terminal_mode:
+                    self.first_search = True
             if self.current_best_path is not None and self.current_best_cost is not None:
                 # prune
                 # for mode in self.reached_modes:
@@ -2294,8 +2214,8 @@ class BaseITstar(ABC):
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
             # start = random.choice(self.g.reverse_transition_node_ids[mode])
             # goal = random.choice(self.g.re)
-            if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
-                continue
+            # if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
+            #     continue
             if not self.remove_based_on_modes or mode not in self.start_transition_arrays:
                 focal_points = np.array(
                 [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
@@ -2326,10 +2246,7 @@ class BaseITstar(ABC):
 
         for mode in list(self.g.transition_node_ids.keys()):
             if self.env.is_terminal_mode(mode) or mode == self.long_horizon.terminal_mode:
-                continue
-            if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
-                continue
-            
+                continue           
             if not self.remove_based_on_modes or mode not in self.start_transition_arrays:
                 focal_points = np.array(
                 [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
@@ -2370,6 +2287,60 @@ class BaseITstar(ABC):
             BaseTree.all_vertices.clear()
             self.g.add_vertex_to_tree(self.g.root)
         print(f"Removed {num_pts_for_removal} nodes")
+    
+    def remove_nodes_in_graph_before_init_sol(self):
+        num_pts_for_removal = 0
+        for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
+            if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
+                continue
+            if mode not in self.g.tree:
+                continue
+            original_count = len(self.g.node_ids[mode])
+            self.g.node_ids[mode] = [
+                id
+                for id in self.g.node_ids[mode]
+                if id == self.g.root.id or id in BaseTree.all_vertices
+            ]
+            num_pts_for_removal += original_count - len(self.g.node_ids[mode])
+        self.g.reverse_transition_node_ids = {}
+
+        for mode in list(self.g.transition_node_ids.keys()):
+            if self.env.is_terminal_mode(mode) or mode == self.long_horizon.terminal_mode:
+                continue           
+            if mode not in self.g.tree:
+                continue
+            if len(self.g.transition_node_ids[mode]) == 1:
+                continue
+            original_count = len(self.g.transition_node_ids[mode])
+            before = self.g.transition_node_ids[mode]
+            self.g.transition_node_ids[mode] = [
+                id
+                for id in self.g.transition_node_ids[mode]
+                if id == self.g.root.id or id in BaseTree.all_vertices
+                 
+            ]
+            if len(self.g.transition_node_ids[mode]) == 0:
+                self.g.transition_node_ids[mode] = [random.choice(before)]
+            
+            num_pts_for_removal += original_count - len(
+                self.g.transition_node_ids[mode]
+            )
+        # Update elements from g.reverse_transition_node_ids
+        self.g.reverse_transition_node_ids[self.env.get_start_mode()] = [self.g.root.id]
+        all_transitions = list(chain.from_iterable(self.g.transition_node_ids.values()))
+        transition_nodes = np.array([self.g.nodes[id] for id in all_transitions])
+        valid_mask = np.array([bool(node.transition_neighbors) for node in transition_nodes])
+        valid_nodes = transition_nodes[valid_mask]
+        reverse_transition_ids = [transition.id for node in valid_nodes for transition in node.transition_neighbors]
+        reverse_transition_modes = [transition.state.mode for node in valid_nodes for transition in node.transition_neighbors]
+        for mode, t_id in zip(reverse_transition_modes, reverse_transition_ids):
+            if mode not in self.g.reverse_transition_node_ids:
+                self.g.reverse_transition_node_ids[mode] = []
+            self.g.reverse_transition_node_ids[mode].append(t_id) 
+        self.g.tree = {}
+        BaseTree.all_vertices.clear()
+        self.g.add_vertex_to_tree(self.g.root)
+        print(f"Removed {num_pts_for_removal} nodes")
 
     def process_valid_path(self, 
                            valid_path, 
@@ -2392,13 +2363,22 @@ class BaseITstar(ABC):
             print('found path:', [n.id for n in valid_path])
             print('found modes:', [n.state.mode.task_ids for n in valid_path])
             self.update_results_tracking(new_path_cost, path)
+            
 
             if self.try_shortcutting and with_shortcutting:
                 print("--- shortcutting ---")
+                rewire = False
                 if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.reached_terminal_mode:
                     iter = 250
+                    rewire = True
                 else:
-                    iter = 100
+                    iter = 0
+                    if self.long_horizon.counter >= int(len(self.sorted_reached_modes)/self.horizon_length):
+                        rewire = True
+                        iter = 10
+                        if self.env.is_terminal_mode(path[-1].mode):
+                            iter = 250
+                    print(iter)
                 shortcut_path, _ = shortcutting.robot_mode_shortcut(
                     self.env,
                     path,
@@ -2455,24 +2435,25 @@ class BaseITstar(ABC):
                     self.current_best_cost = shortcut_path_cost
 
                     interpolated_path = shortcut_path
-                    self.g.add_path_states(interpolated_path, self.approximate_space_extent)   
+                    self.g.add_path_states(interpolated_path, self.approximate_space_extent, rewire = rewire)   
                     self.current_best_path_nodes = self.generate_path(force_generation=True)
                     self.current_best_path = [node.state for node in self.current_best_path_nodes]
 
-                    self.g.initialize_cache()
-                    self.initialize_lb()
-                    if with_queue_update:
-                    #     self.initialize
-                        # self.initialze_forward_search()
-                        # self.initialize_reverse_search()
-                        
-                        self.g.update_reverse_queue_keys('target')
-                        self.g.update_reverse_queue_keys('start')
-                    if self.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
-                        with_queue_update = False
-                    self.add_reverse_connectivity_to_path(self.current_best_path_nodes, with_queue_update)
+                    
+                    if not (self.apply_long_horizon and not self.long_horizon.reached_terminal_mode):
+                        self.g.initialize_cache()
+                        self.initialize_lb()
+                        if with_queue_update:
+                        #     self.initialize
+                            # self.initialze_forward_search()
+                            # self.initialize_reverse_search()
+                            
+                            self.g.update_reverse_queue_keys('target')
+                            self.g.update_reverse_queue_keys('start')
+                        self.add_reverse_connectivity_to_path(self.current_best_path_nodes, with_queue_update)
                         
                     self.current_best_cost = path_cost(self.current_best_path, self.env.batch_config_cost) 
+                    self.update_results_tracking(self.current_best_cost, self.current_best_path)
                     print("rewired cost: " ,self.current_best_cost)
                     print('new path: ', [n.id for n in self.current_best_path_nodes])
                     # if not all([
@@ -2510,16 +2491,15 @@ class BaseITstar(ABC):
             # lb_cost_to_go_expanded = lb_cost_to_go for AIT*
             self.g.update_connectivity(parent, node, edge_cost , parent.lb_cost_to_go + edge_cost,'reverse')
             node.close(self.env.collision_resolution)
-            if node.is_transition and not node.is_reverse_transition:
-                if with_update:
-                    for transition in node.transition_neighbors:
-                        #TODO for all? or only the relevant modes?
-                        self.update_reverse_sets(transition)
-                        self.expand_node_forward(transition, False, True)
-            else:
-                if with_update:
-                    self.expand_node_forward(node, False, True)   
             if with_update:
+                if node.is_transition and not node.is_reverse_transition:
+
+                        for transition in node.transition_neighbors:
+                            #TODO for all? or only the relevant modes?
+                            self.update_reverse_sets(transition)
+                            self.expand_node_forward(transition, False, True)
+                else:
+                    self.expand_node_forward(node, False, True)   
                 self.update_reverse_sets(node) 
             parent = node
       
@@ -2713,7 +2693,11 @@ class BaseITstar(ABC):
             self.update_removal_conditions() 
         if self.apply_long_horizon and self.current_best_cost is not None and not self.long_horizon.reached_terminal_mode:
             self.long_horizon.reset()
-            self.current_best_cost = None
+            if skip:
+                self.current_best_cost = None
+        if self.current_best_cost is not None and self.g.search_init_sol:
+            self.g.search_init_sol = False
+
         self.sample_manifold()
         self.initialize_lb()
         self.initialze_forward_search()
