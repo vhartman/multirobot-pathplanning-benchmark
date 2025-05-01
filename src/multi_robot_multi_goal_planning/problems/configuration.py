@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from numpy.typing import NDArray
 import numba
 
@@ -555,8 +555,8 @@ def one_to_many_batch_config_cost(
 
 
 def batch_config_cost(
-    starts: List[Configuration],
-    batch_other: List[Configuration],
+    starts: Union[Configuration, List[Configuration]],
+    batch_other: Union[NDArray, List[Configuration]],
     metric: str = "max",
     reduction: str = "max",
     w: float = 0.01,
