@@ -91,7 +91,7 @@ def robot_mode_shortcut(
     max_iter: int = 1000,
     resolution=0.001,
     tolerance=0.01,
-    check_edges_in_order:bool = False,
+    check_edges_in_order:bool = True,
     seed:int = None,
 
 ):

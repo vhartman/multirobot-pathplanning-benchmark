@@ -1520,17 +1520,19 @@ class BaseProblem(ABC):
         # valid_edges = 0
 
         if check_edges_in_order:
+            #sparsely check if newly generated points are in collision
+            for i in idx: 
+                q1 = path[i].q
+                mode = path[i].mode
+                if not self.is_collision_free(q1, mode):
+                    return False
+            if not self.is_collision_free(path[-1].q, path[-1].mode):
+                return False
+            #check whole edge
             for i in idx:
-                # skip transition nodes
-                # if path[i].mode != path[i + 1].mode:
-                #     continue
-
                 q1 = path[i].q
                 q2 = path[i + 1].q
                 mode = path[i].mode
-
-                if not self.is_collision_free(q1, mode):
-                    return False
 
                 if not self.is_edge_collision_free(
                     q1,

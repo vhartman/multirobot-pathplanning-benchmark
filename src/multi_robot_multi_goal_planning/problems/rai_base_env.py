@@ -419,6 +419,7 @@ class rai_env(BaseProblem):
         q: Optional[Configuration],
         m: Mode,
         collision_tolerance: float = None,
+        set_mode: bool = True,
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -427,7 +428,8 @@ class rai_env(BaseProblem):
         # self.C.setJointState(q)
 
         if q is not None:
-            self.set_to_mode(m)
+            if set_mode:
+                self.set_to_mode(m)
             self.C.setJointState(q)
 
         # self.C.view()
@@ -556,7 +558,7 @@ class rai_env(BaseProblem):
         q1_state = q1.state()
         q2_state = q2.state()
         dir = (q2_state - q1_state) / (N - 1)
-
+        set_mode = True
         for i in idx[N_start:N_max]:
             if not include_endpoints and (i == 0 or i == N - 1):
                 continue
@@ -564,9 +566,10 @@ class rai_env(BaseProblem):
             # print(i / (N-1))
             q = q1_state + dir * (i)
             # q_conf = NpConfiguration(q, q1.array_slice)
-            if not is_collision_free(q, m, collision_tolerance=tolerance):
+            if not is_collision_free(q, m, collision_tolerance=tolerance, set_mode=set_mode):
                 # print('coll')
                 return False
+            set_mode = False
 
         return True
 
