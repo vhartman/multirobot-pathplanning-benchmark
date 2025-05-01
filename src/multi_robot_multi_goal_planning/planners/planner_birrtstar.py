@@ -99,16 +99,12 @@ class BidirectionalRRTstar(BaseRRTstar):
             new_modes = [self.env.get_start_mode()]
         else:
             new_modes = self.env.get_next_modes(q, mode)
+            new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
+            if new_modes == []:
+                self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue 
-            if tuple(new_mode.task_ids) in self.invalid_next_ids.get(mode, set()):
-                continue
-            if new_mode in self.blacklist_modes:
-                self.update_cache_of_invalid_modes(new_mode)
-                continue
-            if not self.is_next_mode_valid(new_mode):
-                continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
             if self.informed_sampling_version != 6:
@@ -131,8 +127,6 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.trees[new_mode].add_node(node, 'B')
                 self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
                 node.cost = np.inf
-        if mode is not None:
-            self.track_invalid_modes(mode)
 
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         if mode not in self.modes:
@@ -360,6 +354,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             
         self.update_results_tracking(self.operation.cost, self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
+        print(self.mode_validation.counter)
         return self.operation.path, info      
 
 

@@ -1555,7 +1555,7 @@ class dRRTstar(BaseRRTstar):
         for m in modes:
             transitions = []
             while  len(transitions) < self.transistion_batch_size_per_mode:
-                next_ids = self.get_next_ids(m)
+                next_ids = self.mode_validation.get_valid_next_ids(m)
                 active_task = self.env.get_active_task(m, next_ids)
                 if len(transitions) > 0 and len(self.env.get_valid_next_task_combinations(m)) <= 1 and type(active_task.goal) is SingleGoal:
                     break
@@ -1893,7 +1893,7 @@ class dRRTstar(BaseRRTstar):
         Returns:
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
-        next_ids = self.get_next_ids(mode)
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
         constrained_robot = self.env.get_active_task(mode, next_ids).robots
         goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
         q = []
@@ -1934,7 +1934,7 @@ class dRRTstar(BaseRRTstar):
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
         is_gaussian_sampling = sampling_type == "gaussian"
-        constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+        constrained_robots = self.env.get_active_task(mode, self.mode_validation.get_valid_next_ids(mode)).robots
         attemps = 0  # needed if home poses are in collision
 
         #goal sampling
