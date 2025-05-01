@@ -446,7 +446,7 @@ class rai_env(BaseProblem):
         return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode, collision_tolerance: float = None
+        self, r: str, q: NDArray, m: Mode = None, collision_tolerance: float = None, set_mode: bool = True
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -459,8 +459,8 @@ class rai_env(BaseProblem):
         #     for robot in r:
         #         robot_indices = self.robot_idx[robot]
         #         self.C.setJointState(q[robot_indices], self.robot_joints[robot])
-        
-        self.set_to_mode(m)
+        if set_mode:
+            self.set_to_mode(m)
         self.C.setJointState(q)
 
         binary_collision_free = self.C.getCollisionFree()

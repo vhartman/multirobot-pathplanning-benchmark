@@ -1477,7 +1477,7 @@ class BaseProblem(ABC):
         pass
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode, collision_tolerance: float = 0.01
+        self, r: str, q: NDArray, m: Mode, collision_tolerance: float = 0.01, set_mode: bool = True
     ) -> bool:
         raise NotImplementedError
 
