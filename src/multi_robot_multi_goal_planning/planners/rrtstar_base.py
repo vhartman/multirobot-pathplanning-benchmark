@@ -31,7 +31,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 )
 
 from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
-
+from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
 
 class Operation:
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
@@ -928,12 +928,11 @@ class BaseRRTstar(ABC):
         self.all_paths = []
         self.informed_batch_size = informed_batch_size
         self.informed = InformedSampling(self.env, 'sampling_based', self.locally_informed_sampling)
-        self.whitelist_modes = set()
-        self.blacklist_modes = set()
-        self.invalid_next_ids = {}
         self.apply_long_horizon = apply_long_horizon
         self.horizon_length = horizon_length
         self.long_horizon = BaseLongHorizon(self.horizon_length)
+        self.mode_validation = ModeValidation(self.env)
+        self.check = set()
 
     def add_tree(self, 
                  mode: Mode, 
@@ -981,46 +980,24 @@ class BaseRRTstar(ABC):
         if mode is None: 
             new_modes = [self.env.get_start_mode()]
         else:
-            if 7 in mode.task_ids and 1 not in mode.task_ids:
-                pass
+            self.check.add(mode)
             new_modes = self.env.get_next_modes(q, mode)
+            new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
+            if mode.task_ids == [13,4]:
+                pass
+            if new_modes == []:
+                self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
             
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue 
-            if tuple(new_mode.task_ids) in self.invalid_next_ids.get(mode, set()):
-                continue
-            if new_mode in self.blacklist_modes:
-                self.update_cache_of_invalid_modes(new_mode)
-                continue
-            if not self.is_next_mode_valid(new_mode):
-                continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
             if self.informed_sampling_version != 6:
                 self.InformedInitialization(new_mode)
-        if mode is not None:
-            self.track_invalid_modes(mode)
         if self.apply_long_horizon and mode in self.modes:
             self.long_horizon.update(mode, self.operation.init_sol)
 
-    def update_cache_of_invalid_modes(self, mode:Mode) -> None:
-        """
-        Updates the track of invalid modes by adding the current mode to the blacklist of the previous mode.
-
-        Args:
-            mode (Mode): Current operational mode.
-
-        Returns:
-            None: This method does not return any value.
-        """
-        if mode.prev_mode is None:
-            return
-        self.blacklist_modes.add(mode)
-        if mode.prev_mode not in self.invalid_next_ids:
-            self.invalid_next_ids[mode.prev_mode] = set()
-        self.invalid_next_ids[mode.prev_mode].add(tuple(mode.task_ids))              
-        
     def mark_node_as_transition(self, mode:Mode, n:Node) -> None:
         """
         Marks node as a potential transition node for the specified mode.
@@ -1053,26 +1030,19 @@ class BaseRRTstar(ABC):
         self.mark_node_as_transition(mode,n)
         if self.env.is_terminal_mode(mode):
             return
-        next_modes = self.env.get_next_modes(n.state.q, mode)
         if mode not in self.modes:
             return
+        next_modes = self.env.get_next_modes(n.state.q, mode)
+        next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
+        if next_modes == []:
+            self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
+
         for next_mode in next_modes:
-            if tuple(next_mode.task_ids) in self.invalid_next_ids.get(mode, set()):
-                continue
-            if next_mode in self.blacklist_modes:
-                self.update_cache_of_invalid_modes(next_mode)
-                continue
             if next_mode not in self.modes:
                 tree_type = type(self.trees[mode])
                 if tree_type == BidirectionalTree:
                     self.trees[mode].connected = True
                 self.add_new_mode(n.state.q, mode, tree_type)
-                #possible that we can't add it as it is invalid 
-                if tuple(next_mode.task_ids) in self.invalid_next_ids.get(mode, set()):
-                    continue
-                if next_mode in self.blacklist_modes:
-                    self.update_cache_of_invalid_modes(next_mode)
-                    continue
             self.trees[next_mode].add_transition_node_as_start_node(n)
             if self.trees[next_mode].order == 1:
                 index = len(self.trees[next_mode].subtree)-1
@@ -1088,8 +1058,6 @@ class BaseRRTstar(ABC):
                 batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
                 if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
                     self.UpdateCost(next_mode, n)
-        if mode is not None and mode in self.modes:
-            self.track_invalid_modes(mode)
 
     def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
         """
@@ -1202,29 +1170,6 @@ class BaseRRTstar(ABC):
         self.get_lebesgue_measure_of_free_configuration_space()
         self.gamma_rrtstar = ((2 *(1 + 1/self.d))**(1/self.d) * (self.c_free/unit_ball_volume)**(1/self.d))*self.eta
     
-    def get_next_ids(self, mode:Mode) -> List[int]:
-        """
-        Retrieves valid combination of next task IDs for given mode.
-
-        Args:
-            mode (Mode): Current operational mode for which to retrieve valid next task ID combinations.
-
-        Returns:
-            Optional[List[int]]: Randomly selected valid combination of all next task ID combinations if available
-        """
-
-        possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        if not possible_next_task_combinations:
-            if not self.env.is_terminal_mode(mode):
-                self.track_invalid_modes(mode)
-            return
-        invalid_next_modes = self.invalid_next_ids.get(mode, set())
-        while True:
-            next_task = random.choice(possible_next_task_combinations)
-            if tuple(next_task) in invalid_next_modes:
-                continue
-            return next_task
-
     def get_home_poses(self, mode:Mode) -> List[NDArray]:
         """
         Retrieves home poses (i.e., the most recent completed task configurations) for all agents of given mode.
@@ -1273,14 +1218,14 @@ class BaseRRTstar(ABC):
             NDArray: Goal configuration for the specified robot. 
         """
 
-        # task = self.env.get_active_task(mode, self.get_next_ids(mode)) 
+        # task = self.env.get_active_task(mode, self.mode_validation.get_valid_next_ids(mode)) 
         # if r not in task.robots:
         r_idx = self.env.robots.index(r)
         goal = self.env.tasks[mode.task_ids[r_idx]].goal.sample(mode)
         if len(goal) == self.env.robot_dims[r]:
             return goal
         else:
-            constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+            constrained_robot = self.env.get_active_task(mode, self.mode_validation.get_valid_next_ids(mode)).robots
             end_idx = 0
             for robot in constrained_robot:
                 dim = self.env.robot_dims[r]
@@ -1307,9 +1252,10 @@ class BaseRRTstar(ABC):
         failed_attemps = 0
         while True:
             if failed_attemps > 10000:
-                self.track_invalid_modes(mode)
+                print("Failed to sample transition configuration after 10000 attempts.")
+                self.mode_sampling.track_invalid_modes(mode)
                 return
-            next_ids = self.get_next_ids(mode)
+            next_ids = self.mode_validation.get_valid_next_ids(mode)
             if not next_ids and not self.env.is_terminal_mode(mode):
                 return
             constrained_robot = self.env.get_active_task(mode, next_ids).robots
@@ -1352,7 +1298,7 @@ class BaseRRTstar(ABC):
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
         sample_near_path = sampling_type == "sample_near_path"
-        next_ids = self.get_next_ids(mode)
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
         if not next_ids and not self.env.is_terminal_mode(mode):
             return
         constrained_robots = self.env.get_active_task(mode, next_ids).robots
@@ -1487,7 +1433,7 @@ class BaseRRTstar(ABC):
                 self.informed[mode].cost = self.operation.cost
                 update = True
             if goal_sampling:
-                next_ids = self.get_next_ids(mode)
+                next_ids = self.mode_validation.get_valid_next_ids(mode)
                 constrained_robot = self.env.get_active_task(mode, next_ids).robots
                 goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
                 q_rand = []
@@ -1570,7 +1516,7 @@ class BaseRRTstar(ABC):
             #     i+=1 
             return q_rand
         else: 
-            next_ids = self.get_next_ids(mode)
+            next_ids = self.mode_validation.get_valid_next_ids(mode)
             self.informed[mode].initialize(mode, next_ids)
             q_rand = []
             update = False
@@ -1961,10 +1907,8 @@ class BaseRRTstar(ABC):
         elif self.mode_sampling == 1: 
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
-            try:
-                probability[-1] = 1
-            except:
-                pass
+            probability[-1] = 1
+
             p =  probability
 
         elif self.mode_sampling == 0:
@@ -2465,79 +2409,6 @@ class BaseRRTstar(ABC):
         discretized_costs = cumulative_sum(batch_cost)
         return discretized_path, discretized_modes, discretized_costs
 
-    def is_next_mode_valid(self, mode:Mode) -> bool:
-        #TODO what if its a Goal Region? Does that matter?
-        # only eliminate modes that are logically or geometrically impossible
-        if mode in self.blacklist_modes:
-            return False
-        if mode in self.whitelist_modes:
-            return True
-        if mode.prev_mode not in self.invalid_next_ids:
-            self.invalid_next_ids[mode.prev_mode] = set()
-        if mode.prev_mode is None:
-            self.whitelist_modes.add(mode)
-            return True
-        whitelist_robots = set()
-        possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        if not possible_next_task_combinations and not self.env.is_terminal_mode(mode):
-            self.update_cache_of_invalid_modes(mode)
-            return False
-        for next_ids in possible_next_task_combinations:
-            constrained_robots = self.env.get_active_task(mode, next_ids).robots
-            goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
-            q = self.env.start_pos.state().copy()
-            end_idx = 0
-            check_collision = False
-            for robot in self.env.robots:
-                if robot in constrained_robots:
-                    if robot in whitelist_robots:
-                        continue
-                    check_collision = True
-                    robot_indices = self.env.robot_idx[robot]
-                    dim = self.env.robot_dims[robot]
-                    indices = list(range(end_idx, end_idx + dim))
-                    q[robot_indices] = goal[indices]
-                    end_idx += dim 
-                    continue
-            if not check_collision:
-                continue
-            for robot in constrained_robots:
-                # checks if the mode itself has a possible goal configuration
-                # if ((mode.task_ids == [6,1] and mode.prev_mode.task_ids == [6,7]) or (mode.task_ids == [11,1] and mode.prev_mode.task_ids == [11,7])) and robot == "a2_":
-                #     print(q)
-                #     noise = np.random.normal(loc=0.0, scale=0.005)  # Mean 0, stddev 0.05
-                #     print(noise)
-                #     q[8] += noise
-                if not self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance):
-                    self.update_cache_of_invalid_modes(mode)
-                    #when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
-                    return False
-                whitelist_robots.add(robot)
-        self.whitelist_modes.add(mode)
-        return True
-    
-    def track_invalid_modes(self, mode:Mode) -> None:
-        """
-        Tracks invalid modes by adding them to blacklist.
-
-        Args:
-            mode (Mode): The mode to be tracked as invalid.
-
-        Returns:
-            None: This method does not return any value.
-        """
-        while True: 
-            invalid_next_ids = self.invalid_next_ids.get(mode, set())
-            possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-            if len(invalid_next_ids) != len(possible_next_task_combinations):
-                return
-            self.modes.remove(mode)
-            self.update_cache_of_invalid_modes(mode)
-            if mode.prev_mode is None:
-                return
-            mode = mode.prev_mode
-
-    
     @abstractmethod
     def UpdateCost(self, mode:Mode, n: Node) -> None:
         """

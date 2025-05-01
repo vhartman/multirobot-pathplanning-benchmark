@@ -1131,9 +1131,6 @@ class BaseRRTstar(ABC):
         self.informed_batch_size = informed_batch_size
         self.test_mode_sampling = test_mode_sampling
         self.informed = InformedSampling(self.env, 'sampling_based', self.locally_informed_sampling)
-        self.whitelist_modes = set()
-        self.blacklist_modes = set()
-        self.invalid_next_ids = {}
 
     def add_tree(self, 
                  mode: Mode, 
@@ -1398,7 +1395,7 @@ class BaseRRTstar(ABC):
         self.get_lebesgue_measure_of_free_configuration_space()
         self.gamma_rrtstar = ((2 *(1 + 1/self.d))**(1/self.d) * (self.c_free/unit_ball_volume)**(1/self.d))*self.eta
     
-    def get_next_ids(self, mode:Mode) -> List[int]:
+    def get_valid_next_ids(self, mode:Mode) -> List[int]:
         """
         Retrieves valid combination of next task IDs for given mode.
 
@@ -1469,14 +1466,14 @@ class BaseRRTstar(ABC):
             NDArray: Goal configuration for the specified robot. 
         """
 
-        # task = self.env.get_active_task(mode, self.get_next_ids(mode)) 
+        # task = self.env.get_active_task(mode, self.mode_validation.get_valid_next_ids(mode)) 
         # if r not in task.robots:
         r_idx = self.env.robots.index(r)
         goal = self.env.tasks[mode.task_ids[r_idx]].goal.sample(mode)
         if len(goal) == self.env.robot_dims[r]:
             return goal
         else:
-            constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+            constrained_robot = self.env.get_active_task(mode, self.mode_validation.get_valid_next_ids(mode)).robots
             end_idx = 0
             for robot in constrained_robot:
                 dim = self.env.robot_dims[r]
@@ -1503,7 +1500,7 @@ class BaseRRTstar(ABC):
 
         
         while True:
-            next_ids = self.get_next_ids(mode)
+            next_ids = self.mode_validation.get_valid_next_ids(mode)
             constrained_robot = self.env.get_active_task(mode, next_ids).robots
             goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
             q = []
@@ -1543,7 +1540,7 @@ class BaseRRTstar(ABC):
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
         sample_near_path = sampling_type == "sample_near_path"
-        constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+        constrained_robots = self.env.get_active_task(mode, self.mode_validation.get_valid_next_ids(mode)).robots
         attemps = 0  # needed if home poses are in collision
 
         while True:
@@ -1724,7 +1721,7 @@ class BaseRRTstar(ABC):
         path, path_modes = self.interpolate_path(self.operation.path_shortcutting)
         q_rand = []
         attemps = 0
-        next_ids = self.get_next_ids(mode)
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
         self.informed[mode].initialize(mode, next_ids)
         if self.operation.cost != self.informed[mode].cost:
             self.informed[mode].cost = self.operation.cost
@@ -1747,7 +1744,7 @@ class BaseRRTstar(ABC):
         while attemps < max_attemps:
             attemps += 1
             if goal_sampling:
-                next_ids = self.get_next_ids(mode)
+                next_ids = self.mode_validation.get_valid_next_ids(mode)
                 constrained_robot = self.env.get_active_task(mode, next_ids).robots
                 goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
             q_rand = []
