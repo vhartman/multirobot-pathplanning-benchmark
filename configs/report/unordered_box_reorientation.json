@@ -1,11 +1,11 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "other_hallway",
+  "environment": "unordered_box_reorientation",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 400,
-  "num_runs": 20,
-  "seed":1,
+  "max_planning_time": 350,
+  "num_runs": 30,
+  "seed":0,
   "optimize": true,
   "planners": [
     {
@@ -14,8 +14,8 @@
       "options": {
         "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
-        "batch_size": 50,
-        "transition_batch_size": 50,
+        "batch_size": 100,
+        "transition_batch_size": 100,
         "informed_batch_size": 200,
         "informed_transition_batch_size": 150,
         "path_batch_size": 0,
@@ -32,44 +32,17 @@
         "with_tree_visualization": false,
         "apply_long_horizon":false,
         "frontier_mode_sampling_probability":1.0,
-        "horizon_length": 1
+        "horizon_length": 4
       }
     },
     {
-      "name": "aitstar",
-      "type": "aitstar",
-      "options": {
-        "init_uniform_batch_size": 150,
-        "init_transition_batch_size":50,
-        "batch_size": 50,
-        "transition_batch_size": 50,
-        "informed_batch_size": 200,
-        "informed_transition_batch_size": 150,
-        "path_batch_size": 0,
-        "init_mode_sampling_type": "greedy",
-        "distance_function": "max_euclidean",
-        "locally_informed_sampling": true,
-        "informed_sampling": true,
-        "informed_transition_sampling": true,
-        "sample_near_path": false,
-        "shortcutting": true,
-        "direct_informed_sampling": true,
-        "inlcude_lb_in_informed_sampling":false,
-        "remove_based_on_modes":true, 
-        "with_tree_visualization": false,
-        "apply_long_horizon":false,
-        "frontier_mode_sampling_probability":1.0,
-        "horizon_length": 1
-      }
-    },
-    {
-      "name": "long horizon eitstar",
+      "name": "long_horizon eitstar",
       "type": "eitstar",
       "options": {
-        "init_uniform_batch_size": 100,
+        "init_uniform_batch_size": 20,
         "init_transition_batch_size":50,
-        "batch_size": 50,
-        "transition_batch_size": 10,
+        "batch_size": 20,
+        "transition_batch_size": 20,
         "informed_batch_size": 200,
         "informed_transition_batch_size": 150,
         "path_batch_size": 0,
@@ -86,34 +59,7 @@
         "with_tree_visualization": false,
         "apply_long_horizon":true,
         "frontier_mode_sampling_probability":1.0,
-        "horizon_length": 1
-      }
-    },
-    {
-      "name": "long horizon aitstar",
-      "type": "aitstar",
-      "options": {
-        "init_uniform_batch_size": 100,
-        "init_transition_batch_size":50,
-        "batch_size": 50,
-        "transition_batch_size": 10,
-        "informed_batch_size": 200,
-        "informed_transition_batch_size": 150,
-        "path_batch_size": 0,
-        "init_mode_sampling_type": "greedy",
-        "distance_function": "max_euclidean",
-        "locally_informed_sampling": true,
-        "informed_sampling": true,
-        "informed_transition_sampling": true,
-        "sample_near_path": false,
-        "shortcutting": true,
-        "direct_informed_sampling": true,
-        "inlcude_lb_in_informed_sampling":false,
-        "remove_based_on_modes":true, 
-        "with_tree_visualization": false,
-        "apply_long_horizon":true,
-        "frontier_mode_sampling_probability":1.0,
-        "horizon_length": 1
+        "horizon_length": 3
       }
     },
     {
@@ -138,10 +84,10 @@
       "name": "locally_informed_prm_shortcutting",
       "type": "prm",
       "options": {
-        "batch_size": 200,
-        "transition_batch_size": 250,
-        "informed_batch_size": 300,
-        "informed_transition_batch_size": 250,
+        "batch_size": 150,
+        "transition_batch_size": 50,
+        "informed_batch_size": 200,
+        "informed_transition_batch_size": 150,
         "path_batch_size": 0,
         "distance_function": "max_euclidean",
         "connection_strategy": "radius",
@@ -169,6 +115,61 @@
         "informed_batch_size": 300
 
       }
+    },
+    {
+      "name": "aitstar",
+      "type": "aitstar",
+      "options": {
+        "init_uniform_batch_size": 150,
+        "init_transition_batch_size":50,
+        "batch_size": 100,
+        "transition_batch_size": 100,
+        "informed_batch_size": 200,
+        "informed_transition_batch_size": 150,
+        "path_batch_size": 0,
+        "init_mode_sampling_type": "greedy",
+        "distance_function": "max_euclidean",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":false,
+        "frontier_mode_sampling_probability":1.0,
+        "horizon_length": 4
+      }
+    },
+    {
+      "name": "long_horizon aitstar",
+      "type": "aitstar",
+      "options": {
+        "init_uniform_batch_size": 20,
+        "init_transition_batch_size":50,
+        "batch_size": 20,
+        "transition_batch_size": 20,
+        "informed_batch_size": 200,
+        "informed_transition_batch_size": 150,
+        "path_batch_size": 0,
+        "init_mode_sampling_type": "greedy",
+        "distance_function": "max_euclidean",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":true,
+        "frontier_mode_sampling_probability":1.0,
+        "horizon_length": 3
+      }
     }
+
   ]
 }

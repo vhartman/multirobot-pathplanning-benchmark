@@ -2,9 +2,10 @@
 
 # List of config paths
 configs=(
-    "./configs/demo/other_hallway.json"
-    "./configs/demo/box_stacking_dep.json"
-    "./configs/demo/unordered_box_reorientation.json"
+    "./configs/report/other_hallway.json"
+    "./configs/report/box_stacking_dep.json"
+    "./configs/report/unordered_box_reorientation.json"
+    "./configs/report/unassigned_cleanup.json"
 )
 
 # Base command
