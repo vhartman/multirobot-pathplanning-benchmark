@@ -433,8 +433,10 @@ class PinocchioEnvironment(BaseProblem):
     def show_config(self, q, blocking=True):
         if self.viz is None:
             self.setup_visualization()
+        if isinstance(q, Configuration):
+            q = q.state()
 
-        self.viz.display(q.state())
+        self.viz.display(q)
 
         if blocking:
             input("Press Enter to continue...")
@@ -543,6 +545,97 @@ class PinocchioEnvironment(BaseProblem):
 
         # print(mode)
         # self.show_config(q_orig, blocking=False)
+
+        return True
+
+    def is_collision_free_for_robot(
+        self, r: str, q: NDArray, m: Mode = None, collision_tolerance: float = None, set_mode: bool = True
+    ) -> bool:
+        if collision_tolerance is None:
+            collision_tolerance = self.collision_tolerance
+
+        if isinstance(r, str):
+            r = [r]
+
+        # if q is not None:
+        #     self.set_to_mode(m)
+        #     for robot in r:
+        #         robot_indices = self.robot_idx[robot]
+        #         self.C.setJointState(q[robot_indices], self.robot_joints[robot])
+        pin.updateGeometryPlacements(
+            self.model, self.data, self.collision_model, self.geom_data, q
+        )
+
+        # update object positions
+        if m:
+            self._set_to_scenegraph(m.sg)
+
+        pin.updateGeometryPlacements(
+            self.model, self.data, self.collision_model, self.geom_data
+        )
+        in_collision = pin.computeCollisions(self.collision_model, self.geom_data, True)
+        if not in_collision:
+            return True
+        pin.computeDistances(self.collision_model, self.geom_data)
+
+        total_penetration = 0
+        min_dist = {}
+        for k in range(len(self.collision_model.collisionPairs)):
+            cr = self.geom_data.distanceResults[k]
+            # cp = self.collision_model.collisionPairs[k]
+            if cr.min_distance < 0:
+                total_penetration += -cr.min_distance
+            min_dist[k] = -cr.min_distance
+            # print(cr.min_distance)
+            # if cr.isCollision():
+            #     print(self.collision_model.geometryObjects[cp.first].name, self.collision_model.geometryObjects[cp.second].name)
+            #     print("collision pair:", cp.first,",",cp.second,"- collision:","Yes" if cr.isCollision() else "No")
+        # print(q)
+        # print('colliding')
+        # self.show_config(q, blocking=True)
+        #TODO need to be tested properly
+        collisionPairs = self.collision_model.collisionPairs.tolist()
+        if total_penetration > self.collision_tolerance:
+            for k in range(len(self.collision_model.collisionPairs)):
+                dist = min_dist[k]
+                # ignore minor collisions
+                if min_dist[k] > -collision_tolerance / 10:
+                    continue
+                object1 = self.collision_model.geometryObjects[collisionPairs[k].first].name
+                object2 = self.collision_model.geometryObjects[collisionPairs[k].second].name
+                # print(c)
+                involves_relevant_robot = False
+                involves_relevant_object = False
+                for robot in r:
+                    task_idx = m.task_ids[self.robots.index(robot)]
+                    task = self.tasks[task_idx]
+                    if dist < 0 and (robot in object1 or robot in object2):
+                        involves_relevant_robot = True
+                    elif dist < 0 and(object1 in task.frames or object2 in task.frames):
+                        involves_relevant_object = True
+                
+                
+                if not involves_relevant_robot and not involves_relevant_object:
+                    # print("A")
+                    # print(c)
+                    continue
+                # else:
+                #     print("B")
+                #     print(c)
+
+                is_collision_with_other_robot = False
+                for other_robot in self.robots:
+                    if other_robot in r:
+                        continue
+                    if other_robot in object1 or other_robot in object2:
+                        is_collision_with_other_robot = True
+                        break
+
+                if not is_collision_with_other_robot:
+                    # print(c)
+                    return False
+
+            return False
 
         return True
 
