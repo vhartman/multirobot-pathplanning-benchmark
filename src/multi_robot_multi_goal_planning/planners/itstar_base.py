@@ -1386,13 +1386,19 @@ class BaseLongHorizon():
         self.reached_terminal_mode = False
         self.shortcutting_iter = 0
         self.counter = 1
+        self.rewire = False
         
     def init_long_horizon(self, g:BaseGraph, current_best_path_nodes:List[BaseNode], tot_mode_sequence:List[Mode]):
         if self.reached_terminal_mode:
             return
         end_idx = self.counter*self.horizon_length-1
-        if end_idx >= len(tot_mode_sequence)-1 or end_idx + 1 >= len(tot_mode_sequence)-1:
+
+        if self.rewire:
             end_idx = len(tot_mode_sequence)-1
+        
+        elif end_idx >= len(tot_mode_sequence)-2 or end_idx >= len(tot_mode_sequence)-self.horizon_length -1 or (end_idx + 1 >= len(tot_mode_sequence)-2 and self.horizon_length > 1):
+            self.rewire = True
+            end_idx = len(tot_mode_sequence)-2
             
         self.terminal_mode = tot_mode_sequence[end_idx]
         self.mode_sequence = tot_mode_sequence[self.horizon_idx:end_idx+1]
@@ -1532,6 +1538,7 @@ class BaseITstar(ABC):
         self.init_next_ids = {}
         self.found_init_mode_sequence = False
         self.init_next_modes = {}
+        self.expanded_modes = set()
         
     def _create_operation(self) -> BaseOperation:
         return BaseOperation()
@@ -1609,6 +1616,12 @@ class BaseITstar(ABC):
         return new_samples, num_attempts
   
     def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
+        # if not self.apply_long_horizon and self.current_best_cost is None and len(self.g.goal_nodes) > 0:
+        #     self.sorted_reached_modes = [m for m in self.sorted_reached_modes if m not in self.expanded_modes]
+        #     prev_mode = self.sorted_reached_modes[0].prev_mode
+        #     if prev_mode is None:
+        #         prev_mode = self.sorted_reached_modes[0]
+        #     self.g.virtual_root = self.g.nodes[self.g.transition_node_ids[prev_mode][0]].transition_neighbors[0]
         transitions, failed_attemps = 0, 0
         reached_terminal_mode = False
         update = (not self.apply_long_horizon or self.apply_long_horizon and (self.long_horizon.init or self.long_horizon.reached_terminal_mode))
@@ -2289,6 +2302,7 @@ class BaseITstar(ABC):
         print(f"Removed {num_pts_for_removal} nodes")
     
     def remove_nodes_in_graph_before_init_sol(self):
+        # self.expanded_modes.update(list(self.g.tree.keys())[:-1])
         num_pts_for_removal = 0
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
             if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
@@ -2373,11 +2387,13 @@ class BaseITstar(ABC):
                     rewire = True
                 else:
                     iter = 0
-                    if self.long_horizon.counter >= int(len(self.sorted_reached_modes)/self.horizon_length):
+                    if self.long_horizon.rewire:
                         rewire = True
-                        iter = 10
+                        iter = 15
                         if self.env.is_terminal_mode(path[-1].mode):
-                            iter = 250
+                            iter = 0
+                    else:
+                        return
                     print(iter)
                 shortcut_path, _ = shortcutting.robot_mode_shortcut(
                     self.env,
@@ -2684,7 +2700,7 @@ class BaseITstar(ABC):
         #         if not self.long_horizon.reached_terminal_mode:
         #             self.long_horizon.reset()
         #             self.current_best_cost = None
-        
+        print("forward expanded modes", len(self.g.tree))
         if self.current_best_cost is not None and not skip:
             print()
             print("Shortcutting before new batch")

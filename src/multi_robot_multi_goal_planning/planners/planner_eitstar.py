@@ -474,9 +474,9 @@ class EITstar(BaseITstar):
                     if valid_check:
                         sparsely_collision_free = True
                     else:
-                        if edge_id in self.check:
-                            print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-                        self.check.add(edge_id)
+                        # if edge_id in self.check:
+                        #     print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                        # self.check.add(edge_id)
                         sparsely_collision_free = self.env.is_edge_collision_free(
                                     n_start.state.q,
                                     n_end.state.q,
@@ -594,7 +594,10 @@ class EITstar(BaseITstar):
         if self.apply_long_horizon:
             start = self.g.virtual_root
         else:
-            start = self.g.root
+            if self.current_best_cost is None and self.g.virtual_root is not None:
+                start = self.g.virtual_root
+            else:
+                start = self.g.root
         self.expand_node_forward(start, regardless_forward_closed_set = True, first_search=self.first_search)
 
     def initialize_reverse_search(self, reset:bool = True):
