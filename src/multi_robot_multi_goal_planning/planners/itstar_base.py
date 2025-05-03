@@ -2320,7 +2320,9 @@ class BaseITstar(ABC):
 
         for mode in list(self.g.transition_node_ids.keys()):
             if self.env.is_terminal_mode(mode) or mode == self.long_horizon.terminal_mode:
-                continue           
+                continue    
+            if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
+                continue       
             if mode not in self.g.tree:
                 continue
             if len(self.g.transition_node_ids[mode]) == 1:
