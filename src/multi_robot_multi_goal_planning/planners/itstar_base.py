@@ -1539,6 +1539,7 @@ class BaseITstar(ABC):
         self.found_init_mode_sequence = False
         self.init_next_modes = {}
         self.expanded_modes = set()
+        self.last_expanded_mode = None
         
     def _create_operation(self) -> BaseOperation:
         return BaseOperation()
@@ -1614,14 +1615,37 @@ class BaseITstar(ABC):
         print("Percentage of succ. attempts", num_valid / num_attempts)
 
         return new_samples, num_attempts
-  
+    
+    def create_virtual_root(self):
+        transition_nodes = self.g.transition_node_ids[self.last_expanded_mode]
+        for transition in transition_nodes:
+            node = self.g.nodes[transition]
+            if node.forward.parent is not None:
+                self.sorted_reached_modes = [m for m in self.sorted_reached_modes if m not in self.expanded_modes]
+                self.get_virtual_root(node.transition_neighbors, self.sorted_reached_modes[0])
+                return
+        prev_mode = self.last_expanded_mode.prev_mode
+        if prev_mode is None:
+            self.g.virtual_root = self.g.root
+        else:
+            for transition in self.g.transition_node_ids[prev_mode]:
+                node = self.g.nodes[transition]
+                if node.forward.parent is not None:
+                    self.get_virtual_root(node.transition_neighbors, self.last_expanded_mode)
+                    break
+        self.expanded_modes.remove(self.last_expanded_mode)
+        self.sorted_reached_modes = [m for m in self.sorted_reached_modes if m not in self.expanded_modes]
+    
+    def get_virtual_root(self, transition_neighbors:List[BaseNode], next_mode:Mode):
+        for transition in transition_neighbors:
+             if next_mode == transition.state.mode:
+                self.g.virtual_root = transition
+                print("-> Virtual root node: ", transition.id, transition.state.mode)
+                break
+            
     def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
-        # if not self.apply_long_horizon and self.current_best_cost is None and len(self.g.goal_nodes) > 0:
-        #     self.sorted_reached_modes = [m for m in self.sorted_reached_modes if m not in self.expanded_modes]
-        #     prev_mode = self.sorted_reached_modes[0].prev_mode
-        #     if prev_mode is None:
-        #         prev_mode = self.sorted_reached_modes[0]
-        #     self.g.virtual_root = self.g.nodes[self.g.transition_node_ids[prev_mode][0]].transition_neighbors[0]
+        if not self.apply_long_horizon and self.current_best_cost is None and len(self.g.goal_nodes) > 0:
+            self.create_virtual_root()
         transitions, failed_attemps = 0, 0
         reached_terminal_mode = False
         update = (not self.apply_long_horizon or self.apply_long_horizon and (self.long_horizon.init or self.long_horizon.reached_terminal_mode))
@@ -2302,12 +2326,15 @@ class BaseITstar(ABC):
         print(f"Removed {num_pts_for_removal} nodes")
     
     def remove_nodes_in_graph_before_init_sol(self):
-        # self.expanded_modes.update(list(self.g.tree.keys())[:-1])
+        self.expanded_modes.update(self.g.tree.keys())
+        self.last_expanded_mode = list(self.g.tree.keys())[-1]
         num_pts_for_removal = 0
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
             if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
                 continue
             if mode not in self.g.tree:
+                continue
+            if mode == list(self.g.tree.keys())[-1]:
                 continue
             original_count = len(self.g.node_ids[mode])
             self.g.node_ids[mode] = [
@@ -2324,6 +2351,8 @@ class BaseITstar(ABC):
             if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
                 continue       
             if mode not in self.g.tree:
+                continue
+            if mode == list(self.g.tree.keys())[-1]:
                 continue
             if len(self.g.transition_node_ids[mode]) == 1:
                 continue
