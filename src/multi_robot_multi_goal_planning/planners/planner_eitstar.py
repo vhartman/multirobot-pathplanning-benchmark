@@ -661,8 +661,8 @@ class EITstar(BaseITstar):
                         for transition in n1.transition_neighbors:
                             # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
                             #     continue
-                            # if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
-                            #     continue  
+                            if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
+                                continue  
                             self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
@@ -706,8 +706,8 @@ class EITstar(BaseITstar):
                         for transition in n1.transition_neighbors:
                             # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
                             #     continue
-                            # if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
-                            #     continue 
+                            if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
+                                continue 
                             self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)

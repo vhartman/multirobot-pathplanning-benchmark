@@ -1617,12 +1617,15 @@ class BaseITstar(ABC):
         return new_samples, num_attempts
     
     def create_virtual_root(self):
+        if not self.expanded_modes:
+            return
         transition_nodes = self.g.transition_node_ids[self.last_expanded_mode]
         for transition in transition_nodes:
             node = self.g.nodes[transition]
             if node.forward.parent is not None:
-                self.sorted_reached_modes = [m for m in self.sorted_reached_modes if m not in self.expanded_modes]
-                self.get_virtual_root(node.transition_neighbors, self.sorted_reached_modes[0])
+                potential_sorted_reached_modes = [m for m in self.sorted_reached_modes if m not in self.expanded_modes]
+                if self.get_virtual_root(node.transition_neighbors, potential_sorted_reached_modes[0]):
+                    self.sorted_reached_modes = potential_sorted_reached_modes
                 return
         prev_mode = self.last_expanded_mode.prev_mode
         if prev_mode is None:
@@ -1631,7 +1634,8 @@ class BaseITstar(ABC):
             for transition in self.g.transition_node_ids[prev_mode]:
                 node = self.g.nodes[transition]
                 if node.forward.parent is not None:
-                    self.get_virtual_root(node.transition_neighbors, self.last_expanded_mode)
+                    if not self.get_virtual_root(node.transition_neighbors, self.last_expanded_mode):
+                        return
                     break
         self.expanded_modes.remove(self.last_expanded_mode)
         self.sorted_reached_modes = [m for m in self.sorted_reached_modes if m not in self.expanded_modes]
@@ -1641,7 +1645,8 @@ class BaseITstar(ABC):
              if next_mode == transition.state.mode:
                 self.g.virtual_root = transition
                 print("-> Virtual root node: ", transition.id, transition.state.mode)
-                break
+                return True
+        return False
             
     def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
         if not self.apply_long_horizon and self.current_best_cost is None and len(self.g.goal_nodes) > 0:
@@ -2326,8 +2331,13 @@ class BaseITstar(ABC):
         print(f"Removed {num_pts_for_removal} nodes")
     
     def remove_nodes_in_graph_before_init_sol(self):
-        self.expanded_modes.update(self.g.tree.keys())
-        self.last_expanded_mode = list(self.g.tree.keys())[-1]
+        if self.current_best_cost is None:
+            relevant_expanded_modes = [mode for mode in list(self.g.tree.keys()) if mode in self.sorted_reached_modes]
+            if relevant_expanded_modes != []:
+                self.expanded_modes.update(relevant_expanded_modes)
+                self.last_expanded_mode = max(relevant_expanded_modes, key=lambda obj: obj.id)
+            else:
+                self.expanded_modes = set()
         num_pts_for_removal = 0
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
             if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:

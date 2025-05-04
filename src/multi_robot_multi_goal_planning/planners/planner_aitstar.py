@@ -686,7 +686,10 @@ class AITstar(BaseITstar):
         if self.apply_long_horizon:
             start = self.g.virtual_root
         else:
-            start = self.g.root
+            if self.current_best_cost is None and self.g.virtual_root is not None:
+                start = self.g.virtual_root
+            else:
+                start = self.g.root
         self.expand_node_forward(start, regardless_forward_closed_set = True, first_search=self.first_search)
 
     def initialize_reverse_search(self, reset:bool=True):
@@ -758,8 +761,8 @@ class AITstar(BaseITstar):
                         for transition in n1.transition_neighbors:
                             # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
                             #     continue
-                            # if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
-                            #     continue 
+                            if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
+                                continue 
                             self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
@@ -796,8 +799,8 @@ class AITstar(BaseITstar):
                         for transition in n1.transition_neighbors:
                             # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
                             #     continue
-                            # if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
-                            #     continue 
+                            if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
+                                continue 
                             self.expand_node_forward(transition)
                     else:
                         self.expand_node_forward(n1)
