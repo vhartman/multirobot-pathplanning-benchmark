@@ -9,7 +9,10 @@ def path_cost(path: List[State], batch_cost_fun) -> float:
     """
     Computes the path cost via the batch cost function and summing it up.
     """
-    batch_costs = batch_cost_fun(path[:-1], path[1:])
+    # batch_costs = batch_cost_fun(path[:-1], path[1:])
+    batch_costs = batch_cost_fun(path, None)
+    # assert np.allclose(batch_costs, batch_costs_tmp)
+
     return np.sum(batch_costs)
 
 
