@@ -22,6 +22,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     config_dist,
     batch_config_dist,
 )
+from itertools import chain
 from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate_path
 
 from multi_robot_multi_goal_planning.planners import shortcutting
@@ -30,7 +31,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
-
+from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
 
 class Node:
     __slots__ = [
@@ -1398,11 +1399,17 @@ def composite_prm_planner(
     try_shortcutting: bool = True,
     try_direct_informed_sampling: bool = True,
     inlcude_lb_in_informed_sampling: bool = False,
+    init_mode_sampling_type: str = "greedy",
+    frontier_mode_sampling_probability: float = 0.5,
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
 
     reached_modes = set([m0])
+    sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id)) 
+    mode_validation = ModeValidation(env)
+    init_next_modes, init_next_ids = {}, {}
+    found_init_mode_sequence = False
 
     conf_type = type(env.get_start_pos())
     informed = InformedSampling(
@@ -1412,40 +1419,100 @@ def composite_prm_planner(
         include_lb=inlcude_lb_in_informed_sampling,
     )
 
+    # def sample_mode(
+    #     mode_sampling_type: str = "uniform_reached", found_solution: bool = False
+    # ) -> Mode:
+    #     # m_rnd = reached_modes[-1]
+    #     # return m_rnd
+    #     if mode_sampling_type == "uniform_reached":
+    #         # print(len(reached_modes))
+    #         m_rnd = random.choice(tuple(reached_modes))
+    #     elif mode_sampling_type == "weighted":
+    #         # sample such that we tend to get similar number of pts in each mode
+    #         w = []
+    #         for m in reached_modes:
+    #             num_nodes = 0
+    #             if m in g.nodes:
+    #                 num_nodes += len(g.nodes[m])
+    #             if m in g.transition_nodes:
+    #                 num_nodes += len(g.transition_nodes[m])
+    #             w.append(1 / max(1, num_nodes))
+    #         m_rnd = random.choices(tuple(reached_modes), weights=w)[0]
+    #     # elif mode_sampling_type == "greedy_until_first_sol":
+    #     #     if found_solution:
+    #     #         m_rnd = reached_modes[-1]
+    #     #     else:
+    #     #         w = []
+    #     #         for m in reached_modes:
+    #     #             w.append(1 / len(g.nodes[tuple(m)]))
+    #     #         m_rnd = random.choices(reached_modes, weights=w)[0]
+    #     # else:
+    #     #     # sample very greedily and only expand the newest mode
+    #     #     m_rnd = reached_modes[-1]
+
+    #     # print(m_rnd)
+    #     return m_rnd
     def sample_mode(
-        mode_sampling_type: str = "uniform_reached", found_solution: bool = False
+        reached_modes,
+        mode_sampling_type: str = "uniform_reached",
+        found_solution: bool = False
+        
     ) -> Mode:
-        # m_rnd = reached_modes[-1]
-        # return m_rnd
         if mode_sampling_type == "uniform_reached":
-            # print(len(reached_modes))
-            m_rnd = random.choice(tuple(reached_modes))
-        elif mode_sampling_type == "weighted":
-            # sample such that we tend to get similar number of pts in each mode
-            w = []
+            return random.choice(reached_modes)
+        elif mode_sampling_type == "frontier":
+            if len(reached_modes) == 1:
+                return reached_modes[0]
+
+            total_nodes = g.get_num_samples()
+            p_frontier = frontier_mode_sampling_probability
+            p_remaining = 1 - p_frontier
+
+            frontier_modes = []
+            remaining_modes = []
+            sample_counts = {}
+            inv_prob = []
+
             for m in reached_modes:
-                num_nodes = 0
-                if m in g.nodes:
-                    num_nodes += len(g.nodes[m])
-                if m in g.transition_nodes:
-                    num_nodes += len(g.transition_nodes[m])
-                w.append(1 / max(1, num_nodes))
-            m_rnd = random.choices(tuple(reached_modes), weights=w)[0]
-        # elif mode_sampling_type == "greedy_until_first_sol":
-        #     if found_solution:
-        #         m_rnd = reached_modes[-1]
-        #     else:
-        #         w = []
-        #         for m in reached_modes:
-        #             w.append(1 / len(g.nodes[tuple(m)]))
-        #         m_rnd = random.choices(reached_modes, weights=w)[0]
-        # else:
-        #     # sample very greedily and only expand the newest mode
-        #     m_rnd = reached_modes[-1]
+                sample_count = g.get_num_samples_in_mode(m)
+                sample_counts[m] = sample_count
+                if not m.next_modes:
+                    frontier_modes.append(m)
+                else:
+                    remaining_modes.append(m)
+                    inv_prob.append(1 - (sample_count / total_nodes))
+            
+            if not frontier_modes:
+                frontier_modes = reached_modes
 
-        # print(m_rnd)
-        return m_rnd
+            if frontier_mode_sampling_probability == 1:
+                if len(frontier_modes) >  0:
+                    p = [1 / len(frontier_modes)] * len(frontier_modes) 
+                    return random.choices(frontier_modes, weights=p, k=1)[0]
+                else:
+                    return random.choice(reached_modes)
 
+            
+
+            if not remaining_modes:
+                return random.choice(reached_modes)
+
+            total_inverse = sum(1 - (sample_counts[m] / total_nodes) for m in remaining_modes)
+            if total_inverse == 0:
+                return random.choice(reached_modes)
+
+            sorted_reached_modes = frontier_modes + remaining_modes
+            p = [p_frontier / len(frontier_modes)] * len(frontier_modes) 
+            inv_prob = np.array(inv_prob)
+            p.extend((inv_prob / total_inverse) * p_remaining)
+            
+            return random.choices(sorted_reached_modes, weights=p, k=1)[0]
+
+        elif mode_sampling_type == "greedy":    
+            return reached_modes[-1]
+        
+        return random.choice(reached_modes) 
+            # m_rnd = reached_modes[-1]
     # we are checking here if a sample can imrpove a part of the path
     # the condition to do so is that the
 
@@ -1538,7 +1605,7 @@ def composite_prm_planner(
             num_attempts += 1
             # print(len(new_samples))
             # sample mode
-            m = sample_mode("uniform_reached", cost is not None)
+            m = sample_mode(sorted_reached_modes, "uniform_reached", cost is not None)
 
             # print(m)
 
@@ -1557,75 +1624,176 @@ def composite_prm_planner(
 
         return new_samples, num_attempts
 
-    def sample_valid_uniform_transitions(transistion_batch_size, cost):
-        transitions = []
+    # def sample_valid_uniform_transitions(transistion_batch_size, cost):
+    #     transitions = []
 
-        if g.goal_nodes:
+    #     if g.goal_nodes:
+    #         focal_points = np.array(
+    #             [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
+    #             dtype=np.float64,
+    #         )
+
+    #     while len(transitions) < transistion_batch_size:
+    #         # sample mode
+    #         mode = sample_mode("uniform_reached", None)
+
+    #         # sample transition at the end of this mode
+    #         possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
+    #         # print(mode, possible_next_task_combinations)
+
+    #         if len(possible_next_task_combinations) > 0:
+    #             ind = random.randint(0, len(possible_next_task_combinations) - 1)
+    #             active_task = env.get_active_task(
+    #                 mode, possible_next_task_combinations[ind]
+    #             )
+    #         else:
+    #             active_task = env.get_active_task(mode, None)
+
+    #         goals_to_sample = active_task.robots
+    #         goal_sample = active_task.goal.sample(mode)
+
+    #         # if mode.task_ids == [3, 8]:
+    #         #     print(active_task.name)
+
+    #         # q = env.sample_config_uniform_in_limits()
+
+    #         # for i in range(len(env.robots)):
+    #         #     r = env.robots[i]
+    #         #     if r in goals_to_sample:
+    #         #         offset = 0
+    #         #         for _, task_robot in enumerate(active_task.robots):
+    #         #             if task_robot == r:
+    #         #                 q[i] = goal_sample[offset : offset + env.robot_dims[task_robot]]
+
+    #         q = []
+    #         for i in range(len(env.robots)):
+    #             r = env.robots[i]
+    #             if r in goals_to_sample:
+    #                 offset = 0
+    #                 for _, task_robot in enumerate(active_task.robots):
+    #                     if task_robot == r:
+    #                         q.append(
+    #                             goal_sample[
+    #                                 offset : offset + env.robot_dims[task_robot]
+    #                             ]
+    #                         )
+    #                         break
+    #                     offset += env.robot_dims[task_robot]
+    #             else:  # uniform sample
+    #                 lims = env.limits[:, env.robot_idx[r]]
+    #                 if lims[0, 0] < lims[1, 0]:
+    #                     qr = (
+    #                         np.random.rand(env.robot_dims[r])
+    #                         * (lims[1, :] - lims[0, :])
+    #                         + lims[0, :]
+    #                     )
+    #                 else:
+    #                     qr = np.random.rand(env.robot_dims[r]) * 6 - 3
+
+    #                 q.append(qr)
+
+    #         q = conf_type(np.concatenate(q), env.start_pos.array_slice)
+
+    #         if cost is not None:
+    #             if sum(env.batch_config_cost(q, focal_points)) > cost:
+    #                 continue
+
+    #         if env.is_collision_free(q, mode):
+    #             if env.is_terminal_mode(mode):
+    #                 next_modes = None
+    #             else:
+    #                 # print("coll free mode trans: ", mode)
+    #                 next_modes = env.get_next_modes(q, mode)
+    #                 # assert len(next_modes) == 1
+    #                 # next_mode = next_modes[0]
+    #                 # print("next mode", next_mode)
+
+    #                 # if len(next_modes) == 0:
+    #                 #     print("BBBBB")
+    #                 #     print(mode)
+
+                
+    #             if next_modes is None or len(next_modes) > 0:
+    #                 # print("CC")
+    #                 # print(mode, next_modes)
+    #                 transitions.append((q, mode, next_modes))
+
+    #             # print(mode, mode.next_modes)
+
+    #             if next_modes is not None and len(next_modes) > 0:
+    #                 reached_modes.update(next_modes)
+    #                 # for next_mode in next_modes:
+    #                 # #     reached_modes.add(next_mode)
+    #                     # if next_mode not in reached_modes:
+    #                     #     reached_modes.append(next_mode)
+
+    #                 # print("reached modes", len(reached_modes))
+    #                 # print(reached_modes)
+    #         # else:
+    #         #     print("not collfree")
+    #         #     print(mode)
+    #         #     # env.show(True)
+
+    #     return transitions
+
+    def sample_valid_uniform_transitions(transistion_batch_size, 
+                                         cost, 
+                                         found_init_mode_sequence,
+                                         reached_modes, 
+                                         sorted_reached_modes, 
+                                         init_next_modes, 
+                                         init_next_ids):
+        transitions, failed_attemps = 0, 0
+        reached_terminal_mode = False
+        update = True
+        if len(g.goal_nodes) == 0:
+                mode_sampling_type = init_mode_sampling_type
+        else:
+            mode_sampling_type = "uniform_reached"
+        if len(g.goal_nodes) > 0:
             focal_points = np.array(
                 [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
                 dtype=np.float64,
             )
 
-        while len(transitions) < transistion_batch_size:
+        if current_best_cost is None and len(g.goal_nodes) > 0:  
+            reached_terminal_mode = True
+        if len(reached_modes) != len(sorted_reached_modes):
+            if update and not reached_terminal_mode:
+                sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id))  
+        mode_seq = sorted_reached_modes
+        
+        while transitions < transistion_batch_size and failed_attemps < 5* transistion_batch_size:
+            
             # sample mode
-            mode = sample_mode("uniform_reached", None)
-
+            mode = sample_mode(mode_seq, mode_sampling_type, None)
+        
             # sample transition at the end of this mode
-            possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
-            # print(mode, possible_next_task_combinations)
-
-            if len(possible_next_task_combinations) > 0:
-                ind = random.randint(0, len(possible_next_task_combinations) - 1)
-                active_task = env.get_active_task(
-                    mode, possible_next_task_combinations[ind]
-                )
+            if reached_terminal_mode:
+                next_ids = init_next_ids[mode]
             else:
-                active_task = env.get_active_task(mode, None)
-
-            goals_to_sample = active_task.robots
+                possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
+                if len(possible_next_task_combinations) > 0:
+                    next_ids = mode_validation.get_valid_next_ids(mode)
+                else:
+                    next_ids = None
+                        
+            active_task = env.get_active_task(mode, next_ids)
+            constrained_robot = active_task.robots
             goal_sample = active_task.goal.sample(mode)
 
-            # if mode.task_ids == [3, 8]:
-            #     print(active_task.name)
-
-            # q = env.sample_config_uniform_in_limits()
-
-            # for i in range(len(env.robots)):
-            #     r = env.robots[i]
-            #     if r in goals_to_sample:
-            #         offset = 0
-            #         for _, task_robot in enumerate(active_task.robots):
-            #             if task_robot == r:
-            #                 q[i] = goal_sample[offset : offset + env.robot_dims[task_robot]]
-
             q = []
-            for i in range(len(env.robots)):
-                r = env.robots[i]
-                if r in goals_to_sample:
-                    offset = 0
-                    for _, task_robot in enumerate(active_task.robots):
-                        if task_robot == r:
-                            q.append(
-                                goal_sample[
-                                    offset : offset + env.robot_dims[task_robot]
-                                ]
-                            )
-                            break
-                        offset += env.robot_dims[task_robot]
-                else:  # uniform sample
-                    lims = env.limits[:, env.robot_idx[r]]
-                    if lims[0, 0] < lims[1, 0]:
-                        qr = (
-                            np.random.rand(env.robot_dims[r])
-                            * (lims[1, :] - lims[0, :])
-                            + lims[0, :]
-                        )
-                    else:
-                        qr = np.random.rand(env.robot_dims[r]) * 6 - 3
-
-                    q.append(qr)
-
-            q = conf_type(np.concatenate(q), env.start_pos.array_slice)
+            end_idx = 0
+            for robot in env.robots:
+                if robot in constrained_robot:
+                    dim = env.robot_dims[robot]
+                    q.append(goal_sample[end_idx:end_idx + dim])
+                    end_idx += dim 
+                else:
+                    r_idx = env.robot_idx[robot]
+                    lims = env.limits[:, r_idx]
+                    q.append(np.random.uniform(lims[0], lims[1]))
+            q = conf_type.from_list(q)
 
             if cost is not None:
                 if sum(env.batch_config_cost(q, focal_points)) > cost:
@@ -1635,39 +1803,85 @@ def composite_prm_planner(
                 if env.is_terminal_mode(mode):
                     next_modes = None
                 else:
-                    # print("coll free mode trans: ", mode)
-                    next_modes = env.get_next_modes(q, mode)
-                    # assert len(next_modes) == 1
-                    # next_mode = next_modes[0]
-                    # print("next mode", next_mode)
+                    
+                    if reached_terminal_mode:
+                        if mode not in init_next_modes:
+                            next_modes = env.get_next_modes(q, mode)
+                            next_modes = mode_validation.get_valid_modes(mode, tuple(next_modes))
+                            init_next_modes[mode] = next_modes
+                        next_modes = init_next_modes[mode]
+                    else:
+                        next_modes = env.get_next_modes(q, mode)
+                        next_modes = mode_validation.get_valid_modes(mode, tuple(next_modes))
+                        assert not (set(next_modes) & mode_validation.invalid_next_ids.get(mode, set())), (
+                            "items from the set are in the array"
+                        )
+                        if next_modes == []:
+                            reached_modes, _ = mode_validation.track_invalid_modes(mode, reached_modes)
+                        
+                if mode not in reached_modes:
+                    if update and not reached_terminal_mode:
+                        sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id))
+                        mode_seq = sorted_reached_modes
+                    continue
+                g.add_transition_nodes([(q, mode, next_modes)])
+                if len(list(chain.from_iterable(g.transition_nodes.values()))) > transitions:
+                    transitions +=1
+                    if mode == g.root.state.mode:
+                        if np.equal(q.state(), g.root.state.q.state()).all():
+                            reached_modes.discard(mode)
+                    
+                else:
+                    failed_attemps +=1
+                    continue
+            else:
+                failed_attemps +=1
+                continue
+            
+            if next_modes is not None and len(next_modes) > 0:
+                reached_modes.update(next_modes)
 
-                    # if len(next_modes) == 0:
-                    #     print("BBBBB")
-                    #     print(mode)
-
+            init_mode_seq, found_init_mode_sequence =  get_init_mode_sequence(mode,found_init_mode_sequence)
+            if init_mode_seq:
+                mode_seq = init_mode_seq
+                sorted_reached_modes = init_mode_seq
+                reached_terminal_mode = True
+                mode_sampling_type = "uniform_reached"    
+            elif len(reached_modes) != len(sorted_reached_modes):
+                if update and not reached_terminal_mode:
+                    sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id))
+                    mode_seq = sorted_reached_modes                   
+            
+        print(f"Adding {transitions} transitions")
+        print(mode_validation.counter)
+        return reached_modes, sorted_reached_modes, init_next_modes, init_next_ids, found_init_mode_sequence
+    
+    def get_init_mode_sequence(mode, found_init_mode_sequence):
+        if found_init_mode_sequence:
+            return [], found_init_mode_sequence
+        mode_seq = []
+        if current_best_cost is None and len(g.goal_nodes) > 0: 
+            found_init_mode_sequence = True
+            mode_seq = create_mode_init_sequence(mode)
+        return mode_seq, found_init_mode_sequence
+    
+    def create_mode_init_sequence(mode):
+        init_search_modes = [mode]
+        init_next_ids[mode] = None
+        while True:
+            prev_mode = mode.prev_mode
+            if prev_mode is not None:
+                init_search_modes.append(prev_mode)
+                init_next_ids[prev_mode] = mode.task_ids
+                mode = prev_mode
                 
-                if next_modes is None or len(next_modes) > 0:
-                    # print("CC")
-                    # print(mode, next_modes)
-                    transitions.append((q, mode, next_modes))
-
-                # print(mode, mode.next_modes)
-
-                if next_modes is not None and len(next_modes) > 0:
-                    reached_modes.update(next_modes)
-                    # for next_mode in next_modes:
-                    # #     reached_modes.add(next_mode)
-                        # if next_mode not in reached_modes:
-                        #     reached_modes.append(next_mode)
-
-                    # print("reached modes", len(reached_modes))
-                    # print(reached_modes)
-            # else:
-            #     print("not collfree")
-            #     print(mode)
-            #     # env.show(True)
-
-        return transitions
+            else:
+                break
+        init_search_modes = init_search_modes[::-1]
+        sorted_reached_modes = init_search_modes
+        print(sorted_reached_modes)
+        return sorted_reached_modes
+    
 
     g = MultimodalGraph(
         State(q0, m0),
@@ -1770,20 +1984,25 @@ def composite_prm_planner(
         if add_new_batch:
             # add new batch of nodes
             effective_uniform_batch_size = (
-                uniform_batch_size if current_best_cost is not None else 500
+                uniform_batch_size if current_best_cost is not None else 150
             )
             effective_uniform_transition_batch_size = (
-                uniform_transition_batch_size if current_best_cost is not None else 500
+                uniform_transition_batch_size if current_best_cost is not None else 50
             )
 
             # if env.terminal_mode not in reached_modes:
             print("Sampling transitions")
-            new_transitions = sample_valid_uniform_transitions(
+            reached_modes, sorted_reached_modes, init_next_modes, init_next_ids, found_init_mode_sequence= sample_valid_uniform_transitions(
                 transistion_batch_size=effective_uniform_transition_batch_size,
                 cost=current_best_cost,
+                found_init_mode_sequence=found_init_mode_sequence,
+                reached_modes=reached_modes,
+                sorted_reached_modes=sorted_reached_modes,
+                init_next_modes=init_next_modes,
+                init_next_ids=init_next_ids,
             )
-            g.add_transition_nodes(new_transitions)
-            print(f"Adding {len(new_transitions)} transitions")
+            # g.add_transition_nodes(new_transitions)
+            # print(f"Adding {len(new_transitions)} transitions")
 
             print("Sampling uniform")
             new_states, required_attempts_this_batch = sample_valid_uniform_batch(
