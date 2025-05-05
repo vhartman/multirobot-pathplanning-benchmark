@@ -2331,20 +2331,18 @@ class BaseITstar(ABC):
         print(f"Removed {num_pts_for_removal} nodes")
     
     def remove_nodes_in_graph_before_init_sol(self):
-        if self.current_best_cost is None:
-            relevant_expanded_modes = [mode for mode in list(self.g.tree.keys()) if mode in self.sorted_reached_modes]
-            if relevant_expanded_modes != []:
-                self.expanded_modes.update(relevant_expanded_modes)
-                self.last_expanded_mode = max(relevant_expanded_modes, key=lambda obj: obj.id)
-            else:
-                self.expanded_modes = set()
+        relevant_expanded_modes = [mode for mode in list(self.g.tree.keys()) if mode in self.sorted_reached_modes]
+        if relevant_expanded_modes != []:
+            self.expanded_modes.update(relevant_expanded_modes)
+            self.last_expanded_mode = max(relevant_expanded_modes, key=lambda obj: obj.id)
+        else:
+            self.expanded_modes = set()
+            return
         num_pts_for_removal = 0
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
             if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
                 continue
-            if mode not in self.g.tree:
-                continue
-            if mode == list(self.g.tree.keys())[-1]:
+            if mode not in relevant_expanded_modes or mode == self.last_expanded_mode:
                 continue
             original_count = len(self.g.node_ids[mode])
             self.g.node_ids[mode] = [
@@ -2360,9 +2358,7 @@ class BaseITstar(ABC):
                 continue    
             if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
                 continue       
-            if mode not in self.g.tree:
-                continue
-            if mode == list(self.g.tree.keys())[-1]:
+            if mode not in relevant_expanded_modes or mode == self.last_expanded_mode:
                 continue
             if len(self.g.transition_node_ids[mode]) == 1:
                 continue
@@ -2432,7 +2428,7 @@ class BaseITstar(ABC):
                         rewire = True
                         iter = 15
                         if self.env.is_terminal_mode(path[-1].mode):
-                            iter = 0
+                            iter = 250
                     else:
                         return
                     print(iter)
