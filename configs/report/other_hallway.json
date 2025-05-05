@@ -14,8 +14,8 @@
       "options": {
         "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
-        "batch_size": 50,
-        "transition_batch_size": 50,
+        "batch_size": 150,
+        "transition_batch_size": 100,
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
         "path_batch_size": 0,
@@ -85,7 +85,7 @@
       "type": "prm",
       "options": {
         "batch_size": 150,
-        "transition_batch_size": 50,
+        "transition_batch_size": 100,
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
         "path_batch_size": 0,
@@ -96,7 +96,11 @@
         "informed_transition_sampling": true,
         "sample_near_path": false,
         "shortcutting": true,
-        "direct_informed_sampling": true
+        "direct_informed_sampling": true,
+        "init_mode_sampling_type": "greedy",
+        "frontier_mode_sampling_probability":1.0
+
+
       }
     },
     {
@@ -122,8 +126,8 @@
       "options": {
         "init_uniform_batch_size": 150,
         "init_transition_batch_size":50,
-        "batch_size": 50,
-        "transition_batch_size": 50,
+        "batch_size": 150,
+        "transition_batch_size": 100,
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
         "path_batch_size": 0,

@@ -181,7 +181,10 @@ def setup_planner(
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
-                inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"]
+                inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
+                init_mode_sampling_type = options["init_mode_sampling_type"],
+                frontier_mode_sampling_probability = options["frontier_mode_sampling_probability"],
+
             )
     elif planner_config["type"] == "rrtstar":
 
@@ -230,6 +233,7 @@ def setup_planner(
                 remove_redundant_nodes = options["remove_redundant_nodes"],
                 apply_long_horizon=options["apply_long_horizon"],
                 horizon_length = options["horizon_length"],
+                
             ).Plan(optimize)
     elif planner_config["type"] == "drrtstar":
 
