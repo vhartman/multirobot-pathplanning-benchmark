@@ -184,6 +184,8 @@ def setup_planner(
                 inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
                 init_mode_sampling_type = options["init_mode_sampling_type"],
                 frontier_mode_sampling_probability = options["frontier_mode_sampling_probability"],
+                init_uniform_batch_size = options["init_uniform_batch_size"],
+                init_transition_batch_size = options["init_transition_batch_size"],
 
             )
     elif planner_config["type"] == "rrtstar":
