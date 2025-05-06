@@ -518,6 +518,13 @@ class MultimodalGraph:
 
         return num_samples + num_transition_samples
 
+    def get_num_samples_in_mode(self, mode:Mode) -> int:
+        num_samples = 0
+        if mode in self.nodes:
+            num_samples += len(self.nodes[mode])
+        if mode in self.transition_nodes:
+            num_samples += len(self.transition_nodes[mode])
+        return num_samples
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def compute_lower_bound_to_goal(self, batch_cost, best_found_cost):
         # run a reverse search on the transition nodes without any collision checking
