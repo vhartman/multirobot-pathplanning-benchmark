@@ -14,6 +14,8 @@
     "sample_near_path": false,
     "shortcutting": false,
     "direct_informed_sampling": true,
-    "inlcude_lb_in_informed_sampling": false
+    "inlcude_lb_in_informed_sampling": false,
+    "init_uniform_batch_size":  150,
+    "init_transition_batch_size":  90
   }
 }

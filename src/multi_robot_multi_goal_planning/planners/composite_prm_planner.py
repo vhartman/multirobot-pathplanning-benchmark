@@ -1401,6 +1401,8 @@ def composite_prm_planner(
     inlcude_lb_in_informed_sampling: bool = False,
     init_mode_sampling_type: str = "greedy",
     frontier_mode_sampling_probability: float = 0.5,
+    init_uniform_batch_size: int = 150,
+    init_transition_batch_size: int = 90,
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
@@ -1410,6 +1412,7 @@ def composite_prm_planner(
     mode_validation = ModeValidation(env)
     init_next_modes, init_next_ids = {}, {}
     found_init_mode_sequence = False
+    first_search = True
 
     conf_type = type(env.get_start_pos())
     informed = InformedSampling(
@@ -1984,11 +1987,12 @@ def composite_prm_planner(
         if add_new_batch:
             # add new batch of nodes
             effective_uniform_batch_size = (
-                uniform_batch_size if current_best_cost is not None else 150
+                uniform_batch_size if not first_search else init_uniform_batch_size
             )
             effective_uniform_transition_batch_size = (
-                uniform_transition_batch_size if current_best_cost is not None else 50
+                uniform_transition_batch_size if not first_search else init_transition_batch_size
             )
+            first_search = False
 
             # if env.terminal_mode not in reached_modes:
             print("Sampling transitions")
