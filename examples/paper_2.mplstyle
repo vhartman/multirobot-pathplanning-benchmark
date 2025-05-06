@@ -10,4 +10,4 @@ lines.markersize : 6
 legend.fontsize: 16
 mathtext.fontset: stix
 font.family: STIXGeneral
-text.usetex: true
+text.usetex: false

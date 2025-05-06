@@ -1,0 +1,348 @@
+{
+  "experiment_name": "planner_demo",
+  "environment": "unassigned_cleanup",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 450,
+  "num_runs": 30,
+  "seed":0,
+  "optimize": true,
+  "planners": [
+    {
+      "name": "eitstar greedy",
+      "type": "eitstar",
+      "options": {
+        "init_uniform_batch_size": 150,
+        "init_transition_batch_size":90,
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "init_mode_sampling_type": "greedy",
+        "distance_function": "max_euclidean",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":false,
+        "frontier_mode_sampling_probability":0.98,
+        "horizon_length": 4
+      }
+    },
+    {
+      "name": "eitstar frontier",
+      "type": "eitstar",
+      "options": {
+        "init_uniform_batch_size": 150,
+        "init_transition_batch_size":90,
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "init_mode_sampling_type": "frontier",
+        "distance_function": "max_euclidean",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":false,
+        "frontier_mode_sampling_probability":0.98,
+        "horizon_length": 4
+      }
+    },
+    {
+      "name": "eitstar uniform",
+      "type": "eitstar",
+      "options": {
+        "init_uniform_batch_size": 150,
+        "init_transition_batch_size":90,
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "init_mode_sampling_type": "uniform",
+        "distance_function": "max_euclidean",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":false,
+        "frontier_mode_sampling_probability":0.98,
+        "horizon_length": 4
+      }
+    },
+    {
+      "name": "locally_informed_prm_shortcutting greedy",
+      "type": "prm",
+      "options": {
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "distance_function": "max_euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "init_mode_sampling_type": "greedy",
+        "frontier_mode_sampling_probability":0.98
+
+
+      }
+    },
+    {
+      "name": "locally_informed_prm_shortcutting frontier",
+      "type": "prm",
+      "options": {
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "distance_function": "max_euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "init_mode_sampling_type": "frontier",
+        "frontier_mode_sampling_probability":0.98
+
+
+      }
+    },
+    {
+      "name": "locally_informed_prm_shortcutting uniform",
+      "type": "prm",
+      "options": {
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "distance_function": "max_euclidean",
+        "connection_strategy": "radius",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "init_mode_sampling_type": "uniform",
+        "frontier_mode_sampling_probability":0.98
+
+
+      }
+    },
+    {
+      "name": "aitstar frontier",
+      "type": "aitstar",
+      "options": {
+        "init_uniform_batch_size": 150,
+        "init_transition_batch_size":90,
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "init_mode_sampling_type": "frontier",
+        "distance_function": "max_euclidean",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":false,
+        "frontier_mode_sampling_probability":0.98,
+        "horizon_length": 4
+      }
+    },
+    {
+      "name": "aitstar greedy",
+      "type": "aitstar",
+      "options": {
+        "init_uniform_batch_size": 150,
+        "init_transition_batch_size":90,
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "init_mode_sampling_type": "greedy",
+        "distance_function": "max_euclidean",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":false,
+        "frontier_mode_sampling_probability":0.98,
+        "horizon_length": 4
+      }
+    },
+    {
+      "name": "aitstar uniform",
+      "type": "aitstar",
+      "options": {
+        "init_uniform_batch_size": 150,
+        "init_transition_batch_size":90,
+        "batch_size": 150,
+        "transition_batch_size": 100,
+        "informed_batch_size": 250,
+        "informed_transition_batch_size": 200,
+        "path_batch_size": 0,
+        "init_mode_sampling_type": "uniform",
+        "distance_function": "max_euclidean",
+        "locally_informed_sampling": true,
+        "informed_sampling": true,
+        "informed_transition_sampling": true,
+        "sample_near_path": false,
+        "shortcutting": true,
+        "direct_informed_sampling": true,
+        "inlcude_lb_in_informed_sampling":false,
+        "remove_based_on_modes":true, 
+        "with_tree_visualization": false,
+        "apply_long_horizon":false,
+        "frontier_mode_sampling_probability":0.98,
+        "horizon_length": 4
+      }
+    },
+    {
+      "name": "birrtstar greedy",
+      "type": "birrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 1,
+        "transition_nodes": 50,
+        "birrtstar_version": 2, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+      }
+    },
+    {
+      "name": "birrtstar frontier",
+      "type": "birrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 0.98,
+        "transition_nodes": 50,
+        "birrtstar_version": 2, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+      }
+    },
+    {
+      "name": "birrtstar uniform",
+      "type": "birrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": null,
+        "transition_nodes": 50,
+        "birrtstar_version": 2, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+      }
+    },
+     {
+      "name": "rrtstar greedy",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 1, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+
+      }
+    },
+    {
+      "name": "rrtstar frontier",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": 0.98, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+
+      }
+    },
+    {
+      "name": "rrtstar uniform",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "mode_sampling": null, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+
+      }
+    }
+  ]
+}
