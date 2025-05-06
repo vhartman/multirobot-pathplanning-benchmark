@@ -534,11 +534,14 @@ class AITstar(BaseITstar):
             idx = neighbors.index(node.transition_neighbors[0].id)
             neighbors.pop(idx)
             batch_cost = np.delete(batch_cost, idx)
+        if len(neighbors) == 0:
+            self.update_node_without_available_reverse_parent(node)
+            return
 
-                
         lb_costs_to_go_expanded = self.operation.lb_costs_to_go_expanded[neighbors]
         candidates =  lb_costs_to_go_expanded + batch_cost
-
+        if candidates.size == 0:
+            pass
         # if all neighbors are infinity, no need to update node
         min_val = np.min(candidates)
         if np.isinf(min_val):
