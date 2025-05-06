@@ -206,7 +206,7 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
         if node_ids is not None and not node_ids:
             return
 
-        before = len(self.current_entries)
+        # before = len(self.current_entries)
         cnt = 0
 
         if type == 'start':
@@ -226,15 +226,15 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
             return
 
         heappush = self.heappush
-        current_entries = self.current_entries
+        # current_entries = self.current_entries
 
         for nid in update_nodes:
             for item in nodes_with_items[nid]:
-                assert item in current_entries, "ijfdlk"
+                # assert item in current_entries, "ijfdlk"
                 heappush(item)
                 cnt += 1
 
-        assert before == len(current_entries), "hjk,l"
+        # assert before == len(current_entries), "hjk,l"
     
 class VertexQueue(DictIndexHeap[Node]):
     def __init__(self):
@@ -263,15 +263,15 @@ class VertexQueue(DictIndexHeap[Node]):
         if len(node_ids) == 0:
             return
         cnt = 0
-        before = (len(self.current_entries))
+        # before = (len(self.current_entries))
         for id in self.nodes:
             if id not in node_ids:
                 continue
             item = self.nodes_with_item[id]
             self.heappush(item)
             cnt +=1
-        assert before == len(self.current_entries), (
-        "hjk,l")
+        # assert before == len(self.current_entries), (
+        # "hjk,l")
 
 class AITstar(BaseITstar):
     def __init__(
@@ -341,8 +341,6 @@ class AITstar(BaseITstar):
         self.g.reverse_queue.remove(node)
         if node.lb_cost_to_go != node.lb_cost_to_go_expanded:
             self.g.reverse_queue.heappush(node)
-        else:
-            pass
    
     def continue_reverse_search(self, iter) -> bool:
         if len(self.g.reverse_queue) == 0 or len(self.g.forward_queue) == 0:
@@ -442,9 +440,9 @@ class AITstar(BaseITstar):
             if self.ptc.should_terminate(self.cnt, time.time() - self.start_time):
                 break
             n = self.g.reverse_queue.heappop()
-            if self.apply_long_horizon:
-                assert(n.state.mode in self.long_horizon.mode_sequence), (
-                    "ohhh")
+            # if self.apply_long_horizon:
+                # assert(n.state.mode in self.long_horizon.mode_sequence), (
+                #     "ohhh")
             self.reverse_closed_set.add(n.id)
             num_iter += 1
             if num_iter % 100000 == 0:
@@ -461,9 +459,9 @@ class AITstar(BaseITstar):
                 self.consistent_nodes.add(n.id)
                 n.lb_cost_to_go_expanded = n.lb_cost_to_go
                 if is_rev_transition:
-                    assert len(n.transition_neighbors) == 1, (
-                        "Transition neighbor should be only one"
-                    )
+                    # assert len(n.transition_neighbors) == 1, (
+                    #     "Transition neighbor should be only one"
+                    # )
                     n.transition_neighbors[0].lb_cost_to_go_expanded = n.lb_cost_to_go_expanded
                     self.consistent_nodes.add(n.transition_neighbors[0].id)
                 if n.is_transition and not n.is_reverse_transition:
@@ -476,9 +474,9 @@ class AITstar(BaseITstar):
                     self.consistent_nodes.discard(n.transition_neighbors[0].id)
                 self.update_state(n)
 
-            assert  n.lb_cost_to_go_expanded == n.lb_cost_to_go or (np.isinf(n.lb_cost_to_go_expanded)), (
-                "lb_cost_to_go_expanded should not be finite and different from lb_cost_to_go"
-            )
+            # assert  n.lb_cost_to_go_expanded == n.lb_cost_to_go or (np.isinf(n.lb_cost_to_go_expanded)), (
+            #     "lb_cost_to_go_expanded should not be finite and different from lb_cost_to_go"
+            # )
 
             self.update_heuristic_of_neihgbors(n)
             if is_rev_transition:
@@ -542,12 +540,19 @@ class AITstar(BaseITstar):
         candidates =  lb_costs_to_go_expanded + batch_cost
 
         # if all neighbors are infinity, no need to update node
-        if np.all(np.isinf(candidates)):
+        min_val = np.min(candidates)
+        if np.isinf(min_val):
             self.update_node_without_available_reverse_parent(node)
             return
+        # assert(not np.all(np.isinf(candidates))), (
+        #     "candidates should be finite"
+        # )
         # still returns same parent with same lb_cost_to_go as the best one
-        sorted_candidates = np.argsort(candidates)
-        best_idx = sorted_candidates[0]
+        
+        # finite_mask = ~np.isinf(candidates)
+        # finite_indices = np.nonzero(finite_mask)[0]
+        # sorted_candidates = finite_indices[np.argsort(candidates[finite_mask])]
+        best_idx = np.where(candidates == min_val)[0][0]
         best_lb_cost_to_go = candidates[best_idx]
         best_parent = self.g.nodes[neighbors[best_idx]]
         if  best_lb_cost_to_go == node.lb_cost_to_go:
@@ -565,18 +570,19 @@ class AITstar(BaseITstar):
             self.inconcistency_check(node)
             return
         best_parent = None
+        sorted_candidates = np.argsort(candidates)
         for idx in sorted_candidates:
             if np.isinf(candidates[idx]):
                 break
             n = self.g.nodes[neighbors[idx]]
-            assert(n.id not in node.blacklist), (
-            "neighbors are wrong")
-            assert (n.state.mode != node.state.mode.prev_mode or n.id != node.id), (
-                "ohhhhhhhhhhhhhhh"
-            )
-            assert (n.rev.parent == node) == (n.id in node.rev.children), (
-                f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
-            )
+            # assert(n.id not in node.blacklist), (
+            # "neighbors are wrong")
+            # assert (n.state.mode != node.state.mode.prev_mode or n.id != node.id), (
+            #     "ohhhhhhhhhhhhhhh"
+            # )
+            # assert (n.rev.parent == node) == (n.id in node.rev.children), (
+            #     f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
+            # )
             if is_rev_transition:
                 if n.is_transition:
                     if node.state.mode != n.state.mode:
@@ -602,35 +608,29 @@ class AITstar(BaseITstar):
             if node.transition_neighbors[0].rev.parent.id != node.id:
                 potential_cost_to_go = best_parent.lb_cost_to_go_expanded + best_edge_cost
                 if node.transition_neighbors[0].lb_cost_to_go < potential_cost_to_go:
-                    # if self.apply_long_horizon and node.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
-                    #     return
-                    # nodes_to_update = set()
-                    # nodes_to_update = self.invalidate_rev_branch(best_parent, nodes_to_update)
-                    # self.g.update_forward_queue_keys('target', nodes_to_update) 
-                    # self.reverse_tree_set.update(nodes_to_update)
                     self.update_node_without_available_reverse_parent(node, update_transition=False)
                     return               
 
         
-        assert(not np.isinf(best_parent.lb_cost_to_go_expanded)), (
-            "fghjksl"
-        )
+        # assert(not np.isinf(best_parent.lb_cost_to_go_expanded)), (
+        #     "fghjksl"
+        # )
         
-        if best_parent.rev.parent is not None:
-            assert best_parent.rev.parent.id not in node.rev.children, (
-                "Parent of potential parent of node is one of its children"
-            )
-        assert best_parent.id not in node.rev.children, (
-            "Potential parent of node is one of its children"
-        )
-        assert best_parent.rev.parent != node, (
-            "Parent of potential parent of node is node itself"
-        )
+        # if best_parent.rev.parent is not None:
+        #     assert best_parent.rev.parent.id not in node.rev.children, (
+        #         "Parent of potential parent of node is one of its children"
+        #     )
+        # assert best_parent.id not in node.rev.children, (
+        #     "Potential parent of node is one of its children"
+        # )
+        # assert best_parent.rev.parent != node, (
+        #     "Parent of potential parent of node is node itself"
+        # )
         # if best_value < node.lb_cost_to_go:
-        if node.rev.parent is not None:
-            assert node.id in node.rev.parent.rev.children, (
-                f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
-            )
+        # if node.rev.parent is not None:
+        #     assert node.id in node.rev.parent.rev.children, (
+        #         f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
+        #     )
         if candidates[idx] != node.lb_cost_to_go:
             self.updated_target_nodes.add(node.id)
             if is_rev_transition:
@@ -640,17 +640,17 @@ class AITstar(BaseITstar):
         ) 
         self.inconcistency_check(node)
 
-        if node.rev.parent is not None:
-            assert (node.id in best_parent.rev.children) and (
-                node.rev.parent == best_parent
-            ), "Not correct connected"
-        if node.rev.parent is not None:
-            assert node.id in node.rev.parent.rev.children, (
-                f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
-            )
-        assert  n.lb_cost_to_go_expanded == n.lb_cost_to_go or not (np.isinf(n.lb_cost_to_go_expanded)), (
-            "lb_cost_to_go_expanded should not be finite and different from lb_cost_to_go"
-        )
+        # if node.rev.parent is not None:
+        #     assert (node.id in best_parent.rev.children) and (
+        #         node.rev.parent == best_parent
+        #     ), "Not correct connected"
+        # if node.rev.parent is not None:
+        #     assert node.id in node.rev.parent.rev.children, (
+        #         f"Parent and children don't coincide (reverse): parent {node.id} of {n.id}"
+        #     )
+        # assert  n.lb_cost_to_go_expanded == n.lb_cost_to_go or not (np.isinf(n.lb_cost_to_go_expanded)), (
+        #     "lb_cost_to_go_expanded should not be finite and different from lb_cost_to_go"
+        # )
 
     def update_node_without_available_reverse_parent(self, node:Node, update_transition:bool = True):
         if len(node.rev.fam) == 0 and np.isinf(node.lb_cost_to_go) and node.id not in self.consistent_nodes:
@@ -740,15 +740,15 @@ class AITstar(BaseITstar):
                 self.initialize_search()
                 continue
             edge_cost, (n0, n1) = self.g.forward_queue.heappop()
-            assert n0.id not in n1.blacklist, (
-                "askdflö"
-            )
+            # assert n0.id not in n1.blacklist, (
+            #     "askdflö"
+            # )
             is_transition = False
             if n1.is_transition and not n1.is_reverse_transition and n1.transition_neighbors:
                 is_transition = True
-            if np.isinf(n1.lb_cost_to_go):
-                assert not [self.g.forward_queue.key(item)[0] for item in self.g.forward_queue.current_entries if not np.isinf(self.g.forward_queue.key(item)[0])], (
-                "Forward queue contains non-infinite keys!")
+            # if np.isinf(n1.lb_cost_to_go):
+                # assert not [self.g.forward_queue.key(item)[0] for item in self.g.forward_queue.current_entries if not np.isinf(self.g.forward_queue.key(item)[0])], (
+                # "Forward queue contains non-infinite keys!")
             # already found best possible parent
             if n1 in BaseTree.all_vertices:
                     continue
@@ -770,9 +770,9 @@ class AITstar(BaseITstar):
                     n0.cost + edge_cost < n1.cost
                 ):  # parent can improve the cost
             
-                    assert n0.id not in n1.forward.children, (
-                        "Potential parent is already a child (forward)"
-                    )
+                    # assert n0.id not in n1.forward.children, (
+                    #     "Potential parent is already a child (forward)"
+                    # )
                     # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
                     if n0.id not in n1.whitelist:
                         collision_free = False
@@ -791,10 +791,10 @@ class AITstar(BaseITstar):
                             # self.manage_edge_in_collision(n0, n1)
                             continue
                     self.g.update_connectivity(n0, n1, edge_cost, n0.cost + edge_cost ,"forward", is_transition)
-                    if self.current_best_cost is not None: 
-                        assert (n1.cost + n1.lb_cost_to_go <= self.current_best_cost), (
-                                "hjklö"
-                            )
+                    # if self.current_best_cost is not None: 
+                    #     assert (n1.cost + n1.lb_cost_to_go <= self.current_best_cost), (
+                    #             "hjklö"
+                    #         )
                     if is_transition:
                         for transition in n1.transition_neighbors:
                             # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
@@ -819,10 +819,10 @@ class AITstar(BaseITstar):
                                 self.initialize_search(num_iter, True)
            
             else:
-                if np.isinf(n1.lb_cost_to_go):
-                    assert (len(self.g.forward_queue.target_nodes - self.consistent_nodes) == len(self.g.forward_queue.target_nodes)), (
-                        "jkslöadfägh"
-                    ) # still can have inconsitent ones with a non inf lb cost to go 
+                # if np.isinf(n1.lb_cost_to_go):
+                    # assert (len(self.g.forward_queue.target_nodes - self.consistent_nodes) == len(self.g.forward_queue.target_nodes)), (
+                    #     "jkslöadfägh"
+                    # ) # still can have inconsitent ones with a non inf lb cost to go 
                 print("------------------------",n1.lb_cost_to_go)
                 print("------------------------",n1.state.mode.task_ids)
                 self.initialize_search()

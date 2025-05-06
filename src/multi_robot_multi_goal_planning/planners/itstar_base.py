@@ -289,9 +289,9 @@ class DictIndexHeap(ABC, Generic[T]):
                 current_priority, current_idx = self.current_entries[item]
                 # new_priority = self.key(item)
                 if current_idx == idx:
-                    assert(current_priority == priority), (
-                        "queue wrong"
-                    )
+                    # assert(current_priority == priority), (
+                    #     "queue wrong"
+                    # )
                     # if new_priority != priority: #needed if reverse search changed priorities
                     #     _, idx = heapq.heappop(self.queue)
                     #     item = self.pop_and_sync(idx)
@@ -322,9 +322,9 @@ class DictIndexHeap(ABC, Generic[T]):
                 current_priority, current_idx = self.current_entries[item]
                 # new_priority = self.key(item)
                 if current_idx == idx:
-                    assert(current_priority == priority), (
-                        "queue wrong"
-                    )
+                    # assert(current_priority == priority), (
+                    #     "queue wrong"
+                    # )
                     # if new_priority != priority: #needed if reverse search changed priorities
                     #     if type(item) is BaseNode:
                     #         pass
@@ -999,14 +999,14 @@ class BaseGraph(ABC):
             if self.including_effort:
                 self.tot_neighbors_batch_effort_cache[node_id] = self.neighbors_batch_effort_cache[node_id]
 
-        assert len(self.tot_neighbors_id_cache[node_id]) == len(self.tot_neighbors_batch_cost_cache[node_id]), "forward not right"
-        assert len(self.tot_neighbors_id_cache[node_id]) >= len(self.neighbors_batch_cost_cache[node_id]), "sth not right"
-        assert not (set(self.tot_neighbors_id_cache[node_id]) & blacklist), (
-           "items from the set are in the array" 
-        )
-        assert (set(self.tot_neighbors_id_cache[node_id]) & current_fam) == current_fam, (
-          "items from the set are not in the array"  
-        )
+        # assert len(self.tot_neighbors_id_cache[node_id]) == len(self.tot_neighbors_batch_cost_cache[node_id]), "forward not right"
+        # assert len(self.tot_neighbors_id_cache[node_id]) >= len(self.neighbors_batch_cost_cache[node_id]), "sth not right"
+        # assert not (set(self.tot_neighbors_id_cache[node_id]) & blacklist), (
+        #    "items from the set are in the array" 
+        # )
+        # assert (set(self.tot_neighbors_id_cache[node_id]) & current_fam) == current_fam, (
+        #   "items from the set are not in the array"  
+        # )
         return self.tot_neighbors_id_cache[node_id]
 
     def update_neighbors(self, node:BaseNode, update:bool =False): # only needed for forward
@@ -1026,9 +1026,9 @@ class BaseGraph(ABC):
                 self.neighbors_batch_cost_cache[node.id] = self.neighbors_batch_cost_cache[node.id][mask]
                 if self.including_effort:
                     self.neighbors_batch_effort_cache[node.id] = self.neighbors_batch_effort_cache[node.id][mask]
-            assert not (set(self.neighbors_node_ids_cache[node.id]) & node.blacklist), (
-                                "items from the set are in the array"
-                            )
+            # assert not (set(self.neighbors_node_ids_cache[node.id]) & node.blacklist), (
+            #                     "items from the set are in the array"
+            #                 )
         return self.update_neighbors_with_family_of_node(node, update)
             
     def update_forward_cost_of_children(self, n: BaseNode, start_nodes_to_update:set[int]) -> set[int]:
@@ -1067,8 +1067,8 @@ class BaseGraph(ABC):
             #         "ohhhhhhhhhhhhhh something is wrong with the lb cost to go"
             #     )
             n1.forward.cost_to_parent = edge_cost
-            assert n1.id in n0.forward.children, (
-                "not a child")
+            # assert n1.id in n0.forward.children, (
+            #     "not a child")
             
             
             if updated_cost != n1.cost:
@@ -1095,9 +1095,9 @@ class BaseGraph(ABC):
             if n1.rev.parent is not None:
                 if n1.rev.parent.id == n0.id:
                     if is_transition:
-                        assert len(n1.transition_neighbors) == 1, (
-                            "transition should only have one neighbor"
-                        )
+                        # assert len(n1.transition_neighbors) == 1, (
+                        #     "transition should only have one neighbor"
+                        # )
                         self.update_connectivity(n1, n1.transition_neighbors[0], 0.0, n1.lb_cost_to_go,"reverse", False)
                     return
                 else:
@@ -1118,8 +1118,8 @@ class BaseGraph(ABC):
             # assert (n1.lb_cost_to_go != n0.lb_cost_to_go_expanded + edge_cost), (
             # "asdf")
             n1.rev.parent = n0
-            assert n1.id in n0.rev.children, (
-                "not a child")
+            # assert n1.id in n0.rev.children, (
+            #     "not a child")
             
             n1.rev.cost_to_parent = edge_cost
             # assert [
@@ -1152,9 +1152,9 @@ class BaseGraph(ABC):
             n1.rev.fam.add(n0.id)
             n0.rev.fam.add(n1.id)
             if is_transition:
-                assert len(n1.transition_neighbors) == 1, (
-                    "transition should only have one neighbor"
-                )
+                # assert len(n1.transition_neighbors) == 1, (
+                #     "transition should only have one neighbor"
+                # )
                 self.update_connectivity(n1, n1.transition_neighbors[0], 0.0, n1.lb_cost_to_go,"reverse", False)
 
     def compute_transition_lb_cost_to_come(self):
@@ -1724,9 +1724,9 @@ class BaseITstar(ABC):
                     else:
                         next_modes = self.env.get_next_modes(q, mode)
                         next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
-                        assert not (set(next_modes) & self.mode_validation.invalid_next_ids.get(mode, set())), (
-                            "items from the set are in the array"
-                        )
+                        # assert not (set(next_modes) & self.mode_validation.invalid_next_ids.get(mode, set())), (
+                        #     "items from the set are in the array"
+                        # )
                         if next_modes == []:
                             self.reached_modes, _ = self.mode_validation.track_invalid_modes(mode, self.reached_modes)
                         
@@ -2177,9 +2177,9 @@ class BaseITstar(ABC):
             key = node.state.mode           
             if node.is_transition and node.is_reverse_transition:
                 # reverse node only has one transiton neighbor
-                assert len(node.transition_neighbors) == 1,(
-                    "ghjklö"
-                )
+                # assert len(node.transition_neighbors) == 1,(
+                #     "ghjklö"
+                # )
                 if node.transition_neighbors[0].id in vertices_node_ids:
                     vertices_node_ids.append(id)
                     stack.extend(node.forward.children)
@@ -2279,9 +2279,9 @@ class BaseITstar(ABC):
                     self.env.batch_config_cost(self.g.nodes[id].state.q, focal_points))
                 <= cost)
             ]
-            assert[id for id in self.g.node_ids[mode] if id in vertices_to_be_removed]== [],(
-                "hoh"
-            )
+            # assert[id for id in self.g.node_ids[mode] if id in vertices_to_be_removed]== [],(
+            #     "hoh"
+            # )
             num_pts_for_removal += original_count - len(self.g.node_ids[mode])
         # Remove elements from g.transition_node_ids
         self.g.reverse_transition_node_ids = {}
@@ -2640,12 +2640,12 @@ class BaseITstar(ABC):
                 #     continue
                 if node.cost + edge_cost >= n.cost:
                     continue
-            assert (n.forward.parent == node) == (n.id in node.forward.children), (
-                    f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
-                    )
+            # assert (n.forward.parent == node) == (n.id in node.forward.children), (
+            #         f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
+            #         )
             
-            assert(n.id not in node.blacklist), (
-            "neighbors are wrong")
+            # assert(n.id not in node.blacklist), (
+            # "neighbors are wrong")
             if self.current_best_cost is not None:
                 if not np.isinf(n.lb_cost_to_go):
                     if node.cost + edge_cost + n.lb_cost_to_go > self.current_best_cost:

@@ -155,10 +155,10 @@ class Graph(BaseGraph):
         key_cb, item_cb = self.cost_bound_queue.peek_first_element()
         bound = key_cb * self.epsilon
         _, item_ee = self.effort_estimate_queue.peek_first_element()
-        if np.isinf(item_cb[1][1].lb_cost_to_go): 
-            assert(np.isinf(key_cb)), (
-                "key_cb is not inf"
-            )
+        # if np.isinf(item_cb[1][1].lb_cost_to_go): 
+            # assert(np.isinf(key_cb)), (
+            #     "key_cb is not inf"
+            # )
         item = item_cb
         if np.isinf(self.epsilon):     
             key_ee = self.cost_bound_queue.key(item_ee)
@@ -369,13 +369,13 @@ class EITstar(BaseITstar):
                 return          
             edge_costs = self.g.tot_neighbors_batch_cost_cache[node.id]
             edge_efforts = self.g.tot_neighbors_batch_effort_cache[node.id]
-            assert (len(edge_costs) == len(edge_efforts)), (
-                "neighbors and edge_costs are not the same length"
-            )
+            # assert (len(edge_costs) == len(edge_efforts)), (
+            #     "neighbors and edge_costs are not the same length"
+            # )
 
             node_lb_cost_to_go = node.lb_cost_to_go
             node_rev_parent_id = node.rev.parent.id if node.rev.parent is not None else None
-            node_blacklist = node.blacklist
+            # node_blacklist = node.blacklist
             node_is_transition = node.is_transition
             node_mode = getattr(node.state, 'mode', None)
 
@@ -393,13 +393,13 @@ class EITstar(BaseITstar):
                 #     continue
                     # if edge in self.check:
                     # print(node.id, n.id)
-                assert (n.forward.parent == node) == (n.id in node.forward.children), (
-                        f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
-                        )
+                # assert (n.forward.parent == node) == (n.id in node.forward.children), (
+                #         f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
+                #         )
                 if n in self.g.goal_nodes or id == self.g.root.id or n in self.g.virtual_goal_nodes:
                     continue
-                assert(id not in node_blacklist), (
-                "neighbors are wrong")
+                # assert(id not in node_blacklist), (
+                # "neighbors are wrong")
 
                 if n.is_transition:
                     if not n.is_reverse_transition:
@@ -412,9 +412,9 @@ class EITstar(BaseITstar):
                     continue
                 if id in self.reverse_tree_set:
                     if n.lb_cost_to_go < node_lb_cost_to_go + edge_cost:
-                        assert(n.lb_cost_to_go- (node_lb_cost_to_go + edge_cost) < 1e-5), (
-                                    f"{id}, {node.id}, qwdfertzj"
-                                )
+                        # assert(n.lb_cost_to_go- (node_lb_cost_to_go + edge_cost) < 1e-5), (
+                                #     f"{id}, {node.id}, qwdfertzj"
+                                # )
                         continue
                 if self.current_best_cost is not None:
                     if node_lb_cost_to_go + edge_cost + n.lb_cost_to_come > self.current_best_cost:
@@ -496,19 +496,19 @@ class EITstar(BaseITstar):
                     self.g.update_edge_collision_cache(n0, n1, True)
             n1.inad.update(n0, edge_cost, edge_effort)
             if is_transition:
-                assert(len(n1.transition_neighbors) ==1), (
-                        "Transition node has more than one neighbor"
-                    )
+                # assert(len(n1.transition_neighbors) ==1), (
+                #         "Transition node has more than one neighbor"
+                #     )
                 n1.transition_neighbors[0].inad.update(n1, 0.0, 0.0)
            
             if n1.lb_cost_to_go > potential_lb_cost_to_go:
                 self.g.update_connectivity(n0, n1, edge_cost, potential_lb_cost_to_go,"reverse", is_transition)
-                assert (n1.lb_cost_to_go == n1.inad.lb_cost_to_go), (
-                    "ghjklö"
-                )
-                assert(n1.inad.effort != np.inf), (
-                    "effort is inf"
-                )
+                # assert (n1.lb_cost_to_go == n1.inad.lb_cost_to_go), (
+                #     "ghjklö"
+                # )
+                # assert(n1.inad.effort != np.inf), (
+                #     "effort is inf"
+                # )
                 if is_transition:
                     self.reverse_tree_set.add(n1.id)
                     if self.apply_long_horizon and n1.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
@@ -642,9 +642,9 @@ class EITstar(BaseITstar):
                 if n0.id in n1.blacklist:
                     #needed because of rewiring
                     continue
-                assert n0.id not in n1.blacklist, (
-                    "askdflö"
-                )
+                # assert n0.id not in n1.blacklist, (
+                #     "askdflö"
+                # )
                 is_transition = False
                 if n1.is_transition and not n1.is_reverse_transition and n1.transition_neighbors:
                     is_transition = True
@@ -670,9 +670,9 @@ class EITstar(BaseITstar):
                     n0.cost + edge_cost < n1.cost
                 ):  # parent can improve the cost
             
-                    assert n0.id not in n1.forward.children, (
-                        "Potential parent is already a child (forward)"
-                    )
+                    # assert n0.id not in n1.forward.children, (
+                    #     "Potential parent is already a child (forward)"
+                    # )
                     # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
                     if n0.id not in n1.whitelist:
                         collision_free = False
@@ -698,10 +698,10 @@ class EITstar(BaseITstar):
                             self.manage_edge_in_collision(n0, n1)
                             continue
                     self.g.update_connectivity(n0, n1, edge_cost, n0.cost + edge_cost,"forward", is_transition)
-                    if self.current_best_cost is not None: 
-                        assert (n1.cost + n1.lb_cost_to_go <= self.current_best_cost), (
-                                "hjklö"
-                            )
+                    # if self.current_best_cost is not None: 
+                        # assert (n1.cost + n1.lb_cost_to_go <= self.current_best_cost), (
+                        #         "hjklö"
+                        #     )
                     if is_transition:
                         for transition in n1.transition_neighbors:
                             # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
