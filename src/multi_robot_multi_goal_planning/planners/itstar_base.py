@@ -1540,6 +1540,7 @@ class BaseITstar(ABC):
         self.init_next_modes = {}
         self.expanded_modes = set()
         self.last_expanded_mode = None
+        self.empty_transition_nodes = None
         
     def _create_operation(self) -> BaseOperation:
         return BaseOperation()
@@ -1672,7 +1673,10 @@ class BaseITstar(ABC):
             if len(self.reached_modes) != len(self.sorted_reached_modes):
                 if update and not reached_terminal_mode:
                     self.sorted_reached_modes = tuple(sorted(self.reached_modes, key=lambda m: m.id))  
-            mode_seq = self.sorted_reached_modes
+            if self.empty_transition_nodes is not None:
+                mode_seq = [self.empty_transition_nodes]
+            else:
+                mode_seq = self.sorted_reached_modes
         
         while transitions < transistion_batch_size and failed_attemps < 5* transistion_batch_size:
             
@@ -1738,6 +1742,10 @@ class BaseITstar(ABC):
                 self.g.add_transition_nodes([(q, mode, next_modes)])
                 if len(list(chain.from_iterable(self.g.transition_node_ids.values()))) > transitions:
                     transitions +=1
+                    if self.empty_transition_nodes is not None:
+                        self.empty_transition_nodes = None
+                        mode_seq = self.sorted_reached_modes
+                        
                     if mode == self.g.root.state.mode:
                         if np.equal(q.state(), self.g.root.state.q.state()).all():
                             self.reached_modes.discard(mode)
@@ -2337,6 +2345,20 @@ class BaseITstar(ABC):
             self.last_expanded_mode = max(relevant_expanded_modes, key=lambda obj: obj.id)
         else:
             self.expanded_modes = set()
+            self.last_expanded_mode = None
+            if self.g.virtual_root is not None:
+                virtual_root_mode = self.g.virtual_root.transition_neighbors[0].state.mode
+                self.sorted_reached_modes.insert(0, virtual_root_mode)
+                self.g.reverse_transition_node_ids[self.g.virtual_root.state.mode].remove(self.g.virtual_root.id)
+                self.g.transition_node_ids[virtual_root_mode].remove(self.g.virtual_root.transition_neighbors[0].id)
+                self.g.virtual_root = None
+                if len(self.g.transition_node_ids[virtual_root_mode]) == 0:
+                    self.empty_transition_nodes = virtual_root_mode
+                prev_mode = virtual_root_mode.prev_mode
+                if prev_mode is not None:
+                    self.last_expanded_mode = virtual_root_mode.prev_mode
+                    self.expanded_modes.add(virtual_root_mode.prev_mode)
+
             return
         num_pts_for_removal = 0
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
