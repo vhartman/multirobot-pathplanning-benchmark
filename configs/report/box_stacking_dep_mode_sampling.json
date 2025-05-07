@@ -1,6 +1,6 @@
 {
   "experiment_name": "planner_demo",
-  "environment": "unordered_box_reorientation",
+  "environment": "box_stacking_dep",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 450,

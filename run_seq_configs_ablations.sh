@@ -4,7 +4,7 @@
 configs=(
     "./configs/report/box_stacking_dep_batch_size.json"
     "./configs/report/box_stacking_dep_mode_sampling.json"
-    "./configs/report/unassigned_cleanup_bacth_size.json"
+    "./configs/report/unassigned_cleanup_batch_size.json"
     "./configs/report/unassigned_cleanup_mode_sampling.json"
 )
 
