@@ -52,12 +52,14 @@ class BidirectionalRRTstar(BaseRRTstar):
                  informed_batch_size: int = 500,
                  apply_long_horizon:bool = False,
                  horizon_length:int = 1,
+                 with_mode_validation:bool = True
                 ):
         super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
                          informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
                          p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
                          sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                         informed_batch_size = informed_batch_size, apply_long_horizon = apply_long_horizon, horizon_length = horizon_length)
+                         informed_batch_size = informed_batch_size, apply_long_horizon = apply_long_horizon, 
+                         horizon_length = horizon_length, with_mode_validation = with_mode_validation)
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
         self.swap = True
@@ -105,6 +107,8 @@ class BidirectionalRRTstar(BaseRRTstar):
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue 
+            if new_mode in self.blacklist_mode:
+                continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
             if self.informed_sampling_version != 6:
@@ -114,10 +118,6 @@ class BidirectionalRRTstar(BaseRRTstar):
             for i in range(self.transition_nodes):    
                 q = self.sample_transition_configuration(new_mode)
                 if q is None:
-                    assert False, "No valid configuration found for transition node"
-                    print("ghjk")
-                    self.blacklist_mode.add(new_mode)
-                    self.modes.remove(new_mode)
                     break
                 if i > 0 and np.equal(q.state(), node.state.q.state()).all():
                     break

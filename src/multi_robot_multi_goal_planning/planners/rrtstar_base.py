@@ -895,6 +895,7 @@ class BaseRRTstar(ABC):
                  informed_batch_size: int = 500,
                  apply_long_horizon:bool = False,
                  horizon_length:int = 1,
+                 with_mode_validation:bool = True,
                  
 
                  ):
@@ -931,8 +932,11 @@ class BaseRRTstar(ABC):
         self.apply_long_horizon = apply_long_horizon
         self.horizon_length = horizon_length
         self.long_horizon = BaseLongHorizon(self.horizon_length)
-        self.mode_validation = ModeValidation(self.env)
+        self.with_mode_validation = with_mode_validation
+        self.mode_validation = ModeValidation(self.env, self.with_mode_validation)
         self.check = set()
+        self.blacklist_mode = set()
+        
 
     def add_tree(self, 
                  mode: Mode, 
@@ -991,6 +995,8 @@ class BaseRRTstar(ABC):
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue 
+            if new_mode in self.blacklist_mode:
+                continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
             if self.informed_sampling_version != 6:
@@ -1253,7 +1259,11 @@ class BaseRRTstar(ABC):
         while True:
             if failed_attemps > 10000:
                 print("Failed to sample transition configuration after 10000 attempts.")
-                self.mode_sampling.track_invalid_modes(mode)
+                if self.with_mode_validation:
+                    self.mode_sampling.track_invalid_modes(mode)
+                else:
+                    self.blacklist_mode.add(mode)
+                    self.modes.remove(mode)
                 return
             next_ids = self.mode_validation.get_valid_next_ids(mode)
             if not next_ids and not self.env.is_terminal_mode(mode):
