@@ -2,10 +2,14 @@
 
 # List of config paths
 configs=(
-    "./configs/report/box_stacking_dep_batch_size.json"
+    "./configs/report/unassigned_cleanup_mode_validation.json"
+    "./configs/report/box_stacking_dep_mode_validation.json"
+    "./configs/report/unassigned_cleanup_mode_rewiring.json"
+    "./configs/report/box_stacking_dep_mode_rewiring.json"
     "./configs/report/box_stacking_dep_mode_sampling.json"
-    "./configs/report/unassigned_cleanup_batch_size.json"
     "./configs/report/unassigned_cleanup_mode_sampling.json"
+    "./configs/report/unassigned_cleanup_batch_size.json"
+    "./configs/report/box_stacking_dep_batch_size.json"
 )
 
 # Base command
