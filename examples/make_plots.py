@@ -113,6 +113,15 @@ def load_config_from_folder(filepath: str) -> Dict:
 
     return config
 
+report_colors = {
+    "darkgreen":  (0.0, 0.5, 0.0),
+    "lightgreen": (0.2, 0.8, 0.2),
+    "darkblue":   (0.0, 0.0, 1.0),
+    "lightblue":  (0.3, 0.6, 0.9),
+    "darkviolet": (0.537, 0.0, 0.267),
+    "orange":     (1.0, 0.5, 0.0)
+}
+
 
 # TODO: move this to config? Add some default behaviour
 planner_name_to_color = {
@@ -135,13 +144,11 @@ planner_name_to_color = {
     # "locally_informed_prm": "darkgreen",
     "globally_informed_prm": "magenta",
     "locally_informed_shortcutting_prm": "tab:blue",
-    "locally_informed_prm_shortcutting": "tab:blue",
     "globally_informed_prm_shortcutting": "tab:green",
     "globally_informed_shortcutting_prm": "tab:green",
     "locally_informed_prm_rejection": "tab:orange",
     "locally_informed_prm_shortcutting_rejection": "tab:red",
     "globally_informed_prm_shortcutting_rejection": "tab:brown",
-    "birrtstar": "black",
     "max_euclidean_rrtstar": "tab:red",
     "sum_euclidean_rrtstar": "tab:brown",
     "euclidean_rrtstar": "tab:purple",
@@ -152,9 +159,6 @@ planner_name_to_color = {
     "rrtstar_shortcutting_local": "tab:purple",
     "rrtstar_global": "tab:brown",
     "prm": "tab:blue",
-    "rrtstar": "tab:green",
-    "eitstar": "magenta",
-    "aitstar": "lightcoral",
     # "locally_informed_prm": "tab:green",
     # "locally_informed_prm_shortcutting": "navy",
     "long horizon eitstar":"navy",
@@ -171,6 +175,15 @@ planner_name_to_color = {
     "locally_informed_prm_no_shortcutting": "tab:blue",
     "birrtstar_no_shortcutting": "black",
     "rrtstar_no_shortcutting": "tab:red",
+    "rrtstar": report_colors["darkviolet"],
+    "birrtstar": "black",
+    "eitstar": report_colors["lightgreen"],
+    "long_horizon eitstar": report_colors["darkgreen"],
+    "long_horizon aitstar": report_colors["darkblue"],
+    "aitstar": report_colors["lightblue"],
+    "locally_informed_prm_shortcutting": report_colors["orange"],
+
+    
 }
 
 planner_name_to_style = {
