@@ -294,6 +294,8 @@ class EITstar(BaseITstar):
         apply_long_horizon:bool = False,
         frontier_mode_sampling_probability:float = 1.0,
         horizon_length: int = 1,
+        with_rewiring:bool = True,
+        with_mode_validation:bool = True,
         ):
         super().__init__(
             env = env, ptc=ptc, init_mode_sampling_type = init_mode_sampling_type, distance_metric = distance_metric, 
@@ -308,7 +310,7 @@ class EITstar(BaseITstar):
             inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
             remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
             apply_long_horizon = apply_long_horizon, frontier_mode_sampling_probability= frontier_mode_sampling_probability,
-            horizon_length = horizon_length)
+            horizon_length = horizon_length, with_rewiring= with_rewiring, with_mode_validation = with_mode_validation)
 
         self.sparse_number_of_points = 2
         self.reverse_tree_set = set()

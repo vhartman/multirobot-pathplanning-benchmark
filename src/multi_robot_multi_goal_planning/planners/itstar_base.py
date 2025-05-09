@@ -1475,6 +1475,8 @@ class BaseITstar(ABC):
         apply_long_horizon:bool = False,
         frontier_mode_sampling_probability:float = 1.0,
         horizon_length:int = 1,
+        with_rewiring:bool = True,
+        with_mode_validation:bool = True,
     ):
         self.env = env
         self.ptc = ptc
@@ -1499,6 +1501,8 @@ class BaseITstar(ABC):
         self.apply_long_horizon = apply_long_horizon
         self.frontier_mode_sampling_probability = frontier_mode_sampling_probability
         self.horizon_length = horizon_length
+        self.with_rewiring = with_rewiring
+        self.with_mode_validation = with_mode_validation
 
         self.reached_modes = set()
         self.sorted_reached_modes = None
@@ -1534,7 +1538,7 @@ class BaseITstar(ABC):
                         locally_informed_sampling,
                         include_lb=inlcude_lb_in_informed_sampling
                         )
-        self.mode_validation = ModeValidation(self.env)
+        self.mode_validation = ModeValidation(self.env, self.with_mode_validation)
         self.init_next_ids = {}
         self.found_init_mode_sequence = False
         self.init_next_modes = {}
@@ -1678,7 +1682,7 @@ class BaseITstar(ABC):
             else:
                 mode_seq = self.sorted_reached_modes
         
-        while transitions < transistion_batch_size and failed_attemps < 5* transistion_batch_size:
+        while transitions < transistion_batch_size and failed_attemps < 6* transistion_batch_size:
             
             # sample mode
             mode = self.sample_mode(mode_seq, mode_sampling_type, None)
@@ -2443,11 +2447,11 @@ class BaseITstar(ABC):
                 rewire = False
                 if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.reached_terminal_mode:
                     iter = 250
-                    rewire = True
+                    rewire = self.with_rewiring
                 else:
                     iter = 0
                     if self.long_horizon.rewire:
-                        rewire = True
+                        rewire = self.with_rewiring
                         iter = 15
                         if self.env.is_terminal_mode(path[-1].mode):
                             iter = 250

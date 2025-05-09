@@ -11,13 +11,15 @@ class ModeValidation():
 
     def __init__(
         self,
-        env: BaseProblem
+        env: BaseProblem,
+        apply:bool
     ):
         self.env = env
         self.blacklist_modes = set()
         self.whitelist_modes = set()
         self.invalid_next_ids = {}
         self.counter = 0
+        self.apply = apply
 
     def get_valid_modes(self, prev_mode:Mode, modes:tuple[Mode]) -> List[Mode]:
         """
@@ -28,6 +30,8 @@ class ModeValidation():
         Returns:
             List[Mode]: List of valid modes.
         """
+        if not self.apply:
+            return list(modes)
         self.counter += 1
         #TODO what if its a Goal Region? Does that matter?
         start_pos = self.env.start_pos.state()        
@@ -104,6 +108,10 @@ class ModeValidation():
         """
 
         possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
+        if not self.apply:
+            if not possible_next_task_combinations:
+                return
+            return random.choice(possible_next_task_combinations)
         if not possible_next_task_combinations:
             if not self.env.is_terminal_mode(mode):
                 self.track_invalid_modes(mode)
@@ -125,6 +133,8 @@ class ModeValidation():
         Returns:
             None: This method does not return any value.
         """
+        if not self.apply:
+            return
         if mode.prev_mode is None:
             return
         self.blacklist_modes.add(mode)
@@ -142,6 +152,8 @@ class ModeValidation():
         Returns:
             None: This method does not return any value.
         """
+        if not self.apply:
+            return modes, False
         if mode.id == 77:
             pass
         updated = False

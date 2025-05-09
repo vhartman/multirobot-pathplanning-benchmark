@@ -792,7 +792,9 @@ class MultimodalGraph:
                 for node_next_mode, next_mode in zip(next_nodes, next_modes):
                     node_next_mode.neighbors = [node_this_mode]
 
-                    assert this_mode.task_ids != next_mode.task_ids
+                    assert this_mode.task_ids != next_mode.task_ids, (
+                        "ghj"
+                    )
 
                 # if this_mode in self.transition_nodes:
                 # print(len(self.transition_nodes[this_mode]))
@@ -1410,13 +1412,14 @@ def composite_prm_planner(
     frontier_mode_sampling_probability: float = 0.5,
     init_uniform_batch_size: int = 150,
     init_transition_batch_size: int = 90,
+    with_mode_validation: bool = True,
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
 
     reached_modes = set([m0])
     sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id)) 
-    mode_validation = ModeValidation(env)
+    mode_validation = ModeValidation(env, with_mode_validation)
     init_next_modes, init_next_ids = {}, {}
     found_init_mode_sequence = False
     first_search = True
