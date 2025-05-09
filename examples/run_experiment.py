@@ -186,6 +186,7 @@ def setup_planner(
                 frontier_mode_sampling_probability = options["frontier_mode_sampling_probability"],
                 init_uniform_batch_size = options["init_uniform_batch_size"],
                 init_transition_batch_size = options["init_transition_batch_size"],
+                with_mode_validation = options["with_mode_validation"],
 
             )
     elif planner_config["type"] == "rrtstar":
@@ -210,6 +211,7 @@ def setup_planner(
                 remove_redundant_nodes = options["remove_redundant_nodes"],
                 apply_long_horizon=options["apply_long_horizon"],
                 horizon_length = options["horizon_length"],
+                with_mode_validation = options["with_mode_validation"],
             ).Plan(optimize)
     elif planner_config["type"] == "birrtstar":
 
@@ -235,6 +237,7 @@ def setup_planner(
                 remove_redundant_nodes = options["remove_redundant_nodes"],
                 apply_long_horizon=options["apply_long_horizon"],
                 horizon_length = options["horizon_length"],
+                with_mode_validation = options["with_mode_validation"],
                 
             ).Plan(optimize)
     elif planner_config["type"] == "drrtstar":
@@ -309,6 +312,8 @@ def setup_planner(
                 apply_long_horizon=options["apply_long_horizon"],
                 frontier_mode_sampling_probability = options["frontier_mode_sampling_probability"],
                 horizon_length = options["horizon_length"],
+                with_rewiring = options["with_rewiring"],
+                with_mode_validation = options["with_mode_validation"],
 
             ).Plan(optimize)
         
@@ -339,6 +344,8 @@ def setup_planner(
                 apply_long_horizon=options["apply_long_horizon"],
                 frontier_mode_sampling_probability = options["frontier_mode_sampling_probability"],
                 horizon_length = options["horizon_length"],
+                with_rewiring = options["with_rewiring"],
+                with_mode_validation = options["with_mode_validation"],
             ).Plan(optimize)
 
 

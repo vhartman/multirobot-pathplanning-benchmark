@@ -9,7 +9,7 @@
   "optimize": true,
   "planners": [
     {
-      "name": "eitstar with",
+      "name": "eitstar",
       "type": "eitstar",
       "options": {
         "init_uniform_batch_size": 150,
@@ -65,7 +65,7 @@
       }
     },
     {
-      "name": "aitstar with",
+      "name": "aitstar",
       "type": "aitstar",
       "options": {
         "init_uniform_batch_size": 150,

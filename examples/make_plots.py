@@ -121,6 +121,15 @@ report_colors = {
     "darkviolet": (0.537, 0.0, 0.267),
     "orange":     (1.0, 0.5, 0.0)
 }
+faded_report_colors = {
+    "darkgreen":  (0.5, 0.75, 0.5),
+    "lightgreen": (0.6, 0.9, 0.6),
+    "darkblue":   (0.5, 0.5, 1.0),
+    "lightblue":  (0.65, 0.8, 0.95),
+    "darkviolet": (0.7685, 0.5, 0.6335),
+    "orange":     (1.0, 0.75, 0.5),
+    "black":    (0.25, 0.25, 0.25)
+}
 
 
 # TODO: move this to config? Add some default behaviour
@@ -182,6 +191,20 @@ planner_name_to_color = {
     "long_horizon aitstar": report_colors["darkblue"],
     "aitstar": report_colors["lightblue"],
     "locally_informed_prm_shortcutting": report_colors["orange"],
+    "eitstar same":faded_report_colors["lightgreen"],
+    "aitstar same": faded_report_colors["lightblue"],
+    "locally_informed_prm_shortcutting same": faded_report_colors["orange"],
+    "eitstar uniform":faded_report_colors["lightgreen"],
+    "aitstar uniform": faded_report_colors["lightblue"],
+    "locally_informed_prm_shortcutting uniform": faded_report_colors["orange"],
+    "rrtstar uniform": faded_report_colors["darkviolet"],
+    "birrtstar uniform": faded_report_colors["black"],
+    "eitstar without":faded_report_colors["lightgreen"],
+    "aitstar without": faded_report_colors["lightblue"],
+    "locally_informed_prm_shortcutting without": faded_report_colors["orange"],
+    "rrtstar without": faded_report_colors["darkviolet"],
+    "birrtstar without": faded_report_colors["black"],
+
 
     
 }
@@ -193,6 +216,9 @@ planner_name_to_style = {
     "locally_informed_prm_no_shortcutting": "--",
     "birrtstar_no_shortcutting": "--",
     "rrtstar_no_shortcutting": "--",
+    "eitstar same": "--",
+    "aitstar same": "--",
+    "locally_informed_prm_shortcutting same": "--"
 }
 
 

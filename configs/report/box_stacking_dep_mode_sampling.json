@@ -9,7 +9,7 @@
   "optimize": true,
   "planners": [
     {
-      "name": "eitstar greedy",
+      "name": "eitstar",
       "type": "eitstar",
       "options": {
         "init_uniform_batch_size": 150,
@@ -63,7 +63,7 @@
       }
     },
     {
-      "name": "locally_informed_prm_shortcutting greedy",
+      "name": "locally_informed_prm_shortcutting",
       "type": "prm",
       "options": {
         "batch_size": 150,
@@ -109,7 +109,7 @@
       }
     },
     {
-      "name": "aitstar greedy",
+      "name": "aitstar",
       "type": "aitstar",
       "options": {
         "init_uniform_batch_size": 150,
@@ -163,7 +163,7 @@
       }
     },
     {
-      "name": "birrtstar greedy",
+      "name": "birrtstar",
       "type": "birrtstar",
       "options": {
         "informed_sampling": true,
@@ -199,7 +199,7 @@
       }
     },
      {
-      "name": "rrtstar greedy",
+      "name": "rrtstar",
       "type": "rrtstar",
       "options": {
         "informed_sampling": true,
