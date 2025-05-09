@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from numpy.typing import NDArray
 import numba
 
@@ -437,7 +437,7 @@ class NpConfiguration(Configuration):
     @classmethod
     def _dist(cls, pt, other, metric: str = "euclidean") -> float:
         return cls._batch_dist(pt, [other], metric)[0]
-    
+
     # TODO: change into specific function for one against many and many against many
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
@@ -453,9 +453,9 @@ class NpConfiguration(Configuration):
 
         if metric == "euclidean":
             # squared_diff = diff * diff
-            return compute_sliced_euclidean_dists(diff, np.array([[0, pt.array_slice[-1][-1]]]))[
-                0
-            ]
+            return compute_sliced_euclidean_dists(
+                diff, np.array([[0, pt.array_slice[-1][-1]]])
+            )[0]
             # return np.linalg.norm(diff, axis=1)
         elif metric == "sum_euclidean" or metric == "max_euclidean":
             # squared_diff = diff * diff
@@ -554,9 +554,52 @@ def one_to_many_batch_config_cost(
         return compute_sum_reduction(all_robot_dists)
 
 
+def many_to_many_batch_config_cost(
+    starts: NDArray,
+    ends: NDArray,
+    agent_slices: NDArray,
+    metric: str = "max",
+    reduction: str = "max",
+    w: float = 0.01,
+) -> NDArray:
+    diff = starts - ends
+
+    if metric == "euclidean":
+        all_robot_dists = compute_sliced_euclidean_dists(diff, agent_slices)
+    else:
+        for i, (s, e) in enumerate(agent_slices):
+            all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
+
+    if reduction == "max":
+        return compute_max_sum_reduction(all_robot_dists, w)
+    elif reduction == "sum":
+        return compute_sum_reduction(all_robot_dists)
+
+
+def sequential_batch_config_cost(
+    points: NDArray,
+    agent_slices: NDArray,
+    metric: str = "max",
+    reduction: str = "max",
+    w: float = 0.01,
+) -> NDArray:
+    diff = points[1:, :] - points[:-1, :]
+
+    if metric == "euclidean":
+        all_robot_dists = compute_sliced_euclidean_dists(diff, agent_slices)
+    else:
+        for i, (s, e) in enumerate(agent_slices):
+            all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
+
+    if reduction == "max":
+        return compute_max_sum_reduction(all_robot_dists, w)
+    elif reduction == "sum":
+        return compute_sum_reduction(all_robot_dists)
+
+
 def batch_config_cost(
-    starts: List[Configuration],
-    batch_other: List[Configuration],
+    starts: Union[Configuration, List[Configuration]],
+    batch_other: Union[NDArray, List[Configuration]],
     metric: str = "max",
     reduction: str = "max",
     w: float = 0.01,
@@ -570,6 +613,12 @@ def batch_config_cost(
         diff = starts.state() - batch_other
         # all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
         agent_slices = starts.array_slice
+    
+    elif batch_other is None:
+        arr = np.array([start.q.state() for start in starts])
+        diff = arr[1:, :] - arr[:-1, :]
+        agent_slices = starts[0].q.array_slice
+
     else:
         diff = np.array([start.q.state() for start in starts]) - np.array(
             [other.q.state() for other in batch_other], dtype=np.float64
