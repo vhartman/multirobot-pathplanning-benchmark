@@ -1423,6 +1423,7 @@ def composite_prm_planner(
     init_next_modes, init_next_ids = {}, {}
     found_init_mode_sequence = False
     first_search = True
+    dummy_start_mode = False
 
     conf_type = type(env.get_start_pos())
     informed = InformedSampling(
@@ -1755,7 +1756,8 @@ def composite_prm_planner(
                                          reached_modes, 
                                          sorted_reached_modes, 
                                          init_next_modes, 
-                                         init_next_ids):
+                                         init_next_ids,
+                                         dummy_start_mode):
         transitions, failed_attemps = 0, 0
         reached_terminal_mode = False
         update = True
@@ -1843,6 +1845,7 @@ def composite_prm_planner(
                     if mode == g.root.state.mode:
                         if np.equal(q.state(), g.root.state.q.state()).all():
                             reached_modes.discard(mode)
+                            dummy_start_mode = True
                     
                 else:
                     failed_attemps +=1
@@ -1854,7 +1857,7 @@ def composite_prm_planner(
             if next_modes is not None and len(next_modes) > 0:
                 reached_modes.update(next_modes)
 
-            init_mode_seq, found_init_mode_sequence =  get_init_mode_sequence(mode,found_init_mode_sequence)
+            init_mode_seq, found_init_mode_sequence =  get_init_mode_sequence(mode,found_init_mode_sequence, dummy_start_mode)
             if init_mode_seq:
                 mode_seq = init_mode_seq
                 sorted_reached_modes = init_mode_seq
@@ -1867,18 +1870,18 @@ def composite_prm_planner(
             
         print(f"Adding {transitions} transitions")
         print(mode_validation.counter)
-        return reached_modes, sorted_reached_modes, init_next_modes, init_next_ids, found_init_mode_sequence
+        return reached_modes, sorted_reached_modes, init_next_modes, init_next_ids, found_init_mode_sequence, dummy_start_mode
     
-    def get_init_mode_sequence(mode, found_init_mode_sequence):
+    def get_init_mode_sequence(mode, found_init_mode_sequence, dummy_start_mode):
         if found_init_mode_sequence:
             return [], found_init_mode_sequence
         mode_seq = []
         if current_best_cost is None and len(g.goal_nodes) > 0: 
             found_init_mode_sequence = True
-            mode_seq = create_mode_init_sequence(mode)
+            mode_seq = create_mode_init_sequence(mode, dummy_start_mode)
         return mode_seq, found_init_mode_sequence
     
-    def create_mode_init_sequence(mode):
+    def create_mode_init_sequence(mode, dummy_start_mode=False):
         init_search_modes = [mode]
         init_next_ids[mode] = None
         while True:
@@ -1890,7 +1893,10 @@ def composite_prm_planner(
                 
             else:
                 break
-        init_search_modes = init_search_modes[::-1]
+
+        init_search_modes = init_search_modes[::-1]    
+        if dummy_start_mode and init_search_modes[0] == g.root.state.mode:
+            init_search_modes = init_search_modes[1:]
         sorted_reached_modes = init_search_modes
         print(sorted_reached_modes)
         return sorted_reached_modes
@@ -2006,7 +2012,7 @@ def composite_prm_planner(
 
             # if env.terminal_mode not in reached_modes:
             print("Sampling transitions")
-            reached_modes, sorted_reached_modes, init_next_modes, init_next_ids, found_init_mode_sequence= sample_valid_uniform_transitions(
+            reached_modes, sorted_reached_modes, init_next_modes, init_next_ids, found_init_mode_sequence, dummy_start_mode= sample_valid_uniform_transitions(
                 transistion_batch_size=effective_uniform_transition_batch_size,
                 cost=current_best_cost,
                 found_init_mode_sequence=found_init_mode_sequence,
@@ -2014,6 +2020,7 @@ def composite_prm_planner(
                 sorted_reached_modes=sorted_reached_modes,
                 init_next_modes=init_next_modes,
                 init_next_ids=init_next_ids,
+                dummy_start_mode=dummy_start_mode,
             )
             # g.add_transition_nodes(new_transitions)
             # print(f"Adding {len(new_transitions)} transitions")

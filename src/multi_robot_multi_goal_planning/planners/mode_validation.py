@@ -6,6 +6,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
 )
 import random
+import numpy as np
 
 class ModeValidation():
 
@@ -70,14 +71,15 @@ class ModeValidation():
                         robot_indices = self.env.robot_idx[robot]
                         dim = self.env.robot_dims[robot]
                         indices = list(range(end_idx, end_idx + dim))
-                        q[robot_indices] = goal[indices]
+                        q[robot_indices] = goal[indices]+ np.random.normal(loc=0.0, scale=0.01, size=goal[indices].shape)
+                        # 
                         end_idx += dim 
                         # checks if the mode has a possible goal configuration
                         # if not self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance, set_mode):
                         # assert(self.env.is_collision_free_np(q, mode, self.env.collision_tolerance, set_mode) == self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance, set_mode)),(
                         #     "ghjkl"
                         # )
-                        if not self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance, set_mode):
+                        if not self.env.is_collision_free_for_robot(robot, q, mode, 0.001, set_mode):
                             self.update_cache_of_invalid_modes(mode)
                             #when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
                             r_idx = self.env.robots.index(robot)

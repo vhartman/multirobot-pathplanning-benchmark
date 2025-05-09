@@ -1545,6 +1545,7 @@ class BaseITstar(ABC):
         self.expanded_modes = set()
         self.last_expanded_mode = None
         self.empty_transition_nodes = None
+        self.dummy_start_mode = False
         
     def _create_operation(self) -> BaseOperation:
         return BaseOperation()
@@ -1753,6 +1754,7 @@ class BaseITstar(ABC):
                     if mode == self.g.root.state.mode:
                         if np.equal(q.state(), self.g.root.state.q.state()).all():
                             self.reached_modes.discard(mode)
+                            self.dummy_start_mode = True
                     
                 else:
                     failed_attemps +=1
@@ -1807,6 +1809,8 @@ class BaseITstar(ABC):
             else:
                 break
         self.init_search_modes = self.init_search_modes[::-1]
+        if self.dummy_start_mode and self.init_search_modes[0] == self.g.root.state.mode:
+                self.init_search_modes = self.init_search_modes[1:]
         self.sorted_reached_modes = self.init_search_modes
         print(self.sorted_reached_modes)
 
@@ -2345,6 +2349,8 @@ class BaseITstar(ABC):
     def remove_nodes_in_graph_before_init_sol(self):
         relevant_expanded_modes = [mode for mode in list(self.g.tree.keys()) if mode in self.sorted_reached_modes]
         if relevant_expanded_modes != []:
+            if self.dummy_start_mode and relevant_expanded_modes[0] == self.g.root.state.mode:
+                relevant_expanded_modes = relevant_expanded_modes[1:]
             self.expanded_modes.update(relevant_expanded_modes)
             self.last_expanded_mode = max(relevant_expanded_modes, key=lambda obj: obj.id)
         else:
