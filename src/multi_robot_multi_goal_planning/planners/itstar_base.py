@@ -2062,10 +2062,11 @@ class BaseITstar(ABC):
                     remaining_modes.append(m)
                     inv_prob.append(1 - (sample_count / total_nodes))
             
-            if not frontier_modes:
-                frontier_modes = reached_modes
+            
 
             if self.frontier_mode_sampling_probability == 1:
+                if not frontier_modes:
+                    frontier_modes = reached_modes
                 if len(frontier_modes) >  0:
                     p = [1 / len(frontier_modes)] * len(frontier_modes) 
                     return random.choices(frontier_modes, weights=p, k=1)[0]
@@ -2074,7 +2075,7 @@ class BaseITstar(ABC):
 
             
 
-            if not remaining_modes:
+            if not remaining_modes or not frontier_modes:
                 return random.choice(reached_modes)
 
             total_inverse = sum(1 - (sample_counts[m] / total_nodes) for m in remaining_modes)
@@ -2085,6 +2086,7 @@ class BaseITstar(ABC):
             p = [p_frontier / len(frontier_modes)] * len(frontier_modes) 
             inv_prob = np.array(inv_prob)
             p.extend((inv_prob / total_inverse) * p_remaining)
+
             
             return random.choices(sorted_reached_modes, weights=p, k=1)[0]
 
