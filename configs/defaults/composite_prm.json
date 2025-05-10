@@ -17,6 +17,7 @@
     "inlcude_lb_in_informed_sampling": false,
     "init_uniform_batch_size":  150,
     "init_transition_batch_size":  90,
-    "with_mode_validation": true
+    "with_mode_validation": true,
+    "with_noise": false
   }
 }

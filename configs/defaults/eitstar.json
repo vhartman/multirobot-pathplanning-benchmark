@@ -23,6 +23,7 @@
     "frontier_mode_sampling_probability":1.0,
     "horizon_length": 1,
     "with_rewiring": true, 
-    "with_mode_validation": true
+    "with_mode_validation": true,
+    "with_noise": false
   }
 }

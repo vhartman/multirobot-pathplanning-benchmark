@@ -38,6 +38,7 @@ class RRTstar(BaseRRTstar):
                  apply_long_horizon:bool = False,
                  horizon_length:int = 1,
                  with_mode_validation:bool = True,
+                 with_noise:bool = False,
                  
                 ):
         super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
@@ -45,7 +46,7 @@ class RRTstar(BaseRRTstar):
                          p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
                          sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
                          informed_batch_size = informed_batch_size, apply_long_horizon = apply_long_horizon, 
-                         horizon_length = horizon_length, with_mode_validation = with_mode_validation)
+                         horizon_length = horizon_length, with_mode_validation = with_mode_validation, with_noise=with_noise)
      
     def UpdateCost(self, mode:Mode, n:Node) -> None:
         stack = [n]

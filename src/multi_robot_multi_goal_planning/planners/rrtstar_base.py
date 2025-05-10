@@ -896,6 +896,7 @@ class BaseRRTstar(ABC):
                  apply_long_horizon:bool = False,
                  horizon_length:int = 1,
                  with_mode_validation:bool = True,
+                 with_noise:bool = False,
                  
 
                  ):
@@ -933,7 +934,8 @@ class BaseRRTstar(ABC):
         self.horizon_length = horizon_length
         self.long_horizon = BaseLongHorizon(self.horizon_length)
         self.with_mode_validation = with_mode_validation
-        self.mode_validation = ModeValidation(self.env, self.with_mode_validation)
+        self.with_noise = with_noise
+        self.mode_validation = ModeValidation(self.env, self.with_mode_validation, with_noise=with_noise)
         self.check = set()
         self.blacklist_mode = set()
         

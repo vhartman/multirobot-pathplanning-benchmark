@@ -1413,13 +1413,14 @@ def composite_prm_planner(
     init_uniform_batch_size: int = 150,
     init_transition_batch_size: int = 90,
     with_mode_validation: bool = True,
+    with_noise: bool = False,
 ) -> Optional[Tuple[List[State], List]]:
     q0 = env.get_start_pos()
     m0 = env.get_start_mode()
 
     reached_modes = set([m0])
     sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id)) 
-    mode_validation = ModeValidation(env, with_mode_validation)
+    mode_validation = ModeValidation(env, with_mode_validation, with_noise=with_noise)
     init_next_modes, init_next_ids = {}, {}
     found_init_mode_sequence = False
     first_search = True
@@ -1770,7 +1771,7 @@ def composite_prm_planner(
                 dtype=np.float64,
             )
 
-        if current_best_cost is None and len(g.goal_nodes) > 0:  
+        if current_best_cost is None and len(g.goal_nodes) > 0 and with_mode_validation:  
             reached_terminal_mode = True
         if len(reached_modes) != len(sorted_reached_modes):
             if update and not reached_terminal_mode:
@@ -1857,7 +1858,7 @@ def composite_prm_planner(
                 reached_modes.update(next_modes)
 
             init_mode_seq, found_init_mode_sequence =  get_init_mode_sequence(mode,found_init_mode_sequence, dummy_start_mode)
-            if init_mode_seq:
+            if init_mode_seq and with_mode_validation:
                 mode_seq = init_mode_seq
                 sorted_reached_modes = init_mode_seq
                 reached_terminal_mode = True

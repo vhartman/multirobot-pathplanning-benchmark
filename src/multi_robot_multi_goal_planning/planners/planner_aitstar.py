@@ -301,6 +301,7 @@ class AITstar(BaseITstar):
         horizon_length: int = 1,
         with_rewiring:bool = True,
         with_mode_validation:bool = True,
+        with_noise:bool = False,
         ):
         super().__init__(
             env = env, ptc=ptc, init_mode_sampling_type = init_mode_sampling_type, distance_metric = distance_metric, 
@@ -315,7 +316,7 @@ class AITstar(BaseITstar):
             inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
             remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
             apply_long_horizon = apply_long_horizon, frontier_mode_sampling_probability= frontier_mode_sampling_probability,
-            horizon_length = horizon_length, with_rewiring= with_rewiring, with_mode_validation = with_mode_validation)
+            horizon_length = horizon_length, with_rewiring= with_rewiring, with_mode_validation = with_mode_validation, with_noise= with_noise)
 
         self.alpha = 3.0
         self.consistent_nodes = set() #lb_cost_to_go_expanded == lb_cost_to_go

@@ -13,7 +13,8 @@ class ModeValidation():
     def __init__(
         self,
         env: BaseProblem,
-        apply:bool
+        apply:bool,
+        with_noise:bool = False,
     ):
         self.env = env
         self.blacklist_modes = set()
@@ -21,6 +22,7 @@ class ModeValidation():
         self.invalid_next_ids = {}
         self.counter = 0
         self.apply = apply
+        self.with_noise = with_noise
 
     def get_valid_modes(self, prev_mode:Mode, modes:tuple[Mode]) -> List[Mode]:
         """
@@ -71,7 +73,11 @@ class ModeValidation():
                         robot_indices = self.env.robot_idx[robot]
                         dim = self.env.robot_dims[robot]
                         indices = list(range(end_idx, end_idx + dim))
-                        q[robot_indices] = goal[indices]+ np.random.normal(loc=0.0, scale=0.01, size=goal[indices].shape)
+                        if self.with_noise:
+                            q[robot_indices] = goal[indices]+ np.random.normal(loc=0.0, scale=0.00145, size=goal[indices].shape)
+                        else:
+                            q[robot_indices] = goal[indices]
+
                         # 
                         end_idx += dim 
                         # checks if the mode has a possible goal configuration

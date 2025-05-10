@@ -187,6 +187,7 @@ def setup_planner(
                 init_uniform_batch_size = options["init_uniform_batch_size"],
                 init_transition_batch_size = options["init_transition_batch_size"],
                 with_mode_validation = options["with_mode_validation"],
+                with_noise=options["with_noise"],
 
             )
     elif planner_config["type"] == "rrtstar":
@@ -212,6 +213,7 @@ def setup_planner(
                 apply_long_horizon=options["apply_long_horizon"],
                 horizon_length = options["horizon_length"],
                 with_mode_validation = options["with_mode_validation"],
+                with_noise=options["with_noise"],
             ).Plan(optimize)
     elif planner_config["type"] == "birrtstar":
 
@@ -238,6 +240,7 @@ def setup_planner(
                 apply_long_horizon=options["apply_long_horizon"],
                 horizon_length = options["horizon_length"],
                 with_mode_validation = options["with_mode_validation"],
+                with_noise=options["with_noise"],
                 
             ).Plan(optimize)
     elif planner_config["type"] == "drrtstar":
@@ -259,7 +262,7 @@ def setup_planner(
                 locally_informed_sampling = options["locally_informed_sampling"],
                 sample_batch_size_per_task = options["sample_batch_size_per_task"],
                 transistion_batch_size_per_mode  = options["transistion_batch_size_per_mode"],
-                expand_iter  = options["expand_iter"]
+                expand_iter  = options["expand_iter"],
                 # gaussian=options["gaussian"],
             ).Plan()
     elif planner_config["type"] == "fastdrrtstar":
@@ -314,6 +317,7 @@ def setup_planner(
                 horizon_length = options["horizon_length"],
                 with_rewiring = options["with_rewiring"],
                 with_mode_validation = options["with_mode_validation"],
+                with_noise=options["with_noise"],
 
             ).Plan(optimize)
         
@@ -346,6 +350,7 @@ def setup_planner(
                 horizon_length = options["horizon_length"],
                 with_rewiring = options["with_rewiring"],
                 with_mode_validation = options["with_mode_validation"],
+                with_noise=options["with_noise"],
             ).Plan(optimize)
 
 

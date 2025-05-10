@@ -1477,6 +1477,7 @@ class BaseITstar(ABC):
         horizon_length:int = 1,
         with_rewiring:bool = True,
         with_mode_validation:bool = True,
+        with_noise:bool = False,
     ):
         self.env = env
         self.ptc = ptc
@@ -1503,6 +1504,7 @@ class BaseITstar(ABC):
         self.horizon_length = horizon_length
         self.with_rewiring = with_rewiring
         self.with_mode_validation = with_mode_validation
+        self.with_noise = with_noise
 
         self.reached_modes = set()
         self.sorted_reached_modes = None
@@ -1538,7 +1540,7 @@ class BaseITstar(ABC):
                         locally_informed_sampling,
                         include_lb=inlcude_lb_in_informed_sampling
                         )
-        self.mode_validation = ModeValidation(self.env, self.with_mode_validation)
+        self.mode_validation = ModeValidation(self.env, self.with_mode_validation, with_noise=self.with_noise)
         self.init_next_ids = {}
         self.found_init_mode_sequence = False
         self.init_next_modes = {}
@@ -1623,6 +1625,8 @@ class BaseITstar(ABC):
         return new_samples, num_attempts
     
     def create_virtual_root(self):
+        if not self.with_mode_validation:
+            return
         if not self.expanded_modes:
             return
         transition_nodes = self.g.transition_node_ids[self.last_expanded_mode]
@@ -1673,7 +1677,7 @@ class BaseITstar(ABC):
             mode_seq = self.long_horizon.mode_sequence
             reached_terminal_mode = True
         else:
-            if self.current_best_cost is None and len(self.g.goal_nodes) > 0:  
+            if self.current_best_cost is None and len(self.g.goal_nodes) > 0 and self.with_mode_validation:  
                 reached_terminal_mode = True
             if len(self.reached_modes) != len(self.sorted_reached_modes):
                 if update and not reached_terminal_mode:
@@ -1767,7 +1771,7 @@ class BaseITstar(ABC):
                 self.reached_modes.update(next_modes)
 
             init_mode_seq =  self.get_init_mode_sequence(mode)
-            if init_mode_seq:
+            if init_mode_seq and self.with_mode_validation:
                 mode_seq = init_mode_seq
                 reached_terminal_mode = True
                 mode_sampling_type = "uniform_reached"    
