@@ -1260,7 +1260,9 @@ class BaseRRTstar(ABC):
             if failed_attemps > 10000:
                 print("Failed to sample transition configuration after 10000 attempts.")
                 if self.with_mode_validation:
-                    self.mode_sampling.track_invalid_modes(mode)
+                    self.modes.remove(mode)
+                    self.mode_validation.update_cache_of_invalid_modes(mode)
+                    self.modes, _ = self.mode_validation.track_invalid_modes(mode.prev_mode, self.modes)
                 else:
                     self.blacklist_mode.add(mode)
                     self.modes.remove(mode)

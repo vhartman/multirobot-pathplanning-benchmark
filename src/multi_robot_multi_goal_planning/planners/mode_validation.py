@@ -116,7 +116,7 @@ class ModeValidation():
             return random.choice(possible_next_task_combinations)
         if not possible_next_task_combinations:
             if not self.env.is_terminal_mode(mode):
-                self.track_invalid_modes(mode)
+                _ = self.track_invalid_modes(mode)
             return
         invalid_next_modes = self.invalid_next_ids.get(mode, set())
         while True:
@@ -144,7 +144,7 @@ class ModeValidation():
             self.invalid_next_ids[mode.prev_mode] = set()
         self.invalid_next_ids[mode.prev_mode].add(tuple(mode.task_ids))      
 
-    def track_invalid_modes(self, mode:Mode, modes:List[Mode]) -> List[Mode]:
+    def track_invalid_modes(self, mode:Mode, modes:List[Mode] = None) -> List[Mode]:
         """
         Tracks invalid modes by adding them to blacklist and removing them from the list.
 

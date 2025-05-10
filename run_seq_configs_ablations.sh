@@ -4,8 +4,8 @@
 configs=(
     "./configs/report/unassigned_cleanup_mode_validation.json"
     "./configs/report/box_stacking_dep_mode_validation.json"
-    "./configs/report/unassigned_cleanup_mode_rewiring.json"
-    "./configs/report/box_stacking_dep_mode_rewiring.json"
+    "./configs/report/unassigned_cleanup_rewiring.json"
+    "./configs/report/box_stacking_dep_rewiring.json"
     "./configs/report/box_stacking_dep_mode_sampling.json"
     "./configs/report/unassigned_cleanup_mode_sampling.json"
     "./configs/report/unassigned_cleanup_batch_size.json"
