@@ -2360,6 +2360,8 @@ class BaseITstar(ABC):
             self.expanded_modes.update(relevant_expanded_modes)
             self.last_expanded_mode = max(relevant_expanded_modes, key=lambda obj: obj.id)
         else:
+            if self.apply_long_horizon:
+                return
             self.expanded_modes = set()
             self.last_expanded_mode = None
             if self.g.virtual_root is not None:
@@ -2665,7 +2667,7 @@ class BaseITstar(ABC):
         
         for id, edge_cost, edge_effort in zip(neighbors, edge_costs, edge_efforts):
             n = self.g.nodes[id]
-            if self.apply_long_horizon and n.state.mode not in self.long_horizon.mode_sequence:
+            if self.apply_long_horizon and n.state.mode not in self.long_horizon.mode_sequence and node.id != self.g.root.id:
                     continue
             if n.id == self.g.root.id:
                 continue
