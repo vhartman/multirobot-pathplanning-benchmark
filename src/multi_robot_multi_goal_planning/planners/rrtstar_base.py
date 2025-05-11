@@ -1690,11 +1690,9 @@ class BaseRRTstar(ABC):
         vertices = self.trees[mode].get_number_of_nodes_in_tree()
         r = np.minimum(self.gamma_rrtstar*(np.log(vertices)/vertices)**(1/self.d), self.eta)
         indices = find_nearest_indices(set_dists, r) # indices of batch_subtree
-        try:
-            if n_nearest_idx not in indices:
-                indices = np.insert(indices, 0, n_nearest_idx)
-        except:
-            pass
+        if n_nearest_idx not in indices:
+            indices = np.insert(indices, 0, n_nearest_idx)
+
         node_indices = self.trees[mode].get_node_ids_subtree(tree)[indices]
         n_near_costs = self.operation.costs[node_indices]
         N_near_batch = batch_subtree[indices]
@@ -1794,6 +1792,8 @@ class BaseRRTstar(ABC):
     
 
     def update_results_tracking(self, cost, path):
+        if path == []:
+            return
         if not self.env.is_terminal_mode(path[-1].mode):
             return
         self.costs.append(cost)

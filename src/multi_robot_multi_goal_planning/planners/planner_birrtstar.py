@@ -119,6 +119,8 @@ class BidirectionalRRTstar(BaseRRTstar):
             for i in range(self.transition_nodes):    
                 q = self.sample_transition_configuration(new_mode)
                 if q is None:
+                    if new_mode in self.modes:
+                        self.modes.remove(new_mode)
                     break
                 if i > 0 and np.equal(q.state(), node.state.q.state()).all():
                     break

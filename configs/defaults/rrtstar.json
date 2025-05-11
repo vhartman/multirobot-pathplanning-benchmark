@@ -17,7 +17,8 @@
     "test_mode_sampling":false,
     "apply_long_horizon":false,
     "horizon_length": 1,
-    "with_noise": false
+    "with_noise": false,
+    "with_mode_validation": true
     }
 }
 
