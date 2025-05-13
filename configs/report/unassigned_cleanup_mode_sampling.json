@@ -1,5 +1,5 @@
 {
-  "experiment_name": "planner_demo",
+  "experiment_name": "mode_sampling",
   "environment": "unassigned_cleanup",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",

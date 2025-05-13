@@ -74,7 +74,7 @@ class ModeValidation():
                         dim = self.env.robot_dims[robot]
                         indices = list(range(end_idx, end_idx + dim))
                         if self.with_noise:
-                            q[robot_indices] = goal[indices]+ np.random.normal(loc=0.0, scale=0.01, size=goal[indices].shape)
+                            q[robot_indices] = goal[indices]+ np.random.normal(loc=0.0, scale=0.03, size=goal[indices].shape)
                         else:
                             q[robot_indices] = goal[indices]
 
