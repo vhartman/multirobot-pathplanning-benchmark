@@ -88,8 +88,11 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
                     paths.append(path_data)
 
             run_data["paths"] = paths
-            run_data["costs"] = costs[i]
-            run_data["times"] = timestamps[i]
+            try:
+                run_data["costs"] = costs[i]
+                run_data["times"] = timestamps[i]
+            except Exception:
+                continue
 
             planner_data.append(run_data)
 
@@ -113,25 +116,25 @@ def load_config_from_folder(filepath: str) -> Dict:
 
     return config
 
+
 report_colors = {
-    "darkgreen":  (0.0, 0.5, 0.0),
-    "lightgreen": (0.2, 0.8, 0.2),
-    "darkblue":   (0.0, 0.0, 1.0),
-    "lightblue":  (0.3, 0.6, 0.9),
-    "darkviolet": (0.537, 0.0, 0.267),
-    "orange":     (1.0, 0.5, 0.0)
+    "rrt":            (11 / 255.0, 111 / 255.0, 60 / 255.0),
+    "faded rrt":      (124 / 255.0, 235 / 255.0, 125 / 255.0),
+    "faded1 rrt":     (79 / 255.0, 228 / 255.0, 81 / 255.0),
+    "rheit":          (0.537, 0.0, 0.267),  # RGB already in float
+    "eit":            (251 / 255.0, 0 / 255.0, 91 / 255.0),
+    "faded eit":      (249 / 255.0, 100 / 255.0, 255 / 255.0),
+    "faded1 eit":     (249 / 255.0, 100 / 255.0, 255 / 255.0),
+    "rhait":          (132 / 255.0, 0 / 255.0, 255 / 255.0),
+    "ait":            (19 / 255.0, 0 / 255.0, 206 / 255.0),
+    "faded ait":      (51 / 255.0, 158 / 255.0, 241 / 255.0),
+    "faded1 ait":     (51 / 255.0, 158 / 255.0, 241 / 255.0),
+    "prm":            (242 / 255.0, 82 / 255.0, 0 / 255.0),
+    "faded prm":      (255 / 255.0, 172 / 255.0, 4 / 255.0),
+    "faded1 prm":     (255 / 255.0, 172 / 255.0, 4 / 255.0),
+    "faded birrt":    (227 / 255.0, 226 / 255.0, 228 / 255.0),
+    "faded1 birrt":   (158 / 255.0, 154 / 255.0, 161 / 255.0),
 }
-faded_report_colors = {
-    "darkgreen":  (0.5, 0.75, 0.5),
-    "lightgreen": (0.6, 0.9, 0.6),
-    "darkblue":   (0.5, 0.5, 1.0),
-    "lightblue":  (0.65, 0.8, 0.95),
-    "darkviolet": (0.7685, 0.5, 0.6335),
-    "orange":     (1.0, 0.75, 0.5),
-    "black":    (0.25, 0.25, 0.25)
-}
-
-
 # TODO: move this to config? Add some default behaviour
 planner_name_to_color = {
     "informed_prm": "tab:orange",
@@ -184,26 +187,26 @@ planner_name_to_color = {
     "locally_informed_prm_no_shortcutting": "tab:blue",
     "birrtstar_no_shortcutting": "black",
     "rrtstar_no_shortcutting": "tab:red",
-    "rrtstar": report_colors["darkviolet"],
+    "rrtstar": report_colors["rrt"],
     "birrtstar": "black",
-    "eitstar": report_colors["lightgreen"],
-    "long_horizon eitstar": report_colors["darkgreen"],
-    "long_horizon aitstar": report_colors["darkblue"],
-    "aitstar": report_colors["lightblue"],
-    "locally_informed_prm_shortcutting": report_colors["orange"],
-    "eitstar same":faded_report_colors["lightgreen"],
-    "aitstar same": faded_report_colors["lightblue"],
-    "locally_informed_prm_shortcutting same": faded_report_colors["orange"],
-    "eitstar uniform":faded_report_colors["lightgreen"],
-    "aitstar uniform": faded_report_colors["lightblue"],
-    "locally_informed_prm_shortcutting uniform": faded_report_colors["orange"],
-    "rrtstar uniform": faded_report_colors["darkviolet"],
-    "birrtstar uniform": faded_report_colors["black"],
-    "eitstar without":faded_report_colors["lightgreen"],
-    "aitstar without": faded_report_colors["lightblue"],
-    "locally_informed_prm_shortcutting without": faded_report_colors["orange"],
-    "rrtstar without": faded_report_colors["darkviolet"],
-    "birrtstar without": faded_report_colors["black"],
+    "eitstar": report_colors["eit"],
+    "long_horizon eitstar": report_colors["rheit"],
+    "long_horizon aitstar": report_colors["ait"],
+    "aitstar": report_colors["ait"],
+    "locally_informed_prm_shortcutting": report_colors["prm"],
+    "eitstar same": report_colors["faded1 eit"],
+    "aitstar same": report_colors["faded1 ait"],
+    "locally_informed_prm_shortcutting same": report_colors["faded1 prm"],
+    "eitstar uniform": report_colors["faded1 eit"],
+    "aitstar uniform": report_colors["faded1 ait"],
+    "locally_informed_prm_shortcutting uniform": report_colors["faded1 prm"],
+    "rrtstar uniform": report_colors["faded1 rrt"],
+    "birrtstar uniform": report_colors["faded1 birrt"],
+    "eitstar without": report_colors["faded1 eit"],
+    "aitstar without": report_colors["faded1 ait"],
+    "locally_informed_prm_shortcutting without": report_colors["faded1 prm"],
+    "rrtstar without": report_colors["faded1 rrt"],
+    "birrtstar without": report_colors["faded1 birrt"],
 
 
     
@@ -211,14 +214,19 @@ planner_name_to_color = {
 
 planner_name_to_style = {
     "globally_informed_prm_no_shortcutting": "--",
-    "birrtstar_global_sampling": "--",
-    "rrtstar_global_sampling": "--",
-    "locally_informed_prm_no_shortcutting": "--",
-    "birrtstar_no_shortcutting": "--",
-    "rrtstar_no_shortcutting": "--",
+    "birrtstar_global_sampling": ":",
+    "rrtstar_global_sampling": ":",
+    "locally_informed_prm_no_shortcutting": "-:",
+    "birrtstar_no_shortcutting": ":",
+    "rrtstar_no_shortcutting": ":",
     "eitstar same": "--",
     "aitstar same": "--",
-    "locally_informed_prm_shortcutting same": "--"
+    "locally_informed_prm_shortcutting same":"--",
+    "eitstar uniform": "--",
+    "aitstar uniform": "--",
+    "locally_informed_prm_shortcutting uniform":"--",
+    "rrtstar uniform": "--",
+    "birrtstar uniform":"--"
 }
 
 
@@ -262,7 +270,8 @@ def make_cost_plots(
     save_as_png: bool = False,
     add_legend: bool = True,
     baseline_cost=None,
-    add_info: bool = False
+    add_info: bool = False,
+    final_max_time: Optional[float] = None,
 ):
     plt.figure("Cost plot")
 
@@ -333,6 +342,8 @@ def make_cost_plots(
         )
 
     time_discretization = 1e-2
+    if final_max_time is not None:
+        max_time = final_max_time
     interpolated_solution_times = np.arange(0, max_time, time_discretization)
 
     # plt.figure("Cost plot")
@@ -374,7 +385,10 @@ def make_cost_plots(
 
         min_solution_cost = np.min(all_solution_costs, axis=0)
         # max_solution_cost = np.max(all_solution_costs, axis=0)
-        max_solution_cost = np.max(ub_solution_cost[np.isfinite(ub_solution_cost)])
+        try:
+            max_solution_cost = np.max(ub_solution_cost[np.isfinite(ub_solution_cost)])
+        except:
+            min_solution_cost = np.min(all_solution_costs, axis=0)
         if len(max_solution_cost[np.isfinite(max_solution_cost)]) > 0:
             # max_non_inf_cost = max(
             #     max_non_inf_cost,
@@ -430,6 +444,8 @@ def make_cost_plots(
 
         min_non_inf_cost = min(min_non_inf_cost, baseline_cost)
 
+
+
     plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
     # plt.grid()
@@ -471,15 +487,30 @@ def make_cost_plots(
         )
 
 
-def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
+def make_success_plot(
+        all_experiment_data: Dict[str, Any], 
+        config: Dict,
+        save: bool = False,
+        foldername: Optional[str] = None,
+        save_as_png: bool = False,
+        add_legend: bool = True,
+        add_info: bool = False,
+        final_max_time: Optional[float] = None,
+        ):
     time_discretization = 1e-2
-    interpolated_solution_times = np.arange(
-        0, config["max_planning_time"], time_discretization
-    )
+    if final_max_time is None:
+        interpolated_solution_times = np.arange(
+            0, config["max_planning_time"], time_discretization
+        )
+    else:
+        interpolated_solution_times = np.arange(
+            0, final_max_time, time_discretization
+        )
 
     plt.figure("Success plot")
 
     first_solution_found = 1e8
+    len_results = config["num_runs"]
 
     for planner_name, results in all_experiment_data.items():
         all_solution_costs = []
@@ -495,7 +526,7 @@ def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
             all_solution_costs.append(discretized_solution_costs)
 
         solution_found = np.isfinite(all_solution_costs)
-        percentage_solution_found = np.sum(solution_found, axis=0) / len(results)
+        percentage_solution_found = np.sum(solution_found, axis=0) / len_results
 
         for i in range(len(percentage_solution_found)):
             if percentage_solution_found[i] > 1e-3:
@@ -522,7 +553,34 @@ def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
         ]
     )
 
-    plt.legend()
+    # plt.legend()
+    if add_legend:
+        if add_info:
+            legend_title = f"Environment: {config['environment']}\nNumber of runs: {config['num_runs']}"
+            existing_handles, _ = plt.gca().get_legend_handles_labels()
+            plt.legend(handles=existing_handles, title=legend_title, title_fontsize='medium', loc='best', alignment='left')
+        else:
+
+            plt.legend()
+
+    if save:
+        if foldername is None:
+            raise ValueError("No path specified")
+
+        pathlib.Path(f"{foldername}plots/").mkdir(parents=True, exist_ok=True)
+
+        format = "pdf"
+        if save_as_png:
+            format = "png"
+
+        scenario_name = config["environment"]
+
+        plt.savefig(
+            f"{foldername}plots/success_plot_{scenario_name}.{format}",
+            format=format,
+            dpi=300,
+            bbox_inches="tight",
+        )
 
 
 def main():
@@ -562,6 +620,9 @@ def main():
     parser.add_argument(
         "--baseline_cost", type=float, default=None, help="Baseline"
     )
+    parser.add_argument(
+        "--limited_max_time", type=float, default=None, help="Max time for the plot"
+    )
     args = parser.parse_args()
 
     if args.use_paper_style:
@@ -582,9 +643,19 @@ def main():
         save_as_png=args.png,
         add_legend=args.legend,
         baseline_cost=args.baseline_cost,
-        add_info = args.info
+        add_info = args.info,
+        final_max_time=args.limited_max_time,
     )
-    make_success_plot(all_experiment_data, config)
+    make_success_plot(
+        all_experiment_data, 
+        config, 
+        args.save,
+        foldername,
+        save_as_png=args.png,
+        add_legend=args.legend,
+        add_info = args.info,
+        final_max_time=args.limited_max_time,
+        )
 
     if not args.no_display:
         plt.show()
