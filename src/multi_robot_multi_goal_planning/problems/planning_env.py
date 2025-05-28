@@ -5,8 +5,9 @@ import random
 import copy
 
 from abc import ABC, abstractmethod
+from enum import Enum
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.configuration import (
@@ -403,9 +404,9 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                     if not task_requirements_fulfilled:
                         # print(f"dependency unfulfilled for task {t}")
                         continue
-                        
+
                     feasible_tasks_per_robot[i].append(t)
-            
+
             next_states = [
                 list(combo)
                 for combo in product(*feasible_tasks_per_robot)
@@ -634,7 +635,6 @@ class FreeMixin(BaseModeLogic):
             while pm:
                 task_ids = pm.task_ids
                 for i, task_id in enumerate(task_ids):
-
                     for j in range(len(self.task_groups)):
                         if task_id in [id for _, id in self.task_groups[j]]:
                             finished_task_groups.append(j)
@@ -775,7 +775,14 @@ class FreeMixin(BaseModeLogic):
                     continue
                 # Check if there are any remaining dependencies for this task
                 if [new_state[i]] in self.task_dependencies.values():
-                    if next(k for k, v in self.task_dependencies.items() if v == [new_state[i]]) not in finished_tasks:
+                    if (
+                        next(
+                            k
+                            for k, v in self.task_dependencies.items()
+                            if v == [new_state[i]]
+                        )
+                        not in finished_tasks
+                    ):
                         continue
                 new_state[i] = self.terminal_task
 
@@ -1340,6 +1347,65 @@ class DependencyGraphMixin(BaseModeLogic):
             assert len(different_tasks) == 1
 
             return self.tasks[different_tasks[0]]
+
+
+class AgentType(Enum):
+    SINGLE_AGENT = "single_agent"
+    MULTI_AGENT = "multi_agent"
+
+
+class ConstraintType(Enum):
+    UNCONSTRAINED = "unconstrained"
+    CONSTRAINED = "constrained"
+
+
+class ManipulationType(Enum):
+    STATIC = "static"
+    MANIPULATION = "manipulation"
+
+
+class DependencyType(Enum):
+    FULLY_ORDERED = "fully_ordered"
+    UNORDERED = "unordered"
+    UNASSIGNED = "unassigned"
+
+
+class ProblemSpec:
+    def __init__(
+        self,
+        agent_type: AgentType,
+        constraints: ConstraintType,  # Note: can us a set for multiple constraints
+        manipulation: ManipulationType,
+    ):
+        self.agent_type = agent_type
+        self.constraints = constraints
+        self.manipulation = manipulation
+
+    def __repr__(self):
+        return (
+            f"ProblemSpec(Agent: {self.agent_type.value}, "
+            f"Constraints: {self.constraints.value}, "
+            f"Env: {self.manipulation.value}, "
+        )
+
+
+class SolverCapabilities:
+    def __init__(
+        self,
+        supports_agent_types: Set[AgentType],
+        supports_constraints: Set[ConstraintType],
+        supports_manipulation: Set[ManipulationType],
+    ):
+        self.supports_agent_types = supports_agent_types
+        self.supports_constraints = supports_constraints
+        self.supports_environment_dynamism = supports_manipulation
+
+    def __repr__(self):
+        return (
+            f"SolverCapabilities(Agents: {[a.value for a in self.supports_agent_types]}, "
+            f"Constraints: {[c.value for c in self.supports_constraints]}, "
+            f"Env: {[e.value for e in self.supports_environment_dynamism]}, "
+        )
 
 
 # TODO: split into env + problem specification
