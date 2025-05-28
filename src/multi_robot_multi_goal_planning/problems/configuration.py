@@ -611,7 +611,6 @@ def batch_config_cost(
 
     if isinstance(starts, Configuration) and isinstance(batch_other, np.ndarray):
         diff = starts.state() - batch_other
-        # all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
         agent_slices = starts.array_slice
     
     elif batch_other is None:
@@ -623,53 +622,16 @@ def batch_config_cost(
         diff = np.array([start.q.state() for start in starts]) - np.array(
             [other.q.state() for other in batch_other], dtype=np.float64
         )
-        # all_robot_dists = np.zeros((starts[0].q._num_agents, diff.shape[0]))
         agent_slices = starts[0].q.array_slice
 
-        # for i, (s, e) in enumerate(agent_slices):
-        #     diff[:, e-1] *= 0.01
-
-    # return np.linalg.norm(diff, axis=1)
-
     if metric == "euclidean":
-        # squared_diff = diff * diff
         all_robot_dists = compute_sliced_euclidean_dists(diff, agent_slices)
-
-        # all_robot_dists = np.zeros((starts._num_agents, diff.shape[0]))
-        # for i, (s, e) in enumerate(starts.array_slice):
-        #     # Use sqrt(sum(x^2)) instead of np.linalg.norm
-        #     # and pre-computed squared differences
-        #     all_robot_dists[i, :] = np.sqrt(np.sum(squared_diff[:, s:e], axis=1))
     else:
         all_robot_dists = np.zeros((len(agent_slices), diff.shape[0]))
         for i, (s, e) in enumerate(agent_slices):
             all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
 
-    # for i, (s, e) in enumerate(agent_slices):
-    #     if metric == "euclidean":
-    #         all_robot_dists[i, :] = np.linalg.norm(diff[:, s:e], axis=1)
-    #     else:
-    #         all_robot_dists[i, :] = np.max(np.abs(diff[:, s:e]), axis=1)
-
-    # print(tmp - all_robot_dists)
-
-    # print(all_robot_dists)
-
     if reduction == "max":
-        # tmp = compute_max_sum_reduction(all_robot_dists, w)
-        # tmp2 = np.max(all_robot_dists, axis=0) + w * np.sum(all_robot_dists, axis=0)
-
-        # assert np.allclose(tmp, tmp2)
-
-        # return np.max(all_robot_dists, axis=0) + w * np.sum(all_robot_dists, axis=0)
         return compute_max_sum_reduction(all_robot_dists, w)
-        # return np.max(all_robot_dists.T, axis=1) + w * np.sum(all_robot_dists.T, axis=1)
     elif reduction == "sum":
-        # tmp = np.sum(all_robot_dists, axis=0)
-        # tmp2 = compute_sum_reduction(all_robot_dists)
-
-        # assert np.allclose(tmp, tmp2)
-
-        # return np.sum(all_robot_dists, axis=0)
         return compute_sum_reduction(all_robot_dists)
-        # return np.sum(all_robot_dists.T, axis=1)
