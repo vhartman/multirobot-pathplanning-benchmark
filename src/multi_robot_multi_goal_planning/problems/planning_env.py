@@ -23,6 +23,8 @@ from collections import deque
 
 from itertools import product
 
+from dataclasses import dataclass
+
 
 @cache
 def generate_binary_search_indices(N):
@@ -1370,6 +1372,7 @@ class DependencyType(Enum):
     UNASSIGNED = "unassigned"
 
 
+@dataclass(frozen=True)
 class ProblemSpec:
     def __init__(
         self,
@@ -1386,25 +1389,6 @@ class ProblemSpec:
             f"ProblemSpec(Agent: {self.agent_type.value}, "
             f"Constraints: {self.constraints.value}, "
             f"Env: {self.manipulation.value}, "
-        )
-
-
-class SolverCapabilities:
-    def __init__(
-        self,
-        supports_agent_types: Set[AgentType],
-        supports_constraints: Set[ConstraintType],
-        supports_manipulation: Set[ManipulationType],
-    ):
-        self.supports_agent_types = supports_agent_types
-        self.supports_constraints = supports_constraints
-        self.supports_environment_dynamism = supports_manipulation
-
-    def __repr__(self):
-        return (
-            f"SolverCapabilities(Agents: {[a.value for a in self.supports_agent_types]}, "
-            f"Constraints: {[c.value for c in self.supports_constraints]}, "
-            f"Env: {[e.value for e in self.supports_environment_dynamism]}, "
         )
 
 
