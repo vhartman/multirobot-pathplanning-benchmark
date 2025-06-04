@@ -88,10 +88,6 @@ class ModeValidation():
                         if not self.env.is_collision_free_for_robot(robot, q, mode, 0.001, set_mode):
                             self.update_cache_of_invalid_modes(mode)
                             #when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
-                            r_idx = self.env.robots.index(robot)
-                            assert(mode.task_ids[r_idx]+1 != mode.prev_mode.task_ids[r_idx]),(
-                                "dfghjbnk"
-                            )
                             is_in_collision = True
                             break
                         whitelist_robots.add(robot)
