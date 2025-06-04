@@ -17,7 +17,8 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
     BaseRRTstar, 
     Node, 
-    BidirectionalTree
+    BidirectionalTree,
+    save_data
 
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
@@ -54,13 +55,15 @@ class BidirectionalRRTstar(BaseRRTstar):
                  horizon_length:int = 1,
                  with_mode_validation:bool = True,
                  with_noise:bool = False,
+                 with_tree_visualization:bool = False
                 ):
         super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
                          informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
                          p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
                          sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
                          informed_batch_size = informed_batch_size, apply_long_horizon = apply_long_horizon, 
-                         horizon_length = horizon_length, with_mode_validation = with_mode_validation, with_noise=with_noise)
+                         horizon_length = horizon_length, with_mode_validation = with_mode_validation, with_noise=with_noise,
+                         with_tree_visualization=with_tree_visualization)
         self.transition_nodes = transition_nodes 
         self.birrtstar_version = birrtstar_version
         self.swap = True
@@ -139,7 +142,9 @@ class BidirectionalRRTstar(BaseRRTstar):
             if n_new.id in self.trees[mode].subtree:
                 if self.env.is_transition(n_new.state.q, mode):
                     self.trees[mode].connected = True
+                    self.save_tree_data()
                     self.add_new_mode(n_new.state.q, mode, BidirectionalTree)
+                    self.save_tree_data()
                     self.convert_node_to_transition_node(mode, n_new)
                 #check if termination is reached
                 if self.env.done(n_new.state.q, mode):
@@ -301,6 +306,56 @@ class BidirectionalRRTstar(BaseRRTstar):
                 i +=1
             else:
                 return 
+            
+    def save_tree_data(self) -> None:
+        if not self.with_tree_visualization:
+            return
+        data = {}
+        data['all_nodes'] = [self.trees[m].subtree[id].state.q.state() for m in self.modes for id in self.trees[m].get_node_ids_subtree('A')]
+        
+        try:
+            data['all_transition_nodes'] = [self.trees[m].subtree[id].state.q.state() for m in self.modes for id in self.transition_node_ids[m]]
+            data['all_transition_nodes_mode'] = [self.trees[m].subtree[id].state.mode.task_ids for m in self.modes for id in self.transition_node_ids[m]]
+        except Exception:
+            data['all_transition_nodes'] = []
+            data['all_transition_nodes_mode'] = []
+        data['all_nodes_mode'] = [self.trees[m].subtree[id].state.mode.task_ids for m in self.modes for id in self.trees[m].get_node_ids_subtree()]
+        
+        for i, type in enumerate(['forward', 'reverse']): 
+            data[type] = {}
+            data[type]['nodes'] = []
+            data[type]['parents'] = []
+            data[type]['modes'] = []
+            for m in self.modes:
+                if type == 'forward':
+                    ids = self.trees[m].get_node_ids_subtree('A')
+                else:
+                    ids = self.trees[m].get_node_ids_subtree('B')
+                for id in ids:
+                    if type == 'forward':
+                        node = self.trees[m].subtree[id]
+                    else:
+                        node = self.trees[m].subtree_b[id]
+                    data[type]["nodes"].append(node.state.q.state())
+                    data[type]['modes'].append(node.state.mode.task_ids)
+                    parent = node.parent
+                    if parent is not None:
+                        data[type]["parents"].append(parent.state.q.state())
+                    else:
+                        data[type]["parents"].append(None)
+            
+        data['pathnodes'] = []
+        data['pathparents'] = []
+        if self.operation.path_nodes is not None:
+            for node in self.operation.path_nodes: 
+                data['pathnodes'].append(node.state.q.state())
+                parent = node.parent
+                if parent is not None:
+                    data['pathparents'].append(parent.state.q.state())
+                else:
+                    data['pathparents'].append(None)
+
+        save_data(data, True)
 
     def PlannerInitialization(self) -> None:
         # Initilaize first Mode
@@ -350,9 +405,11 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.trees[active_mode].swap()
             
             if not optimize and self.operation.init_sol:
+                self.save_tree_data()
                 break
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
+                print('Number of iterations: ', i)
                 break
             
         self.update_results_tracking(self.operation.cost, self.operation.path)

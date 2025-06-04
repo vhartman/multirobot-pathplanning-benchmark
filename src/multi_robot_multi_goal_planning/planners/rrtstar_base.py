@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Union, List, Dict, Callable, ClassVar
 from numpy.typing import NDArray
 from numba import njit
+import os
+import pickle
 
 try:
     from scipy.stats.qmc import Halton
@@ -841,6 +843,27 @@ def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:List[int], r_idx:
                 return np.array([-1]) # if its at the start pose
             return path_modes[i-1]
 
+def save_data(data:dict, tree:bool= False):
+        # Directory Handling: Ensure directory exists
+        parent_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        directory = os.path.join(parent_path, 'out')
+        if tree:
+            dir = os.path.join(directory, 'Analysis/Tree')
+        else:
+            dir = os.path.join(directory, 'Analysis')
+        os.makedirs(dir, exist_ok=True)
+
+        # Determine Next File Number: Use generator expressions for efficiency
+        next_file_number = max(
+            (int(file.split('.')[0]) for file in os.listdir(dir)
+            if file.endswith('.pkl') and file.split('.')[0].isdigit()),
+            default=-1
+        ) + 1
+
+        # Save Data as Pickle File
+        filename = os.path.join(dir, f"{next_file_number:04d}.pkl")
+        with open(filename, 'wb') as file:
+            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
 class BaseLongHorizon():
     counter: ClassVar[int] = 1
@@ -897,6 +920,7 @@ class BaseRRTstar(ABC):
                  horizon_length:int = 1,
                  with_mode_validation:bool = True,
                  with_noise:bool = False,
+                 with_tree_visualization:bool = False
                  
 
                  ):
@@ -936,6 +960,7 @@ class BaseRRTstar(ABC):
         self.with_mode_validation = with_mode_validation
         self.with_noise = with_noise
         self.mode_validation = ModeValidation(self.env, self.with_mode_validation, with_noise=with_noise)
+        self.with_tree_visualization = with_tree_visualization
         self.check = set()
         self.blacklist_mode = set()
         
@@ -993,7 +1018,7 @@ class BaseRRTstar(ABC):
                 pass
             if new_modes == []:
                 self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
-            
+            self.save_tree_data() 
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue 
@@ -2481,4 +2506,7 @@ class BaseRRTstar(ABC):
 
 
         """
+        pass
+    @abstractmethod
+    def save_tree_data(self) -> None:
         pass

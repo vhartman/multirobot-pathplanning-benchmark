@@ -10,7 +10,8 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
     BaseRRTstar, 
     Node, 
-    SingleTree
+    SingleTree,
+    save_data
 
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
@@ -39,6 +40,7 @@ class RRTstar(BaseRRTstar):
                  horizon_length:int = 1,
                  with_mode_validation:bool = True,
                  with_noise:bool = False,
+                 with_tree_visualization: bool = False
                  
                 ):
         super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
@@ -46,7 +48,8 @@ class RRTstar(BaseRRTstar):
                          p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
                          sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
                          informed_batch_size = informed_batch_size, apply_long_horizon = apply_long_horizon, 
-                         horizon_length = horizon_length, with_mode_validation = with_mode_validation, with_noise=with_noise)
+                         horizon_length = horizon_length, with_mode_validation = with_mode_validation, with_noise=with_noise,
+                         with_tree_visualization = with_tree_visualization)
      
     def UpdateCost(self, mode:Mode, n:Node) -> None:
         stack = [n]
@@ -62,7 +65,9 @@ class RRTstar(BaseRRTstar):
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         #check if transition is reached
         if self.env.is_transition(n_new.state.q, mode):
+            self.save_tree_data() 
             self.add_new_mode(n_new.state.q, mode, SingleTree)
+            self.save_tree_data() 
             self.convert_node_to_transition_node(mode, n_new)
         #check if termination is reached
         if self.env.done(n_new.state.q, mode):
@@ -86,6 +91,49 @@ class RRTstar(BaseRRTstar):
         # in case a dummy start is defined
         self.ManageTransition(active_mode, start_node)
     
+    def save_tree_data(self) -> None:
+        if not self.with_tree_visualization:
+            return
+        data = {}
+        data['all_nodes'] = [self.trees[m].subtree[id].state.q.state() for m in self.modes for id in self.trees[m].get_node_ids_subtree()]
+        
+        try:
+            data['all_transition_nodes'] = [self.trees[m].subtree[id].state.q.state() for m in self.modes for id in self.transition_node_ids[m]]
+            data['all_transition_nodes_mode'] = [self.trees[m].subtree[id].state.mode.task_ids for m in self.modes for id in self.transition_node_ids[m]]
+        except Exception:
+            data['all_transition_nodes'] = []
+            data['all_transition_nodes_mode'] = []
+        data['all_nodes_mode'] = [self.trees[m].subtree[id].state.mode.task_ids for m in self.modes for id in self.trees[m].get_node_ids_subtree()]
+        
+        for i, type in enumerate(['forward', 'reverse']):
+            data[type] = {}
+            data[type]['nodes'] = []
+            data[type]['parents'] = []
+            data[type]['modes'] = []
+            for m in self.modes:
+                for id in self.trees[m].get_node_ids_subtree():
+                    node = self.trees[m].subtree[id]
+                    data[type]["nodes"].append(node.state.q.state())
+                    data[type]['modes'].append(node.state.mode.task_ids)
+                    parent = node.parent
+                    if parent is not None:
+                        data[type]["parents"].append(parent.state.q.state())
+                    else:
+                        data[type]["parents"].append(None)
+            break
+        data['pathnodes'] = []
+        data['pathparents'] = []
+        if self.operation.path_nodes is not None:
+            for node in self.operation.path_nodes: 
+                data['pathnodes'].append(node.state.q.state())
+                parent = node.parent
+                if parent is not None:
+                    data['pathparents'].append(parent.state.q.state())
+                else:
+                    data['pathparents'].append(None)
+
+        save_data(data, True)
+
     def Plan(self, optimize:bool=True) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         i = 0
         self.PlannerInitialization()
@@ -114,6 +162,7 @@ class RRTstar(BaseRRTstar):
                 self.ManageTransition(active_mode, n_new)
 
             if not optimize and self.operation.init_sol:
+                self.save_tree_data()
                 break
 
             if self.ptc.should_terminate(i, time.time() - self.start_time):
