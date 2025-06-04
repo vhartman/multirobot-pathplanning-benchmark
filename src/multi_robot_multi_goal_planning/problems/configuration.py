@@ -33,6 +33,7 @@ class Configuration(ABC):
     def state(self) -> NDArray:
         pass
 
+    @classmethod
     @abstractmethod
     def from_list(cls, q_list: List[NDArray]) -> "Configuration":
         pass

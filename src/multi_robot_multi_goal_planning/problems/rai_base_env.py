@@ -28,10 +28,8 @@ import time
 
 import os
 import sys
-import io
 from contextlib import contextmanager
 from functools import wraps
-import tempfile
 import copy
 
 DEVNULL = os.open(os.devnull, os.O_WRONLY)
@@ -326,7 +324,7 @@ class rai_env(BaseProblem):
 
         return new_env
 
-    def sample_config_uniform_in_limits(self):
+    def sample_config_uniform_in_limits(self) -> NpConfiguration:
         rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
         q = NpConfiguration(rnd, self.start_pos.array_slice)
 
@@ -387,7 +385,7 @@ class rai_env(BaseProblem):
         self,
         q: Optional[Configuration],
         m: Mode,
-        collision_tolerance: float = None,
+        collision_tolerance: float | None = None,
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -446,7 +444,7 @@ class rai_env(BaseProblem):
         return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode, collision_tolerance: float = None
+        self, r: str, q: NDArray, m: Mode, collision_tolerance: float | None = None
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -518,12 +516,12 @@ class rai_env(BaseProblem):
         q1: Configuration,
         q2: Configuration,
         m: Mode,
-        resolution: float = None,
-        tolerance: float = None,
+        resolution: float | None = None,
+        tolerance: float | None = None,
         include_endpoints: bool = False,
         N_start: int = 0,
-        N_max: int = None,
-        N: int = None,
+        N_max: int | None = None,
+        N: int | None = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution

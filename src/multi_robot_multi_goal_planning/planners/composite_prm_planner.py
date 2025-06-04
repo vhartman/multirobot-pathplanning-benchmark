@@ -975,7 +975,7 @@ class MultimodalGraph:
         approximate_space_extent: float | None = None,
     ) -> List[Node]:
         if approximate_space_extent is None:
-            approximate_space_extent = np.prod(np.diff(env.limits, axis=0))
+            approximate_space_extent = float(np.prod(np.diff(env.limits, axis=0)))
 
         goal = None
         h_cache = {}
@@ -1232,7 +1232,7 @@ class MultimodalGraph:
 
             n = goal
 
-            while parents[n] is not None:
+            while n is not None and parents[n] is not None:
                 path.append(parents[n])
                 n = parents[n]
 
@@ -1297,7 +1297,7 @@ class MultimodalGraph:
             return cost
 
         parents = {start_node: None}
-        gs = {start_node: 0}  # best cost to get to a node
+        gs = {start_node: 0.}  # best cost to get to a node
 
         # populate open_queue and fs
 
@@ -1379,7 +1379,7 @@ class MultimodalGraph:
 
             n = goal
 
-            while parents[n] is not None:
+            while n is not None and parents[n] is not None:
                 path.append(parents[n])
                 n = parents[n]
 
@@ -1423,7 +1423,7 @@ class CompositePRM(BasePlanner):
         self,
         ptc: PlannerTerminationCondition,
         optimize: bool = True,
-    ) -> Optional[Tuple[List[State], List]]:
+    ) -> Tuple[List[State] | None, Dict[str, Any]]:
         q0 = self.env.get_start_pos()
         m0 = self.env.get_start_mode()
 
@@ -1548,7 +1548,7 @@ class CompositePRM(BasePlanner):
 
             return new_states_from_path_sampling, new_transitions_from_path_sampling
 
-        def sample_valid_uniform_batch(batch_size: int, cost: float) -> List[State]:
+        def sample_valid_uniform_batch(batch_size: int, cost: float | None) -> Tuple[List[State], int]:
             new_samples = []
             num_attempts = 0
             num_valid = 0
@@ -1593,7 +1593,7 @@ class CompositePRM(BasePlanner):
 
             while len(transitions) < transistion_batch_size:
                 # sample mode
-                mode = sample_mode("uniform_reached", None)
+                mode = sample_mode("uniform_reached", cost is not None)
 
                 # sample transition at the end of this mode
                 possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
@@ -1713,11 +1713,11 @@ class CompositePRM(BasePlanner):
 
         all_paths = []
 
-        approximate_space_extent = np.prod(np.diff(self.env.limits, axis=0))
+        approximate_space_extent = float(np.prod(np.diff(self.env.limits, axis=0)))
 
         cnt = 0
         while True:
-            if current_best_path is not None:
+            if current_best_path is not None and current_best_cost is not None:
                 # prune
                 num_pts_for_removal = 0
                 focal_points = np.array(
@@ -1831,7 +1831,7 @@ class CompositePRM(BasePlanner):
                 # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
                 # plt.show()
 
-                approximate_space_extent = (
+                approximate_space_extent = float(
                     np.prod(np.diff(self.env.limits, axis=0))
                     * len(new_states)
                     / required_attempts_this_batch
@@ -1845,7 +1845,7 @@ class CompositePRM(BasePlanner):
                 # g.compute_lower_bound_to_goal(self.env.batch_config_cost)
                 # g.compute_lower_bound_from_start(self.env.batch_config_cost)
 
-                if current_best_cost is not None and (
+                if current_best_cost is not None and current_best_path is not None and (
                     self.config.try_informed_sampling or self.config.try_informed_transitions
                 ):
                     interpolated_path = interpolate_path(current_best_path)

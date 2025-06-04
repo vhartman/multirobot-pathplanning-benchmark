@@ -7,7 +7,7 @@ import copy
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Any
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.configuration import (
@@ -183,20 +183,20 @@ class SingleGoal(Goal):
 
 
 class Task:
-    name: str
+    name: str | None
     robots: List[str]
     goal: Goal
 
     # things for manipulation
-    type: str
-    frames: List[str]
-    side_effect: str
+    type: str | None
+    frames: List[str] | None
+    side_effect: str | None
 
     # things for the future:
     constraints = List
 
     def __init__(
-        self, robots: List[str], goal: NDArray, type=None, frames=None, side_effect=None
+        self, robots: List[str], goal: Goal, type=None, frames=None, side_effect=None
     ):
         self.robots = robots
         self.goal = goal
@@ -225,9 +225,9 @@ class Mode:
     sg: Dict[str, tuple]
 
     id: int
-    prev_mode: "Mode"
+    prev_mode: "Mode | None "
     next_modes: List["Mode"]
-    additional_hash_info: any
+    additional_hash_info: Any
 
     id_counter = 0
 
@@ -325,7 +325,7 @@ class BaseModeLogic(ABC):
         pass
 
     @abstractmethod
-    def get_valid_next_task_combinations(self, m: Mode):
+    def get_valid_next_task_combinations(self, m: Mode) -> List[List[int]]:
         pass
 
     @abstractmethod
@@ -365,7 +365,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         return [self.terminal_task] * self.start_pos.num_agents()
 
     @cache
-    def get_valid_next_task_combinations(self, mode: Mode):
+    def get_valid_next_task_combinations(self, mode: Mode) -> List[List[int]]:
         # print(f"called get valid next with {mode.task_ids}")
         if self.is_terminal_mode(mode):
             return []
@@ -592,7 +592,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         return False
 
-    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+    def get_active_task(self, current_mode: Mode, next_task_ids: List[int] | None) -> Task:
         if next_task_ids is None:
             # we should return the terminal task here
             return self.tasks[self._terminal_task_ids[0]]
@@ -1396,15 +1396,17 @@ class ProblemSpec:
 class BaseProblem(ABC):
     robots: List[str]
     robot_dims: Dict[str, int]
-    robot_idx: Dict[str, NDArray]
+    robot_idx: Dict[str, List[int]]
     start_pos: Configuration
 
     start_mode: Mode
     _terminal_task_ids: List[int]
 
+    limits: NDArray
+
     # misc
-    # collision_tolerance: float
-    # collision_resolution: float
+    collision_tolerance: float
+    collision_resolution: float
 
     # def __init__(self):
     #     self.collision_tolerance = 0.01
@@ -1487,9 +1489,6 @@ class BaseProblem(ABC):
     def get_robot_dim(self, robot: str):
         return self.robot_dims[robot]
 
-    def get_all_bounds(self):
-        self.bounds
-
     # def get_robot_bounds(self, robot):
     #     self.bounds
 
@@ -1502,16 +1501,28 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
+    def is_terminal_mode(self, mode: Mode):
+        pass
+
+    @abstractmethod
     def get_next_modes(self, q: Configuration, mode: Mode):
         pass
 
     @abstractmethod
-    def get_active_task(self, mode: Mode, next_task_ids: List[int]) -> Task:
+    def get_active_task(self, mode: Mode, next_task_ids: List[int] | None) -> Task:
+        pass
+
+    @abstractmethod
+    def get_valid_next_task_combinations(self, m: Mode) -> List[List[int]]:
         pass
 
     # @abstractmethod
     # def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
     #     pass
+
+    @abstractmethod
+    def sample_config_uniform_in_limits(self) -> Configuration:
+        pass
 
     # Collision checking and environment related methods
     @abstractmethod
@@ -1537,12 +1548,12 @@ class BaseProblem(ABC):
         q1: Configuration,
         q2: Configuration,
         m: Mode,
-        resolution: float = None,
-        tolerance: float = None,
+        resolution: float | None = None,
+        tolerance: float | None = None,
         include_endpoints: bool = False,
         N_start: int = 0,
-        N_max: int = None,
-        N: int = None,
+        N_max: int | None = None,
+        N: int | None = None,
     ) -> bool:
         pass
 
