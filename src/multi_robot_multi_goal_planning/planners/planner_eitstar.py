@@ -502,6 +502,8 @@ class EITstar(BaseITstar):
                 # assert(len(n1.transition_neighbors) ==1), (
                 #         "Transition node has more than one neighbor"
                 #     )
+                if self.with_tree_visualization and iter > 0:
+                    self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
                 n1.transition_neighbors[0].inad.update(n1, 0.0, 0.0)
            
             if n1.lb_cost_to_go > potential_lb_cost_to_go:
@@ -513,6 +515,8 @@ class EITstar(BaseITstar):
                 #     "effort is inf"
                 # )
                 if is_transition:
+                    if self.with_tree_visualization and iter > 0:
+                        self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
                     self.reverse_tree_set.add(n1.id)
                     if self.apply_long_horizon and n1.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
                         continue

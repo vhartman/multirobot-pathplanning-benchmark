@@ -422,8 +422,8 @@ class AITstar(BaseITstar):
         self.updated_target_nodes = set()
         if edge is not None:
             nodes_to_update = set()
-            if self.with_tree_visualization:
-                self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+            # if self.with_tree_visualization:
+            #     self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
             if edge[0].rev.parent == edge[1]:
                 nodes_to_update = self.invalidate_rev_branch(edge[0], nodes_to_update)
             elif edge[1].rev.parent == edge[0]:
@@ -432,8 +432,8 @@ class AITstar(BaseITstar):
                 return
             self.g.update_forward_queue_keys('target', nodes_to_update) 
             self.reverse_tree_set.update(nodes_to_update)
-            if self.with_tree_visualization:
-                self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+            # if self.with_tree_visualization:
+            #     self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
             # if not self.dynamic_reverse_search_update:
             #     return
 
@@ -450,6 +450,8 @@ class AITstar(BaseITstar):
             num_iter += 1
             if num_iter % 100000 == 0:
                 print(num_iter, ": Reverse Queue: ", len(self.g.reverse_queue))
+            if num_iter %2 == 0 and self.with_tree_visualization and num_iter > 0:
+                self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
             is_rev_transition = False
             if n.is_transition and n.is_reverse_transition:
                 is_rev_transition = True
@@ -492,6 +494,9 @@ class AITstar(BaseITstar):
                 if self.apply_long_horizon and n.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
                     continue
                 self.update_heuristic_of_neihgbors(n.transition_neighbors[0])
+                if self.with_tree_visualization and num_iter > 0:
+                    self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
+
         if self.with_tree_visualization and num_iter > 0:
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
         self.init_rev_search = False
