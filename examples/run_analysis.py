@@ -147,6 +147,13 @@ def process_all_frame_traces_to_figure(env, all_frame_traces, static_traces):
     ]
     )
 
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(visible=False, showgrid=False, showticklabels=False, zeroline=False),
+            yaxis=dict(visible=False, showgrid=False, showticklabels=False, zeroline=False),
+            zaxis=dict(visible=False, showgrid=False, showticklabels=False, zeroline=False),
+        )
+    )
     # fig.write_html(output_html)
     fig.show()
 
@@ -385,6 +392,7 @@ def ellipse_with_matrices(env, env_path, pkl_file):
             path = data["path"]
             C_matrices = data["C"]
             L_matrices = data["L"]
+            CL_matrices = data["CL"]
 
 
             if mode is None:
@@ -405,47 +413,51 @@ def ellipse_with_matrices(env, env_path, pkl_file):
                 c = center[robot]
                 r_indices = env.robot_idx[robot]
                 frame_traces.append(go.Scatter3d(
-                    x=[f[0][r_indices][0]],
-                    y=[f[0][r_indices][1]],
-                    z = [1],
-                    mode='markers',
-                    marker=dict(size=10, color='grey'),
-                    legendgroup = legend_group,
-                    showlegend = False,
-                ))
-                frame_traces.append(go.Scatter3d(
-                    x=[f[1][r_indices][0]],
-                    y=[f[1][r_indices][1]],
+                    x=[f[0][0]],
+                    y=[f[0][1]],
                     z = [1],
                     mode='markers',
                     marker=dict(size=10, color='black'),
                     legendgroup = legend_group,
                     showlegend = False,
                 ))
-                if c is not None:
-                    frame_traces.append(go.Scatter3d(
-                        x=[c[0]],
-                        y=[c[1]],
-                        z = [1],
-                        mode='markers',
-                        marker=dict(size=10, color='red'),
-                        legendgroup = legend_group,
-                        showlegend = False,
-                    ))
-                    frame_traces.append(go.Scatter3d(
-                        x=[c[0]],
-                        y=[c[1]],
-                        z = [1],
-                        mode='markers',
-                        marker=dict(size=10, color='red'),
-                        legendgroup = legend_group,
-                        showlegend = False,
-                    ))
+                frame_traces.append(go.Scatter3d(
+                    x=[f[1][0]],
+                    y=[f[1][1]],
+                    z = [1],
+                    mode='markers',
+                    marker=dict(size=10, color='black'),
+                    legendgroup = legend_group,
+                    showlegend = False,
+                ))
+                # if c is not None:
+                #     frame_traces.append(go.Scatter3d(
+                #         x=[c[0]],
+                #         y=[c[1]],
+                #         z = [1],
+                #         mode='markers',
+                #         marker=dict(size=10, color='red'),
+                #         legendgroup = legend_group,
+                #         showlegend = False,
+                #     ))
+                #     frame_traces.append(go.Scatter3d(
+                #         x=[c[0]],
+                #         y=[c[1]],
+                #         z = [1],
+                #         mode='markers',
+                #         marker=dict(size=10, color='red'),
+                #         legendgroup = legend_group,
+                #         showlegend = False,
+                #     ))
                 try:
-                    C = C_matrices[robot_idx]
-                    L = L_matrices[robot_idx]
-                    if L is not None:
-                        if C.shape[0] == 3:  # 3D case
+                    try:
+                        C = C_matrices[robot_idx]
+                        L = L_matrices[robot_idx]
+                        CL = C @ L
+                    except Exception:
+                        CL = CL_matrices[robot_idx]
+                    if CL is not None:
+                        if CL.shape[0] == 3:  # 3D case
                             theta = np.linspace(0, 2 * np.pi, 100)
                             phi = np.linspace(0, np.pi, 50)
                             theta, phi = np.meshgrid(theta, phi)
@@ -458,13 +470,13 @@ def ellipse_with_matrices(env, env_path, pkl_file):
 
                             # Transform the unit sphere into an ellipsoid
                             unit_sphere = np.array([x.flatten(), y.flatten(), z.flatten()])
-                            ellipsoid_transformed = C @ L @ unit_sphere
+                            ellipsoid_transformed = CL @ unit_sphere
                             
 
                             # Translate to center
                             x_ellipsoid = ellipsoid_transformed[0, :] + c[0]
                             y_ellipsoid = ellipsoid_transformed[1, :] + c[1]
-                            z_ellipsoid = ellipsoid_transformed[2, :] + c[2] + 1
+                            z_ellipsoid = ellipsoid_transformed[2, :] + 0 + 1
 
 
                             # Add 3D ellipsoid using Mesh3d
@@ -475,12 +487,12 @@ def ellipse_with_matrices(env, env_path, pkl_file):
                                     z=z_ellipsoid,
                                     alphahull=0,  # Ensure it forms a hull
                                     color=color,  # Grey color for the surface
-                                    opacity=0.1,  # High transparency
+                                    opacity=0.15,  # High transparency
                                     legendgroup = robot,
                                     showlegend = False,
                                 )
                             )
-                        if C.shape[0] == 2:  # 2D case
+                        if CL.shape[0] == 2:  # 2D case
                             theta = np.linspace(0, 2 * np.pi, 100)  # Generate angles for ellipse
                             
                             # Generate unit circle points
@@ -489,7 +501,7 @@ def ellipse_with_matrices(env, env_path, pkl_file):
                             unit_circle = np.array([x, y])
                             
                             # Transform the unit circle into an ellipse
-                            ellipse_transformed = C @ L @ unit_circle
+                            ellipse_transformed = CL @ unit_circle
                             
                             # Translate to center
                             x_ellipse = ellipse_transformed[0, :] + c[0]
@@ -523,9 +535,9 @@ def ellipse_with_matrices(env, env_path, pkl_file):
                         y=path_y,
                         z=path_z,
                         mode="lines+markers",
-                        line=dict(color=colors[len(modes)+robot_idx], width=6),
+                        line=dict(color=colors[len(modes)+robot_idx], width=8),
                         marker=dict(
-                            size=3,  # Very small markers
+                            size=4,  # Very small markers
                             color=colors[len(modes)+robot_idx],  # Match marker color with line
                             opacity=1
                         ),
@@ -534,7 +546,46 @@ def ellipse_with_matrices(env, env_path, pkl_file):
                         showlegend=False
                     )
                     )
-        
+                q_start = env.get_start_pos().state()
+                try:
+                    q_goal = env.tasks[env.sequence[-1]].goal.sample([2,2])
+                except:
+                    q_goal = env.tasks[-1].goal.sample([2,2])
+
+                start = q_start[r_indices]
+                end = q_goal[r_indices]
+                frame_traces.append(
+                    go.Scatter3d(
+                        x=[start[0]], 
+                        y=[start[1]],
+                        z=[1],
+                        mode="markers",
+                        marker=dict(
+                            size=10,  # Very small markers
+                            color=color,  # Match marker color with line
+                            opacity=1
+                        ),
+                        opacity=1,
+                        legendgroup=robot,
+                        showlegend=False
+                    )
+                    )
+                frame_traces.append(
+                    go.Scatter3d(
+                        x=[end[0]], 
+                        y=[end[1]],
+                        z=[1],
+                        mode="markers",
+                        marker=dict(
+                            size=10,  # Very small markers
+                            color=color,  # Match marker color with line
+                            opacity=1
+                        ),
+                        opacity=1,
+                        legendgroup=robot,
+                        showlegend=False
+                    )
+                    )
         
         
         except Exception as e:
@@ -846,6 +897,9 @@ def visualize_tree_2d_with_color(env, path_to_folder,env_path, html:bool = False
                 zorder=7
             )
 
+        path = data["path"]
+
+
     
         next_file_number = max(
                 (int(file.split('.')[0]) for file in os.listdir(dir)
@@ -861,21 +915,22 @@ def get_modes(env, last_file):
     modes = [env.start_mode]
     counter = 0
     color = {}
-    
+
     try:
         while True:     
             for mode in modes:
                 reached_task_ids.append(mode.task_ids)
                 reached_modes.append(mode)
-                color = []
+                color_ = []
                 while True:
                     c = np.random.rand(3,)
                     if tuple(c) not in colors:
-                        color.append(c)
-                        colors.add(tuple(c))
-                    if len(color) == len(env.robots):
+                        for robot in env.robots:
+                            color_.append(c)
+                            colors.add(tuple(c))
+                    if len(color_) == len(env.robots):
                         break
-                color[f'{mode.task_ids}'] = color
+                color[f'{mode.task_ids}'] = color_
                 counter += len(env.robots)
             if env.is_terminal_mode(mode):  
                 break
@@ -943,216 +998,291 @@ def visualize_tree_2d_paper(env, path_to_folder):
     dir = os.path.join(os.path.dirname(path_to_folder),'tree_vis')
     if os.path.exists(dir):
         shutil.rmtree(dir)
+    os.makedirs(dir, exist_ok=True)
+       
 
-    # Recreate the directory
-    os.makedirs(dir)
     obstacles, table_size = get_infos_of_obstacles_and_table_2d(env)
     last_file = os.path.join(path_to_folder, os.listdir(path_to_folder)[-1])
     reached_modes, reached_task_ids, color = get_modes(env, last_file)
     q_start = env.get_start_pos().state()
     try:
         q_goal = env.tasks[env.sequence[-1]].goal.sample(reached_task_ids[-1])
-    except:
+    except Exception:
         q_goal = env.tasks[-1].goal.sample(reached_task_ids[-1])
+    for main_robot_idx, robot in enumerate(env.robots):
+        dir_out = os.path.join(dir, str(main_robot_idx))
+        os.makedirs(dir_out, exist_ok=True)
+        for filename in os.listdir(path_to_folder):
+            pkl_file = os.path.join(path_to_folder, filename)
+            with open(pkl_file, 'rb') as file:
+                all_data = dill.load(file)
+                all_nodes = all_data['all_nodes']
+                all_transition_nodes = all_data['all_transition_nodes']  
+                all_nodes_modes = all_data['all_nodes_mode']
+                all_transition_nodes_modes = all_data['all_transition_nodes_mode']
+                
+            fig, ax = plt.subplots()
+            ax.set_xlim(1*table_size[0], -1*table_size[0])
+            ax.set_ylim(1*table_size[1], -1.0*table_size[1])
+            ax.set_aspect("equal")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+                spine.set_linewidth(10)  # Thickness in points (increase as needed)
+                spine.set_edgecolor("black")
 
-    for filename in os.listdir(path_to_folder):
-        pkl_file = os.path.join(path_to_folder, filename)
-        with open(pkl_file, 'rb') as file:
-            all_data = dill.load(file)
-            all_nodes = all_data['all_nodes']
-            all_transition_nodes = all_data['all_transition_nodes']  
-            all_nodes_modes = all_data['all_nodes_mode']
-            all_transition_nodes_modes = all_data['all_transition_nodes_mode']
             
-        fig, ax = plt.subplots()
-        ax.set_xlim(1*table_size[0], -1*table_size[0])
-        ax.set_ylim(1*table_size[1], -1.0*table_size[1])
-        ax.set_aspect("equal")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
-
-        
-        # Draw obstacles
-        for obs in obstacles:
-            x, y = obs["pos"]
-            w, h = obs["size"]
-            rect = patches.Rectangle((x - w / 2, y - h / 2), w, h, color="black")
-            ax.add_patch(rect)
-        for idx, tree_type in enumerate(['forward', 'reverse']):
-            if idx == 0:
-                zorder = 1
-            if idx == 1:
-                zorder = 0
-            data = all_data[tree_type]
-            nodes = data['nodes']
-            parents = data['parents']
-            modes = data['modes']
-            # color = colors[idx]
-            colors_plot, segments = [], []
-            #tree
-            lines = {'x': [], 'y': []}
-            for robot_idx, robot in enumerate(env.robots):
-                indices = env.robot_idx[robot]
-                for node, parent, mode in zip(nodes, parents, modes):   
-                    if idx == 1:  
-                        c = color[f'{mode}'][robot_idx]
-
-                    else:
-                        c = 'red'
-                    x0 = node[indices][0]
-                    y0 = node[indices][1]
-
-                    if parent is not None:
-                        x1 = parent[indices][0]
-                        y1 = parent[indices][1]
-                    else:
-                        x1 = x0
-                        y1 = y0
-                    segments.append([[x0, y0], [x1, y1]])
-                    lines['x'].extend([x0, x1, None])
-                    lines['y'].extend([y0, y1, None])
-                    colors_plot.append(c)
-
-            segments = np.array(segments)
-
-            # Plot lines with individual colors
-            lc = LineCollection(segments, colors=colors_plot, linewidths=0.5, alpha=1, zorder=zorder)
-            ax.add_collection(lc)
-
-            # Optional: Scatter plot the same points
-            x_vals = segments[:, 0, 0]
-            y_vals = segments[:, 0, 1]
-            ax.scatter(
-                x_vals,
-                y_vals,
-                color=colors_plot,
-                alpha=1,
-                s=2,
-                edgecolors='none',
-                zorder=zorder
-            )
-
-
-        all_points = []
-        all_colors = []
-
-        for robot_idx, robot in enumerate(env.robots):
-            indices = env.robot_idx[robot]
-            for n, mode in zip(all_nodes, all_nodes_modes):  # <- all_modes must match length of 'all'
-                x = n[indices][0]
-                y = n[indices][1]
-                all_points.append((x, y))
-                c = color[f'{mode}'][robot_idx]
-                all_colors.append(c)
-
-        all_points = np.array(all_points)
-        ax.scatter(
-            all_points[:, 0],
-            all_points[:, 1],
-            color=all_colors,
-            alpha=0.5,
-            s=3,
-            edgecolors='none',
-            zorder=0,
-        )
-        all_points = []
-        all_colors = []
-
-        for robot_idx, robot in enumerate(env.robots):
-            indices = env.robot_idx[robot]
-            for n, mode in zip(all_transition_nodes, all_transition_nodes_modes):  # all_nodes and all_nodes_modes must match
-                x = n[indices][0]
-                y = n[indices][1]
-                all_points.append((x, y))
-                c = color[f'{mode}'][robot_idx]
-                all_colors.append(c)
-
-        all_points = np.array(all_points)
-        ax.scatter(
-            all_points[:, 0],
-            all_points[:, 1],
-            color=all_colors,
-            alpha=0.5,
-            s=3,  # slightly larger dots
-            edgecolors='black',
-            linewidths=0.35,  # thinner edge
-            zorder=5
-        )
-
-
-        for robot_idx, robot in enumerate(env.robots):
-            indices = env.robot_idx[robot]
-            x_start = q_start[indices][0]
-            y_start = q_start[indices][1]
-            x_goal = q_goal[indices][0]
-            y_goal = q_goal[indices][1]
-
-            # Plot a circle marker at the start point
-            # ax.scatter(
-            #     [x_goal],
-            #     [y_goal],
-            #     color='white',
-            #     s=30,  # size of the circle
-            #     edgecolors=colors[color[f'{reached_modes[-1].task_ids}'][robot_idx]],
-            #     zorder=5
-            # )
-
-            # Plot a circle marker at the start point
-            ax.scatter(
-                [x_start],
-                [y_start],
-                color='black',
-                s=13,  # size of the circle
-                edgecolors='none',
-                zorder=6
-            )
-            # #plot transition nodes
-        for m in reached_modes:
-            possible_next_task_combinations = env.get_valid_next_task_combinations(m)
-            if not possible_next_task_combinations:
+            # Draw obstacles
+            for obs in obstacles:
+                x, y = obs["pos"]
+                w, h = obs["size"]
+                rect = patches.Rectangle((x - w / 2, y - h / 2), w, h, color="black", zorder = 0)
+                ax.add_patch(rect)
+            for idx, tree_type in enumerate(['forward', 'reverse']):
+                if len(all_data['forward']['nodes']) > 1:
+                    if tree_type == 'reverse':
+                        continue
+                # if tree_type == 'reverse':
+                #     break
+                if idx == 0:
+                    zorder = 2
+                if idx == 1:
+                    zorder = 1
+                data = all_data[tree_type]
+                nodes = data['nodes']
+                parents = data['parents']
+                modes = data['modes']
+                # color = colors[idx]
+                colors_plot, segments = [], []
+                #tree
+                lines = {'x': [], 'y': []}
                 for robot_idx, robot in enumerate(env.robots):
-                    c = color[f'{mode}'][robot_idx]
+                    if robot_idx != main_robot_idx:
+                        continue
                     indices = env.robot_idx[robot]
-                    ax.scatter(
-                    [q_goal[indices][0]],
-                    [q_goal[indices][1]],
-                    color='white',
-                    s=30,  # size of the circle
-                    edgecolors=c,
+                    for node, parent, mode in zip(nodes, parents, modes):   
+                        if idx == 1:  
+                            c = color[f'{mode}'][robot_idx]
+
+                        else:
+                            c = color[f'{mode}'][robot_idx]
+                        x0 = node[indices][0]
+                        y0 = node[indices][1]
+
+                        if parent is not None:
+                            x1 = parent[indices][0]
+                            y1 = parent[indices][1]
+                        else:
+                            x1 = x0
+                            y1 = y0
+                        segments.append([[x0, y0], [x1, y1]])
+                        lines['x'].extend([x0, x1, None])
+                        lines['y'].extend([y0, y1, None])
+                        colors_plot.append(c)
+
+                segments = np.array(segments)
+
+                # Plot lines with individual colors
+                lc = LineCollection(segments, colors=colors_plot, linewidths=1, alpha=1, zorder=zorder)
+                ax.add_collection(lc)
+
+                # Optional: Scatter plot the same points
+                x_vals = segments[:, 0, 0]
+                y_vals = segments[:, 0, 1]
+                ax.scatter(
+                    x_vals,
+                    y_vals,
+                    color=colors_plot,
+                    alpha=1,
+                    s=4,
+                    edgecolors='none',
+                    zorder=zorder
+                )
+
+
+            all_points = []
+            all_colors = []
+
+            for robot_idx, robot in enumerate(env.robots):
+                if robot_idx != main_robot_idx:
+                        continue
+                indices = env.robot_idx[robot]
+                for n, mode in zip(all_nodes, all_nodes_modes):  # <- all_modes must match length of 'all'
+                    if any(np.array_equal(n, x) for x in all_transition_nodes):
+                        continue
+                    x = n[indices][0]
+                    y = n[indices][1]
+                    all_points.append((x, y))
+                    c = color[f'{mode}'][robot_idx]
+                    all_colors.append(c)
+
+            all_points = np.array(all_points)
+            ax.scatter(
+                all_points[:, 0],
+                all_points[:, 1],
+                color=all_colors,
+                alpha=0.5,
+                s=4,
+                edgecolors='none',
+                zorder=0,
+            )
+            all_points = []
+            all_colors = []
+            try:
+                for robot_idx, robot in enumerate(env.robots):
+                    if robot_idx != main_robot_idx:
+                        continue
+                    indices = env.robot_idx[robot]
+                    for n, mode in zip(all_transition_nodes, all_transition_nodes_modes):  # all_nodes and all_nodes_modes must match
+                        x = n[indices][0]
+                        y = n[indices][1]
+                        all_points.append((x, y))
+                        c = color[f'{mode}'][robot_idx]
+                        all_colors.append(c)
+
+                all_points = np.array(all_points)
+                ax.scatter(
+                    all_points[:, 0],
+                    all_points[:, 1],
+                    color=all_colors,
+                    alpha=0.5,
+                    s=4,  # slightly larger dots
+                    edgecolors='black',
+                    linewidths=0.35,  # thinner edge
                     zorder=5
                 )
-                continue
-            next_ids = random.choice(possible_next_task_combinations)
-            constrained_robot = env.get_active_task(m, next_ids).robots
-            goal = env.get_active_task(m, next_ids).goal.sample(m)
-            q = []
-            end_idx = 0
-            for robot_idx, robot in enumerate(env.robots):
-                c = color[f'{mode}'][robot_idx]
-                if robot in constrained_robot:
-                    dim = env.robot_dims[robot]
-                    indices = list(range(end_idx, end_idx + dim))
-                    q = goal[indices]
-                    ax.scatter(
-                        [q[0]],
-                        [q[1]],
-                        color=c,
-                        s=30,  # size of the circle
-                        edgecolors='black',
-                        zorder=6
-                    )
-                    end_idx += dim 
-                    continue
+            except Exception:
+                pass
 
-        next_file_number = max(
-                (int(file.split('.')[0]) for file in os.listdir(dir)
-                if file.endswith('.png') and file.split('.')[0].isdigit()),
-                default=-1
-            ) + 1
-        plt.savefig(os.path.join(dir,f"{next_file_number:04d}.png"), dpi=300, bbox_inches='tight') 
-    generate_gif(dir)
+
+            for robot_idx, robot in enumerate(env.robots):
+                if robot_idx != main_robot_idx:
+                        continue
+                indices = env.robot_idx[robot]
+                x_start = q_start[indices][0]
+                y_start = q_start[indices][1]
+                x_goal = q_goal[indices][0]
+                y_goal = q_goal[indices][1]
+
+                # Plot a circle marker at the start point
+                # ax.scatter(
+                #     [x_goal],
+                #     [y_goal],
+                #     color='white',
+                #     s=30,  # size of the circle
+                #     edgecolors=colors[color[f'{reached_modes[-1].task_ids}'][robot_idx]],
+                #     zorder=5
+                # )
+
+                # Plot a circle marker at the start point
+                ax.scatter(
+                    [x_start],
+                    [y_start],
+                    color='black',
+                    s=13,  # size of the circle
+                    edgecolors='none',
+                    zorder=6
+                )
+                # #plot transition nodes
+            for m in reached_modes:
+                possible_next_task_combinations = env.get_valid_next_task_combinations(m)
+                if not possible_next_task_combinations:
+                    for robot_idx, robot in enumerate(env.robots):
+                        if robot_idx != main_robot_idx:
+                            continue
+                        c = color[f'{mode}'][robot_idx]
+                        indices = env.robot_idx[robot]
+                        ax.scatter(
+                        [q_goal[indices][0]],
+                        [q_goal[indices][1]],
+                        color='white',
+                        s=30,  # size of the circle
+                        edgecolors=c,
+                        zorder=5
+                    )
+                    continue
+                next_ids = random.choice(possible_next_task_combinations)
+                constrained_robot = env.get_active_task(m, next_ids).robots
+                goal = env.get_active_task(m, next_ids).goal.sample(m)
+                q = []
+                end_idx = 0
+                for robot_idx, robot in enumerate(env.robots):
+                    if robot_idx != main_robot_idx:
+                        continue
+                    c = color[f'{mode}'][robot_idx]
+                    if robot in constrained_robot:
+                        dim = env.robot_dims[robot]
+                        indices = list(range(end_idx, end_idx + dim))
+                        q = goal[indices]
+                        ax.scatter(
+                            [q[0]],
+                            [q[1]],
+                            color=c,
+                            s=30,  # size of the circle
+                            edgecolors='black',
+                            zorder=6
+                        )
+                        end_idx += dim 
+                        continue
+            try:
+                nodes = all_data['pathnodes']
+                parents = all_data['pathparents']
+                # color = colors[idx]
+                colors_plot, segments = [], []
+                #tree
+                lines = {'x': [], 'y': []}
+                for robot_idx, robot in enumerate(env.robots):
+                    if robot_idx != main_robot_idx:
+                        continue
+                    indices = env.robot_idx[robot]
+                    for node, parent in zip(nodes, parents):   
+                        c = 'black'
+                        x0 = node[indices][0]
+                        y0 = node[indices][1]
+
+                        if parent is not None:
+                            x1 = parent[indices][0]
+                            y1 = parent[indices][1]
+                        else:
+                            x1 = x0
+                            y1 = y0
+                        segments.append([[x0, y0], [x1, y1]])
+                        lines['x'].extend([x0, x1, None])
+                        lines['y'].extend([y0, y1, None])
+                        colors_plot.append(c)
+
+                segments = np.array(segments)
+
+                # Plot lines with individual colors
+                lc = LineCollection(segments, colors=colors_plot, linewidths=2.5, alpha=1, zorder=6)
+                ax.add_collection(lc)
+
+                # Optional: Scatter plot the same points
+                x_vals = segments[:, 0, 0]
+                y_vals = segments[:, 0, 1]
+                ax.scatter(
+                    x_vals,
+                    y_vals,
+                    color=colors_plot,
+                    alpha=1,
+                    s=2.5,
+                    edgecolors='none',
+                    zorder=6
+                )
+            except Exception:
+                pass
+
+            next_file_number = max(
+                    (int(file.split('.')[0]) for file in os.listdir(dir_out)
+                    if file.endswith('.png') and file.split('.')[0].isdigit()),
+                    default=-1
+                ) + 1
+            
+            plt.savefig(os.path.join(dir_out,f"{next_file_number:04d}.png"), dpi=300, bbox_inches='tight') 
+        generate_gif(dir_out)
 
 def visualize_tree_2d_with_color_html(env, env_path, pkl_folder, output_html):
 
@@ -1499,7 +1629,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     if args.path_to_pkl_file is not None:
-        dir_path_pkl = args.path
+        dir_path_pkl = args.path_to_pkl_file
     else:
         #get latest created folder
         home_dir = os.path.expanduser("~")
