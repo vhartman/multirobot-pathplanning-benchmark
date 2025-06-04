@@ -2720,6 +2720,17 @@ class BaseITstar(ABC):
                     data[type]["parents"].append(parent.state.q.state())
                 else:
                     data[type]["parents"].append(None)
+        data['pathnodes'] = []
+        data['pathparents'] = []
+        if self.current_best_path_nodes is not None:
+            for node in self.current_best_path_nodes: 
+                data['pathnodes'].append(node.state.q.state())
+                parent = node.forward.parent
+                if parent is not None:
+                    data['pathparents'].append(parent.state.q.state())
+                else:
+                    data['pathparents'].append(None)
+
         save_data(data, True)
     
     def initialize_search(self, num_iter = None, skip:bool= False) -> None:
