@@ -64,7 +64,16 @@ def convert_to_path(env, path_data):
         if a["mode"] != prev_mode_ids:
             # if a["mode"] != prev_mode_ids and a["mode"] != env._terminal_task_ids:
             print(a["mode"])
-            next_mode = env.get_next_mode(prev_config, modes[-1])
+            next_modes = env.get_next_modes(prev_config, modes[-1])
+            # assert len(next_modes) == 1
+            # next_mode = next_modes[0]
+            if len(next_modes) == 1:
+                next_mode = next_modes[0]
+            else:
+                next_modes_task_ids = [m.task_ids for m in next_modes]
+                idx = next_modes_task_ids.index(a["mode"])
+                next_mode = next_modes[idx]
+
             modes.append(next_mode)
 
         real_path.append(State(q, modes[-1]))
@@ -142,12 +151,10 @@ def make_mode_plot(path, env):
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("path_filename", nargs="?", default="", help="filepath")
-    parser.add_argument("env_name", nargs="?", default="", help="filepath")
     parser.add_argument(
         "--interpolate",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=True,
-        help="Interpolate the path that is loaded. (default: True)",
+        action="store_true",
+        help="Interpolate the path that is loaded. (default: False)",
     )
     parser.add_argument(
         "--shortcut",
@@ -157,13 +164,19 @@ def main():
     parser.add_argument(
         "--insert_transition_nodes",
         action="store_true",
-        help="Shortcut the path. (default: False)",
+        help="Insert transition nodes into the path. (default: False)",
     )
     parser.add_argument(
         "--plot",
         action="store_true",
-        help="Plot the path. (default: True)",
+        help="Plot the path. (default: False)",
     )
+    parser.add_argument(
+        "--outline",
+        action="store_true",
+        help="Add outline to the visualization. (default: False)",
+    )
+
     args = parser.parse_args()
 
     folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
@@ -171,16 +184,19 @@ def main():
     if Path(potential_config_path).exists():
         config = load_experiment_config(potential_config_path)
         seed = config["seed"] 
+        env_name = config["environment"]
+        cost_reduction = config["cost_reduction"]
+        cost_metric = config["per_agent_cost"]
     else:
-        seed = 0
+        raise FileNotFoundError(f"Could not find the configuration file at: '{potential_config_path}'. Please check the provided path {args.path_filename} and try again.")
     
     np.random.seed(seed)
     random.seed(seed)
 
     path_data = load_path(args.path_filename)
-    env = get_env_by_name(args.env_name)
-    env.cost_reduction = "sum"
-    env.cost_metric = "euclidean"
+    env = get_env_by_name(env_name)
+    env.cost_reduction = cost_reduction
+    env.cost_metric = cost_metric
 
     path = convert_to_path(env, path_data)
 
@@ -208,6 +224,11 @@ def main():
         ax.set_yticks([])
         ax.set_xticklabels([])
         ax.set_yticklabels([])
+        if args.outline:
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+                spine.set_linewidth(10) 
+                spine.set_edgecolor("black")
         
         # Draw obstacles
         for obs in obstacles:
@@ -221,51 +242,134 @@ def main():
         step = 50
 
         path = path[::step]
+        num_steps = len(path)
 
-        cmap_1 = cm.get_cmap("cool", len(path))
-        cmap_2 = cm.get_cmap("summer", len(path))
+        cmap_1 = cm.get_cmap("cool", num_steps)
+        cmap_2 = cm.get_cmap("summer", num_steps)
+        cmap_3 = cm.get_cmap("plasma", num_steps)
+        cmap_4 = cm.get_cmap("viridis", num_steps)
+        cmap_5 = cm.get_cmap("cividis", num_steps)
+
+        cmap_list = [cmap_1, cmap_2, cmap_3, cmap_4, cmap_5]
         norm = mcolors.Normalize(vmin=0, vmax=len(path) - 1)
-
-        for i in range(2):
+        available_shapes = ["rectangle", "circle", "triangle", "diamond", "hexagon"]
+        for i in range(len(env.robots)):
             x_vals = [pt.q[i][0] for pt in path]
             y_vals = [pt.q[i][1] for pt in path]
             theta_vals = [pt.q[i][2] for pt in path]
-            
-            if i == 0:
-                shape = "rectangle"
-            else:
-                shape = "circle"
-            
-            for t, (x, y, theta) in enumerate(zip(x_vals, y_vals, theta_vals)):
-              if shape == "rectangle":
-                  color = cmap_1(norm(t))
-                  # Simplified rectangle plotting
-                  width, height = 0.09, 0.49
-                  # Create rectangle at origin
-                  rect = patches.Rectangle(
-                      (-width/2, -height/2),  # Center the rectangle
-                      width, height,
-                      angle=np.degrees(theta),
-                      rotation_point='center',
-                      edgecolor=color,
-                      facecolor='none',
-                      linewidth=2
-                  )
-                  # Move rectangle to the right position
-                  transform = plt.matplotlib.transforms.Affine2D().translate(x, y)
-                  rect.set_transform(transform + ax.transData)
-                  ax.add_patch(rect)
+            shape = available_shapes[i]
+            color_map = cmap_list[i]
 
-              else:
-                  color = cmap_2(norm(t))
-                  circle = patches.Circle((x, y), 0.15, edgecolor=color, facecolor='none',linewidth=2)
-                  ax.add_patch(circle)
+            for t, (x, y, theta) in enumerate(zip(x_vals, y_vals, theta_vals)):
+                if shape == "rectangle":
+                    color = color_map(norm(t))
+                    # Simplified rectangle plotting
+                    width, height = 0.09, 0.49
+                    # Create rectangle at origin
+                    rect = patches.Rectangle(
+                        (-width/2, -height/2),  # Center the rectangle
+                        width, height,
+                        angle=np.degrees(theta),
+                        rotation_point='center',
+                        edgecolor=color,
+                        facecolor='none',
+                        linewidth=2
+                    )
+                    # Move rectangle to the right position
+                    transform = plt.matplotlib.transforms.Affine2D().translate(x, y)
+                    rect.set_transform(transform + ax.transData)
+                    ax.add_patch(rect)
+                elif shape == "triangle":
+                    color = color_map(norm(t))
+                    size = 0.15  # side length of the equilateral triangle
+
+                    # Height of an equilateral triangle with side length `size`
+                    height = np.sqrt(3) / 2 * size
+
+                    # Define triangle vertices (centered at origin, pointing "up")
+                    triangle_pts = np.array([
+                        [0, 2/3 * height],               # Top vertex
+                        [-size / 2, -1/3 * height],      # Bottom left
+                        [size / 2, -1/3 * height]        # Bottom right
+                    ])
+
+                    # Create rotation matrix
+                    c, s = np.cos(theta), np.sin(theta)
+                    rotation_matrix = np.array([[c, -s], [s, c]])
+
+                    # Rotate and translate triangle
+                    rotated_pts = triangle_pts @ rotation_matrix.T + np.array([x, y])
+
+                    # Draw triangle
+                    triangle = patches.Polygon(
+                        rotated_pts,
+                        edgecolor=color,
+                        facecolor='none',
+                        linewidth=2
+                    )
+                    ax.add_patch(triangle)
+                elif shape == "diamond":
+                    color = color_map(norm(t))
+                    width, height = 0.09, 0.2  # Match rectangle footprint
+
+                    diamond_pts = np.array([
+                        [0, height / 2],             # Top
+                        [width / 2, 0],              # Right
+                        [0, -height / 2],            # Bottom
+                        [-width / 2, 0],             # Left
+                    ])
+
+                    rot = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+                    rotated = diamond_pts @ rot.T + np.array([x, y])
+
+                    diamond = patches.Polygon(
+                        rotated,
+                        edgecolor=color,
+                        facecolor='none',
+                        linewidth=2
+                    )
+                    ax.add_patch(diamond)
+                elif shape == "hexagon":
+                    color = color_map(norm(t))
+                    radius = 0.1  # Approximate radius to visually match the rectangle
+
+                    hexagon_pts = []
+                    for i in range(6):
+                        angle = np.pi / 3 * i
+                        px = radius * np.cos(angle)
+                        py = radius * np.sin(angle)
+                        hexagon_pts.append([px, py])
+                    hexagon_pts = np.array(hexagon_pts)
+
+                    rot = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+                    rotated = hexagon_pts @ rot.T + np.array([x, y])
+
+                    hexagon = patches.Polygon(
+                        rotated,
+                        edgecolor=color,
+                        facecolor='none',
+                        linewidth=2
+                    )
+                    ax.add_patch(hexagon)
+                else:
+                    color = color_map(norm(t))
+                    circle = patches.Circle((x, y), 0.15, edgecolor=color, facecolor='none',linewidth=2)
+                    ax.add_patch(circle)
                 
 
         # plt.show(block=False)
 
         # make_mode_plot(path, env)
-        plt.show()
+        dir_out = os.path.join(Path(args.path_filename).parent.parent, 'ColoredPath')
+        os.makedirs(dir_out, exist_ok=True)
+        next_file_number = max(
+            (int(file.split('.')[0]) for file in os.listdir(dir_out)
+            if file.endswith('.png') and file.split('.')[0].isdigit()),
+            default=-1
+        ) + 1
+        output_path = os.path.join(dir_out, f"{next_file_number:04d}.png")
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
 
     if args.insert_transition_nodes:
         path_w_doubled_modes = []
