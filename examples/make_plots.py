@@ -119,21 +119,16 @@ def load_config_from_folder(filepath: str) -> Dict:
 
 report_colors = {
     "rrt":            (11 / 255.0, 111 / 255.0, 60 / 255.0),
-    "faded rrt":      (124 / 255.0, 235 / 255.0, 125 / 255.0),
-    "faded1 rrt":     (79 / 255.0, 228 / 255.0, 81 / 255.0),
+    "changed rrt":     (79 / 255.0, 228 / 255.0, 81 / 255.0),
     "rheit":          (0.537, 0.0, 0.267),  # RGB already in float
     "eit":            (251 / 255.0, 0 / 255.0, 91 / 255.0),
-    "faded eit":      (249 / 255.0, 100 / 255.0, 255 / 255.0),
-    "faded1 eit":     (249 / 255.0, 100 / 255.0, 255 / 255.0),
+    "changed eit":     (249 / 255.0, 100 / 255.0, 255 / 255.0),
     "rhait":          (132 / 255.0, 0 / 255.0, 255 / 255.0),
     "ait":            (19 / 255.0, 0 / 255.0, 206 / 255.0),
-    "faded ait":      (51 / 255.0, 158 / 255.0, 241 / 255.0),
-    "faded1 ait":     (51 / 255.0, 158 / 255.0, 241 / 255.0),
+    "changed ait":     (51 / 255.0, 158 / 255.0, 241 / 255.0),
     "prm":            (242 / 255.0, 82 / 255.0, 0 / 255.0),
-    "faded prm":      (255 / 255.0, 172 / 255.0, 4 / 255.0),
-    "faded1 prm":     (255 / 255.0, 172 / 255.0, 4 / 255.0),
-    "faded birrt":    (227 / 255.0, 226 / 255.0, 228 / 255.0),
-    "faded1 birrt":   (158 / 255.0, 154 / 255.0, 161 / 255.0),
+    "changed prm":     (255 / 255.0, 172 / 255.0, 4 / 255.0),
+    "changed birrt":   (158 / 255.0, 154 / 255.0, 161 / 255.0),
 }
 # TODO: move this to config? Add some default behaviour
 planner_name_to_color = {
@@ -194,19 +189,19 @@ planner_name_to_color = {
     "long_horizon aitstar": report_colors["ait"],
     "aitstar": report_colors["ait"],
     "locally_informed_prm_shortcutting": report_colors["prm"],
-    "eitstar same": report_colors["faded1 eit"],
-    "aitstar same": report_colors["faded1 ait"],
-    "locally_informed_prm_shortcutting same": report_colors["faded1 prm"],
-    "eitstar uniform": report_colors["faded1 eit"],
-    "aitstar uniform": report_colors["faded1 ait"],
-    "locally_informed_prm_shortcutting uniform": report_colors["faded1 prm"],
-    "rrtstar uniform": report_colors["faded1 rrt"],
-    "birrtstar uniform": report_colors["faded1 birrt"],
-    "eitstar without": report_colors["faded1 eit"],
-    "aitstar without": report_colors["faded1 ait"],
-    "locally_informed_prm_shortcutting without": report_colors["faded1 prm"],
-    "rrtstar without": report_colors["faded1 rrt"],
-    "birrtstar without": report_colors["faded1 birrt"],
+    "eitstar same": report_colors["changed eit"],
+    "aitstar same": report_colors["changed ait"],
+    "locally_informed_prm_shortcutting same": report_colors["changed prm"],
+    "eitstar uniform": report_colors["changed eit"],
+    "aitstar uniform": report_colors["changed ait"],
+    "locally_informed_prm_shortcutting uniform": report_colors["changed prm"],
+    "rrtstar uniform": report_colors["changed rrt"],
+    "birrtstar uniform": report_colors["changed birrt"],
+    "eitstar without": report_colors["changed eit"],
+    "aitstar without": report_colors["changed ait"],
+    "locally_informed_prm_shortcutting without": report_colors["changed prm"],
+    "rrtstar without": report_colors["changed rrt"],
+    "birrtstar without": report_colors["changed birrt"],
 
 
     
@@ -226,7 +221,12 @@ planner_name_to_style = {
     "aitstar uniform": "--",
     "locally_informed_prm_shortcutting uniform":"--",
     "rrtstar uniform": "--",
-    "birrtstar uniform":"--"
+    "birrtstar uniform":"--",
+    "eitstar without": "--",
+    "aitstar without": "--",
+    "locally_informed_prm_shortcutting without":"--",
+    "rrtstar without": "--",
+    "birrtstar without":"--"
 }
 
 
@@ -538,12 +538,16 @@ def make_success_plot(
         else:
             color = np.random.rand(3,)
 
+        ls = '-'
+        if planner_name in planner_name_to_style:
+            ls = planner_name_to_style[planner_name]
         plt.semilogx(
             interpolated_solution_times,
             percentage_solution_found,
             color=color,
             label=planner_name,
             drawstyle="steps-post",
+            ls = ls
         )
 
     plt.xlim(
@@ -562,6 +566,9 @@ def make_success_plot(
         else:
 
             plt.legend()
+    plt.grid(which="both", axis="both", ls="--")  
+    plt.ylabel(f"Success [%]")
+    plt.xlabel("Computation Time [s]")
 
     if save:
         if foldername is None:
