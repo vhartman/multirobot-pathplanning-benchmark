@@ -1,4 +1,3 @@
-
 base_link: { multibody:true}
 base_link_0(base_link): { shape: mesh, mesh: <ur_description/meshes/ur10/visual/Base.ply>, visual: True }
 shoulder_pan_joint_origin(base_link): { rel: [0, 0, 0.1273, 1, 0, 0, 0] }
