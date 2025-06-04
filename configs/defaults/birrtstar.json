@@ -19,6 +19,7 @@
     "apply_long_horizon":false,
     "horizon_length": 1,
     "with_noise": false,
-    "with_mode_validation": true
+    "with_mode_validation": true,
+    "with_tree_visualization": false
     }
 }
