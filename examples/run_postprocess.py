@@ -70,9 +70,9 @@ def path_as_png(
 def path_vis(env: BaseProblem, dir:str, path: List[State], framerate:int = 1, generate_png:bool = True, path_original:bool = False):
     if generate_png:
             if path_original:
-                interpolated_path = interpolate_path(path, resolution=None)
+                interpolated_path = path
             else:
-                interpolated_path = interpolate_path(path)  
+                interpolated_path = interpolate_path(path, resolution=0.25)  
             path_as_png(env, interpolated_path, export = True, dir =  dir, framerate = framerate)
     # Generate a gif
     palette_file = os.path.join(dir, 'palette.png')
@@ -179,7 +179,7 @@ def single_path_html(env, env_path, path, output_html):
                 mode="lines+markers",
                 line=dict(color=colors[len(modes)+robot_idx], width=6),
                 marker=dict(
-                    size=3,  # Very small markers
+                    size=5,  # Very small markers
                     color=colors[len(modes)+robot_idx],  # Match marker color with line
                     opacity=1
                 ),
@@ -277,7 +277,7 @@ def single_path_html(env, env_path, path, output_html):
     fig.write_html(output_html)
     print(f"Animation saved to {output_html}")
 
-def path_evolution_html(env, env_path, dir_run, output_html):
+def path_evolution_html(env, env_path, dir_run, output_html, args):
     
     # Print the parsed task sequence
     try:
@@ -323,6 +323,9 @@ def path_evolution_html(env, env_path, dir_run, output_html):
     for dir_path_json in sorted_files:
         path_data = load_path(dir_path_json)
         path = convert_to_path(env, path_data)
+        if args.insert_transition_nodes:
+            # Add transition nodes to the path
+            path = add_transition_nodes(path)
         paths.append(path)
         for s in path:
             mode = s.mode
@@ -469,6 +472,18 @@ def path_evolution_html(env, env_path, dir_run, output_html):
     fig.write_html(output_html)
     print(f"Animation saved to {output_html}")
 
+def add_transition_nodes(path: List[State]) -> List[State]:
+    """
+    Adds transition nodes to the path.
+    """
+    path_w_doubled_modes = []
+    for i in range(len(path)):
+        path_w_doubled_modes.append(path[i])
+
+        if i + 1 < len(path) and path[i].mode != path[i + 1].mode:
+            path_w_doubled_modes.append(State(path[i].q, path[i + 1].mode))
+
+    return path_w_doubled_modes
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
@@ -481,18 +496,27 @@ if __name__ == "__main__":
         "path",
         help="Select path to be processed",
     )
+    parser.add_argument(
+        "--insert_transition_nodes",
+        action="store_true",
+        help="Shortcut the path. (default: False)",
+    )
+
    
     args = parser.parse_args()
     if args.path.endswith('.json'):
         assert args.do == "single_path_html" or args.do == "single_path", "Please give a json file for single path"
         dir_path_json = args.path
-        dir = '/'.join(dir_path_json.split('/')[:6]) 
+        dir = '/'.join(dir_path_json.split('/')[:-3]) 
+        
+        print("-----------------------------------------------------------------")
+        print(dir)
         run = re.search(r'/(\d+)(?=/)', dir_path_json).group(1)
         dir_run = os.path.join(dir, run)
     elif re.search(r"/\d$", args.path): 
         assert args.do == "path_evolution_html", "Please give a folder for path evolution"
         dir_run = args.path
-        dir = '/'.join(dir_run.split('/')[:6]) 
+        dir = '/'.join(dir_run.split('/')[:-2]) 
         run = os.path.basename(dir_run)
         dir_path_json = None
     elif args.path is not None:
@@ -536,6 +560,9 @@ if __name__ == "__main__":
                 dir_path_json = os.path.join(dir_run, sorted(os.listdir(dir_run))[-1])
                 path_data = load_path(dir_path_json)
                 path = convert_to_path(env, path_data)
+                if args.insert_transition_nodes:
+                    # Add transition nodes to the path
+                    path = add_transition_nodes(path)
                 dir_out_run = os.path.join(dir_out, str(run))
                 os.makedirs(dir_out_run, exist_ok=True)
                 path_vis(env, dir_out_run +"/", path, framerate=framerate, generate_png = generate_png, path_original= path_original)
@@ -545,20 +572,26 @@ if __name__ == "__main__":
         #path_filename needs to be specified
         path_original = False
         generate_png = True
-        framerate = 63
+        framerate = 15
         if path_original:
             folder_name = "PathOriginal"
         else:
             folder_name = "Path"
         try: 
-            planner_name = re.match(r'.*/out/[^/]+/([^/]+)(?:/|$)', dir_path_json).group(1)
+            # planner_name = re.match(r'.*/out/[^/]+/([^/]+)(?:/|$)', dir_path_json).group(1)
+            planner_name = ''.join(dir_path_json.split('/')[-3:-2]) 
+            print(planner_name)
         except Exception:
             print("Please give dir to json file")
         dir_planner = os.path.join(dir, planner_name)
         dir_out = os.path.join(dir_planner, folder_name)
+        print(dir_out)
         os.makedirs(dir_out, exist_ok=True)
         path_data = load_path(dir_path_json)
         path = convert_to_path(env, path_data)
+        if args.insert_transition_nodes:
+            # Add transition nodes to the path
+            path = add_transition_nodes(path)
         run = re.search(r'/(\d+)(?=/)', dir_path_json).group(1)
         dir_out_run = os.path.join(dir_out, run)
         os.makedirs(dir_out_run, exist_ok=True)
@@ -573,6 +606,9 @@ if __name__ == "__main__":
         dir_planner = os.path.join(dir, planner_name)
         path_data = load_path(dir_path_json)
         path = convert_to_path(env, path_data)
+        if args.insert_transition_nodes:
+            # Add transition nodes to the path
+            path = add_transition_nodes(path)
         file_name = os.path.basename(dir_path_json)
         modified_file_name = file_name.replace('.', '_')
         output_html = os.path.join(dir_planner, f'run_{run}_{modified_file_name}.html')
@@ -583,5 +619,5 @@ if __name__ == "__main__":
         planner_name = os.path.basename('/'.join(dir_run.split('/')[:7])) 
         dir_planner = os.path.join(dir, planner_name)
         output_html = os.path.join(dir_planner, f'run_{run}_path_evolution.html')
-        path_evolution_html(env, env_path, dir_run, output_html)    
+        path_evolution_html(env, env_path, dir_run, output_html, args)    
         webbrowser.open('file://' + os.path.realpath(output_html))
