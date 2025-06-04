@@ -1372,7 +1372,7 @@ class DependencyType(Enum):
     UNASSIGNED = "unassigned"
 
 
-@dataclass(frozen=True)
+@dataclass
 class ProblemSpec:
     def __init__(
         self,
@@ -1684,8 +1684,8 @@ class BaseProblem(ABC):
     @abstractmethod
     def batch_config_cost(
         self,
-        starts: List[Configuration],
-        ends: List[Configuration],
+        starts: List[Configuration] | Configuration,
+        ends: List[Configuration] | NDArray,
     ) -> List[float]:
         pass
 

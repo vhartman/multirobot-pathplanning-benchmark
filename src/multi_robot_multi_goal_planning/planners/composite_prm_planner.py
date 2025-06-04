@@ -60,7 +60,7 @@ class Node:
     lb_cost_to_goal: Optional[float]
     lb_cost_from_start: Optional[float]
     is_transition: bool
-    neighbors: List[int]
+    neighbors: List["Node"]
     whitelist: Set[int]
     blacklist: Set[int]
     id: int
@@ -178,7 +178,7 @@ class EfficientEdgeQueue:
         # Min-heap of (cost, edge_cost, (node1, node2))
         self.heap = []
         # Dictionary mapping node2 to a set of edges for quick removal
-        self.edges_by_node = defaultdict(set)
+        self.edges_by_node = collections.defaultdict(set)
 
     def heappush(self, item):
         """Add a new edge to the queue."""
@@ -308,7 +308,7 @@ class DictIndexHeap:
 
     #     heapq.heapify(self.queue)
 
-    def heappush(self, item: Tuple[float, Any]) -> None:
+    def heappush(self, item: Tuple[float, Any, Any]) -> None:
         """Push a single item into the heap."""
         # idx = len(self.items)
         self.items[DictIndexHeap.idx] = item  # Store only valid items
@@ -481,7 +481,7 @@ class DiscreteBucketIndexHeap:
 
 
 class MultimodalGraph:
-    root: State
+    root: Node
     nodes: Dict
 
     # batch_dist_fun
@@ -719,7 +719,7 @@ class MultimodalGraph:
         for n in nodes:
             self.add_node(n)
 
-    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, List[Mode]]):
+    def add_transition_nodes(self, transitions: List[Tuple[Configuration, Mode, List[Mode]]]):
         self.transition_node_array_cache = {}
         self.reverse_transition_node_array_cache = {}
 
@@ -815,7 +815,7 @@ class MultimodalGraph:
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_neighbors(
-        self, node: Node, space_extent: float = None
+        self, node: Node, space_extent: Optional[float] = None
     ) -> Tuple[List[Node], NDArray]:
         key = node.state.mode
         if key in self.nodes:
@@ -972,7 +972,7 @@ class MultimodalGraph:
         env: BaseProblem,
         best_cost: Optional[float] = None,
         resolution: float = 0.1,
-        approximate_space_extent: float = None,
+        approximate_space_extent: float | None = None,
     ) -> List[Node]:
         if approximate_space_extent is None:
             approximate_space_extent = np.prod(np.diff(env.limits, axis=0))
@@ -1254,7 +1254,7 @@ class MultimodalGraph:
         env: BaseProblem,
         best_cost: Optional[float] = None,
         resolution: float = 0.1,
-        approximate_space_extent: float = None,
+        approximate_space_extent: float | None = None,
     ) -> List[Node]:
         open_queue = []
 
