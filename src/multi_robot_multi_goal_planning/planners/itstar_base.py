@@ -36,8 +36,10 @@ from multi_robot_multi_goal_planning.planners import shortcutting
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.rrtstar_base import find_nearest_indices
-from multi_robot_multi_goal_planning.planners.rrtstar_base_old import save_data
+from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+    find_nearest_indices,
+    save_data
+    )
 # from multi_robot_multi_goal_planning.planners.sampling_phs import (
 #     sample_phs_with_given_matrices, compute_PHS_matrices
 # )

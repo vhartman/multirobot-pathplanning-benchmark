@@ -214,6 +214,7 @@ def setup_planner(
                 horizon_length = options["horizon_length"],
                 with_mode_validation = options["with_mode_validation"],
                 with_noise=options["with_noise"],
+                with_tree_visualization = options["with_tree_visualization"],
             ).Plan(optimize)
     elif planner_config["type"] == "birrtstar":
 
@@ -241,6 +242,7 @@ def setup_planner(
                 horizon_length = options["horizon_length"],
                 with_mode_validation = options["with_mode_validation"],
                 with_noise=options["with_noise"],
+                with_tree_visualization = options["with_tree_visualization"],
                 
             ).Plan(optimize)
     elif planner_config["type"] == "drrtstar":
