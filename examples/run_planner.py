@@ -20,7 +20,10 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
     prioritized_planning,
 )
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import composite_prm_planner
+from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
+    CompositePRMConfig,
+    CompositePRM,
+)
 from multi_robot_multi_goal_planning.planners.shortcutting import (
     single_mode_shortcut,
     robot_mode_shortcut,
@@ -138,18 +141,21 @@ def main():
         termination_condition = RuntimeTerminationCondition(args.max_time)
 
     if args.planner == "joint_prm":
-        path, info = composite_prm_planner(
-            env,
-            ptc=termination_condition,
-            optimize=args.optimize,
-            mode_sampling_type=None,
-            distance_metric=args.distance_metric,
-            try_sampling_around_path=args.prm_sample_near_path,
-            use_k_nearest=args.prm_k_nearest,
-            try_informed_sampling=args.prm_informed_sampling,
-            try_shortcutting=args.prm_shortcutting,
-            try_direct_informed_sampling=args.prm_direct_sampling,
-            locally_informed_sampling=args.prm_locally_informed_sampling,
+        config = CompositePRMConfig()
+
+        config.mode_sampling_type = None
+        config.distance_metric = args.distance_metric
+        config.try_sampling_around_path = args.prm_sample_near_path
+        config.use_k_nearest = args.prm_k_nearest
+        config.try_informed_sampling = args.prm_informed_sampling
+        config.try_shortcutting = args.prm_shortcutting
+        config.try_direct_informed_sampling = args.prm_direct_sampling
+        config.locally_informed_sampling = args.prm_locally_informed_sampling
+
+        planner = CompositePRM(env, config)
+
+        path, info = planner.plan(
+            ptc=termination_condition, optimize=args.optimize
         )
 
         if args.save:

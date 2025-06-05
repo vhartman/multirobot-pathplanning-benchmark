@@ -32,7 +32,10 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
     prioritized_planning,
 )
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import composite_prm_planner
+from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
+    CompositePRM,
+    CompositePRMConfig,
+)
 from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
     tensor_prm_planner,
 )
@@ -162,10 +165,8 @@ def setup_planner(
 
         def planner(env):
             options = planner_config["options"]
-            return composite_prm_planner(
-                env,
-                ptc=RuntimeTerminationCondition(runtime),
-                optimize=optimize,
+            prm_config = CompositePRMConfig(
+                # Map dictionary keys to dataclass attributes
                 distance_metric=options["distance_function"],
                 try_sampling_around_path=options["sample_near_path"],
                 use_k_nearest=options["connection_strategy"] == "k_nearest",
@@ -181,14 +182,15 @@ def setup_planner(
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
-                inlcude_lb_in_informed_sampling = options["inlcude_lb_in_informed_sampling"],
-                init_mode_sampling_type = options["init_mode_sampling_type"],
-                frontier_mode_sampling_probability = options["frontier_mode_sampling_probability"],
-                init_uniform_batch_size = options["init_uniform_batch_size"],
-                init_transition_batch_size = options["init_transition_batch_size"],
-                with_mode_validation = options["with_mode_validation"],
-                with_noise=options["with_noise"],
+                # Corrected spelling here as well:
+                inlcude_lb_in_informed_sampling=options[
+                    "inlcude_lb_in_informed_sampling"
+                ],
+            )
 
+            return CompositePRM(env, config=prm_config).plan(
+                ptc=RuntimeTerminationCondition(runtime),
+                optimize=optimize,
             )
     elif planner_config["type"] == "rrtstar":
 
@@ -206,8 +208,8 @@ def setup_planner(
                 p_uniform=options["p_uniform"],
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
-                locally_informed_sampling = options["locally_informed_sampling"],
-                informed_batch_size = options["informed_batch_size"],
+                locally_informed_sampling=options["locally_informed_sampling"],
+                informed_batch_size=options["informed_batch_size"],
                 sample_near_path=options["sample_near_path"],
                 remove_redundant_nodes = options["remove_redundant_nodes"],
                 apply_long_horizon=options["apply_long_horizon"],
@@ -232,7 +234,7 @@ def setup_planner(
                 p_uniform=options["p_uniform"],
                 shortcutting=options["shortcutting"],
                 mode_sampling=options["mode_sampling"],
-                locally_informed_sampling = options["locally_informed_sampling"],
+                locally_informed_sampling=options["locally_informed_sampling"],
                 sample_near_path=options["sample_near_path"],
                 transition_nodes=options["transition_nodes"],
                 birrtstar_version=options["birrtstar_version"], 
@@ -427,7 +429,7 @@ def run_experiment(
 
                     if isinstance(env, rai_env):
                         del env_copy.C
-                        
+
                     del planner
                     gc.collect()
 
