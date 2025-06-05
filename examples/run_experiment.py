@@ -186,6 +186,12 @@ def setup_planner(
                 inlcude_lb_in_informed_sampling=options[
                     "inlcude_lb_in_informed_sampling"
                 ],
+                init_mode_sampling_type=options["init_mode_sampling_type"],
+                frontier_mode_sampling_probability=options["frontier_mode_sampling_probability"],
+                init_uniform_batch_size=options["init_uniform_batch_size"],
+                init_transition_batch_size=options["init_transition_batch_size"],
+                with_mode_validation=options["with_mode_validation"],
+                with_noise=options["with_noise"],
             )
 
             return CompositePRM(env, config=prm_config).plan(
