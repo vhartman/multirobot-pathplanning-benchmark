@@ -5,8 +5,9 @@ import random
 import copy
 
 from abc import ABC, abstractmethod
+from enum import Enum
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.configuration import (
@@ -21,6 +22,8 @@ from functools import cache
 from collections import deque
 
 from itertools import product
+
+from dataclasses import dataclass
 
 
 @cache
@@ -403,9 +406,9 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                     if not task_requirements_fulfilled:
                         # print(f"dependency unfulfilled for task {t}")
                         continue
-                        
+
                     feasible_tasks_per_robot[i].append(t)
-            
+
             next_states = [
                 list(combo)
                 for combo in product(*feasible_tasks_per_robot)
@@ -634,7 +637,6 @@ class FreeMixin(BaseModeLogic):
             while pm:
                 task_ids = pm.task_ids
                 for i, task_id in enumerate(task_ids):
-
                     for j in range(len(self.task_groups)):
                         if task_id in [id for _, id in self.task_groups[j]]:
                             finished_task_groups.append(j)
@@ -775,7 +777,14 @@ class FreeMixin(BaseModeLogic):
                     continue
                 # Check if there are any remaining dependencies for this task
                 if [new_state[i]] in self.task_dependencies.values():
-                    if next(k for k, v in self.task_dependencies.items() if v == [new_state[i]]) not in finished_tasks:
+                    if (
+                        next(
+                            k
+                            for k, v in self.task_dependencies.items()
+                            if v == [new_state[i]]
+                        )
+                        not in finished_tasks
+                    ):
                         continue
                 new_state[i] = self.terminal_task
 
@@ -1340,6 +1349,47 @@ class DependencyGraphMixin(BaseModeLogic):
             assert len(different_tasks) == 1
 
             return self.tasks[different_tasks[0]]
+
+
+class AgentType(Enum):
+    SINGLE_AGENT = "single_agent"
+    MULTI_AGENT = "multi_agent"
+
+
+class ConstraintType(Enum):
+    UNCONSTRAINED = "unconstrained"
+    CONSTRAINED = "constrained"
+
+
+class ManipulationType(Enum):
+    STATIC = "static"
+    MANIPULATION = "manipulation"
+
+
+class DependencyType(Enum):
+    FULLY_ORDERED = "fully_ordered"
+    UNORDERED = "unordered"
+    UNASSIGNED = "unassigned"
+
+
+@dataclass(frozen=True)
+class ProblemSpec:
+    def __init__(
+        self,
+        agent_type: AgentType,
+        constraints: ConstraintType,  # Note: can us a set for multiple constraints
+        manipulation: ManipulationType,
+    ):
+        self.agent_type = agent_type
+        self.constraints = constraints
+        self.manipulation = manipulation
+
+    def __repr__(self):
+        return (
+            f"ProblemSpec(Agent: {self.agent_type.value}, "
+            f"Constraints: {self.constraints.value}, "
+            f"Env: {self.manipulation.value}, "
+        )
 
 
 # TODO: split into env + problem specification
