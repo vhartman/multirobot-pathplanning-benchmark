@@ -35,6 +35,7 @@ from multi_robot_multi_goal_planning.planners.planner_aitstar import EdgeQueue
 # needed adaption to work.
 
 class InadmissibleHeuristics():
+    """Stores and updates inadmissible heuristic estimates used during reverse search."""
     __slots__ = [
         "lb_cost_to_go",
         "effort",    
@@ -47,17 +48,46 @@ class InadmissibleHeuristics():
         self.lb_cost_to_go = np.inf
         self.effort = np.inf
 
-    def update(self, pot_parent:"Node", edge_cost:float, edge_effort:float):
+    def update(self, pot_parent:"Node", edge_cost:float, edge_effort:float) -> None:
+        """
+        Updates inadmissible heuristic values using a potential parent node and associated edge cost and effort.
+
+        Args:
+            pot_parent (Node): The potential parent node from which the update is derived.
+            edge_cost (float): The cost associated with the edge to the current node.
+            edge_effort (float): The effort associated with the edge to the current node.
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.lb_cost_to_go = min(self.lb_cost_to_go, pot_parent.inad.lb_cost_to_go + edge_cost)
         new_effort = pot_parent.inad.effort + edge_effort
         if new_effort < self.effort:
             self.effort = new_effort
 
-    def reset_goal_nodes(self):
-       self.lb_cost_to_go = 0.0
-       self.effort = 0.0
-    
-    def reset(self):
+    def reset_goal_nodes(self) -> None:
+        """
+        Resets the heuristic values for goal nodes to zero.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
+        self.lb_cost_to_go = 0.0
+        self.effort = 0.0
+
+    def reset(self) -> None:
+        """
+        Resets the heuristic values to infinity.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.lb_cost_to_go = np.inf
         self.effort = np.inf
 
@@ -82,7 +112,8 @@ class Graph(BaseGraph):
         self.cost_bound_queue = None
         self.epsilon = np.inf
 
-    def reset_reverse_tree(self):
+    def reset_reverse_tree(self) -> None:
+
         [
             (
                 setattr(self.nodes[node_id], "lb_cost_to_go", math.inf),
@@ -108,7 +139,17 @@ class Graph(BaseGraph):
               for node_id in list(chain.from_iterable(self.reverse_transition_node_ids.values()))
         ]
 
-    def reset_all_goal_nodes_lb_costs_to_go(self):
+    def reset_all_goal_nodes_lb_costs_to_go(self) -> None:
+        """
+        Sets the lower bound cost-to-go of all goal nodes (and virtual goal nodes, if present) to zero,
+        resets their reverse cost-to-parent, and resets their inadmissible heuristic attributes.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         for node in self.goal_nodes:
             node.lb_cost_to_go = 0
             node.rev.cost_to_parent = 0
@@ -120,13 +161,13 @@ class Graph(BaseGraph):
                 node.rev.cost_to_parent = 0
                 node.inad.reset_goal_nodes()
 
-    def update_forward_queue(self, edge_cost, edge, edge_effort):
+    def update_forward_queue(self, edge_cost:float, edge:Tuple["Node", "Node"], edge_effort:float) -> None:
         item = (edge_cost, edge, edge_effort)
         self.effort_estimate_queue.heappush(item)
         self.cost_bound_queue.heappush(item)
         # self.g.cost_estimate_queue.heappush((edge_cost, edge)) 
 
-    def update_forward_queue_keys(self, type:str, node_ids:Optional[Set[BaseNode]] = None):
+    def update_forward_queue_keys(self, type:str, node_ids:Optional[Set["Node"]] = None) -> None:
         if node_ids is not None and len(node_ids) == 0:
             return
         # if node_ids is not None:
@@ -135,13 +176,13 @@ class Graph(BaseGraph):
         self.cost_bound_queue.update(node_ids, type)
         if type == 'target':
             self.effort_estimate_queue.update(node_ids, type)
-    
-    def update_reverse_queue_keys(self, type:str, node_ids:Optional[Set[BaseNode]] = None):
+
+    def update_reverse_queue_keys(self, type:str, node_ids:Optional[Set["Node"]] = None) -> None:
         if node_ids is not None and len(node_ids) == 0:
             return
         self.reverse_queue.update(node_ids, type)
 
-    def remove_forward_queue(self, edge_cost, n0, n1, edge_effort):
+    def remove_forward_queue(self, edge_cost:float, n0:"Node", n1:"Node", edge_effort:float) -> None:
         item1 = (edge_cost, (n1, n0), edge_effort)
         item2 = (edge_cost, (n0, n1), edge_effort)
         self.cost_bound_queue.remove(item1) 
@@ -170,13 +211,11 @@ class Graph(BaseGraph):
 
         return item
 
-class Operation(BaseOperation):
-    """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
-    
+class Operation(BaseOperation):   
     def __init__(self) -> None:
         super().__init__()
 
-    def update(self, node:"Node", lb_cost_to_go:float = np.inf, cost:float = np.inf, lb_cost_to_come:float = np.inf):
+    def update(self, node:"Node", lb_cost_to_go:float = np.inf, cost:float = np.inf, lb_cost_to_come:float = np.inf) -> None:
         node.lb_cost_to_go = lb_cost_to_go
         self.lb_costs_to_come = self.ensure_capacity(self.lb_costs_to_come, node.id) 
         node.lb_cost_to_come = lb_cost_to_come
@@ -197,11 +236,11 @@ class Node(BaseNode):
         self.inad = InadmissibleHeuristics()
         self.lb_effort_to_come = np.inf
     
-    def close(self, resolution):
+    def close(self, resolution: Optional[float] = None) -> None:
         self.inad.lb_cost_to_go = self.lb_cost_to_go
         self.inad.effort = self.rev.parent.inad.effort +  self.rev.cost_to_parent/resolution
 
-    def set_to_goal_node(self):
+    def set_to_goal_node(self) -> None:
         self.lb_cost_to_go = 0.0
         self.inad.reset_goal_nodes()
     
@@ -209,7 +248,7 @@ class ReverseQueue(EdgeQueue):
     def __init__(self, alpha =1.0, collision_resolution: Optional[float] = None):
         super().__init__(alpha, collision_resolution)
     
-    def key(self, item: Tuple[Any]) -> float:
+    def key(self, item: Tuple[Any]) -> Tuple[float, float]:
         # item[0]: edge_cost from n0 to n1
         # item[1]: edge (n0, n1)
         # item[2]: edge effort from n0, n1
@@ -229,13 +268,13 @@ class EffortEstimateQueue(EdgeQueue):
         #item[2]: edge effort from n0, n1
         return item[1][1].inad.effort + item[2]
     
-    def add_and_sync(self, item):
+    def add_and_sync(self, item: Tuple[Any]) -> None:
         target_node_id = item[1][1].id
 
         self.target_nodes.add(target_node_id)
         self.target_nodes_with_item.setdefault(target_node_id, set()).add(item)
-    
-    def remove(self, item, in_current_entries:bool = False):
+
+    def remove(self, item: Tuple[Any], in_current_entries: bool = False) -> None:
         if not in_current_entries and item not in self.current_entries:
            return
         target_node_id = item[1][1].id
@@ -244,8 +283,6 @@ class EffortEstimateQueue(EdgeQueue):
 
         if not self.target_nodes_with_item[target_node_id]:
             self.target_nodes.discard(target_node_id)
-
-    
 class CostBoundQueue(EdgeQueue):
     def key(self, item: Tuple[Any]) -> float:
         # item[0]: edge_cost from n0 to n1
@@ -265,10 +302,9 @@ class CostBoundQueue(EdgeQueue):
     
 #     def
 
-
-
 class EITstar(BaseITstar):
-    
+    """Represents the class for the EIT* based planner"""
+
     def __init__(
         self,
         env: BaseProblem,
@@ -323,21 +359,21 @@ class EITstar(BaseITstar):
 
     def _create_operation(self) -> BaseOperation:
         return Operation()
-    
-    def _create_graph(self, root_state) -> BaseGraph:
+
+    def _create_graph(self, root_state: State) -> BaseGraph:
         return Graph(
             root_state=root_state,
             operation=self.operation,
-            distance_metric = self.distance_metric,
+            distance_metric=self.distance_metric,
             batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.distance_metric),
-            batch_cost_fun= lambda a, b: self.env.batch_config_cost(a, b),
-            is_edge_collision_free = self.env.is_edge_collision_free,
-            get_next_modes = self.env.get_next_modes,
-            collision_resolution = self.env.collision_resolution,
+            batch_cost_fun=lambda a, b: self.env.batch_config_cost(a, b),
+            is_edge_collision_free=self.env.is_edge_collision_free,
+            get_next_modes=self.env.get_next_modes,
+            collision_resolution=self.env.collision_resolution,
             node_cls=Node
             )
-           
-    def continue_reverse_search(self, iter) -> bool:
+
+    def continue_reverse_search(self, iter: int) -> bool:
         if len(self.g.reverse_queue) == 0 or len(self.g.cost_bound_queue) == 0:
             return False
         if iter > 0 and not self.updated_target_nodes:
@@ -356,11 +392,21 @@ class EITstar(BaseITstar):
             return False
         return True
     
-    def update_reverse_sets(self, node):
+    def update_reverse_sets(self, node:Node) -> None:
         self.reverse_closed_set.add(node.id)
         self.reverse_tree_set.add(node.id)
            
     def expand_node_reverse(self, nodes: List[Node], first_search:bool = False) -> None:
+        """
+        Expands nodes in reverse search and updates the reverse search tree.
+
+        Args:
+            nodes (List[Node]): A list of nodes to be expanded in reverse.
+            first_search (bool, optional): Whether this is the initial reverse expansion. Defaults to False.
+
+        Returns:
+            None
+        """
         g_nodes = self.g.nodes
         for node in nodes:
             if node.id == self.g.root.id or node == self.g.virtual_root:
@@ -425,21 +471,50 @@ class EITstar(BaseITstar):
                 edge = (node, n)
                 self.g.reverse_queue.heappush((edge_cost, edge, edge_effort))
                  
-    def update_inflation_factor(self):
+    def update_inflation_factor(self) -> None:
+        """
+        Updates the inflation factor (epsilon) used in reverse search.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         # if self.current_best_cost is None:
         if not self.dynamic_reverse_search_update:
             self.g.epsilon = np.inf
         else:
             self.g.epsilon = 1
     @cache
-    def get_collision_start_and_max_index(self, sparse_N):
-        if sparse_N >2:
-            start = int(sparse_N/2)
+    def get_collision_start_and_end_index(self, sparse_N) -> Tuple[int, int]:
+        """
+        Computes the start and end index for collision checking based on the number of samples.
+
+        Args:
+            sparse_N (int): The number of samples along a path or edge.
+
+        Returns:
+            Tuple[int, int]: The start and end index for collision checking.
+                - The start index for collision checking.
+                - The end index (equal to sparse_N).
+        """
+        if sparse_N > 2:
+            start = int(sparse_N / 2)
         else:
             start = 0
         return start, int(sparse_N)
 
-    def reverse_search(self):
+    def reverse_search(self) -> None:
+        """
+        Performs the reverse search process, updating lower bound costs and tree structure.
+
+        Args:
+            None.
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.updated_target_nodes = set()
         iter = 0
         while self.continue_reverse_search(iter):
@@ -466,7 +541,7 @@ class EITstar(BaseITstar):
                 sparsely_collision_free = False
                 if n0.id not in n1.blacklist:
                     n_start, n_end = (n0, n1) if n1.id > n0.id else (n1, n0)
-                    N_start, N_max = self.get_collision_start_and_max_index(self.sparse_number_of_points)
+                    N_start, N_max = self.get_collision_start_and_end_index(self.sparse_number_of_points)
                     N = max(2, int(edge_effort)+1)
                     
                     edge_id = (n_start.id, n_end.id)
@@ -526,8 +601,18 @@ class EITstar(BaseITstar):
 
         if self.with_tree_visualization and iter > 0:
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
-                    
-    def clear_reverse_edge_in_collision(self, n0, n1):
+
+    def clear_reverse_edge_in_collision(self, n0: Node, n1: Node) -> None:
+        """
+        Handles the removal of a reverse edge due to a detected collision and updates affected nodes.
+
+        Args:
+            n0 (Node): One endpoint of the edge in collision.
+            n1 (Node): The other endpoint of the edge in collision.
+
+        Returns:
+            None
+        """
         if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
         if n1.rev.parent is not None and n1.rev.parent.id == n0.id:
@@ -540,7 +625,16 @@ class EITstar(BaseITstar):
         if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
     
-    def update_reverse_node_of_children(self, n: BaseNode) -> set[int]:
+    def update_reverse_node_of_children(self, n: Node) -> set[int]:
+        """
+        Resets the reverse search state of a node and all its reverse children, and collects affected node IDs.
+
+        Args:
+            n (Node): The node whose associated reverse search structure and descendants are to be updated.
+
+        Returns:
+            set[int]: Set of node IDs that need their queue entries updated due to reverse tree modifications.
+        """
         nodes_to_update = set()
         n.lb_cost_to_go = np.inf
         n.inad.reset()
@@ -575,25 +669,35 @@ class EITstar(BaseITstar):
                 stack.extend(children)
         return nodes_to_update
 
-    def manage_edge_in_collision(self, n0, n1, clear:bool =False):
+    def manage_edge_in_collision(self, n0: Node, n1: Node, clear: bool = False) -> None:
+        """
+        Handles reverse edge collisions by either clearing the edge or increasing resolution and reinitializing the search.
 
+        Args:
+            n0 (Node): One endpoint of the edge in collision.
+            n1 (Node): The other endpoint of the edge in collision.
+            clear (bool, optional): Whether to immediately clear the reverse edge. Defaults to False.
+
+        Returns:
+            None
+        """
         if n0.rev.parent == n1 or n1.rev.parent == n0:
             if not self.dynamic_reverse_search_update or clear:
                 self.clear_reverse_edge_in_collision(n0, n1)
                 # self.initialize_reverse_search(False)
                 return
-            self.sparse_number_of_points *=2
+            self.sparse_number_of_points *= 2
             # self.clear_reverse_edge_in_collision(n0, n1)
             self.initialize_reverse_search(False) 
         # elif len(self.g.reverse_queue) == 0:
         #     self.initialize_reverse_search(False) 
 
-    def initialize_lb(self):
+    def initialize_lb(self) -> None:
         self.g.compute_transition_lb_cost_to_come()
         self.g.compute_transition_lb_effort_to_come()
         self.g.compute_node_lb_to_come()
 
-    def initialze_forward_search(self):
+    def initialize_forward_search(self) -> None:
         self.update_inflation_factor()
         self.g.effort_estimate_queue = EffortEstimateQueue(collision_resolution=self.env.collision_resolution)
         self.g.cost_bound_queue = CostBoundQueue()
@@ -607,7 +711,7 @@ class EITstar(BaseITstar):
                 start = self.g.root
         self.expand_node_forward(start, regardless_forward_closed_set = True, first_search=self.first_search)
 
-    def initialize_reverse_search(self, reset:bool = True):
+    def initialize_reverse_search(self, reset:bool = True) -> None:
         if len(BaseTree.all_vertices) > 1:
             if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
                 self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
@@ -626,9 +730,9 @@ class EITstar(BaseITstar):
         self.expand_node_reverse(goal_nodes, first_search = self.first_search) 
         self.g.update_forward_queue_keys('target') 
 
-    def Plan(
-        self,optimize:bool = True
-    ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def Plan(self,
+             optimize:bool = True
+            ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         self.collision_cache = set()
         self.PlannerInitialization()
         num_iter = 0
@@ -688,7 +792,7 @@ class EITstar(BaseITstar):
                             edge_id = (n_start.id, n_end.id)
                             N_start = 0
                             if edge_id in self.sparesly_checked_edges:
-                                _, N_start = self.get_collision_start_and_max_index(self.sparse_number_of_points)
+                                _, N_start = self.get_collision_start_and_end_index(self.sparse_number_of_points)
                             N = max(2, int(edge_effort))
                             collision_free = self.env.is_edge_collision_free(
                                 n_start.state.q,

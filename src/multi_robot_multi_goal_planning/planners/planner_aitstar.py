@@ -35,9 +35,7 @@ from multi_robot_multi_goal_planning.planners.itstar_base import (
 # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
 # needed adaption to work.
 
-class Operation(BaseOperation):
-    """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
-    
+class Operation(BaseOperation):   
     def __init__(self) -> None:
         super().__init__()
         self.lb_costs_to_go_expanded = np.empty(10000000, dtype=np.float64)
@@ -53,7 +51,7 @@ class Operation(BaseOperation):
             float: Cost associated with the specified node."""
         return self.lb_costs_to_go_expanded[idx]
 
-    def update(self, node:"Node", lb_cost_to_go:float = np.inf, cost:float = np.inf, lb_cost_to_come:float = np.inf):
+    def update(self, node:"Node", lb_cost_to_go:float = np.inf, cost:float = np.inf, lb_cost_to_come:float = np.inf) -> None:
         self.lb_costs_to_go_expanded = self.ensure_capacity(self.lb_costs_to_go_expanded, node.id) 
         node.lb_cost_to_go_expanded = lb_cost_to_go
         node.lb_cost_to_go = lb_cost_to_go
@@ -79,7 +77,7 @@ class Graph(BaseGraph):
         self.reverse_queue = None
         self.forward_queue = None
 
-    def reset_reverse_tree(self):
+    def reset_reverse_tree(self) -> None:
         [
             (
                 setattr(self.nodes[node_id], "lb_cost_to_go", math.inf),
@@ -105,7 +103,17 @@ class Graph(BaseGraph):
               for node_id in list(chain.from_iterable(self.reverse_transition_node_ids.values()))
         ]
     
-    def reset_all_goal_nodes_lb_costs_to_go(self, apply_long_horizon:bool = False):
+    def reset_all_goal_nodes_lb_costs_to_go(self, apply_long_horizon:bool = False) -> None:
+        """
+        Sets the lower bound cost-to-go of all goal nodes (or virtual goal nodes if long horizon is applied) to zero,
+        resets their reverse cost-to-parent, and pushes them to the reverse queue.
+
+        Args:
+            apply_long_horizon (bool, optional): Whether to use virtual goal nodes for long horizon planning. Defaults to False.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if not apply_long_horizon:
             for node in self.goal_nodes:
                 node.lb_cost_to_go = 0
@@ -117,21 +125,20 @@ class Graph(BaseGraph):
                 node.rev.cost_to_parent = 0
                 self.reverse_queue.heappush(node)
 
-
-    def update_forward_queue(self, edge_cost, edge):
+    def update_forward_queue(self, edge_cost: float, edge: Tuple["Node", "Node"]) -> None:
         self.forward_queue.heappush((edge_cost, edge))
-           
-    def update_forward_queue_keys(self, type:str ,node_ids:Optional[Set[BaseNode]] = None):
+
+    def update_forward_queue_keys(self, type: str, node_ids: Optional[Set["Node"]] = None) -> None:
         self.forward_queue.update(node_ids, type)
-    
-    def update_reverse_queue_keys(self, type:str, node_ids:Optional[Set[BaseNode]] = None):
+
+    def update_reverse_queue_keys(self, type: str, node_ids: Optional[Set["Node"]] = None) -> None:
         if type == "start":
             return
         self.reverse_queue.update(node_ids, type)
 
-    def remove_forward_queue(self, edge_cost, n0, n1):
-        self.forward_queue.remove((edge_cost, (n1, n0))) 
-        self.forward_queue.remove((edge_cost, (n0, n1))) 
+    def remove_forward_queue(self, edge_cost: float, n0: "Node", n1: "Node") -> None:
+        self.forward_queue.remove((edge_cost, (n1, n0)))
+        self.forward_queue.remove((edge_cost, (n0, n1)))
 
 class Node(BaseNode):
     def __init__(self, operation: "BaseOperation", state: "State", is_transition: bool = False) -> None:
@@ -143,7 +150,7 @@ class Node(BaseNode):
         return self.operation.get_lb_cost_to_go_expanded(self.id)
     
     @lb_cost_to_go_expanded.setter
-    def lb_cost_to_go_expanded(self, value) -> None:
+    def lb_cost_to_go_expanded(self, value: float) -> None:
         """Set the cost in the shared operation costs array.
 
         Args:
@@ -153,10 +160,10 @@ class Node(BaseNode):
             None: This method does not return any value."""
         self.operation.lb_costs_to_go_expanded[self.id] = value
 
-    def close(self, resolution):
+    def close(self, resolution: Optional[float] = None) -> None:
         self.lb_cost_to_go_expanded = self.lb_cost_to_go
 
-    def set_to_goal_node(self):
+    def set_to_goal_node(self) -> None:
         self.lb_cost_to_go = 0.0
         self.lb_cost_to_go_expanded = 0.0
 class EdgeQueue(DictIndexHeap[Tuple[Any]]):
@@ -168,7 +175,7 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
         self.target_nodes_with_item = dict()
         self.start_nodes_with_item = dict()
 
-    def key(self, item: Tuple[Any]) -> float:
+    def key(self, item: Tuple[Any]) -> Tuple[float, float, float]:
         # item[0]: edge_cost from n0 to n1
         # item[1]: edge (n0, n1)
 
@@ -177,8 +184,8 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
             item[1][0].cost + item[0],
             item[1][0].cost,
         )
-   
-    def add_and_sync(self, item):
+
+    def add_and_sync(self, item: Tuple[Any]) -> None:
         start_node, target_node = item[1]
 
         self.target_nodes.add(target_node.id)
@@ -186,8 +193,8 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
 
         self.target_nodes_with_item.setdefault(target_node.id, set()).add(item)
         self.start_nodes_with_item.setdefault(start_node.id, set()).add(item)
-    
-    def remove(self, item, in_current_entries:bool = False):
+
+    def remove(self, item: Tuple[Any], in_current_entries: bool = False) -> None:
         if not in_current_entries and item not in self.current_entries:
            return
         start_node_id, target_node_id = item[1][0].id, item[1][1].id
@@ -201,7 +208,7 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
         if not self.start_nodes_with_item[start_node_id]:
             self.start_nodes.discard(start_node_id)
 
-    def update(self, node_ids: Optional[Set[BaseNode]], type: str):
+    def update(self, node_ids: Optional[Set[BaseNode]], type: str) -> None:
         if node_ids is not None and not node_ids:
             return
 
@@ -233,30 +240,29 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
                 heappush(item)
                 cnt += 1
 
-        # assert before == len(current_entries), "hjk,l"
-    
-class VertexQueue(DictIndexHeap[Node]):
+        # assert before == len(current_entries), "hjk,l"   
+class VertexQueue(DictIndexHeap[BaseNode]):
     def __init__(self):
         super().__init__()
         self.nodes = set()
         self.nodes_with_item = dict()
-    
-    def add_and_sync(self, item: Node):
+
+    def add_and_sync(self, item: BaseNode) -> None:
         self.nodes.add(item.id)
         self.nodes_with_item[item.id] = item
-    
-    def remove(self, item, in_current_entries:bool = False):
+
+    def remove(self, item: BaseNode, in_current_entries: bool = False) -> None:
         if not in_current_entries and item not in self.current_entries:
            return
         del self.current_entries[item]
         self.nodes.remove(item.id)
         # del self.nodes_with_item[item.id]
 
-    def key(self, node: Node) -> float:
+    def key(self, node: BaseNode) -> Tuple[float, float]:
         min_lb = min(node.lb_cost_to_go, node.lb_cost_to_go_expanded) 
         return (min_lb + node.lb_cost_to_come, min_lb)
 
-    def update(self, node_ids:Optional[Set[BaseNode]], type:str):
+    def update(self, node_ids: Optional[Set[BaseNode]], type: str) -> None:
         if node_ids is None:
             node_ids = self.nodes
         if len(node_ids) == 0:
@@ -273,6 +279,7 @@ class VertexQueue(DictIndexHeap[Node]):
         # "hjk,l")
 
 class AITstar(BaseITstar):
+    """Represents the class for the AIT* based planner"""
     def __init__(
         self,
         env: BaseProblem,
@@ -325,8 +332,8 @@ class AITstar(BaseITstar):
 
     def _create_operation(self) -> BaseOperation:
         return Operation()
-    
-    def _create_graph(self,root_state) -> BaseGraph:
+
+    def _create_graph(self, root_state: State) -> BaseGraph:
         return Graph(
             root_state=root_state,
             operation=self.operation,
@@ -339,12 +346,21 @@ class AITstar(BaseITstar):
             node_cls=Node
             )
         
-    def inconcistency_check(self, node: Node):  
+    def inconcistency_check(self, node: Node) -> None:  
+        """
+        Checks if the node's lower bound cost-to-go is inconsistent with its expanded value and updates the reverse queue accordingly.
+
+        Args:
+            node (Node): The node to check for inconsistency.
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.g.reverse_queue.remove(node)
         if node.lb_cost_to_go != node.lb_cost_to_go_expanded:
             self.g.reverse_queue.heappush(node)
    
-    def continue_reverse_search(self, iter) -> bool:
+    def continue_reverse_search(self, iter:int) -> bool:
         if len(self.g.reverse_queue) == 0 or len(self.g.forward_queue) == 0:
             return False
         if iter > 0 and len(self.updated_target_nodes) == 0:
@@ -375,8 +391,18 @@ class AITstar(BaseITstar):
                     return True
             return False
         return True
-        
-    def invalidate_rev_branch(self, n: Node, nodes_to_update) -> set[int]:
+
+    def invalidate_rev_branch(self, n: Node, nodes_to_update: set[int]) -> set[int]:
+        """
+        Invalidates a branch in the reverse tree starting from the given node, resetting costs and updating tracking sets.
+
+        Args:
+            n (Node): The node from which to start invalidation.
+            nodes_to_update (set[int]): Set to collect IDs of nodes that need updating.
+
+        Returns:
+            set[int]: Set of node IDs that were updated.
+        """
         # Only reset if not a goal node
         if n not in self.g.goal_nodes and n not in self.g.virtual_goal_nodes:
             # Reset cost values
@@ -415,7 +441,16 @@ class AITstar(BaseITstar):
 
         return nodes_to_update
 
-    def reverse_search(self, edge: Optional[Tuple[Node, Node]] = None) -> float:
+    def reverse_search(self, edge: Optional[Tuple[Node, Node]] = None) -> None:
+        """
+        Performs the reverse search process, updating lower bound costs and tree structure.
+
+        Args:
+            edge (Optional[Tuple[Node, Node]], optional): An edge to trigger branch invalidation before search. Defaults to None.
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.reverse_closed_set = set() # node was visited in reverse search
         self.reverse_tree_set.update(self.updated_target_nodes)
         self.updated_target_nodes = set()
@@ -456,7 +491,7 @@ class AITstar(BaseITstar):
                 is_rev_transition = True
                 # if n.transition_neighbors[0].lb_cost_to_go < n.lb_cost_to_go_expanded:
                 #     #don't change the parent
-                #     self.update_heuristic_of_neihgbors(n.transition_neighbors[0])
+                #     self.update_heuristic_of_neighbors(n.transition_neighbors[0])
                 #     continue
             
             if n.lb_cost_to_go < n.lb_cost_to_go_expanded:
@@ -482,7 +517,7 @@ class AITstar(BaseITstar):
             #     "lb_cost_to_go_expanded should not be finite and different from lb_cost_to_go"
             # )
 
-            self.update_heuristic_of_neihgbors(n)
+            self.update_heuristic_of_neighbors(n)
             if is_rev_transition:
                 # assert math.isclose(n.transition_neighbors[0].lb_cost_to_go, n.lb_cost_to_go, rel_tol=1e-10, abs_tol=1e-5), (
                 # "ohhh")
@@ -492,18 +527,25 @@ class AITstar(BaseITstar):
                 # assert(n.lb_cost_to_go == n.lb_cost_to_go_expanded), ("ohhh")
                 if self.apply_long_horizon and n.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
                     continue
-                self.update_heuristic_of_neihgbors(n.transition_neighbors[0])
+                self.update_heuristic_of_neighbors(n.transition_neighbors[0])
                 if self.with_tree_visualization and num_iter > 0:
                     self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
 
         if self.with_tree_visualization and num_iter > 0:
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
         self.init_rev_search = False
-        
-    def update_heuristic_of_neihgbors(self, n):
+
+    def update_heuristic_of_neighbors(self, n: Node) -> None:
+        """
+        Updates the heuristic values of all neighbors of a given node by calling update_state on each valid neighbor.
+
+        Args:
+            n (Node): The node whose neighbors will be updated.
+
+        Returns:
+            None: This method does not return any value.
+        """
         neighbors = self.g.get_neighbors(n, self.approximate_space_extent)
-        if 1 not in neighbors:
-            pass
         # batch_cost = self.g.tot_neighbors_batch_cost_cache[n.id]
         for idx, id in enumerate(neighbors):  #node itself is not included in neighbors
             nb = self.g.nodes[id]
@@ -516,6 +558,15 @@ class AITstar(BaseITstar):
             self.update_state(nb)
                         
     def update_state(self, node: Node) -> None:
+        """
+        Updates the state of a node in the reverse search, including its parent, cost-to-go, and consistency status.
+
+        Args:
+            node (Node): Node to update.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if node.id == self.g.root.id or node == self.g.virtual_root or node in self.g.goal_nodes or node in self.g.virtual_goal_nodes:
             return
         if node.is_transition and not node.is_reverse_transition:
@@ -662,7 +713,17 @@ class AITstar(BaseITstar):
         #     "lb_cost_to_go_expanded should not be finite and different from lb_cost_to_go"
         # )
 
-    def update_node_without_available_reverse_parent(self, node:Node, update_transition:bool = True):
+    def update_node_without_available_reverse_parent(self, node:Node, update_transition:bool = True) -> None:
+        """
+        Handles the case where a node has no available reverse parent, resetting costs and updating consistency.
+
+        Args:
+            node (Node): The node to update.
+            update_transition (bool, optional): Whether to update the transition neighbor if applicable. Defaults to True.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if len(node.rev.fam) == 0 and np.isinf(node.lb_cost_to_go) and node.id not in self.consistent_nodes:
             return
         self.consistent_nodes.discard(node.id)
@@ -681,11 +742,11 @@ class AITstar(BaseITstar):
         if node.is_transition and node.is_reverse_transition and update_transition:
             self.update_node_without_available_reverse_parent(node.transition_neighbors[0])
          
-    def initialize_lb(self):    
+    def initialize_lb(self) -> None:    
         self.g.compute_transition_lb_cost_to_come()
         self.g.compute_node_lb_to_come()
 
-    def initialze_forward_search(self):
+    def initialize_forward_search(self) -> None:
         # if self.current_best_cost is not None:
         #     self.g.weight = 0.5
         # else:
@@ -729,14 +790,14 @@ class AITstar(BaseITstar):
         print("... finished")
         self.g.update_forward_queue_keys('target') 
     
-    def update_reverse_sets(self, node):
+    def update_reverse_sets(self, node: Node) -> None:
         self.reverse_closed_set.add(node.id)
         self.consistent_nodes.add(node.id)
         self.reverse_tree_set.add(node.id)
 
-    def Plan(
-        self, optimize:bool = True
-    ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def Plan(self, 
+             optimize:bool = True
+            ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
         self.collision_cache = set()
         self.PlannerInitialization()
         num_iter = 0

@@ -40,9 +40,7 @@ from multi_robot_multi_goal_planning.planners.rrtstar_base import (
     find_nearest_indices,
     save_data
     )
-# from multi_robot_multi_goal_planning.planners.sampling_phs import (
-#     sample_phs_with_given_matrices, compute_PHS_matrices
-# )
+
 from multi_robot_multi_goal_planning.planners.sampling_informed import (InformedSampling as BaseInformedSampling)
 from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
 T = TypeVar("T")
@@ -114,6 +112,9 @@ class BaseOperation(ABC):
         return array
 
 class BaseNode(ABC):
+    """
+    Represents a node in the planning graph, encapsulating state, connectivity, transition information, and cost attributes.
+    """
     __slots__ = [
         "state",
         "forward",
@@ -161,10 +162,28 @@ class BaseNode(ABC):
         self.lb_cost_to_go = np.inf
     
     @abstractmethod
-    def close(self):
+    def close(self, resolution: Optional[float]) -> None:
+        """
+        Marks the node as closed (expanded) in the search process.
+
+        Args:
+            resolution (Optional[float]): The collision detection resolution.
+
+        Returns:
+            None
+        """
         pass
     @abstractmethod
-    def set_to_goal_node(self):
+    def set_to_goal_node(self) -> None:
+        """
+        Marks the node as a goal node in the planning graph.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         pass
 
     def __lt__(self, other: "BaseNode") -> bool:
@@ -174,15 +193,15 @@ class BaseNode(ABC):
         return self.id
 
     @property
-    def lb_cost_to_come(self):
+    def lb_cost_to_come(self) -> float:
         return self.operation.get_lb_cost_to_come(self.id)
     
     @lb_cost_to_come.setter
-    def lb_cost_to_come(self, value) -> None:
-        """Set the cost in the shared operation costs array.
+    def lb_cost_to_come(self, value: float) -> None:
+        """Set the lower bound cost in the shared operation lower bound costs array.
 
         Args:
-            value (float): Cost value to assign to the current node.
+            value (float): Lower bound cost value to assign to the current node.
 
         Returns: 
             None: This method does not return any value."""
@@ -193,7 +212,7 @@ class BaseNode(ABC):
         return self.operation.get_cost(self.id)
     
     @cost.setter
-    def cost(self, value) -> None:
+    def cost(self, value: float) -> None:
         """Set the cost in the shared operation costs array.
 
         Args:
@@ -206,6 +225,10 @@ class BaseNode(ABC):
         #     self.lb_cost_to_come = value
 
 class Relatives:
+    """
+    Represents the relationship structure for a node in the planning tree, 
+    maintaining references to its parent, children, cost to parent, and family set.
+    """
     __slots__ = [
         "parent",
         "children",
@@ -223,17 +246,30 @@ class Relatives:
         self.cost_to_parent = None
         self.fam = set()
 
-    def reset(self):
+    def reset(self) -> None:
+        """
+        Resets the relationship attributes of the node by clearing its parent, children, cost to parent, and family set.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.parent = None
         self.children = []
         self.cost_to_parent = None
         self.fam.clear()  
 class DictIndexHeap(ABC, Generic[T]):
+    """
+    Represents a dictionary-backed indexed heap structure for efficient priority queue operations,
+    supporting fast updates, removals, and priority changes for items with unique keys.
+    """
     __slots__ = ["queue", "items", "current_entries", "nodes"]
 
-    queue: List[Tuple[float, int]]  # (priority, index)
+    queue: List[Tuple[Tuple, int]]  # (priority, index)
     items: Dict[int, Any]  # Dictionary for storing active items
-    current_entries: Dict[T, Tuple[float, int]]
+    current_entries: Dict[T, Tuple[Tuple, int]]
     nodes: set
     items_to_skip: set
     idx = 0
@@ -245,18 +281,66 @@ class DictIndexHeap(ABC, Generic[T]):
         self.collision_resolution = collision_resolution
         self.items_to_skip = set()
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Returns the number of active entries in the heap.
+
+        Args:
+            None
+
+        Returns:
+            int: Number of active entries.
+        """
         return len(self.current_entries)
     
     def __contains__(self, item: T) -> bool:
+        """
+        Checks if the specified item is present in the heap.
+
+        Args:
+            item (T): The item to check for presence.
+
+        Returns:
+            bool: True if the item is in the heap, False otherwise.
+        """
         return item in self.current_entries
     
     @abstractmethod
-    def key(self, node: BaseNode) -> float:
-        pass
+    def key(self, item: T) -> Union[Tuple, float]:
+        """
+        Computes the priority key for the given item.
 
+        Args:
+            item (T): The item for which to compute the key.
+
+        Returns:
+            Union[Tuple, float]: The computed priority value.
+        """
+        pass
+    @abstractmethod
+    def update(self, node_ids: Optional[Set[BaseNode]], type: str) -> None:
+        """
+        Updates the heap queue for either start or target nodes, re-inserting all items associated with the specified nodes.
+
+        Args:
+            node_ids (Optional[Set[BaseNode]]): Set of node IDs to update. If None, updates all nodes of the specified type.
+            type (str): The type of nodes to update, either 'start' or 'target'.
+
+        Returns:
+            None
+        """
+        pass
+    
     def heappush(self, item: T) -> None:
-        """Push a single item into the heap."""
+        """
+        Pushes a single item into the heap, updating its priority if already present.
+
+        Args:
+            item (T): The item to be pushed.
+
+        Returns:
+            None: This method does not return any value.
+        """
         # idx = len(self.items)
         item_already_in_heap = item in self.current_entries
         priority = self.key(item)
@@ -270,17 +354,47 @@ class DictIndexHeap(ABC, Generic[T]):
         # self.nodes_in_queue[item[1]] = (priority, DictIndexHeap.idx)
         heapq.heappush(self.queue, (priority, DictIndexHeap.idx))
         DictIndexHeap.idx += 1
-  
+    @abstractmethod
     def add_and_sync(self, item: T) -> None:
+        """
+        Adds the item to any additional tracking structures and synchronizes state.
+        Should be implemented by subclasses if needed.
+
+        Args:
+            item (T): The item to add and synchronize.
+
+        Returns:
+            None: This method does not return any value.
+        """
         pass
 
-    def push_and_sync(self, item, priority, item_already_in_heap:bool = False) -> float:
+    def push_and_sync(self, item:T, priority:Tuple, item_already_in_heap:bool = False) -> float:
+        """
+        Updates the heap and tracking dictionaries with the new item and its priority.
+
+        Args:
+            item (T): The item to add or update.
+            priority (float): The priority value for the item.
+            item_already_in_heap (bool, optional): Whether the item is already present in the heap. Defaults to False.
+
+        Returns:
+            float: The assigned priority.
+        """
         self.items[DictIndexHeap.idx] = item  # Store only valid items
         self.current_entries[item] = (priority, DictIndexHeap.idx) # always up to date with the newest one!
         if not item_already_in_heap:
             self.add_and_sync(item)
 
-    def peek_first_element(self) -> Any:
+    def peek_first_element(self) -> Tuple[Tuple, T]:
+        """
+        Returns the smallest priority and the corresponding item without removing it from the heap.
+
+        Args:
+            None
+
+        Returns:
+            Tuple[Tuple, T]: A tuple containing the smallest priority and the corresponding item.
+        """
         while self.current_entries:
             priority, idx = self.queue[0]
             if idx in self.items_to_skip:
@@ -304,13 +418,31 @@ class DictIndexHeap(ABC, Generic[T]):
             _ = self.items.pop(idx)
             continue
 
-    def remove(self, item, in_current_entries:bool = False):
+    def remove(self, item: T, in_current_entries: bool = False) -> None:
+        """
+        Removes the specified item from the heap and tracking dictionaries.
+
+        Args:
+            item (T): The item to remove.
+            in_current_entries (bool): If True, assumes the item is in current_entries.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if not in_current_entries and item not in self.current_entries:
            return
         del self.current_entries[item]
     
-    def heappop(self) -> BaseNode:
-        """Pop the item with the smallest priority from the heap."""
+    def heappop(self) -> T:
+        """
+        Pops and returns the item with the smallest priority from the heap.
+
+        Args:
+            None
+
+        Returns:
+            T: The item with the smallest priority.
+        """
         if not self.queue:
             raise IndexError("pop from an empty heap")
 
@@ -338,6 +470,9 @@ class DictIndexHeap(ABC, Generic[T]):
                 
         raise IndexError("pop from an empty queue")
 class BaseTree():
+    """
+    Represents a tree structure to manage vertices, their positions, and connectivity.
+    """
     all_vertices = set()
     def __init__(self, 
                  operation:BaseOperation, 
@@ -362,49 +497,94 @@ class BaseTree():
         self.is_edge_collision_free = is_edge_collision_free
 
     def ensure_capacity(self,array: NDArray, required_capacity: int) -> NDArray:
+        """
+        Ensures that a NumPy array has sufficient capacity to accommodate new elements and resizes it if necessary.
+
+        Args:
+            array (NDArray): The array to be checked and potentially resized.
+            required_capacity (int): The minimum required capacity for the array.
+
+        Returns:
+            NDArray: The array with ensured capacity.
+        """
         return self.operation.ensure_capacity(array, required_capacity)
        
     def add_vertex(self, node: BaseNode) -> None:  
+        """
+        Adds a node as a vertex to the tree, updating all relevant data structures.
+
+        Args:
+            node (BaseNode): The node to add as a vertex.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if node.id in BaseTree.all_vertices:
             return
         BaseTree.all_vertices.add(node.id)         
         position = self.cnt
         self.vertices_position[node.id] = position
         self.vertices_batch_array = self.ensure_capacity(self.vertices_batch_array, position)
-        self.vertices_batch_array[position,:] = node.state.q.state()
+        self.vertices_batch_array[position, :] = node.state.q.state()
         self.vertices_node_ids = self.ensure_capacity(self.vertices_node_ids, position)
         self.vertices_node_ids[position] = node.id
         self.vertices[node.id] = node
-        self.cnt +=1
-    
-    def get_vertices_batch_array(self)-> NDArray:
+        self.cnt += 1
+
+    def get_vertices_batch_array(self) -> NDArray:
+        """
+        Returns the batch array of all vertex states in the tree.
+
+        Args:
+            None
+
+        Returns:
+            NDArray: The batch array of vertex states.
+        """
         return self.vertices_batch_array[:self.cnt]
 
     def get_vertices_node_ids(self)-> NDArray:
+        """
+        Returns the array of all vertex node IDs in the tree.
+
+        Args:
+            None
+
+        Returns:
+            NDArray: The array of vertex node IDs.
+        """
         return self.vertices_node_ids[:self.cnt]
     
     def get_position_of_node(self, node:BaseNode) -> int:
+        """
+        Returns the position index of the given node in the batch array.
+
+        Args:
+            node (BaseNode): The node whose position is to be retrieved.
+
+        Returns:
+            int: The position index of the node.
+        """
         return self.vertices_position[node.id]
  
     def neighbors(self, 
              node: BaseNode, 
-             potential_parent:BaseNode, 
-             r:float,
+             potential_parent: BaseNode, 
+             r: float,
              ) -> Tuple[NDArray, NDArray, NDArray]:      
         """
         Retrieves neighbors of a node within a calculated radius for the given mode.
 
         Args:
-            node (Node): New node for which neighbors are being identified.
-            n_nearest_idx (int): Index of the nearest node to node.
-            set_dists (Optional[NDArray]): Precomputed distances from n_new to all nodes in the specified subtree.
-            tree (str): Identifier of subtree in which the nearest node is searched for
+            node (BaseNode): Node for which neighbors are being identified.
+            potential_parent (BaseNode): Candidate parent node.
+            r (float): Search radius.
 
         Returns:
             Tuple:   
-                - NDArray: Batch of neighbors near n_new.
-                - NDArray: Corresponding cost values of these nodes.
-                - NDArray: Corresponding IDs of these nodes.
+                - NDArray: Array of costs from the given node to each neighbor.
+                - NDArray: Array of cost values for each neighbor node.
+                - NDArray: Array of node IDs corresponding to the neighbors.
         """
         #node is not yet in the tree
         batch_array= self.get_vertices_batch_array()
@@ -419,28 +599,28 @@ class BaseTree():
         N_near_batch = batch_array[indices]
         batch_cost = self.batch_cost_fun(node.state.q, N_near_batch)
         return batch_cost, n_near_costs, node_indices
-    
-    def find_parent(self, 
-                    node: BaseNode, 
-                    potential_parent:BaseNode,  
-                    batch_cost: NDArray, 
+
+    def find_parent(self,
+                    node: BaseNode,
+                    potential_parent: BaseNode,
+                    batch_cost: NDArray,
                     n_near_costs: NDArray,
                     node_indices: NDArray,
                     goal_node_ids: NDArray,
-                    ) -> None:
+                    ) -> Tuple[BaseNode, float]:
         """
         Sets the optimal parent for a new node by evaluating connection costs among candidate nodes.
 
         Args:
-            mode (Mode): Current operational mode.
-            node_indices (NDArray): Array of IDs representing candidate neighboring nodes.
-            n_new (Node): New node that needs a parent connection.
-            n_nearest (Node): Nearest candidate node to n_new.
-            batch_cost (NDArray): Costs associated from n_new to all candidate neighboring nodes.
-            n_near_costs (NDArray): Cost values for all candidate neighboring nodes.
+            node (BaseNode): New node that needs a parent connection.
+            potential_parent (BaseNode): Candidate parent node.
+            batch_cost (NDArray): Costs from new node to all candidate neighbors.
+            n_near_costs (NDArray): Cost values for all candidate neighbors.
+            node_indices (NDArray): IDs of candidate neighbors.
+            goal_node_ids (NDArray): IDs of goal nodes.
 
         Returns:
-            None: This method does not return any value.
+            Tuple[BaseNode, float]: The selected parent node and the cost to parent.
         """
         idx =  np.where(node_indices == potential_parent.id)[0][0]
         c_new_tensor = n_near_costs + batch_cost
@@ -474,17 +654,16 @@ class BaseTree():
                 node_indices: NDArray
                ) -> bool:
         """
-        Rewires neighboring nodes by updating their parent connection to n_new if a lower-cost path is established.
+        Rewires neighboring nodes by updating their parent connection to the new node if a lower-cost path is established.
 
         Args:
-            mode (Mode): Current operational mode.
-            node_indices (NDArray): Array of IDs representing candidate neighboring nodes.
-            n_new (Node): New node as potential parent for neighboring nodes.
-            batch_cost (NDArray): Costs associated from n_new to all candidate neighboring nodes.
-            n_near_costs (NDArray): Cost values for all candidate neighboring nodes.
+            node (BaseNode): New node as potential parent for neighboring nodes.
+            batch_cost (NDArray): Costs from new node to all candidate neighbors.
+            n_near_costs (NDArray): Cost values for all candidate neighbors.
+            node_indices (NDArray): IDs of candidate neighbors.
 
         Returns:
-            bool: True if any neighbor's parent connection is updated to n_new; otherwise, False.
+            bool: True if any neighbor's parent connection is updated; otherwise, False.
         """
         c_potential_tensor = node.cost + batch_cost
 
@@ -512,16 +691,20 @@ class BaseTree():
                   
 
 class BaseGraph(ABC):
+    """
+    Represents a graph structure to manage nodes, trees, and transitions.
+    """
+     
     root: BaseNode
     nodes: Dict
     node_ids: Dict
     tree: BaseTree
 
-    def __init__(self, 
-                 root_state, 
-                 operation:BaseOperation,
-                 distance_metric: str, 
-                 batch_dist_fun, 
+    def __init__(self,
+                 root_state,
+                 operation: BaseOperation,
+                 distance_metric: str,
+                 batch_dist_fun,
                  batch_cost_fun, 
                  is_edge_collision_free, 
                  get_next_modes,
@@ -533,7 +716,7 @@ class BaseGraph(ABC):
         self.node_cls = node_cls
         self.root = self.node_cls(operation, root_state)
         self.dim = len(self.root.state.q.state())
-        self.operation.update(self.root, lb_cost_to_go=np.inf, cost = 0, lb_cost_to_come = 0.0)
+        self.operation.update(self.root, lb_cost_to_go=np.inf, cost=0, lb_cost_to_come=0.0)
         self.batch_dist_fun = batch_dist_fun
         self.batch_cost_fun = batch_cost_fun
         self.is_edge_collision_free = is_edge_collision_free
@@ -560,11 +743,29 @@ class BaseGraph(ABC):
         self.weight = 1
         self.search_init_sol = True
 
-    def create_node_ids(self):
+    def create_node_ids(self) -> None:
+        """
+        Initializes the node ids dictionary with the root node.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.node_ids = {}
         self.node_ids[self.root.state.mode] = [self.root.id]
 
     def get_num_samples(self) -> int:
+        """
+        Returns the total number of samples (nodes and transition nodes) in the graph.
+
+        Args:
+            None
+
+        Returns:
+            int: Total number of samples in the graph.
+        """
         num_samples = 0
         for k, v in self.node_ids.items():
             num_samples += len(v)
@@ -577,7 +778,16 @@ class BaseGraph(ABC):
         # return sum(len(v) for v in self.node_ids.values()) + \
         #     sum(len(v) for v in self.transition_node_ids.values())
     
-    def get_num_samples_in_mode(self, mode:Mode) -> int:
+    def get_num_samples_in_mode(self, mode: Mode) -> int:
+        """
+        Returns the number of samples (nodes and transition nodes) in a specific mode.
+
+        Args:
+            mode (Mode): The mode for which to count samples.
+
+        Returns:
+            int: Number of samples in the specified mode.
+        """
         num_samples = 0
         if mode in self.node_ids:
             num_samples += len(self.node_ids[mode])
@@ -585,8 +795,22 @@ class BaseGraph(ABC):
             num_samples += len(self.transition_node_ids[mode])
         return num_samples
 
+    def add_node(self, 
+                 new_node: BaseNode, 
+                 cost: float = np.inf, 
+                 lb_cost_to_go: float = np.inf
+                 ) -> None:
+        """
+        Adds a new node to the graph and updates its cost attributes.
 
-    def add_node(self, new_node, cost:float = np.inf, lb_cost_to_go:float = np.inf) -> None:
+        Args:
+            new_node (BaseNode): The node to add.
+            cost (float, optional): Cost associated with the node. Defaults to np.inf.
+            lb_cost_to_go (float, optional): Lower bound cost-to-go for the node. Defaults to np.inf.
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.nodes[new_node.id] = new_node
         key = new_node.state.mode
         if key not in self.node_ids:
@@ -595,26 +819,64 @@ class BaseGraph(ABC):
         self.operation.update(new_node, lb_cost_to_go, cost)
         
     def add_vertex_to_tree(self, node: BaseNode) -> None:  
+        """
+        Adds a node as a vertex to the appropriate tree for its mode.
+
+        Args:
+            node (BaseNode): The node to add as a vertex.
+
+        Returns:
+            None: This method does not return any value.
+        """
         mode = node.state.mode
-        if mode not in self.tree: 
-            self.tree[mode] = BaseTree(self.operation, 
-                                       self.dim, 
-                                       batch_dist_fun = self.batch_dist_fun,
-                                       batch_cost_fun = self.batch_cost_fun,
-                                       update_connectivity = self.update_connectivity,
-                                       remove_forward_queue = self.remove_forward_queue,
-                                       is_edge_collision_free = self.is_edge_collision_free)
+        if mode not in self.tree:
+            self.tree[mode] = BaseTree(self.operation,
+                                       self.dim,
+                                       batch_dist_fun=self.batch_dist_fun,
+                                       batch_cost_fun=self.batch_cost_fun,
+                                       update_connectivity=self.update_connectivity,
+                                       remove_forward_queue=self.remove_forward_queue,
+                                       is_edge_collision_free=self.is_edge_collision_free)
         self.tree[mode].add_vertex(node)
 
-    def add_states(self, states: List[State]):
+    def add_states(self, states: List[State]) -> None:
+        """
+        Adds a list of states as nodes to the graph.
+
+        Args:
+            states (List[State]): List of states to add.
+
+        Returns:
+            None: This method does not return any value.
+        """
         for s in states:
             self.add_node(self.node_cls(self.operation, s))
 
-    def add_nodes(self, nodes: List[BaseNode]):
+    def add_nodes(self, nodes: List[BaseNode]) -> None:
+        """
+        Adds a list of nodes to the graph.
+
+        Args:
+            nodes (List[BaseNode]): List of nodes to add.
+
+        Returns:
+            None: This method does not return any value.
+        """
         for n in nodes:
             self.add_node(n)
 
-    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, List[Mode]]):
+    def add_transition_nodes(self, 
+                             transitions: List[Tuple[Configuration, Mode, List[Mode]]]
+                             ) -> None:
+        """
+        Adds transition nodes to the graph for the given transitions.
+
+        Args:
+            transitions (List[Tuple[Configuration, Mode, List[Mode]]]): Transitions to add.
+
+        Returns:
+            None: This method does not return any value.
+        """
         for q, this_mode, next_modes in transitions:
             is_goal = True
             node_this_mode = self.node_cls(self.operation, State( q, this_mode), True)           
@@ -634,7 +896,26 @@ class BaseGraph(ABC):
                     self.add_transition_node(node_next_mode, reverse=True)
             self.add_transition_node(node_this_mode, is_goal=is_goal)
 
-    def add_transition_node(self, node, is_goal:bool = False, reverse:bool = False, cost:float = np.inf, lb_cost_to_go:float = np.inf):
+    def add_transition_node(self, 
+                            node, 
+                            is_goal:bool = False, 
+                            reverse:bool = False, 
+                            cost:float = np.inf, 
+                            lb_cost_to_go:float = np.inf
+                            ) -> None:
+        """
+        Adds a transition node to the graph, updating all relevant data structures and cost attributes.
+
+        Args:
+            node (BaseNode): The transition node to add.
+            is_goal (bool, optional): Whether this node is a goal node. Defaults to False.
+            reverse (bool, optional): Whether this node is a reverse transition node. Defaults to False.
+            cost (float, optional): Cost associated with the node. Defaults to np.inf.
+            lb_cost_to_go (float, optional): Lower bound cost-to-go for the node. Defaults to np.inf.
+
+        Returns:
+            None: This method does not return any value.
+        """
         mode = node.state.mode
         if mode is None:
             return 
@@ -659,7 +940,24 @@ class BaseGraph(ABC):
         self.nodes[node.id] = node
         self.operation.update(node, lb_cost_to_go, cost)
     
-    def add_path_states(self, path:List[State], space_extent, rewire:bool = True):
+    def add_path_states(self, 
+                        path:List[State], 
+                        space_extent:float, 
+                        rewire:bool = True, 
+                        lh:bool = False
+                        ) -> None:
+        """
+        Adds path sequence of states as nodes to the graph.
+
+        Args:
+            path (List[State]): The sequence of states to add.
+            space_extent (float): The extent of the configuration space.
+            rewire (bool, optional): Whether to rewire the tree after adding nodes. Defaults to True.
+            lh (bool, optional): Whether to use long-horizon logic. Defaults to False.
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.new_path = []
         parent = self.root
         for i in range(len(path)): 
@@ -699,12 +997,34 @@ class BaseGraph(ABC):
                                 self.tree[next_mode].rewire(transition_neighbor, batch_cost, n_near_costs, node_indices)
                         parent = self.new_path[-1]
                         continue
-            self.add_path_node(node, parent, is_transition, next_mode, space_extent, rewire = rewire)
+            self.add_path_node(node, parent, is_transition, next_mode, space_extent, rewire = rewire, lh = lh)
             self.update_edge_collision_cache(parent, node, True)
             parent = self.new_path[-1]     
         return 
 
-    def add_path_node(self, node:BaseNode, parent, is_transition:bool, next_mode:Mode, space_extent, rewire:bool = True): 
+    def add_path_node(self, 
+                      node:BaseNode, 
+                      parent, is_transition:bool, 
+                      next_mode:Mode, 
+                      space_extent: float, 
+                      rewire: bool = True, 
+                      lh: bool = False
+                      ) -> None: 
+        """
+        Adds a node along a path to the graph, handling both transition and regular nodes.
+
+        Args:
+            node (BaseNode): The node to add.
+            parent (BaseNode): The parent node in the path.
+            is_transition (bool): Whether the node is a transition node.
+            next_mode (Optional[Mode]): The next mode if this is a transition node.
+            space_extent (float): The extent of the configuration space.
+            rewire (bool, optional): Whether to rewire the tree after adding nodes. Defaults to True.
+            lh (bool, optional): Whether to use long-horizon logic. Defaults to False.
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.new_path.append(node)
         if is_transition:
             edge_cost = float(self.batch_cost_fun([parent.state], [node.state]))
@@ -734,8 +1054,10 @@ class BaseGraph(ABC):
                     self.add_transition_node(node_next_mode, reverse=True, cost=node.cost) 
                     
             else:
-                node.set_to_goal_node()
-
+                if is_goal and not lh:
+                    node.set_to_goal_node()
+                else:
+                    is_goal = False
             self.add_transition_node(node, is_goal=is_goal, cost=node.cost)
             
             
@@ -756,7 +1078,16 @@ class BaseGraph(ABC):
             self.add_node(node, cost=node.cost)
             self.add_vertex_to_tree(node)
             
-    def transition_or_goal_is_already_present(self, node:BaseNode):  
+    def transition_or_goal_is_already_present(self, node: BaseNode) -> Optional[BaseNode]:
+        """
+        Checks if a transition or goal node with the same configuration already exists.
+
+        Args:
+            node (BaseNode): The node to check for existence.
+
+        Returns:
+            Optional[BaseNode]: The existing node if found, otherwise None.
+        """ 
         if node.state.mode in self.transition_node_ids and len(self.transition_node_ids[node.state.mode]) > 0:
             configs_list = [
                             self.nodes[id].state.q
@@ -772,7 +1103,16 @@ class BaseGraph(ABC):
                 return self.nodes[id]
         return
     
-    def reverse_transition_is_already_present(self, node:BaseNode):  
+    def reverse_transition_is_already_present(self, node: BaseNode) -> bool:
+        """
+        Checks if a reverse transition node with the same configuration already exists.
+
+        Args:
+            node (BaseNode): The node to check for existence.
+
+        Returns:
+            bool: True if a reverse transition node exists, otherwise False.
+        """ 
         if len(self.transition_node_ids[node.state.mode]) > 0:
             configs_list = [
                             self.nodes[id].state.q
@@ -785,7 +1125,16 @@ class BaseGraph(ABC):
                 return True
         return False
 
-    def update_cache(self, key: Mode):
+    def update_cache(self, key: Mode) -> None:
+        """
+        Updates the cache for nodes and transitions for a given mode.
+
+        Args:
+            key (Mode): The mode for which to update the cache.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if key in self.node_ids and key not in self.node_array_cache:
             ids = self.node_ids[key]
             self.node_array_cache[key] = np.empty((len(ids), self.dim ), dtype=np.float64)
@@ -802,28 +1151,54 @@ class BaseGraph(ABC):
             for i, id in enumerate(ids):
                 self.reverse_transition_node_array_cache[key][i] = self.nodes[id].state.q.q
         if key.prev_mode is None and key not in self.reverse_transition_node_array_cache:
-            self.reverse_transition_node_array_cache[key] = np.array([self.root.state.q.q], dtype=np.float6)
+            self.reverse_transition_node_array_cache[key] = np.array([self.root.state.q.q], dtype=np.float64)
 
-    def initialize_cache(self):
+    def initialize_cache(self) -> None:
+        """
+        Initializes all caches for nodes, transitions, and neighbors.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         # modes as keys
         self.node_array_cache = {} 
         self.transition_node_array_cache = {}
 
         # node ids as keys
-        self.neighbors_node_ids_cache = {} #neighbors received by radius
+        self.neighbors_node_ids_cache = {}  # neighbors received by radius
         self.neighbors_batch_cost_cache = {}
         self.neighbors_fam_ids_cache = {}
         self.tot_neighbors_batch_cost_cache = {}
-        self.tot_neighbors_batch_effort_cache = {} #only needed for EIT*
+        self.tot_neighbors_batch_effort_cache = {}  # only needed for EIT*
         self.neighbors_batch_effort_cache = {}
-        self.tot_neighbors_id_cache = {} #neighbors including family
+        self.tot_neighbors_id_cache = {}  # neighbors including family
         self.transition_node_lb_cache = {}
         self.reverse_transition_node_lb_cache = {}
         self.reverse_transition_node_array_cache = {}
         self.blacklist_cache = {}
 
     def get_r_star(
-        self, number_of_nodes, informed_measure, unit_n_ball_measure, weight=1):
+        self, 
+        number_of_nodes: int, 
+        informed_measure: float, 
+        unit_n_ball_measure: float, 
+        weight: float = 1
+        ) -> float:
+        """
+            Computes the connection radius r* as in the PRM* algorithm.
+
+            Args:
+                number_of_nodes (int): Number of nodes in the tree.
+                informed_measure (float): The measure of the informed set.
+                unit_n_ball_measure (float): The measure of the unit n-ball.
+                weight (float, optional): Additional scaling weight. Defaults to 1.
+
+            Returns:
+                float: The computed connection radius r*.
+            """
         # r_star = (
         #     1.001
         #     * weight
@@ -846,9 +1221,22 @@ class BaseGraph(ABC):
         )
         return r_star
 
-    def get_neighbors(
-        self, node: BaseNode, space_extent: float = 1, first_search:bool = False
-    ) -> set:
+    def get_neighbors(self, 
+                      node: BaseNode, 
+                      space_extent: float = 1, 
+                      first_search:bool = False
+                    ) -> NDArray:
+        """
+        Returns the set of neighbor node IDs for a given node, using the current cache or by computing them.
+
+        Args:
+            node (BaseNode): The node for which to find neighbors.
+            space_extent (float, optional): The extent of the configuration space. Defaults to 1.
+            first_search (bool, optional): Whether this is the first search (affects caching). Defaults to False.
+
+        Returns:
+            NDArray: Array of neighbor node IDs.
+        """
          
         if node.id in self.neighbors_node_ids_cache:
             return self.update_neighbors(node)            
@@ -952,7 +1340,17 @@ class BaseGraph(ABC):
             return all_ids
         return self.update_neighbors(node, True)
 
-    def update_neighbors_with_family_of_node(self, node: BaseNode, update: bool = False):
+    def update_neighbors_with_family_of_node(self, node: BaseNode, update: bool = False) -> NDArray:
+        """
+        Updates the neighbor cache for a node, including its family (forward and reverse relatives).
+
+        Args:
+            node (BaseNode): The node whose neighbors are being updated.
+            update (bool, optional): Whether to force an update. Defaults to False.
+
+        Returns:
+            NDArray: Array of neighbor node IDs including family.
+        """
         node_id = node.id
         if self.search_init_sol:
             if update:
@@ -1011,7 +1409,17 @@ class BaseGraph(ABC):
         # )
         return self.tot_neighbors_id_cache[node_id]
 
-    def update_neighbors(self, node:BaseNode, update:bool =False): # only needed for forward
+    def update_neighbors(self, node: BaseNode, update: bool = False) -> NDArray:
+        """
+        Updates the neighbor cache for a node, filtering out blacklisted nodes.
+
+        Args:
+            node (BaseNode): The node whose neighbors are being updated.
+            update (bool, optional): Whether to force an update. Defaults to False.
+
+        Returns:
+            NDArray: Array of neighbor node IDs after filtering.
+        """
         blacklist = node.blacklist
         blacklist_diff = blacklist -  self.blacklist_cache[node.id]
         if blacklist_diff:
@@ -1033,7 +1441,17 @@ class BaseGraph(ABC):
             #                 )
         return self.update_neighbors_with_family_of_node(node, update)
             
-    def update_forward_cost_of_children(self, n: BaseNode, start_nodes_to_update:set[int]) -> set[int]:
+    def update_forward_cost_of_children(self, n: BaseNode, start_nodes_to_update: set[int]) -> set[int]:
+        """
+        Recursively updates the cost of all children in the forward tree starting from node n.
+
+        Args:
+            n (BaseNode): The starting node whose children's costs are to be updated.
+            start_nodes_to_update (set[int]): Set of node IDs to update.
+
+        Returns:
+            set[int]: The set of updated node IDs.
+        """
         stack = [n.id]
         while stack:
             current_id = stack.pop()
@@ -1047,15 +1465,45 @@ class BaseGraph(ABC):
                     start_nodes_to_update.add(child.id)
                 stack.extend(children)
         return start_nodes_to_update
-    
-    def update_forward_cost(self, node:BaseNode):
+
+    def update_forward_cost(self, node: BaseNode) -> None:
+        """
+        Updates the forward cost for a node and all its descendants.
+
+        Args:
+            node (BaseNode): The node whose forward cost is to be updated.
+
+        Returns:
+            None: This method does not return any value.
+        """
         start_nodes_to_update = set()
         start_nodes_to_update.add(node.id)
         if len(node.forward.children) > 0:
             start_nodes_to_update = self.update_forward_cost_of_children(node, start_nodes_to_update)
         self.update_forward_queue_keys('start', start_nodes_to_update)
         
-    def update_connectivity(self, n0: BaseNode, n1: BaseNode, edge_cost, updated_cost, tree: str = "forward", is_transition:bool = False):
+    def update_connectivity(self, 
+                            n0: BaseNode, 
+                            n1: BaseNode, 
+                            edge_cost: float, 
+                            updated_cost: float, 
+                            tree: str = "forward", 
+                            is_transition: bool = False
+                            ) -> None:
+        """
+        Updates the connectivity between two nodes in the tree (forward or reverse).
+
+        Args:
+            n0 (BaseNode): The parent node.
+            n1 (BaseNode): The child node.
+            edge_cost (float): The cost of the edge.
+            updated_cost (float): The updated cost for the child node.
+            tree (str, optional): "forward" or "reverse". Defaults to "forward".
+            is_transition (bool, optional): Whether this is a transition edge. Defaults to False.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if tree == "forward":
             if n1.forward.parent is None: 
                 n0.forward.children.append(n1.id)
@@ -1159,7 +1607,16 @@ class BaseGraph(ABC):
                 # )
                 self.update_connectivity(n1, n1.transition_neighbors[0], 0.0, n1.lb_cost_to_go,"reverse", False)
 
-    def compute_transition_lb_cost_to_come(self):
+    def compute_transition_lb_cost_to_come(self) -> None:
+        """
+        Computes the lower bound cost-to-come for all transition nodes using a reverse search.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         # run a reverse search on the transition nodes without any collision checking
         costs = {}
         transition_nodes = {}
@@ -1209,7 +1666,16 @@ class BaseGraph(ABC):
                             heapq.heappush(queue, (cost, transition))
         # print(processed)
 
-    def compute_transition_lb_effort_to_come(self):
+    def compute_transition_lb_effort_to_come(self) -> None:
+        """
+        Computes the lower bound effort-to-come for all transition nodes using a reverse search.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         # run a reverse search on the transition nodes without any collision checking
         efforts = {}
         transition_nodes = {}
@@ -1258,7 +1724,16 @@ class BaseGraph(ABC):
                             transition.lb_effort_to_come = effort
                             heapq.heappush(queue, (effort, transition))
 
-    def compute_node_lb_to_come(self):
+    def compute_node_lb_to_come(self) -> None:
+        """
+        Computes the lower bound cost-to-come and effort-to-come for all nodes using the reverse transition nodes.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         processed = 0
         reverse_transition_node_lb_cache = {}
         for mode in self.node_ids:
@@ -1297,29 +1772,97 @@ class BaseGraph(ABC):
                 n.lb_cost_to_come = np.minimum.reduce(reverse_lb_array + costs_to_transitions)
                 processed +=1
 
-    def update_edge_collision_cache(
-            self, n0: BaseNode, n1: BaseNode, is_edge_collision_free: bool
-        ):
-            if is_edge_collision_free:
-                n1.whitelist.add(n0.id)
-                n0.whitelist.add(n1.id)
-            else:
-                n0.blacklist.add(n1.id)
-                n1.blacklist.add(n0.id)
+    def update_edge_collision_cache(self, 
+                                    n0: BaseNode, 
+                                    n1: BaseNode, 
+                                    is_edge_collision_free: bool
+                                    ) -> None: 
+        """
+        Updates the edge collision cache and the whitelist/blacklist of the involved nodes.
+
+        Args:
+            n0 (BaseNode): The first node of the edge.
+            n1 (BaseNode): The second node of the edge.
+            is_edge_collision_free (bool): Whether the edge is collision-free.
+
+        Returns:
+            None: This method does not return any value.
+        """ 
+        if is_edge_collision_free:
+            n1.whitelist.add(n0.id)
+            n0.whitelist.add(n1.id)
+        else:
+            n0.blacklist.add(n1.id)
+            n1.blacklist.add(n0.id)
 
     @abstractmethod
-    def update_forward_queue(self, edge_cost, edge, edge_effort:float=None):
-        pass
-    @abstractmethod
-    def remove_forward_queue(self, edge_cost, n0, n1, edge_effort):
-        pass
-    @abstractmethod
-    def update_forward_queue_keys(self, type:str, node_ids:Optional[Set[BaseNode]] = None):
-        pass
-    @abstractmethod
-    def update_reverse_queue_keys(self, type:str, node_ids:Optional[Set[BaseNode]] = None):
-        pass
+    def update_forward_queue(self, edge_cost: float, edge: Tuple[BaseNode, BaseNode], edge_effort: float = None) -> None:
+        """
+        Updates the forward search queue with a new edge and its associated cost and effort.
 
+        Args:
+            edge_cost (float): The cost of the edge to be added or updated in the queue.
+            edge (Tuple[BaseNode, BaseNode]): The edge to be added or updated (typically a tuple of nodes).
+            edge_effort (float, optional): The effort associated with the edge. Defaults to None.
+
+        Returns:
+            None
+        """
+        pass
+    @abstractmethod
+    def update_forward_queue_keys(self, type: str, node_ids: Optional[Set[BaseNode]] = None) -> None:
+        """
+        Updates the keys in the forward queue for the specified nodes.
+
+        Args:
+            type (str): The type of update.
+            node_ids (Optional[Set[BaseNode]]): The set of node IDs to update.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        pass
+    @abstractmethod
+    def remove_forward_queue(self, edge_cost, n0, n1, edge_effort) -> None:
+        """
+        Removes an edge from the forward queue.
+
+        Args:
+            edge_cost: The cost of the edge.
+            n0: The start node of the edge.
+            n1: The end node of the edge.
+            edge_effort: The effort associated with the edge.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        pass
+    @abstractmethod
+    def update_reverse_queue_keys(self, type: str, node_ids: Optional[Set[BaseNode]] = None) -> None:
+        """
+        Updates the keys in the reverse queue for the specified nodes.
+
+        Args:
+            type (str): The type of update.
+            node_ids (Optional[Set[BaseNode]]): The set of node IDs to update.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        pass
+    @abstractmethod
+    def reset_reverse_tree(self) -> None:
+        """
+        Resets the reverse tree by setting the cost-to-go heuristics of all nodes to infinity,
+        and resetting their reverse relatives.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
+        pass
 class InformedSampling(BaseInformedSampling):
     def lb_cost_from_start(self, state:State, g, lb_attribute_name="lb_cost_to_come"):
         if state.mode not in g.reverse_transition_node_array_cache:
@@ -1377,6 +1920,9 @@ class InformedSampling(BaseInformedSampling):
 
 
 class BaseLongHorizon():
+    """
+    Manages long-horizon planning logic, including horizon segmentation, virtual roots/goals, and rewiring.
+    """
     def __init__(self, horizon_length:int = 4):
         self.init = True
         self.new_section = True
@@ -1390,7 +1936,22 @@ class BaseLongHorizon():
         self.counter = 1
         self.rewire = False
         
-    def init_long_horizon(self, g:BaseGraph, current_best_path_nodes:List[BaseNode], tot_mode_sequence:List[Mode]):
+    def init_long_horizon(self, 
+                          g:BaseGraph, 
+                          current_best_path_nodes:List[BaseNode], 
+                          tot_mode_sequence:List[Mode]
+                          ) -> None:
+        """
+        Initializes or updates the current planning horizon, setting the terminal mode and mode sequence.
+
+        Args:
+            g (BaseGraph): The planning graph.
+            current_best_path_nodes (List[BaseNode]): The current best path as nodes.
+            tot_mode_sequence (List[Mode]): The total sequence of modes for the problem.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if self.reached_terminal_mode:
             return
         end_idx = self.counter*self.horizon_length-1
@@ -1422,7 +1983,17 @@ class BaseLongHorizon():
         self.counter+=1
         self.new_section = False
 
-    def update_virtual_goal_nodes(self, g:BaseGraph, tot_mode_sequence):
+    def update_virtual_goal_nodes(self, g: "BaseGraph", tot_mode_sequence: List["Mode"]) -> None:
+        """
+        Updates the virtual goal nodes for the current horizon.
+
+        Args:
+            g (BaseGraph): The planning graph.
+            tot_mode_sequence (List[Mode]): The total sequence of modes for the problem.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if self.terminal_mode == tot_mode_sequence[-1]:
              g.virtual_goal_nodes = [g.nodes[id] for id in g.transition_node_ids[self.terminal_mode]]
              g.virtual_goal_node_ids = g.transition_node_ids[self.terminal_mode]
@@ -1437,13 +2008,37 @@ class BaseLongHorizon():
                     g.virtual_goal_node_ids.append(id)
         pass
 
-    def update_virtual_root(self, g:BaseGraph, current_best_path_nodes, tot_mode_sequence:List[Mode]):
+    def update_virtual_root(self, 
+                            g:BaseGraph, 
+                            current_best_path_nodes:List[BaseNode], 
+                            tot_mode_sequence:List[Mode]
+                            ) -> None:  
+        """
+        Updates the virtual root node for the current horizon.
+
+        Args:
+            g (BaseGraph): The planning graph.
+            current_best_path_nodes (List[BaseNode]): The current best path as nodes.
+            tot_mode_sequence (List[Mode]): The total sequence of modes for the problem.
+
+        Returns:
+            None: This method does not return any value.
+        """
         for next_node in current_best_path_nodes[-1].transition_neighbors:
             if next_node.state.mode == self.mode_sequence[0]:
                 g.virtual_root = next_node
                 break
     
-    def reset(self):
+    def reset(self) -> None:
+        """
+        Resets the horizon section state for a new planning segment.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.new_section = True
 
 # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
@@ -1552,9 +2147,24 @@ class BaseITstar(ABC):
         self.dummy_start_mode = False
         
     def _create_operation(self) -> BaseOperation:
+        """
+        Creates and returns a BaseOperation instance.
+
+        Returns:
+            BaseOperation: The operation instance.
+        """
         return BaseOperation()
     
-    def _create_graph(self, root_state:State) -> BaseGraph:
+    def _create_graph(self, root_state: State) -> BaseGraph:
+        """
+        Creates and returns a graph instance for the given root state.
+
+        Args:
+            root_state (State): The root state for the graph.
+
+        Returns:
+            BaseGraph: The created graph instance.
+        """
         return BaseGraph(
             root_state=root_state,
             operation=self.operation,
@@ -1567,14 +2177,29 @@ class BaseITstar(ABC):
             )
 
     def _create_long_horizon(self) -> BaseLongHorizon:
+        """
+        Creates and returns a longhorizon instance.
+
+        Returns:
+            BaseLongHorizon: The long-horizon planning manager.
+        """
         return BaseLongHorizon(self.horizon_length)
 
     def sample_valid_uniform_batch(self, batch_size: int, cost: float) -> List[State]:
+        """
+        Samples a batch of valid, collision-free states uniformly from the configuration space.
+
+        Args:
+            batch_size (int): Number of samples to generate.
+            cost (float): Cost threshold for accepting samples (if not None).
+
+        Returns:
+            List[State]: A list of valid State objects.
+        """
         new_samples = []
         num_attempts = 0
         num_valid = 0
-        failed_attemps = 0
-        
+        failed_attempts = 0
 
         if len(self.g.goal_nodes) > 0:
             focal_points = np.array(
@@ -1613,20 +2238,29 @@ class BaseITstar(ABC):
 
             if cost is not None:
                 if sum(self.env.batch_config_cost(q, focal_points)) > cost:
-                    failed_attemps += 1
+                    failed_attempts += 1
                     continue
 
             if self.env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
                 num_valid += 1
             else:
-                 failed_attemps += 1
+                 failed_attempts += 1
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
 
         return new_samples, num_attempts
     
-    def create_virtual_root(self):
+    def create_virtual_root(self) -> None:
+        """
+        Updates the virtual root node, if mode validation is enabled.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         if not self.with_mode_validation:
             return
         if not self.expanded_modes:
@@ -1652,7 +2286,17 @@ class BaseITstar(ABC):
         self.expanded_modes.remove(self.last_expanded_mode)
         self.sorted_reached_modes = [m for m in self.sorted_reached_modes if m not in self.expanded_modes]
     
-    def get_virtual_root(self, transition_neighbors:List[BaseNode], next_mode:Mode):
+    def get_virtual_root(self, transition_neighbors: List[BaseNode], next_mode: Mode) -> bool:
+        """
+        Finds and sets the virtual root node among transition neighbors for the given next mode.
+
+        Args:
+            transition_neighbors (List[BaseNode]): List of transition neighbor nodes.
+            next_mode (Mode): The mode to match for the virtual root.
+
+        Returns:
+            bool: True if a virtual root was found and set, False otherwise.
+        """
         for transition in transition_neighbors:
              if next_mode == transition.state.mode:
                 self.g.virtual_root = transition
@@ -1660,10 +2304,20 @@ class BaseITstar(ABC):
                 return True
         return False
             
-    def sample_valid_uniform_transitions(self, transistion_batch_size, cost):
+    def sample_valid_uniform_transitions(self, transistion_batch_size: int, cost: float) -> None:
+        """
+        Samples a batch of valid, collision-free transition nodes uniformly from the configuration space.
+
+        Args:
+            transistion_batch_size (int): Number of transitions to sample.
+            cost (float): Cost threshold for accepting transitions (if not None).
+
+        Returns:
+            None: This method does not return any value.
+        """
         if not self.apply_long_horizon and self.current_best_cost is None and len(self.g.goal_nodes) > 0:
             self.create_virtual_root()
-        transitions, failed_attemps = 0, 0
+        transitions, failed_attempts = 0, 0
         reached_terminal_mode = False
         update = (not self.apply_long_horizon or self.apply_long_horizon and (self.long_horizon.init or self.long_horizon.reached_terminal_mode))
         if len(self.g.goal_node_ids) == 0:
@@ -1689,7 +2343,7 @@ class BaseITstar(ABC):
             else:
                 mode_seq = self.sorted_reached_modes
         
-        while transitions < transistion_batch_size and failed_attemps < 6* transistion_batch_size:
+        while transitions < transistion_batch_size and failed_attempts < 6* transistion_batch_size:
             
             # sample mode
             mode = self.sample_mode(mode_seq, mode_sampling_type, None)
@@ -1763,10 +2417,10 @@ class BaseITstar(ABC):
                             self.dummy_start_mode = True
                     
                 else:
-                    failed_attemps +=1
+                    failed_attempts +=1
                     continue
             else:
-                failed_attemps +=1
+                failed_attempts +=1
                 continue
             
             if next_modes is not None and len(next_modes) > 0:
@@ -1785,8 +2439,17 @@ class BaseITstar(ABC):
         print(f"Adding {transitions} transitions")
         print(self.mode_validation.counter)
         return
-    
-    def get_init_mode_sequence(self, mode):
+
+    def get_init_mode_sequence(self, mode: Mode) -> List[Mode]:
+        """
+        Generates the initial mode sequence for the planning problem, ending at the given mode.
+
+        Args:
+            mode: The terminal mode.
+
+        Returns:
+            List: The sequence of modes from start to the given mode.
+        """
         if self.found_init_mode_sequence:
             return []
         mode_seq = []
@@ -1801,8 +2464,17 @@ class BaseITstar(ABC):
             else:
                 mode_seq = self.sorted_reached_modes
         return mode_seq
-   
-    def create_mode_init_sequence(self, mode):
+
+    def create_mode_init_sequence(self, mode: Mode) -> None:
+        """
+        Creates the initial search mode sequence by traversing backwards from the given mode.
+
+        Args:
+            mode: The terminal mode.
+
+        Returns:
+            None: This method does not return any value.
+        """
         self.init_search_modes = [mode]
         self.init_next_ids[mode] = None
         while True:
@@ -1820,7 +2492,18 @@ class BaseITstar(ABC):
         self.sorted_reached_modes = self.init_search_modes
         print(self.sorted_reached_modes)
 
-    def sample_around_path(self, path):
+    def sample_around_path(self, path: List[State]) -> Tuple[List[State], List[Tuple]]:
+        """
+        Samples new states and transitions around a given path by adding noise to configurations.
+
+        Args:
+            path (List[State]): The reference path to sample around.
+
+        Returns:
+            Tuple[List[State], List[Tuple]]: 
+                - List of new State objects sampled around the path.
+                - List of new transition tuples (q, mode, next_mode) sampled around transitions in the path.
+        """
         # sample index
         interpolated_path = interpolate_path(path)
         # interpolated_path = current_best_path
@@ -1894,7 +2577,16 @@ class BaseITstar(ABC):
 
         return new_states_from_path_sampling, new_transitions_from_path_sampling
 
-    def add_sample_batch(self):
+    def add_sample_batch(self) -> None:
+        """
+        Adds a new batch of nodes and transitions to the graph, including uniform, informed, and path-based samples.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         # add new batch of nodes
         while True:
 
@@ -2037,13 +2729,22 @@ class BaseITstar(ABC):
         # self.g.compute_lb_reverse_cost_to_come(self.env.batch_config_cost)
         # self.g.compute_lb_cost_to_come(self.env.batch_config_cost)
 
-    def sample_mode(
-        self,
-        reached_modes,
-        mode_sampling_type: str = "uniform_reached",
-        found_solution: bool = False
-        
-    ) -> Mode:
+    def sample_mode(self,
+                    reached_modes: List[Mode],
+                    mode_sampling_type: str = "uniform_reached",
+                    found_solution: bool = False
+                    ) -> Mode:
+        """
+        Samples a mode from the set of reached modes according to the specified strategy.
+
+        Args:
+            reached_modes (List[Mode]): Modes to sample from.
+            mode_sampling_type (str, optional): Sampling strategy ("uniform_reached", "frontier", "greedy"). Defaults to "uniform_reached".
+            found_solution (bool, optional): Whether a solution has been found. Defaults to False.
+
+        Returns:
+            Mode: The sampled mode.
+        """
         if mode_sampling_type == "uniform_reached":
             return random.choice(reached_modes)
         elif mode_sampling_type == "frontier":
@@ -2103,6 +2804,22 @@ class BaseITstar(ABC):
             # m_rnd = reached_modes[-1]
 
     def sample_manifold(self) -> None:
+        """
+        Main sampling loop for the IT* planner. 
+        Handles cache initialization, node pruning, batch sampling, and tracks the number of samples added.
+        The loop continues until at least one goal node is found in the graph.
+
+        - Initializes caches and prunes nodes if needed (based on long horizon and search state).
+        - Adds new sample batches (uniform, informed, and path-based).
+        - Updates the sample count.
+        - Exits when a goal node is found.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
         print("====================")
         while True:
             self.g.initialize_cache()
@@ -2184,7 +2901,18 @@ class BaseITstar(ABC):
             #     print("good to go")
             #     break
     
-    def prune_set_of_expanded_nodes(self):
+    def prune_set_of_expanded_nodes(self) -> Tuple[List[int], List[int]]:
+        """
+        Identifies which nodes in the graph should be kept or removed based on the current best path and cost.
+
+        Args:
+            None
+
+        Returns:
+            Tuple[List[int], List[int]]:
+                - List of node IDs to keep in the graph.
+                - List of node IDs to remove from the graph.
+        """
         if not self.remove_nodes:
             return BaseTree.all_vertices, []
 
@@ -2272,7 +3000,16 @@ class BaseITstar(ABC):
                 vertices_node_ids.append(goal)
         return vertices_node_ids, children_to_be_removed
 
-    def remove_nodes_in_graph(self):
+    def remove_nodes_in_graph(self) -> None:
+        """
+        Removes nodes from the graph that are outside the current cost bound or not in the expanded tree.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         num_pts_for_removal = 0
         vertices_to_keep, vertices_to_be_removed = self.prune_set_of_expanded_nodes()
         # vertices_to_keep = list(chain.from_iterable(self.g.vertices_node_ids.values()))
@@ -2353,8 +3090,17 @@ class BaseITstar(ABC):
             BaseTree.all_vertices.clear()
             self.g.add_vertex_to_tree(self.g.root)
         print(f"Removed {num_pts_for_removal} nodes")
-    
-    def remove_nodes_in_graph_before_init_sol(self):
+
+    def remove_nodes_in_graph_before_init_sol(self) -> None:
+        """
+        Removes nodes from the graph before an initial solution is found.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         relevant_expanded_modes = [mode for mode in list(self.g.tree.keys()) if mode in self.sorted_reached_modes]
         if relevant_expanded_modes != []:
             if self.dummy_start_mode and relevant_expanded_modes[0] == self.g.root.state.mode:
@@ -2391,6 +3137,7 @@ class BaseITstar(ABC):
                 id
                 for id in self.g.node_ids[mode]
                 if id == self.g.root.id or id in BaseTree.all_vertices
+                or (not self.with_mode_validation and not np.isinf(self.g.nodes[id].cost))
             ]
             num_pts_for_removal += original_count - len(self.g.node_ids[mode])
         self.g.reverse_transition_node_ids = {}
@@ -2409,7 +3156,8 @@ class BaseITstar(ABC):
             self.g.transition_node_ids[mode] = [
                 id
                 for id in self.g.transition_node_ids[mode]
-                if id == self.g.root.id or id in BaseTree.all_vertices
+                if id == self.g.root.id or id in BaseTree.all_vertices 
+                or (not self.with_mode_validation and not np.isinf(self.g.nodes[id].cost))
                  
             ]
             if len(self.g.transition_node_ids[mode]) == 0:
@@ -2435,11 +3183,24 @@ class BaseITstar(ABC):
         self.g.add_vertex_to_tree(self.g.root)
         print(f"Removed {num_pts_for_removal} nodes")
 
-    def process_valid_path(self, 
-                           valid_path, 
-                           with_queue_update:bool = True, 
-                           with_shortcutting:bool = False, 
-                           force_update:bool = False):
+    def process_valid_path(self,
+                           valid_path,
+                           with_queue_update: bool = True,
+                           with_shortcutting: bool = False,
+                           force_update: bool = False
+                           ) -> None:
+        """
+        Processes a valid path found by the planner, updating the best path and cost, and optionally performing shortcutting and rewiring.
+
+        Args:
+            valid_path (List[BaseNode]): The valid path as a list of nodes.
+            with_queue_update (bool, optional): Whether to update the search queues. Defaults to True.
+            with_shortcutting (bool, optional): Whether to attempt shortcutting. Defaults to False.
+            force_update (bool, optional): Whether to force updating the best path and cost. Defaults to False.
+
+        Returns:
+            None
+        """
         path = [node.state for node in valid_path]
         new_path_cost = path_cost(path, self.env.batch_config_cost)
         if force_update or self.current_best_cost is None or new_path_cost < self.current_best_cost:
@@ -2530,7 +3291,8 @@ class BaseITstar(ABC):
                     self.current_best_cost = shortcut_path_cost
 
                     interpolated_path = shortcut_path
-                    self.g.add_path_states(interpolated_path, self.approximate_space_extent, rewire = rewire)   
+                    lh = self.apply_long_horizon and not self.env.is_terminal_mode(shortcut_path[-1].mode)
+                    self.g.add_path_states(interpolated_path, self.approximate_space_extent, rewire = rewire, lh = lh)   
                     self.current_best_path_nodes = self.generate_path(force_generation=True)
                     self.current_best_path = [node.state for node in self.current_best_path_nodes]
 
@@ -2540,7 +3302,7 @@ class BaseITstar(ABC):
                         self.initialize_lb()
                         if with_queue_update:
                         #     self.initialize
-                            # self.initialze_forward_search()
+                            # self.initialize_forward_search()
                             # self.initialize_reverse_search()
                             
                             self.g.update_reverse_queue_keys('target')
@@ -2562,7 +3324,16 @@ class BaseITstar(ABC):
             
             # extract modes for removal strategy
              
-    def update_removal_conditions(self):
+    def update_removal_conditions(self) -> None:
+        """
+        Updates the removal conditions for nodes based on the current best path, setting up arrays for transition start/end and intermediate costs.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         self.start_transition_arrays, self.end_transition_arrays, self.intermediate_mode_costs = {}, {}, {}
         self.start_transition_arrays[self.current_best_path_nodes[0].state.mode] = self.g.root.state.q.state()
         modes = [self.current_best_path_nodes[0].state.mode]
@@ -2577,9 +3348,19 @@ class BaseITstar(ABC):
         self.end_transition_arrays[modes[-1]] = self.current_best_path_nodes[-1].state.q.state()
         self.intermediate_mode_costs[modes[-1]] = self.current_best_path_nodes[-1].cost - start_cost
         print("Modes of new path")
-        print([m.task_ids for m in modes])     
-            
-    def add_reverse_connectivity_to_path(self, path, with_update):
+        print([m.task_ids for m in modes])
+
+    def add_reverse_connectivity_to_path(self, path: List[BaseNode], with_update: bool) -> None:
+        """
+        Adds reverse connectivity along a given path, updating the reverse tree and optionally expanding nodes.
+
+        Args:
+            path (List[BaseNode]): The path along which to add reverse connectivity.
+            with_update (bool): Whether to update reverse sets and expand nodes.
+
+        Returns:
+            None
+        """
         parent = path[-1]
         for node in reversed(path[1:-1]):
             edge_cost = parent.forward.cost_to_parent
@@ -2598,7 +3379,16 @@ class BaseITstar(ABC):
                 self.update_reverse_sets(node) 
             parent = node
       
-    def generate_path(self, force_generation:bool = False) -> List[BaseNode]:
+    def generate_path(self, force_generation: bool = False) -> List[BaseNode]:
+        """
+        Generates a path from the goal node to the root by following parent pointers.
+
+        Args:
+            force_generation (bool, optional): If True, generates the path even if the cost difference is small. Defaults to False.
+
+        Returns:
+            List[BaseNode]: The generated path as a list of nodes from root to goal.
+        """
         path = []
         goal, cost = self.get_lb_goal_node_and_cost()
         if self.current_best_cost is not None:
@@ -2619,7 +3409,17 @@ class BaseITstar(ABC):
         path = path[::-1]
         return path
 
-    def update_results_tracking(self, cost, path):
+    def update_results_tracking(self, cost: float, path: List[BaseNode]) -> None:
+        """
+        Updates the tracking of costs, times, and all explored paths if the path ends in a terminal mode.
+
+        Args:
+            cost (float): The cost of the path.
+            path (List[BaseNode]): The path as a list of nodes.
+
+        Returns:
+            None
+        """
         if not self.env.is_terminal_mode(path[-1].mode):
             return
         self.costs.append(cost)
@@ -2627,6 +3427,15 @@ class BaseITstar(ABC):
         self.all_paths.append(path)
 
     def get_lb_goal_node_and_cost(self) -> BaseNode:
+        """
+        Retrieves the goal node with the lowest cost and its associated cost.
+
+        Args:
+            None
+
+        Returns:
+            Tuple[BaseNode, float]: The best goal node and its cost.
+        """
         if self.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
             min_id = np.argmin(self.operation.costs[self.g.virtual_goal_node_ids], axis=0)
             best_cost = self.operation.costs[self.g.virtual_goal_node_ids][min_id]
@@ -2641,7 +3450,20 @@ class BaseITstar(ABC):
                             node: Optional[BaseNode] = None, 
                             regardless_forward_closed_set:bool= False, 
                             choose_random_set:bool=False, 
-                            first_search:bool = False) -> None:
+                            first_search:bool = False
+                            ) -> None:
+        """
+        Expands a node forward by evaluating and updating its neighbors in the graph.
+
+        Args:
+            node (Optional[BaseNode], optional): The node to expand. Defaults to None.
+            regardless_forward_closed_set (bool, optional): If True, expands regardless of closed set. Defaults to False.
+            choose_random_set (bool, optional): If True, randomly selects a subset of neighbors. Defaults to False.
+            first_search (bool, optional): If True, indicates this is the first search. Defaults to False.
+
+        Returns:
+            None
+        """
         if node in self.g.goal_nodes or node in self.g.virtual_goal_nodes:
             return   
         # if node.id == 1326:
@@ -2700,6 +3522,15 @@ class BaseITstar(ABC):
                  self.g.update_forward_queue(edge_cost, edge)
 
     def save_tree_data(self, nodes:Tuple[set]) -> None:
+        """
+        Saves the current tree data, including node states, modes, and parent relationships.
+
+        Args:
+            nodes (Tuple[set]): Tuple containing sets of node IDs for forward and reverse trees.
+
+        Returns:
+            None
+        """
         data = {}
         data['all_nodes'] = [self.g.nodes[id].state.q.state() for id in list(chain.from_iterable(self.g.node_ids.values()))]
         data['all_transition_nodes'] = [self.g.nodes[id].state.q.state() for id in list(chain.from_iterable(self.g.transition_node_ids.values()))]
@@ -2736,6 +3567,16 @@ class BaseITstar(ABC):
         save_data(data, True)
     
     def initialize_search(self, num_iter = None, skip:bool= False) -> None:
+        """
+        Initializes the search process, optionally performing shortcutting and removal updates.
+
+        Args:
+            num_iter (int, optional): Number of iterations. Defaults to None.
+            skip (bool, optional): Whether to skip shortcutting and removal updates. Defaults to False.
+
+        Returns:
+            None
+        """
         # if self.g.get_num_samples() >200:
         #     q_samples = []
         #     modes = []
@@ -2806,12 +3647,21 @@ class BaseITstar(ABC):
 
         self.sample_manifold()
         self.initialize_lb()
-        self.initialze_forward_search()
+        self.initialize_forward_search()
         self.initialize_reverse_search()
         self.dynamic_reverse_search_update = False
         self.first_search = False
 
     def PlannerInitialization(self) -> None:
+        """
+        Initializes the planner, graph, and search structures.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         q0 = self.env.get_start_pos()
         m0 = self.env.get_start_mode()
         self.reached_modes.update([m0])
@@ -2823,28 +3673,76 @@ class BaseITstar(ABC):
         self.initialize_search()
     
     @abstractmethod
-    def update_reverse_sets(node):
+    def update_reverse_sets(self, node: BaseNode) -> None:
+        """
+        Updates reverse sets for a node (to be implemented by subclasses).
+
+        Args:
+            node: The node for which to update reverse sets.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        pass
         pass
         
     @abstractmethod
-    def initialize_lb(self):    
-        pass
-
-    @abstractmethod
-    def initialize_reverse_search(self, reset:bool =True):
-        pass
-
-    @abstractmethod
-    def initialze_forward_search(self):
-        pass
-
-    @abstractmethod
-    def Plan(self) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def initialize_lb(self) -> None:
         """
-        Executes planning process using an RRT* framework.
+        Initializes lower bound costs.
 
         Args:
             None
+
+        Returns:
+            None: This method does not return any value.
+        """
+        pass
+
+    @abstractmethod
+    def initialize_reverse_search(self, reset:bool = True) -> None:
+        """
+        Initializes the reverse search.
+
+        Args:
+            reset (bool, optional): Whether to reset the search. Defaults to True.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        pass
+
+    @abstractmethod
+    def initialize_forward_search(self) -> None:
+        """
+        Initializes the forward search.
+
+        Args:
+            None
+
+        Returns:
+            None: This method does not return any value.
+        """
+        pass
+    @abstractmethod
+    def continue_reverse_search(self, iter:int) -> bool:
+        """
+        Determines whether the reverse search should continue based on queue states and consistency conditions.
+
+        Args:
+            iter (int): The current iteration number.
+
+        Returns:
+            bool: True if the reverse search should continue, False otherwise.
+        """
+        pass
+    @abstractmethod
+    def Plan(self, optimize:bool = True) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+        """
+        Executes planning process.
+
+        Args:
+            optimize (bool, optional): Whether to optimize the path. Defaults to True.
 
         Returns:
             Tuple:
