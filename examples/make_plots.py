@@ -186,7 +186,7 @@ planner_name_to_color = {
     "birrtstar": "black",
     "eitstar": report_colors["eit"],
     "long_horizon eitstar": report_colors["rheit"],
-    "long_horizon aitstar": report_colors["ait"],
+    "long_horizon aitstar": report_colors["rhait"],
     "aitstar": report_colors["ait"],
     "locally_informed_prm_shortcutting": report_colors["prm"],
     "eitstar same": report_colors["changed eit"],
