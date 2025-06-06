@@ -8,6 +8,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode
 )
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+    BaseRRTConfig,
     BaseRRTstar, 
     Node, 
     SingleTree,
@@ -22,35 +23,11 @@ class RRTstar(BaseRRTstar):
     """Represents the class for the RRT* based planner"""
     def __init__(self, 
                  env: BaseProblem,
-                 ptc: PlannerTerminationCondition,  
-                 general_goal_sampling: bool = False, 
-                 informed_sampling: bool = False, 
-                 informed_sampling_version: int = 6, 
-                 distance_metric: str = 'max_euclidean',
-                 p_goal: float = 0.1, 
-                 p_stay: float = 0.0,
-                 p_uniform: float = 0.2, 
-                 shortcutting: bool = False, 
-                 mode_sampling: Optional[Union[int, float]] = None, 
-                 sample_near_path: bool = False,
-                 locally_informed_sampling:bool = True, 
-                 remove_redundant_nodes:bool = True,
-                 informed_batch_size: int = 500,
-                 apply_long_horizon:bool = False,
-                 horizon_length:int = 1,
-                 with_mode_validation:bool = True,
-                 with_noise:bool = False,
-                 with_tree_visualization: bool = False
-                 
+                 config: BaseRRTConfig
                 ):
-        super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
-                         informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
-                         p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
-                         sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                         informed_batch_size = informed_batch_size, apply_long_horizon = apply_long_horizon, 
-                         horizon_length = horizon_length, with_mode_validation = with_mode_validation, with_noise=with_noise,
-                         with_tree_visualization = with_tree_visualization)
-     
+        
+        super().__init__(env=env, config=config)
+
     def UpdateCost(self, mode:Mode, n:Node) -> None:
         stack = [n]
         while stack:
@@ -92,7 +69,7 @@ class RRTstar(BaseRRTstar):
         self.ManageTransition(active_mode, start_node)
     
     def save_tree_data(self) -> None:
-        if not self.with_tree_visualization:
+        if not self.config.with_tree_visualization:
             return
         data = {}
         data['all_nodes'] = [self.trees[m].subtree[id].state.q.state() for m in self.modes for id in self.trees[m].get_node_ids_subtree()]
@@ -134,13 +111,17 @@ class RRTstar(BaseRRTstar):
 
         save_data(data, True)
 
-    def Plan(self, optimize:bool=True) ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def plan(
+        self,
+        ptc: PlannerTerminationCondition,
+        optimize: bool = True,
+    ) -> Optional[Tuple[List[State], List]]:
         i = 0
         self.PlannerInitialization()
         while True:
             i += 1
-            # Mode selectiom       
-            active_mode  = self.RandomMode()
+            # Mode selection
+            active_mode = self.RandomMode()
             # RRT* core
             q_rand = self.SampleNodeManifold(active_mode)
             if not q_rand:
@@ -165,7 +146,7 @@ class RRTstar(BaseRRTstar):
                 self.save_tree_data()
                 break
 
-            if self.ptc.should_terminate(i, time.time() - self.start_time):
+            if ptc.should_terminate(i, time.time() - self.start_time):
                 print('Number of iterations: ', i)
                 break
             

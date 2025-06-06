@@ -43,6 +43,8 @@ from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
 from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
     BidirectionalRRTstar,
 )
+from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+    BaseRRTConfig)
 from multi_robot_multi_goal_planning.planners.planner_drrtstar import dRRTstar
 from multi_robot_multi_goal_planning.planners.planner_fastdrrtstar import fastdRRTstar
 from make_plots import make_cost_plots
@@ -202,9 +204,7 @@ def setup_planner(
 
         def planner(env):
             options = planner_config["options"]
-            return RRTstar(
-                env,
-                ptc=RuntimeTerminationCondition(runtime),
+            rrtstar_config =  BaseRRTConfig(
                 general_goal_sampling=options["general_goal_sampling"],
                 informed_sampling=options["informed_sampling"],
                 informed_sampling_version=options["informed_sampling_version"],
@@ -223,14 +223,18 @@ def setup_planner(
                 with_mode_validation = options["with_mode_validation"],
                 with_noise=options["with_noise"],
                 with_tree_visualization = options["with_tree_visualization"],
-            ).Plan(optimize)
+            )
+        
+            return RRTstar(env, config=rrtstar_config).plan(
+                    ptc=RuntimeTerminationCondition(runtime),
+                    optimize=optimize,
+                )
+        
     elif planner_config["type"] == "birrtstar":
 
         def planner(env):
             options = planner_config["options"]
-            return BidirectionalRRTstar(
-                env,
-                ptc=RuntimeTerminationCondition(runtime),
+            birrtstar_config =  BaseRRTConfig(
                 general_goal_sampling=options["general_goal_sampling"],
                 informed_sampling=options["informed_sampling"],
                 informed_sampling_version=options["informed_sampling_version"],
@@ -252,7 +256,11 @@ def setup_planner(
                 with_noise=options["with_noise"],
                 with_tree_visualization = options["with_tree_visualization"],
                 
-            ).Plan(optimize)
+            )
+            return BidirectionalRRTstar(env, config=birrtstar_config).plan(
+                    ptc=RuntimeTerminationCondition(runtime),
+                    optimize=optimize,
+                )
     elif planner_config["type"] == "drrtstar":
 
         def planner(env):

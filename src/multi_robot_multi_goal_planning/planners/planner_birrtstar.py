@@ -15,6 +15,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 )
 
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+    BaseRRTConfig,
     BaseRRTstar, 
     Node, 
     BidirectionalTree,
@@ -28,44 +29,14 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 @njit
 def compute_child_costs(parent_cost, cost_to_parents):
     return parent_cost + cost_to_parents
-
-
 class BidirectionalRRTstar(BaseRRTstar):
     """Represents the class for the Bidirectional RRT* based planner"""
 
     def __init__(self, 
-                 env:BaseProblem, 
-                 ptc: PlannerTerminationCondition,
-                 general_goal_sampling: bool = False, 
-                 informed_sampling: bool = False, 
-                 informed_sampling_version: int = 6, 
-                 distance_metric: str = 'max_euclidean',
-                 p_goal: float = 0.1, 
-                 p_stay: float = 0.0,
-                 p_uniform: float = 0.2, 
-                 shortcutting: bool = False, 
-                 mode_sampling: Optional[Union[int, float]] = None, 
-                 sample_near_path: bool = False, 
-                 transition_nodes: int = 50, 
-                 birrtstar_version: int = 2,
-                 locally_informed_sampling: bool = True, 
-                 remove_redundant_nodes: bool = True, 
-                 informed_batch_size: int = 500,
-                 apply_long_horizon:bool = False,
-                 horizon_length:int = 1,
-                 with_mode_validation:bool = True,
-                 with_noise:bool = False,
-                 with_tree_visualization:bool = False
-                ):
-        super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
-                         informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
-                         p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
-                         sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                         informed_batch_size = informed_batch_size, apply_long_horizon = apply_long_horizon, 
-                         horizon_length = horizon_length, with_mode_validation = with_mode_validation, with_noise=with_noise,
-                         with_tree_visualization=with_tree_visualization)
-        self.transition_nodes = transition_nodes 
-        self.birrtstar_version = birrtstar_version
+                 env: BaseProblem,
+                 **kwargs):
+        config = BaseRRTConfig(**kwargs)
+        super().__init__(env=env, config=config)
         self.swap = True
        
     def UpdateCost(self, mode:Mode, n:Node, connection:bool = False) -> None:
@@ -119,7 +90,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.InformedInitialization(new_mode)
             #Initialize transition nodes
             node = None
-            for i in range(self.transition_nodes):    
+            for i in range(self.config.transition_nodes):    
                 q = self.sample_transition_configuration(new_mode)
                 if q is None:
                     if new_mode in self.modes:
@@ -217,7 +188,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             return
         n_nearest_b, dist, _, _= self.Nearest(mode, n_new.state.q, 'B')
 
-        if self.birrtstar_version == 1 or self.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
+        if self.config.birrtstar_version == 1 or self.config.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
@@ -232,7 +203,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, mode): #ORder rigth? TODO
                 return
           
-        elif self.birrtstar_version == 2 and not self.trees[mode].connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
+        elif self.config.birrtstar_version == 2 and not self.trees[mode].connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
             n_nearest_b = self.Extend(mode, n_nearest_b, n_new, dist)
             if not n_nearest_b:
                 return
@@ -308,7 +279,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 return 
             
     def save_tree_data(self) -> None:
-        if not self.with_tree_visualization:
+        if not self.config.with_tree_visualization:
             return
         data = {}
         data['all_nodes'] = [self.trees[m].subtree[id].state.q.state() for m in self.modes for id in self.trees[m].get_node_ids_subtree('A')]
@@ -370,7 +341,11 @@ class BidirectionalRRTstar(BaseRRTstar):
         start_node.cost_to_parent = 0.0
         self.ManageTransition(mode, start_node)
 
-    def Plan(self, optimize:bool=True)  ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def plan(
+        self,
+        ptc: PlannerTerminationCondition,
+        optimize: bool = True,
+    ) -> Optional[Tuple[List[State], List]]:
         i = 0
         self.PlannerInitialization()
         while True:
@@ -408,7 +383,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.save_tree_data()
                 break
 
-            if self.ptc.should_terminate(i, time.time() - self.start_time):
+            if ptc.should_terminate(i, time.time() - self.start_time):
                 print('Number of iterations: ', i)
                 break
             
