@@ -196,6 +196,31 @@ class Constraint(ABC):
         pass
 
 
+class FrameOrientationConstraint(Constraint):
+    def __init__(self, frame_name, pose_bounds):
+        self.frame_name = frame_name
+        self.bounds = pose_bounds
+
+    def is_fulfilled(self, q, env):
+        frame_pose = env.get_frame_pose(self.frame_name)
+
+        return frame_pose < self.bounds[:, 0] and frame_pose > self.bounds[:, 1]
+
+
+class FrameRelativeOrientationConstraint(Constraint):
+    def __init__(self, frame_names: List, relative_pose):
+        self.frames = frame_names
+        self.relative_pose = relative_pose
+
+    def is_fulfilled(self, q, env):
+        frame_1_pose = env.get_frame_pose(self.frames[0])
+        frame_2_pose = env.get_frame_pose(self.frames[1])
+
+        relative_pose = np.zeros(4)
+
+        return np.isclose(relative_pose, self.relative_pose)
+
+
 class Task:
     """
     A task is encoding what a (set of) robot(s) need to achieve.
@@ -308,6 +333,10 @@ class Mode:
 
 
 class State:
+    """
+    A state in our motion planning problem fully describes the scene, i.e., it contains both the information of a mode (the scene graph), and the 
+    joint poses that the robots are in.
+    """
     q: Configuration
     mode: Mode
 
@@ -327,6 +356,9 @@ def state_dist(start: State, end: State) -> float:
 
 
 class BaseModeLogic(ABC):
+    """
+    Abstract class for determining the logic, consisting of the mode and task transitions.
+    """
     tasks: List[Task]
     _task_name_dict: Dict[str, Task]
     _task_id_dict: Dict[str, int]
@@ -1445,6 +1477,10 @@ class ProblemSpec:
 
 # TODO: split into env + problem specification
 class BaseProblem(ABC):
+    """
+    ABstract base class for the planning problems.
+    """
+
     robots: List[str]
     robot_dims: Dict[str, int]
     robot_idx: Dict[str, List[int]]
@@ -1497,7 +1533,6 @@ class BaseProblem(ABC):
                 )  # Convert string representation back to dictionary
                 goal_type = task_data["goal_type"]
 
-                goal = None
                 if goal_type == "SingleGoal":
                     goal = SingleGoal.from_data(task_data["goal"])
                 elif goal_type == "GoalRegion":
@@ -1508,6 +1543,8 @@ class BaseProblem(ABC):
                     goal = ConditionalGoal.from_data(task_data["goal"])
                 elif goal_type == "ConstrainedGoal":
                     goal = ConstrainedGoal.from_data(task_data["goal"])
+
+                assert goal is not None
 
                 task = Task(
                     robots=task_data["robots"],
@@ -1545,26 +1582,43 @@ class BaseProblem(ABC):
 
     @abstractmethod
     def done(self, q: Configuration, mode: Mode):
+        "Checks if we are done (i.e., if the terminal constraint is fulfilled.)"
         pass
 
     @abstractmethod
     def is_transition(self, q: Configuration, m: Mode) -> bool:
+        """
+        Checks if a given configuration satisfies constraints to transition to a different mode.
+        """
         pass
 
     @abstractmethod
     def is_terminal_mode(self, mode: Mode):
+        """
+        Checks if a mode is a terminal mode.
+        """
         pass
 
     @abstractmethod
     def get_next_modes(self, q: Configuration, mode: Mode):
+        """
+        Get the modes that can be reached from the current mode and configuration.
+        Assumes that the currentconfiguration fulfills is_transition(..)
+        """
         pass
 
     @abstractmethod
     def get_active_task(self, mode: Mode, next_task_ids: List[int] | None) -> Task:
+        """
+        Checks which task is the one that needs to be fulfilled given the current mode and a desired List of next task indices.
+        """
         pass
 
     @abstractmethod
     def get_valid_next_task_combinations(self, m: Mode) -> List[List[int]]:
+        """
+        Returns the valid next task combinations given the current mode.
+        """
         pass
 
     # @abstractmethod
@@ -1719,8 +1773,11 @@ class BaseProblem(ABC):
         return True
 
     def is_valid_plan(self, path: List[State]) -> bool:
-        # check if it is collision free and if all modes are passed in order
-        # only take the configuration into account for that
+        """
+        Check if the path is collision free and if all modes are transitioned through in the correct order.
+        We only take the configuration into account for this check.
+        """
+
         mode = self.start_mode
         collision = False
         for i in range(len(path)):
