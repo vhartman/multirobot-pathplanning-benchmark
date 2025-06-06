@@ -1,6 +1,12 @@
 import numpy as np
 import random
-
+import heapq
+import time
+import math
+from numpy.typing import NDArray
+from itertools import chain
+from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
 from typing import (
     List,
     Dict,
@@ -14,12 +20,6 @@ from typing import (
     TypeVar,
     Type
 )
-from numpy.typing import NDArray
-from itertools import chain
-import heapq
-import time
-import math
-from abc import ABC, abstractmethod
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
@@ -29,20 +29,16 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist
 )
-from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate_path
-
-from multi_robot_multi_goal_planning.planners import shortcutting
-
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
-    PlannerTerminationCondition,
-)
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
     find_nearest_indices,
     save_data
     )
-
+from multi_robot_multi_goal_planning.problems.util import path_cost, interpolate_path
+from multi_robot_multi_goal_planning.planners import shortcutting
 from multi_robot_multi_goal_planning.planners.sampling_informed import (InformedSampling as BaseInformedSampling)
 from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
+from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
+
 T = TypeVar("T")
 class BaseOperation(ABC):
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
@@ -1958,7 +1954,7 @@ class BaseLongHorizon():
 
         if self.rewire:
             end_idx = len(tot_mode_sequence)-1
-        
+
         elif end_idx >= len(tot_mode_sequence)-2 or end_idx >= len(tot_mode_sequence)-self.horizon_length -1 or (end_idx + 1 >= len(tot_mode_sequence)-2 and self.horizon_length > 1):
             self.rewire = True
             end_idx = len(tot_mode_sequence)-2
@@ -2043,66 +2039,44 @@ class BaseLongHorizon():
 
 # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
 # needed adaption to work.
-class BaseITstar(ABC):
+@dataclass
+class BaseITConfig:
+    init_mode_sampling_type: str = "greedy"
+    distance_metric: str = "euclidean"
+    try_sampling_around_path: bool = True
+    try_informed_sampling: bool = True
+    init_uniform_batch_size: int = 100
+    init_transition_batch_size:int = 100
+    uniform_batch_size: int = 200
+    uniform_transition_batch_size: int = 500
+    informed_batch_size: int = 500
+    informed_transition_batch_size: int = 500
+    path_batch_size: int = 500
+    locally_informed_sampling: bool = True
+    try_informed_transitions: bool = True
+    try_shortcutting: bool = True
+    try_direct_informed_sampling: bool = True
+    inlcude_lb_in_informed_sampling:bool = True
+    remove_based_on_modes:bool = False
+    with_tree_visualization:bool = False
+    apply_long_horizon:bool = False
+    frontier_mode_sampling_probability:float = 1.0
+    horizon_length:int = 1
+    with_rewiring:bool = True
+    with_mode_validation:bool = True
+    with_noise:bool = False
+
+class BaseITstar(BasePlanner):
     """
     Represents the base class for IT*-based algorithms, providing core functionalities for motion planning.
     """
-    def __init__(
-        self,
-        env: BaseProblem,
-        ptc: PlannerTerminationCondition,
-        init_mode_sampling_type: str = "greedy",
-        distance_metric: str = "euclidean",
-        try_sampling_around_path: bool = True,
-        try_informed_sampling: bool = True,
-        init_uniform_batch_size: int = 100,
-        init_transition_batch_size:int = 100,
-        uniform_batch_size: int = 200,
-        uniform_transition_batch_size: int = 500,
-        informed_batch_size: int = 500,
-        informed_transition_batch_size: int = 500,
-        path_batch_size: int = 500,
-        locally_informed_sampling: bool = True,
-        try_informed_transitions: bool = True,
-        try_shortcutting: bool = True,
-        try_direct_informed_sampling: bool = True,
-        inlcude_lb_in_informed_sampling:bool = True,
-        remove_based_on_modes:bool = False,
-        with_tree_visualization:bool = False,
-        apply_long_horizon:bool = False,
-        frontier_mode_sampling_probability:float = 1.0,
-        horizon_length:int = 1,
-        with_rewiring:bool = True,
-        with_mode_validation:bool = True,
-        with_noise:bool = False,
-    ):
-        self.env = env
-        self.ptc = ptc
-        self.init_mode_sampling_type = init_mode_sampling_type
-        self.distance_metric = distance_metric
-        self.try_sampling_around_path = try_sampling_around_path
-        self.try_informed_sampling = try_informed_sampling
-        self.init_uniform_batch_size = init_uniform_batch_size
-        self.init_transition_batch_size = init_transition_batch_size
-        self.uniform_batch_size = uniform_batch_size
-        self.uniform_transition_batch_size = uniform_transition_batch_size
-        self.informed_batch_size = informed_batch_size
-        self.informed_transition_batch_size = informed_transition_batch_size
-        self.path_batch_size = path_batch_size
-        self.locally_informed_sampling = locally_informed_sampling
-        self.try_informed_transitions = try_informed_transitions
-        self.try_shortcutting = try_shortcutting
-        self.try_direct_informed_sampling = try_direct_informed_sampling
-        self.inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling
-        self.remove_based_on_modes = remove_based_on_modes
-        self.with_tree_visualization = with_tree_visualization
-        self.apply_long_horizon = apply_long_horizon
-        self.frontier_mode_sampling_probability = frontier_mode_sampling_probability
-        self.horizon_length = horizon_length
-        self.with_rewiring = with_rewiring
-        self.with_mode_validation = with_mode_validation
-        self.with_noise = with_noise
+    def __init__(self, 
+                 env:BaseProblem,
+                 config: BaseITConfig = field(default_factory=BaseITConfig)
+                 ):
 
+        self.env = env
+        self.config = config
         self.reached_modes = set()
         self.sorted_reached_modes = None
         self.start_time = time.time()
@@ -2134,10 +2108,10 @@ class BaseITstar(ABC):
         self.valid_next_modes = {}
         self.informed = InformedSampling(env, 
                         'graph_based',   
-                        locally_informed_sampling,
-                        include_lb=inlcude_lb_in_informed_sampling
+                        self.config.locally_informed_sampling,
+                        include_lb=self.config.inlcude_lb_in_informed_sampling
                         )
-        self.mode_validation = ModeValidation(self.env, self.with_mode_validation, with_noise=self.with_noise)
+        self.mode_validation = ModeValidation(self.env, self.config.with_mode_validation, with_noise=self.config.with_noise)
         self.init_next_ids = {}
         self.found_init_mode_sequence = False
         self.init_next_modes = {}
@@ -2168,7 +2142,7 @@ class BaseITstar(ABC):
         return BaseGraph(
             root_state=root_state,
             operation=self.operation,
-            batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.distance_metric),
+            batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.config.distance_metric),
             batch_cost_fun= lambda a, b: self.env.batch_config_cost(a, b),
             is_edge_collision_free = self.env.is_edge_collision_free,
             get_next_modes = self.env.get_next_modes,
@@ -2183,7 +2157,7 @@ class BaseITstar(ABC):
         Returns:
             BaseLongHorizon: The long-horizon planning manager.
         """
-        return BaseLongHorizon(self.horizon_length)
+        return BaseLongHorizon(self.config.horizon_length)
 
     def sample_valid_uniform_batch(self, batch_size: int, cost: float) -> List[State]:
         """
@@ -2207,7 +2181,7 @@ class BaseITstar(ABC):
                 dtype=np.float64,
             )
 
-        if self.apply_long_horizon and not self.long_horizon.init and not self.long_horizon.reached_terminal_mode:
+        if self.config.apply_long_horizon and not self.long_horizon.init and not self.long_horizon.reached_terminal_mode:
             mode_seq = self.long_horizon.mode_sequence
         else:
             mode_seq = self.sorted_reached_modes
@@ -2261,7 +2235,7 @@ class BaseITstar(ABC):
         Returns:
             None: This method does not return any value.
         """
-        if not self.with_mode_validation:
+        if not self.config.with_mode_validation:
             return
         if not self.expanded_modes:
             return
@@ -2299,7 +2273,11 @@ class BaseITstar(ABC):
         """
         for transition in transition_neighbors:
              if next_mode == transition.state.mode:
+                index = self.sorted_reached_modes.index(transition.state.mode)
+                if index != 0 and transition.forward.parent.state.mode != self.sorted_reached_modes[index - 1]:
+                    return False
                 self.g.virtual_root = transition
+                
                 print("-> Virtual root node: ", transition.id, transition.state.mode)
                 return True
         return False
@@ -2315,13 +2293,13 @@ class BaseITstar(ABC):
         Returns:
             None: This method does not return any value.
         """
-        if not self.apply_long_horizon and self.current_best_cost is None and len(self.g.goal_nodes) > 0:
+        if not self.config.apply_long_horizon and self.current_best_cost is None and len(self.g.goal_nodes) > 0:
             self.create_virtual_root()
         transitions, failed_attempts = 0, 0
         reached_terminal_mode = False
-        update = (not self.apply_long_horizon or self.apply_long_horizon and (self.long_horizon.init or self.long_horizon.reached_terminal_mode))
+        update = (not self.config.apply_long_horizon or self.config.apply_long_horizon and (self.long_horizon.init or self.long_horizon.reached_terminal_mode))
         if len(self.g.goal_node_ids) == 0:
-                mode_sampling_type = self.init_mode_sampling_type
+                mode_sampling_type = self.config.init_mode_sampling_type
         else:
             mode_sampling_type = "uniform_reached"
         if len(self.g.goal_nodes) > 0:
@@ -2329,11 +2307,11 @@ class BaseITstar(ABC):
                 [self.g.root.state.q.state(), self.g.goal_nodes[0].state.q.state()],
                 dtype=np.float64,
             )
-        if self.apply_long_horizon and not self.long_horizon.init and not self.long_horizon.reached_terminal_mode:
+        if self.config.apply_long_horizon and not self.long_horizon.init and not self.long_horizon.reached_terminal_mode:
             mode_seq = self.long_horizon.mode_sequence
             reached_terminal_mode = True
         else:
-            if self.current_best_cost is None and len(self.g.goal_nodes) > 0 and self.with_mode_validation:  
+            if self.current_best_cost is None and len(self.g.goal_nodes) > 0 and self.config.with_mode_validation:  
                 reached_terminal_mode = True
             if len(self.reached_modes) != len(self.sorted_reached_modes):
                 if update and not reached_terminal_mode:
@@ -2350,7 +2328,10 @@ class BaseITstar(ABC):
         
             # sample transition at the end of this mode
             if reached_terminal_mode:
-                next_ids = self.init_next_ids[mode]
+                try:
+                    next_ids = self.init_next_ids[mode]
+                except KeyError:
+                    next_ids = None 
             else:
                 possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
                 if len(possible_next_task_combinations) > 0:
@@ -2427,7 +2408,7 @@ class BaseITstar(ABC):
                 self.reached_modes.update(next_modes)
 
             init_mode_seq =  self.get_init_mode_sequence(mode)
-            if init_mode_seq and self.with_mode_validation:
+            if init_mode_seq and self.config.with_mode_validation:
                 mode_seq = init_mode_seq
                 reached_terminal_mode = True
                 mode_sampling_type = "uniform_reached"    
@@ -2457,7 +2438,7 @@ class BaseITstar(ABC):
             self.found_init_mode_sequence = True
             self.terminal_mode = mode
             self.create_mode_init_sequence(mode)
-            if self.apply_long_horizon and self.long_horizon.init:
+            if self.config.apply_long_horizon and self.long_horizon.init:
                 self.long_horizon.init_long_horizon(self.g, self.current_best_path_nodes, self.sorted_reached_modes)
                 self.long_horizon.init = False
                 mode_seq = self.long_horizon.mode_sequence
@@ -2591,17 +2572,17 @@ class BaseITstar(ABC):
         while True:
 
             uniform_batch_size = (self.current_best_cost is not None or not self.first_search 
-                                  or self.apply_long_horizon 
+                                  or self.config.apply_long_horizon 
                                   and self.first_search and not self.long_horizon.init)
             
             effective_uniform_batch_size = (
-                self.uniform_batch_size if uniform_batch_size
-                else self.init_uniform_batch_size
+                self.config.uniform_batch_size if uniform_batch_size
+                else self.config.init_uniform_batch_size
             )
             effective_uniform_transition_batch_size = (
-                self.uniform_transition_batch_size
+                self.config.uniform_transition_batch_size
                 if uniform_batch_size
-                else self.init_transition_batch_size
+                else self.config.init_transition_batch_size
             ) 
 
             # nodes_per_state = []
@@ -2632,7 +2613,7 @@ class BaseITstar(ABC):
             if len(self.g.goal_nodes) == 0:
                 continue
             
-            if self.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
+            if self.config.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
                 self.long_horizon.update_virtual_goal_nodes(self.g, self.sorted_reached_modes)
 
             # self.g.add_transition_nodes(new_transitions)
@@ -2659,10 +2640,10 @@ class BaseITstar(ABC):
         # g.compute_lower_bound_from_start(self.env.batch_config_cost)
 
             if self.current_best_cost is not None and (
-                self.try_informed_sampling or self.try_informed_transitions
+                self.config.try_informed_sampling or self.config.try_informed_transitions
             ):
                 interpolated_path = interpolate_path(self.current_best_path)
-                if self.apply_long_horizon:
+                if self.config.apply_long_horizon:
                     mode_seq = self.long_horizon.mode_sequence
                 else:
                     mode_seq = self.sorted_reached_modes
@@ -2670,13 +2651,13 @@ class BaseITstar(ABC):
 
 
                 # interpolated_path = current_best_path
-                if self.try_informed_sampling:
+                if self.config.try_informed_sampling:
                     print("Generating informed samples")
                     new_informed_states = self.informed.generate_samples(
                                             mode_seq,
-                                            self.informed_batch_size,
+                                            self.config.informed_batch_size,
                                             interpolated_path,
-                                            try_direct_sampling=self.try_direct_informed_sampling,
+                                            try_direct_sampling=self.config.try_direct_informed_sampling,
                                             g=self.g
                                         )
                     
@@ -2684,11 +2665,11 @@ class BaseITstar(ABC):
 
                     print(f"Adding {len(new_informed_states)} informed samples")
 
-                if self.try_informed_transitions:
+                if self.config.try_informed_transitions:
                     print("Generating informed transitions")
                     new_informed_transitions = self.informed.generate_transitions(
                                                 mode_seq,
-                                                self.informed_transition_batch_size,
+                                                self.config.informed_transition_batch_size,
                                                 interpolated_path,
                                                 g=self.g
                                             )
@@ -2700,7 +2681,7 @@ class BaseITstar(ABC):
                     # g.compute_lb_cost_to_go(self.env.batch_config_cost)
                     # g.compute_lower_bound_from_start(self.env.batch_config_cost)
 
-            if self.try_sampling_around_path and self.current_best_path is not None:
+            if self.config.try_sampling_around_path and self.current_best_path is not None:
                 print("Sampling around path")
                 path_samples, path_transitions = self.sample_around_path(
                     self.current_best_path
@@ -2752,7 +2733,7 @@ class BaseITstar(ABC):
                 return reached_modes[0]
 
             total_nodes = self.g.get_num_samples()
-            p_frontier = self.frontier_mode_sampling_probability
+            p_frontier = self.config.frontier_mode_sampling_probability
             p_remaining = 1 - p_frontier
 
             frontier_modes = []
@@ -2771,7 +2752,7 @@ class BaseITstar(ABC):
             
             
 
-            if self.frontier_mode_sampling_probability == 1:
+            if self.config.frontier_mode_sampling_probability == 1:
                 if not frontier_modes:
                     frontier_modes = reached_modes
                 if len(frontier_modes) >  0:
@@ -2823,11 +2804,11 @@ class BaseITstar(ABC):
         print("====================")
         while True:
             self.g.initialize_cache()
-            if not self.apply_long_horizon and self.current_best_cost is None and not self.first_search:
+            if not self.config.apply_long_horizon and self.current_best_cost is None and not self.first_search:
                     self.remove_nodes_in_graph_before_init_sol()
-            if self.apply_long_horizon and not self.long_horizon.new_section and not self.long_horizon.reached_terminal_mode:
+            if self.config.apply_long_horizon and not self.long_horizon.new_section and not self.long_horizon.reached_terminal_mode:
                 self.remove_nodes_in_graph_before_init_sol()
-            if self.apply_long_horizon and self.long_horizon.new_section and not self.long_horizon.init:
+            if self.config.apply_long_horizon and self.long_horizon.new_section and not self.long_horizon.init:
                 self.long_horizon.init_long_horizon(self.g, self.current_best_path_nodes, self.sorted_reached_modes)
                 if not self.long_horizon.reached_terminal_mode:
                     self.first_search = True
@@ -2878,7 +2859,7 @@ class BaseITstar(ABC):
                 #     print()
 
 
-            print(f"Samples: {self.cnt}; {self.ptc}")
+            print(f"Samples: {self.cnt};")
 
             samples_in_graph_before = self.g.get_num_samples()
             self.add_sample_batch()
@@ -2938,7 +2919,7 @@ class BaseITstar(ABC):
                     count +=1
                 continue
             
-            if not self.remove_based_on_modes or key not in self.start_transition_arrays:
+            if not self.config.remove_based_on_modes or key not in self.start_transition_arrays:
                 if key not in focal_points:
                     focal_points[key] = np.array(
                     [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
@@ -3017,9 +2998,9 @@ class BaseITstar(ABC):
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
             # start = random.choice(self.g.reverse_transition_node_ids[mode])
             # goal = random.choice(self.g.re)
-            # if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
+            # if self.config.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
             #     continue
-            if not self.remove_based_on_modes or mode not in self.start_transition_arrays:
+            if not self.config.remove_based_on_modes or mode not in self.start_transition_arrays:
                 focal_points = np.array(
                 [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
                 dtype=np.float64,
@@ -3050,7 +3031,7 @@ class BaseITstar(ABC):
         for mode in list(self.g.transition_node_ids.keys()):
             if self.env.is_terminal_mode(mode) or mode == self.long_horizon.terminal_mode:
                 continue           
-            if not self.remove_based_on_modes or mode not in self.start_transition_arrays:
+            if not self.config.remove_based_on_modes or mode not in self.start_transition_arrays:
                 focal_points = np.array(
                 [self.g.root.state.q.state(), self.current_best_path[-1].q.state()],
                 dtype=np.float64,
@@ -3108,7 +3089,7 @@ class BaseITstar(ABC):
             self.expanded_modes.update(relevant_expanded_modes)
             self.last_expanded_mode = max(relevant_expanded_modes, key=lambda obj: obj.id)
         else:
-            if self.apply_long_horizon:
+            if self.config.apply_long_horizon:
                 return
             self.expanded_modes = set()
             self.last_expanded_mode = None
@@ -3128,7 +3109,7 @@ class BaseITstar(ABC):
             return
         num_pts_for_removal = 0
         for mode in list(self.g.node_ids.keys()):# Avoid modifying dict while iterating
-            if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
+            if self.config.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
                 continue
             if mode not in relevant_expanded_modes or mode == self.last_expanded_mode:
                 continue
@@ -3137,7 +3118,7 @@ class BaseITstar(ABC):
                 id
                 for id in self.g.node_ids[mode]
                 if id == self.g.root.id or id in BaseTree.all_vertices
-                or (not self.with_mode_validation and not np.isinf(self.g.nodes[id].cost))
+                or (not self.config.with_mode_validation and not np.isinf(self.g.nodes[id].cost))
             ]
             num_pts_for_removal += original_count - len(self.g.node_ids[mode])
         self.g.reverse_transition_node_ids = {}
@@ -3145,7 +3126,7 @@ class BaseITstar(ABC):
         for mode in list(self.g.transition_node_ids.keys()):
             if self.env.is_terminal_mode(mode) or mode == self.long_horizon.terminal_mode:
                 continue    
-            if self.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
+            if self.config.apply_long_horizon and mode not in self.long_horizon.mode_sequence:
                 continue       
             if mode not in relevant_expanded_modes or mode == self.last_expanded_mode:
                 continue
@@ -3157,7 +3138,7 @@ class BaseITstar(ABC):
                 id
                 for id in self.g.transition_node_ids[mode]
                 if id == self.g.root.id or id in BaseTree.all_vertices 
-                or (not self.with_mode_validation and not np.isinf(self.g.nodes[id].cost))
+                or (not self.config.with_mode_validation and not np.isinf(self.g.nodes[id].cost))
                  
             ]
             if len(self.g.transition_node_ids[mode]) == 0:
@@ -3219,16 +3200,16 @@ class BaseITstar(ABC):
             self.update_results_tracking(new_path_cost, path)
             
 
-            if self.try_shortcutting and with_shortcutting:
+            if self.config.try_shortcutting and with_shortcutting:
                 print("--- shortcutting ---")
                 rewire = False
-                if not self.apply_long_horizon or self.apply_long_horizon and self.long_horizon.reached_terminal_mode:
+                if not self.config.apply_long_horizon or self.config.apply_long_horizon and self.long_horizon.reached_terminal_mode:
                     iter = 250
-                    rewire = self.with_rewiring
+                    rewire = self.config.with_rewiring
                 else:
                     iter = 0
                     if self.long_horizon.rewire:
-                        rewire = self.with_rewiring
+                        rewire = self.config.with_rewiring
                         iter = 15
                         if self.env.is_terminal_mode(path[-1].mode):
                             iter = 250
@@ -3291,13 +3272,13 @@ class BaseITstar(ABC):
                     self.current_best_cost = shortcut_path_cost
 
                     interpolated_path = shortcut_path
-                    lh = self.apply_long_horizon and not self.env.is_terminal_mode(shortcut_path[-1].mode)
+                    lh = self.config.apply_long_horizon and not self.env.is_terminal_mode(shortcut_path[-1].mode)
                     self.g.add_path_states(interpolated_path, self.approximate_space_extent, rewire = rewire, lh = lh)   
                     self.current_best_path_nodes = self.generate_path(force_generation=True)
                     self.current_best_path = [node.state for node in self.current_best_path_nodes]
 
                     
-                    if not (self.apply_long_horizon and not self.long_horizon.reached_terminal_mode):
+                    if not (self.config.apply_long_horizon and not self.long_horizon.reached_terminal_mode):
                         self.g.initialize_cache()
                         self.initialize_lb()
                         if with_queue_update:
@@ -3436,7 +3417,7 @@ class BaseITstar(ABC):
         Returns:
             Tuple[BaseNode, float]: The best goal node and its cost.
         """
-        if self.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
+        if self.config.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
             min_id = np.argmin(self.operation.costs[self.g.virtual_goal_node_ids], axis=0)
             best_cost = self.operation.costs[self.g.virtual_goal_node_ids][min_id]
             best_node = self.g.virtual_goal_nodes[min_id]
@@ -3491,7 +3472,7 @@ class BaseITstar(ABC):
         
         for id, edge_cost, edge_effort in zip(neighbors, edge_costs, edge_efforts):
             n = self.g.nodes[id]
-            if self.apply_long_horizon and n.state.mode not in self.long_horizon.mode_sequence and node.id != self.g.root.id:
+            if self.config.apply_long_horizon and n.state.mode not in self.long_horizon.mode_sequence and node.id != self.g.root.id:
                     continue
             if n.id == self.g.root.id:
                 continue
@@ -3627,7 +3608,7 @@ class BaseITstar(ABC):
         #         self.process_valid_path(path, force_update = True, update_queues=False )
         # print("edges sparsely checked several times", [self.sparesly_checked_edges[key] for key in self.sparesly_checked_edges.keys() if self.sparesly_checked_edges[key] > 1])
         # if num_iter is not None:
-        #     if self.apply_long_horizon and num_iter % 100 == 0:
+        #     if self.config.apply_long_horizon and num_iter % 100 == 0:
         #         if not self.long_horizon.reached_terminal_mode:
         #             self.long_horizon.reset()
         #             self.current_best_cost = None
@@ -3638,7 +3619,7 @@ class BaseITstar(ABC):
             self.current_best_path_nodes = self.generate_path(True)
             self.process_valid_path(self.current_best_path_nodes, False, True, True)
             self.update_removal_conditions() 
-        if self.apply_long_horizon and self.current_best_cost is not None and not self.long_horizon.reached_terminal_mode:
+        if self.config.apply_long_horizon and self.current_best_cost is not None and not self.long_horizon.reached_terminal_mode:
             self.long_horizon.reset()
             if skip:
                 self.current_best_cost = None
@@ -3734,24 +3715,5 @@ class BaseITstar(ABC):
 
         Returns:
             bool: True if the reverse search should continue, False otherwise.
-        """
-        pass
-    @abstractmethod
-    def Plan(self, optimize:bool = True) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
-        """
-        Executes planning process.
-
-        Args:
-            optimize (bool, optional): Whether to optimize the path. Defaults to True.
-
-        Returns:
-            Tuple:
-                - List[State]: The planned path as a list of states.
-                - Dict[str, List]: A dictionary containing:
-                    - "costs" (List[float]): Recorded path costs.
-                    - "times" (List[float]): Recorded execution times.
-                    - "paths" (List[List[State]]): All explored paths.
-
-
         """
         pass

@@ -59,7 +59,8 @@
         "with_tree_visualization": false,
         "apply_long_horizon":false,
         "frontier_mode_sampling_probability":1,
-        "horizon_length": 4
+        "horizon_length": 4,
+        "with_noise": true
       }
     },
     {
@@ -103,7 +104,8 @@
         "shortcutting": true,
         "direct_informed_sampling": true,
         "init_mode_sampling_type": "uniform",
-        "frontier_mode_sampling_probability":1
+        "frontier_mode_sampling_probability":1,
+        "with_noise":true
 
 
       }
@@ -159,7 +161,8 @@
         "with_tree_visualization": false,
         "apply_long_horizon":false,
         "frontier_mode_sampling_probability":1,
-        "horizon_length": 4
+        "horizon_length": 4,
+        "with_noise": true
       }
     },
     {

@@ -23,6 +23,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
 from multi_robot_multi_goal_planning.planners.itstar_base import (
+    BaseITConfig,
     BaseITstar,
     BaseGraph,
     BaseOperation, 
@@ -305,49 +306,12 @@ class CostBoundQueue(EdgeQueue):
 class EITstar(BaseITstar):
     """Represents the class for the EIT* based planner"""
 
-    def __init__(
-        self,
-        env: BaseProblem,
-        ptc: PlannerTerminationCondition,
-        init_mode_sampling_type: str = "greedy",
-        distance_metric: str = "euclidean",
-        try_sampling_around_path: bool = True,
-        try_informed_sampling: bool = True,
-        init_uniform_batch_size: int = 100,
-        init_transition_batch_size:int = 100,
-        uniform_batch_size: int = 200,
-        uniform_transition_batch_size: int = 500,
-        informed_batch_size: int = 500,
-        informed_transition_batch_size: int = 500,
-        path_batch_size: int = 500,
-        locally_informed_sampling: bool = True,
-        try_informed_transitions: bool = True,
-        try_shortcutting: bool = True,
-        try_direct_informed_sampling: bool = True,
-        inlcude_lb_in_informed_sampling:bool = True,
-        remove_based_on_modes:bool = False,
-        with_tree_visualization:bool = False,
-        apply_long_horizon:bool = False,
-        frontier_mode_sampling_probability:float = 1.0,
-        horizon_length: int = 1,
-        with_rewiring:bool = True,
-        with_mode_validation:bool = True,
-        with_noise:bool = False,
-        ):
-        super().__init__(
-            env = env, ptc=ptc, init_mode_sampling_type = init_mode_sampling_type, distance_metric = distance_metric, 
-            try_sampling_around_path = try_sampling_around_path,try_informed_sampling = try_informed_sampling, 
-            init_uniform_batch_size=init_uniform_batch_size, init_transition_batch_size=init_transition_batch_size,
-            uniform_batch_size = uniform_batch_size, 
-            uniform_transition_batch_size = uniform_transition_batch_size, informed_batch_size = informed_batch_size, 
-            informed_transition_batch_size = informed_transition_batch_size, 
-            path_batch_size = path_batch_size, locally_informed_sampling = locally_informed_sampling, 
-            try_informed_transitions = try_informed_transitions, try_shortcutting = try_shortcutting, 
-            try_direct_informed_sampling = try_direct_informed_sampling, 
-            inlcude_lb_in_informed_sampling = inlcude_lb_in_informed_sampling,
-            remove_based_on_modes = remove_based_on_modes, with_tree_visualization = with_tree_visualization,
-            apply_long_horizon = apply_long_horizon, frontier_mode_sampling_probability= frontier_mode_sampling_probability,
-            horizon_length = horizon_length, with_rewiring= with_rewiring, with_mode_validation = with_mode_validation, with_noise= with_noise)
+    def __init__(self, 
+                 env: BaseProblem,
+                 config: BaseITConfig
+                ):
+        
+        super().__init__(env=env, config=config)
 
         self.sparse_number_of_points = 2
         self.reverse_tree_set = set()
@@ -364,8 +328,8 @@ class EITstar(BaseITstar):
         return Graph(
             root_state=root_state,
             operation=self.operation,
-            distance_metric=self.distance_metric,
-            batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.distance_metric),
+            distance_metric=self.config.distance_metric,
+            batch_dist_fun=lambda a, b, c=None: batch_config_dist(a, b, c or self.config.distance_metric),
             batch_cost_fun=lambda a, b: self.env.batch_config_cost(a, b),
             is_edge_collision_free=self.env.is_edge_collision_free,
             get_next_modes=self.env.get_next_modes,
@@ -533,7 +497,7 @@ class EITstar(BaseITstar):
             potential_lb_cost_to_go = n0.lb_cost_to_go + edge_cost        
             if is_transition and n1.transition_neighbors[0].lb_cost_to_go < potential_lb_cost_to_go:
                 #don't change the parent
-                if self.apply_long_horizon and n1.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
+                if self.config.apply_long_horizon and n1.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
                     continue
                 self.expand_node_reverse([n1.transition_neighbors[0]])
                 continue
@@ -577,7 +541,7 @@ class EITstar(BaseITstar):
                 # assert(len(n1.transition_neighbors) ==1), (
                 #         "Transition node has more than one neighbor"
                 #     )
-                if self.with_tree_visualization and iter > 0:
+                if self.config.with_tree_visualization and iter > 0:
                     self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
                 n1.transition_neighbors[0].inad.update(n1, 0.0, 0.0)
            
@@ -590,16 +554,16 @@ class EITstar(BaseITstar):
                 #     "effort is inf"
                 # )
                 if is_transition:
-                    if self.with_tree_visualization and iter > 0:
+                    if self.config.with_tree_visualization and iter > 0:
                         self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
                     self.reverse_tree_set.add(n1.id)
-                    if self.apply_long_horizon and n1.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
+                    if self.config.apply_long_horizon and n1.transition_neighbors[0].state.mode not in self.long_horizon.mode_sequence:
                         continue
                     self.expand_node_reverse([n1.transition_neighbors[0]])
                     continue
                 self.expand_node_reverse([n1])
 
-        if self.with_tree_visualization and iter > 0:
+        if self.config.with_tree_visualization and iter > 0:
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
 
     def clear_reverse_edge_in_collision(self, n0: Node, n1: Node) -> None:
@@ -613,7 +577,7 @@ class EITstar(BaseITstar):
         Returns:
             None
         """
-        if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
+        if self.config.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
         if n1.rev.parent is not None and n1.rev.parent.id == n0.id:
             nodes_to_update = self.update_reverse_node_of_children(n1)
@@ -622,7 +586,7 @@ class EITstar(BaseITstar):
         self.g.update_forward_queue_keys('target', nodes_to_update)
         self.g.update_reverse_queue_keys('start', nodes_to_update)
 
-        if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
+        if self.config.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
     
     def update_reverse_node_of_children(self, n: Node) -> set[int]:
@@ -702,7 +666,7 @@ class EITstar(BaseITstar):
         self.g.effort_estimate_queue = EffortEstimateQueue(collision_resolution=self.env.collision_resolution)
         self.g.cost_bound_queue = CostBoundQueue()
         # self.g.cost_estimate_queue = CostEstimateQueue()
-        if self.apply_long_horizon:
+        if self.config.apply_long_horizon:
             start = self.g.virtual_root
         else:
             if self.current_best_cost is None and self.g.virtual_root is not None:
@@ -713,7 +677,7 @@ class EITstar(BaseITstar):
 
     def initialize_reverse_search(self, reset:bool = True) -> None:
         if len(BaseTree.all_vertices) > 1:
-            if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
+            if self.config.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
                 self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
         self.reverse_closed_set = set() #node was as start node visited in the reverse search
         self.reverse_tree_set = set() #node was extended in the reverse search
@@ -723,16 +687,18 @@ class EITstar(BaseITstar):
         self.updated_target_nodes = set() #lb_cost_to_go was updated in reverse search
         if reset:
             self.sparse_number_of_points = 2
-        if self.apply_long_horizon:
+        if self.config.apply_long_horizon:
             goal_nodes = self.g.virtual_goal_nodes
         else:
             goal_nodes = self.g.goal_nodes
         self.expand_node_reverse(goal_nodes, first_search = self.first_search) 
         self.g.update_forward_queue_keys('target') 
 
-    def Plan(self,
-             optimize:bool = True
-            ) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def plan(
+        self,
+        ptc: PlannerTerminationCondition,
+        optimize: bool = True,
+    ) -> Optional[Tuple[List[State], List]]:
         self.collision_cache = set()
         self.PlannerInitialization()
         num_iter = 0
@@ -770,9 +736,9 @@ class EITstar(BaseITstar):
                 if n1.forward.parent == n0:  # if its already the parent
                     if is_transition:
                         for transition in n1.transition_neighbors:
-                            # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
+                            # if self.config.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
                             #     continue
-                            if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
+                            if not self.config.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
                                 continue  
                             self.expand_node_forward(transition)
                     else:
@@ -815,9 +781,9 @@ class EITstar(BaseITstar):
                         #     )
                     if is_transition:
                         for transition in n1.transition_neighbors:
-                            # if self.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
+                            # if self.config.apply_long_horizon and transition.state.mode not in self.long_horizon.mode_sequence:
                             #     continue
-                            if not self.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
+                            if not self.config.apply_long_horizon and self.current_best_cost is not None and transition.state.mode not in self.sorted_reached_modes:
                                 continue 
                             self.expand_node_forward(transition)
                     else:
@@ -828,13 +794,13 @@ class EITstar(BaseITstar):
                     if self.dynamic_reverse_search_update or update:
                         path = self.generate_path()
                         if len(path) > 0:
-                            if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
+                            if self.config.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
                                 self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
                             self.process_valid_path(path, with_shortcutting= update, with_queue_update=update)
                             self.update_inflation_factor()
-                            if self.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
+                            if self.config.with_tree_visualization and (BaseTree.all_vertices or self.reverse_tree_set):
                                 self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
-                            if self.apply_long_horizon and self.current_best_path_nodes[-1].transition_neighbors:
+                            if self.config.apply_long_horizon and self.current_best_path_nodes[-1].transition_neighbors:
                                 self.initialize_search(num_iter, True)
                            
 
@@ -844,11 +810,11 @@ class EITstar(BaseITstar):
   
                 
             if not optimize and self.current_best_cost is not None:                   
-                if self.apply_long_horizon and self.current_best_path_nodes[-1].transition_neighbors:
+                if self.config.apply_long_horizon and self.current_best_path_nodes[-1].transition_neighbors:
                     continue
                 break
 
-            if self.ptc.should_terminate(self.cnt, time.time() - self.start_time):
+            if ptc.should_terminate(self.cnt, time.time() - self.start_time):
                 break
         if self.costs != []:
             self.update_results_tracking(self.costs[-1], self.current_best_path)

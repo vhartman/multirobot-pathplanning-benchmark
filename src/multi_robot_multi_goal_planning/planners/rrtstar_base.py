@@ -3,13 +3,13 @@ import time as time
 import math as math
 import random
 import multi_robot_multi_goal_planning.planners as mrmgp
+import os
+import pickle
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Union, List, Dict, Callable, ClassVar
 from numpy.typing import NDArray
 from numba import njit
-import os
-import pickle
-
+from dataclasses import dataclass, field
 try:
     from scipy.stats.qmc import Halton
 except ImportError:
@@ -27,11 +27,6 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     config_dist,
     batch_config_dist,  
 )
-
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
-    PlannerTerminationCondition,
-)
-from dataclasses import dataclass, field
 from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
 from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
 from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
