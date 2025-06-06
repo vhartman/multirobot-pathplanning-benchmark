@@ -182,6 +182,20 @@ class SingleGoal(Goal):
         return SingleGoal(np.array(data))
 
 
+class Constraint(ABC):
+    @abstractmethod
+    def is_fulfilled(self, q, env):
+        pass
+
+    @abstractmethod
+    def get_gradient(self, q, env):
+        pass
+
+    @abstractmethod
+    def project_to_manifold(self, q, env):
+        pass
+
+
 class Task:
     """
     A task is encoding what a (set of) robot(s) need to achieve.
@@ -202,7 +216,7 @@ class Task:
     side_effect: str | None
 
     # things for the future:
-    constraints = List
+    constraints = List[Constraint]
 
     def __init__(
         self, robots: List[str], goal: Goal, type=None, frames=None, side_effect=None
@@ -234,9 +248,11 @@ class Mode:
         "_cached_hash",
     )
 
-    task_ids: List[int] # the tasks that the robots are currently trying to do
-    entry_configuration: Configuration # the geometric pose at which this mode was entered
-    sg: Dict[str, tuple] # the scenegraph
+    task_ids: List[int]  # the tasks that the robots are currently trying to do
+    entry_configuration: (
+        Configuration  # the geometric pose at which this mode was entered
+    )
+    sg: Dict[str, tuple]  # the scenegraph
 
     id: int
     prev_mode: "Mode | None "
