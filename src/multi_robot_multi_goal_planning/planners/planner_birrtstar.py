@@ -34,8 +34,9 @@ class BidirectionalRRTstar(BaseRRTstar):
 
     def __init__(self, 
                  env: BaseProblem,
-                 **kwargs):
-        config = BaseRRTConfig(**kwargs)
+                 config: BaseRRTConfig
+                ):
+        
         super().__init__(env=env, config=config)
         self.swap = True
        
@@ -86,7 +87,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
-            if self.informed_sampling_version != 6:
+            if self.config.informed_sampling_version != 6:
                 self.InformedInitialization(new_mode)
             #Initialize transition nodes
             node = None
