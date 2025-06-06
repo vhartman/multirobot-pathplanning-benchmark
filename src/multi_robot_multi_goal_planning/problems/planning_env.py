@@ -183,6 +183,15 @@ class SingleGoal(Goal):
 
 
 class Task:
+    """
+    A task is encoding what a (set of) robot(s) need to achieve.
+    What we want to achieve is described by the Goal, which can be various types of constraints, but most of the time is a single pose, or a set of poses.
+
+    In addition, some side effects might be happening once a goal is achieved, e.g. re-linking of frames.
+
+    A task also specifies the constraints that might be active currently.
+    """
+
     name: str | None
     robots: List[str]
     goal: Goal
@@ -209,6 +218,11 @@ class Task:
 
 
 class Mode:
+    """
+    A mode fully determines the current kinematic tree of the environment (encoded in the scenegraph, sg).
+    In addition, a mode describes what goals each agent is trying to achieve at the moment (encoded in task_ids).
+    """
+
     __slots__ = (
         "task_ids",
         "entry_configuration",
@@ -220,9 +234,9 @@ class Mode:
         "_cached_hash",
     )
 
-    task_ids: List[int]
-    entry_configuration: Configuration
-    sg: Dict[str, tuple]
+    task_ids: List[int] # the tasks that the robots are currently trying to do
+    entry_configuration: Configuration # the geometric pose at which this mode was entered
+    sg: Dict[str, tuple] # the scenegraph
 
     id: int
     prev_mode: "Mode | None "
@@ -592,7 +606,9 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         return False
 
-    def get_active_task(self, current_mode: Mode, next_task_ids: List[int] | None) -> Task:
+    def get_active_task(
+        self, current_mode: Mode, next_task_ids: List[int] | None
+    ) -> Task:
         if next_task_ids is None:
             # we should return the terminal task here
             return self.tasks[self._terminal_task_ids[0]]
@@ -1356,9 +1372,19 @@ class AgentType(Enum):
     MULTI_AGENT = "multi_agent"
 
 
+class GoalType(Enum):
+    MULTI_GOAL = "multi_goal"
+    SINGLE_GOAL = "single_goal"
+
+
 class ConstraintType(Enum):
     UNCONSTRAINED = "unconstrained"
     CONSTRAINED = "constrained"
+
+
+class DynamicsType(Enum):
+    GEOMETRIC = "geometric"
+    KINODYNAMIC = "kinodynamic"
 
 
 class ManipulationType(Enum):
@@ -1377,18 +1403,27 @@ class ProblemSpec:
     def __init__(
         self,
         agent_type: AgentType,
-        constraints: ConstraintType,  # Note: can us a set for multiple constraints
+        constraints: ConstraintType,  # Note: can use a set for multiple constraints
         manipulation: ManipulationType,
+        dependency: DependencyType,
+        dynamics: DynamicsType,
+        goals: GoalType,
     ):
         self.agent_type = agent_type
         self.constraints = constraints
         self.manipulation = manipulation
+        self.dependency = dependency
+        self.dynamics = dynamics
+        self.goal = goals
 
     def __repr__(self):
         return (
             f"ProblemSpec(Agent: {self.agent_type.value}, "
             f"Constraints: {self.constraints.value}, "
             f"Env: {self.manipulation.value}, "
+            f"Goals: {self.goal.value}, "
+            f"Dependencies: {self.dependency.value}, "
+            f"Dynamics: {self.dynamics.value}, "
         )
 
 
@@ -1531,10 +1566,19 @@ class BaseProblem(ABC):
 
     @abstractmethod
     def set_to_mode(self, mode: Mode):
+        """
+        Sets the environment to the given mode.
+        """
         pass
 
     @abstractmethod
     def is_collision_free(self, q: Optional[Configuration], mode: Mode) -> bool:
+        """
+        Computes if a configuration is collision free if a configuration and a mode is given.
+        Computes if the currently set configuration is collision free if no configuration is given.
+
+        Returns True if 'q' is collision free, False otherwise.
+        """
         pass
 
     def is_collision_free_for_robot(
@@ -1555,6 +1599,10 @@ class BaseProblem(ABC):
         N_max: int | None = None,
         N: int | None = None,
     ) -> bool:
+        """
+        Checks if an edge defined by the linear interpolation between q1 and q2 is collision free.
+        We assume that both configurations are in the same mode.
+        """
         pass
 
     def is_path_collision_free(
