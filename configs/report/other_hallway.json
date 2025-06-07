@@ -71,7 +71,9 @@
         "shortcutting": true,
         "direct_informed_sampling": true,
         "init_mode_sampling_type": "greedy",
-        "frontier_mode_sampling_probability":1.0
+        "frontier_mode_sampling_probability":1.0,
+        "init_uniform_batch_size": 150,
+        "init_transition_batch_size":50
 
 
       }
