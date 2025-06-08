@@ -48,6 +48,7 @@ def load_path(filename):
         d = json.load(f)
         return d
 
+
 def convert_to_path(env, path_data):
     real_path = []
     prev_mode_ids = env.start_mode.task_ids
@@ -85,6 +86,7 @@ def convert_to_path(env, path_data):
         # env.show_config(q, True)
 
     return real_path
+
 
 def make_mode_plot(path, env):
     data = []
@@ -147,6 +149,7 @@ def make_mode_plot(path, env):
     ax.set_yticklabels([f"Robot {i}" for i in range(num_robots)])
     ax.set_xlabel("Time")
     ax.set_ylabel("Robots")
+
 
 def main():
     parser = argparse.ArgumentParser(description="")
@@ -423,8 +426,6 @@ def main():
         adapt_to_max_distance=True,
     )
 
+
 if __name__ == "__main__":
     main()
-
-
-
