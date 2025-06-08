@@ -6,7 +6,7 @@ import random
 
 from typing import List
 
-from multi_robot_multi_goal_planning.problems.planning_env import State
+from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
@@ -86,7 +86,7 @@ def single_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
 
 
 def robot_mode_shortcut(
-    env: rai_env,
+    env: BaseProblem,
     path: List[State],
     max_iter: int = 1000,
     resolution=0.001,

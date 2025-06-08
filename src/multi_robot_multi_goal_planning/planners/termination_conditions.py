@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 class PlannerTerminationCondition(ABC):
     @abstractmethod
     def should_terminate(
-        self, current_iterations: int = None, current_time: int = None
+        self, current_iterations: int | None = None, current_time: float | None = None
     ) -> bool:
         pass
 
@@ -17,8 +17,10 @@ class IterationTerminationCondition(PlannerTerminationCondition):
         return f"max iter.: {self.max_iterations}"
 
     def should_terminate(
-        self, current_iterations: int = None, current_time: int = None
+        self, current_iterations: int | None = None, current_time: float | None = None
     ) -> bool:
+        assert current_iterations
+        
         if self.max_iterations < current_iterations:
             return True
 
@@ -33,8 +35,10 @@ class RuntimeTerminationCondition(PlannerTerminationCondition):
         return f"max runtime.: {self.max_runtime_in_s} s"
 
     def should_terminate(
-        self, current_iterations: int = None, current_time: int = None
+        self, current_iterations: int | None = None, current_time: float | None = None
     ) -> bool:
+        assert current_time
+
         if self.max_runtime_in_s < current_time:
             return True
 

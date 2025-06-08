@@ -7,7 +7,7 @@ import copy
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Any
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.configuration import (
@@ -182,21 +182,69 @@ class SingleGoal(Goal):
         return SingleGoal(np.array(data))
 
 
+class Constraint(ABC):
+    @abstractmethod
+    def is_fulfilled(self, q, env):
+        pass
+
+    @abstractmethod
+    def get_gradient(self, q, env):
+        pass
+
+    @abstractmethod
+    def project_to_manifold(self, q, env):
+        pass
+
+
+class FrameOrientationConstraint(Constraint):
+    def __init__(self, frame_name, pose_bounds):
+        self.frame_name = frame_name
+        self.bounds = pose_bounds
+
+    def is_fulfilled(self, q, env):
+        frame_pose = env.get_frame_pose(self.frame_name)
+
+        return frame_pose < self.bounds[:, 0] and frame_pose > self.bounds[:, 1]
+
+
+class FrameRelativeOrientationConstraint(Constraint):
+    def __init__(self, frame_names: List, relative_pose):
+        self.frames = frame_names
+        self.relative_pose = relative_pose
+
+    def is_fulfilled(self, q, env):
+        frame_1_pose = env.get_frame_pose(self.frames[0])
+        frame_2_pose = env.get_frame_pose(self.frames[1])
+
+        relative_pose = np.zeros(4)
+
+        return np.isclose(relative_pose, self.relative_pose)
+
+
 class Task:
-    name: str
+    """
+    A task is encoding what a (set of) robot(s) need to achieve.
+    What we want to achieve is described by the Goal, which can be various types of constraints, but most of the time is a single pose, or a set of poses.
+
+    In addition, some side effects might be happening once a goal is achieved, e.g. re-linking of frames.
+
+    A task also specifies the constraints that might be active currently.
+    """
+
+    name: str | None
     robots: List[str]
     goal: Goal
 
     # things for manipulation
-    type: str
-    frames: List[str]
-    side_effect: str
+    type: str | None
+    frames: List[str] | None
+    side_effect: str | None
 
     # things for the future:
-    constraints = List
+    constraints = List[Constraint]
 
     def __init__(
-        self, robots: List[str], goal: NDArray, type=None, frames=None, side_effect=None
+        self, robots: List[str], goal: Goal, type=None, frames=None, side_effect=None
     ):
         self.robots = robots
         self.goal = goal
@@ -209,6 +257,11 @@ class Task:
 
 
 class Mode:
+    """
+    A mode fully determines the current kinematic tree of the environment (encoded in the scenegraph, sg).
+    In addition, a mode describes what goals each agent is trying to achieve at the moment (encoded in task_ids).
+    """
+
     __slots__ = (
         "task_ids",
         "entry_configuration",
@@ -220,14 +273,16 @@ class Mode:
         "_cached_hash",
     )
 
-    task_ids: List[int]
-    entry_configuration: Configuration
-    sg: Dict[str, tuple]
+    task_ids: List[int]  # the tasks that the robots are currently trying to do
+    entry_configuration: (
+        Configuration  # the geometric pose at which this mode was entered
+    )
+    sg: Dict[str, tuple]  # the scenegraph
 
     id: int
-    prev_mode: "Mode"
+    prev_mode: "Mode | None "
     next_modes: List["Mode"]
-    additional_hash_info: any
+    additional_hash_info: Any
 
     id_counter = 0
 
@@ -278,6 +333,10 @@ class Mode:
 
 
 class State:
+    """
+    A state in our motion planning problem fully describes the scene, i.e., it contains both the information of a mode (the scene graph), and the 
+    joint poses that the robots are in.
+    """
     q: Configuration
     mode: Mode
 
@@ -297,6 +356,9 @@ def state_dist(start: State, end: State) -> float:
 
 
 class BaseModeLogic(ABC):
+    """
+    Abstract class for determining the logic, consisting of the mode and task transitions.
+    """
     tasks: List[Task]
     _task_name_dict: Dict[str, Task]
     _task_id_dict: Dict[str, int]
@@ -325,7 +387,7 @@ class BaseModeLogic(ABC):
         pass
 
     @abstractmethod
-    def get_valid_next_task_combinations(self, m: Mode):
+    def get_valid_next_task_combinations(self, m: Mode) -> List[List[int]]:
         pass
 
     @abstractmethod
@@ -365,7 +427,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         return [self.terminal_task] * self.start_pos.num_agents()
 
     @cache
-    def get_valid_next_task_combinations(self, mode: Mode):
+    def get_valid_next_task_combinations(self, mode: Mode) -> List[List[int]]:
         # print(f"called get valid next with {mode.task_ids}")
         if self.is_terminal_mode(mode):
             return []
@@ -592,7 +654,9 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         return False
 
-    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+    def get_active_task(
+        self, current_mode: Mode, next_task_ids: List[int] | None
+    ) -> Task:
         if next_task_ids is None:
             # we should return the terminal task here
             return self.tasks[self._terminal_task_ids[0]]
@@ -1356,9 +1420,19 @@ class AgentType(Enum):
     MULTI_AGENT = "multi_agent"
 
 
+class GoalType(Enum):
+    MULTI_GOAL = "multi_goal"
+    SINGLE_GOAL = "single_goal"
+
+
 class ConstraintType(Enum):
     UNCONSTRAINED = "unconstrained"
     CONSTRAINED = "constrained"
+
+
+class DynamicsType(Enum):
+    GEOMETRIC = "geometric"
+    KINODYNAMIC = "kinodynamic"
 
 
 class ManipulationType(Enum):
@@ -1372,39 +1446,54 @@ class DependencyType(Enum):
     UNASSIGNED = "unassigned"
 
 
-@dataclass(frozen=True)
+@dataclass
 class ProblemSpec:
     def __init__(
         self,
         agent_type: AgentType,
-        constraints: ConstraintType,  # Note: can us a set for multiple constraints
+        constraints: ConstraintType,  # Note: can use a set for multiple constraints
         manipulation: ManipulationType,
+        dependency: DependencyType,
+        dynamics: DynamicsType,
+        goals: GoalType,
     ):
         self.agent_type = agent_type
         self.constraints = constraints
         self.manipulation = manipulation
+        self.dependency = dependency
+        self.dynamics = dynamics
+        self.goal = goals
 
     def __repr__(self):
         return (
             f"ProblemSpec(Agent: {self.agent_type.value}, "
             f"Constraints: {self.constraints.value}, "
             f"Env: {self.manipulation.value}, "
+            f"Goals: {self.goal.value}, "
+            f"Dependencies: {self.dependency.value}, "
+            f"Dynamics: {self.dynamics.value}, "
         )
 
 
 # TODO: split into env + problem specification
 class BaseProblem(ABC):
+    """
+    ABstract base class for the planning problems.
+    """
+
     robots: List[str]
     robot_dims: Dict[str, int]
-    robot_idx: Dict[str, NDArray]
+    robot_idx: Dict[str, List[int]]
     start_pos: Configuration
 
     start_mode: Mode
     _terminal_task_ids: List[int]
 
+    limits: NDArray
+
     # misc
-    # collision_tolerance: float
-    # collision_resolution: float
+    collision_tolerance: float
+    collision_resolution: float
 
     # def __init__(self):
     #     self.collision_tolerance = 0.01
@@ -1444,7 +1533,6 @@ class BaseProblem(ABC):
                 )  # Convert string representation back to dictionary
                 goal_type = task_data["goal_type"]
 
-                goal = None
                 if goal_type == "SingleGoal":
                     goal = SingleGoal.from_data(task_data["goal"])
                 elif goal_type == "GoalRegion":
@@ -1455,6 +1543,8 @@ class BaseProblem(ABC):
                     goal = ConditionalGoal.from_data(task_data["goal"])
                 elif goal_type == "ConstrainedGoal":
                     goal = ConstrainedGoal.from_data(task_data["goal"])
+
+                assert goal is not None
 
                 task = Task(
                     robots=task_data["robots"],
@@ -1487,31 +1577,57 @@ class BaseProblem(ABC):
     def get_robot_dim(self, robot: str):
         return self.robot_dims[robot]
 
-    def get_all_bounds(self):
-        self.bounds
-
     # def get_robot_bounds(self, robot):
     #     self.bounds
 
     @abstractmethod
     def done(self, q: Configuration, mode: Mode):
+        "Checks if we are done (i.e., if the terminal constraint is fulfilled.)"
         pass
 
     @abstractmethod
     def is_transition(self, q: Configuration, m: Mode) -> bool:
+        """
+        Checks if a given configuration satisfies constraints to transition to a different mode.
+        """
+        pass
+
+    @abstractmethod
+    def is_terminal_mode(self, mode: Mode):
+        """
+        Checks if a mode is a terminal mode.
+        """
         pass
 
     @abstractmethod
     def get_next_modes(self, q: Configuration, mode: Mode):
+        """
+        Get the modes that can be reached from the current mode and configuration.
+        Assumes that the currentconfiguration fulfills is_transition(..)
+        """
         pass
 
     @abstractmethod
-    def get_active_task(self, mode: Mode, next_task_ids: List[int]) -> Task:
+    def get_active_task(self, mode: Mode, next_task_ids: List[int] | None) -> Task:
+        """
+        Checks which task is the one that needs to be fulfilled given the current mode and a desired List of next task indices.
+        """
+        pass
+
+    @abstractmethod
+    def get_valid_next_task_combinations(self, m: Mode) -> List[List[int]]:
+        """
+        Returns the valid next task combinations given the current mode.
+        """
         pass
 
     # @abstractmethod
     # def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
     #     pass
+
+    @abstractmethod
+    def sample_config_uniform_in_limits(self) -> Configuration:
+        pass
 
     # Collision checking and environment related methods
     @abstractmethod
@@ -1520,10 +1636,19 @@ class BaseProblem(ABC):
 
     @abstractmethod
     def set_to_mode(self, mode: Mode):
+        """
+        Sets the environment to the given mode.
+        """
         pass
 
     @abstractmethod
     def is_collision_free(self, q: Optional[Configuration], mode: Mode) -> bool:
+        """
+        Computes if a configuration is collision free if a configuration and a mode is given.
+        Computes if the currently set configuration is collision free if no configuration is given.
+
+        Returns True if 'q' is collision free, False otherwise.
+        """
         pass
 
     def is_collision_free_for_robot(
@@ -1537,13 +1662,17 @@ class BaseProblem(ABC):
         q1: Configuration,
         q2: Configuration,
         m: Mode,
-        resolution: float = None,
-        tolerance: float = None,
+        resolution: float | None = None,
+        tolerance: float | None = None,
         include_endpoints: bool = False,
         N_start: int = 0,
-        N_max: int = None,
-        N: int = None,
+        N_max: int | None = None,
+        N: int | None = None,
     ) -> bool:
+        """
+        Checks if an edge defined by the linear interpolation between q1 and q2 is collision free.
+        We assume that both configurations are in the same mode.
+        """
         pass
 
     def is_path_collision_free(
@@ -1649,8 +1778,11 @@ class BaseProblem(ABC):
         return True
 
     def is_valid_plan(self, path: List[State]) -> bool:
-        # check if it is collision free and if all modes are passed in order
-        # only take the configuration into account for that
+        """
+        Check if the path is collision free and if all modes are transitioned through in the correct order.
+        We only take the configuration into account for this check.
+        """
+
         mode = self.start_mode
         collision = False
         for i in range(len(path)):
@@ -1689,8 +1821,8 @@ class BaseProblem(ABC):
     @abstractmethod
     def batch_config_cost(
         self,
-        starts: List[Configuration],
-        ends: List[Configuration],
+        starts: List[Configuration] | Configuration,
+        ends: List[Configuration] | NDArray,
     ) -> List[float]:
         pass
 

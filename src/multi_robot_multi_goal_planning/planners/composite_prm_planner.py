@@ -60,7 +60,7 @@ class Node:
     lb_cost_to_goal: Optional[float]
     lb_cost_from_start: Optional[float]
     is_transition: bool
-    neighbors: List[int]
+    neighbors: List["Node"]
     whitelist: Set[int]
     blacklist: Set[int]
     id: int
@@ -178,7 +178,7 @@ class EfficientEdgeQueue:
         # Min-heap of (cost, edge_cost, (node1, node2))
         self.heap = []
         # Dictionary mapping node2 to a set of edges for quick removal
-        self.edges_by_node = defaultdict(set)
+        self.edges_by_node = collections.defaultdict(set)
 
     def heappush(self, item):
         """Add a new edge to the queue."""
@@ -308,7 +308,7 @@ class DictIndexHeap:
 
     #     heapq.heapify(self.queue)
 
-    def heappush(self, item: Tuple[float, Any]) -> None:
+    def heappush(self, item: Tuple[float, Any, Any]) -> None:
         """Push a single item into the heap."""
         # idx = len(self.items)
         self.items[DictIndexHeap.idx] = item  # Store only valid items
@@ -481,7 +481,7 @@ class DiscreteBucketIndexHeap:
 
 
 class MultimodalGraph:
-    root: State
+    root: Node
     nodes: Dict
 
     # batch_dist_fun
@@ -726,7 +726,7 @@ class MultimodalGraph:
         for n in nodes:
             self.add_node(n)
 
-    def add_transition_nodes(self, transitions: Tuple[Configuration, Mode, List[Mode]]):
+    def add_transition_nodes(self, transitions: List[Tuple[Configuration, Mode, List[Mode]]]):
         self.transition_node_array_cache = {}
         self.reverse_transition_node_array_cache = {}
 
@@ -824,7 +824,7 @@ class MultimodalGraph:
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_neighbors(
-        self, node: Node, space_extent: float = None
+        self, node: Node, space_extent: Optional[float] = None
     ) -> Tuple[List[Node], NDArray]:
         key = node.state.mode
         if key in self.nodes:
@@ -981,10 +981,10 @@ class MultimodalGraph:
         env: BaseProblem,
         best_cost: Optional[float] = None,
         resolution: float = 0.1,
-        approximate_space_extent: float = None,
+        approximate_space_extent: float | None = None,
     ) -> List[Node]:
         if approximate_space_extent is None:
-            approximate_space_extent = np.prod(np.diff(env.limits, axis=0))
+            approximate_space_extent = float(np.prod(np.diff(env.limits, axis=0)))
 
         goal = None
         h_cache = {}
@@ -1241,7 +1241,7 @@ class MultimodalGraph:
 
             n = goal
 
-            while parents[n] is not None:
+            while n is not None and parents[n] is not None:
                 path.append(parents[n])
                 n = parents[n]
 
@@ -1263,7 +1263,7 @@ class MultimodalGraph:
         env: BaseProblem,
         best_cost: Optional[float] = None,
         resolution: float = 0.1,
-        approximate_space_extent: float = None,
+        approximate_space_extent: float | None = None,
     ) -> List[Node]:
         open_queue = []
 
@@ -1306,7 +1306,7 @@ class MultimodalGraph:
             return cost
 
         parents = {start_node: None}
-        gs = {start_node: 0}  # best cost to get to a node
+        gs = {start_node: 0.}  # best cost to get to a node
 
         # populate open_queue and fs
 
@@ -1388,7 +1388,7 @@ class MultimodalGraph:
 
             n = goal
 
-            while parents[n] is not None:
+            while n is not None and parents[n] is not None:
                 path.append(parents[n])
                 n = parents[n]
 
@@ -1444,7 +1444,7 @@ class CompositePRM(BasePlanner):
         self,
         ptc: PlannerTerminationCondition,
         optimize: bool = True,
-    ) -> Optional[Tuple[List[State], List]]:
+    ) -> Tuple[List[State] | None, Dict[str, Any]]:
         q0 = self.env.get_start_pos()
         m0 = self.env.get_start_mode()
 
@@ -1603,7 +1603,7 @@ class CompositePRM(BasePlanner):
 
             return new_states_from_path_sampling, new_transitions_from_path_sampling
 
-        def sample_valid_uniform_batch(batch_size: int, cost: float) -> List[State]:
+        def sample_valid_uniform_batch(batch_size: int, cost: float | None) -> Tuple[List[State], int]:
             new_samples = []
             num_attempts = 0
             num_valid = 0
@@ -1911,11 +1911,11 @@ class CompositePRM(BasePlanner):
 
         all_paths = []
 
-        approximate_space_extent = np.prod(np.diff(self.env.limits, axis=0))
+        approximate_space_extent = float(np.prod(np.diff(self.env.limits, axis=0)))
 
         cnt = 0
         while True:
-            if current_best_path is not None:
+            if current_best_path is not None and current_best_cost is not None:
                 # prune
                 num_pts_for_removal = 0
                 focal_points = np.array(
@@ -2029,7 +2029,7 @@ class CompositePRM(BasePlanner):
                 # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
                 # plt.show()
 
-                approximate_space_extent = (
+                approximate_space_extent = float(
                     np.prod(np.diff(self.env.limits, axis=0))
                     * len(new_states)
                     / required_attempts_this_batch
@@ -2043,7 +2043,7 @@ class CompositePRM(BasePlanner):
                 # g.compute_lower_bound_to_goal(self.env.batch_config_cost)
                 # g.compute_lower_bound_from_start(self.env.batch_config_cost)
 
-                if current_best_cost is not None and (
+                if current_best_cost is not None and current_best_path is not None and (
                     self.config.try_informed_sampling or self.config.try_informed_transitions
                 ):
                     interpolated_path = interpolate_path(current_best_path)
