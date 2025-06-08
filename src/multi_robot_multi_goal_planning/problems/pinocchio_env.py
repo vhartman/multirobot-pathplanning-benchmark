@@ -433,10 +433,8 @@ class PinocchioEnvironment(BaseProblem):
     def show_config(self, q, blocking=True):
         if self.viz is None:
             self.setup_visualization()
-        if isinstance(q, Configuration):
-            q = q.state()
 
-        self.viz.display(q)
+        self.viz.display(q.state())
 
         if blocking:
             input("Press Enter to continue...")

@@ -187,7 +187,8 @@ def setup_planner(
                     "inlcude_lb_in_informed_sampling"
                 ],
                 init_mode_sampling_type=options["init_mode_sampling_type"],
-                frontier_mode_sampling_probability=options["frontier_mode_sampling_probability"],
+                frontier_mode_sampling_probability=options[
+                    "frontier_mode_sampling_probability"],
                 init_uniform_batch_size=options["init_uniform_batch_size"],
                 init_transition_batch_size=options["init_transition_batch_size"],
                 with_mode_validation=options["with_mode_validation"],
@@ -273,16 +274,20 @@ def setup_planner(
                 uniform_batch_size=options["batch_size"],
                 uniform_transition_batch_size=options["transition_batch_size"],
                 informed_batch_size=options["informed_batch_size"],
-                informed_transition_batch_size=options["informed_transition_batch_size"],
+                informed_transition_batch_size=options[
+                    "informed_transition_batch_size"],
                 path_batch_size=options["path_batch_size"],
-                locally_informed_sampling=options["locally_informed_sampling"],
+                locally_informed_sampling=options[
+                    "locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
-                inlcude_lb_in_informed_sampling=options["inlcude_lb_in_informed_sampling"],
+                inlcude_lb_in_informed_sampling=options[
+                    "inlcude_lb_in_informed_sampling"],
                 remove_based_on_modes=options["remove_based_on_modes"],
                 with_tree_visualization=options["with_tree_visualization"],
                 apply_long_horizon=options["apply_long_horizon"],
-                frontier_mode_sampling_probability=options["frontier_mode_sampling_probability"],
+                frontier_mode_sampling_probability=options[
+                    "frontier_mode_sampling_probability"],
                 horizon_length=options["horizon_length"],
                 with_rewiring=options["with_rewiring"],
                 with_mode_validation=options["with_mode_validation"],
@@ -308,16 +313,20 @@ def setup_planner(
                 uniform_batch_size=options["batch_size"],
                 uniform_transition_batch_size=options["transition_batch_size"],
                 informed_batch_size=options["informed_batch_size"],
-                informed_transition_batch_size=options["informed_transition_batch_size"],
+                informed_transition_batch_size=options[
+                    "informed_transition_batch_size"],
                 path_batch_size=options["path_batch_size"],
-                locally_informed_sampling=options["locally_informed_sampling"],
+                locally_informed_sampling=options[
+                    "locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
-                inlcude_lb_in_informed_sampling=options["inlcude_lb_in_informed_sampling"],
+                inlcude_lb_in_informed_sampling=options[
+                    "inlcude_lb_in_informed_sampling"],
                 remove_based_on_modes=options["remove_based_on_modes"],
                 with_tree_visualization=options["with_tree_visualization"],
                 apply_long_horizon=options["apply_long_horizon"],
-                frontier_mode_sampling_probability=options["frontier_mode_sampling_probability"],
+                frontier_mode_sampling_probability=options[
+                    "frontier_mode_sampling_probability"],
                 horizon_length=options["horizon_length"],
                 with_rewiring=options["with_rewiring"],
                 with_mode_validation=options["with_mode_validation"],
@@ -600,14 +609,9 @@ def main():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # convention: alsways use "/" as trailing character
-    try: 
-        experiment_folder = f"/media/tirza/tirza/MasterThesis/out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
-        if not os.path.isdir(experiment_folder):
-            os.makedirs(experiment_folder)
-    except Exception:
-        experiment_folder = (
-            f"./out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
-        )
+    experiment_folder = (
+        f"./out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
+    )
 
     if not os.path.isdir(experiment_folder):
         os.makedirs(experiment_folder)
@@ -624,11 +628,6 @@ def main():
     if args.display_result:
         make_cost_plots(all_experiment_data, config)
         plt.show()
-    
-        
-
-    
-
 
 
 if __name__ == "__main__":

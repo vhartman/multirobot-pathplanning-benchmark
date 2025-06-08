@@ -915,8 +915,7 @@ class BaseRRTConfig:
     # BidirectionalRRTstar
     transition_nodes: int = 50
     birrtstar_version: int = 2
-
-    
+ 
 class BaseRRTstar(BasePlanner):
     """
     Represents the base class for RRT*-based algorithms, providing core functionalities for motion planning.
@@ -943,8 +942,7 @@ class BaseRRTstar(BasePlanner):
         self.long_horizon = BaseLongHorizon(self.config.horizon_length)
         self.mode_validation = ModeValidation(self.env, self.config.with_mode_validation, with_noise=self.config.with_noise)
         self.check = set()
-        self.blacklist_mode = set()
-        
+        self.blacklist_mode = set() 
 
     def add_tree(self, 
                  mode: Mode, 
@@ -987,16 +985,13 @@ class BaseRRTstar(BasePlanner):
 
         Returns:
             None: This method does not return any value.
-        """
-        
+        """ 
         if mode is None: 
             new_modes = [self.env.get_start_mode()]
         else:
             self.check.add(mode)
             new_modes = self.env.get_next_modes(q, mode)
             new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
-            if mode.task_ids == [13,4]:
-                pass
             if new_modes == []:
                 self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
             self.save_tree_data() 
@@ -1795,9 +1790,18 @@ class BaseRRTstar(BasePlanner):
                         if n_near.children != []:
                             rewired = True
         return rewired
-    
 
-    def update_results_tracking(self, cost, path):
+    def update_results_tracking(self, cost: float, path: List[State]) -> None:
+        """
+        Updates the tracking of costs, times, and all explored paths if the path ends in a terminal mode.
+
+        Args:
+            cost (float): The cost of the path.
+            path (List[State]): The path as a list of states.
+
+        Returns:
+            None: This method does not return any value.
+        """
         if path == []:
             return
         if not self.env.is_terminal_mode(path[-1].mode):

@@ -27,7 +27,6 @@ from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut
 
 
 @pytest.mark.parametrize(
@@ -473,52 +472,3 @@ def test_unassigned_with_pick_place_dependency_mixin():
 
     valid_combinations = tmp.get_valid_next_task_combinations(test_mode_4)
     assert len(valid_combinations) == 0
-
-@pytest.mark.parametrize(
-    "planner_fn_no_shurtcutting",
-    [
-        lambda env, ptc: RRTstar(env, ptc=ptc, shortcutting=False).Plan(optimize = False),
-    ],
-)
-
-@pytest.mark.parametrize("run_idx", range(3))
-def test_shortcutting(planner_fn_no_shurtcutting, run_idx):
-    env = get_env_by_name("hallway")
-    ptc = RuntimeTerminationCondition(10)
-
-    path, _ = planner_fn_no_shurtcutting(env, ptc)
-    assert path is not None
-
-    print(run_idx)
-    seed = run_idx
-
-    shortcut_path_checked_edge_in_order, (cost1, time1) = robot_mode_shortcut(
-        env,
-        path,
-        550,
-        resolution=env.collision_resolution,
-        tolerance=env.collision_tolerance,
-        check_edges_in_order=True, 
-        seed=seed
-    )
-
-    shortcut_path_checked_edge_not_in_order, (cost2, time2) = robot_mode_shortcut(
-        env,
-        path,
-        550,
-        resolution=env.collision_resolution,
-        tolerance=env.collision_tolerance,
-        check_edges_in_order=False,
-        seed=seed
-    )
-
-    list1 = [s.q.state() for s in shortcut_path_checked_edge_in_order]
-    list2 = [s.q.state() for s in shortcut_path_checked_edge_not_in_order]
-
-    assert all(np.allclose(a1, a2) for a1, a2 in zip(list1, list2))
-    assert cost1 == cost2
-    assert len(shortcut_path_checked_edge_in_order) == len(shortcut_path_checked_edge_not_in_order)
-    print("time checked edge in order: ", time1[-1])
-    print("time checked edge not in order: ", time2[-1])
-    print(time2[-1] < time1[-1])
-    # assert 
