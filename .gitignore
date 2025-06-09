@@ -84,10 +84,3 @@ cache/
 /CMakeFiles/
 /Makefile
 cmake_install.cmake
-
-configs/demo/test.json
-configs/demo/test1.json
-configs/demo/test2.json
-configs/demo/test3.json
-.vscode/
-z.log.global
