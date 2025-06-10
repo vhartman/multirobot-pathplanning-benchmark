@@ -88,8 +88,11 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
                     paths.append(path_data)
 
             run_data["paths"] = paths
-            run_data["costs"] = costs[i]
-            run_data["times"] = timestamps[i]
+            try:
+                run_data["costs"] = costs[i]
+                run_data["times"] = timestamps[i]
+            except Exception:
+                continue
 
             planner_data.append(run_data)
 
@@ -114,6 +117,19 @@ def load_config_from_folder(filepath: str) -> Dict:
     return config
 
 
+report_colors = {
+    "rrt":            (11 / 255.0, 111 / 255.0, 60 / 255.0),
+    "changed rrt":     (79 / 255.0, 228 / 255.0, 81 / 255.0),
+    "rheit":          (0.537, 0.0, 0.267),  # RGB already in float
+    "eit":            (251 / 255.0, 0 / 255.0, 91 / 255.0),
+    "changed eit":     (249 / 255.0, 100 / 255.0, 255 / 255.0),
+    "rhait":          (132 / 255.0, 0 / 255.0, 255 / 255.0),
+    "ait":            (19 / 255.0, 0 / 255.0, 206 / 255.0),
+    "changed ait":     (51 / 255.0, 158 / 255.0, 241 / 255.0),
+    "prm":            (242 / 255.0, 82 / 255.0, 0 / 255.0),
+    "changed prm":     (255 / 255.0, 172 / 255.0, 4 / 255.0),
+    "changed birrt":   (158 / 255.0, 154 / 255.0, 161 / 255.0),
+}
 # TODO: move this to config? Add some default behaviour
 planner_name_to_color = {
     "informed_prm": "tab:orange",
@@ -135,17 +151,14 @@ planner_name_to_color = {
     # "locally_informed_prm": "darkgreen",
     "globally_informed_prm": "magenta",
     "locally_informed_shortcutting_prm": "tab:blue",
-    "locally_informed_prm_shortcutting": "tab:blue",
     "globally_informed_prm_shortcutting": "tab:green",
     "globally_informed_shortcutting_prm": "tab:green",
     "locally_informed_prm_rejection": "tab:orange",
     "locally_informed_prm_shortcutting_rejection": "tab:red",
     "globally_informed_prm_shortcutting_rejection": "tab:brown",
-    "birrtstar": "black",
     "max_euclidean_rrtstar": "tab:red",
     "sum_euclidean_rrtstar": "tab:brown",
     "euclidean_rrtstar": "tab:purple",
-    "rrtstar": "tab:red",
     "rrtstar_2": "tab:orange",
     "rrtstar_local": "tab:red",
     "rrtstar_shortcutting_global": "black",
@@ -167,15 +180,48 @@ planner_name_to_color = {
     "locally_informed_prm_no_shortcutting": "tab:blue",
     "birrtstar_no_shortcutting": "black",
     "rrtstar_no_shortcutting": "tab:red",
+    "rrtstar": report_colors["rrt"],
+    "birrtstar": "black",
+    "eitstar": report_colors["eit"],
+    "long_horizon eitstar": report_colors["rheit"],
+    "long_horizon aitstar": report_colors["rhait"],
+    "aitstar": report_colors["ait"],
+    "locally_informed_prm_shortcutting": report_colors["prm"],
+    "eitstar same": report_colors["changed eit"],
+    "aitstar same": report_colors["changed ait"],
+    "locally_informed_prm_shortcutting same": report_colors["changed prm"],
+    "eitstar uniform": report_colors["changed eit"],
+    "aitstar uniform": report_colors["changed ait"],
+    "locally_informed_prm_shortcutting uniform": report_colors["changed prm"],
+    "rrtstar uniform": report_colors["changed rrt"],
+    "birrtstar uniform": report_colors["changed birrt"],
+    "eitstar without": report_colors["changed eit"],
+    "aitstar without": report_colors["changed ait"],
+    "locally_informed_prm_shortcutting without": report_colors["changed prm"],
+    "rrtstar without": report_colors["changed rrt"],
+    "birrtstar without": report_colors["changed birrt"], 
 }
 
 planner_name_to_style = {
     "globally_informed_prm_no_shortcutting": "--",
-    "birrtstar_global_sampling": "--",
-    "rrtstar_global_sampling": "--",
-    "locally_informed_prm_no_shortcutting": "--",
-    "birrtstar_no_shortcutting": "--",
-    "rrtstar_no_shortcutting": "--",
+    "birrtstar_global_sampling": ":",
+    "rrtstar_global_sampling": ":",
+    "locally_informed_prm_no_shortcutting": "-:",
+    "birrtstar_no_shortcutting": ":",
+    "rrtstar_no_shortcutting": ":",
+    "eitstar same": "--",
+    "aitstar same": "--",
+    "locally_informed_prm_shortcutting same":"--",
+    "eitstar uniform": "--",
+    "aitstar uniform": "--",
+    "locally_informed_prm_shortcutting uniform":"--",
+    "rrtstar uniform": "--",
+    "birrtstar uniform":"--",
+    "eitstar without": "--",
+    "aitstar without": "--",
+    "locally_informed_prm_shortcutting without":"--",
+    "rrtstar without": "--",
+    "birrtstar without":"--"
 }
 
 
@@ -219,7 +265,8 @@ def make_cost_plots(
     save_as_png: bool = False,
     add_legend: bool = True,
     baseline_cost=None,
-    add_info: bool = False
+    add_info: bool = False,
+    final_max_time: Optional[float] = None,
 ):
     plt.figure("Cost plot")
 
@@ -290,6 +337,8 @@ def make_cost_plots(
         )
 
     time_discretization = 1e-2
+    if final_max_time is not None:
+        max_time = final_max_time
     interpolated_solution_times = np.arange(0, max_time, time_discretization)
 
     # plt.figure("Cost plot")
@@ -331,7 +380,10 @@ def make_cost_plots(
 
         min_solution_cost = np.min(all_solution_costs, axis=0)
         # max_solution_cost = np.max(all_solution_costs, axis=0)
-        max_solution_cost = np.max(ub_solution_cost[np.isfinite(ub_solution_cost)])
+        try:
+            max_solution_cost = np.max(ub_solution_cost[np.isfinite(ub_solution_cost)])
+        except:
+            min_solution_cost = np.min(all_solution_costs, axis=0)
         if len(max_solution_cost[np.isfinite(max_solution_cost)]) > 0:
             # max_non_inf_cost = max(
             #     max_non_inf_cost,
@@ -387,6 +439,8 @@ def make_cost_plots(
 
         min_non_inf_cost = min(min_non_inf_cost, baseline_cost)
 
+
+
     plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
     # plt.grid()
@@ -428,15 +482,30 @@ def make_cost_plots(
         )
 
 
-def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
+def make_success_plot(
+        all_experiment_data: Dict[str, Any], 
+        config: Dict,
+        save: bool = False,
+        foldername: Optional[str] = None,
+        save_as_png: bool = False,
+        add_legend: bool = True,
+        add_info: bool = False,
+        final_max_time: Optional[float] = None,
+        ):
     time_discretization = 1e-2
-    interpolated_solution_times = np.arange(
-        0, config["max_planning_time"], time_discretization
-    )
+    if final_max_time is None:
+        interpolated_solution_times = np.arange(
+            0, config["max_planning_time"], time_discretization
+        )
+    else:
+        interpolated_solution_times = np.arange(
+            0, final_max_time, time_discretization
+        )
 
     plt.figure("Success plot")
 
     first_solution_found = 1e8
+    len_results = config["num_runs"]
 
     for planner_name, results in all_experiment_data.items():
         all_solution_costs = []
@@ -452,7 +521,7 @@ def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
             all_solution_costs.append(discretized_solution_costs)
 
         solution_found = np.isfinite(all_solution_costs)
-        percentage_solution_found = np.sum(solution_found, axis=0) / len(results)
+        percentage_solution_found = np.sum(solution_found, axis=0) / len_results
 
         for i in range(len(percentage_solution_found)):
             if percentage_solution_found[i] > 1e-3:
@@ -464,12 +533,16 @@ def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
         else:
             color = np.random.rand(3,)
 
+        ls = '-'
+        if planner_name in planner_name_to_style:
+            ls = planner_name_to_style[planner_name]
         plt.semilogx(
             interpolated_solution_times,
             percentage_solution_found,
             color=color,
             label=planner_name,
             drawstyle="steps-post",
+            ls = ls
         )
 
     plt.xlim(
@@ -479,7 +552,37 @@ def make_success_plot(all_experiment_data: Dict[str, Any], config: Dict):
         ]
     )
 
-    plt.legend()
+    # plt.legend()
+    if add_legend:
+        if add_info:
+            legend_title = f"Environment: {config['environment']}\nNumber of runs: {config['num_runs']}"
+            existing_handles, _ = plt.gca().get_legend_handles_labels()
+            plt.legend(handles=existing_handles, title=legend_title, title_fontsize='medium', loc='best', alignment='left')
+        else:
+
+            plt.legend()
+    plt.grid(which="both", axis="both", ls="--")  
+    plt.ylabel(f"Success [%]")
+    plt.xlabel("Computation Time [s]")
+
+    if save:
+        if foldername is None:
+            raise ValueError("No path specified")
+
+        pathlib.Path(f"{foldername}plots/").mkdir(parents=True, exist_ok=True)
+
+        format = "pdf"
+        if save_as_png:
+            format = "png"
+
+        scenario_name = config["environment"]
+
+        plt.savefig(
+            f"{foldername}plots/success_plot_{scenario_name}.{format}",
+            format=format,
+            dpi=300,
+            bbox_inches="tight",
+        )
 
 
 def main():
@@ -519,6 +622,9 @@ def main():
     parser.add_argument(
         "--baseline_cost", type=float, default=None, help="Baseline"
     )
+    parser.add_argument(
+        "--limited_max_time", type=float, default=None, help="Max time for the plot"
+    )
     args = parser.parse_args()
 
     if args.use_paper_style:
@@ -539,9 +645,19 @@ def main():
         save_as_png=args.png,
         add_legend=args.legend,
         baseline_cost=args.baseline_cost,
-        add_info = args.info
+        add_info = args.info,
+        final_max_time=args.limited_max_time,
     )
-    make_success_plot(all_experiment_data, config)
+    make_success_plot(
+        all_experiment_data, 
+        config, 
+        args.save,
+        foldername,
+        save_as_png=args.png,
+        add_legend=args.legend,
+        add_info = args.info,
+        final_max_time=args.limited_max_time,
+        )
 
     if not args.no_display:
         plt.show()
