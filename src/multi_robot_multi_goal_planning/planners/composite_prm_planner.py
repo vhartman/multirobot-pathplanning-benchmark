@@ -1837,9 +1837,8 @@ class CompositePRM(BasePlanner):
                 q = conf_type.from_list(q)
 
                 # could this transition possibly improve the path?
-                if cost is not None:
-                    if sum(self.env.batch_config_cost(q, focal_points)) > cost:
-                        continue
+                if cost is not None and sum(self.env.batch_config_cost(q, focal_points)) > cost:
+                    continue
 
                 # check if the transition is collision free
                 if self.env.is_collision_free(q, mode):
@@ -1934,6 +1933,7 @@ class CompositePRM(BasePlanner):
             
             if self.dummy_start_mode and init_search_modes[0] == g.root.state.mode:
                 init_search_modes = init_search_modes[1:]
+
             self.sorted_reached_modes = init_search_modes
 
             print(self.sorted_reached_modes)

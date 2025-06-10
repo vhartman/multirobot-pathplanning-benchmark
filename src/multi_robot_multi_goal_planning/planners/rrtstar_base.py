@@ -1920,14 +1920,14 @@ class BaseRRTstar(BasePlanner):
 
         num_modes = len(self.modes)
         if num_modes == 1:
-            return np.random.choice(self.modes)
+            return random.choice(self.modes)
         # if self.operation.task_sequence == [] and self.config.mode_sampling != 0:
         elif self.operation.init_sol and self.config.mode_sampling != 0:
-                p = [1/num_modes] * num_modes
+            p = [1/num_modes] * num_modes
         
         elif self.config.mode_sampling is None:
             # equally (= mode uniformly)
-            return np.random.choice(self.modes)
+            return random.choice(self.modes)
 
         elif self.config.mode_sampling == 1: 
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
@@ -2087,117 +2087,6 @@ class BaseRRTstar(BasePlanner):
                 lb_transition_node = self.get_transition_node(mode, result[1])
                 self.GeneratePath(mode, lb_transition_node, shortcutting_bool= shortcutting_bool)
 
-    def UpdateDiscretizedCost(self, path:List[State], cost:NDArray, idx:int) -> None:
-        """
-        Updates discretized cost along a given path by recalculating segment costs from a specified index onward.
-
-        Args:
-            path (List[State]): The sequence of states representing the path.
-            cost (NDArray): The array storing cumulative cost values along the path.
-            idx (int): The index from which cost updates should begin.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
-        path_a, path_b = path[idx-1: -1], path[idx: ]
-        batch_cost = self.env.batch_config_cost(path_a, path_b)
-        cost[idx:] = cumulative_sum(batch_cost) + cost[idx-1]
-
-    def Shortcutting(self,
-                     active_mode:Mode, 
-                     deterministic:bool = False
-                     ) -> None:
-        """
-        Applies shortcutting logic based on the given mode.
-
-        Args:
-            active_mode (Mode): Current operational mode.
-            deterministic (bool): If True, applies a deterministic approach. 
-
-        Returns:
-            None: This method does not return any value.
-        """
-        
-        indices  = [self.env.robot_idx[r] for r in self.env.robots]
-
-        discretized_path, discretized_modes, discretized_costs = self.Discretization(self.operation.path_nodes, indices)  
-
-        termination_cost = discretized_costs[-1]
-        termination_iter = 0
-        dim = None
-
-        if not deterministic:
-            range1 = 1
-            range2 = 2000
-        else:
-            range1 = len(discretized_path)
-            range2 = range1
-
-        for i in range(range1):
-            for j in range(range2):
-                if not deterministic:
-                    i1 = np.random.choice(len(discretized_path)-1)
-                    i2 = np.random.choice(len(discretized_path)-1)
-                else:
-                    i1 = i
-                    i2 = j
-                if np.abs(i1-i2) < 2:
-                    continue
-                idx1 = min(i1, i2)
-                idx2 = max(i1, i2)
-                m1 = discretized_modes[idx1]    
-                m2 = discretized_modes[idx2]    
-                if m1 == m2 and self.config.shortcutting_robot_version == 0: #take all possible robots
-                    robot = None
-                    if self.config.shortcutting_dim_version == 2:
-                        dim = [np.random.choice(indices[r_idx]) for r_idx in range(len(self.env.robots))]
-                    
-                    if self.config.shortcutting_dim_version == 3:
-                        dim = []
-                        for r_idx in range(len(self.env.robots)):
-                            all_indices = [i for i in indices[r_idx]]
-                            num_indices = np.random.choice(range(len(indices[r_idx])))
-                            random.shuffle(all_indices)
-                            dim.append(all_indices[:num_indices])
-                else:
-                    robot = np.random.choice(len(self.env.robots)) 
-                    #robot just needs to pursue the same task across the modes
-                    if len(m1) > 1:
-                        task_agent = m1[1][robot]
-                    else:
-                        task_agent = m1[0][robot]
-
-                    if m2[0][robot] != task_agent:
-                        continue
-
-                    if self.config.shortcutting_dim_version == 2:
-                        dim = [np.random.choice(indices[robot])]
-                    if self.config.shortcutting_dim_version == 3:
-                        all_indices = [i for i in indices[robot]]
-                        num_indices = np.random.choice(range(len(indices[robot])))
-
-                        random.shuffle(all_indices)
-                        dim = all_indices[:num_indices]
-
-
-                edge, edge_cost =  self.EdgeInterpolation(discretized_path[idx1:idx2+1].copy(), 
-                                                            discretized_costs[idx1], indices, dim, self.config.shortcutting_dim_version, robot)
-        
-                if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge, resolution=0.001, tolerance=0.001): #need to make path_collision_free
-                    discretized_path[idx1:idx2+1] = edge
-                    discretized_costs[idx1:idx2+1] = edge_cost
-                    self.UpdateDiscretizedCost(discretized_path, discretized_costs, idx2)
-                    self.operation.path = discretized_path
-                    if not deterministic:
-                        if np.abs(discretized_costs[-1] - termination_cost) > 0.001:
-                            termination_cost = discretized_costs[-1]
-                            termination_iter = j
-                        elif np.abs(termination_iter -j) > 25000:
-                            break
-                    
-        self.TreeExtension(active_mode, discretized_path, discretized_costs, discretized_modes)
-
     def TreeExtension(self, 
                       discretized_path:List[State]
                       ) -> None:
@@ -2280,159 +2169,12 @@ class BaseRRTstar(BasePlanner):
         # # axes[2, 1].scatter([s[0] for s in samples], [s[1] for s in samples])
         # # axes[2, 1].set_title('Agent 3')
 
-        
-        
-
         # # Adjust layout and display the plots
         # plt.tight_layout()
         # plt.show()
         print('final new cost:' , self.operation.cost)
 
         # self.GeneratePath(active_mode, node, shortcutting_bool=False)
-
-    def EdgeInterpolation(self, 
-                          path:List[State], 
-                          cost:float, 
-                          indices:List[List[int]], 
-                          dim:Union[int, List[int]], 
-                          version:int, 
-                          r:Optional[int]
-                          ) -> Tuple[List[State], List[float]]:
-        """
-            Interpolates an edge between two configurations along a path using different shortcutting strategies.
-
-            Args:
-                path (List[State]): Sequence of states representing path.
-                cost (float): Initial cost associated with path segment.
-                indices (List[List[int]]): Indices of relevant dimensions for each robot.
-                dim (Union[int, List[int]]): Specific dimensions to interpolate.
-                version (int): The interpolation strategy to use:
-                    - 0: Uniform interpolation across all dimensions.
-                    - 1: Shortcutting across all indices of a robot.
-                    - 2: Partial shortcutting for a single dimension of a robot.
-                    - 3: Partial shortcutting for a random set of dimensions.
-                r (Optional[int]): Specific robot to apply shortcutting to.
-
-            Returns:
-                Tuple: 
-                    - List[State]: Interpolated states forming the edge.
-                    - List[float]: Computed costs for each segment the interpolated path.
-            """
-
-        q0 = path[0].q.state()
-        q1 = path[-1].q.state()
-        edge  = []
-        # edge_cost = [cost]
-        segment_vector = q1 - q0
-        # dim_indices = [indices[i][dim] for i in range(len(indices))]
-        N = len(path) -1
-        for i in range(len(path)):
-            if version == 0 :
-                q = q0 +  (segment_vector * (i / N))
-
-            elif version == 1: #shortcutting all indices of agent
-                q = path[i].q.state().copy()
-                for robot in range(len(self.env.robots)):
-                    if r is not None and r == robot:
-                        q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i /N))
-                        break
-                    if r is None:
-                        q[indices[robot]] = q0[indices[robot]] +  (segment_vector[indices[robot]] * (i / N))
-
-            elif version == 2: #partial shortcutting agent single dim 
-                q = path[i].q.state().copy()
-                for robot in range(len(self.env.robots)):
-                    if r is not None and r == robot:
-                        q[dim] = q0[dim] +  (segment_vector[dim] * (i / N))
-                        break
-                    if r is None:
-                        q[dim[robot]] = q0[dim[robot]] +  (segment_vector[dim[robot]] * (i / N))
-            
-            elif version == 3: #partial shortcutting agent random set of dim 
-                q = path[i].q.state().copy()
-                for robot in range(len(self.env.robots)):
-                    if r is not None and r == robot:
-                        for idx in dim:
-                            q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
-                        break
-                    if r is None:
-                        for idx in dim[robot]:
-                            q[idx] = q0[idx] + ((q1[idx] - q0[idx])* (i / N))
-
-            q_list = [q[indices[i]] for i in range(len(indices))]
-            edge.append(State(NpConfiguration(q_list, self.env.start_pos.array_slice),path[i].mode))
-            if i == 0:
-                continue  
-            edge_a, edge_b = edge[:-1], edge[1:]
-            batch_cost = self.env.batch_config_cost(edge_a, edge_b)
-            batch_cost = np.insert(batch_cost, 0, 0.0)
-            edge_cost = cumulative_sum(batch_cost) + cost
-        return edge, edge_cost
-
-    def Discretization(self, 
-                       path:List[State], 
-                       indices: List[List[int]], 
-                       resolution:float=0.1
-                       ) -> Tuple[List[State], List[List[int]], List[float]]:
-        """
-        Discretizes a given path into intermediate states based on specified resolution.
-
-        Args:
-            path (List[State]): Sequence of states representing original path.
-            indices (List[List[int]]): Indices of relevant dimensions for interpolation.
-            resolution (float, optional): Step size used to determine the number of discretized points.
-
-        Returns:
-            Tuple:
-                - List[State]: List of discretized states forming the refined path.
-                - List[List[int]: List of mode transitions associated with each discretized state.
-                - List[float]: List of cumulative costs along the discretized path.
-        """
-
-        discretized_path, discretized_modes = [], []
-        for i in range(len(path) - 1):
-            start = path[i].state.q
-            end = path[i+1].state.q
-
-            # Calculate the vector difference and the length of the segment
-            segment_vector = end.state() - start.state()
-            # Determine the number of points needed for the current segment
-            if resolution is None: 
-                num_points = 2 
-            else:
-                N = config_dist(start, end) / resolution
-                N = max(2, N)
-                num_points = int(N)            # num_points = 
-            
-            # Create the points along the segment
-            mode = [path[i].state.mode.task_ids]
-            for j in range(num_points):
-                if path[i].transition and j == 0:
-                    if mode[0] != path[i+1].state.mode.task_ids:
-                        mode.append(path[i+1].state.mode.task_ids)
-                if j == 0:
-                    original_mode = path[i].state.mode
-                    discretized_modes.append(mode)
-                    discretized_path.append(path[i].state)
-                    if i == 0:
-                        continue
-
-                else:
-                    original_mode = path[i+1].state.mode
-                    if j != num_points-1:
-                        interpolated_point = start.state() + (segment_vector * (j / (num_points -1)))
-                        q_list = [interpolated_point[indices[i]] for i in range(len(indices))]
-                        discretized_path.append(State(NpConfiguration.from_list(q_list), original_mode))
-                        discretized_modes.append([mode[-1]])
-                        
-                
-        discretized_modes.append([path[-1].state.mode.task_ids])
-        discretized_path.append(path[-1].state)
-        path_a, path_b = discretized_path[:-1], discretized_path[1:]
-        batch_cost = self.env.batch_config_cost(path_a, path_b)
-        batch_cost = np.insert(batch_cost, 0, 0.0)
-        discretized_costs = cumulative_sum(batch_cost)
-        return discretized_path, discretized_modes, discretized_costs
 
     @abstractmethod
     def UpdateCost(self, mode:Mode, n: Node) -> None:
@@ -2447,6 +2189,7 @@ class BaseRRTstar(BasePlanner):
             None: This method does not return any value.
         """
         pass
+
     @abstractmethod
     def PlannerInitialization(self) -> None:
         """
@@ -2459,6 +2202,7 @@ class BaseRRTstar(BasePlanner):
             None: None: This method does not return any value.
         """
         pass
+
     @abstractmethod
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
         """
@@ -2474,6 +2218,7 @@ class BaseRRTstar(BasePlanner):
             None: This method does not return any value.
         """
         pass
+
     @abstractmethod
     def save_tree_data(self) -> None:
         pass

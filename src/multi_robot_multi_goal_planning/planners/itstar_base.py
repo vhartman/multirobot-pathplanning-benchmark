@@ -2157,7 +2157,7 @@ class BaseITstar(BasePlanner):
         """
         return BaseLongHorizon(self.config.horizon_length)
 
-    def sample_valid_uniform_batch(self, batch_size: int, cost: float) -> List[State]:
+    def sample_valid_uniform_batch(self, batch_size: int, cost: float | None) -> Tuple[List[State], int]:
         """
         Samples a batch of valid, collision-free states uniformly from the configuration space.
 
@@ -2280,7 +2280,7 @@ class BaseITstar(BasePlanner):
                 return True
         return False
             
-    def sample_valid_uniform_transitions(self, transistion_batch_size: int, cost: float) -> None:
+    def sample_valid_uniform_transitions(self, transistion_batch_size: int, cost: float | None) -> None:
         """
         Samples a batch of valid, collision-free transition nodes uniformly from the configuration space.
 
@@ -2624,7 +2624,7 @@ class BaseITstar(BasePlanner):
             self.g.add_states(new_states)
             print(f"Adding {len(new_states)} new states")
 
-            self.approximate_space_extent = (
+            self.approximate_space_extent = float(
                 np.prod(np.diff(self.env.limits, axis=0))
                 * len(new_states)
                 / required_attempts_this_batch
