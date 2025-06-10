@@ -36,6 +36,12 @@ from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
     BidirectionalRRTstar,
 )
 
+from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTConfig
+from multi_robot_multi_goal_planning.planners.itstar_base import BaseITConfig
+
+from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
+from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
+
 from run_experiment import export_planner_data
 
 
@@ -56,7 +62,15 @@ def main():
     )
     parser.add_argument(
         "--planner",
-        choices=["joint_prm", "tensor_prm", "prioritized", "rrt_star"],
+        choices=[
+            "joint_prm",
+            "tensor_prm",
+            "prioritized",
+            "rrt_star",
+            "birrt_star",
+            "aitstar",
+            "eitstar",
+        ],
         default="joint_prm",
         help="Planner to use (default: joint_prm)",
     )
@@ -140,6 +154,8 @@ def main():
     elif args.max_time is not None:
         termination_condition = RuntimeTerminationCondition(args.max_time)
 
+    assert termination_condition is not None
+
     if args.planner == "joint_prm":
         config = CompositePRMConfig()
 
@@ -154,9 +170,7 @@ def main():
 
         planner = CompositePRM(env, config)
 
-        path, info = planner.plan(
-            ptc=termination_condition, optimize=args.optimize
-        )
+        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
 
         if args.save:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -172,32 +186,44 @@ def main():
             planner_folder = experiment_folder + args.planner + "/"
             export_planner_data(planner_folder, 0, info)
     elif args.planner == "rrt_star":
-        path, info = RRTstar(
-            env,
-            ptc=termination_condition,
-            general_goal_sampling=False,
-            informed_sampling=True,
-            informed_sampling_version=6,
-            distance_metric=args.distance_metric,
-            p_goal=0.4,
-            p_stay=0,
-            p_uniform=0.2,
-            shortcutting=True,
-            mode_sampling=1,
-            sample_near_path=False,
-            locally_informed_sampling=True,
-            informed_batch_size=300,
-            remove_redundant_nodes=True,
-        ).Plan(args.optimize)
-    elif args.planner == "tensor_prm":
-        path, info = tensor_prm_planner(
-            env,
-            optimize=args.optimize,
-            mode_sampling_type=None,
-            max_iter=args.num_iters,
-        )
-    elif args.planner == "prioritized":
-        path, info = prioritized_planning(env)
+        config = BaseRRTConfig()
+
+        config.distance_metric = args.distance_metric
+
+        planner = RRTstar(env, config=config)
+        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
+    elif args.planner == "birrt_star":
+        config = BaseRRTConfig()
+
+        config.distance_metric = args.distance_metric
+
+        planner = BidirectionalRRTstar(env, config=config)
+        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
+    elif args.planner == "aitstar":
+        config = BaseITConfig()
+
+        config.distance_metric = args.distance_metric
+
+        planner = AITstar(env, config=config)
+        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
+
+    elif args.planner == "eitstar":
+        config = BaseITConfig()
+
+        config.distance_metric = args.distance_metric
+
+        planner = EITstar(env, config=config)
+        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
+
+    # elif args.planner == "tensor_prm":
+    #     path, info = tensor_prm_planner(
+    #         env,
+    #         optimize=args.optimize,
+    #         mode_sampling_type=None,
+    #         max_iter=args.num_iters,
+    #     )
+    # elif args.planner == "prioritized":
+    #     path, info = prioritized_planning(env)
 
     print("robot-mode-shortcut")
     shortcut_path, info_shortcut = robot_mode_shortcut(
