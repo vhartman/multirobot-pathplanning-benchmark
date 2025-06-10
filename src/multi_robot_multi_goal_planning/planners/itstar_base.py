@@ -2037,13 +2037,11 @@ class BaseLongHorizon():
         """
         self.new_section = True
 
-# taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
-# needed adaption to work.
 @dataclass
 class BaseITConfig:
     init_mode_sampling_type: str = "greedy"
     distance_metric: str = "euclidean"
-    try_sampling_around_path: bool = True
+    try_sampling_around_path: bool = False
     try_informed_sampling: bool = True
     init_uniform_batch_size: int = 100
     init_transition_batch_size:int = 100
@@ -2378,7 +2376,7 @@ class BaseITstar(BasePlanner):
                         #     "items from the set are in the array"
                         # )
                         if next_modes == []:
-                            self.reached_modes, _ = self.mode_validation.track_invalid_modes(mode, self.reached_modes)
+                            self.reached_modes = self.mode_validation.track_invalid_modes(mode, self.reached_modes)
                         
                 if mode not in self.reached_modes:
                     if update and not reached_terminal_mode:

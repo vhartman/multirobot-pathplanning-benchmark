@@ -334,9 +334,10 @@ class Mode:
 
 class State:
     """
-    A state in our motion planning problem fully describes the scene, i.e., it contains both the information of a mode (the scene graph), and the 
+    A state in our motion planning problem fully describes the scene, i.e., it contains both the information of a mode (the scene graph), and the
     joint poses that the robots are in.
     """
+
     q: Configuration
     mode: Mode
 
@@ -359,6 +360,7 @@ class BaseModeLogic(ABC):
     """
     Abstract class for determining the logic, consisting of the mode and task transitions.
     """
+
     tasks: List[Task]
     _task_name_dict: Dict[str, Task]
     _task_id_dict: Dict[str, int]
@@ -399,7 +401,7 @@ class BaseModeLogic(ABC):
         pass
 
     @abstractmethod
-    def get_next_modes(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
         pass
 
     @abstractmethod
@@ -570,7 +572,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         return False
 
-    def get_next_modes(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
         # needs to be changed to get next modes
         valid_next_combinations = self.get_valid_next_task_combinations(mode)
 
@@ -898,7 +900,7 @@ class FreeMixin(BaseModeLogic):
         return False
 
     @cache
-    def get_next_modes(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
         # needs to be changed to get next modes
         # print(q.state(), mode)
         valid_next_combinations = self.get_valid_next_task_combinations(mode)
@@ -1148,7 +1150,7 @@ class SequenceMixin(BaseModeLogic):
 
         return [next_task_ids]
 
-    def get_next_modes(self, q: Optional[Configuration], mode: Mode) -> Mode:
+    def get_next_modes(self, q: Optional[Configuration], mode: Mode) -> List[Mode]:
         next_task_ids = self.get_valid_next_task_combinations(mode)[0]
 
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
@@ -1302,7 +1304,7 @@ class DependencyGraphMixin(BaseModeLogic):
             if robot in involved_robots:
                 return name
 
-    def get_next_modes(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
         next_mode_ids = self.get_valid_next_task_combinations(mode)
 
         # all of this is duplicated with the method below
@@ -1495,6 +1497,9 @@ class BaseProblem(ABC):
     collision_tolerance: float
     collision_resolution: float
 
+    cost_metric: str = "euclidean"
+    cost_reduction: str = "max"
+
     # def __init__(self):
     #     self.collision_tolerance = 0.01
     #     self.collision_resolution = 0.01
@@ -1600,7 +1605,7 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def get_next_modes(self, q: Configuration, mode: Mode):
+    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
         """
         Get the modes that can be reached from the current mode and configuration.
         Assumes that the currentconfiguration fulfills is_transition(..)
@@ -1652,7 +1657,12 @@ class BaseProblem(ABC):
         pass
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode, collision_tolerance: float = 0.01, set_mode: bool = True
+        self,
+        r: str,
+        q: NDArray,
+        m: Mode,
+        collision_tolerance: float = 0.01,
+        set_mode: bool = True,
     ) -> bool:
         raise NotImplementedError
 
@@ -1699,15 +1709,15 @@ class BaseProblem(ABC):
         # valid_edges = 0
 
         if check_edges_in_order:
-            #sparsely check if newly generated points are in collision
-            for i in idx: 
+            # sparsely check if newly generated points are in collision
+            for i in idx:
                 q1 = path[i].q
                 mode = path[i].mode
                 if not self.is_collision_free(q1, mode):
                     return False
             if not self.is_collision_free(path[-1].q, path[-1].mode):
                 return False
-            #check whole edge
+            # check whole edge
             for i in idx:
                 q1 = path[i].q
                 q2 = path[i + 1].q
@@ -1730,7 +1740,7 @@ class BaseProblem(ABC):
 
             # print("checked edges in shortcutting: ", valid_edges)
         else:
-            Ns = {}  
+            Ns = {}
             edge_queue = list(idx)
             checks_per_iteration = 10
             N_start = 0
@@ -1756,7 +1766,7 @@ class BaseProblem(ABC):
                         include_endpoints=False,
                         N_start=N_start,
                         N_max=N_max,
-                        # N = Ns[i] 
+                        # N = Ns[i]
                     )
 
                     if res is None:
@@ -1821,8 +1831,8 @@ class BaseProblem(ABC):
     @abstractmethod
     def batch_config_cost(
         self,
-        starts: List[Configuration] | Configuration,
-        ends: List[Configuration] | NDArray,
+        starts: List[State] | Configuration,
+        ends: List[State] | NDArray,
     ) -> List[float]:
         pass
 
@@ -1831,3 +1841,15 @@ class BaseProblem(ABC):
             return np.inf
 
         return self.config_cost(start.q, end.q)
+
+    def display_path(
+        self,
+        path: List[State],
+        stop: bool = True,
+        export: bool = False,
+        pause_time: float = 0.01,
+        stop_at_end=False,
+        adapt_to_max_distance: bool = False,
+        stop_at_mode: bool = False,
+    ) -> None:
+        raise NotImplementedError

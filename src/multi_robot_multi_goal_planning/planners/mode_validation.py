@@ -1,5 +1,5 @@
 from typing import (
-    List, Tuple
+    List, Tuple, Set
 )
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
@@ -24,17 +24,18 @@ class ModeValidation():
         self.apply = apply
         self.with_noise = with_noise
 
-    def get_valid_modes(self, prev_mode:Mode, modes:tuple[Mode]) -> List[Mode]:
+    def get_valid_modes(self, prev_mode:Mode, modes:List[Mode]) -> List[Mode]:
         """
         Filters a list of modes based on their validity (logically/geometrically) and updates the cache of invalid modes.
         Args:
             prev_mode (Mode): Previous mode of all modes in the list.
-            modes (tuple[Mode]): List of modes to be validated.
+            modes (List[Mode]): List of modes to be validated.
         Returns:
             List[Mode]: List of valid modes.
         """
         if not self.apply:
             return list(modes)
+
         self.counter += 1
         #TODO what if its a Goal Region? Does that matter?
         start_pos = self.env.start_pos.state()        
@@ -110,7 +111,7 @@ class ModeValidation():
    
         return valid_modes
     
-    def get_valid_next_ids(self, mode:Mode) -> List[int]:
+    def get_valid_next_ids(self, mode:Mode) -> List[int] | None:
         """
         Retrieves valid combination of next task IDs for given mode.
 
@@ -124,13 +125,17 @@ class ModeValidation():
         possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
         if not self.apply:
             if not possible_next_task_combinations:
-                return
+                return None
+
             return random.choice(possible_next_task_combinations)
+
         if not possible_next_task_combinations:
             if not self.env.is_terminal_mode(mode):
                 _ = self.track_invalid_modes(mode)
-            return
+            return None
+        
         invalid_next_modes = self.invalid_next_ids.get(mode, set())
+        
         while True:
             next_task = random.choice(possible_next_task_combinations)
             if tuple(next_task) in invalid_next_modes:
@@ -156,7 +161,8 @@ class ModeValidation():
             self.invalid_next_ids[mode.prev_mode] = set()
         self.invalid_next_ids[mode.prev_mode].add(tuple(mode.task_ids))      
 
-    def track_invalid_modes(self, mode:Mode, modes:List[Mode] | None = None) -> Tuple[List[Mode], bool]:
+    # TODO: split in adding to blacklist, and removing from the list
+    def track_invalid_modes(self, mode:Mode, modes:Set[Mode] | None = None) -> Set[Mode]:
         """
         Tracks invalid modes by adding them to blacklist and removing them from the list.
 
@@ -164,22 +170,23 @@ class ModeValidation():
             mode (Mode): The mode to be tracked as invalid.
 
         Returns:
-            None: This method does not return any value.
+            modes: The filtered mode ist
         """
         if not self.apply:
-            return modes, False
+            return modes
+
         if mode.id == 77:
             pass
-        updated = False
+
         while True: 
             invalid_next_ids = self.invalid_next_ids.get(mode, set())
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
             if len(invalid_next_ids) < len(possible_next_task_combinations):
                 break
-            updated = True
             modes.remove(mode)
             self.update_cache_of_invalid_modes(mode)
             if mode.prev_mode is None:
                 break
             mode = mode.prev_mode
-        return modes, updated
+
+        return modes

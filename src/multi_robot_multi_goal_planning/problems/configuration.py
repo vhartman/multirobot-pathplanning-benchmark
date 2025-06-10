@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Any
 from numpy.typing import NDArray
 import numba
 
@@ -16,7 +16,7 @@ class Configuration(ABC):
     A multirobot configuration needs to provide all robots' states
     How this is done is up to the actual implementations.
     """
-    
+
     @abstractmethod
     def num_agents(self) -> int:
         pass
@@ -449,8 +449,8 @@ def sequential_batch_config_cost(
 
 
 def batch_config_cost(
-    starts: Union[Configuration, List[Configuration]],
-    batch_other: Union[NDArray, List[Configuration]],
+    starts: Union[Configuration, List[Any]],
+    batch_other: Union[NDArray, List[Any]],
     metric: str = "max",
     reduction: str = "max",
     w: float = 0.01,

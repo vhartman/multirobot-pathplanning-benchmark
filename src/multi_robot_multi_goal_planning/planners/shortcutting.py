@@ -12,7 +12,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import State, BasePro
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
 
-def single_mode_shortcut(env: rai_env, path: List[State], max_iter: int = 1000):
+def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 1000):
     """
     Shortcutting the composite path a single mode at a time.
     I.e. we never shortcut over mode transitions, even if it would be possible.

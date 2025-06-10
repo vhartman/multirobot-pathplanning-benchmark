@@ -893,23 +893,23 @@ class BaseLongHorizon():
 @dataclass
 class BaseRRTConfig:
     general_goal_sampling: bool = False
-    informed_sampling: bool = False
+    informed_sampling: bool = True
     informed_sampling_version: int = 6
     distance_metric: str = 'max_euclidean'
-    p_goal: float = 0.1
+    p_goal: float = 0.4
     p_stay: float = 0.0
     p_uniform: float = 0.2
     shortcutting: bool = True
-    mode_sampling: Optional[Union[int, float]] = None
-    sample_near_path: bool = True
+    mode_sampling: Optional[Union[int, float]] = 1
+    sample_near_path: bool = False
     shortcutting_dim_version:int = 2
     shortcutting_robot_version:int = 1
     locally_informed_sampling:bool = True
     remove_redundant_nodes:bool = True
-    informed_batch_size: int = 500
+    informed_batch_size: int = 300
     apply_long_horizon:bool = False
     horizon_length:int = 1
-    with_mode_validation:bool = True
+    with_mode_validation:bool = False
     with_noise:bool = False
     with_tree_visualization:bool = False
     # BidirectionalRRTstar
@@ -993,7 +993,7 @@ class BaseRRTstar(BasePlanner):
             new_modes = self.env.get_next_modes(q, mode)
             new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
             if new_modes == []:
-                self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
+                self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
             self.save_tree_data() 
         for new_mode in new_modes:
             if new_mode in self.modes:
@@ -1044,7 +1044,7 @@ class BaseRRTstar(BasePlanner):
         next_modes = self.env.get_next_modes(n.state.q, mode)
         next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
         if next_modes == []:
-            self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
+            self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
 
         for next_mode in next_modes:
             if next_mode not in self.modes:
@@ -1265,7 +1265,7 @@ class BaseRRTstar(BasePlanner):
                 if self.config.with_mode_validation:
                     self.modes.remove(mode)
                     self.mode_validation.update_cache_of_invalid_modes(mode)
-                    self.modes, _ = self.mode_validation.track_invalid_modes(mode.prev_mode, self.modes)
+                    self.modes = self.mode_validation.track_invalid_modes(mode.prev_mode, self.modes)
                 else:
                     self.blacklist_mode.add(mode)
                     self.modes.remove(mode)
@@ -1424,6 +1424,7 @@ class BaseRRTstar(BasePlanner):
                     #uniform sampling
                     lims = self.env.limits[:, self.env.robot_idx[robot]]
                     q.append(np.random.uniform(lims[0], lims[1]))
+
             q = type(self.env.get_start_pos()).from_list(q)
             if self.env.is_collision_free(q, mode):
                 return q

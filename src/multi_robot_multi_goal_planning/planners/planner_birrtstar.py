@@ -79,7 +79,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             new_modes = self.env.get_next_modes(q, mode)
             new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
             if new_modes == []:
-                self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
+                self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue 

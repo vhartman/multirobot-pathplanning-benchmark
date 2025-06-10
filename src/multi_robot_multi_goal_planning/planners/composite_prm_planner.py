@@ -735,7 +735,7 @@ class MultimodalGraph:
         for n in nodes:
             self.add_node(n)
 
-    def add_transition_nodes(self, transitions: List[Tuple[Configuration, Mode, List[Mode]]]):
+    def add_transition_nodes(self, transitions: List[Tuple[Configuration, Mode, List[Mode] | None]]):
         """
         Adds transition nodes.
 
@@ -1442,7 +1442,7 @@ class CompositePRMConfig:
     frontier_mode_sampling_probability: float = 0.5
     init_uniform_batch_size: int = 150
     init_transition_batch_size: int = 90
-    with_mode_validation: bool = False
+    with_mode_validation: bool = True
     with_noise: bool = False
 
 
@@ -1461,6 +1461,186 @@ class CompositePRM(BasePlanner):
         self.dummy_start_mode = False
         self.sorted_reached_modes = None
 
+    def _sample_mode(self,
+        reached_modes,
+        graph,
+        mode_sampling_type: str = "uniform_reached",
+        found_solution: bool = False, 
+        ) -> Mode:
+
+        if mode_sampling_type == "uniform_reached":
+            return random.choice(reached_modes)
+        elif mode_sampling_type == "frontier":
+            if len(reached_modes) == 1:
+                return reached_modes[0]
+
+            total_nodes = graph.get_num_samples()
+            p_frontier = self.config.frontier_mode_sampling_probability
+            p_remaining = 1 - p_frontier
+
+            frontier_modes = []
+            remaining_modes = []
+            sample_counts = {}
+            inv_prob = []
+
+            for m in reached_modes:
+                sample_count = graph.get_num_samples_in_mode(m)
+                sample_counts[m] = sample_count
+                if not m.next_modes:
+                    frontier_modes.append(m)
+                else:
+                    remaining_modes.append(m)
+                    inv_prob.append(1 - (sample_count / total_nodes))
+
+
+            if self.config.frontier_mode_sampling_probability == 1:
+                if not frontier_modes:
+                    frontier_modes = reached_modes
+                if len(frontier_modes) >  0:
+                    p = [1 / len(frontier_modes)] * len(frontier_modes) 
+                    return random.choices(frontier_modes, weights=p, k=1)[0]
+                else:
+                    return random.choice(reached_modes)
+
+            if not remaining_modes or not frontier_modes:
+                return random.choice(reached_modes)
+
+            total_inverse = sum(1 - (sample_counts[m] / total_nodes) for m in remaining_modes)
+            if total_inverse == 0:
+                return random.choice(reached_modes)
+
+            sorted_reached_modes = frontier_modes + remaining_modes
+            p = [p_frontier / len(frontier_modes)] * len(frontier_modes) 
+            inv_prob = np.array(inv_prob)
+            p.extend((inv_prob / total_inverse) * p_remaining)
+            
+            return random.choices(sorted_reached_modes, weights=p, k=1)[0]
+        elif mode_sampling_type == "greedy":    
+            return reached_modes[-1]
+        elif mode_sampling_type == "weighted":
+            # sample such that we tend to get similar number of pts in each mode
+            w = []
+            for m in reached_modes:
+                num_nodes = 0
+                if m in graph.nodes:
+                    num_nodes += len(graph.nodes[m])
+                if m in graph.transition_nodes:
+                    num_nodes += len(graph.transition_nodes[m])
+                w.append(1 / max(1, num_nodes))
+            return random.choices(tuple(reached_modes), weights=w)[0]
+        return random.choice(reached_modes)
+
+    def _sample_valid_uniform_batch(self, graph, batch_size: int, cost: float | None) -> Tuple[List[State], int]:
+        new_samples = []
+        num_attempts = 0
+        num_valid = 0
+
+        if graph.goal_nodes:
+            focal_points = np.array(
+                [graph.root.state.q.state(), graph.goal_nodes[0].state.q.state()],
+                dtype=np.float64,
+            )
+
+        while len(new_samples) < batch_size:
+            num_attempts += 1
+            # print(len(new_samples))
+            # sample mode
+            m = self._sample_mode(self.sorted_reached_modes, graph, "uniform_reached", cost is not None)
+
+            # print(m)
+
+            # sample configuration
+            q = self.env.sample_config_uniform_in_limits()
+
+            if cost is not None:
+                if sum(self.env.batch_config_cost(q, focal_points)) > cost:
+                    continue
+
+            if self.env.is_collision_free(q, m):
+                new_samples.append(State(q, m))
+                num_valid += 1
+
+        print("Percentage of succ. attempts", num_valid / num_attempts)
+
+        return new_samples, num_attempts
+
+    def _sample_around_path(self, path):
+        conf_type = type(self.env.get_start_pos())
+
+        interpolated_path = interpolate_path(path)
+
+        new_states_from_path_sampling = []
+        new_transitions_from_path_sampling = []
+
+        for _ in range(self.config.path_batch_size):
+            # sample index
+            idx = random.randint(0, len(interpolated_path) - 2)
+            state = interpolated_path[idx]
+
+            # this is a transition. we would need to figure out which robots are active and not sample those
+            q = []
+            if (
+                state.mode != interpolated_path[idx + 1].mode
+                and np.linalg.norm(
+                    state.q.state() - interpolated_path[idx + 1].q.state()
+                )
+                < 1e-5
+            ):
+                next_task_ids = interpolated_path[idx + 1].mode.task_ids
+
+                # TODO: this seems to move transitions around
+                task = self.env.get_active_task(state.mode, next_task_ids)
+                involved_robots = task.robots
+                for i in range(len(self.env.robots)):
+                    r = self.env.robots[i]
+                    if r in involved_robots:
+                        qr = state.q[i] * 1.0
+                    else:
+                        qr_mean = state.q[i] * 1.0
+
+                        qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+
+                        lims = self.env.limits[:, self.env.robot_idx[r]]
+                        if lims[0, 0] < lims[1, 0]:
+                            qr = np.clip(qr, lims[0, :], lims[1, :])
+
+                    q.append(qr)
+
+                q = conf_type.from_list(q)
+
+                if self.env.is_collision_free(q, state.mode):
+                    new_transitions_from_path_sampling.append(
+                        (q, state.mode, interpolated_path[idx + 1].mode)
+                    )
+
+            else:
+                for i in range(len(self.env.robots)):
+                    r = self.env.robots[i]
+                    qr_mean = state.q[i]
+
+                    qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
+
+                    lims = self.env.limits[:, self.env.robot_idx[r]]
+                    if lims[0, 0] < lims[1, 0]:
+                        qr = np.clip(qr, lims[0, :], lims[1, :])
+
+                    q.append(qr)
+
+                q = conf_type.from_list(q)
+
+                if self.env.is_collision_free(q, state.mode):
+                    rnd_state = State(q, state.mode)
+                    new_states_from_path_sampling.append(rnd_state)
+
+        # fig = plt.figure()
+        # ax = fig.add_subplot(projection='3d')
+        # ax.scatter([a.q[0][0] for a in new_states_from_path_sampling], [a.q[0][1] for a in new_states_from_path_sampling], [a.q[0][2] for a in new_states_from_path_sampling])
+        # ax.scatter([a.q[1][0] for a in new_states_from_path_sampling], [a.q[1][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
+        # ax.scatter([a.q[2][0] for a in new_states_from_path_sampling], [a.q[2][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
+        # plt.show()
+
+        return new_states_from_path_sampling, new_transitions_from_path_sampling
+
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def plan(
         self,
@@ -1475,7 +1655,6 @@ class CompositePRM(BasePlanner):
 
         reached_modes = set([m0])
         self.sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id)) 
-        
 
         conf_type = type(self.env.get_start_pos())
         informed = InformedSampling(
@@ -1484,184 +1663,6 @@ class CompositePRM(BasePlanner):
             self.config.locally_informed_sampling,
             include_lb=self.config.inlcude_lb_in_informed_sampling,
         )
-
-        def sample_mode(
-            reached_modes,
-            mode_sampling_type: str = "uniform_reached",
-            found_solution: bool = False
-            ) -> Mode:
-
-            if mode_sampling_type == "uniform_reached":
-                return random.choice(reached_modes)
-            elif mode_sampling_type == "frontier":
-                if len(reached_modes) == 1:
-                    return reached_modes[0]
-
-                total_nodes = g.get_num_samples()
-                p_frontier = self.config.frontier_mode_sampling_probability
-                p_remaining = 1 - p_frontier
-
-                frontier_modes = []
-                remaining_modes = []
-                sample_counts = {}
-                inv_prob = []
-
-                for m in reached_modes:
-                    sample_count = g.get_num_samples_in_mode(m)
-                    sample_counts[m] = sample_count
-                    if not m.next_modes:
-                        frontier_modes.append(m)
-                    else:
-                        remaining_modes.append(m)
-                        inv_prob.append(1 - (sample_count / total_nodes))
-
-
-                if self.config.frontier_mode_sampling_probability == 1:
-                    if not frontier_modes:
-                        frontier_modes = reached_modes
-                    if len(frontier_modes) >  0:
-                        p = [1 / len(frontier_modes)] * len(frontier_modes) 
-                        return random.choices(frontier_modes, weights=p, k=1)[0]
-                    else:
-                        return random.choice(reached_modes)
-
-                if not remaining_modes or not frontier_modes:
-                    return random.choice(reached_modes)
-
-                total_inverse = sum(1 - (sample_counts[m] / total_nodes) for m in remaining_modes)
-                if total_inverse == 0:
-                    return random.choice(reached_modes)
-
-                sorted_reached_modes = frontier_modes + remaining_modes
-                p = [p_frontier / len(frontier_modes)] * len(frontier_modes) 
-                inv_prob = np.array(inv_prob)
-                p.extend((inv_prob / total_inverse) * p_remaining)
-                
-                return random.choices(sorted_reached_modes, weights=p, k=1)[0]
-            elif mode_sampling_type == "greedy":    
-                return reached_modes[-1]
-            elif mode_sampling_type == "weighted":
-                # sample such that we tend to get similar number of pts in each mode
-                w = []
-                for m in reached_modes:
-                    num_nodes = 0
-                    if m in g.nodes:
-                        num_nodes += len(g.nodes[m])
-                    if m in g.transition_nodes:
-                        num_nodes += len(g.transition_nodes[m])
-                    w.append(1 / max(1, num_nodes))
-                return random.choices(tuple(reached_modes), weights=w)[0]
-            return random.choice(reached_modes)
-        # we are checking here if a sample can imrpove a part of the path
-        # the condition to do so is that the
-
-        def sample_around_path(path):
-            # sample index
-            interpolated_path = interpolate_path(path)
-            # interpolated_path = current_best_path
-            new_states_from_path_sampling = []
-            new_transitions_from_path_sampling = []
-            for _ in range(self.config.path_batch_size):
-                idx = random.randint(0, len(interpolated_path) - 2)
-                state = interpolated_path[idx]
-
-                # this is a transition. we would need to figure out which robots are active and not sample those
-                q = []
-                if (
-                    state.mode != interpolated_path[idx + 1].mode
-                    and np.linalg.norm(
-                        state.q.state() - interpolated_path[idx + 1].q.state()
-                    )
-                    < 1e-5
-                ):
-                    next_task_ids = interpolated_path[idx + 1].mode.task_ids
-
-                    # TODO: this seems to move transitions around
-                    task = self.env.get_active_task(state.mode, next_task_ids)
-                    involved_robots = task.robots
-                    for i in range(len(self.env.robots)):
-                        r = self.env.robots[i]
-                        if r in involved_robots:
-                            qr = state.q[i] * 1.0
-                        else:
-                            qr_mean = state.q[i] * 1.0
-
-                            qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
-
-                            lims = self.env.limits[:, self.env.robot_idx[r]]
-                            if lims[0, 0] < lims[1, 0]:
-                                qr = np.clip(qr, lims[0, :], lims[1, :])
-
-                        q.append(qr)
-
-                    q = conf_type.from_list(q)
-
-                    if self.env.is_collision_free(q, state.mode):
-                        new_transitions_from_path_sampling.append(
-                            (q, state.mode, interpolated_path[idx + 1].mode)
-                        )
-
-                else:
-                    for i in range(len(self.env.robots)):
-                        r = self.env.robots[i]
-                        qr_mean = state.q[i]
-
-                        qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
-
-                        lims = self.env.limits[:, self.env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = np.clip(qr, lims[0, :], lims[1, :])
-
-                        q.append(qr)
-
-                    q = conf_type.from_list(q)
-
-                    if self.env.is_collision_free(q, state.mode):
-                        rnd_state = State(q, state.mode)
-                        new_states_from_path_sampling.append(rnd_state)
-
-            # fig = plt.figure()
-            # ax = fig.add_subplot(projection='3d')
-            # ax.scatter([a.q[0][0] for a in new_states_from_path_sampling], [a.q[0][1] for a in new_states_from_path_sampling], [a.q[0][2] for a in new_states_from_path_sampling])
-            # ax.scatter([a.q[1][0] for a in new_states_from_path_sampling], [a.q[1][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
-            # ax.scatter([a.q[2][0] for a in new_states_from_path_sampling], [a.q[2][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
-            # plt.show()
-
-            return new_states_from_path_sampling, new_transitions_from_path_sampling
-
-        def sample_valid_uniform_batch(batch_size: int, cost: float | None) -> Tuple[List[State], int]:
-            new_samples = []
-            num_attempts = 0
-            num_valid = 0
-
-            if g.goal_nodes:
-                focal_points = np.array(
-                    [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
-                    dtype=np.float64,
-                )
-
-            while len(new_samples) < batch_size:
-                num_attempts += 1
-                # print(len(new_samples))
-                # sample mode
-                m = sample_mode(self.sorted_reached_modes, "uniform_reached", cost is not None)
-
-                # print(m)
-
-                # sample configuration
-                q = self.env.sample_config_uniform_in_limits()
-
-                if cost is not None:
-                    if sum(self.env.batch_config_cost(q, focal_points)) > cost:
-                        continue
-
-                if self.env.is_collision_free(q, m):
-                    new_samples.append(State(q, m))
-                    num_valid += 1
-
-            print("Percentage of succ. attempts", num_valid / num_attempts)
-
-            return new_samples, num_attempts
 
         # def sample_valid_uniform_transitions(transistion_batch_size, cost):
         #     transitions = []
@@ -1774,33 +1775,38 @@ class CompositePRM(BasePlanner):
 
         #     return transitions
 
-        def sample_valid_uniform_transitions(transistion_batch_size, 
-                                            cost, 
-                                            reached_modes):
+        def sample_valid_uniform_transitions(transistion_batch_size: int, 
+                                            cost: float | None, 
+                                            reached_modes: Set[Mode]):
             transitions, failed_attemps = 0, 0
             reached_terminal_mode = False
             update = True
+
+            # if we did not yet reach the goal mode, sample using the specified initial sampling strategy
             if len(g.goal_nodes) == 0:
-                    mode_sampling_type = self.config.init_mode_sampling_type
+                mode_sampling_type = self.config.init_mode_sampling_type
             else:
                 mode_sampling_type = "uniform_reached"
+
             if len(g.goal_nodes) > 0:
                 focal_points = np.array(
                     [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
                     dtype=np.float64,
                 )
 
-            if current_best_cost is None and len(g.goal_nodes) > 0 and self.config.with_mode_validation:  
+            if cost is None and len(g.goal_nodes) > 0 and self.config.with_mode_validation:  
                 reached_terminal_mode = True
+
+            # I am not sure if this should be happening here -> symptom for other problems?
             if len(reached_modes) != len(self.sorted_reached_modes):
                 if update and not reached_terminal_mode:
-                    self.sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id))  
+                    self.sorted_reached_modes = sorted(reached_modes, key=lambda m: m.id)
+
             mode_seq = self.sorted_reached_modes
 
             while transitions < transistion_batch_size and failed_attemps < 5 * transistion_batch_size:
-
                 # sample mode
-                mode = sample_mode(mode_seq, mode_sampling_type, None)
+                mode = self._sample_mode(mode_seq, g, mode_sampling_type, cost is None)
             
                 # sample transition at the end of this mode
                 if reached_terminal_mode:
@@ -1816,6 +1822,7 @@ class CompositePRM(BasePlanner):
                 constrained_robot = active_task.robots
                 goal_sample = active_task.goal.sample(mode)
 
+                # sample a configuration
                 q = []
                 end_idx = 0
                 for robot in self.env.robots:
@@ -1829,37 +1836,44 @@ class CompositePRM(BasePlanner):
                         q.append(np.random.uniform(lims[0], lims[1]))
                 q = conf_type.from_list(q)
 
+                # could this transition possibly improve the path?
                 if cost is not None:
                     if sum(self.env.batch_config_cost(q, focal_points)) > cost:
                         continue
 
+                # check if the transition is collision free
                 if self.env.is_collision_free(q, mode):
                     if self.env.is_terminal_mode(mode):
                         next_modes = None
                     else:
-                        
                         if reached_terminal_mode:
+                            # we cache the next modes
                             if mode not in self.init_next_modes:
                                 next_modes = self.env.get_next_modes(q, mode)
-                                next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
+                                next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
                                 self.init_next_modes[mode] = next_modes
+
                             next_modes = self.init_next_modes[mode]
                         else:
                             next_modes = self.env.get_next_modes(q, mode)
-                            next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
+                            next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
 
                             assert not (set(next_modes) & self.mode_validation.invalid_next_ids.get(mode, set())), (
-                                "items from the set are in the array"
+                                "There are invalid modes in the 'next_modes'."
                             )
+
+                            # if there are no valid next modes, we add this mode to the invalid modes (and remove them from the reached modes)
                             if next_modes == []:
-                                reached_modes, _ = self.mode_validation.track_invalid_modes(mode, reached_modes)
+                                reached_modes = self.mode_validation.track_invalid_modes(mode, reached_modes)
 
                     if mode not in reached_modes:
                         if update and not reached_terminal_mode:
                             self.sorted_reached_modes = tuple(sorted(reached_modes, key=lambda m: m.id))
                             mode_seq = self.sorted_reached_modes
                         continue
+
                     g.add_transition_nodes([(q, mode, next_modes)])
+
                     if len(list(chain.from_iterable(g.transition_nodes.values()))) > transitions:
                         transitions +=1
                         if mode == g.root.state.mode:
@@ -1889,21 +1903,25 @@ class CompositePRM(BasePlanner):
 
             print(f"Adding {transitions} transitions")
             print(self.mode_validation.counter)
+
             return reached_modes
 
         def get_init_mode_sequence(mode):
             if self.found_init_mode_sequence:
                 return []
+            
             mode_seq = []
             if current_best_cost is None and len(g.goal_nodes) > 0:
                 self.found_init_mode_sequence = True
                 create_mode_init_sequence(mode)
                 mode_seq = self.sorted_reached_modes
+
             return mode_seq
 
         def create_mode_init_sequence(mode):
             init_search_modes = [mode]
             self.init_next_ids[mode] = None
+            
             while True:
                 prev_mode = mode.prev_mode
                 if prev_mode is not None:
@@ -1913,9 +1931,11 @@ class CompositePRM(BasePlanner):
                 else:
                     break
             init_search_modes = init_search_modes[::-1]
+            
             if self.dummy_start_mode and init_search_modes[0] == g.root.state.mode:
                 init_search_modes = init_search_modes[1:]
             self.sorted_reached_modes = init_search_modes
+
             print(self.sorted_reached_modes)
         
         g = MultimodalGraph(
@@ -2037,7 +2057,7 @@ class CompositePRM(BasePlanner):
                 # print(f"Adding {len(new_transitions)} transitions")
 
                 print("Sampling uniform")
-                new_states, required_attempts_this_batch = sample_valid_uniform_batch(
+                new_states, required_attempts_this_batch = self._sample_valid_uniform_batch(g,
                     batch_size=effective_uniform_batch_size, cost=current_best_cost
                 )
                 g.add_states(new_states)
@@ -2079,7 +2099,7 @@ class CompositePRM(BasePlanner):
                     if self.config.try_informed_sampling:
                         print("Generating informed samples")
                         new_informed_states = informed.generate_samples(
-                            tuple(reached_modes),
+                            list(reached_modes),
                             self.config.informed_batch_size,
                             interpolated_path,
                             try_direct_sampling=self.config.try_direct_informed_sampling,
@@ -2092,7 +2112,7 @@ class CompositePRM(BasePlanner):
                     if self.config.try_informed_transitions:
                         print("Generating informed transitions")
                         new_informed_transitions = informed.generate_transitions(
-                            tuple(reached_modes),
+                            list(reached_modes),
                             self.config.informed_transition_batch_size,
                             interpolated_path,
                             g=g,
@@ -2107,7 +2127,7 @@ class CompositePRM(BasePlanner):
 
                 if self.config.try_sampling_around_path and current_best_path is not None:
                     print("Sampling around path")
-                    path_samples, path_transitions = sample_around_path(current_best_path)
+                    path_samples, path_transitions = self._sample_around_path(current_best_path)
 
                     g.add_states(path_samples)
                     print(f"Adding {len(path_samples)} path samples")
@@ -2286,7 +2306,7 @@ class CompositePRM(BasePlanner):
                                                     (
                                                         s.q,
                                                         s.mode,
-                                                        interpolated_path[i + 1].mode,
+                                                        [interpolated_path[i + 1].mode],
                                                     )
                                                 ]
                                             )
