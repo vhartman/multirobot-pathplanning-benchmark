@@ -1,5 +1,5 @@
 from typing import (
-    List,
+    List, Tuple
 )
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
@@ -40,21 +40,24 @@ class ModeValidation():
         start_pos = self.env.start_pos.state()        
         valid_modes = []
         for mode in modes:
-
             if mode in self.blacklist_modes:
                 self.update_cache_of_invalid_modes(mode)
                 continue
+
             if mode in self.whitelist_modes:
                 valid_modes.append(mode)
                 continue
+            
             if mode.prev_mode is None:
                 self.whitelist_modes.add(mode)
                 valid_modes.append(mode)
                 continue
+            
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
             if not possible_next_task_combinations and not self.env.is_terminal_mode(mode):
                 self.update_cache_of_invalid_modes(mode)
                 return []
+            
             is_in_collision = False
             whitelist_robots = set()
             set_mode = True
@@ -63,10 +66,13 @@ class ModeValidation():
                 constrained_robots = active_task.robots
                 if len(whitelist_robots) == len(self.env.robots):
                     break
+            
                 if all(elem in whitelist_robots for elem in constrained_robots):
                     continue
+            
                 goal = active_task.goal.sample(mode)
                 end_idx = 0
+            
                 for robot in self.env.robots:
                     if robot in constrained_robots:
                         q = start_pos *1
@@ -85,19 +91,23 @@ class ModeValidation():
                         # assert(self.env.is_collision_free_np(q, mode, self.env.collision_tolerance, set_mode) == self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance, set_mode)),(
                         #     "ghjkl"
                         # )
-                        if not self.env.is_collision_free_for_robot(robot, q, mode, 0.001, set_mode):
+                        if not self.env.is_collision_free_for_robot(robot, q, mode, collision_tolerance=None, set_mode=set_mode):
                             self.update_cache_of_invalid_modes(mode)
                             #when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
                             is_in_collision = True
                             break
+
                         whitelist_robots.add(robot)
                         set_mode = False
                 if is_in_collision:
                     break
+
             if is_in_collision:
                 continue
+            
             valid_modes.append(mode)
             self.whitelist_modes.add(mode)
+   
         return valid_modes
     
     def get_valid_next_ids(self, mode:Mode) -> List[int]:
@@ -146,7 +156,7 @@ class ModeValidation():
             self.invalid_next_ids[mode.prev_mode] = set()
         self.invalid_next_ids[mode.prev_mode].add(tuple(mode.task_ids))      
 
-    def track_invalid_modes(self, mode:Mode, modes:List[Mode] = None) -> List[Mode]:
+    def track_invalid_modes(self, mode:Mode, modes:List[Mode] | None = None) -> Tuple[List[Mode], bool]:
         """
         Tracks invalid modes by adding them to blacklist and removing them from the list.
 

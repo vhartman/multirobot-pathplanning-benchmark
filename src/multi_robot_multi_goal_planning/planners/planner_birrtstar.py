@@ -1,7 +1,7 @@
 import numpy as np
 import time as time
 import math as math
-from typing import Tuple, Optional, Union, List, Dict
+from typing import Tuple, Optional, Union, List, Dict, Any
 from numpy.typing import NDArray
 from numba import njit
 
@@ -346,7 +346,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         self,
         ptc: PlannerTerminationCondition,
         optimize: bool = True,
-    ) -> Optional[Tuple[List[State], List]]:
+    ) -> Tuple[List[State] | None, Dict[str, Any]]:
         i = 0
         self.PlannerInitialization()
         while True:

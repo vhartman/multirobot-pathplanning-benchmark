@@ -481,6 +481,9 @@ class DiscreteBucketIndexHeap:
 
 
 class MultimodalGraph:
+    """"
+    The graph that we will construct and refine and search on.
+    """
     root: Node
     nodes: Dict
 
@@ -534,7 +537,10 @@ class MultimodalGraph:
         return num_samples
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def compute_lower_bound_to_goal(self, batch_cost, best_found_cost):
-        # run a reverse search on the transition nodes without any collision checking
+        """
+        Computes the lower bound on the cost to reach to goal from any configuration by
+        running a reverse search on the transition nodes without any collision checking.
+        """
         costs = {}
         closed_set = set()
 
@@ -630,7 +636,10 @@ class MultimodalGraph:
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def compute_lower_bound_from_start(self, batch_cost):
-        # run a reverse search on the transition nodes without any collision checking
+        """
+        compute the lower bound to reach a configuration from the start.
+        run a reverse search on the transition nodes without any collision checking
+        """
         costs = {}
 
         closed_set = set()
@@ -727,6 +736,13 @@ class MultimodalGraph:
             self.add_node(n)
 
     def add_transition_nodes(self, transitions: List[Tuple[Configuration, Mode, List[Mode]]]):
+        """
+        Adds transition nodes.
+
+        A transition node consists of a configuration, the mode it is in, and the modes it is a transition to.
+        The configuration is added as node to the current mode, and to all the following modes.
+        """
+        
         self.transition_node_array_cache = {}
         self.reverse_transition_node_array_cache = {}
 
@@ -826,6 +842,9 @@ class MultimodalGraph:
     def get_neighbors(
         self, node: Node, space_extent: Optional[float] = None
     ) -> Tuple[List[Node], NDArray]:
+        """
+        Computes all neighbours to the current mode, either k_nearest, or according to a radius.
+        """
         key = node.state.mode
         if key in self.nodes:
             node_list = self.nodes[key]
@@ -983,6 +1002,9 @@ class MultimodalGraph:
         resolution: float = 0.1,
         approximate_space_extent: float | None = None,
     ) -> List[Node]:
+        """
+        Entry point for the search.
+        """
         if approximate_space_extent is None:
             approximate_space_extent = float(np.prod(np.diff(env.limits, axis=0)))
 
@@ -1416,12 +1438,12 @@ class CompositePRMConfig:
     try_shortcutting: bool = True
     try_direct_informed_sampling: bool = True
     inlcude_lb_in_informed_sampling: bool = False
-    init_mode_sampling_type: str = "greedy",
-    frontier_mode_sampling_probability: float = 0.5,
-    init_uniform_batch_size: int = 150,
-    init_transition_batch_size: int = 90,
-    with_mode_validation: bool = True,
-    with_noise: bool = False,
+    init_mode_sampling_type: str = "greedy"
+    frontier_mode_sampling_probability: float = 0.5
+    init_uniform_batch_size: int = 150
+    init_transition_batch_size: int = 90
+    with_mode_validation: bool = False
+    with_noise: bool = False
 
 
 class CompositePRM(BasePlanner):
@@ -1445,6 +1467,9 @@ class CompositePRM(BasePlanner):
         ptc: PlannerTerminationCondition,
         optimize: bool = True,
     ) -> Tuple[List[State] | None, Dict[str, Any]]:
+        """
+        Main entry point for the PRM planner in composite space.
+        """
         q0 = self.env.get_start_pos()
         m0 = self.env.get_start_mode()
 
@@ -1465,6 +1490,7 @@ class CompositePRM(BasePlanner):
             mode_sampling_type: str = "uniform_reached",
             found_solution: bool = False
             ) -> Mode:
+
             if mode_sampling_type == "uniform_reached":
                 return random.choice(reached_modes)
             elif mode_sampling_type == "frontier":
@@ -1821,6 +1847,7 @@ class CompositePRM(BasePlanner):
                         else:
                             next_modes = self.env.get_next_modes(q, mode)
                             next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
+
                             assert not (set(next_modes) & self.mode_validation.invalid_next_ids.get(mode, set())), (
                                 "items from the set are in the array"
                             )

@@ -698,7 +698,7 @@ class EITstar(BaseITstar):
         self,
         ptc: PlannerTerminationCondition,
         optimize: bool = True,
-    ) -> Optional[Tuple[List[State], List]]:
+    ) -> Tuple[List[State] | None, Dict[str, Any]]:
         self.collision_cache = set()
         self.PlannerInitialization()
         num_iter = 0

@@ -1,7 +1,7 @@
 import numpy as np
 import time as time
 import math as math
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict, Any
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
@@ -115,7 +115,7 @@ class RRTstar(BaseRRTstar):
         self,
         ptc: PlannerTerminationCondition,
         optimize: bool = True,
-    ) -> Optional[Tuple[List[State], List]]:
+    ) -> Tuple[List[State] | None, Dict[str, Any]]:
         i = 0
         self.PlannerInitialization()
         while True:
