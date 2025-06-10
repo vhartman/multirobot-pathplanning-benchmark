@@ -89,7 +89,7 @@ class ListConfiguration(Configuration):
         return len(self.q)
 
 
-@numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True, parallel=True)
+@numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True)
 def compute_sliced_euclidean_dists(diff: NDArray, slices: NDArray) -> NDArray:
     """Compute Euclidean distances for sliced configurations with optimizations."""
     num_slices = len(slices)
