@@ -63,16 +63,16 @@ def main():
     parser.add_argument(
         "--planner",
         choices=[
-            "joint_prm",
-            "tensor_prm",
-            "prioritized",
+            "composite_prm",
+            # "tensor_prm",
+            # "prioritized",
             "rrt_star",
             "birrt_star",
             "aitstar",
             "eitstar",
         ],
-        default="joint_prm",
-        help="Planner to use (default: joint_prm)",
+        default="composite_prm",
+        help="Planner to use (default: composite_prm)",
     )
     parser.add_argument(
         "--distance_metric",
@@ -156,10 +156,9 @@ def main():
 
     assert termination_condition is not None
 
-    if args.planner == "joint_prm":
+    if args.planner == "composite_prm":
         config = CompositePRMConfig()
 
-        config.mode_sampling_type = None
         config.distance_metric = args.distance_metric
         config.try_sampling_around_path = args.prm_sample_near_path
         config.use_k_nearest = args.prm_k_nearest
@@ -224,6 +223,8 @@ def main():
     #     )
     # elif args.planner == "prioritized":
     #     path, info = prioritized_planning(env)
+
+    assert path is not None
 
     print("robot-mode-shortcut")
     shortcut_path, info_shortcut = robot_mode_shortcut(

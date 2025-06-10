@@ -83,7 +83,6 @@ def load_experiment_config(filepath: str) -> Dict[str, Any]:
     planner_default_config_paths["aitstar"] = "configs/defaults/aitstar.json"
     planner_default_config_paths["eitstar"] = "configs/defaults/eitstar.json"
 
-
     for planner_type, default_config_path in planner_default_config_paths.items():
         with open(default_config_path) as f:
             planner_default_configs[planner_type] = json.load(f)
