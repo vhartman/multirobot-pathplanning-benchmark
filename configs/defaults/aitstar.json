@@ -1,0 +1,31 @@
+{
+  "type": "aitstar",
+  "options": {
+    "init_mode_sampling_type": "greedy",
+    "distance_metric": "max_euclidean",
+    "try_sampling_around_path": true,
+    "try_informed_sampling": true,
+    "init_uniform_batch_size": 300,
+    "init_transition_batch_size":50,
+    "uniform_batch_size":200,
+    "uniform_transition_batch_size": 500,
+    "informed_batch_size":500,
+    "informed_transition_batch_size": 500,
+    "path_batch_size":500,
+    "locally_informed_sampling": true,
+    "try_informed_transitions":true,
+    "try_shortcutting":  true,
+    "try_direct_informed_sampling": true,
+    "inlcude_lb_in_informed_sampling": true,
+    "remove_based_on_modes": false,
+    "with_tree_visualization": false,
+    "apply_long_horizon":false,
+    "frontier_mode_sampling_probability":1.0,
+    "horizon_length": 1,
+    "with_rewiring": true, 
+    "with_mode_validation": true,
+    "with_noise": false
+
+
+  }
+}

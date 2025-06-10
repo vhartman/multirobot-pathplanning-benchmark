@@ -3,11 +3,13 @@ import time as time
 import math as math
 import random
 import multi_robot_multi_goal_planning.planners as mrmgp
+import os
+import pickle
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Union, List, Dict, Callable
+from typing import Tuple, Optional, Union, List, Dict, Callable, ClassVar
 from numpy.typing import NDArray
 from numba import njit
-
+from dataclasses import dataclass, field
 try:
     from scipy.stats.qmc import Halton
 except ImportError:
@@ -25,13 +27,9 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     config_dist,
     batch_config_dist,  
 )
-
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
-    PlannerTerminationCondition,
-)
-
 from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
-
+from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
+from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
 
 class Operation:
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization. """
@@ -841,48 +839,95 @@ def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:List[int], r_idx:
                 return np.array([-1]) # if its at the start pose
             return path_modes[i-1]
 
+def save_data(data:dict, tree:bool= False):
+        # Directory Handling: Ensure directory exists
+        parent_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        directory = os.path.join(parent_path, 'out')
+        if tree:
+            dir = os.path.join(directory, 'Analysis/Tree')
+        else:
+            dir = os.path.join(directory, 'Analysis')
+        os.makedirs(dir, exist_ok=True)
 
-class BaseRRTstar(ABC):
+        # Determine Next File Number: Use generator expressions for efficiency
+        next_file_number = max(
+            (int(file.split('.')[0]) for file in os.listdir(dir)
+            if file.endswith('.pkl') and file.split('.')[0].isdigit()),
+            default=-1
+        ) + 1
+
+        # Save Data as Pickle File
+        filename = os.path.join(dir, f"{next_file_number:04d}.pkl")
+        with open(filename, 'wb') as file:
+            pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
+
+class BaseLongHorizon():
+    counter: ClassVar[int] = 1
+    def __init__(self, horizon_length:int = 4):
+        self.reached_terminal_mode = False
+        self.reached_modes = set()
+        self.new_section = True
+        self.reached_horizon = False
+        self.horizon_length = horizon_length
+        self.horizon_idx = BaseLongHorizon.counter*self.horizon_length
+        self.terminal_mode = None
+    
+    def update(self, mode:Mode, init):
+        if mode not in self.reached_modes:
+            self.reached_modes.add(mode)
+
+            
+        if len(self.reached_modes) >= self.horizon_idx:
+            BaseLongHorizon.counter+=1
+            self.horizon_idx = BaseLongHorizon.counter*self.horizon_length
+            self.reached_horizon = True
+            self.terminal_mode = mode
+        if init:
+            self.reached_terminal_mode = True
+        
+    def reset(self):
+        if not self.reached_terminal_mode:
+            self.reached_horizon = False
+
+
+@dataclass
+class BaseRRTConfig:
+    general_goal_sampling: bool = False
+    informed_sampling: bool = False
+    informed_sampling_version: int = 6
+    distance_metric: str = 'max_euclidean'
+    p_goal: float = 0.1
+    p_stay: float = 0.0
+    p_uniform: float = 0.2
+    shortcutting: bool = True
+    mode_sampling: Optional[Union[int, float]] = None
+    sample_near_path: bool = True
+    shortcutting_dim_version:int = 2
+    shortcutting_robot_version:int = 1
+    locally_informed_sampling:bool = True
+    remove_redundant_nodes:bool = True
+    informed_batch_size: int = 500
+    apply_long_horizon:bool = False
+    horizon_length:int = 1
+    with_mode_validation:bool = True
+    with_noise:bool = False
+    with_tree_visualization:bool = False
+    # BidirectionalRRTstar
+    transition_nodes: int = 50
+    birrtstar_version: int = 2
+ 
+class BaseRRTstar(BasePlanner):
     """
     Represents the base class for RRT*-based algorithms, providing core functionalities for motion planning.
     """
     def __init__(self, 
                  env:BaseProblem,
-                 ptc: PlannerTerminationCondition, 
-                 general_goal_sampling: bool = False, 
-                 informed_sampling: bool = False, 
-                 informed_sampling_version: int = 6, 
-                 distance_metric: str = 'max_euclidean',
-                 p_goal: float = 0.1, 
-                 p_stay: float = 0.0,
-                 p_uniform: float = 0.2, 
-                 shortcutting: bool = True, 
-                 mode_sampling: Optional[Union[int, float]] = None, 
-                 sample_near_path: bool = True,
-                 shortcutting_dim_version:int = 2, 
-                 shortcutting_robot_version:int = 1, 
-                 locally_informed_sampling:bool = True,
-                 remove_redundant_nodes:bool = True,
-                 informed_batch_size: int = 500,
-
+                 config: BaseRRTConfig = field(default_factory=BaseRRTConfig)
                  ):
         self.env = env
-        self.ptc = ptc
-        self.general_goal_sampling = general_goal_sampling
-        self.informed_sampling = informed_sampling
-        self.informed_sampling_version = informed_sampling_version
-        self.distance_metric = distance_metric
-        self.p_goal = p_goal
-        self.shortcutting = shortcutting
-        self.mode_sampling = mode_sampling
-        self.p_uniform = p_uniform
-        self.sample_near_path = sample_near_path
-        self.p_stay = p_stay
-        self.shortcutting_dim_version = shortcutting_dim_version
-        self.shortcutting_robot_version = shortcutting_robot_version
-        self.locally_informed_sampling = locally_informed_sampling
-        self.remove_redundant_nodes = remove_redundant_nodes
-        self.eta = np.sqrt(sum(self.env.robot_dims.values()))
+        self.config = config
+        self.dim = sum(self.env.robot_dims.values())
+        self.eta = np.sqrt(self.dim)
         self.operation = Operation()
         self.start_single_goal= SingleGoal(self.env.start_pos.q)
         self.modes = [] 
@@ -893,8 +938,11 @@ class BaseRRTstar(ABC):
         self.costs = [] 
         self.times = []
         self.all_paths = []
-        self.informed_batch_size = informed_batch_size
-        self.informed = InformedSampling(self.env, 'sampling_based', self.locally_informed_sampling)
+        self.informed = InformedSampling(self.env, 'sampling_based', self.config.locally_informed_sampling)
+        self.long_horizon = BaseLongHorizon(self.config.horizon_length)
+        self.mode_validation = ModeValidation(self.env, self.config.with_mode_validation, with_noise=self.config.with_noise)
+        self.check = set()
+        self.blacklist_mode = set() 
 
     def add_tree(self, 
                  mode: Mode, 
@@ -937,23 +985,27 @@ class BaseRRTstar(ABC):
 
         Returns:
             None: This method does not return any value.
-        """
-
+        """ 
         if mode is None: 
-            new_mode = self.env.get_start_mode()
-            new_mode.prev_mode = None
+            new_modes = [self.env.get_start_mode()]
         else:
+            self.check.add(mode)
             new_modes = self.env.get_next_modes(q, mode)
-            assert len(new_modes) == 1
-            new_mode = new_modes[0]
-
-            new_mode.prev_mode = mode
-        if new_mode in self.modes:
-            return 
-        self.modes.append(new_mode)
-        self.add_tree(new_mode, tree_instance)
-        if self.informed_sampling_version != 6:
-            self.InformedInitialization(new_mode)
+            new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
+            if new_modes == []:
+                self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
+            self.save_tree_data() 
+        for new_mode in new_modes:
+            if new_mode in self.modes:
+                continue 
+            if new_mode in self.blacklist_mode:
+                continue
+            self.modes.append(new_mode)
+            self.add_tree(new_mode, tree_instance)
+            if self.config.informed_sampling_version != 6:
+                self.InformedInitialization(new_mode)
+        if self.config.apply_long_horizon and mode in self.modes:
+            self.long_horizon.update(mode, self.operation.init_sol)
 
     def mark_node_as_transition(self, mode:Mode, n:Node) -> None:
         """
@@ -987,30 +1039,34 @@ class BaseRRTstar(ABC):
         self.mark_node_as_transition(mode,n)
         if self.env.is_terminal_mode(mode):
             return
+        if mode not in self.modes:
+            return
         next_modes = self.env.get_next_modes(n.state.q, mode)
-        assert len(next_modes) == 1
-        next_mode = next_modes[0]
+        next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
+        if next_modes == []:
+            self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
 
-        if next_mode not in self.modes:
-            tree_type = type(self.trees[mode])
-            if tree_type == BidirectionalTree:
-                self.trees[mode].connected = True
-            self.add_new_mode(n.state.q, mode, tree_type)
-        self.trees[next_mode].add_transition_node_as_start_node(n)
-        if self.trees[next_mode].order == 1:
-            index = len(self.trees[next_mode].subtree)-1
-            tree = 'A'
-        else:
-            index = len(self.trees[next_mode].subtree_b)-1
-            tree = 'B'
-        # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
+        for next_mode in next_modes:
+            if next_mode not in self.modes:
+                tree_type = type(self.trees[mode])
+                if tree_type == BidirectionalTree:
+                    self.trees[mode].connected = True
+                self.add_new_mode(n.state.q, mode, tree_type)
+            self.trees[next_mode].add_transition_node_as_start_node(n)
+            if self.trees[next_mode].order == 1:
+                index = len(self.trees[next_mode].subtree)-1
+                tree = 'A'
+            else:
+                index = len(self.trees[next_mode].subtree_b)-1
+                tree = 'B'
+            # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
 
-        #need to rewire tree of next mode as well
-        if index != 0:
-            N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
-            batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
-            if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
-                self.UpdateCost(next_mode, n)
+            #need to rewire tree of next mode as well
+            if index != 0:
+                N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
+                batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
+                if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
+                    self.UpdateCost(next_mode, n)
 
     def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
         """
@@ -1123,22 +1179,6 @@ class BaseRRTstar(ABC):
         self.get_lebesgue_measure_of_free_configuration_space()
         self.gamma_rrtstar = ((2 *(1 + 1/self.d))**(1/self.d) * (self.c_free/unit_ball_volume)**(1/self.d))*self.eta
     
-    def get_next_ids(self, mode:Mode) -> List[int]:
-        """
-        Retrieves valid combination of next task IDs for given mode.
-
-        Args:
-            mode (Mode): Current operational mode for which to retrieve valid next task ID combinations.
-
-        Returns:
-            Optional[List[int]]: Randomly selected valid combination of all next task ID combinations if available
-        """
-
-        possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-        if not possible_next_task_combinations:
-            return None
-        return random.choice(possible_next_task_combinations)
-
     def get_home_poses(self, mode:Mode) -> List[NDArray]:
         """
         Retrieves home poses (i.e., the most recent completed task configurations) for all agents of given mode.
@@ -1187,14 +1227,14 @@ class BaseRRTstar(ABC):
             NDArray: Goal configuration for the specified robot. 
         """
 
-        # task = self.env.get_active_task(mode, self.get_next_ids(mode)) 
+        # task = self.env.get_active_task(mode, self.mode_validation.get_valid_next_ids(mode)) 
         # if r not in task.robots:
         r_idx = self.env.robots.index(r)
         goal = self.env.tasks[mode.task_ids[r_idx]].goal.sample(mode)
         if len(goal) == self.env.robot_dims[r]:
             return goal
         else:
-            constrained_robot = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+            constrained_robot = self.env.get_active_task(mode, self.mode_validation.get_valid_next_ids(mode)).robots
             end_idx = 0
             for robot in constrained_robot:
                 dim = self.env.robot_dims[r]
@@ -1218,10 +1258,21 @@ class BaseRRTstar(ABC):
         Returns:
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
-
-        
+        failed_attemps = 0
         while True:
-            next_ids = self.get_next_ids(mode)
+            if failed_attemps > 10000:
+                print("Failed to sample transition configuration after 10000 attempts.")
+                if self.config.with_mode_validation:
+                    self.modes.remove(mode)
+                    self.mode_validation.update_cache_of_invalid_modes(mode)
+                    self.modes, _ = self.mode_validation.track_invalid_modes(mode.prev_mode, self.modes)
+                else:
+                    self.blacklist_mode.add(mode)
+                    self.modes.remove(mode)
+                return
+            next_ids = self.mode_validation.get_valid_next_ids(mode)
+            if not next_ids and not self.env.is_terminal_mode(mode):
+                return
             constrained_robot = self.env.get_active_task(mode, next_ids).robots
             goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
             q = []
@@ -1229,15 +1280,16 @@ class BaseRRTstar(ABC):
             for robot in self.env.robots:
                 if robot in constrained_robot:
                     dim = self.env.robot_dims[robot]
-                    indices = list(range(end_idx, end_idx + dim))
-                    q.append(goal[indices])
+                    q.append(goal[end_idx:end_idx + dim])
                     end_idx += dim 
-                    continue
-                lims = self.env.limits[:, self.env.robot_idx[robot]]
-                q.append(np.random.uniform(lims[0], lims[1]))
+                else:
+                    r_idx = self.env.robot_idx[robot]
+                    lims = self.env.limits[:, r_idx]
+                    q.append(np.random.uniform(lims[0], lims[1]))
             q = type(self.env.get_start_pos()).from_list(q)   
             if self.env.is_collision_free(q, mode):
                 return q
+            failed_attemps+=1
     
     def sample_configuration(self, 
                              mode:Mode, 
@@ -1261,7 +1313,10 @@ class BaseRRTstar(ABC):
         is_informed_sampling = sampling_type == "informed"
         is_home_pose_sampling = sampling_type == "home_pose"
         sample_near_path = sampling_type == "sample_near_path"
-        constrained_robots = self.env.get_active_task(mode, self.get_next_ids(mode)).robots
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if not next_ids and not self.env.is_terminal_mode(mode):
+            return
+        constrained_robots = self.env.get_active_task(mode, next_ids).robots
         attemps = 0  # needed if home poses are in collision
 
         while True:
@@ -1283,10 +1338,10 @@ class BaseRRTstar(ABC):
                             return node.state.q
                         
                 if self.operation.init_sol and self.informed: 
-                    if self.informed_sampling_version == 6 and not self.env.is_terminal_mode(mode):
+                    if self.config.informed_sampling_version == 6 and not self.env.is_terminal_mode(mode):
                         q = self.informed.generate_transitions(
                             self.modes,
-                            self.informed_batch_size,
+                            self.config.informed_batch_size,
                             self.operation.path_shortcutting_interpolated,
                             active_mode = mode)
                         if q == []:
@@ -1306,13 +1361,15 @@ class BaseRRTstar(ABC):
                         if self.env.is_collision_free(q, mode):
                             return q
                         continue
-                    elif not self.informed_sampling_version == 1 and not self.informed_sampling_version == 6:
+                    elif not self.config.informed_sampling_version == 1 and not self.config.informed_sampling_version == 6:
                         q = self.sample_informed(mode, True)
                         q = type(self.env.get_start_pos()).from_list(q)
                         if self.env.is_collision_free(q, mode):
                             return q
                         continue
                 q = self.sample_transition_configuration(mode)
+                if q is None:
+                    return
                 if random.choice([0,1]) == 0:
                     return q
                 while True:
@@ -1326,10 +1383,10 @@ class BaseRRTstar(ABC):
                         return q
             #informed sampling       
             if is_informed_sampling:
-                if self.informed_sampling_version == 6:
+                if self.config.informed_sampling_version == 6:
                     q = self.informed.generate_samples(
                             self.modes,
-                            self.informed_batch_size,
+                            self.config.informed_batch_size,
                             self.operation.path_shortcutting_interpolated,
                             active_mode = mode)
                     if q == []:
@@ -1338,7 +1395,7 @@ class BaseRRTstar(ABC):
                         continue
                     if self.env.is_collision_free(q, mode):
                         return q
-                elif not self.informed_sampling_version == 6:
+                elif not self.config.informed_sampling_version == 6:
                     q = self.sample_informed(mode)
             #gaussian noise
             if sample_near_path: 
@@ -1361,7 +1418,7 @@ class BaseRRTstar(ABC):
                             q.append(q_home[r_idx])
                             continue
                         if np.array_equal(self.get_task_goal_of_agent(mode, robot), q_home[r_idx]):
-                            if np.random.uniform(0, 1) > self.p_goal: # goal sampling
+                            if np.random.uniform(0, 1) > self.config.p_goal: # goal sampling
                                 q.append(q_home[r_idx])
                                 continue
                     #uniform sampling
@@ -1384,14 +1441,14 @@ class BaseRRTstar(ABC):
         Returns: 
             Configuration: Configuration within the informed set that satisfies the specified limits for the robots. """
 
-        if not self.informed_sampling_version == 1:
+        if not self.config.informed_sampling_version == 1:
             q_rand = []
             update = False
             if self.operation.cost != self.informed[mode].cost:
                 self.informed[mode].cost = self.operation.cost
                 update = True
             if goal_sampling:
-                next_ids = self.get_next_ids(mode)
+                next_ids = self.mode_validation.get_valid_next_ids(mode)
                 constrained_robot = self.env.get_active_task(mode, next_ids).robots
                 goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
                 q_rand = []
@@ -1402,9 +1459,9 @@ class BaseRRTstar(ABC):
                     if update:
                         self.informed[mode].mode_task_ids_home_poses[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()
                         self.informed[mode].mode_task_ids_task[r_idx] = get_mode_task_ids_of_active_task_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()  
-                        if not self.informed_sampling_version == 4 and not self.informed_sampling_version == 3:
+                        if not self.config.informed_sampling_version == 4 and not self.config.informed_sampling_version == 3:
                             self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
-                    if self.informed_sampling_version == 4 or self.informed_sampling_version == 3:
+                    if self.config.informed_sampling_version == 4 or self.config.informed_sampling_version == 3:
                         self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
                     if robot in constrained_robot:
                         dim = self.env.robot_dims[robot]
@@ -1435,9 +1492,9 @@ class BaseRRTstar(ABC):
                 if update:
                     self.informed[mode].mode_task_ids_home_poses[r_idx] = get_mode_task_ids_of_home_pose_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()
                     self.informed[mode].mode_task_ids_task[r_idx] = get_mode_task_ids_of_active_task_in_path(np.array(self.operation.path_modes), mode.task_ids[r_idx], r_idx).tolist()  
-                    if not self.informed_sampling_version == 4 and not self.informed_sampling_version == 3:
+                    if not self.config.informed_sampling_version == 4 and not self.config.informed_sampling_version == 3:
                         self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
-                if self.informed_sampling_version == 4 or self.informed_sampling_version == 3:
+                if self.config.informed_sampling_version == 4 or self.config.informed_sampling_version == 3:
                     self.informed[mode].L[r_idx] = self.informed[mode].cholesky_decomposition(r_indices, r_idx ,self.operation.path_nodes)
                 if self.informed[mode].L[r_idx] is None:
                     lims = self.env.limits[:, self.env.robot_idx[robot]]
@@ -1474,7 +1531,7 @@ class BaseRRTstar(ABC):
             #     i+=1 
             return q_rand
         else: 
-            next_ids = self.get_next_ids(mode)
+            next_ids = self.mode_validation.get_valid_next_ids(mode)
             self.informed[mode].initialize(mode, next_ids)
             q_rand = []
             update = False
@@ -1561,7 +1618,7 @@ class BaseRRTstar(ABC):
                 - int: Index of the nearest node in the distance array.
         """
 
-        set_dists = batch_config_dist(q_rand, self.trees[mode].get_batch_subtree(tree), self.distance_metric)
+        set_dists = batch_config_dist(q_rand, self.trees[mode].get_batch_subtree(tree), self.config.distance_metric)
         idx = np.argmin(set_dists)
         node_id = self.trees[mode].get_node_ids_subtree(tree)[idx]
         # print([float(set_dists[idx])])
@@ -1592,7 +1649,7 @@ class BaseRRTstar(ABC):
             return None
         q_nearest = n_nearest.state.q.state()
         direction = q_rand.q - q_nearest
-        if self.distance_metric != "max_euclidean":
+        if self.config.distance_metric != "max_euclidean":
             #most independent of the number of robots and their dimension
             dist = batch_config_dist(n_nearest.state.q, [q_rand], metric = "max_euclidean")
         N = float((dist / self.eta)) # to have exactly the step size
@@ -1630,12 +1687,13 @@ class BaseRRTstar(ABC):
 
         batch_subtree = self.trees[mode].get_batch_subtree(tree)
         if set_dists is None:
-            set_dists = batch_config_dist(n_new.state.q, batch_subtree, self.distance_metric)
+            set_dists = batch_config_dist(n_new.state.q, batch_subtree, self.config.distance_metric)
         vertices = self.trees[mode].get_number_of_nodes_in_tree()
         r = np.minimum(self.gamma_rrtstar*(np.log(vertices)/vertices)**(1/self.d), self.eta)
         indices = find_nearest_indices(set_dists, r) # indices of batch_subtree
         if n_nearest_idx not in indices:
             indices = np.insert(indices, 0, n_nearest_idx)
+
         node_indices = self.trees[mode].get_node_ids_subtree(tree)[indices]
         n_near_costs = self.operation.costs[node_indices]
         N_near_batch = batch_subtree[indices]
@@ -1732,7 +1790,26 @@ class BaseRRTstar(ABC):
                         if n_near.children != []:
                             rewired = True
         return rewired
-      
+
+    def update_results_tracking(self, cost: float, path: List[State]) -> None:
+        """
+        Updates the tracking of costs, times, and all explored paths if the path ends in a terminal mode.
+
+        Args:
+            cost (float): The cost of the path.
+            path (List[State]): The path as a list of states.
+
+        Returns:
+            None: This method does not return any value.
+        """
+        if path == []:
+            return
+        if not self.env.is_terminal_mode(path[-1].mode):
+            return
+        self.costs.append(cost)
+        self.times.append(time.time() - self.start_time)
+        self.all_paths.append(path)
+
     def GeneratePath(self, 
                      mode:Mode, 
                      n: Node, 
@@ -1766,12 +1843,10 @@ class BaseRRTstar(ABC):
         self.operation.path = path_in_order  
         self.operation.path_nodes = path_nodes[::-1]
         self.operation.cost = self.operation.path_nodes[-1].cost
-        self.costs.append(self.operation.cost)
-        self.times.append(time.time() - self.start_time)
-        self.all_paths.append(self.operation.path)
+        self.update_results_tracking(self.operation.cost, self.operation.path)
         self.operation.path_shortcutting = path_shortcutting[::-1] # includes transiiton node twice
         self.operation.path_shortcutting_interpolated = mrmgp.composite_prm_planner.interpolate_path(path_shortcutting)
-        if self.operation.init_sol and self.shortcutting and shortcutting_bool:
+        if (self.operation.init_sol or self.config.apply_long_horizon and self.long_horizon.reached_horizon) and self.config.shortcutting and shortcutting_bool:
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             shortcut_path_, result = mrmgp.shortcutting.robot_mode_shortcut(
                                 self.env,
@@ -1780,7 +1855,7 @@ class BaseRRTstar(ABC):
                                 resolution=self.env.collision_resolution,
                                 tolerance=self.env.collision_tolerance,
                             )
-            if self.remove_redundant_nodes:
+            if self.config.remove_redundant_nodes:
                 # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
                 shortcut_path = mrmgp.shortcutting.remove_interpolated_nodes(shortcut_path_)
             else:
@@ -1824,10 +1899,12 @@ class BaseRRTstar(ABC):
             # shortcut_path_costs = cumulative_sum(batch_cost)
             # shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
             if result[0][-1] < self.operation.cost:
-                self.costs.append(result[0][-1])
-                self.times.append(time.time() - self.start_time)
-                self.all_paths.append(shortcut_path)
+                self.update_results_tracking(result[0][-1], shortcut_path)
                 self.TreeExtension(shortcut_path)
+            
+            if self.config.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
+                self.long_horizon.reset()
+                self.operation.cost = np.inf 
 
     def RandomMode(self) -> Mode:
         """
@@ -1843,21 +1920,22 @@ class BaseRRTstar(ABC):
         num_modes = len(self.modes)
         if num_modes == 1:
             return np.random.choice(self.modes)
-        # if self.operation.task_sequence == [] and self.mode_sampling != 0:
-        elif self.operation.init_sol and self.mode_sampling != 0:
+        # if self.operation.task_sequence == [] and self.config.mode_sampling != 0:
+        elif self.operation.init_sol and self.config.mode_sampling != 0:
                 p = [1/num_modes] * num_modes
         
-        elif self.mode_sampling is None:
+        elif self.config.mode_sampling is None:
             # equally (= mode uniformly)
             return np.random.choice(self.modes)
 
-        elif self.mode_sampling == 1: 
+        elif self.config.mode_sampling == 1: 
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
             probability[-1] = 1
+
             p =  probability
 
-        elif self.mode_sampling == 0:
+        elif self.config.mode_sampling == 0:
             # Uniformly
             total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes)
             # Calculate probabilities inversely proportional to node counts
@@ -1881,30 +1959,32 @@ class BaseRRTstar(ABC):
         #     ]
 
         #     # Normalize the probabilities of all modes except the last one
-        #     remaining_probability = 1-self.mode_sampling  
+        #     remaining_probability = 1-self.config.mode_sampling  
         #     total_inverse = sum(inverse_probabilities)
         #     if total_inverse == 0:
-        #         p = [1-self.mode_sampling, self.mode_sampling]
+        #         p = [1-self.config.mode_sampling, self.config.mode_sampling]
         #     else:
         #         p =  [
         #             (inv_prob / total_inverse) * remaining_probability
         #             for inv_prob in inverse_probabilities
-        #         ] + [self.mode_sampling]
+        #         ] + [self.config.mode_sampling]
 
         else:
-            frontier_modes = []
+            #not working for unordered envs
+            frontier_modes = set()
 
             for m in self.modes:
                 if not m.next_modes:
-                    frontier_modes.append(m)
+                    frontier_modes.add(m)
 
-            p_frontier = self.mode_sampling
+            p_frontier = self.config.mode_sampling
             p_remaining = 1 - p_frontier
 
             total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes) 
             # Calculate probabilities inversely proportional to node counts
+            subtree_lengths = {mode: len(self.trees[mode].subtree) for mode in self.modes}
             inverse_probabilities = [
-                1 - (len(self.trees[mode].subtree) / total_nodes)
+                1 - (subtree_lengths[mode] / total_nodes)
                 for mode in self.modes if mode not in frontier_modes
             ]
             total_inverse = sum(inverse_probabilities)
@@ -1915,11 +1995,12 @@ class BaseRRTstar(ABC):
                 if m in frontier_modes:
                     tmp = p_frontier / len(frontier_modes)
                 else:
-                    tmp = (1 - (len(self.trees[m].subtree) / total_nodes)) / total_inverse * p_remaining
+                    tmp = (1 - (subtree_lengths[m]  / total_nodes)) / total_inverse * p_remaining
                 
                 p.append(tmp)
         
-        return np.random.choice(self.modes, p = p)
+        # return np.random.choice(self.modes, p = p)
+        return random.choices(self.modes, weights=p, k=1)[0]
 
     def InformedInitialization(self, mode: Mode) -> None: 
         """
@@ -1932,23 +2013,23 @@ class BaseRRTstar(ABC):
             None: This method does not return any value.
         """
 
-        if not self.informed_sampling:
+        if not self.config.informed_sampling:
             return
-        if self.informed_sampling_version == 0:
+        if self.config.informed_sampling_version == 0:
             self.informed[mode] = InformedVersion0(self.env, self.env.config_cost)
             self.informed[mode].initialize()
-        if self.informed_sampling_version == 1:
+        if self.config.informed_sampling_version == 1:
             self.informed[mode] = InformedVersion1(self.env, self.env.config_cost)
-        if self.informed_sampling_version == 2:
+        if self.config.informed_sampling_version == 2:
             self.informed[mode] = InformedVersion2(self.env, self.env.config_cost)
             self.informed[mode].initialize()
-        if self.informed_sampling_version == 3:
+        if self.config.informed_sampling_version == 3:
             self.informed[mode] = InformedVersion3(self.env, self.env.config_cost)
             self.informed[mode].initialize()
-        if self.informed_sampling_version == 4:
+        if self.config.informed_sampling_version == 4:
             self.informed[mode] = InformedVersion4(self.env, self.env.config_cost)
             self.informed[mode].initialize()
-        if self.informed_sampling_version == 5:
+        if self.config.informed_sampling_version == 5:
             self.informed[mode] = InformedVersion5(self.env, self.env.config_cost)
             self.informed[mode].initialize()
 
@@ -1963,21 +2044,21 @@ class BaseRRTstar(ABC):
             Configuration: Configuration obtained by a sampling strategy based on preset probabilities and operational conditions.
         """
 
-        if  np.random.uniform(0, 1) < self.p_goal:
+        if  np.random.uniform(0, 1) < self.config.p_goal:
             # goal sampling
             return self.sample_configuration(mode, "goal", self.transition_node_ids, self.trees[mode].order)
         else:       
-            if self.informed_sampling and self.operation.init_sol: 
-                if self.informed_sampling_version == 0 and np.random.uniform(0, 1) < self.p_uniform or self.informed_sampling_version == 5 and np.random.uniform(0, 1) < self.p_uniform:
+            if self.config.informed_sampling and self.operation.init_sol: 
+                if self.config.informed_sampling_version == 0 and np.random.uniform(0, 1) < self.config.p_uniform or self.config.informed_sampling_version == 5 and np.random.uniform(0, 1) < self.p_uniform:
                     #uniform sampling
                     return self.sample_configuration(mode, "uniform")
                 #informed_sampling
                 return self.sample_configuration(mode, "informed")
             # gaussian sampling
-            if self.sample_near_path and self.operation.init_sol: 
+            if self.config.sample_near_path and self.operation.init_sol: 
                 return self.sample_configuration(mode, "sample_near_path")
             # home pose sampling
-            if np.random.uniform(0, 1) < self.p_stay: 
+            if np.random.uniform(0, 1) < self.config.p_stay: 
                 return self.sample_configuration(mode, "home_pose")
             #uniform sampling
             return self.sample_configuration(mode, "uniform")
@@ -1993,8 +2074,10 @@ class BaseRRTstar(ABC):
             None: This method does not return any value.
         """
 
-        if self.operation.init_sol: 
+        if self.operation.init_sol or self.config.apply_long_horizon and self.long_horizon.reached_horizon: 
             modes = self.get_termination_modes()     
+            if self.config.apply_long_horizon and self.long_horizon.reached_horizon and not self.operation.init_sol:
+                modes = [self.long_horizon.terminal_mode]
             result, mode = self.get_lb_transition_node_id(modes) 
             if not result:
                 return
@@ -2064,12 +2147,12 @@ class BaseRRTstar(ABC):
                 idx2 = max(i1, i2)
                 m1 = discretized_modes[idx1]    
                 m2 = discretized_modes[idx2]    
-                if m1 == m2 and self.shortcutting_robot_version == 0: #take all possible robots
+                if m1 == m2 and self.config.shortcutting_robot_version == 0: #take all possible robots
                     robot = None
-                    if self.shortcutting_dim_version == 2:
+                    if self.config.shortcutting_dim_version == 2:
                         dim = [np.random.choice(indices[r_idx]) for r_idx in range(len(self.env.robots))]
                     
-                    if self.shortcutting_dim_version == 3:
+                    if self.config.shortcutting_dim_version == 3:
                         dim = []
                         for r_idx in range(len(self.env.robots)):
                             all_indices = [i for i in indices[r_idx]]
@@ -2087,9 +2170,9 @@ class BaseRRTstar(ABC):
                     if m2[0][robot] != task_agent:
                         continue
 
-                    if self.shortcutting_dim_version == 2:
+                    if self.config.shortcutting_dim_version == 2:
                         dim = [np.random.choice(indices[robot])]
-                    if self.shortcutting_dim_version == 3:
+                    if self.config.shortcutting_dim_version == 3:
                         all_indices = [i for i in indices[robot]]
                         num_indices = np.random.choice(range(len(indices[robot])))
 
@@ -2098,7 +2181,7 @@ class BaseRRTstar(ABC):
 
 
                 edge, edge_cost =  self.EdgeInterpolation(discretized_path[idx1:idx2+1].copy(), 
-                                                            discretized_costs[idx1], indices, dim, self.shortcutting_dim_version, robot)
+                                                            discretized_costs[idx1], indices, dim, self.config.shortcutting_dim_version, robot)
         
                 if edge_cost[-1] < discretized_costs[idx2] and self.env.is_path_collision_free(edge, resolution=0.001, tolerance=0.001): #need to make path_collision_free
                     discretized_path[idx1:idx2+1] = edge
@@ -2391,21 +2474,5 @@ class BaseRRTstar(ABC):
         """
         pass
     @abstractmethod
-    def Plan(self, optimize:bool=True) -> Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
-        """
-        Executes planning process using an RRT* framework.
-
-        Args:
-            None
-
-        Returns:
-            Tuple:
-                - List[State]: The planned path as a list of states.
-                - Dict[str, List]: A dictionary containing:
-                    - "costs" (List[float]): Recorded path costs.
-                    - "times" (List[float]): Recorded execution times.
-                    - "paths" (List[List[State]]): All explored paths.
-
-
-        """
+    def save_tree_data(self) -> None:
         pass

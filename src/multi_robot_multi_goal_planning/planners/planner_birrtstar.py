@@ -15,9 +15,11 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 )
 
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+    BaseRRTConfig,
     BaseRRTstar, 
     Node, 
-    BidirectionalTree
+    BidirectionalTree,
+    save_data
 
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
@@ -27,37 +29,15 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 @njit
 def compute_child_costs(parent_cost, cost_to_parents):
     return parent_cost + cost_to_parents
-
-
 class BidirectionalRRTstar(BaseRRTstar):
     """Represents the class for the Bidirectional RRT* based planner"""
 
     def __init__(self, 
-                 env:BaseProblem, 
-                 ptc: PlannerTerminationCondition,
-                 general_goal_sampling: bool = False, 
-                 informed_sampling: bool = False, 
-                 informed_sampling_version: int = 6, 
-                 distance_metric: str = 'max_euclidean',
-                 p_goal: float = 0.1, 
-                 p_stay: float = 0.0,
-                 p_uniform: float = 0.2, 
-                 shortcutting: bool = False, 
-                 mode_sampling: Optional[Union[int, float]] = None, 
-                 sample_near_path: bool = False, 
-                 transition_nodes: int = 50, 
-                 birrtstar_version: int = 2,
-                 locally_informed_sampling: bool = True, 
-                 remove_redundant_nodes: bool = True, 
-                 informed_batch_size: int = 500,
+                 env: BaseProblem,
+                 config: BaseRRTConfig
                 ):
-        super().__init__(env = env, ptc = ptc, general_goal_sampling = general_goal_sampling, informed_sampling = informed_sampling, 
-                         informed_sampling_version = informed_sampling_version, distance_metric = distance_metric,
-                         p_goal = p_goal, p_stay = p_stay, p_uniform = p_uniform, shortcutting = shortcutting, mode_sampling = mode_sampling, 
-                         sample_near_path = sample_near_path, locally_informed_sampling = locally_informed_sampling, remove_redundant_nodes = remove_redundant_nodes, 
-                         informed_batch_size = informed_batch_size )
-        self.transition_nodes = transition_nodes 
-        self.birrtstar_version = birrtstar_version
+        
+        super().__init__(env=env, config=config)
         self.swap = True
        
     def UpdateCost(self, mode:Mode, n:Node, connection:bool = False) -> None:
@@ -94,40 +74,49 @@ class BidirectionalRRTstar(BaseRRTstar):
             None: This method does not return any value.
         """
         if mode is None: 
-            new_mode = self.env.make_start_mode()
-            new_mode.prev_mode = None
+            new_modes = [self.env.get_start_mode()]
         else:
             new_modes = self.env.get_next_modes(q, mode)
-            assert len(new_modes) == 1
-            new_mode = new_modes[0]
-
-            new_mode.prev_mode = mode
-        if new_mode in self.modes:
-            return 
-    
-        self.modes.append(new_mode)
-        self.add_tree(new_mode, tree_instance)
-        self.InformedInitialization(new_mode)
-        #Initialize transition nodes
-        node = None
-        for i in range(self.transition_nodes):                 
-            q = self.sample_transition_configuration(new_mode)
-            if i > 0 and np.equal(q.state(), node.state.q.state()).all():
-                break
-            node = Node(State(q, new_mode), self.operation)
-            node.cost_to_parent = 0.0
-            self.mark_node_as_transition(new_mode, node)
-            self.trees[new_mode].add_node(node, 'B')
-            self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
-            node.cost = np.inf
+            new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
+            if new_modes == []:
+                self.modes, _ = self.mode_validation.track_invalid_modes(mode, self.modes)
+        for new_mode in new_modes:
+            if new_mode in self.modes:
+                continue 
+            if new_mode in self.blacklist_mode:
+                continue
+            self.modes.append(new_mode)
+            self.add_tree(new_mode, tree_instance)
+            if self.config.informed_sampling_version != 6:
+                self.InformedInitialization(new_mode)
+            #Initialize transition nodes
+            node = None
+            for i in range(self.config.transition_nodes):    
+                q = self.sample_transition_configuration(new_mode)
+                if q is None:
+                    if new_mode in self.modes:
+                        self.modes.remove(new_mode)
+                    break
+                if i > 0 and np.equal(q.state(), node.state.q.state()).all():
+                    break
+                node = Node(State(q, new_mode), self.operation)
+                node.cost_to_parent = 0.0
+                self.mark_node_as_transition(new_mode, node)
+                self.trees[new_mode].add_node(node, 'B')
+                self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
+                node.cost = np.inf
 
     def ManageTransition(self, mode:Mode, n_new: Node) -> None:
+        if mode not in self.modes:
+            return
         #check if transition is reached
         if self.trees[mode].order == 1:
             if n_new.id in self.trees[mode].subtree:
                 if self.env.is_transition(n_new.state.q, mode):
                     self.trees[mode].connected = True
+                    self.save_tree_data()
                     self.add_new_mode(n_new.state.q, mode, BidirectionalTree)
+                    self.save_tree_data()
                     self.convert_node_to_transition_node(mode, n_new)
                 #check if termination is reached
                 if self.env.done(n_new.state.q, mode):
@@ -200,7 +189,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             return
         n_nearest_b, dist, _, _= self.Nearest(mode, n_new.state.q, 'B')
 
-        if self.birrtstar_version == 1 or self.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
+        if self.config.birrtstar_version == 1 or self.config.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
             # relevant_dists = []
             # for r_idx, r in enumerate(self.env.robots):
@@ -215,7 +204,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, mode): #ORder rigth? TODO
                 return
           
-        elif self.birrtstar_version == 2 and not self.trees[mode].connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
+        elif self.config.birrtstar_version == 2 and not self.trees[mode].connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
             n_nearest_b = self.Extend(mode, n_nearest_b, n_new, dist)
             if not n_nearest_b:
                 return
@@ -289,6 +278,56 @@ class BidirectionalRRTstar(BaseRRTstar):
                 i +=1
             else:
                 return 
+            
+    def save_tree_data(self) -> None:
+        if not self.config.with_tree_visualization:
+            return
+        data = {}
+        data['all_nodes'] = [self.trees[m].subtree[id].state.q.state() for m in self.modes for id in self.trees[m].get_node_ids_subtree('A')]
+        
+        try:
+            data['all_transition_nodes'] = [self.trees[m].subtree[id].state.q.state() for m in self.modes for id in self.transition_node_ids[m]]
+            data['all_transition_nodes_mode'] = [self.trees[m].subtree[id].state.mode.task_ids for m in self.modes for id in self.transition_node_ids[m]]
+        except Exception:
+            data['all_transition_nodes'] = []
+            data['all_transition_nodes_mode'] = []
+        data['all_nodes_mode'] = [self.trees[m].subtree[id].state.mode.task_ids for m in self.modes for id in self.trees[m].get_node_ids_subtree()]
+        
+        for i, type in enumerate(['forward', 'reverse']): 
+            data[type] = {}
+            data[type]['nodes'] = []
+            data[type]['parents'] = []
+            data[type]['modes'] = []
+            for m in self.modes:
+                if type == 'forward':
+                    ids = self.trees[m].get_node_ids_subtree('A')
+                else:
+                    ids = self.trees[m].get_node_ids_subtree('B')
+                for id in ids:
+                    if type == 'forward':
+                        node = self.trees[m].subtree[id]
+                    else:
+                        node = self.trees[m].subtree_b[id]
+                    data[type]["nodes"].append(node.state.q.state())
+                    data[type]['modes'].append(node.state.mode.task_ids)
+                    parent = node.parent
+                    if parent is not None:
+                        data[type]["parents"].append(parent.state.q.state())
+                    else:
+                        data[type]["parents"].append(None)
+            
+        data['pathnodes'] = []
+        data['pathparents'] = []
+        if self.operation.path_nodes is not None:
+            for node in self.operation.path_nodes: 
+                data['pathnodes'].append(node.state.q.state())
+                parent = node.parent
+                if parent is not None:
+                    data['pathparents'].append(parent.state.q.state())
+                else:
+                    data['pathparents'].append(None)
+
+        save_data(data, True)
 
     def PlannerInitialization(self) -> None:
         # Initilaize first Mode
@@ -301,8 +340,13 @@ class BidirectionalRRTstar(BaseRRTstar):
         self.trees[mode].add_node(start_node)
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
+        self.ManageTransition(mode, start_node)
 
-    def Plan(self, optimize:bool=True)  ->  Tuple[List[State], Dict[str, List[Union[float, float, List[State]]]]]:
+    def plan(
+        self,
+        ptc: PlannerTerminationCondition,
+        optimize: bool = True,
+    ) -> Optional[Tuple[List[State], List]]:
         i = 0
         self.PlannerInitialization()
         while True:
@@ -337,14 +381,16 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.trees[active_mode].swap()
             
             if not optimize and self.operation.init_sol:
+                self.save_tree_data()
                 break
 
-            if self.ptc.should_terminate(i, time.time() - self.start_time):
+            if ptc.should_terminate(i, time.time() - self.start_time):
+                print('Number of iterations: ', i)
                 break
-        self.costs.append(self.operation.cost)
-        self.times.append(time.time() - self.start_time)
-        self.all_paths.append(self.operation.path)
+            
+        self.update_results_tracking(self.operation.cost, self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
+        print(self.mode_validation.counter)
         return self.operation.path, info      
 
 

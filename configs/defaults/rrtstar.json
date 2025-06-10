@@ -13,7 +13,13 @@
     "sample_near_path": false,
     "locally_informed_sampling": true,
     "informed_batch_size": 300,
-    "remove_redundant_nodes": true
+    "remove_redundant_nodes": true,
+    "test_mode_sampling":false,
+    "apply_long_horizon":false,
+    "horizon_length": 1,
+    "with_noise": false,
+    "with_mode_validation": true,
+    "with_tree_visualization": false
     }
 }
 
