@@ -28,16 +28,21 @@ from dataclasses import dataclass
 
 @cache
 def generate_binary_search_indices(N):
-    sequence = []
+    sequence = [0] * N
     queue = deque([(0, N - 1)])
+
+    idx = 0
+
     while queue:
         start, end = queue.popleft()
-        if start > end:
-            continue
         mid = (start + end) // 2
-        sequence.append(int(mid))
-        queue.append((start, mid - 1))
-        queue.append((mid + 1, end))
+        sequence[idx] = mid
+        idx += 1
+
+        if start <= mid - 1:
+            queue.append((start, mid - 1))
+        if mid + 1 <= end:
+            queue.append((mid + 1, end))
     return tuple(sequence)
 
 

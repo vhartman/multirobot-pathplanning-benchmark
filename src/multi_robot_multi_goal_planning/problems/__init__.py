@@ -92,6 +92,7 @@ def get_all_environments():
 
         # single robot, single goal: debugging
         "two_dim_single_robot_single_goal": lambda: rsge.rai_random_two_dim_single_agent(),
+        "two_dim_single_robot_single_goal_w_rot": lambda: rsge.rai_random_two_dim_single_agent(agents_can_rotate=True),
         "single_panda_arm_single_goal": lambda: rsge.rai_single_panda_arm_single_goal_env(),
         "single_agent_box_rearrangement": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=1, num_boxes=2),
       

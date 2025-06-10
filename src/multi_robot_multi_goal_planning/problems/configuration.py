@@ -89,7 +89,7 @@ class ListConfiguration(Configuration):
         return len(self.q)
 
 
-@numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True)
+@numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True, boundscheck=False)
 def compute_sliced_euclidean_dists(diff: NDArray, slices: NDArray) -> NDArray:
     """Compute Euclidean distances for sliced configurations with optimizations."""
     num_slices = len(slices)
@@ -112,65 +112,7 @@ def compute_sliced_euclidean_dists(diff: NDArray, slices: NDArray) -> NDArray:
     return dists
 
 
-# @numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True)
-# def compute_sliced_euclidean_dists(diff: NDArray, slices: NDArray) -> NDArray:
-#     """Compute Euclidean distances for sliced configurations - optimized for sequential execution."""
-#     num_slices = len(slices)
-#     num_samples = diff.shape[0]
-#     dists = np.empty((num_slices, num_samples), dtype=np.float64)
-
-#     # Pre-extract slice bounds for better access patterns
-#     starts = np.empty(num_slices, dtype=np.int64)
-#     ends = np.empty(num_slices, dtype=np.int64)
-#     for i in range(num_slices):
-#         starts[i] = slices[i, 0]
-#         ends[i] = slices[i, 1]
-
-#     # Process samples in the outer loop for better cache locality
-#     for j in range(num_samples):
-#         # Process each slice for this sample
-#         for i in range(num_slices):
-#             s = starts[i]
-#             e = ends[i]
-#             sum_squared = 0.0
-
-#             # Improved loop unrolling with early exit conditions
-#             # Unroll by 8 when possible
-#             idx = s
-#             while idx + 8 <= e:
-#                 sum_squared += (
-#                     diff[j, idx] * diff[j, idx]
-#                     + diff[j, idx + 1] * diff[j, idx + 1]
-#                     + diff[j, idx + 2] * diff[j, idx + 2]
-#                     + diff[j, idx + 3] * diff[j, idx + 3]
-#                     + diff[j, idx + 4] * diff[j, idx + 4]
-#                     + diff[j, idx + 5] * diff[j, idx + 5]
-#                     + diff[j, idx + 6] * diff[j, idx + 6]
-#                     + diff[j, idx + 7] * diff[j, idx + 7]
-#                 )
-#                 idx += 8
-
-#             # Unroll remaining by 4
-#             while idx + 4 <= e:
-#                 sum_squared += (
-#                     diff[j, idx] * diff[j, idx]
-#                     + diff[j, idx + 1] * diff[j, idx + 1]
-#                     + diff[j, idx + 2] * diff[j, idx + 2]
-#                     + diff[j, idx + 3] * diff[j, idx + 3]
-#                 )
-#                 idx += 4
-
-#             # Handle remaining elements
-#             while idx < e:
-#                 sum_squared += diff[j, idx] * diff[j, idx]
-#                 idx += 1
-
-#             dists[i, j] = np.sqrt(sum_squared)
-
-#     return dists
-
-
-@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
+@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True, boundscheck=False)
 def compute_sum_reduction(dists: NDArray) -> NDArray:
     """Compute sum reduction across robot distances."""
     num_slices, num_samples = dists.shape
@@ -187,7 +129,7 @@ def compute_sum_reduction(dists: NDArray) -> NDArray:
 
 
 @numba.jit(
-    numba.float64[:](numba.float64[:, :], numba.float64), nopython=True, fastmath=True
+    numba.float64[:](numba.float64[:, :], numba.float64), nopython=True, fastmath=True, boundscheck=False
 )
 def compute_max_sum_reduction(dists: NDArray, w: float) -> NDArray:
     """Compute max + w*sum reduction across robot distances."""
@@ -207,7 +149,7 @@ def compute_max_sum_reduction(dists: NDArray, w: float) -> NDArray:
     return result
 
 
-@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
+@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True, boundscheck=False)
 def compute_abs_max_reduction(dists: NDArray) -> NDArray:
     """Compute the maximum absolute value along axis 1 for each row."""
     num_rows, num_cols = dists.shape
@@ -228,7 +170,7 @@ def compute_abs_max_reduction(dists: NDArray) -> NDArray:
     return result
 
 
-@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True)
+@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True, boundscheck=False)
 def compute_max_reduction(dists: NDArray) -> NDArray:
     """Compute max + w*sum reduction across robot distances."""
     num_slices, num_samples = dists.shape
@@ -465,12 +407,13 @@ def batch_config_cost(
         diff = starts.state() - batch_other
         agent_slices = starts.array_slice
 
+    # special case for a path cost computation: We want to compute the cost between the pairs, shifted by one
     elif batch_other is None:
         arr = np.array([start.q.state() for start in starts])
         diff = arr[1:, :] - arr[:-1, :]
         agent_slices = starts[0].q.array_slice
 
-    else:
+    elif isinstance(starts, list) and isinstance(batch_other, list):
         diff = np.array([start.q.state() for start in starts]) - np.array(
             [other.q.state() for other in batch_other], dtype=np.float64
         )
