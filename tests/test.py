@@ -18,8 +18,8 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
 )
 
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import composite_prm_planner
-from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
+from multi_robot_multi_goal_planning.planners.composite_prm_planner import CompositePRM, CompositePRMConfig
+from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar, BaseRRTConfig
 from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
     BidirectionalRRTstar,
 )
@@ -121,9 +121,9 @@ def test_path_collision_checking(mocker):
 @pytest.mark.parametrize(
     "planner_fn",
     [
-        lambda env, ptc: composite_prm_planner(env, ptc=ptc, optimize=False),
-        lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
-        lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
+        lambda env, ptc: CompositePRM(env, CompositePRMConfig()).plan(ptc=ptc, optimize=False),
+        lambda env, ptc: RRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
+        lambda env, ptc: BidirectionalRRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
     ],
 )
 def test_planner_on_abstract_env(planner_fn):
@@ -142,9 +142,9 @@ def test_planner_on_abstract_env(planner_fn):
 @pytest.mark.parametrize(
     "planner_fn",
     [
-        lambda env, ptc: composite_prm_planner(env, ptc=ptc, optimize=False),
-        lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
-        lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
+        lambda env, ptc: CompositePRM(env, CompositePRMConfig()).plan(ptc=ptc, optimize=False),
+        lambda env, ptc: RRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
+        lambda env, ptc: BidirectionalRRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
     ],
 )
 def test_planner_on_rai_manip_env(planner_fn):
@@ -159,13 +159,12 @@ def test_planner_on_rai_manip_env(planner_fn):
     assert env.is_terminal_mode(path[-1].mode)
     assert env.is_valid_plan(path)
 
-
 @pytest.mark.parametrize(
     "planner_fn",
     [
-        lambda env, ptc: composite_prm_planner(env, ptc=ptc, optimize=False),
-        lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
-        lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
+        lambda env, ptc: CompositePRM(env, CompositePRMConfig()).plan(ptc=ptc, optimize=False),
+        lambda env, ptc: RRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
+        lambda env, ptc: BidirectionalRRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
     ],
 )
 def test_planner_on_pinocchio_manip_env(planner_fn):
@@ -184,9 +183,9 @@ def test_planner_on_pinocchio_manip_env(planner_fn):
 @pytest.mark.parametrize(
     "planner_fn",
     [
-        lambda env, ptc: composite_prm_planner(env, ptc=ptc, optimize=False),
-        lambda env, ptc: RRTstar(env, ptc=ptc).Plan(False),
-        lambda env, ptc: BidirectionalRRTstar(env, ptc=ptc).Plan(False),
+        lambda env, ptc: CompositePRM(env, CompositePRMConfig()).plan(ptc=ptc, optimize=False),
+        lambda env, ptc: RRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
+        lambda env, ptc: BidirectionalRRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
     ],
 )
 def test_planner_on_hallway_dependency_env(planner_fn):
