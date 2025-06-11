@@ -326,7 +326,7 @@ class rai_env(BaseProblem):
 
     def sample_config_uniform_in_limits(self) -> NpConfiguration:
         rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = NpConfiguration(rnd, self.start_pos.array_slice)
+        q = self.start_pos.from_flat(rnd)
 
         return q
 

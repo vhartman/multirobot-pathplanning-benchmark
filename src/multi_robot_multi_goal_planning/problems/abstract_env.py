@@ -153,7 +153,7 @@ class AbstractEnvironment(BaseProblem):
 
     def sample_config_uniform_in_limits(self):
         rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = NpConfiguration(rnd, self.start_pos.array_slice)
+        q = self.start_pos.from_flat(rnd)
 
         return q
 
@@ -242,7 +242,7 @@ class AbstractEnvironment(BaseProblem):
     ) -> NDArray:
         return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction)
 
-    def is_collision_free(self, q: Optional[Configuration], mode: List[int]):
+    def is_collision_free(self, q: Optional[Configuration], mode: Mode):
         if q is None:
             raise ValueError
 
@@ -336,7 +336,7 @@ class AbstractEnvironment(BaseProblem):
 
             # print(i / (N-1))
             q = q1_state + dir * (i)
-            q = NpConfiguration(q, q1.array_slice)
+            q = q1.from_flat(q)
 
             if not self.is_collision_free(q, mode):
                 return False

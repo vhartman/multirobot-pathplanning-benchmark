@@ -42,7 +42,7 @@ def convert_to_path(env, path_data):
 
     for i, a in enumerate(path_data):
         q_np = np.array(a["q"])
-        q = type(env.get_start_pos())(q_np, start_conf.array_slice)
+        q = env.get_start_pos().from_flat(q_np)
 
         # print(i)
         # print(q.state())

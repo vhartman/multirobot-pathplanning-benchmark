@@ -186,7 +186,7 @@ def robot_mode_shortcut(
 
             # print(q)
             path_element.append(
-                State(config_type(q, q0.array_slice), new_path[i + k].mode)
+                State(q0.from_flat(q), new_path[i + k].mode)
             )
 
         # check if the shortcut improves cost

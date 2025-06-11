@@ -1,4 +1,3 @@
-import robotic as ry
 import numpy as np
 import random
 
@@ -7,7 +6,7 @@ import copy
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from typing import List, Dict, Optional, Set, Any
+from typing import List, Dict, Optional, Set, Any, Tuple
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.configuration import (
@@ -60,7 +59,7 @@ class Goal(ABC):
         pass
 
     @abstractmethod
-    def serialize(self):
+    def serialize(self) -> List:
         pass
 
     @classmethod
@@ -96,7 +95,7 @@ class GoalRegion(Goal):
         )
         return q
 
-    def serialize(self):
+    def serialize(self) -> List:
         return self.limits.tolist()
 
     @classmethod
@@ -131,7 +130,7 @@ class ConditionalGoal(Goal):
 
         raise ValueError("No feasible goal in mode")
 
-    def serialize(self):
+    def serialize(self) -> List:
         print("This is not yet implemented")
         raise NotImplementedError
 
@@ -156,7 +155,7 @@ class GoalSet(Goal):
         rnd = np.random.randint(0, len(self.goals))
         return self.goals[rnd]
 
-    def serialize(self):
+    def serialize(self) -> List:
         return [goal.tolist() for goal in self.goals]
 
     @classmethod
@@ -168,9 +167,7 @@ class SingleGoal(Goal):
     def __init__(self, goal: NDArray):
         self.goal = goal
 
-    def satisfies_constraints(
-        self, q: ry.Config, mode: "Mode", tolerance: float
-    ) -> bool:
+    def satisfies_constraints(self, q, mode: "Mode", tolerance: float) -> bool:
         if np.linalg.norm(self.goal - q) < tolerance:
             return True
 
@@ -179,7 +176,7 @@ class SingleGoal(Goal):
     def sample(self, mode: "Mode") -> NDArray:
         return self.goal
 
-    def serialize(self):
+    def serialize(self) -> List:
         return self.goal.tolist()
 
     @classmethod
@@ -189,7 +186,7 @@ class SingleGoal(Goal):
 
 class Constraint(ABC):
     @abstractmethod
-    def is_fulfilled(self, q, env):
+    def is_fulfilled(self, q: Configuration, env) -> bool:
         pass
 
     @abstractmethod
@@ -221,6 +218,7 @@ class FrameRelativeOrientationConstraint(Constraint):
         frame_1_pose = env.get_frame_pose(self.frames[0])
         frame_2_pose = env.get_frame_pose(self.frames[1])
 
+        # TODO: this is very wrong
         relative_pose = np.zeros(4)
 
         return np.isclose(relative_pose, self.relative_pose)
@@ -370,27 +368,33 @@ class BaseModeLogic(ABC):
     _task_name_dict: Dict[str, Task]
     _task_id_dict: Dict[str, int]
 
+    start_pos: Configuration
+
     def __init__(self):
         self.prev_mode = None
         self.start_mode = self.make_start_mode()
         self._terminal_task_ids = self.make_symbolic_end()
 
-    def _get_task_by_name(self, name):
+    def _get_task_by_name(self, name) -> Task:
         for t in self.tasks:
             if t.name == name:
                 return t
 
-    def _get_task_id_by_name(self, name):
+        raise ValueError
+
+    def _get_task_id_by_name(self, name) -> int:
         for i, t in enumerate(self.tasks):
             if t.name == name:
                 return i
 
+        raise ValueError
+
     @abstractmethod
-    def make_start_mode(self):
+    def make_start_mode(self) -> Mode:
         pass
 
     @abstractmethod
-    def make_symbolic_end(self):
+    def make_symbolic_end(self) -> List[int]:
         pass
 
     @abstractmethod
@@ -414,7 +418,9 @@ class BaseModeLogic(ABC):
         pass
 
     @abstractmethod
-    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+    def get_active_task(
+        self, current_mode: Mode, next_task_ids: List[int] | None
+    ) -> Task:
         pass
 
 
@@ -425,12 +431,15 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
     terminal_task: int
 
-    def make_start_mode(self):
+    robots: List[str]
+    start_pos: Configuration
+
+    def make_start_mode(self) -> Mode:
         ids = [0] * self.start_pos.num_agents()
         m = Mode(ids, self.start_pos)
         return m
 
-    def make_symbolic_end(self):
+    def make_symbolic_end(self) -> List[int]:
         return [self.terminal_task] * self.start_pos.num_agents()
 
     @cache
@@ -613,7 +622,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
             tmp = tuple(tuple(sublist) for sublist in valid_next_combinations)
             next_mode.additional_hash_info = tmp
 
-            sg = self.get_scenegraph_info_for_mode(next_mode)
+            sg = self.get_scenegraph_info_for_mode(next_mode)  # type: ignore[attr-defined]
             next_mode.sg = sg
 
             mode_exists = False
@@ -685,18 +694,21 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 class FreeMixin(BaseModeLogic):
     tasks: List[Task]
     task_groups: List[
-        List[int]
+        List[Tuple[int, int]]
     ]  # describes groups of tasks of which one has to be done
     task_dependencies: Dict[int, List[int]]
     terminal_task: int
 
-    def make_start_mode(self):
+    start_pos: Configuration
+    robots: List[str]
+
+    def make_start_mode(self) -> Mode:
         # ids = [0, 1]
         ids = [0] * self.start_pos.num_agents()
         m = Mode(ids, self.start_pos)
         return m
 
-    def make_symbolic_end(self):
+    def make_symbolic_end(self) -> List[int]:
         return [self.terminal_task] * self.start_pos.num_agents()
 
     def _get_finished_groups(self, mode: Mode) -> List[int]:
@@ -944,7 +956,7 @@ class FreeMixin(BaseModeLogic):
             tmp = tuple(self._get_finished_groups(next_mode))
             next_mode.additional_hash_info = copy.deepcopy(tmp)
 
-            sg = self.get_scenegraph_info_for_mode(next_mode)
+            sg = self.get_scenegraph_info_for_mode(next_mode)  # type: ignore[attr-defined]
             next_mode.sg = sg
 
             mode_exists = False
@@ -992,7 +1004,10 @@ class FreeMixin(BaseModeLogic):
 
         return False
 
-    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+    # TODO: redundant with the other mixins
+    def get_active_task(
+        self, current_mode: Mode, next_task_ids: List[int] | None
+    ) -> Task:
         if next_task_ids is None:
             # we should return the terminal task here
             return self.tasks[self._terminal_task_ids[0]]
@@ -1016,6 +1031,9 @@ class FreeMixin(BaseModeLogic):
 class SequenceMixin(BaseModeLogic):
     sequence: List[int]
     tasks: List[Task]
+
+    start_pos: Configuration
+    robots: List[str]
 
     def _make_sequence_from_names(self, names: List[str]) -> List[int]:
         sequence = []
@@ -1047,7 +1065,7 @@ class SequenceMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
-        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)  # type: ignore[attr-defined]
         start_mode.sg = sg
         return start_mode
 
@@ -1161,7 +1179,7 @@ class SequenceMixin(BaseModeLogic):
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
         next_mode.prev_mode = mode
 
-        sg = self.get_scenegraph_info_for_mode(next_mode)
+        sg = self.get_scenegraph_info_for_mode(next_mode)  # type: ignore[attr-defined]
         next_mode.sg = sg
 
         for nm in mode.next_modes:
@@ -1172,7 +1190,9 @@ class SequenceMixin(BaseModeLogic):
 
         return [next_mode]
 
-    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+    def get_active_task(
+        self, current_mode: Mode, next_task_ids: List[int] | None
+    ) -> Task:
         seq_idx = self.get_current_seq_index(current_mode)
         return self.tasks[self.sequence[seq_idx]]
 
@@ -1180,6 +1200,8 @@ class SequenceMixin(BaseModeLogic):
 class DependencyGraphMixin(BaseModeLogic):
     graph: DependencyGraph
     tasks: List[Task]
+
+    robots: List[str]
 
     def _make_sequence_from_names(self, names: List[str]) -> List[int]:
         sequence = []
@@ -1211,11 +1233,11 @@ class DependencyGraphMixin(BaseModeLogic):
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
-        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)
+        sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)  # type: ignore[attr-defined]
         start_mode.sg = sg
         return start_mode
 
-    def _make_terminal_mode_from_sequence(self, sequence) -> Mode:
+    def _make_terminal_mode_from_sequence(self, sequence) -> List[int]:
         mode_dict = {}
         _completed_symbolic_tasks_cache: Dict[Mode, List[str]]
 
@@ -1244,7 +1266,7 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return self._make_start_mode_from_sequence(possible_id_sequence)
 
-    def make_symbolic_end(self) -> Mode:
+    def make_symbolic_end(self) -> List[int]:
         possible_named_sequence = self.graph.get_build_order()
         possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
 
@@ -1333,7 +1355,7 @@ class DependencyGraphMixin(BaseModeLogic):
                         tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
 
-                        sg = self.get_scenegraph_info_for_mode(tmp)
+                        sg = self.get_scenegraph_info_for_mode(tmp)  # type: ignore[attr-defined]
                         tmp.sg = sg
 
                         for nm in mode.next_modes:
@@ -1347,6 +1369,7 @@ class DependencyGraphMixin(BaseModeLogic):
 
         raise ValueError("This does not fulfill the constraints to reach a new mode.")
 
+    # TODO: factor this out
     def is_transition(self, q: Configuration, m: Mode) -> bool:
         if self.is_terminal_mode(m):
             return False
@@ -1403,7 +1426,9 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return False
 
-    def get_active_task(self, current_mode: Mode, next_task_ids: List[int]) -> Task:
+    def get_active_task(
+        self, current_mode: Mode, next_task_ids: List[int] | None
+    ) -> Task:
         if next_task_ids is None:
             # we should return the terminal task here
             return self.tasks[self._terminal_task_ids[0]]
@@ -1570,28 +1595,28 @@ class BaseProblem(ABC):
 
     # visualization
     @abstractmethod
-    def show_config(self, q: Configuration):
+    def show_config(self, q: Configuration) -> None:
         pass
 
     @abstractmethod
-    def show(self):
+    def show(self) -> None:
         pass
 
     ## General methods
-    def get_start_pos(self):
+    def get_start_pos(self) -> Configuration:
         return self.start_pos
 
-    def get_start_mode(self):
+    def get_start_mode(self) -> Mode:
         return self.start_mode
 
-    def get_robot_dim(self, robot: str):
+    def get_robot_dim(self, robot: str) -> int:
         return self.robot_dims[robot]
 
     # def get_robot_bounds(self, robot):
     #     self.bounds
 
     @abstractmethod
-    def done(self, q: Configuration, mode: Mode):
+    def done(self, q: Configuration, mode: Mode) -> bool:
         "Checks if we are done (i.e., if the terminal constraint is fulfilled.)"
         pass
 
@@ -1603,7 +1628,7 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def is_terminal_mode(self, mode: Mode):
+    def is_terminal_mode(self, mode: Mode) -> bool:
         """
         Checks if a mode is a terminal mode.
         """
@@ -1641,11 +1666,13 @@ class BaseProblem(ABC):
 
     # Collision checking and environment related methods
     @abstractmethod
-    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
+    def get_scenegraph_info_for_mode(
+        self, mode: Mode, is_start_mode: bool = False
+    ) -> Dict:
         pass
 
     @abstractmethod
-    def set_to_mode(self, mode: Mode):
+    def set_to_mode(self, mode: Mode) -> None:
         """
         Sets the environment to the given mode.
         """

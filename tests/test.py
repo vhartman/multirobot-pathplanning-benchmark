@@ -46,8 +46,8 @@ def test_binary_indices(n, expected):
 def test_edge_checking():
     env = get_env_by_name("abstract_test")
 
-    q1 = NpConfiguration(np.array([-1, 0, 1, 1]), env.start_pos.array_slice)
-    q2 = NpConfiguration(np.array([-1, 1, 1, 0]), env.start_pos.array_slice)
+    q1 = env.start_pos.from_flat(np.array([-1, 0, 1, 1]))
+    q2 = env.start_pos.from_flat(np.array([-1, 1, 1, 0]))
 
     is_collision_free = env.is_edge_collision_free(q1, q2, env.start_mode)
 
@@ -57,8 +57,8 @@ def test_edge_checking():
 def test_edge_checking_resolution(mocker):
     env = get_env_by_name("abstract_test")
 
-    q1 = NpConfiguration(np.array([-1, 0, 1, 1]), env.start_pos.array_slice)
-    q2 = NpConfiguration(np.array([-1, 1, 1, 0]), env.start_pos.array_slice)
+    q1 = env.start_pos.from_flat(np.array([-1, 0, 1, 1]))
+    q2 = env.start_pos.from_flat(np.array([-1, 1, 1, 0]))
 
     mock = mocker.patch.object(env, "is_collision_free", return_value=True)
 
@@ -89,9 +89,9 @@ def test_edge_checking_resolution(mocker):
 def test_path_collision_checking(mocker):
     env = get_env_by_name("abstract_test")
 
-    q1 = NpConfiguration(np.array([-1, 0, 1, 1]), env.start_pos.array_slice)
-    q2 = NpConfiguration(np.array([-1, 1, 1, 0]), env.start_pos.array_slice)
-    q3 = NpConfiguration(np.array([-1, 2, 1, -1]), env.start_pos.array_slice)
+    q1 = env.start_pos.from_flat(np.array([-1, 0, 1, 1]))
+    q2 = env.start_pos.from_flat(np.array([-1, 1, 1, 0]))
+    q3 = env.start_pos.from_flat(np.array([-1, 2, 1, -1]))
 
     s1 = State(q1, env.start_mode)
     s2 = State(q2, env.start_mode)

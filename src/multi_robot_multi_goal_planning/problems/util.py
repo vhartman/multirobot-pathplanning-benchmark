@@ -43,7 +43,7 @@ def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
 
         for j in range(N):
             q = q0_state + dir * j
-            new_path.append(State(config_type(q, q0.array_slice), path[i].mode))
+            new_path.append(State(q0.from_flat(q), path[i].mode))
 
     # add the final state (which is not added in the interpolation before)
     new_path.append(State(path[-1].q, path[-1].mode))

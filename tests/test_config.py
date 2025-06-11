@@ -63,8 +63,8 @@ def test_batch_config_cost_translation(reduction, dims, num_points):
 
     offset = 1
     pts_offset = pts + offset
-    single_config_offset = NpConfiguration(
-        single_config.state() + offset, single_config.array_slice
+    single_config_offset = single_config.from_flat(
+        single_config.state() + offset
     )
 
     dists = batch_config_cost(single_config, pts, reduction=reduction)
@@ -94,7 +94,7 @@ def test_batch_config_cost_euclidean_manual_comparison(dims):
     )
 
     manual_dist = 0
-    slice = single_config.array_slice
+    slice = single_config._array_slice
     for i in range(len(dims)):
         single_agent_dist = np.linalg.norm(
             pts[0][slice[i][0] : slice[i][1]]
@@ -113,7 +113,7 @@ def test_batch_config_cost_max_manual_comparison(dims):
     )
 
     manual_dist = 0
-    slice = single_config.array_slice
+    slice = single_config._array_slice
     for i in range(len(dims)):
         single_agent_dist = np.max(
             np.abs(
@@ -173,8 +173,8 @@ def test_batch_config_dist_translation(metric, dims, num_points):
 
     offset = 1
     pts_offset = pts + offset
-    single_config_offset = NpConfiguration(
-        single_config.state() + offset, single_config.array_slice
+    single_config_offset = single_config.from_flat(
+        single_config.state() + offset
     )
 
     dists = batch_config_dist(single_config, pts, metric=metric)

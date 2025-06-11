@@ -441,7 +441,7 @@ class PinocchioEnvironment(BaseProblem):
 
     def sample_config_uniform_in_limits(self):
         rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = NpConfiguration(rnd, self.start_pos.array_slice)
+        q = self.start_pos.from_flat(rnd)
 
         return q
 
@@ -685,7 +685,7 @@ class PinocchioEnvironment(BaseProblem):
 
             # print(i / (N-1))
             q = q1_state + dir * (i)
-            q = NpConfiguration(q, q1.array_slice)
+            q = NpConfiguration(q, q1._array_slice)
 
             if not self.is_collision_free(q, mode):
                 # print(q)

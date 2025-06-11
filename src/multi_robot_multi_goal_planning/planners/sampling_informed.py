@@ -103,8 +103,8 @@ class InformedSampling:
             Mode: Sampled mode according to the specified strategy.
         """
 
-        if mode_sampling_type == "uniform_reached":
-            return random.choice(reached_modes)
+        assert mode_sampling_type == "uniform_reached"
+        return random.choice(reached_modes)
 
     def get_inbetween_modes(self, start_mode: Mode, end_mode: Mode) -> List[Mode]:
         """
@@ -635,7 +635,7 @@ class InformedSampling:
                             q_config.append(q[j][:, i])
 
                         qnp = np.concatenate(q_config)
-                        qs.append(self.conf_type(qnp, self.env.start_pos.array_slice))
+                        qs.append(self.env.start_pos.from_flat(qnp))
                 else:
                     qs = [q]
 
@@ -649,7 +649,7 @@ class InformedSampling:
                             | (qnp > self.env.limits[1, :])
                         ):
                             continue
-                        q = self.conf_type(qnp, self.env.start_pos.array_slice)
+                        q = self.env.start_pos.from_flat(qnp)
 
                     if sum(self.env.batch_config_cost(q, focal_points)) > current_cost:
                         # print(path[start_ind].mode, path[end_ind].mode, m)
@@ -850,7 +850,7 @@ class InformedSampling:
 
                         q.append(qr)
 
-                q = self.conf_type(np.concatenate(q), self.env.start_pos.array_slice)
+                q = self.env.start_pos.from_flat(np.concatenate(q))
 
                 to_q_cost = self.env.batch_config_cost(q, focal_points)
                 if to_q_cost[0] + to_q_cost[1] > current_cost:

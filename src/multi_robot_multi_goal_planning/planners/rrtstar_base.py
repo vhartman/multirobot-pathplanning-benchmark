@@ -1659,7 +1659,7 @@ class BaseRRTstar(BasePlanner):
             q_new = q_rand.q
         else:
             q_new = q_nearest + (direction * (i /N))
-        state_new = State(type(self.env.get_start_pos())(q_new, n_nearest.state.q.array_slice), mode)
+        state_new = State(self.env.get_start_pos().from_flat(q_new), mode)
         return state_new
     
     def Near(self, 
