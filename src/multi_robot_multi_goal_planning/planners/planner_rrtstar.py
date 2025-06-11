@@ -136,7 +136,7 @@ class RRTstar(BaseRRTstar):
             # Mode selection
             active_mode = self.random_mode()
             # RRT* core
-            q_rand = self.sample_node_manifold(active_mode)
+            q_rand = self.sample_configuration(active_mode)
             if not q_rand:
                 continue
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
