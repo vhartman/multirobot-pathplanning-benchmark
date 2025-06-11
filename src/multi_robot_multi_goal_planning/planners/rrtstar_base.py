@@ -501,7 +501,8 @@ class InformedVersion0(BaseInformed):
             return
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
-        return goal_cost-start_cost    
+        return goal_cost-start_cost 
+       
 class InformedVersion1(BaseInformed):
     """
     Globally informed sampling considering whole state space.
