@@ -40,7 +40,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         super().__init__(env=env, config=config)
         self.swap = True
        
-    def UpdateCost(self, mode:Mode, n:Node, connection:bool = False) -> None:
+    def update_cost(self, mode:Mode, n:Node, connection:bool = False) -> None:
         stack = [n]
         while stack:
             current_node = stack.pop()
@@ -88,7 +88,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
             if self.config.informed_sampling_version != 6:
-                self.InformedInitialization(new_mode)
+                self.initialize_informed_sampling(new_mode)
             #Initialize transition nodes
             node = None
             for i in range(self.config.transition_nodes):    
@@ -106,7 +106,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.operation.costs = self.trees[new_mode].ensure_capacity(self.operation.costs, node.id) 
                 node.cost = np.inf
 
-    def ManageTransition(self, mode:Mode, n_new: Node) -> None:
+    def manage_transition(self, mode:Mode, n_new: Node) -> None:
         if mode not in self.modes:
             return
         #check if transition is reached
@@ -125,9 +125,9 @@ class BidirectionalRRTstar(BaseRRTstar):
                     if not self.operation.init_sol:
                         # print(time.time()-self.start_time)
                         self.operation.init_sol = True
-        self.FindLBTransitionNode()
+        self.find_lb_transition_node()
 
-    def UpdateTree(self, 
+    def update_tree(self, 
                    mode:Mode,
                    n: Node, 
                    n_parent:Node, 
@@ -150,7 +150,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             n.cost = n_parent.cost +  cost_to_parent
             # dist_cpu= dists.clone().to(dtype=torch.float16).cpu()
             # n.agent_dists = n_parent.agent_dists + dist_cpu
-            self.UpdateCost(mode, n, True)
+            self.update_cost(mode, n, True)
             n_parent_inter = n.parent
             cost_to_parent_inter = n.cost_to_parent
             # agent_dists_to_parent_inter = n.agent_dists_to_parent
@@ -173,7 +173,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             # print(n.state.mode)
             n.children.remove(n_parent)
   
-    def Connect(self, mode:Mode, n_new:Node) -> None:
+    def connect(self, mode:Mode, n_new:Node) -> None:
         """
         Attempts to connect the bidirectional trees (forward and reversed growing subtrees) in the given mode by extending and linking nodes.
 
@@ -187,7 +187,7 @@ class BidirectionalRRTstar(BaseRRTstar):
 
         if not self.trees[mode].subtree_b:
             return
-        n_nearest_b, dist, _, _= self.Nearest(mode, n_new.state.q, 'B')
+        n_nearest_b, dist, _, _= self.nearest(mode, n_new.state.q, 'B')
 
         if self.config.birrtstar_version == 1 or self.config.birrtstar_version == 2 and self.trees[mode].connected: #Based on paper Bi-RRT* by B. Wang 
             #TODO only check dist of active robots to connect (cost can be extremly high)? or the smartest way to just connect when possible?
@@ -205,7 +205,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 return
           
         elif self.config.birrtstar_version == 2 and not self.trees[mode].connected: #Based on paper RRT-Connect by JJ. Kuffner/ RRT*-Connect by S.Klemm
-            n_nearest_b = self.Extend(mode, n_nearest_b, n_new, dist)
+            n_nearest_b = self.extend(mode, n_nearest_b, n_new, dist)
             if not n_nearest_b:
                 return
            
@@ -216,12 +216,12 @@ class BidirectionalRRTstar(BaseRRTstar):
             self.swap = False
             if not self.env.is_edge_collision_free(n_nearest_b.state.q, n_new.state.q, mode):
                 return
-            self.UpdateTree(mode, n_new, n_nearest_b, cost[0]) 
+            self.update_tree(mode, n_new, n_nearest_b, cost[0]) 
             
         else:
             if not self.env.is_edge_collision_free(n_new.state.q, n_nearest_b.state.q, mode):
                 return
-            self.UpdateTree(mode, n_nearest_b, n_new, cost[0])
+            self.update_tree(mode, n_nearest_b, n_new, cost[0])
 
         transition_node = self.get_transition_node(mode, self.transition_node_ids[mode][-1]) 
         #initial solution has been found for the frist time in this mode
@@ -236,7 +236,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         #need to do that after the next mode was initialized
         self.convert_node_to_transition_node(mode, transition_node)
 
-    def Extend(self, 
+    def extend(self, 
                mode:Mode, 
                n_nearest_b:Node, 
                n_new:Node, dist
@@ -258,7 +258,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         #RRT not RRT*
         i = 1
         while True:
-            state_new = self.Steer(mode, n_nearest_b, q, dist, i)
+            state_new = self.steer(mode, n_nearest_b, q, dist, i)
             if not state_new or np.equal(state_new.q.state(), q.state()).all(): # Reached
                 return n_nearest_b
             if self.env.is_collision_free(state_new.q, mode) and self.env.is_edge_collision_free(n_nearest_b.state.q, state_new.q, mode):
@@ -329,7 +329,7 @@ class BidirectionalRRTstar(BaseRRTstar):
 
         save_data(data, True)
 
-    def PlannerInitialization(self) -> None:
+    def initialize_planner(self) -> None:
         # Initilaize first Mode
         self.set_gamma_rrtstar()
         self.add_new_mode(tree_instance=BidirectionalTree)
@@ -340,7 +340,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         self.trees[mode].add_node(start_node)
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
-        self.ManageTransition(mode, start_node)
+        self.manage_transition(mode, start_node)
 
     def plan(
         self,
@@ -348,18 +348,18 @@ class BidirectionalRRTstar(BaseRRTstar):
         optimize: bool = True,
     ) -> Tuple[List[State] | None, Dict[str, Any]]:
         i = 0
-        self.PlannerInitialization()
+        self.initialize_planner()
         while True:
             self.swap = True
             i += 1
             # Mode selection
-            active_mode  = self.RandomMode()
+            active_mode  = self.random_mode()
             # Bi RRT* core
-            q_rand = self.SampleNodeManifold(active_mode)
+            q_rand = self.sample_node_manifold(active_mode)
             if not q_rand:
                 continue
-            n_nearest, dist, set_dists, n_nearest_idx = self.Nearest(active_mode, q_rand)        
-            state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
+            n_nearest, dist, set_dists, n_nearest_idx = self.nearest(active_mode, q_rand)        
+            state_new = self.steer(active_mode, n_nearest, q_rand, dist)
             # q_rand == n_nearest
             if not state_new: 
                 continue
@@ -367,16 +367,16 @@ class BidirectionalRRTstar(BaseRRTstar):
             if self.env.is_collision_free(state_new.q, active_mode) and self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, active_mode):
                 n_new = Node(state_new, self.operation)
                 if np.equal(n_new.state.q.state(), q_rand.state()).all():
-                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx, set_dists)
+                    N_near_batch, n_near_costs, node_indices = self.near(active_mode, n_new, n_nearest_idx, set_dists)
                 else:
-                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx)
+                    N_near_batch, n_near_costs, node_indices = self.near(active_mode, n_new, n_nearest_idx)
 
                 batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
-                self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
-                if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
-                    self.UpdateCost(active_mode,n_new)
-                self.Connect(active_mode, n_new)
-                self.ManageTransition(active_mode, n_new)
+                self.find_parent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
+                if self.rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
+                    self.update_cost(active_mode,n_new)
+                self.connect(active_mode, n_new)
+                self.manage_transition(active_mode, n_new)
             if self.swap:
                 self.trees[active_mode].swap()
             

@@ -589,6 +589,7 @@ class InformedVersion1(BaseInformed):
         r1 = cmax / 2
         r2 = np.sqrt(cmax**2 - self.cmin**2) / 2
         return np.diag(np.concatenate([np.repeat(r1, 1), np.repeat(r2, self.n - 1)]))   
+    
 class InformedVersion2(BaseInformed):
     """
     Globally informed sampling for each agent separately (start and goal config are equal to home pose and task).
@@ -633,6 +634,7 @@ class InformedVersion2(BaseInformed):
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return path_nodes[-1].cost - lb_goal - lb_start    
+    
 class InformedVersion3(BaseInformed):
     """
     Locally informed sampling for each agent seperately (randomly select start and goal config between home pose and task).
@@ -684,6 +686,7 @@ class InformedVersion3(BaseInformed):
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         
         return path_nodes[idx2].cost - path_nodes[idx1].cost - lb_goal - lb_start   
+    
 class InformedVersion4(BaseInformed):
     """
     Globally informed sampling for each agent separately (randomly select start and end config on whole path).
@@ -727,6 +730,7 @@ class InformedVersion4(BaseInformed):
         self.cmin[r_idx]  = norm-2*self.env.collision_tolerance
         self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state())/2
         return path_nodes[-1].cost - lb_goal - lb_start
+    
 class InformedVersion5(BaseInformed):
     """
     Globally informed sampling for each agent separately (start and goal config are equal to home pose and task).
@@ -785,6 +789,7 @@ def find_nearest_indices(set_dists:NDArray, r:float) -> NDArray:
 
     r += 1e-10 # a small epsilon is added to mitigate floating point issues
     return np.nonzero(set_dists <= r)[0]
+
 @njit
 def cumulative_sum(batch_cost:NDArray) -> NDArray:
     """
@@ -800,6 +805,7 @@ def cumulative_sum(batch_cost:NDArray) -> NDArray:
     for idx in range(0, len(batch_cost)):
         cost[idx] = np.sum(batch_cost[:idx+1])
     return cost
+
 @njit
 def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:List[int], r_idx:int) -> List[int]:
     """
@@ -819,6 +825,7 @@ def get_mode_task_ids_of_active_task_in_path(path_modes, task_id:List[int], r_id
         if path_modes[i][r_idx] == task_id:  
             last_index = i 
     return path_modes[last_index]
+
 @njit
 def get_mode_task_ids_of_home_pose_in_path(path_modes, task_id:List[int], r_idx:int) -> List[int]:
     """
@@ -1003,7 +1010,7 @@ class BaseRRTstar(BasePlanner):
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
             if self.config.informed_sampling_version != 6:
-                self.InformedInitialization(new_mode)
+                self.initialize_informed_sampling(new_mode)
         if self.config.apply_long_horizon and mode in self.modes:
             self.long_horizon.update(mode, self.operation.init_sol)
 
@@ -1063,10 +1070,10 @@ class BaseRRTstar(BasePlanner):
 
             #need to rewire tree of next mode as well
             if index != 0:
-                N_near_batch, n_near_costs, node_indices = self.Near(next_mode, n, index, tree = tree)
+                N_near_batch, n_near_costs, node_indices = self.near(next_mode, n, index, tree = tree)
                 batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
-                if self.Rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
-                    self.UpdateCost(next_mode, n)
+                if self.rewire(next_mode, node_indices, n, batch_cost, n_near_costs, tree):
+                    self.update_cost(next_mode, n)
 
     def get_lb_transition_node_id(self, modes:List[Mode]) -> Tuple[Tuple[float, int], Mode]:
         """
@@ -1599,7 +1606,7 @@ class BaseRRTstar(BasePlanner):
                 termination_modes.append(mode)
         return termination_modes
 
-    def Nearest(self, 
+    def nearest(self, 
                 mode:Mode, 
                 q_rand: Configuration, 
                 tree: str = ''
@@ -1625,7 +1632,7 @@ class BaseRRTstar(BasePlanner):
         # print([float(set_dists[idx])])
         return  self.trees[mode].get_node(node_id, tree), set_dists[idx], set_dists, idx
     
-    def Steer(self, 
+    def steer(self, 
               mode:Mode, 
               n_nearest: Node, 
               q_rand: Configuration, 
@@ -1662,7 +1669,7 @@ class BaseRRTstar(BasePlanner):
         state_new = State(self.env.get_start_pos().from_flat(q_new), mode)
         return state_new
     
-    def Near(self, 
+    def near(self, 
              mode:Mode, 
              n_new: Node, 
              n_nearest_idx:int, 
@@ -1700,7 +1707,7 @@ class BaseRRTstar(BasePlanner):
         N_near_batch = batch_subtree[indices]
         return N_near_batch, n_near_costs, node_indices
     
-    def FindParent(self, 
+    def find_parent(self, 
                    mode:Mode, 
                    node_indices: NDArray, 
                    n_new: Node, 
@@ -1745,7 +1752,7 @@ class BaseRRTstar(BasePlanner):
         n_new.cost = c_min
         self.trees[mode].add_node(n_new)
     
-    def Rewire(self, 
+    def rewire(self, 
                mode:Mode,  
                node_indices: NDArray, 
                n_new: Node, 
@@ -1811,7 +1818,7 @@ class BaseRRTstar(BasePlanner):
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(path)
 
-    def GeneratePath(self, 
+    def generate_path(self, 
                      mode:Mode, 
                      n: Node, 
                      shortcutting_bool:bool = True
@@ -1901,13 +1908,13 @@ class BaseRRTstar(BasePlanner):
             # shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
             if result[0][-1] < self.operation.cost:
                 self.update_results_tracking(result[0][-1], shortcut_path)
-                self.TreeExtension(shortcut_path)
+                self.tree_extension(shortcut_path)
             
             if self.config.apply_long_horizon and not self.long_horizon.reached_terminal_mode:
                 self.long_horizon.reset()
                 self.operation.cost = np.inf 
 
-    def RandomMode(self) -> Mode:
+    def random_mode(self) -> Mode:
         """
         Randomly selects a mode based on the current mode sampling strategy.
 
@@ -2003,7 +2010,7 @@ class BaseRRTstar(BasePlanner):
         # return np.random.choice(self.modes, p = p)
         return random.choices(self.modes, weights=p, k=1)[0]
 
-    def InformedInitialization(self, mode: Mode) -> None: 
+    def initialize_informed_sampling(self, mode: Mode) -> None: 
         """
         Initializes the informed sampling module for the given mode based on the specified version.
 
@@ -2034,7 +2041,7 @@ class BaseRRTstar(BasePlanner):
             self.informed[mode] = InformedVersion5(self.env, self.env.config_cost)
             self.informed[mode].initialize()
 
-    def SampleNodeManifold(self, mode:Mode) -> Configuration:
+    def sample_node_manifold(self, mode:Mode) -> Configuration:
         """
         Samples a node configuration from the manifold based on various probabilistic strategies.
 
@@ -2064,7 +2071,7 @@ class BaseRRTstar(BasePlanner):
             #uniform sampling
             return self.sample_configuration(mode, "uniform")
                
-    def FindLBTransitionNode(self, shortcutting_bool:bool = True) -> None:
+    def find_lb_transition_node(self, shortcutting_bool:bool = True) -> None:
         """
         Searches lower-bound transition node and generates its corresponding path if a valid candidate is found.
 
@@ -2085,9 +2092,9 @@ class BaseRRTstar(BasePlanner):
             valid_mask = result[0] < self.operation.cost
             if valid_mask.any():
                 lb_transition_node = self.get_transition_node(mode, result[1])
-                self.GeneratePath(mode, lb_transition_node, shortcutting_bool= shortcutting_bool)
+                self.generate_path(mode, lb_transition_node, shortcutting_bool= shortcutting_bool)
 
-    def TreeExtension(self, 
+    def tree_extension(self, 
                       discretized_path:List[State]
                       ) -> None:
         """
@@ -2114,9 +2121,9 @@ class BaseRRTstar(BasePlanner):
             
             if mode == node.state.mode:
                 index = np.where(self.trees[node.state.mode].get_node_ids_subtree() == parent.id)
-                N_near_batch, n_near_costs, node_indices = self.Near(node.state.mode, node, index)
+                N_near_batch, n_near_costs, node_indices = self.near(node.state.mode, node, index)
                 batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
-                self.FindParent(node.state.mode, node_indices, node, parent, batch_cost, n_near_costs) 
+                self.find_parent(node.state.mode, node_indices, node, parent, batch_cost, n_near_costs) 
             else:
                 node.parent = parent
                 self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
@@ -2125,11 +2132,11 @@ class BaseRRTstar(BasePlanner):
                 parent.children.append(node)
                 self.convert_node_to_transition_node(node.parent.state.mode, node.parent)
                 index = np.where(self.trees[node.state.mode].get_node_ids_subtree() == parent.id)
-                N_near_batch, n_near_costs, node_indices = self.Near(node.state.mode, node, index)
+                N_near_batch, n_near_costs, node_indices = self.near(node.state.mode, node, index)
                 batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
 
-            if self.Rewire(node.state.mode, node_indices, node, batch_cost, n_near_costs):
-                self.UpdateCost(node.state.mode, node)
+            if self.rewire(node.state.mode, node_indices, node, batch_cost, n_near_costs):
+                self.update_cost(node.state.mode, node)
             if self.trees[discretized_path[i].mode].order == 1:
                 self.trees[discretized_path[i].mode].add_node(node)
             else:
@@ -2139,7 +2146,7 @@ class BaseRRTstar(BasePlanner):
             mode = node.state.mode
 
         self.convert_node_to_transition_node(mode, node)
-        self.FindLBTransitionNode(shortcutting_bool =False)
+        self.find_lb_transition_node(shortcutting_bool =False)
         # import matplotlib.pyplot as plt
         # fig, axes = plt.subplots(3, 2, figsize=(12, 15))
 
@@ -2177,7 +2184,7 @@ class BaseRRTstar(BasePlanner):
         # self.GeneratePath(active_mode, node, shortcutting_bool=False)
 
     @abstractmethod
-    def UpdateCost(self, mode:Mode, n: Node) -> None:
+    def update_cost(self, mode:Mode, n: Node) -> None:
         """
         Updates cost for a given node and all its descendants by propagating the cost change down the tree.
 
@@ -2191,7 +2198,7 @@ class BaseRRTstar(BasePlanner):
         pass
 
     @abstractmethod
-    def PlannerInitialization(self) -> None:
+    def initialize_planner(self) -> None:
         """
         Initializes planner by setting parameters, creating the initial mode, and adding start node.
 
@@ -2204,7 +2211,7 @@ class BaseRRTstar(BasePlanner):
         pass
 
     @abstractmethod
-    def ManageTransition(self, mode:Mode, n_new: Node) -> None:
+    def manage_transition(self, mode:Mode, n_new: Node) -> None:
         """
         Checks if new node qualifies as a transition or termination node. 
         If it does, node is converted into transition node, mode is updated accordingly, 

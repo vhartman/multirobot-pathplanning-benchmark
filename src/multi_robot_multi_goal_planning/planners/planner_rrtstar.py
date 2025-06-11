@@ -28,7 +28,7 @@ class RRTstar(BaseRRTstar):
         
         super().__init__(env=env, config=config)
 
-    def UpdateCost(self, mode:Mode, n:Node) -> None:
+    def update_cost(self, mode:Mode, n:Node) -> None:
         stack = [n]
         while stack:
             current_node = stack.pop()
@@ -39,7 +39,7 @@ class RRTstar(BaseRRTstar):
                     # child.agent_dists = current_node.agent_dists + child.agent_dists_to_parent
                 stack.extend(children)
    
-    def ManageTransition(self, mode:Mode, n_new: Node) -> None:
+    def manage_transition(self, mode:Mode, n_new: Node) -> None:
         #check if transition is reached
         if self.env.is_transition(n_new.state.q, mode):
             self.save_tree_data() 
@@ -51,9 +51,9 @@ class RRTstar(BaseRRTstar):
             self.convert_node_to_transition_node(mode, n_new)
             if not self.operation.init_sol:
                 self.operation.init_sol = True
-        self.FindLBTransitionNode()
+        self.find_lb_transition_node()
  
-    def PlannerInitialization(self) -> None:
+    def initialize_planner(self) -> None:
         self.set_gamma_rrtstar()
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
@@ -66,7 +66,7 @@ class RRTstar(BaseRRTstar):
         start_node.cost = 0.0
         start_node.cost_to_parent = 0.0
         # in case a dummy start is defined
-        self.ManageTransition(active_mode, start_node)
+        self.manage_transition(active_mode, start_node)
     
     def save_tree_data(self) -> None:
         if not self.config.with_tree_visualization:
@@ -117,30 +117,30 @@ class RRTstar(BaseRRTstar):
         optimize: bool = True,
     ) -> Tuple[List[State] | None, Dict[str, Any]]:
         i = 0
-        self.PlannerInitialization()
+        self.initialize_planner()
         while True:
             i += 1
             # Mode selection
-            active_mode = self.RandomMode()
+            active_mode = self.random_mode()
             # RRT* core
-            q_rand = self.SampleNodeManifold(active_mode)
+            q_rand = self.sample_node_manifold(active_mode)
             if not q_rand:
                 continue
-            n_nearest, dist, set_dists, n_nearest_idx = self.Nearest(active_mode, q_rand)    
-            state_new = self.Steer(active_mode, n_nearest, q_rand, dist)
+            n_nearest, dist, set_dists, n_nearest_idx = self.nearest(active_mode, q_rand)    
+            state_new = self.steer(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
             if self.env.is_collision_free(state_new.q, active_mode) and self.env.is_edge_collision_free(n_nearest.state.q, state_new.q, active_mode):
                 n_new = Node(state_new, self.operation)
                 if np.equal(n_new.state.q.state(), q_rand.state()).all():
-                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx, set_dists)
+                    N_near_batch, n_near_costs, node_indices = self.near(active_mode, n_new, n_nearest_idx, set_dists)
                 else:
-                    N_near_batch, n_near_costs, node_indices = self.Near(active_mode, n_new, n_nearest_idx)
+                    N_near_batch, n_near_costs, node_indices = self.near(active_mode, n_new, n_nearest_idx)
                 batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
-                self.FindParent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
-                if self.Rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
-                    self.UpdateCost(active_mode, n_new) 
-                self.ManageTransition(active_mode, n_new)
+                self.find_parent(active_mode, node_indices, n_new, n_nearest, batch_cost, n_near_costs)
+                if self.rewire(active_mode, node_indices, n_new, batch_cost, n_near_costs):
+                    self.update_cost(active_mode, n_new) 
+                self.manage_transition(active_mode, n_new)
 
             if not optimize and self.operation.init_sol:
                 self.save_tree_data()
