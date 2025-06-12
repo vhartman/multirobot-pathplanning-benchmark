@@ -24,6 +24,8 @@ from itertools import product
 
 from dataclasses import dataclass
 
+from scipy.spatial.transform import Rotation as R
+
 
 @cache
 def generate_binary_search_indices(N):
@@ -198,15 +200,46 @@ class Constraint(ABC):
         pass
 
 
+def get_axes_from_quaternion(quat):
+    """
+    Returns the x, y, z unit vectors of the frame defined by the quaternion.
+    Each axis is a 3D vector in world coordinates.
+    """
+    rot = R.from_quat(quat)
+    rot_matrix = rot.as_matrix()  # 3x3 rotation matrix
+    x_axis = rot_matrix[:, 0]
+    y_axis = rot_matrix[:, 1]
+    z_axis = rot_matrix[:, 2]
+    return x_axis, y_axis, z_axis
+
+
 class FrameOrientationConstraint(Constraint):
-    def __init__(self, frame_name, pose_bounds):
+    def __init__(self, frame_name, desired_orientation_vector, epsilon):
         self.frame_name = frame_name
-        self.bounds = pose_bounds
+        self.desired_orientation_vector = desired_orientation_vector
+        self.epsilon = epsilon
 
     def is_fulfilled(self, q, env):
         frame_pose = env.get_frame_pose(self.frame_name)
 
-        return frame_pose < self.bounds[:, 0] and frame_pose > self.bounds[:, 1]
+        # get vector from quaternion
+        x_axis, y_axis, z_axis = get_axes_from_quaternion(frame_pose[3:])
+
+        return np.dot(self.desired_orientation_vector, z_axis) >= 1 - self.epsilon
+
+
+class PathConstraint(Constraint):
+    def __init__(self, frame_name, path, epsilon):
+        self.frame_name = frame_name
+        self.path = path
+        self.epsilon = epsilon
+
+    def is_fulfilled(self, q, env):
+        frame_pose = env.get_frame_pose(self.frame_name)
+
+        # find closest element on path
+
+        return True
 
 
 class FrameRelativeOrientationConstraint(Constraint):
@@ -219,7 +252,7 @@ class FrameRelativeOrientationConstraint(Constraint):
         frame_2_pose = env.get_frame_pose(self.frames[1])
 
         # TODO: this is very wrong
-        relative_pose = np.zeros(4)
+        relative_pose = np.zeros(7)
 
         return np.isclose(relative_pose, self.relative_pose)
 
