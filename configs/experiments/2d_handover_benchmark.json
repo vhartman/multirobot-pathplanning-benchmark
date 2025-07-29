@@ -4,7 +4,7 @@
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 500,
-  "optimize": true,
+  "optimize": false,
   "num_runs": 10,
   "seed": 0,
   "planners": [
@@ -24,7 +24,9 @@
         "informed_transition_sampling": true,
         "sample_near_path": false,
         "shortcutting": true,
-        "direct_informed_sampling": true
+        "direct_informed_sampling": true,
+        "init_mode_sampling_type": "greedy",
+        "frontier_mode_sampling_probability":1.0
       }
     },
     {
@@ -43,7 +45,9 @@
         "informed_transition_sampling": true,
         "sample_near_path": false,
         "shortcutting": true,
-        "direct_informed_sampling": true
+        "direct_informed_sampling": true,
+        "init_mode_sampling_type": "greedy",
+        "frontier_mode_sampling_probability":1.0
       }
     }
   ]

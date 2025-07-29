@@ -18,6 +18,7 @@
     "init_uniform_batch_size":  150,
     "init_transition_batch_size":  90,
     "with_mode_validation": true,
-    "with_noise": false
+    "with_noise": false,
+    "init_mode_sampling_type": "greedy"
   }
 }
