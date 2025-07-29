@@ -1428,7 +1428,7 @@ class BaseRRTstar(BasePlanner):
                 print("Failed to sample transition configuration after 10000 attempts.")
                 if self.config.with_mode_validation:
                     self.modes.remove(mode)
-                    self.mode_validation.update_cache_of_invalid_modes(mode)
+                    self.mode_validation.add_invalid_mode(mode)
                     self.modes = self.mode_validation.track_invalid_modes(
                         mode.prev_mode, self.modes
                     )
