@@ -1,0 +1,87 @@
+{
+  "experiment_name": "sampling_test",
+  "environment": "other_hallway",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "sum",
+  "max_planning_time": 200,
+  "num_runs": 50,
+  "optimize": true,
+  "seed": 0,
+  "planners": [
+    {
+      "name": "rrtstar_global_sampling",
+      "type": "rrtstar",
+      "options": {
+        "shortcutting": false,
+        "locally_informed_sampling": false
+      }
+    },
+    {
+      "name": "birrtstar_global_sampling",
+      "type": "birrtstar",
+      "options": {
+        "shortcutting": false,
+        "locally_informed_sampling": false
+      }
+    },
+    {
+      "name": "globally_informed_prm_no_shortcutting",
+      "type": "prm",
+      "options": {
+        "locally_informed_sampling": false,
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "eitstar_global_sampling",
+      "type": "eitstar",
+      "options": {
+        "locally_informed_sampling": false,
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "aitstar_global_sampling",
+      "type": "aitstar",
+      "options": {
+        "locally_informed_sampling": false,
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "birrtstar",
+      "type": "birrtstar",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "locally_informed_prm",
+      "type": "prm",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "eitstar",
+      "type": "eitstar",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "aitstar",
+      "type": "aitstar",
+      "options": {
+        "shortcutting": false
+      }
+    }
+  ]
+}

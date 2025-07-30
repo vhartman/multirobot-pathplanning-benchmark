@@ -1,0 +1,72 @@
+{
+  "experiment_name": "mode_sampling",
+  "environment": "box_stacking_dep",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 100,
+  "num_runs": 30,
+  "seed": 0,
+  "optimize": true,
+  "planners": [
+    {
+      "name": "eitstar",
+      "type": "eitstar",
+      "options": {}
+    },
+    {
+      "name": "eitstar uniform",
+      "type": "eitstar",
+      "options": {
+        "init_mode_sampling_type": "uniform"
+      }
+    },
+    {
+      "name": "locally_informed_prm_shortcutting",
+      "type": "prm",
+      "options": {}
+    },
+    {
+      "name": "locally_informed_prm_shortcutting uniform",
+      "type": "prm",
+      "options": {
+        "init_mode_sampling_type": "uniform"
+      }
+    },
+    {
+      "name": "aitstar",
+      "type": "aitstar",
+      "options": {}
+    },
+    {
+      "name": "aitstar uniform",
+      "type": "aitstar",
+      "options": {
+        "init_mode_sampling_type": "uniform"
+      }
+    },
+    {
+      "name": "birrtstar",
+      "type": "birrtstar",
+      "options": {}
+    },
+    {
+      "name": "birrtstar uniform",
+      "type": "birrtstar",
+      "options": {
+        "mode_sampling": null
+      }
+    },
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {}
+    },
+    {
+      "name": "rrtstar uniform",
+      "type": "rrtstar",
+      "options": {
+        "mode_sampling": null
+      }
+    }
+  ]
+}

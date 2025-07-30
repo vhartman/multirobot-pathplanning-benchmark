@@ -1,24 +1,25 @@
 {
   "type": "prm",
   "options": {
-    "batch_size": 200,
-    "transition_batch_size": 250,
-    "informed_batch_size": 300,
+    "batch_size": 100,
+    "transition_batch_size": 50,
+    "informed_batch_size": 250,
     "informed_transition_batch_size": 250,
     "path_batch_size": 0,
-    "distance_function": "euclidean",
+    "distance_function": "max_euclidean",
     "connection_strategy": "radius",
     "locally_informed_sampling": true,
     "informed_sampling": true,
     "informed_transition_sampling": true,
     "sample_near_path": false,
-    "shortcutting": false,
+    "shortcutting": true,
     "direct_informed_sampling": true,
     "inlcude_lb_in_informed_sampling": false,
-    "init_uniform_batch_size":  150,
-    "init_transition_batch_size":  90,
+    "init_uniform_batch_size": 150,
+    "init_transition_batch_size": 50,
     "with_mode_validation": true,
     "with_noise": false,
-    "init_mode_sampling_type": "greedy"
+    "init_mode_sampling_type": "frontier",
+    "frontier_mode_sampling_probability": 0.98
   }
 }

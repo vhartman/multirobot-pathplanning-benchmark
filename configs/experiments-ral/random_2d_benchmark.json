@@ -1,0 +1,37 @@
+{
+  "experiment_name": "",
+  "environment": "random_2d",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 100,
+  "optimize": true,
+  "num_runs": 5,
+  "seed": 0,
+  "planners": [
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {}
+    },
+    {
+      "name": "birrtstar",
+      "type": "birrtstar",
+      "options": {}
+    },
+    {
+      "name": "locally_informed_prm_shortcutting",
+      "type": "prm",
+      "options": {}
+    },
+    {
+      "name": "eitstar",
+      "type": "eitstar",
+      "options": {}
+    },
+    {
+      "name": "aitstar",
+      "type": "aitstar",
+      "options": {}
+    }
+  ]
+}

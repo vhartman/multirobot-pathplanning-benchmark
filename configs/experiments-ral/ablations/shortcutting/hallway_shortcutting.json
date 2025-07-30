@@ -1,0 +1,77 @@
+{
+  "experiment_name": "shortcutting_test",
+  "environment": "other_hallway",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "sum",
+  "max_planning_time": 200,
+  "num_runs": 50,
+  "optimize": true,
+  "seed": 0,
+  "planners": [
+    {
+      "name": "rrtstar_no_shortcutting",
+      "type": "rrtstar",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "birrtstar_no_shortcutting",
+      "type": "birrtstar",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "locally_informed_prm_no_shortcutting",
+      "type": "prm",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "eitstar_no_shortcutting",
+      "type": "eitstar",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "aitstar_no_shortcutting",
+      "type": "aitstar",
+      "options": {
+        "shortcutting": false
+      }
+    },
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+      }
+    },
+    {
+      "name": "birrtstar",
+      "type": "birrtstar",
+      "options": {
+      }
+    },
+    {
+      "name": "locally_informed_prm_shortcutting",
+      "type": "prm",
+      "options": {
+      }
+    },
+    {
+      "name": "eitstar",
+      "type": "eitstar",
+      "options": {
+      }
+    },
+    {
+      "name": "aitstar",
+      "type": "aitstar",
+      "options": {
+      }
+    }
+  ]
+}

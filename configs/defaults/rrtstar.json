@@ -9,7 +9,7 @@
     "p_stay": 0.0,
     "p_uniform": 0.2,
     "shortcutting": true,
-    "mode_sampling": 1, 
+    "mode_sampling": 0.98, 
     "sample_near_path": false,
     "locally_informed_sampling": true,
     "informed_batch_size": 300,

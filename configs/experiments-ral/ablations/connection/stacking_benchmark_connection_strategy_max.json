@@ -1,0 +1,24 @@
+{
+  "experiment_name": "connection_strategy",
+  "environment": "box_stacking_dep",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 500,
+  "optimize": true,
+  "num_runs": 50,
+  "seed": 2,
+  "planners": [
+    {
+      "name": "informed_prm_k_nearest",
+      "type": "prm",
+      "options": {
+        "connection_strategy": "k_nearest"
+      }
+    },
+    {
+      "name": "informed_prm_radius",
+      "type": "prm",
+      "options": {}
+    }
+  ]
+}

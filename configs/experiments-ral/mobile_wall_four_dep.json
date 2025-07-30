@@ -1,0 +1,37 @@
+{
+  "experiment_name": "rrt_planner_convergence",
+  "environment": "mobile_four_dep",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 100,
+  "num_runs": 5,
+  "seed": 0,
+  "optimize": true,
+  "planners": [
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {}
+    },
+    {
+      "name": "birrtstar",
+      "type": "birrtstar",
+      "options": {}
+    },
+    {
+      "name": "locally_informed_prm_shortcutting",
+      "type": "prm",
+      "options": {}
+    },
+    {
+      "name": "eitstar",
+      "type": "eitstar",
+      "options": {}
+    },
+    {
+      "name": "aitstar",
+      "type": "aitstar",
+      "options": {}
+    }
+  ]
+}

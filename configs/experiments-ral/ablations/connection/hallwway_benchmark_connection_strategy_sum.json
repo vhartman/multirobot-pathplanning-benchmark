@@ -1,0 +1,24 @@
+{
+  "experiment_name": "connection_strategy",
+  "environment": "other_hallway",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "sum",
+  "max_planning_time": 200,
+  "optimize": true,
+  "num_runs": 50,
+  "seed": 0,
+  "planners": [
+    {
+      "name": "informed_prm_k_nearest",
+      "type": "prm",
+      "options": {
+        "connection_strategy": "k_nearest"
+      }
+    },
+    {
+      "name": "informed_prm_radius",
+      "type": "prm",
+      "options": {}
+    }
+  ]
+}
