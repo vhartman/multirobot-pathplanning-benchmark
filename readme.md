@@ -128,7 +128,10 @@ A problem consists of the initial scene, and a task sequence or a dependency gra
 
 #### Implementing your own planner
 
-Todo: To implement your own planner, you need to specialize the `planner` base-class.
+To implement your own planner, you need to specialize the `planner` base-class, as the other planners do.
+The only required method is the `plan()`-function, which takes the termination criterion as argument.
+It has to return two things: the final path, and a dict containing some information, which is then exported.
+The information that is needed for plots, is a list of all paths that were found, a list of their corresponding costs and a list of the times at wich they were found.
 
 # Tests
 There are initial tests in the `tests/` folder.
