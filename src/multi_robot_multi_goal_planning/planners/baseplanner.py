@@ -16,6 +16,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     DependencyType,
     DynamicsType,
     ProblemSpec,
+    SafePoseType
 )
 
 
@@ -27,6 +28,7 @@ class SolverCapabilities:
     supports_agent_types: Set[AgentType]
     supports_constraints: Set[ConstraintType]
     supports_manipulation: Set[ManipulationType]
+    supports_safe_home_pose: Set[SafePoseType]
 
     def __repr__(self):
         return (
@@ -35,6 +37,7 @@ class SolverCapabilities:
             f"Env: {[e.value for e in self.supports_manipulation]}, "
             f"Dynamics: {[e.value for e in self.supports_dynamics_type]}, "
             f"Goals: {[e.value for e in self.supports_goal_type]}, "
+            f"HomePose: {[e.value for e in self.supports_safe_home_pose]}, "
             f"Dependencies: {[e.value for e in self.supports_dependency_type]}, "
         )
 
@@ -70,4 +73,5 @@ class BasePlanner(ABC):
             and problem_spec.dynamics in caps.supports_dependency_type
             and problem_spec.dependency in caps.supports_dependency_type
             and problem_spec.manipulation in caps.supports_manipulation
+            and problem_spec.home_pose in caps.supports_safe_home_pose
         )

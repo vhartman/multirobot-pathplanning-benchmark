@@ -1511,7 +1511,7 @@ class DependencyType(Enum):
     UNASSIGNED = "unassigned"
 
 
-class HomeSafePoseType(Enum):
+class SafePoseType(Enum):
     HAS_NO_SAFE_HOME_POSE = "has_no_home_pose"
     HAS_SAFE_HOME_POSE = "has_home_pose"
 
@@ -1526,6 +1526,7 @@ class ProblemSpec:
         dependency: DependencyType,
         dynamics: DynamicsType,
         goals: GoalType,
+        home_pose: SafePoseType
     ):
         self.agent_type = agent_type
         self.constraints = constraints
@@ -1533,6 +1534,7 @@ class ProblemSpec:
         self.dependency = dependency
         self.dynamics = dynamics
         self.goal = goals
+        self.home_pose = home_pose
 
     def __repr__(self):
         return (
@@ -1540,6 +1542,7 @@ class ProblemSpec:
             f"Constraints: {self.constraints.value}, "
             f"Env: {self.manipulation.value}, "
             f"Goals: {self.goal.value}, "
+            f"SafePose: {self.home_pose}, "
             f"Dependencies: {self.dependency.value}, "
             f"Dynamics: {self.dynamics.value}, "
         )
@@ -1548,8 +1551,10 @@ class ProblemSpec:
 # TODO: split into env + problem specification
 class BaseProblem(ABC):
     """
-    ABstract base class for the planning problems.
+    Abstract base class for the planning problems.
     """
+
+    # spec: ProblemSpec
 
     robots: List[str]
     robot_dims: Dict[str, int]
