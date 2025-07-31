@@ -21,6 +21,14 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     GoalSet,
     GoalRegion,
     ConditionalGoal,
+    ProblemSpec,
+    AgentType,
+    GoalType,
+    ConstraintType,
+    DynamicsType,
+    ManipulationType,
+    DependencyType,
+    SafePoseType,
 )
 from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
@@ -118,6 +126,9 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
+        self.spec.home_pose = SafePoseType.HAS_NO_SAFE_HOME_POSE
+        self.spec.manipulation = ManipulationType.STATIC
+
 
 # very simple task:
 # make the robots go back and forth.
@@ -174,6 +185,8 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
         self.collision_tolerance = 0.001
 
         BaseModeLogic.__init__(self)
+
+        self.spec.manipulation = ManipulationType.STATIC
 
 
 # for the case of the dependency graph, the optimal solution should be 4.1
@@ -234,6 +247,9 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
         self.collision_tolerance = 0.001
 
         BaseModeLogic.__init__(self)
+
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.manipulation = ManipulationType.STATIC
 
 
 # trivial environment for planing
@@ -309,6 +325,8 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
         BaseModeLogic.__init__(self)
 
+        self.spec.manipulation = ManipulationType.STATIC
+
 
 class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
     def __init__(self):
@@ -359,6 +377,8 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
+
+        self.spec.manipulation = ManipulationType.STATIC
 
 
 # best max-cost sol: 3.41
@@ -509,6 +529,8 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
         self.collision_tolerance = 0.01
 
         self.prev_mode = self.start_mode
+
+        self.spec.dependency = DependencyType.UNORDERED
 
 
 # best cost found for max-cost is 17.64
@@ -715,6 +737,8 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
+        self.spec.dependency = DependencyType.UNORDERED
+
 
 # best solution found with sum-cost: 49.48
 # best solution found with max-cost: xx
@@ -762,6 +786,8 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
+        self.spec.manipulation = ManipulationType.STATIC
+
 
 # best solution found with sum-cost: 14.08 (independent of rotation)
 # best solution found with max-cost: 9.7 (independent of rotation)
@@ -796,6 +822,8 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.005
 
+        self.spec.manipulation = ManipulationType.STATIC
+
 
 # best solution found with sum-cost: xx (independent of rotation)
 # best solution found with max-cost: xx (independent of rotation)
@@ -829,6 +857,9 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.spec.manipulation = ManipulationType.STATIC
+
 
 class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
@@ -861,6 +892,10 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.spec.manipulation = ManipulationType.STATIC
+        self.spec.dependency = DependencyType.UNORDERED
 
 
 class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
@@ -896,6 +931,10 @@ class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.spec.manipulation = ManipulationType.STATIC
+        self.spec.dependency = DependencyType.UNORDERED
 
 
 # best sum-cost: 12.9
@@ -955,6 +994,8 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
+        self.spec.manipulation = ManipulationType.STATIC
+
 
 class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
@@ -1011,6 +1052,9 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env
         print(self._terminal_task_ids)
 
         self.collision_tolerance = 0.01
+
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.manipulation = ManipulationType.STATIC
 
 
 ##############################
@@ -1077,6 +1121,8 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
+        self.spec.manipulation = ManipulationType.STATIC
+
 
 class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
     def __init__(
@@ -1123,6 +1169,8 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
+        self.spec.manipulation = ManipulationType.STATIC
+
 
 # goals are poses
 class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
@@ -1165,6 +1213,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
+        self.spec.manipulation = ManipulationType.STATIC
 
 class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes: int = 9):
@@ -1894,6 +1943,8 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
         self.collision_tolerance = 0.01
         # self.collision_resolution = 0.1
 
+        self.spec.dependency = DependencyType.UNORDERED
+
 
 # best cost found (max): 21.45
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
@@ -2002,6 +2053,8 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
 
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.005
+
+        self.spec.dependency = DependencyType.UNORDERED
 
 
 # mobile manip
@@ -2120,6 +2173,9 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
 
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.01
+
+        self.spec.dependency = DependencyType.UNORDERED
+
 
 def check_all_modes():
     all_envs = [

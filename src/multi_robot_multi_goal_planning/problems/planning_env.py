@@ -1293,6 +1293,12 @@ class DependencyGraphMixin(BaseModeLogic):
 
         return True
 
+    def get_sequence(self) -> List[int]:
+        possible_named_sequence = self.graph.get_build_order()
+        possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
+
+        return possible_id_sequence
+
     def make_start_mode(self) -> Mode:
         possible_named_sequence = self.graph.get_build_order()
         possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
@@ -1518,33 +1524,23 @@ class SafePoseType(Enum):
 
 @dataclass
 class ProblemSpec:
-    def __init__(
-        self,
-        agent_type: AgentType,
-        constraints: ConstraintType,  # Note: can use a set for multiple constraints
-        manipulation: ManipulationType,
-        dependency: DependencyType,
-        dynamics: DynamicsType,
-        goals: GoalType,
-        home_pose: SafePoseType
-    ):
-        self.agent_type = agent_type
-        self.constraints = constraints
-        self.manipulation = manipulation
-        self.dependency = dependency
-        self.dynamics = dynamics
-        self.goal = goals
-        self.home_pose = home_pose
+    agent_type: AgentType
+    constraints: ConstraintType
+    manipulation: ManipulationType
+    dependency: DependencyType
+    dynamics: DynamicsType
+    goals: GoalType
+    home_pose: SafePoseType
 
     def __repr__(self):
         return (
             f"ProblemSpec(Agent: {self.agent_type.value}, "
             f"Constraints: {self.constraints.value}, "
             f"Env: {self.manipulation.value}, "
-            f"Goals: {self.goal.value}, "
+            f"Goals: {self.goals.value}, "
             f"SafePose: {self.home_pose}, "
             f"Dependencies: {self.dependency.value}, "
-            f"Dynamics: {self.dynamics.value}, "
+            f"Dynamics: {self.dynamics.value})"
         )
 
 
@@ -1554,7 +1550,7 @@ class BaseProblem(ABC):
     Abstract base class for the planning problems.
     """
 
-    # spec: ProblemSpec
+    spec: ProblemSpec
 
     robots: List[str]
     robot_dims: Dict[str, int]

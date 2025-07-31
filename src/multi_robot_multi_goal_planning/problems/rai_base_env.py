@@ -11,6 +11,14 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
     State,
     Task,
+    ProblemSpec,
+    AgentType,
+    GoalType,
+    ConstraintType,
+    DynamicsType,
+    ManipulationType,
+    DependencyType,
+    SafePoseType,
 )
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
@@ -295,6 +303,16 @@ class rai_env(BaseProblem):
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
 
+        self.spec = ProblemSpec(
+            agent_type=AgentType.MULTI_AGENT,
+            constraints=ConstraintType.UNCONSTRAINED,
+            manipulation=ManipulationType.MANIPULATION,
+            dependency=DependencyType.FULLY_ORDERED,
+            dynamics=DynamicsType.GEOMETRIC,
+            goals=GoalType.MULTI_GOAL,
+            home_pose=SafePoseType.HAS_NO_SAFE_HOME_POSE,
+        )
+
     def __deepcopy__(self, memo):
         # Save the C attribute
         C = self.C
@@ -446,7 +464,12 @@ class rai_env(BaseProblem):
         return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode | None = None, collision_tolerance: float | None = None, set_mode: bool = True
+        self,
+        r: str,
+        q: NDArray,
+        m: Mode | None = None,
+        collision_tolerance: float | None = None,
+        set_mode: bool = True,
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -488,10 +511,9 @@ class rai_env(BaseProblem):
                     task = self.tasks[task_idx]
                     if c[2] < 0 and (robot in c[0] or robot in c[1]):
                         involves_relevant_robot = True
-                    elif c[2] < 0 and(c[0] in task.frames or c[1] in task.frames):
+                    elif c[2] < 0 and (c[0] in task.frames or c[1] in task.frames):
                         involves_relevant_object = True
-                
-                
+
                 if not involves_relevant_robot and not involves_relevant_object:
                     # print("A")
                     # print(c)
@@ -566,7 +588,9 @@ class rai_env(BaseProblem):
             # print(i / (N-1))
             q = q1_state + dir * (i)
             # q_conf = NpConfiguration(q, q1.array_slice)
-            if not is_collision_free(q, m, collision_tolerance=tolerance, set_mode=set_mode):
+            if not is_collision_free(
+                q, m, collision_tolerance=tolerance, set_mode=set_mode
+            ):
                 # print('coll')
                 return False
             set_mode = False
@@ -587,11 +611,11 @@ class rai_env(BaseProblem):
         for frame in self.C.getFrames():
             if "obj" in frame.name:
                 movable_objects.append(frame.name)
-                
+
                 relative_pose = np.round(frame.getRelativeTransform(), 3)
-                relative_pose[abs(relative_pose) < 1e-6] = 0.
+                relative_pose[abs(relative_pose) < 1e-6] = 0.0
                 relative_pose.flags.writeable = False
-                
+
                 sg[frame.name] = (
                     frame.getParent().name,
                     relative_pose.tobytes(),
@@ -656,7 +680,11 @@ class rai_env(BaseProblem):
             next_mode = mode_sequence[i + 1]
 
             for j in range(2):
-                if mode.task_ids[j] in [1, 3, 5, 7, 11, 9] and next_mode.task_ids[j] == 13 and m.task_ids == [13, 13]:
+                if (
+                    mode.task_ids[j] in [1, 3, 5, 7, 11, 9]
+                    and next_mode.task_ids[j] == 13
+                    and m.task_ids == [13, 13]
+                ):
                     show_stuff = True
 
             active_task = self.get_active_task(mode, next_mode.task_ids)
@@ -683,7 +711,7 @@ class rai_env(BaseProblem):
             # if m.task_ids == [9, 9]:
             #     print(mode, next_mode, active_task.name, mode_switching_robots, [self.tasks[i].name for i in next_mode.task_ids])
             #     tmp.view(True)
-            
+
             if self.tasks[prev_mode_index].type is not None:
                 if self.tasks[prev_mode_index].type == "goto":
                     pass

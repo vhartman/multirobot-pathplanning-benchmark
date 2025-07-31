@@ -20,6 +20,8 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
     State,
+    SafePoseType,
+    DependencyType
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
@@ -27,7 +29,6 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.configuration import (
-    NpConfiguration,
     batch_config_dist,
     config_dist,
 )
@@ -1291,7 +1292,14 @@ class PrioritizedPlanner(BasePlanner):
 
         # get a sequence for the tasks from the environment
         # this is a constraint that this planner has, we need to have a sequence for planning
-        sequence = env.get_task_sequence()
+
+        if env.spec.home_pose != SafePoseType.HAS_SAFE_HOME_POSE:
+            raise ValueError
+        
+        if env.spec.dependency != DependencyType.FULLY_ORDERED and env.spec.dependency != DependencyType.UNORDERED:
+            raise ValueError
+
+        sequence = env.get_sequence()
 
         computation_start_time = time.time()
 

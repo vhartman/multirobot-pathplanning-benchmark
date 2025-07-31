@@ -61,7 +61,7 @@ def main():
         "--planner",
         choices=[
             "composite_prm",
-            # "prioritized",
+            "prioritized",
             "rrt_star",
             "birrt_star",
             "aitstar",
@@ -192,8 +192,8 @@ def main():
 
         planner = EITstar(env, config=config)
 
-    # elif args.planner == "prioritized":
-    #     path, info = prioritized_planning(env)
+    elif args.planner == "prioritized":
+        planner = PrioritizedPlanner(env)
     
     path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
 
