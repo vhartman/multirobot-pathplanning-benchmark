@@ -76,7 +76,7 @@
         "p_stay": 0.0,
         "p_uniform": 0.5,
         "shortcutting": true,
-        "mode_sampling": 1,
+        "init_mode_sampling_type": "greedy",
         "locally_informed_sampling": true
       }
     },
@@ -91,7 +91,7 @@
         "p_stay": 0.0,
         "p_uniform": 0.5,
         "shortcutting": true,
-        "mode_sampling": 1,
+        "init_mode_sampling_type": "greedy",
         "locally_informed_sampling": true
       }
     },
@@ -106,7 +106,7 @@
         "p_stay": 0.0,
         "p_uniform": 0.5,
         "shortcutting": true,
-        "mode_sampling": 1,
+        "init_mode_sampling_type": "greedy",
         "locally_informed_sampling": true
       }
     }

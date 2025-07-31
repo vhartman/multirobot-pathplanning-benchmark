@@ -19,7 +19,7 @@
         "p_stay": 0.0,
         "p_uniform": 0.2,
         "shortcutting": true,
-        "mode_sampling": 1, 
+        "init_mode_sampling_type": "greedy", 
         "locally_informed_sampling": true,
         "informed_batch_size": 300
 
@@ -36,7 +36,7 @@
         "p_stay": 0.0,
         "p_uniform": 0.2,
         "shortcutting": false,
-        "mode_sampling": 1, 
+        "init_mode_sampling_type": "greedy", 
         "locally_informed_sampling": true,
         "informed_batch_size": 300
 
@@ -53,7 +53,7 @@
         "p_stay": 0.0,
         "p_uniform": 0.2,
         "shortcutting": true,
-        "mode_sampling": 1, 
+        "init_mode_sampling_type": "greedy", 
         "locally_informed_sampling": false,
         "informed_batch_size": 300
 
@@ -70,7 +70,7 @@
         "p_stay": 0.0,
         "p_uniform": 0.2,
         "shortcutting": false,
-        "mode_sampling": 1, 
+        "init_mode_sampling_type": "greedy", 
         "locally_informed_sampling": false,
         "informed_batch_size": 300
 

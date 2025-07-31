@@ -9,6 +9,30 @@
   "optimize": true,
   "planners": [
     {
+      "name": "birrtstar",
+      "type": "birrtstar",
+      "options": {}
+    },
+    {
+      "name": "birrtstar uniform",
+      "type": "birrtstar",
+      "options": {
+        "init_mode_sampling_type": "uniform_reached"
+      }
+    },
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {}
+    },
+    {
+      "name": "rrtstar uniform",
+      "type": "rrtstar",
+      "options": {
+        "init_mode_sampling_type": "uniform_reached"
+      }
+    },
+    {
       "name": "eitstar",
       "type": "eitstar",
       "options": {}
@@ -42,30 +66,6 @@
       "type": "aitstar",
       "options": {
         "init_mode_sampling_type": "uniform"
-      }
-    },
-    {
-      "name": "birrtstar",
-      "type": "birrtstar",
-      "options": {}
-    },
-    {
-      "name": "birrtstar uniform",
-      "type": "birrtstar",
-      "options": {
-        "mode_sampling": null
-      }
-    },
-    {
-      "name": "rrtstar",
-      "type": "rrtstar",
-      "options": {}
-    },
-    {
-      "name": "rrtstar uniform",
-      "type": "rrtstar",
-      "options": {
-        "mode_sampling": null
       }
     }
   ]

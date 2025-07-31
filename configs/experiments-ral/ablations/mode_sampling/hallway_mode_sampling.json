@@ -55,7 +55,7 @@
       "name": "birrtstar uniform",
       "type": "birrtstar",
       "options": {
-        "mode_sampling": null
+        "init_mode_sampling_type": "uniform_reached"
       }
     },
     {
@@ -67,7 +67,7 @@
       "name": "rrtstar uniform",
       "type": "rrtstar",
       "options": {
-        "mode_sampling": null
+        "init_mode_sampling_type": "uniform_reached"
       }
     }
   ]

@@ -1539,6 +1539,7 @@ class CompositePRM(BasePlanner):
                     num_nodes += len(graph.transition_nodes[m])
                 w.append(1 / max(1, num_nodes))
             return random.choices(tuple(reached_modes), weights=w)[0]
+        
         return random.choice(reached_modes)
 
     def _sample_valid_uniform_batch(

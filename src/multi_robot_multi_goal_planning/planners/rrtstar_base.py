@@ -1029,7 +1029,8 @@ class BaseRRTConfig:
     p_stay: float = 0.0
     p_uniform: float = 0.2
     shortcutting: bool = True
-    mode_sampling: Optional[Union[int, float]] = 1
+    init_mode_sampling_type: str = "frontier"
+    frontier_mode_sampling_probability: float = 0.98
     sample_near_path: bool = False
     shortcutting_dim_version: int = 2
     shortcutting_robot_version: int = 1
@@ -1984,25 +1985,29 @@ class BaseRRTstar(BasePlanner):
             Mode: Sampled mode based on the mode sampling strategy.
         """
 
+        mode_sampling_type = self.config.init_mode_sampling_type
+        if self.operation.init_sol:
+            mode_sampling_type = "uniform_reached"
+
         num_modes = len(self.modes)
         if num_modes == 1:
             return random.choice(self.modes)
         # if self.operation.task_sequence == [] and self.config.mode_sampling != 0:
-        elif self.operation.init_sol and self.config.mode_sampling != 0:
-            p = [1 / num_modes] * num_modes
+        # elif self.operation.init_sol and mode_sampling_type != "weighted":
+        #     p = [1 / num_modes] * num_modes
 
-        elif self.config.mode_sampling is None:
+        elif mode_sampling_type == "uniform_reached":# is None:
             # equally (= mode uniformly)
             return random.choice(self.modes)
 
-        elif self.config.mode_sampling == 1:
+        elif mode_sampling_type == "greedy": # 1:
             # greedy (only latest mode is selected until initial paths are found and then it continues with equally)
             probability = [0] * (num_modes)
             probability[-1] = 1
 
             p = probability
 
-        elif self.config.mode_sampling == 0:
+        elif mode_sampling_type == "weighted": #0:
             # Uniformly
             total_nodes = sum(
                 self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes
@@ -2015,27 +2020,8 @@ class BaseRRTstar(BasePlanner):
             total_inverse = sum(inverse_probabilities)
             p = [inv_prob / total_inverse for inv_prob in inverse_probabilities]
 
+        elif mode_sampling_type == "frontier":
         # else:
-        #     # manually set
-        #     total_nodes = sum(self.trees[mode].get_number_of_nodes_in_tree() for mode in self.modes[:-1])
-        #     # Calculate probabilities inversely proportional to node counts
-        #     inverse_probabilities = [
-        #         1 - (len(self.trees[mode].subtree) / total_nodes)
-        #         for mode in self.modes[:-1]
-        #     ]
-
-        #     # Normalize the probabilities of all modes except the last one
-        #     remaining_probability = 1-self.config.mode_sampling
-        #     total_inverse = sum(inverse_probabilities)
-        #     if total_inverse == 0:
-        #         p = [1-self.config.mode_sampling, self.config.mode_sampling]
-        #     else:
-        #         p =  [
-        #             (inv_prob / total_inverse) * remaining_probability
-        #             for inv_prob in inverse_probabilities
-        #         ] + [self.config.mode_sampling]
-
-        else:
             # not working for unordered envs
             frontier_modes = set()
 
@@ -2043,7 +2029,8 @@ class BaseRRTstar(BasePlanner):
                 if not m.next_modes:
                     frontier_modes.add(m)
 
-            p_frontier = self.config.mode_sampling
+            p_frontier = self.config.frontier_mode_sampling_probability
+            # p_frontier = self.config.mode_sampling
             p_remaining = 1 - p_frontier
 
             total_nodes = sum(
