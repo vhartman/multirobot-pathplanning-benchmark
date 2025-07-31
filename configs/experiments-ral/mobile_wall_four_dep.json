@@ -19,7 +19,7 @@
       "options": {}
     },
     {
-      "name": "locally_informed_prm_shortcutting",
+      "name": "prm",
       "type": "prm",
       "options": {}
     },

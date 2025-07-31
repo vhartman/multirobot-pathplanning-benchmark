@@ -63,7 +63,7 @@
       }
     },
     {
-      "name": "locally_informed_prm",
+      "name": "prm",
       "type": "prm",
       "options": {
         "shortcutting": false
