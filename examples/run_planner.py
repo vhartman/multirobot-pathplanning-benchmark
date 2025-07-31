@@ -28,9 +28,6 @@ from multi_robot_multi_goal_planning.planners.shortcutting import (
     single_mode_shortcut,
     robot_mode_shortcut,
 )
-from multi_robot_multi_goal_planning.planners.tensor_prm_planner import (
-    tensor_prm_planner,
-)
 from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
 from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
     BidirectionalRRTstar,
@@ -64,7 +61,6 @@ def main():
         "--planner",
         choices=[
             "composite_prm",
-            # "tensor_prm",
             # "prioritized",
             "rrt_star",
             "birrt_star",
