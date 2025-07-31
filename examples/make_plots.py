@@ -136,20 +136,17 @@ report_colors = {
 planner_name_to_color = {
     "informed_prm_k_nearest": "orange",
     "informed_prm_radius": "tab:blue",
-    "globally_informed_prm": "magenta",
     "locally_informed_shortcutting_prm": "tab:blue",
     "rrtstar_global": "tab:brown",
 
-    "globally_informed_prm_no_shortcutting": "tab:blue",
-
     "rrtstar": report_colors["rrt"],
-    "rrtstar_global_sampling": "tab:red",
+    "rrtstar_global_sampling": report_colors["rrt_ablation"],
     "rrtstar_no_shortcutting": report_colors["rrt_ablation"],
     "rrtstar uniform": report_colors["rrt_ablation"],
     "rrtstar without": report_colors["rrt_ablation"],
 
     "birrtstar": report_colors["birrt"],
-    "birrtstar_global_sampling": "black",
+    "birrtstar_global_sampling": report_colors["birrt_ablation"],
     "birrtstar_no_shortcutting": report_colors["birrt_ablation"],
     "birrtstar uniform": report_colors["birrt_ablation"],
     "birrtstar without": report_colors["birrt_ablation"], 
@@ -160,19 +157,22 @@ planner_name_to_color = {
     "eitstar uniform": report_colors["eit_ablation"],
     "eitstar_no_shortcutting": report_colors["eit_ablation"],
     "eitstar without": report_colors["eit_ablation"],
+    "eitstar_global_sampling": report_colors["eit_ablation"],
 
     "aitstar": report_colors["ait"],
     "aitstar same": report_colors["ait_ablation"],
     "long_horizon aitstar": report_colors["rhait"],
     "aitstar uniform": report_colors["ait_ablation"],
     "aitstar_no_shortcutting": report_colors["ait_ablation"],
+    "aitstar_global_sampling": report_colors["ait_ablation"],
     "aitstar without": report_colors["ait_ablation"],
 
     "prm": report_colors["prm"],
-    "locally_informed_prm_no_shortcutting": report_colors["prm_ablation"],
-    "locally_informed_prm_shortcutting same": report_colors["prm_ablation"],
-    "locally_informed_prm_shortcutting uniform": report_colors["prm_ablation"],
-    "locally_informed_prm_shortcutting without": report_colors["prm_ablation"],    
+    "prm_no_shortcutting": report_colors["prm_ablation"],
+    "prm same": report_colors["prm_ablation"],
+    "prm uniform": report_colors["prm_ablation"],
+    "prm without": report_colors["prm_ablation"],    
+    "globally_informed_prm": report_colors["prm"],
 }
 
 planner_name_to_style = {
@@ -186,21 +186,23 @@ planner_name_to_style = {
     "birrtstar uniform":"--",
     "birrtstar without":"--",
 
-    "globally_informed_prm_no_shortcutting": "--",
-    "locally_informed_prm_no_shortcutting": ":",
-    "locally_informed_prm_shortcutting same":"--",
-    "locally_informed_prm_shortcutting uniform":"--",
-    "locally_informed_prm_shortcutting without":"--",
+    "globally_informed_prm": "--",
+    "prm_no_shortcutting": ":",
+    "prm same":"--",
+    "prm uniform":"--",
+    "prm without":"--",
 
     "aitstar same": "--",
     "aitstar_no_shortcutting": ":",
     "aitstar uniform": "--",
     "aitstar without": "--",
+    "aitstar_global_sampling": ":",
 
     "eitstar_no_shortcutting": ":",
     "eitstar same": "--",
     "eitstar uniform": "--",
     "eitstar without": "--",
+    "eitstar_global_sampling": ":",
 }
 
 
@@ -255,6 +257,10 @@ def make_cost_plots(
         all_initial_solution_times = []
         all_initial_solution_costs = []
 
+        if len(results) == 0:
+            print(f"Skipping {planner_name} since no solutions are available")
+            continue
+
         for single_run_result in results:
             solution_times = single_run_result["times"]
             solution_costs = single_run_result["costs"]
@@ -277,16 +283,10 @@ def make_cost_plots(
         lb_initial_solution_time = sorted_solution_times[lb_index]
         ub_initial_solution_time = sorted_solution_times[ub_index - 1]
 
-        # lb_initial_solution_time = np.quantile(all_initial_solution_times, 0.1)
-        # ub_initial_solution_time = np.quantile(all_initial_solution_times, 0.9)
-
         sorted_solution_costs = np.sort(all_initial_solution_costs)
 
         lb_initial_solution_cost = sorted_solution_costs[lb_index]
         ub_initial_solution_cost = sorted_solution_costs[ub_index - 1]
-
-        # lb_initial_solution_cost = np.quantile(all_initial_solution_costs, 0.1)
-        # ub_initial_solution_cost = np.quantile(all_initial_solution_costs, 0.9)
 
         if planner_name in planner_name_to_color:
             color = planner_name_to_color[planner_name]
@@ -327,6 +327,10 @@ def make_cost_plots(
 
     for planner_name, results in all_experiment_data.items():
         print(f"Constructing cost curve for {planner_name}")
+        if len(results) == 0:
+            print(f"Skipping {planner_name} since no solutions are available")
+            continue
+        
         all_solution_costs = []
 
         max_planner_solution_time = 0
@@ -487,6 +491,10 @@ def make_success_plot(
     len_results = config["num_runs"]
 
     for planner_name, results in all_experiment_data.items():
+        if len(results) == 0:
+            print(f"Skipping {planner_name} since no solutions are available")
+            continue
+        
         all_solution_costs = []
 
         for single_run_result in results:

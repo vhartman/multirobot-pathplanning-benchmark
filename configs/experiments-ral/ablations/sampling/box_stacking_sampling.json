@@ -3,7 +3,7 @@
   "environment": "box_stacking_dep",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 500,
+  "max_planning_time": 100,
   "num_runs": 50,
   "seed": 2,
   "optimize": true,
@@ -25,7 +25,7 @@
       }
     },
     {
-      "name": "globally_informed_prm_no_shortcutting",
+      "name": "globally_informed_prm",
       "type": "prm",
       "options": {
         "locally_informed_sampling": false,

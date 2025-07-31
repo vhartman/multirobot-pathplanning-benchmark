@@ -50,7 +50,7 @@
       "options": {}
     },
     {
-      "name": "locally_informed_prm_shortcutting uniform",
+      "name": "prm uniform",
       "type": "prm",
       "options": {
         "init_mode_sampling_type": "uniform"

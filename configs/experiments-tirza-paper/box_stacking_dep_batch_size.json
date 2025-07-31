@@ -113,7 +113,7 @@
       }
     },
     {
-      "name": "locally_informed_prm_shortcutting same",
+      "name": "prm same",
       "type": "prm",
       "options": {
         "batch_size": 150,

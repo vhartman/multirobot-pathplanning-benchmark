@@ -43,7 +43,7 @@
       }
     },
     {
-      "name": "globally_informed_prm_no_shortcutting",
+      "name": "globally_informed_prm",
       "type": "prm",
       "options": {
         "batch_size": 200,

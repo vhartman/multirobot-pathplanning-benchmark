@@ -87,7 +87,7 @@
       }
     },
     {
-      "name": "locally_informed_prm_shortcutting uniform",
+      "name": "prm uniform",
       "type": "prm",
       "options": {
         "batch_size": 150,
