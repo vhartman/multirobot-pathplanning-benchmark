@@ -32,7 +32,7 @@
         "informed_batch_size": 300,
         "informed_transition_batch_size": 250,
         "path_batch_size": 0,
-        "distance_function": "max_euclidean",
+        "distance_metric": "max_euclidean",
         "connection_strategy": "radius",
         "locally_informed_sampling": true,
         "informed_sampling": true,

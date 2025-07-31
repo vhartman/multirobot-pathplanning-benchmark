@@ -1511,6 +1511,11 @@ class DependencyType(Enum):
     UNASSIGNED = "unassigned"
 
 
+class HomeSafePoseType(Enum):
+    HAS_NO_SAFE_HOME_POSE = "has_no_home_pose"
+    HAS_SAFE_HOME_POSE = "has_home_pose"
+
+
 @dataclass
 class ProblemSpec:
     def __init__(

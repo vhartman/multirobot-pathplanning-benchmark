@@ -14,7 +14,7 @@
       "options": {
         "batch_size": "",
         "transition_batch_size": "",
-        "distance_function": "euclidean",
+        "distance_metric": "euclidean",
         "connection_strategy": "radius",
         "informed_sampling": true,
         "sample_near_path": false
@@ -26,7 +26,7 @@
       "options": {
         "batch_size": "",
         "transition_batch_size": "",
-        "distance_function": "euclidean",
+        "distance_metric": "euclidean",
         "connection_strategy": "radius",
         "informed_sampling": false,
         "sample_near_path": false
@@ -38,7 +38,7 @@
       "options": {
         "batch_size": "",
         "transition_batch_size": "",
-        "distance_function": "euclidean",
+        "distance_metric": "euclidean",
         "connection_strategy": "radius",
         "informed_sampling": false,
         "sample_near_path": true

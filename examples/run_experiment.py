@@ -30,7 +30,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     IterationTerminationCondition,
 )
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
-    prioritized_planning,
+    PrioritizedPlanner,
 )
 from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
     CompositePRM,
@@ -166,7 +166,7 @@ def setup_planner(
             options = planner_config["options"]
             prm_config = CompositePRMConfig(
                 # Map dictionary keys to dataclass attributes
-                distance_metric=options["distance_function"],
+                distance_metric=options["distance_metric"],
                 try_sampling_around_path=options["sample_near_path"],
                 use_k_nearest=options["connection_strategy"] == "k_nearest",
                 try_informed_sampling=options["informed_sampling"],
@@ -264,7 +264,7 @@ def setup_planner(
             options = planner_config["options"]
             aitstar_config = BaseITConfig(
                 init_mode_sampling_type=options["init_mode_sampling_type"],
-                distance_metric=options["distance_function"],
+                distance_metric=options["distance_metric"],
                 try_sampling_around_path=options["sample_near_path"],
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],
@@ -303,7 +303,7 @@ def setup_planner(
             options = planner_config["options"]
             eitstar_config = BaseITConfig(
                 init_mode_sampling_type=options["init_mode_sampling_type"],
-                distance_metric=options["distance_function"],
+                distance_metric=options["distance_metric"],
                 try_sampling_around_path=options["sample_near_path"],
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],

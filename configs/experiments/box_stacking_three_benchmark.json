@@ -1,11 +1,11 @@
 {
   "experiment_name": "",
-  "environment": "random_2d",
+  "environment": "box_stacking_three_robots",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 500,
+  "max_planning_time": 700,
   "optimize": true,
-  "num_runs": 50,
+  "num_runs": 10,
   "seed": 0,
   "planners": [
     {
@@ -15,35 +15,16 @@
         "informed_sampling": true,
         "informed_sampling_version": 6,
         "distance_metric": "max_euclidean",
-        "p_goal": 0.4,
+        "p_goal": 0.1,
         "p_stay": 0.0,
         "p_uniform": 0.2,
         "shortcutting": true,
         "mode_sampling": 1,
-        "locally_informed_sampling": true,
-        "informed_batch_size": 300
+        "locally_informed_sampling": true
       }
     },
     {
-      "name": "birrtstar",
-      "type": "birrtstar",
-      "options": {
-        "informed_sampling": true,
-        "informed_sampling_version": 6,
-        "distance_metric": "max_euclidean",
-        "p_goal": 0.4,
-        "p_stay": 0.0,
-        "p_uniform": 0.2,
-        "shortcutting": true,
-        "mode_sampling": 1,
-        "transition_nodes": 50,
-        "birrtstar_version": 2,
-        "locally_informed_sampling": true,
-        "informed_batch_size": 300
-      }
-    },
-    {
-      "name": "locally_informed_shortcutting_prm",
+      "name": "locally_informed_prm_shortcutting",
       "type": "prm",
       "options": {
         "batch_size": 200,

@@ -18,7 +18,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 )
 
 from multi_robot_multi_goal_planning.planners.prioritized_planner import (
-    prioritized_planning,
+    PrioritizedPlanner,
 )
 from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
     CompositePRMConfig,

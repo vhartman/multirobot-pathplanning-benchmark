@@ -2,7 +2,15 @@ import numpy as np
 import random
 import time
 
-from typing import List, Dict
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+)
 from numpy.typing import NDArray
 
 from collections import namedtuple
@@ -10,7 +18,11 @@ import copy
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
-    SingleGoal,
+    Mode,
+    State,
+)
+from multi_robot_multi_goal_planning.planners.termination_conditions import (
+    PlannerTerminationCondition,
 )
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
@@ -19,6 +31,8 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     batch_config_dist,
     config_dist,
 )
+from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
+
 from multi_robot_multi_goal_planning.problems.util import *
 
 import matplotlib.pyplot as plt
@@ -123,8 +137,6 @@ class MultiRobotPath:
             self.paths[r].append(subpath)
 
         # constructing the mode-sequence:
-        
-        
 
     def add_next_task_to_final_paths(self, mode):
         for i, r in enumerate(self.robots):
@@ -1223,201 +1235,222 @@ def plan_robots_in_dyn_env(
     return separate_paths
 
 
-def prioritized_planning(env: BaseProblem):
-    q0 = env.get_start_pos()
-    m0 = env.get_start_mode()
+class PrioritizedPlanner(BasePlanner):
+    def __init__(
+        self,
+        env: BaseProblem,
+    ):
+        self.env = env
 
-    conf_type = type(env.get_start_pos())
+    def plan(
+        self,
+        ptc: PlannerTerminationCondition,
+        optimize: bool = True,
+    ) -> Tuple[List[State] | None, Dict[str, Any]]:
+        env = self.env
 
-    robots = env.robots
+        q0 = env.get_start_pos()
+        m0 = env.get_start_mode()
 
-    robot_paths = MultiRobotPath(q0, m0, robots)
+        conf_type = type(env.get_start_pos())
 
-    def sample_non_blocking(current_robots, next_robots, next_goal, mode):
-        next_robots_joint_names = []
-        for r in next_robots:
-            next_robots_joint_names.extend(get_robot_joints(env.C, r))
+        robots = env.robots
 
-        curr_robots_joint_names = []
-        for r in current_robots:
-            curr_robots_joint_names.extend(get_robot_joints(env.C, r))
+        robot_paths = MultiRobotPath(q0, m0, robots)
 
-        lims = env.limits[
-            :, env.robot_idx[env.robots[env.robots.index(next_robots[0])]]
-        ]
+        # def sample_non_blocking(current_robots, next_robots, next_goal, mode):
+        #     next_robots_joint_names = []
+        #     for r in next_robots:
+        #         next_robots_joint_names.extend(get_robot_joints(env.C, r))
+
+        #     curr_robots_joint_names = []
+        #     for r in current_robots:
+        #         curr_robots_joint_names.extend(get_robot_joints(env.C, r))
+
+        #     lims = env.limits[
+        #         :, env.robot_idx[env.robots[env.robots.index(next_robots[0])]]
+        #     ]
+
+        #     while True:
+        #         qg = next_goal.sample(mode)
+        #         env.C.setJointState(qg, next_robots_joint_names)
+
+        #         q = (
+        #             np.random.rand(env.robot_dims[next_robots[0]])
+        #             * (lims[1, :] - lims[0, :])
+        #             + lims[0, :]
+        #         )
+        #         env.C.setJointState(q, curr_robots_joint_names)
+
+        #         if env.is_collision_free(None, mode):
+        #             return q
+
+        #         # env.C.view(True)
+
+        seq_index = 0
+
+        # get a sequence for the tasks from the environment
+        # this is a constraint that this planner has, we need to have a sequence for planning
+        sequence = env.get_task_sequence()
+
+        computation_start_time = time.time()
 
         while True:
-            qg = next_goal.sample(mode)
-            env.C.setJointState(qg, next_robots_joint_names)
+            # get next active task
+            task_index = sequence[seq_index]
+            task = env.tasks[task_index]
+            involved_robots = task.robots
 
-            q = (
-                np.random.rand(env.robot_dims[next_robots[0]])
-                * (lims[1, :] - lims[0, :])
-                + lims[0, :]
-            )
-            env.C.setJointState(q, curr_robots_joint_names)
+            print("task name", task.name)
+            print("robots:", involved_robots)
 
-            if env.is_collision_free(None, mode):
-                return q
+            # remove escape path from plan
+            robot_paths.remove_final_escape_path(involved_robots)
 
-            # env.C.view(True)
+            # for k,v in robot_paths.paths.items():
+            #     for p in v:
+            #         print(p.path.time)
+            #         print(p.path.path)
 
-    seq_index = 0
-
-    computation_start_time = time.time()
-
-    while True:
-        # get next active task
-        task_index = env.sequence[seq_index]
-        task = env.tasks[task_index]
-        involved_robots = task.robots
-
-        print("task name", task.name)
-        print("robots:", involved_robots)
-
-        # remove escape path from plan
-        robot_paths.remove_final_escape_path(involved_robots)
-
-        # for k,v in robot_paths.paths.items():
-        #     for p in v:
-        #         print(p.path.time)
-        #         print(p.path.path)
-
-        # get current robot position and last planned time
-        print("Collecting start times")
-        end_times = robot_paths.get_end_times(involved_robots)
-        start_time = min([t for _, t in end_times.items()])
-        print("Collecting start poses")
-        start_pose = robot_paths.get_robot_poses_at_time(involved_robots, start_time)
-
-        # sample goal from the task
-        task_goal = task.goal
-
-        # figure out when this task can end at the earliest
-        earliest_end_time = robot_paths.get_final_non_escape_time()
-
-        # plan actual task
-        path = plan_robots_in_dyn_env(
-            env,
-            robot_paths,
-            involved_robots,
-            task_index,
-            start_pose,
-            end_times,
-            task_goal,
-            earliest_end_time,
-        )
-
-        if path is None:
-            print("Failed")
-            return
-
-        # add plan to overall path
-        prev_mode = robot_paths.get_mode_at_time(
-            robot_paths.get_final_non_escape_time()
-        )
-        curr_mode = prev_mode.copy()
-        for i, r in enumerate(involved_robots):
-            curr_mode[i] = task_index
-        next_modes = env.get_next_modes(None, curr_mode)
-        assert len(next_modes) == 1
-        next_mode = next_modes[0]
-
-        next_task_indices = {}
-        for i, r in enumerate(involved_robots):
-            next_task_indices[r] = next_mode[i]
-
-        robot_paths.add_path(
-            env,
-            involved_robots,
-            Path(path=path, task_index=task_index, next_task_index=None),
-            next_task_indices=next_task_indices,
-        )
-
-        robot_done = False
-        if robot_done:
-            continue
-
-        # print("A")
-        # print(seq_index)
-        # print(env.sequence)
-        if seq_index + 1 >= len(env.sequence):
-            break
-
-        # plan escape path
-
-        # TODO: escape paths always need to be planned separately for each agent
-        if False:
-            print("planning escape path")
-
-            # sample a position that we feel like is not gonna be in the way to reach the next goal
-            next_task_index = env.sequence[seq_index + 1]
-            next_task = env.tasks[next_task_index]
-            next_task_robots = next_task.robots
-            next_task_goal = next_task.goal
-            mode = []
-            q_non_blocking = sample_non_blocking(
-                involved_robots, next_task_robots, next_task_goal, mode
-            )
-            escape_goal = SingleGoal(q_non_blocking)
-
-            escape_start_time = path[involved_robots[0]].time[-1]
-            escape_start_pose = robot_paths.get_robot_poses_at_time(
-                involved_robots, escape_start_time
+            # get current robot position and last planned time
+            print("Collecting start times")
+            end_times = robot_paths.get_end_times(involved_robots)
+            start_time = min([t for _, t in end_times.items()])
+            print("Collecting start poses")
+            start_pose = robot_paths.get_robot_poses_at_time(
+                involved_robots, start_time
             )
 
-            escape_path = plan_robots_in_dyn_env(
+            # sample goal from the task
+            task_goal = task.goal
+
+            # figure out when this task can end at the earliest
+            earliest_end_time = robot_paths.get_final_non_escape_time()
+
+            # plan actual task
+            path = plan_robots_in_dyn_env(
                 env,
                 robot_paths,
                 involved_robots,
                 task_index,
-                escape_start_pose,
-                escape_start_time,
-                escape_goal,
+                start_pose,
+                end_times,
+                task_goal,
+                earliest_end_time,
             )
 
-            print("escape path")
-            print(escape_path)
-
-            if escape_path is None:
+            if path is None:
                 print("Failed")
                 return
 
             # add plan to overall path
-            robot_paths.add_path(involved_robots, Path(path=escape_path, task_index=-1))
+            prev_mode = robot_paths.get_mode_at_time(
+                robot_paths.get_final_non_escape_time()
+            )
+            curr_mode = prev_mode.copy()
+            for i, r in enumerate(involved_robots):
+                curr_mode[i] = task_index
+            next_modes = env.get_next_modes(None, curr_mode)
+            assert len(next_modes) == 1
+            next_mode = next_modes[0]
 
-        # check if there is a task left to do
+            next_task_indices = {}
+            for i, r in enumerate(involved_robots):
+                next_task_indices[r] = next_mode[i]
 
-        seq_index += 1
+            robot_paths.add_path(
+                env,
+                involved_robots,
+                Path(path=path, task_index=task_index, next_task_index=None),
+                next_task_indices=next_task_indices,
+            )
 
-    if False:
-        print("displaying")
-        for k, v in robot_paths.paths.items():
-            for p in v:
-                print(p.path.time)
-                print(p.path.path)
+            robot_done = False
+            if robot_done:
+                continue
 
-        display_multi_robot_path(env, robot_paths)
+            # print("A")
+            # print(seq_index)
+            # print(env.sequence)
+            if seq_index + 1 >= len(sequence):
+                break
 
-    # re-organize the data such that it is in the same format as before
-    path = []
+            # plan escape path
 
-    T = robot_paths.get_final_time()
-    N = 5 * int(T)
-    for i in range(N):
-        t = i * T / N
+            # TODO: escape paths always need to be planned separately for each agent
+            if False:
+                print("planning escape path")
 
-        q = robot_paths.get_robot_poses_at_time(env.robots, t)
-        config = conf_type.from_list(q)
-        mode = robot_paths.get_mode_at_time(t)
+                # sample a position that we feel like is not gonna be in the way to reach the next goal
+                next_task_index = sequence[seq_index + 1]
+                next_task = env.tasks[next_task_index]
+                next_task_robots = next_task.robots
+                next_task_goal = next_task.goal
+                mode = []
+                q_non_blocking = sample_non_blocking(
+                    involved_robots, next_task_robots, next_task_goal, mode
+                )
+                escape_goal = SingleGoal(q_non_blocking)
 
-        state = State(config, mode)
+                escape_start_time = path[involved_robots[0]].time[-1]
+                escape_start_pose = robot_paths.get_robot_poses_at_time(
+                    involved_robots, escape_start_time
+                )
 
-        path.append(state)
+                escape_path = plan_robots_in_dyn_env(
+                    env,
+                    robot_paths,
+                    involved_robots,
+                    task_index,
+                    escape_start_pose,
+                    escape_start_time,
+                    escape_goal,
+                )
 
-    end_time = time.time()
-    cost = path_cost(path, env.batch_config_cost)
+                print("escape path")
+                print(escape_path)
 
-    info = {"costs": [cost], "times": [end_time - computation_start_time]}
+                if escape_path is None:
+                    print("Failed")
+                    return
 
-    return path, info
+                # add plan to overall path
+                robot_paths.add_path(
+                    involved_robots, Path(path=escape_path, task_index=-1)
+                )
+
+            # check if there is a task left to do
+
+            seq_index += 1
+
+        if False:
+            print("displaying")
+            for k, v in robot_paths.paths.items():
+                for p in v:
+                    print(p.path.time)
+                    print(p.path.path)
+
+            display_multi_robot_path(env, robot_paths)
+
+        # re-organize the data such that it is in the same format as before
+        path = []
+
+        T = robot_paths.get_final_time()
+        N = 5 * int(T)
+        for i in range(N):
+            t = i * T / N
+
+            q = robot_paths.get_robot_poses_at_time(env.robots, t)
+            config = conf_type.from_list(q)
+            mode = robot_paths.get_mode_at_time(t)
+
+            state = State(config, mode)
+
+            path.append(state)
+
+        end_time = time.time()
+        cost = path_cost(path, env.batch_config_cost)
+
+        info = {"costs": [cost], "times": [end_time - computation_start_time]}
+
+        return path, info

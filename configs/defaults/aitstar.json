@@ -2,7 +2,7 @@
   "type": "aitstar",
   "options": {
     "init_mode_sampling_type": "frontier",
-    "distance_function": "max_euclidean",
+    "distance_metric": "max_euclidean",
     "init_uniform_batch_size": 150,
     "init_transition_batch_size": 90,
     "batch_size": 150,
