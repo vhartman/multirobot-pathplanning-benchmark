@@ -169,42 +169,25 @@ def main():
 
         planner = CompositePRM(env, config)
 
-        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
-
-        if args.save:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
-            # convention: alsways use "/" as trailing character
-            experiment_folder = f"./out/{timestamp}_{args.env}/"
-
-            # export_config(experiment_folder, config)
-
-            if not os.path.isdir(experiment_folder):
-                os.makedirs(experiment_folder)
-
-            planner_folder = experiment_folder + args.planner + "/"
-            export_planner_data(planner_folder, 0, info)
     elif args.planner == "rrt_star":
         config = BaseRRTConfig()
 
         config.distance_metric = args.distance_metric
 
         planner = RRTstar(env, config=config)
-        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
+
     elif args.planner == "birrt_star":
         config = BaseRRTConfig()
 
         config.distance_metric = args.distance_metric
 
         planner = BidirectionalRRTstar(env, config=config)
-        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
     elif args.planner == "aitstar":
         config = BaseITConfig()
 
         config.distance_metric = args.distance_metric
 
         planner = AITstar(env, config=config)
-        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
 
     elif args.planner == "eitstar":
         config = BaseITConfig()
@@ -212,18 +195,26 @@ def main():
         config.distance_metric = args.distance_metric
 
         planner = EITstar(env, config=config)
-        path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
 
-    # elif args.planner == "tensor_prm":
-    #     path, info = tensor_prm_planner(
-    #         env,
-    #         optimize=args.optimize,
-    #         mode_sampling_type=None,
-    #         max_iter=args.num_iters,
-    #     )
     # elif args.planner == "prioritized":
     #     path, info = prioritized_planning(env)
+    
+    path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
 
+    if args.save:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # convention: alsways use "/" as trailing character
+        experiment_folder = f"./out/{timestamp}_{args.env}/"
+
+        # export_config(experiment_folder, config)
+
+        if not os.path.isdir(experiment_folder):
+            os.makedirs(experiment_folder)
+
+        planner_folder = experiment_folder + args.planner + "/"
+        export_planner_data(planner_folder, 0, info)
+    
     assert path is not None
 
     print("robot-mode-shortcut")
