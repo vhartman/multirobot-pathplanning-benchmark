@@ -107,13 +107,6 @@ def load_config_from_folder(filepath: str) -> Dict:
 
     # TODO: sanity checks
 
-    # config["planners"] = {}
-    # config["planners"]["name"] = []
-    # config["planners"]["type"] = []
-    # config["planners"]["options"] = {}
-
-    # config["environment_name"] = []
-
     return config
 
 
@@ -341,9 +334,6 @@ def make_cost_plots(
 
             all_solution_costs.append(discretized_solution_costs)
 
-            # max_planner_solution_time = max(
-            #     max_planner_solution_time, solution_times[-1]
-            # )
             max_planner_solution_time = max_time
 
         median_solution_cost = np.median(all_solution_costs, axis=0)
@@ -354,20 +344,12 @@ def make_cost_plots(
         lb_solution_cost = sorted_solution_costs[lb_index, :]
         ub_solution_cost = sorted_solution_costs[ub_index - 1, :]
 
-        # lb_solution_cost = np.quantile(all_solution_costs, 0.1, axis=0)
-        # ub_solution_cost = np.quantile(all_solution_costs, 0.9, axis=0)
-
         min_solution_cost = np.min(all_solution_costs, axis=0)
-        # max_solution_cost = np.max(all_solution_costs, axis=0)
         try:
             max_solution_cost = np.max(ub_solution_cost[np.isfinite(ub_solution_cost)])
         except:
             min_solution_cost = np.min(all_solution_costs, axis=0)
         if len(max_solution_cost[np.isfinite(max_solution_cost)]) > 0:
-            # max_non_inf_cost = max(
-            #     max_non_inf_cost,
-            #     np.max(max_solution_cost[np.isfinite(max_solution_cost)]),
-            # )
             max_non_inf_cost = max(
                 max_non_inf_cost,
                 max_solution_cost
@@ -381,10 +363,6 @@ def make_cost_plots(
 
         ub_solution_cost[~np.isfinite(ub_solution_cost)] = 1e6
 
-        # if planner_name in planner_name_to_color:
-        #     color = planner_name_to_color[planner_name]
-        # else:
-        #     color = np.random.rand(3,)
         color = colors[planner_name]
 
         ls = "-"
@@ -422,15 +400,10 @@ def make_cost_plots(
 
     plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
-    # plt.grid()
-    # plt.grid(which="major", ls="--")
     plt.grid(which="both", axis="both", ls="--")
 
     plt.ylabel(f"Cost ({config['cost_reduction']})")
     plt.xlabel("Computation Time [s]")
-
-    # for side in ['top', 'bottom', 'left', 'right']:
-    #     plt.spines[side].set(lw=0.2)
 
     if add_legend:
         if add_info:
