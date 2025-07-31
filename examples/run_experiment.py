@@ -343,6 +343,7 @@ def setup_planner(
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
 
+    return name, planner
 
 def setup_env(env_config):
     pass
