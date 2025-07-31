@@ -1,16 +1,21 @@
 {
   "experiment_name": "rrt_planner_convergence",
-  "environment": "mobile_wall_three",
+  "environment": "mobile_four_dep",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 800,
-  "num_runs": 20,
+  "num_runs": 5,
   "seed": 1,
   "optimize": true,
   "planners": [
     {
       "name": "rrtstar",
       "type": "rrtstar",
+      "options": {}
+    },
+    {
+      "name": "birrtstar",
+      "type": "birrtstar",
       "options": {}
     },
     {

@@ -1,10 +1,10 @@
 {
   "experiment_name": "rrt_planner_convergence",
-  "environment": "mobile_wall_three",
+  "environment": "other_hallway",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "max",
-  "max_planning_time": 800,
-  "num_runs": 20,
+  "cost_reduction": "sum",
+  "max_planning_time": 500,
+  "num_runs": 5,
   "seed": 1,
   "optimize": true,
   "planners": [
