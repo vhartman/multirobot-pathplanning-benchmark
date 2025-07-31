@@ -119,26 +119,21 @@ def load_config_from_folder(filepath: str) -> Dict:
 
 report_colors = {
     "rrt":            "#A01CBB",
-    "rrt_ablation":     "#EE99CC",
-    "birrt":            "black",
-    "birrt_ablation":   (158 / 255.0, 154 / 255.0, 161 / 255.0),
+    "rrt_ablation":   "#EE99CC",
+    "birrt":          "black",
+    "birrt_ablation": (158 / 255.0, 154 / 255.0, 161 / 255.0),
     "eit":            "#009E1A",
-    "eit_ablation":     "#90E93D",
-    "rheit":          (0.537, 0.0, 0.267),  # RGB already in float
+    "eit_ablation":   "#90E93D",
+    "rheit":          (0.537, 0.0, 0.267), 
     "ait":            "#00C3FF",
-    "ait_ablation":     "#306DDF",
+    "ait_ablation":   "#306DDF",
     "rhait":          (132 / 255.0, 0 / 255.0, 255 / 255.0),
     "prm":            "#E21616",
-    "prm_ablation":     "#FF6600",
+    "prm_ablation":   "#FF6600",
 }
 
 # TODO: move this to config?
 planner_name_to_color = {
-    "informed_prm_k_nearest": "orange",
-    "informed_prm_radius": "tab:blue",
-    "locally_informed_shortcutting_prm": "tab:blue",
-    "rrtstar_global": "tab:brown",
-
     "rrtstar": report_colors["rrt"],
     "rrtstar_global_sampling": report_colors["rrt_ablation"],
     "rrtstar_no_shortcutting": report_colors["rrt_ablation"],
@@ -168,6 +163,7 @@ planner_name_to_color = {
     "aitstar without": report_colors["ait_ablation"],
 
     "prm": report_colors["prm"],
+    "informed_prm_k_nearest":  report_colors["prm_ablation"],
     "prm_no_shortcutting": report_colors["prm_ablation"],
     "prm same": report_colors["prm_ablation"],
     "prm uniform": report_colors["prm_ablation"],

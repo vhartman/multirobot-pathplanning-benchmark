@@ -43,7 +43,7 @@
       }
     },
     {
-      "name": "locally_informed_shortcutting_prm",
+      "name": "prm",
       "type": "prm",
       "options": {
         "batch_size": 200,

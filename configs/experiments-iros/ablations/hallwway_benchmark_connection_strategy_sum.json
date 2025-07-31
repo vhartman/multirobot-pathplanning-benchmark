@@ -28,7 +28,7 @@
       }
     },
     {
-      "name": "informed_prm_radius",
+      "name": "prm",
       "type": "prm",
       "options": {
         "batch_size": 200,
