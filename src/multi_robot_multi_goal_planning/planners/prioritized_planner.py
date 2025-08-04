@@ -23,6 +23,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     SafePoseType,
     DependencyType,
     generate_binary_search_indices,
+    SingleGoal
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
@@ -763,7 +764,7 @@ def plan_in_time_space(
         return q_new
 
     latest_end_time = max([end_times[r] for r in robots])
-    t_lb = max(latest_end_time, t_lb)
+    t_lb = max(latest_end_time + 1, t_lb)
 
     print("end_time: ", t_lb)
 
@@ -779,7 +780,7 @@ def plan_in_time_space(
     d = config_dist(conf_type.from_list(goal_config), conf_type.from_list(start_poses))
 
     # compute max time from it
-    max_t = t_lb + (d / v_max) * 50
+    max_t = t_lb + 1 + (d / v_max) * 50
 
     print("start_times", end_times)
     print("max time", max_t)
@@ -1576,11 +1577,13 @@ class PrioritizedPlanner(BasePlanner):
             # plan escape path
 
             # TODO: escape paths always need to be planned separately for each agent
-            if False:
+            if True:
                 print("planning escape path")
                 escape_start_time = path[involved_robots[0]].time[-1]
+                end_times = robot_paths.get_end_times(involved_robots)
+
                 for r in involved_robots:
-                    q_non_blocking = env.home_pose[r]
+                    q_non_blocking = env.safe_pose[r]
                     escape_goal = SingleGoal(q_non_blocking)
 
                     escape_start_pose = robot_paths.get_robot_poses_at_time(
@@ -1592,7 +1595,7 @@ class PrioritizedPlanner(BasePlanner):
                         robot_paths,
                         [r],
                         escape_start_pose,
-                        escape_start_time,
+                        end_times,
                         escape_goal,
                     )
 

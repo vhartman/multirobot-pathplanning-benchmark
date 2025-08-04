@@ -863,6 +863,11 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.spec.manipulation = ManipulationType.STATIC
 
+        self.safe_pose = {
+            "a1": np.array(keyframes[0]),
+            "a2": np.array(keyframes[1])
+        }
+
 
 class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
@@ -1993,6 +1998,11 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         self.collision_resolution = 0.005
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 
 class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
