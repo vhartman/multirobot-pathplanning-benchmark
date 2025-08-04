@@ -187,6 +187,7 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.spec.manipulation = ManipulationType.STATIC
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
 # for the case of the dependency graph, the optimal solution should be 4.1
@@ -455,6 +456,8 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
 class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
@@ -1988,6 +1991,8 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.005
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
 class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):

@@ -1677,7 +1677,7 @@ class BaseProblem(ABC):
     def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
         """
         Get the modes that can be reached from the current mode and configuration.
-        Assumes that the currentconfiguration fulfills is_transition(..)
+        Assumes that the current configuration fulfills is_transition(..)
         """
         pass
 
