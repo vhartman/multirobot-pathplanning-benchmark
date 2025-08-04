@@ -35,7 +35,7 @@ def get_all_environments():
         "hallway": lambda: re.rai_hallway_two_dim(),
         "hallway_no_rot": lambda: re.rai_hallway_two_dim(agents_can_rotate=False),
         "other_hallway": lambda: re.rai_alternative_hallway_two_dim(),
-        "other_hallway_no_rot": lambda: re.rai_alternative_hallway_two_dim(),
+        "other_hallway_no_rot": lambda: re.rai_alternative_hallway_two_dim(agents_can_rotate=False),
         "random_2d": lambda: re.rai_random_two_dim(),
         "random_2d_three_goals": lambda: re.rai_random_two_dim(num_goals=3),
         "random_2d_two_goals": lambda: re.rai_random_two_dim(num_goals=2),
