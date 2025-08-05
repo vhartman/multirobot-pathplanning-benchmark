@@ -111,8 +111,6 @@ def robot_mode_shortcut(
 
     start_time = time.time()
 
-    config_type = type(env.get_start_pos())
-
     cnt = 0
     # for iter in range(max_iter):
     max_attempts = max_iter * 10

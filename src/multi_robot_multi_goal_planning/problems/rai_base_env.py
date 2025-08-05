@@ -402,7 +402,7 @@ class rai_env(BaseProblem):
     def is_collision_free(
         self,
         q: Optional[Configuration],
-        m: Mode,
+        m: Optional[Mode],
         collision_tolerance: float | None = None,
     ) -> bool:
         if collision_tolerance is None:
