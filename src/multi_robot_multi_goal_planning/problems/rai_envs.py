@@ -459,6 +459,11 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
+        self.safe_pose = {
+            "a1": np.array(keyframes[0][self.robot_idx["a1"]]),
+            "a2": np.array(keyframes[1][self.robot_idx["a2"]])
+        }
+
 
 class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
@@ -1429,6 +1434,14 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.05
 
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
 
 class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
     def __init__(self):
@@ -1534,6 +1547,14 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
 class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
@@ -1678,6 +1699,14 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
 
 class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes=9, make_many_handover_poses: bool = False):
@@ -1784,6 +1813,14 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
 
@@ -2123,6 +2160,14 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.1
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
 class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
