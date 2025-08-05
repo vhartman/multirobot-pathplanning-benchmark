@@ -23,7 +23,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     SafePoseType,
     DependencyType,
     generate_binary_search_indices,
-    SingleGoal
+    SingleGoal,
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
@@ -36,7 +36,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 )
 from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
 
-from multi_robot_multi_goal_planning.problems.util import *
+from multi_robot_multi_goal_planning.problems.util import path_cost
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -47,6 +47,7 @@ Path = namedtuple("Path", ["path", "task_index"])
 
 import bisect
 
+
 class MultiRobotPath:
     __slots__ = [
         "robots",
@@ -55,8 +56,10 @@ class MultiRobotPath:
         "m0",
         "q0_split",
         "robot_ids",
-        "timed_mode_sequence"
+        "timed_mode_sequence",
+        "times",
     ]
+
     def __init__(self, q0, m0, robots):
         self.robots = robots
         self.paths = {}
@@ -73,22 +76,83 @@ class MultiRobotPath:
 
         # indicates which mode is active after a certain time (until the next one)
         self.timed_mode_sequence = [(0, self.m0)]
+        self.times = [0]
 
         for r in robots:
             self.paths[r] = []
 
     def get_mode_at_time(self, t) -> Mode:
-        """
-        Iterate over all the stored modes and give the one back that we are in at a certain time.
-        """
-        for i in range(len(self.timed_mode_sequence) - 1):
-            mode_time = self.timed_mode_sequence[i][0]
-            mode = self.timed_mode_sequence[i][1]
+        # """
+        # Iterate over all the stored modes and give the one back that we are in at a certain time.
+        # """
+        # for i in range(len(self.timed_mode_sequence) - 1):
+        #     mode_time = self.timed_mode_sequence[i][0]
+        #     mode = self.timed_mode_sequence[i][1]
 
-            if t >= mode_time and t < self.timed_mode_sequence[i + 1][0]:
-                return mode
+        #     if t >= mode_time and t < self.timed_mode_sequence[i + 1][0]:
+        #         return mode
 
-        return self.timed_mode_sequence[-1][1]
+        # return self.timed_mode_sequence[-1][1]
+        # times = [entry[0] for entry in self.timed_mode_sequence]
+        if t >= self.times[-1]:
+            return self.timed_mode_sequence[-1][1]
+
+        idx = bisect.bisect_right(self.times, t)
+
+        # if idx == len(self.times):
+        #     assert False
+        #     return self.timed_mode_sequence[-1][1]
+
+        return self.timed_mode_sequence[idx - 1][1]
+
+    # # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # def get_robot_poses_at_time_old(self, robots, t):
+    #     poses = []
+
+    #     # print('r at t')
+    #     # print(robots)
+
+    #     for r in robots:
+    #         # print(r)
+    #         i = self.robot_ids[r]
+
+    #         if len(self.paths[r]) == 0:
+    #             poses.append(self.q0_split[i])
+    #         else:
+    #             if t <= self.paths[r][0].path.time[0]:
+    #                 pose = self.q0_split[i]
+    #             elif t >= self.paths[r][-1].path.time[-1]:
+    #                 pose = self.paths[r][-1].path.path[-1]
+
+    #             else:
+    #                 for robot_path in self.paths[r]:
+    #                     path = robot_path.path.path
+    #                     times = robot_path.path.time
+    #                     if times[-1] <= t:
+    #                         pose = path[-1]
+    #                         continue
+
+    #                     elif times[0] <= t and t < times[-1]:
+    #                         k = bisect.bisect_right(times, t) - 1
+
+    #                         # print(k, t, p.time[-1], len(p.time), p.time[k])
+
+    #                         # for k in range(len(p.time) - 1):
+    #                         time_k = times[k]
+    #                         time_kn = times[k + 1]
+    #                         # if time_k <= t and t <= time_kn:
+    #                         td = time_kn - time_k
+    #                         q0 = path[k]
+    #                         pose = q0 + (t - time_k) / td * (path[k + 1] - q0)
+    #                         # break
+
+    #             if pose is None:
+    #                 print("pose is none")
+    #                 print(t, r)
+
+    #             poses.append(pose)
+
+    #     return poses
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_robot_poses_at_time(self, robots, t):
@@ -97,42 +161,56 @@ class MultiRobotPath:
         # print('r at t')
         # print(robots)
 
-        # TODO: map to correct index
         for r in robots:
             # print(r)
             i = self.robot_ids[r]
-        # for i, r in enumerate(self.robots):
-            # if r not in robots:
-                # continue
 
-            if len(self.paths[r]) == 0:
+            if not self.paths[r]:
                 poses.append(self.q0_split[i])
             else:
-                if t <= self.paths[r][0].path.time[0]:
+                if t >= self.paths[r][-1].path.time[-1]:
+                    pose = self.paths[r][-1].path.path[-1]
+                elif t <= self.paths[r][0].path.time[0]:
                     pose = self.q0_split[i]
-
                 else:
-                    for robot_path in self.paths[r]:
-                        p = robot_path.path
-                        if p.time[-1] <= t:
-                            pose = p.path[-1]
-                            continue
+                    path_end_times = [rp.path.time[-1] for rp in self.paths[r]]
+                    segment_idx = bisect.bisect_left(path_end_times, t)
 
-                        elif p.time[0] <= t and t < p.time[-1]:
-                            k = bisect.bisect_right(p.time, t) - 1
+                    # print(t)
+                    # print(segment_idx)
+                    # print(path_end_times)
 
-                            # print(k, t, p.time[-1], len(p.time), p.time[k])
+                    rp = self.paths[r][segment_idx]
 
-                            # for k in range(len(p.time) - 1):
-                            time_k = p.time[k]
-                            time_kn= p.time[k+1]
-                            # if time_k <= t and t <= time_kn:
-                            td = time_kn - time_k
-                            q0 = p.path[k]
-                            pose = q0 + (t - time_k) / td * (
-                                p.path[k + 1] - q0
-                            )
-                                # break
+                    if t == rp.path.time[-1] and segment_idx < len(self.paths[r]) - 1:
+                        # If 't' is exactly the end time of a segment that is not the very last segment,
+                        # we take the last pose of *that* segment.
+                        pose = rp.path.path[-1]
+                    elif rp.path.time[0] <= t < rp.path.time[-1]:
+                        # 't' is within the current segment (exclusive of the end time).
+                        p = rp.path.path
+                        time_points = rp.path.time
+
+                        # Find the specific time interval within the segment
+                        k = bisect.bisect_right(time_points, t) - 1
+
+                        # print(k)
+                        # print(time_points)
+
+                        time_k = time_points[k]
+                        time_kn = time_points[k + 1]
+
+                        # Linear interpolation
+                        td = time_kn - time_k
+                        q0 = p[k]
+                        pose = q0 + (t - time_k) / td * (p[k + 1] - q0)
+                    else:
+                        if (
+                            segment_idx > 0
+                            and t >= self.paths[r][segment_idx - 1].path.time[-1]
+                        ):
+                            # If t is past the previous segment's end, and not in current, take last of previous.
+                            pose = self.paths[r][segment_idx - 1].path.path[-1]
 
                 if pose is None:
                     print("pose is none")
@@ -155,8 +233,8 @@ class MultiRobotPath:
 
         return end_times
 
-    def add_path(self, robots, path, next_mode, is_escape_path = False):
-        print("adding path to multi-robot-path")
+    def add_path(self, robots, path, next_mode, is_escape_path=False):
+        # print("adding path to multi-robot-path")
         for r in robots:
             # get robot-path from the original path
             subpath = Path(
@@ -166,18 +244,19 @@ class MultiRobotPath:
             self.paths[r].append(subpath)
 
             # print(subpath.path.time)
-    
+
             final_time = path.path[r].time[-1]
-            print("max_time of path:", final_time)
+            # print("max_time of path:", final_time)
 
         # constructing the mode-sequence:
         # this is done simply by adding the next mode to the sequence
         if not is_escape_path:
             self.timed_mode_sequence.append((final_time, next_mode))
+            self.times.append(final_time)
 
     def remove_final_escape_path(self, robots):
         for r in robots:
-            if len(self.paths[r]) == 0:
+            if not self.paths[r]:
                 continue
             if self.paths[r][-1].task_index == -1:
                 self.paths[r] = self.paths[r][:-1]
@@ -211,9 +290,14 @@ def display_multi_robot_path(env: rai_env, path: MultiRobotPath):
         poses = path.get_robot_poses_at_time(env.robots, t)
         mode = path.get_mode_at_time(t)
         env.set_to_mode(mode)
-        env.show_config(np.concatenate(poses))
+        env.C.setJointState(np.concatenate(poses))
 
-        time.sleep(0.01)
+        if not env.is_collision_free(None, None):
+            print(f"Collision at time {t}")
+
+        env.show(False)
+
+        time.sleep(0.000001)
 
 
 class Node:
@@ -379,7 +463,15 @@ class Tree:
 
 # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
 def collision_free_with_moving_obs(
-    env: BaseProblem, t, q, prev_plans, end_times, robots, robot_joints
+    env: BaseProblem,
+    t,
+    q,
+    q_buffer,
+    prev_plans,
+    end_times,
+    robots,
+    other_robots,
+    robot_joints,
 ):
     # print("coll check")
     # print(robots)
@@ -390,49 +482,21 @@ def collision_free_with_moving_obs(
     mode = prev_plans.get_mode_at_time(t)
     env.set_to_mode(mode)
 
-    # set robots to their planned position for time
-    # q_all = np.zeros_like(env.start_pos.state())
-
-    other_robots = []
-    for r in env.robots:
-        if r not in robots:
-            other_robots.append(r)
-    
     robot_poses = prev_plans.get_robot_poses_at_time(other_robots, t)
     for i, r in enumerate(other_robots):
-        # if r not in robots:
-        pose = robot_poses[i]
-        joint_names = robot_joints[r]
-        env.C.setJointState(pose, joint_names)
+        q_buffer[env.robot_idx[r]] = robot_poses[i]
+    # if other_robots:
+    # q_buffer[np.array([env.robot_idx[r] for r in other_robots])] = np.array(robot_poses).flatten()
 
-        # q_all[env.robot_idx[r]] = pose
-
-            # print('setting to prev pos')
-
-    # actually check if it is collision free
-    curr_robot_joint_names = []
+    offset = 0
     for r in robots:
-        curr_robot_joint_names.extend(robot_joints[r])
+        dim = env.robot_dims[r]
+        q_buffer[env.robot_idx[r]] = q[offset : offset + dim]
+        offset += dim
 
-    # offset = 0
-    # for r in robots:
-    #     dim = env.robot_dims[r]
-    #     q_all[env.robot_idx[r]]  = q[offset:offset+dim]
-    #     offset += dim
+    env.C.setJointState(q_buffer)
 
-    env.C.setJointState(q, curr_robot_joint_names)
-    # env.C.setJointState(q_all)
-
-    # if t > 10.0:
-    #     env.show(True)
-
-    # if t < t0:
-    #     raise ValueError
-
-    # env.show(False)
-
-    if env.is_collision_free(None, mode):
-    # if env.is_collision_free_np(None, mode):
+    if env.is_collision_free(None, None):
         global global_collision_counter
 
         global_collision_counter += 1
@@ -442,10 +506,18 @@ def collision_free_with_moving_obs(
     # for c in colls:
     #     if c[2] < 0:
     #         print(c)
+    # if global_collision_counter > 50000 and t > max([t_e for r, t_e in end_times.items()]):
+    #     colls = env.C.getCollisions()
+    #     for c in colls:
+    #         if c[2] < 0:
+    #             print(c)
+    #     print(t)
+    #     env.C.view(False)
 
     # print('col')
 
     return False
+
 
 # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
 def edge_collision_free_with_moving_obs(
@@ -460,8 +532,6 @@ def edge_collision_free_with_moving_obs(
     joint_names,
     resolution=0.1,
 ):
-    # TODO: switch to collision checking directly, do not first compute all poses
-    # TODO: do we really need the interpolation/the double call to get pose t time?
     # print("edge check")
     # print(robots)
 
@@ -485,6 +555,9 @@ def edge_collision_free_with_moving_obs(
 
     indices = [i for i in range(N)]
     times = [ts + tdiff * idx / (N - 1) for idx in range(N)]
+
+    # print(te, ts)
+    # print(times)
 
     start_interpolation_at_index = {}
 
@@ -524,8 +597,15 @@ def edge_collision_free_with_moving_obs(
     #         starts_at_zero = False
 
     # if starts_at_zero:
-    indices = generate_binary_search_indices(len(indices))
-    
+    # indices = generate_binary_search_indices(len(indices))
+
+    other_robots = []
+    for r in env.robots:
+        if r not in robots:
+            other_robots.append(r)
+
+    q_buffer = env.start_pos.state() * 1.0
+
     for idx in indices:
         ql = []
         t = times[idx]
@@ -549,7 +629,9 @@ def edge_collision_free_with_moving_obs(
                     # robot_start_interp_pose = robot_poses[r][
                     #     start_interpolation_at_index[r]
                     # ]
-                    robot_start_interp_pose = prev_plans.get_robot_poses_at_time([r], times[start_interpolation_at_index[r]])[0]
+                    robot_start_interp_pose = prev_plans.get_robot_poses_at_time(
+                        [r], times[start_interpolation_at_index[r]]
+                    )[0]
                     # print(robot_start_interp_pose)
                     # print(tmp)
                     time_for_interp_traversal = (
@@ -576,10 +658,17 @@ def edge_collision_free_with_moving_obs(
         q = np.concatenate(ql)
 
         if not collision_free_with_moving_obs(
-            env, t, q, prev_plans, end_times, robots, joint_names
+            env,
+            t,
+            q,
+            q_buffer,
+            prev_plans,
+            end_times,
+            robots,
+            other_robots,
+            joint_names,
         ):
             return False
-
 
     # for idx in indices:
     #     # todo this interpolatoin is wrong if we need to project to the manifold
@@ -601,6 +690,7 @@ def edge_collision_free_with_moving_obs(
 
 def plan_in_time_space(
     env: BaseProblem,
+    t0,
     prev_plans: MultiRobotPath,
     robots,
     end_times,
@@ -610,7 +700,7 @@ def plan_in_time_space(
     computation_start_time = time.time()
 
     max_iter = 50000
-    t0 = min([v for k, v in end_times.items()])
+    # t0 = min([v for k, v in end_times.items()])
     # t0 = max([v for k, v in end_times.items()])
     # t0 = prev_plans.get_final_time()
 
@@ -669,7 +759,7 @@ def plan_in_time_space(
         if t_diff < max_stepsize and length < max_q:
             # print('reached', rnd_node.q.state())
             return rnd_node.t, rnd_node.q
-        
+
         t_m = min(max_q / v_max, max_stepsize)
 
         # # print('not')
@@ -712,6 +802,8 @@ def plan_in_time_space(
                 offset += dim
 
             sampled_goals.append((t_rnd, conf_type.from_list(q_goal_as_list)))
+
+            print(f"Adding goal at {t_rnd}")
 
             return t_rnd, conf_type.from_list(q_goal_as_list)
 
@@ -780,13 +872,13 @@ def plan_in_time_space(
     d = config_dist(conf_type.from_list(goal_config), conf_type.from_list(start_poses))
 
     # compute max time from it
-    max_t = t_lb + 1 + (d / v_max) * 50
+    max_t = t_lb + 1 + (d / v_max) * 100
 
     print("start_times", end_times)
     print("max time", max_t)
 
     # curr_t_ub = t_lb + (d / v_max) * 3
-    curr_t_ub = max([end_times[r] for r in robots]) + (d / v_max)*3
+    curr_t_ub = max([end_times[r] for r in robots]) + (d / v_max) * 3
     # curr_t_ub = max_t
 
     curr_t_ub = max(curr_t_ub, t_lb)
@@ -800,6 +892,26 @@ def plan_in_time_space(
 
     sampled_times = []
     sampled_pts = []
+
+    other_robots = []
+    for r in env.robots:
+        if r not in robots:
+            other_robots.append(r)
+
+    
+    if not collision_free_with_moving_obs(
+        env,
+        t0,
+        q0.state(),
+        env.start_pos.state() * 1.0,
+        prev_plans,
+        end_times,
+        robots,
+        other_robots,
+        robot_joints,
+    ):
+        print("Start pose not feasible")
+        assert False
 
     cnt = 0
     loopy_bois = 0
@@ -852,12 +964,16 @@ def plan_in_time_space(
             env,
             t_rnd,
             q_rnd.state(),
+            env.start_pos.state() * 1.0,
             prev_plans,
             end_times,
             robots,
+            other_robots,
             robot_joints,
         ):
             # print('invalid sample')
+            # global global_collision_counter
+            # if global_collision_counter > 50000:
             # env.show(True)
             continue
 
@@ -875,7 +991,7 @@ def plan_in_time_space(
 
         #         x0 = n.parent.q.state()[0]
         #         y0 = n.parent.q.state()[1]
-                
+
         #         x1 = n.q.state()[0]
         #         y1 = n.q.state()[1]
 
@@ -933,7 +1049,7 @@ def plan_in_time_space(
         q_new = None
         t_new = None
 
-        extend = True
+        extend = False
         if extend:
             t_goal = t_rnd
             q_goal = q_rnd
@@ -953,9 +1069,11 @@ def plan_in_time_space(
                     env,
                     t_next,
                     q_next.state(),
+                    env.start_pos.state() * 1.0,
                     prev_plans,
                     end_times,
                     robots,
+                    other_robots,
                     robot_joints,
                 ):
                     break
@@ -970,7 +1088,7 @@ def plan_in_time_space(
                     robots,
                     end_times,
                     robot_joints,
-                    resolution=env.collision_resolution
+                    resolution=env.collision_resolution,
                 ):
                     # add to tree
                     tree.add_node(Node(t_next, q_next), n_prev)
@@ -1011,7 +1129,7 @@ def plan_in_time_space(
                 robots,
                 end_times,
                 robot_joints,
-                resolution=env.collision_resolution
+                resolution=env.collision_resolution,
             ):
                 # if len(q_new.state()) > 3 and q_new[0] > 0.1:
                 #     for i, r in enumerate(robots):
@@ -1073,7 +1191,7 @@ def plan_in_time_space(
             configurations.append(p.q.state())
             times.append(p.t)
 
-            print(times[::-1])
+            # print(times[::-1])
 
             # print(configurations)
             # print(times)
@@ -1082,11 +1200,11 @@ def plan_in_time_space(
             print(f"\t\tTook {computation_end_time - computation_start_time}s")
             print(f"\t\tTook {computation_end_time - computation_start_time}s")
             print(f"\t\tTook {computation_end_time - computation_start_time}s")
-            
+
             global global_collision_counter
             print(global_collision_counter)
             global_collision_counter = 0
-            
+
             return TimedPath(time=times[::-1], path=configurations[::-1])
 
         if cnt > max_iter:
@@ -1270,7 +1388,7 @@ def shortcut_with_dynamic_obstacles(
             t = t0 + (t1 - t0) * j / N
             discretized_time.append(t)
 
-            print(t)
+            # print(t)
 
     discretized_path.append(path.path[-1])
     discretized_time.append(path.time[-1])
@@ -1281,6 +1399,13 @@ def shortcut_with_dynamic_obstacles(
     end_times = other_paths.get_end_times(robots)
 
     # start_time = time.time()
+
+    indices = {}
+    offset = 0
+    for r in robots:
+        dim = env.robot_dims[r]
+        indices[r] = np.arange(offset, offset+dim)
+        offset += dim
 
     cnt = 0
     for _ in range(max_iter):
@@ -1295,15 +1420,21 @@ def shortcut_with_dynamic_obstacles(
         if abs(j - i) < 2:
             continue
 
-        skip = False
-        for r in robots:
-            if np.sign(new_path.time[i] - end_times[r]) != np.sign(
-                new_path.time[j] - end_times[r]
-            ):
-                skip = True
-                break
+        robot_to_shortcut = np.random.randint(0, len(robots))
 
-        if skip:
+        # we skip this attempt of shortcutting if the attempt tries to shortcut a path before the end time of this robot
+        # skip = False
+        # for r in robots:
+        #     if np.sign(new_path.time[i] - end_times[r]) != np.sign(
+        #         new_path.time[j] - end_times[r]
+        #     ):
+        #         skip = True
+        #         break
+
+        # if skip:
+        #     continue
+
+        if new_path.time[i] < end_times[robots[robot_to_shortcut]] or new_path.time[j] < end_times[robots[robot_to_shortcut]]:
             continue
 
         q0 = arr_to_config(new_path.path[i])
@@ -1320,26 +1451,58 @@ def shortcut_with_dynamic_obstacles(
 
         cnt += 1
 
-        robots_to_shortcut = [r for r in range(len(robots))]
-        if False:
-            random.shuffle(robots_to_shortcut)
-            num_robots = 1
-            # num_robots = np.random.randint(0, len(robots_to_shortcut))
-            robots_to_shortcut = robots_to_shortcut[:num_robots]
+        # robots_to_shortcut = [r for r in robots]
+        # if False:
+        #     random.shuffle(robots_to_shortcut)
+        #     num_robots = 1
+        #     # num_robots = np.random.randint(0, len(robots_to_shortcut))
+        #     robots_to_shortcut = robots_to_shortcut[:num_robots]
+
+        q0 = conf_type.from_list([q0[robot_to_shortcut]])
+        q1 = conf_type.from_list([q1[robot_to_shortcut]])
+
+        # append paths that are not involved
+        if len(robots) > 1:
+            tmp_other_paths = copy.deepcopy(other_paths)
+            tmp_paths = {}
+            for r in robots:
+                if r != robots[robot_to_shortcut]:
+                    ind = indices[r]
+                    tmp_paths[r] = TimedPath(path=[pt[ind] * 1.0 for pt in new_path.path], time=discretized_time)
+
+            # uninvolved_indices = np.array([ind for r, ind in indices.items() if r != robots[robot_to_shortcut]]).flatten()
+            # tmp_path = TimedPath(time=discretized_time, path=[pt[uninvolved_indices] for pt in new_path.path])
+            tmp_other_paths.add_path([r for r in robots if r != robots[robot_to_shortcut]], Path(path=tmp_paths, task_index=-1), None, is_escape_path=True)
+        else:
+            tmp_other_paths = other_paths
 
         # this is wrong for partial shortcuts atm.
         if edge_collision_free_with_moving_obs(
-            env, q0, q1, t0, t1, other_paths, robots, end_times, robot_joints
+            env, q0, q1, t0, t1, tmp_other_paths, [robots[robot_to_shortcut]], end_times, robot_joints, resolution=env.collision_resolution
         ):
+            # if len(robots) > 1:
+            #     print("AAA")
+            
             for k in range(j - i):
                 ql = []
-                for r in robots_to_shortcut:
-                    q = q0[r] + (q1[r] - q0[r]) / (j - i) * k
+                # for r_idx, r in enumerate(robots_to_shortcut):
+                #     q = q0[r_idx] + (q1[r_idx] - q0[r_idx]) / (j - i) * k
+                #     ql.append(q)
+                
+                for r_idx, r in enumerate(robots):
+                    if r_idx == robot_to_shortcut:
+                        q = q0[0] + (q1[0] - q0[0]) / (j - i) * k
+                    else:
+                        q = new_path.path[i+k][indices[r]] * 1.0
                     ql.append(q)
+                    
                 new_path.path[i + k] = np.concatenate(ql)
                 new_path.time[i + k] = new_path.time[i] + k / (j - i) * (
                     new_path.time[j] - new_path.time[i]
                 )
+
+            # print("new cost:", path_cost(arrs_to_states(new_path.path), env.batch_config_cost))
+
 
         # env.show(True)
 
@@ -1357,16 +1520,29 @@ def shortcut_with_dynamic_obstacles(
 
 
 def plan_robots_in_dyn_env(
-    env, other_paths, robots, q0, end_times, goal, t_lb=-1
+    env, t0, other_paths, robots, q0, end_times, goal, t_lb=-1
 ) -> Dict[str, TimedPath]:
     # plan
-    path = plan_in_time_space(env, other_paths, robots, end_times, goal, t_lb)
+    path = plan_in_time_space(env, t0, other_paths, robots, end_times, goal, t_lb)
 
     # if len(robots) == 1:
     #     plt.figure()
 
     #     x = [pt[0] for pt in path.path]
     #     y = [pt[1] for pt in path.path]
+
+    #     plt.plot(x, y)
+
+    # if len(robots) == 2:
+    #     plt.figure()
+
+    #     x = [pt[0] for pt in path.path]
+    #     y = [pt[1] for pt in path.path]
+
+    #     plt.plot(x, y)
+
+    #     x = [pt[3] for pt in path.path]
+    #     y = [pt[4] for pt in path.path]
 
     #     plt.plot(x, y)
 
@@ -1384,7 +1560,7 @@ def plan_robots_in_dyn_env(
     # take the separate paths apart
     separate_paths = {}
     offset = 0
-    print(end_times)
+    print("end times", end_times)
     for r in robots:
         dim = env.robot_dims[r]
         c_n = []
@@ -1394,20 +1570,32 @@ def plan_robots_in_dyn_env(
                 per_robot_times.append(path.time[i])
                 c_n.append(path.path[i][offset : offset + dim])
 
-        if end_times[r] > path.time[0]:
-            c_n.insert(0, other_paths.get_robot_poses_at_time([r], end_times[r])[0])
-            per_robot_times.insert(0, end_times[r])
+        # if end_times[r] > path.time[0]:
+        #     c_n.insert(0, other_paths.get_robot_poses_at_time([r], end_times[r])[0])
+        #     per_robot_times.insert(0, end_times[r])
 
         offset += dim
 
+        # print("R", r)
+        # print(per_robot_times)
+
         separate_paths[r] = TimedPath(time=per_robot_times, path=c_n)
 
-        # if len(robots) == 1:
-        #     x = [pt[0] for pt in separate_paths[r].path]
-        #     y = [pt[1] for pt in separate_paths[r].path]
+    #     if len(robots) == 1:
+    #         x = [pt[0] for pt in separate_paths[r].path]
+    #         y = [pt[1] for pt in separate_paths[r].path]
 
-        #     plt.plot(x, y)
-        #     plt.show()
+    #         plt.plot(x, y)
+    #         # plt.show()
+
+    # if len(robots) == 2:
+    #     for r in robots:
+    #         x = [pt[0] for pt in separate_paths[r].path]
+    #         y = [pt[1] for pt in separate_paths[r].path]
+
+    #         plt.plot(x, y)
+        # plt.show()
+
 
     return separate_paths, postprocessed_path.path[-1]
 
@@ -1421,7 +1609,6 @@ class PrioritizedPlanner(BasePlanner):
 
         global global_collision_counter
         global_collision_counter = 0
-
 
     def plan(
         self,
@@ -1492,11 +1679,21 @@ class PrioritizedPlanner(BasePlanner):
             task = env.tasks[task_index]
             involved_robots = task.robots
 
+            print()
             print("task name", task.name)
             print("robots:", involved_robots)
 
+            # figure out when this task can end at the earliest
+            earliest_end_time = robot_paths.get_final_non_escape_time()
+            print("earliest end time", earliest_end_time)
+
             # remove escape path from plan
+            
+            # if 
             robot_paths.remove_final_escape_path(involved_robots)
+            
+            end_times = robot_paths.get_end_times(involved_robots)
+            t0 = min([v for k, v in end_times.items()])
 
             # for k,v in robot_paths.paths.items():
             #     for p in v:
@@ -1505,7 +1702,6 @@ class PrioritizedPlanner(BasePlanner):
 
             # get current robot position and last planned time
             print("Collecting start times")
-            end_times = robot_paths.get_end_times(involved_robots)
             start_time = min([t for _, t in end_times.items()])
             print("Collecting start poses")
             start_pose = robot_paths.get_robot_poses_at_time(
@@ -1515,12 +1711,10 @@ class PrioritizedPlanner(BasePlanner):
             # sample goal from the task
             task_goal = task.goal
 
-            # figure out when this task can end at the earliest
-            earliest_end_time = robot_paths.get_final_non_escape_time()
-
             # plan actual task
             path, final_pose = plan_robots_in_dyn_env(
                 env,
+                t0,
                 robot_paths,
                 involved_robots,
                 start_pose,
@@ -1540,13 +1734,16 @@ class PrioritizedPlanner(BasePlanner):
             curr_mode = prev_mode
             if not env.is_terminal_mode(curr_mode):
                 final_time = path[involved_robots[0]].time[-1]
+                print("start_time", path[involved_robots[0]].time[0])
                 print("final_time: ", final_time)
                 q = []
                 for r in env.robots:
                     if r in involved_robots:
                         q.append(path[r].path[-1])
                     else:
-                        q.append(robot_paths.get_robot_poses_at_time([r], final_time)[0])
+                        q.append(
+                            robot_paths.get_robot_poses_at_time([r], final_time)[0]
+                        )
 
                 print("curr mode", curr_mode)
                 print("final pose in path", final_pose)
@@ -1559,10 +1756,38 @@ class PrioritizedPlanner(BasePlanner):
                 next_mode = None
 
             robot_paths.add_path(
-                involved_robots,
-                Path(path=path, task_index=task_index),
-                next_mode
+                involved_robots, Path(path=path, task_index=task_index), next_mode
             )
+
+            # print("Drawing path")
+            # final_time = robot_paths.get_final_time()
+            # # plt.figure()
+            # for r in robots:
+            #     x = []
+            #     y = []
+            #     for t in np.arange(0, int(final_time), 0.1):
+            #         p = robot_paths.get_robot_poses_at_time([r], t)[0]
+            #         x.append(p[0])
+            #         y.append(p[1])
+
+            #     plt.plot(x, y)
+            
+            # plt.show()
+
+
+            # for r in robots:
+            #     print("___________________")
+            #     print("R", r)
+            #     tprev = 0
+            #     for segment in robot_paths.paths[r]:
+            #         print("next segment")
+            #         print(segment.task_index)
+            #         for t in segment.path.time:
+            #             # if t < tprev:
+            #             print(t)
+                    
+            #             # tprev = t
+
 
             robot_done = False
             if robot_done:
@@ -1576,7 +1801,6 @@ class PrioritizedPlanner(BasePlanner):
 
             # plan escape path
 
-            # TODO: escape paths always need to be planned separately for each agent
             if True:
                 print("planning escape path")
                 escape_start_time = path[involved_robots[0]].time[-1]
@@ -1589,9 +1813,12 @@ class PrioritizedPlanner(BasePlanner):
                     escape_start_pose = robot_paths.get_robot_poses_at_time(
                         [r], escape_start_time
                     )
+                    
+                    t0 = min([v for k, v in end_times.items()])
 
                     escape_path, _ = plan_robots_in_dyn_env(
                         env,
+                        t0,
                         robot_paths,
                         [r],
                         escape_start_pose,
@@ -1600,7 +1827,7 @@ class PrioritizedPlanner(BasePlanner):
                     )
 
                     print("escape path")
-                    print(escape_path)
+                    # print(escape_path)
 
                     if escape_path is None:
                         print("Failed")
@@ -1608,10 +1835,14 @@ class PrioritizedPlanner(BasePlanner):
 
                     # add plan to overall path
                     robot_paths.add_path(
-                        [r], Path(path=escape_path, task_index=-1), next_mode=None, is_escape_path = True
+                        [r],
+                        Path(path=escape_path, task_index=-1),
+                        next_mode=None,
+                        is_escape_path=True,
                     )
 
             # check if there is a task left to do
+            # display_multi_robot_path(env, robot_paths)
 
             seq_index += 1
 
