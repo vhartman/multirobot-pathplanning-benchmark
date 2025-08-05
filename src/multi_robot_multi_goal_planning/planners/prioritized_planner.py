@@ -502,6 +502,24 @@ def collision_free_with_moving_obs(
         global_collision_counter += 1
         return True
 
+    # # involves_robot_we_plan_for = False
+    # colls = env.C.getCollisions()
+    # for c in colls:
+    #     for r in robots:
+    #         if (r in c[1] or r in c[0]) or ("obj" in c[0] or "obj" in c[1]):
+    #             # involves_robot_we_plan_for = True
+    #             return False
+    #         # else:
+    #         #     env.C.view(True)
+    #         #     print(c)
+    # env.C.view(True)
+    # # print(c)
+
+    # return True
+
+        # if c[2] < 0:
+        #     print(c)
+
     # colls = env.C.getCollisions()
     # for c in colls:
     #     if c[2] < 0:
@@ -597,7 +615,7 @@ def edge_collision_free_with_moving_obs(
     #         starts_at_zero = False
 
     # if starts_at_zero:
-    # indices = generate_binary_search_indices(len(indices))
+    indices = generate_binary_search_indices(len(indices))
 
     other_robots = []
     for r in env.robots:
@@ -696,6 +714,7 @@ def plan_in_time_space(
     end_times,
     goal,
     t_lb,
+    v_max = 0.5
 ) -> TimedPath:
     computation_start_time = time.time()
 
@@ -723,8 +742,6 @@ def plan_in_time_space(
 
     tree = Tree(Node(t0, q0))
 
-    v_max = 0.5
-
     print(q0)
 
     robot_joints = {}
@@ -747,7 +764,7 @@ def plan_in_time_space(
             return None, None
             assert False
 
-        max_q = np.sqrt(len(q_diff)) * 5
+        max_q = np.sqrt(len(q_diff)) * 10
 
         # if length < max_q:
         #     return rnd_node.t, rnd_node.q
@@ -803,7 +820,7 @@ def plan_in_time_space(
 
             sampled_goals.append((t_rnd, conf_type.from_list(q_goal_as_list)))
 
-            print(f"Adding goal at {t_rnd}")
+            # print(f"Adding goal at {t_rnd}")
 
             return t_rnd, conf_type.from_list(q_goal_as_list)
 
@@ -872,7 +889,7 @@ def plan_in_time_space(
     d = config_dist(conf_type.from_list(goal_config), conf_type.from_list(start_poses))
 
     # compute max time from it
-    max_t = t_lb + 1 + (d / v_max) * 100
+    max_t = t_lb + 1 + (d / v_max) * 25
 
     print("start_times", end_times)
     print("max time", max_t)
@@ -911,6 +928,7 @@ def plan_in_time_space(
         robot_joints,
     ):
         print("Start pose not feasible")
+        env.C.view(True)
         assert False
 
     cnt = 0
@@ -935,8 +953,9 @@ def plan_in_time_space(
 
         # check if there is a chance that we can reach the goal (or the start)
         time_from_start = t_rnd - t0
-        d_from_start = config_dist(q0, q_rnd)
+        d_from_start = config_dist(q0, q_rnd, "max")
         if d_from_start / time_from_start > v_max:
+            print("dist too large for speed")
             continue
 
         reachable_goal = False
@@ -950,7 +969,7 @@ def plan_in_time_space(
                 reachable_goal = True
                 break
 
-            d_from_goal = config_dist(qg, q_rnd)
+            d_from_goal = config_dist(qg, q_rnd, "max")
             if d_from_goal / time_from_goal < v_max:
                 reachable_goal = True
                 break
@@ -983,7 +1002,7 @@ def plan_in_time_space(
         # find closest pt in tree
         n_close = tree.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
 
-        # if len(tree.nodes) > 10 and loopy_bois % 5 == 0:
+        # if len(tree.nodes) > 20 and loopy_bois % 5 == 0:
         #     plt.figure()
         #     for n in tree.nodes:
         #         if n.parent is None:
@@ -995,7 +1014,7 @@ def plan_in_time_space(
         #         x1 = n.q.state()[0]
         #         y1 = n.q.state()[1]
 
-        #         print(x0, x1, y0, y1)
+        #         # print(x0, x1, y0, y1)
 
         #         plt.plot([x0, x1], [y0, y1])
 
@@ -1059,7 +1078,7 @@ def plan_in_time_space(
             while True:
                 steps += 1
 
-                t_next, q_next = steer(n_prev, Node(t_goal, q_goal), 10)
+                t_next, q_next = steer(n_prev, Node(t_goal, q_goal), 5)
                 if t_next is None:
                     break
 
@@ -1105,7 +1124,7 @@ def plan_in_time_space(
                     break
         else:
             # steer towards pt
-            t_new, q_new = steer(n_close, Node(t_rnd, q_rnd))
+            t_new, q_new = steer(n_close, Node(t_rnd, q_rnd), max_stepsize=30)
 
             # # check if sample is valid
             # if not collision_free_with_moving_obs(env, t_new, q_new.state(), prev_plans, end_times, robots, robot_joints, task_idx):
@@ -1171,6 +1190,9 @@ def plan_in_time_space(
                 #         print("B")
 
                 added_pt = True
+            else:
+                print("failed")
+                print(len(tree.nodes))
 
         if (
             added_pt
@@ -1219,6 +1241,51 @@ def plan_in_time_space(
     configurations = 0
     return TimedPath(time=times, path=configurations)
 
+
+# def plan_in_time_space_bidirectional(
+#     env: rai_env,
+#     prev_plans: MultiRobotPath,
+#     robots,
+#     q0,
+#     end_times,
+#     goal,
+#     t_lb,
+# ):
+#     t_fwd = Tree()
+#     t_rev = Tree(reverse=True)
+
+#     t_max = 0
+
+#     tree = t_fwd
+
+#     max_iters = 10000
+#     for cnt in range(max_iters):
+#         # sample
+#         t_rnd, q_rnd = sample()
+
+#         n_close = tree.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
+
+#         # go in dir and check collision
+#         t_new, q_new = steer()
+#         if edge_collision_free_with_moving_obs():
+#             # add to tree
+
+#             n_close_opposite = tree.get_nearest_neighbor()
+
+#             if edge_collision_free_with_moving_obs():
+#                 # connected
+                
+#                 # extract path
+
+#                 # return path
+#                 path = []
+#                 times = []
+#                 return TimedPath(time=times, path=path)
+
+#     times = 0
+#     configurations = 0
+#     return TimedPath(time=times, path=configurations)
+    
 
 def interpolate_in_time_space(
     env: rai_env, robots, paths: MultiRobotPath, q0, end_times, goal, t_lb
@@ -1297,18 +1364,6 @@ def interpolate_in_time_space(
     # remove parts of paths where they were not available yet
 
     return new_paths
-
-
-def plan_in_time_space_bidirectional(
-    env: rai_env,
-    prev_plans: MultiRobotPath,
-    robots,
-    q0,
-    end_times,
-    goal,
-    t_lb,
-):
-    pass
 
 
 def shortcut_with_dynamic_obstacles(
@@ -1664,9 +1719,8 @@ class PrioritizedPlanner(BasePlanner):
             raise ValueError("No safe home pose")
 
         # life is easier if we just assume that we get a sequence-env for now
-        if (
-            env.spec.dependency != DependencyType.FULLY_ORDERED
-        ):  # and env.spec.dependency != DependencyType.UNORDERED:
+        if env.spec.dependency != DependencyType.FULLY_ORDERED \
+            and env.spec.dependency != DependencyType.UNORDERED:
             raise ValueError
 
         sequence = env.get_sequence()
