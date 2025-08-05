@@ -539,6 +539,13 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.spec.dependency = DependencyType.UNORDERED
+        
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {
+            "a1": np.array(keyframes[0][self.robot_idx["a1"]]),
+            "a2": np.array(keyframes[1][self.robot_idx["a2"]])
+        }
 
 
 # best cost found for max-cost is 17.64
@@ -948,6 +955,11 @@ class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.spec.manipulation = ManipulationType.STATIC
         self.spec.dependency = DependencyType.UNORDERED
+
+        self.safe_pose = {
+            "a1": np.array(keyframes[0]),
+            "a2": np.array(keyframes[1])
+        }
 
 
 # best sum-cost: 12.9
