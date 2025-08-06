@@ -1294,7 +1294,8 @@ class DependencyGraphMixin(BaseModeLogic):
         return True
 
     def get_sequence(self) -> List[int]:
-        possible_named_sequence = self.graph.get_build_order()
+        possible_named_sequence = self.graph.get_random_sequence()
+        # possible_named_sequence = self.graph.get_build_order()
         possible_id_sequence = self._make_sequence_from_names(possible_named_sequence)
 
         return possible_id_sequence
