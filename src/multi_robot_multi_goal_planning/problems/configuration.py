@@ -430,10 +430,17 @@ def batch_config_cost(
         agent_slices = starts[0].q._array_slice
 
     elif isinstance(starts, list) and isinstance(batch_other, list):
-        diff = np.array([start.q.state() for start in starts]) - np.array(
-            [other.q.state() for other in batch_other], dtype=np.float64
-        )
-        agent_slices = starts[0].q._array_slice
+        if isinstance(starts[0], Configuration):
+            diff = np.array([start.state() for start in starts]) - np.array(
+                [other.state() for other in batch_other], dtype=np.float64
+            )
+            agent_slices = starts[0]._array_slice
+
+        else:
+            diff = np.array([start.q.state() for start in starts]) - np.array(
+                [other.q.state() for other in batch_other], dtype=np.float64
+            )
+            agent_slices = starts[0].q._array_slice
 
     if metric == "euclidean":
         all_robot_dists = compute_sliced_euclidean_dists(diff, agent_slices)

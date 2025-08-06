@@ -33,6 +33,7 @@ from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.configuration import (
     batch_config_dist,
     config_dist,
+    batch_config_cost
 )
 from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
 
@@ -40,6 +41,7 @@ from multi_robot_multi_goal_planning.problems.util import path_cost
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from mpl_toolkits.mplot3d import Axes3D # Import for 3D plotting
 
 
 TimedPath = namedtuple("TimedPath", ["time", "path"])
@@ -320,33 +322,67 @@ class Tree:
         self.nodes = [self.root]
         self.batch_config_dist_fun = batch_config_dist
 
+        self.prev_plans = None
+        self.robots = None
+
     def batch_dist_fun(self, n1: Node, n2: List[Node], v_max):
+        l = 0.9
+
         ts = np.array([1.0 * n.t for n in n2])
         t_diff = n1.t - ts
+
+        if len(self.robots) > 1:
+            end_times = self.prev_plans.get_end_times(self.robots)
+            # latest_relevant_end_time = max([end_times[r] for r in self.robots])
+
+            # should_have_intermediate_pose = (n1.t > latest_relevant_end_time) & (ts < latest_relevant_end_time)
+
+            # deal with arrays instead of configs here
+            intermediate_poses = []
+            for n in n2:
+                p = []
+                for i, r in enumerate(self.robots):
+                    if n1.t > end_times[r] and n.t < end_times[r]:
+                        p.extend(self.prev_plans.get_robot_poses_at_time([r], n1.t)[0])
+                    else:
+                        p.extend(n.q[i])
+                intermediate_poses.append(self.root.q.from_flat(np.array(p)))
+
+            q_dist_to_inter = self.batch_config_dist_fun(n1.q, intermediate_poses, "max_euclidean")
+            q_dist_from_inter = batch_config_cost(intermediate_poses, [n.q for n in n2], "max_euclidean")
+    
+            dist = (q_dist_from_inter + q_dist_to_inter) * l + (1 - l) * t_diff
 
         # print("time diffs")
         # print(n1.t)
         # print(np.array([n.t for n in n2]))
         # print(tdiff)
+        else:
+            q_dist = self.batch_config_dist_fun(n1.q, [n.q for n in n2], "max_euclidean")
+            dist = q_dist * l + (1 - l) * t_diff
 
-        q_dist = self.batch_config_dist_fun(n1.q, [n.q for n in n2])
-
-        v = q_dist / t_diff
+        q_dist_for_vel = self.batch_config_dist_fun(n1.q, [n.q for n in n2])
+        v = q_dist_for_vel / t_diff
 
         mask = (t_diff < 0) | (abs(v) > v_max)
 
         # print(q_diff)
 
-        q_dist[mask] = np.inf
-        t_diff[mask] = np.inf
+        # q_dist[mask] = np.inf
+        # t_diff[mask] = np.inf
 
         # speed_filter[np.isinf(tdiff)] = -np.inf
 
         # return -speed_filter
 
-        l = 0.9
         # dist = q_dist
-        dist = q_dist * l + (1 - l) * t_diff
+
+        # print(dist)
+
+        dist[mask] = np.inf
+
+        # dist[t_diff > 20] = np.inf
+
         return dist
 
         # t_diff[q_dist > 2] = np.inf
@@ -377,6 +413,8 @@ class Tree:
 
         if np.isinf(batch_dists[batch_idx]):
             return None
+        
+        # print(batch_dists[batch_idx], config_dist(node.q, self.nodes[batch_idx].q), node.t - self.nodes[batch_idx].t)
 
         # print('time', node.t)
 
@@ -522,8 +560,9 @@ def collision_free_with_moving_obs(
 
     # colls = env.C.getCollisions()
     # for c in colls:
-    #     if c[2] < 0:
-    #         print(c)
+    #     for r in robots:
+    #         if t < end_times[r] and (r in c[0] or r in c[1]) and c[2] < 0:
+    #             print(c)
     # if global_collision_counter > 50000 and t > max([t_e for r, t_e in end_times.items()]):
     #     colls = env.C.getCollisions()
     #     for c in colls:
@@ -741,6 +780,8 @@ def plan_in_time_space(
     # env.show()
 
     tree = Tree(Node(t0, q0))
+    tree.prev_plans = prev_plans
+    tree.robots = robots
 
     print(q0)
 
@@ -759,12 +800,17 @@ def plan_in_time_space(
         length = config_dist(rnd_node.q, close_node.q)
 
         v = length / t_diff
+        
+        # if length < 1e-3:
+        #     return None, None
+
+        print("l", length)
 
         if v > v_max:
             return None, None
             assert False
 
-        max_q = np.sqrt(len(q_diff)) * 10
+        # max_q = 1
 
         # if length < max_q:
         #     return rnd_node.t, rnd_node.q
@@ -773,12 +819,15 @@ def plan_in_time_space(
         # t = close_node.t + t_req
         # q = close_node.q.state() + t_req * v * q_diff / length
 
-        if t_diff < max_stepsize and length < max_q:
+        if t_diff < max_stepsize:
             # print('reached', rnd_node.q.state())
             return rnd_node.t, rnd_node.q
 
-        t_m = min(max_q / v_max, max_stepsize)
+        # t_m = min(max_q / v_max, max_stepsize)
+        t_m = min(max_stepsize * 1., t_diff)
 
+        if length < 1e-3:
+            return None, None
         # # print('not')
 
         # TODO: this might be wrong?
@@ -821,7 +870,7 @@ def plan_in_time_space(
 
             sampled_goals.append((t_rnd, conf_type.from_list(q_goal_as_list)))
 
-            # print(f"Adding goal at {t_rnd}")
+            print(f"Adding goal at {t_rnd}")
 
             return t_rnd, conf_type.from_list(q_goal_as_list)
 
@@ -941,7 +990,7 @@ def plan_in_time_space(
             curr_t_ub += 1
             curr_t_ub = min(curr_t_ub, max_t)
 
-        if cnt % 500 == 0:
+        if cnt % 500 == 1:
             print("cnt", cnt)
             print(len(tree.nodes))
             print(loopy_bois)
@@ -956,7 +1005,7 @@ def plan_in_time_space(
         time_from_start = t_rnd - t0
         d_from_start = config_dist(q0, q_rnd, "max")
         if d_from_start / time_from_start > v_max:
-            print("dist too large for speed")
+            # print("pos not reachable from start")
             continue
 
         reachable_goal = False
@@ -1003,7 +1052,7 @@ def plan_in_time_space(
         # find closest pt in tree
         n_close = tree.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
 
-        # if len(tree.nodes) > 20 and loopy_bois % 5 == 0:
+        # if len(tree.nodes) > 200 and loopy_bois % 5 == 0:
         #     plt.figure()
         #     for n in tree.nodes:
         #         if n.parent is None:
@@ -1014,6 +1063,21 @@ def plan_in_time_space(
 
         #         x1 = n.q.state()[0]
         #         y1 = n.q.state()[1]
+
+        #         # print(x0, x1, y0, y1)
+
+        #         plt.plot([x0, x1], [y0, y1])
+            
+        #     plt.figure()
+        #     for n in tree.nodes:
+        #         if n.parent is None:
+        #             continue
+
+        #         x0 = n.parent.q.state()[3]
+        #         y0 = n.parent.q.state()[4]
+
+        #         x1 = n.q.state()[3]
+        #         y1 = n.q.state()[4]
 
         #         # print(x0, x1, y0, y1)
 
@@ -1127,6 +1191,9 @@ def plan_in_time_space(
             # steer towards pt
             t_new, q_new = steer(n_close, Node(t_rnd, q_rnd), max_stepsize=30)
 
+            if t_new is None:
+                continue
+
             # # check if sample is valid
             # if not collision_free_with_moving_obs(env, t_new, q_new.state(), prev_plans, end_times, robots, robot_joints, task_idx):
             #     # print('invalid sample')
@@ -1191,15 +1258,18 @@ def plan_in_time_space(
                 #         print("B")
 
                 added_pt = True
+                print(f"succ at time {t_new}")
             else:
-                print("failed")
+                # plt.plot([n_close.q.state()[0], q_new.state()[0]], [n_close.q.state()[1], q_new.state()[1]])
+                print(f"failed at time {t_new}")
                 print(len(tree.nodes))
 
         if (
             added_pt
-            and goal.satisfies_constraints(q_new.state(), mode=None, tolerance=0.1)
+            and goal.satisfies_constraints(q_new.state(), mode=None, tolerance=1e-5)
             and t_new > t_lb
         ):
+            # plt.show()
             configurations = [q_new.state()]
             times = [t_new]
 
@@ -1228,6 +1298,52 @@ def plan_in_time_space(
             print(global_collision_counter)
             global_collision_counter = 0
 
+            # for k in range(len(robots)):
+            #     # plt.figure()
+            #     # for n in tree.nodes:
+            #     #     if n.parent is None:
+            #     #         continue
+
+            #     #     x0 = n.parent.q.state()[0 + k*2]
+            #     #     y0 = n.parent.q.state()[1 + k*2]
+
+            #     #     x1 = n.q.state()[0 + k*2]
+            #     #     y1 = n.q.state()[1 + k*2]
+
+            #     #     # print(x0, x1, y0, y1)
+
+            #     #     plt.plot([x0, x1], [y0, y1])
+            #     fig = plt.figure(figsize=(10, 8)) # Create a new figure for each robot
+            #     # Add a 3D subplot to the figure
+            #     ax = fig.add_subplot(111, projection='3d')
+            #     ax.set_title(f"Robot {k} Path in 3D (t-component as Z)")
+            #     ax.set_xlabel("X-coordinate")
+            #     ax.set_ylabel("Y-coordinate")
+            #     ax.set_zlabel("T-component")
+
+            #     # Iterate through the nodes in the tree to plot the path segments
+            #     for n in tree.nodes:
+            #         if n.parent is None:
+            #             continue # Skip the root node as it has no parent to draw a line from
+
+            #         # Parent's coordinates and t-component
+            #         x0 = n.parent.q.state()[0 + k*2] # X-coordinate of parent
+            #         y0 = n.parent.q.state()[1 + k*2] # Y-coordinate of parent
+            #         z0 = n.parent.t             # T-component of parent (now Z)
+
+            #         # Current node's coordinates and t-component
+            #         x1 = n.q.state()[0 + k*2] # X-coordinate of current node
+            #         y1 = n.q.state()[1 + k*2] # Y-coordinate of current node
+            #         z1 = n.t             # T-component of current node (now Z)
+
+            #         # Plot the line segment in 3D
+            #         # The 'k*2' from your original code was likely for indexing into a flattened state
+            #         # array that contained multiple robot states. Here, we assume n.q.state()
+            #         # directly gives the x, y for the current robot, and n.t is its time.
+            #         ax.plot([x0, x1], [y0, y1], [z0, z1], marker='o', linestyle='-')
+            
+            # plt.show()
+
             return TimedPath(time=times[::-1], path=configurations[::-1])
 
         if cnt > max_iter:
@@ -1243,128 +1359,205 @@ def plan_in_time_space(
     return TimedPath(time=times, path=configurations)
 
 
-# def plan_in_time_space_bidirectional(
-#     env: rai_env,
-#     prev_plans: MultiRobotPath,
-#     robots,
-#     q0,
-#     end_times,
-#     goal,
-#     t_lb,
-# ):
-#     t_fwd = Tree()
-#     t_rev = Tree(reverse=True)
+def plan_in_time_space_bidirectional(
+    env: BaseProblem,
+    t0,
+    prev_plans: MultiRobotPath,
+    robots,
+    end_times,
+    goal,
+    t_lb,
+    v_max = 0.5
+) -> TimedPath:
+    computation_start_time = time.time()
+    conf_type = type(env.get_start_pos())
 
-#     t_max = 0
+    # print("start_time", t0)
+    # print("robots", robots)
+    # print("earliest end time", t_lb)
 
-#     tree = t_fwd
+    start_configuration = prev_plans.get_robot_poses_at_time(robots, t0)
+    q0 = conf_type.from_list(start_configuration)
 
-#     max_iters = 10000
-#     for cnt in range(max_iters):
-#         # sample
-#         t_rnd, q_rnd = sample()
+    t_fwd = Tree(Node(t0, q0))
+    t_rev = Tree(None, reverse=True)
 
-#         n_close = tree.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
+    t_max = 0
 
-#         # go in dir and check collision
-#         t_new, q_new = steer()
-#         if edge_collision_free_with_moving_obs():
-#             # add to tree
+    tree = t_fwd
 
-#             n_close_opposite = tree.get_nearest_neighbor()
+    added_goals = []
 
-#             if edge_collision_free_with_moving_obs():
-#                 # connected
+    def steer():
+        pass
+
+    def sample_goal(t_ub):
+        t_rnd = np.random.rand() * (t_ub - t_lb) + t_lb
+        q_goal = goal.sample(None)
+
+        q_goal_as_list = []
+        offset = 0
+        for r in robots:
+            dim = env.robot_dims[r]
+            q_goal_as_list.append(q_goal[offset : offset + dim])
+            offset += dim
+
+        sampled_goals.append((t_rnd, conf_type.from_list(q_goal_as_list)))
+
+        print(f"Adding goal at {t_rnd}")
+
+        return t_rnd, conf_type.from_list(q_goal_as_list)
+
+
+    def sample(t_ub, goal_sampling_probability=0.1):
+        max_goal_time = max([g[0] for g in sampled_goals])
+
+        t_rnd = np.random.rand() * (max_goal_time - t0) + t0
+
+        if t_rnd < t0:
+            raise ValueError
+
+        q_rnd = []
+        # rnd_config = env.sample_config_uniform_in_limits()
+        # print(rnd_config.state())
+        # for i, r in enumerate(env.robots):
+        #     if r not in robots:
+        #         continue
+        for r in robots:
+            idx = env.robot_idx[r]
+
+            lims = env.limits[:, idx]
+
+            # print(lims)
+
+            dim = env.robot_dims[r]
+
+            rnd_uni_0_1 = np.random.rand(dim)
+            q = rnd_uni_0_1 * (lims[1, :] - lims[0, :]) + lims[0, :]
+
+            # print('rnd val', rnd_uni_0_1)
+            # print((lims[1, :] - lims[0, :]))
+            # print(lims[0, :])
+            # print('q', q)
+
+            q_rnd.append(q * 1.0)
+            # q_rnd.append(rnd_config[i])
+
+        # print(q_rnd)
+
+        return t_rnd, conf_type.from_list(q_rnd)
+
+    max_iters = 10000
+    for cnt in range(max_iters):
+        # sample
+        t_rnd, q_rnd = sample()
+
+        n_close = tree.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
+
+        # go in dir and check collision
+        t_new, q_new = steer()
+        if edge_collision_free_with_moving_obs():
+            # add to tree
+
+            n_close_opposite = tree.get_nearest_neighbor()
+
+            if edge_collision_free_with_moving_obs():
+                # connected
                 
-#                 # extract path
+                # extract path
 
-#                 # return path
-#                 path = []
-#                 times = []
-#                 return TimedPath(time=times, path=path)
+                # return path
+                path = []
+                times = []
+                return TimedPath(time=times, path=path)
+        
+        if cnt % 2 == 0:
+            tree = t_fwd
+        else:
+            tree = t_rev
 
-#     times = 0
-#     configurations = 0
-#     return TimedPath(time=times, path=configurations)
+    times = 0
+    configurations = 0
+    return TimedPath(time=times, path=configurations)
     
 
-def interpolate_in_time_space(
-    env: rai_env, robots, paths: MultiRobotPath, q0, end_times, goal, t_lb
-):
-    print("interpolating")
-    N = 5
-    v_max = 1
+# def interpolate_in_time_space(
+#     env: rai_env, robots, paths: MultiRobotPath, q0, end_times, goal, t_lb
+# ):
+#     print("interpolating")
+#     N = 5
+#     v_max = 1
 
-    # q0 = np.concatenate(q0)
-    # t0 = min([t for _, t in end_times.items()])
+#     # q0 = np.concatenate(q0)
+#     # t0 = min([t for _, t in end_times.items()])
 
-    print("start_pose", q0)
-    qg = goal.sample(None)
-    print("goal pose", qg)
+#     print("start_pose", q0)
+#     qg = goal.sample(None)
+#     print("goal pose", qg)
 
-    offset = 0
-    t_max_goal = t_lb
-    for i, r in enumerate(robots):
-        pose = paths.get_robot_poses_at_time([r], end_times[r])
-        dim = env.robot_dims[r]
+#     offset = 0
+#     t_max_goal = t_lb
+#     for i, r in enumerate(robots):
+#         pose = paths.get_robot_poses_at_time([r], end_times[r])
+#         dim = env.robot_dims[r]
 
-        print("dim", dim)
+#         print("dim", dim)
 
-        qg_robot = qg[offset : offset + dim]
-        offset += dim
+#         qg_robot = qg[offset : offset + dim]
+#         offset += dim
 
-        pose_diff_robot = qg_robot - pose
+#         pose_diff_robot = qg_robot - pose
 
-        robot_dist = np.linalg.norm(pose_diff_robot)
+#         robot_dist = np.linalg.norm(pose_diff_robot)
 
-        robot_t0 = end_times[r]
-        t_goal = max(t_lb, t_max_goal)
+#         robot_t0 = end_times[r]
+#         t_goal = max(t_lb, t_max_goal)
 
-        t_diff = t_goal - robot_t0
+#         t_diff = t_goal - robot_t0
 
-        if t_diff <= 0:
-            t_diff = 1e-6
+#         if t_diff <= 0:
+#             t_diff = 1e-6
 
-        v = robot_dist / t_diff
+#         v = robot_dist / t_diff
 
-        if v > v_max:
-            v = v_max
-            t_goal = robot_t0 + robot_dist / v
+#         if v > v_max:
+#             v = v_max
+#             t_goal = robot_t0 + robot_dist / v
 
-        t_max_goal = max(t_goal, t_max_goal)
+#         t_max_goal = max(t_goal, t_max_goal)
 
-    new_paths = {}
-    offset = 0
-    for i, r in enumerate(robots):
-        pose = paths.get_robot_poses_at_time([r], end_times[r])[0]
-        dim = env.robot_dims[r]
+#     new_paths = {}
+#     offset = 0
+#     for i, r in enumerate(robots):
+#         pose = paths.get_robot_poses_at_time([r], end_times[r])[0]
+#         dim = env.robot_dims[r]
 
-        qg_robot = qg[offset : offset + dim]
+#         qg_robot = qg[offset : offset + dim]
 
-        pose_diff_robot = qg_robot - pose
+#         pose_diff_robot = qg_robot - pose
 
-        robot_dist = np.linalg.norm(pose_diff_robot)
+#         robot_dist = np.linalg.norm(pose_diff_robot)
 
-        robot_t0 = end_times[r]
+#         robot_t0 = end_times[r]
 
-        configurations = [pose + pose_diff_robot * i / (N - 1) for i in range(N)]
-        times = [robot_t0 + (t_max_goal - robot_t0) * i / (N - 1) for i in range(N)]
+#         configurations = [pose + pose_diff_robot * i / (N - 1) for i in range(N)]
+#         times = [robot_t0 + (t_max_goal - robot_t0) * i / (N - 1) for i in range(N)]
 
-        new_paths[r] = TimedPath(times, configurations)
+#         new_paths[r] = TimedPath(times, configurations)
 
-        offset += dim
+#         offset += dim
 
-    # # split paths for robots
-    # paths = {}
-    # offset = 0
-    # for r in robots:
-    #     dim = env.robot_dims[r]
-    #     paths[r] = TimedPath(times, [c[offset : offset + dim] for c in configurations])
-    #     offset += dim
+#     # # split paths for robots
+#     # paths = {}
+#     # offset = 0
+#     # for r in robots:
+#     #     dim = env.robot_dims[r]
+#     #     paths[r] = TimedPath(times, [c[offset : offset + dim] for c in configurations])
+#     #     offset += dim
 
-    # remove parts of paths where they were not available yet
+#     # remove parts of paths where they were not available yet
 
-    return new_paths
+#     return new_paths
 
 
 def shortcut_with_dynamic_obstacles(
@@ -1795,6 +1988,7 @@ class PrioritizedPlanner(BasePlanner):
                 task_goal = task.goal
 
                 # plan actual task
+                # TODO: need to add ptc in here to avoid violating the timings
                 path, final_pose = plan_robots_in_dyn_env(
                     env,
                     t0,
@@ -1807,8 +2001,8 @@ class PrioritizedPlanner(BasePlanner):
                 )
 
                 if path is None:
-                    print("Failed")
-                    return
+                    print("Failed planning")
+                    break
 
                 # add plan to overall path
                 prev_mode = robot_paths.get_mode_at_time(
