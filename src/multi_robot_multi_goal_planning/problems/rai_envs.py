@@ -2119,6 +2119,12 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
         self.collision_resolution = 0.005
 
         self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 
 # mobile manip
