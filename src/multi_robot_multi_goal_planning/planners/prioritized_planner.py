@@ -910,42 +910,85 @@ def plan_in_time_space(
 
             return t_rnd, conf_type.from_list(q_goal_as_list)
 
-        max_goal_time = max([g[0] for g in sampled_goals])
+        if False:
+            max_goal_time = max([g[0] for g in sampled_goals])
 
-        t_rnd = np.random.rand() * (max_goal_time - t0) + t0
+            t_rnd = np.random.rand() * (max_goal_time - t0) + t0
 
-        if t_rnd < t0:
-            raise ValueError
+            if t_rnd < t0:
+                raise ValueError
 
-        q_rnd = []
-        # rnd_config = env.sample_config_uniform_in_limits()
-        # print(rnd_config.state())
-        # for i, r in enumerate(env.robots):
-        #     if r not in robots:
-        #         continue
-        for r in robots:
-            idx = env.robot_idx[r]
+            q_rnd = []
+            # rnd_config = env.sample_config_uniform_in_limits()
+            # print(rnd_config.state())
+            # for i, r in enumerate(env.robots):
+            #     if r not in robots:
+            #         continue
+            for r in robots:
+                idx = env.robot_idx[r]
 
-            lims = env.limits[:, idx]
+                lims = env.limits[:, idx]
 
-            # print(lims)
+                # print(lims)
 
-            dim = env.robot_dims[r]
+                dim = env.robot_dims[r]
 
-            rnd_uni_0_1 = np.random.rand(dim)
-            q = rnd_uni_0_1 * (lims[1, :] - lims[0, :]) + lims[0, :]
+                rnd_uni_0_1 = np.random.rand(dim)
+                q = rnd_uni_0_1 * (lims[1, :] - lims[0, :]) + lims[0, :]
 
-            # print('rnd val', rnd_uni_0_1)
-            # print((lims[1, :] - lims[0, :]))
-            # print(lims[0, :])
-            # print('q', q)
+                # print('rnd val', rnd_uni_0_1)
+                # print((lims[1, :] - lims[0, :]))
+                # print(lims[0, :])
+                # print('q', q)
 
-            q_rnd.append(q * 1.0)
-            # q_rnd.append(rnd_config[i])
+                q_rnd.append(q * 1.0)
+                # q_rnd.append(rnd_config[i])
+            
+            conf = conf_type.from_list(q_rnd)
 
-        # print(q_rnd)
+            # print(q_rnd)
+        else:
+            # sample from box
+            q0_state = q0.state()
+            qg_state = sampled_goals[0][1].state()
 
-        return t_rnd, conf_type.from_list(q_rnd)
+            mid = (q0_state + qg_state) / 2
+
+            max_goal_time = max([g[0] for g in sampled_goals])
+
+            c_max = (max_goal_time - t0) * v_max
+            # c_min = config_dist(q0, sampled_goals[0][1])
+
+            s = []
+            i = 0
+            for r in robots:
+                idx = env.robot_idx[r]
+                lims = env.limits[:, idx]
+
+                for j in range(env.robot_dims[r]):
+                    lo = mid[i] - c_max * 0.5
+                    hi = mid[i] + c_max * 0.5
+
+                    lo = max(lims[1, j], lo)
+                    hi = min(lims[0, j], hi)
+                
+                    s.append(np.random.uniform(lo, hi))
+
+                    i += 1
+            
+            conf = q0.from_flat(np.array(s))
+
+            min_dt_from_start = config_dist(q0, conf) / v_max
+            
+            min_t_sample = t0 + min_dt_from_start
+            max_t_sample = max_goal_time - config_dist(conf, sampled_goals[0][1])
+
+            if min_t_sample > max_t_sample:
+                return max_goal_time + 1, q0.from_flat(np.random.rand(len(q0.state())))
+
+            t_rnd = np.random.uniform(min_t_sample, max_t_sample)
+
+        return t_rnd, conf
 
     def project_sample_to_preplanned_path(t, q):
         q_new = q
@@ -1018,12 +1061,12 @@ def plan_in_time_space(
         assert False
 
     cnt = 0
-    loopy_bois = 0
+    attempts = 0
     while True:
         if ptc.should_terminate(0, time.time() - computation_start_time):
             break
 
-        loopy_bois += 1
+        attempts += 1
         # increase upper bound that we are sampling
         if cnt % 50:
             curr_t_ub += 1
@@ -1032,7 +1075,7 @@ def plan_in_time_space(
         if cnt % 500 == 1:
             print("cnt", cnt)
             print(len(tree.nodes))
-            print(loopy_bois)
+            print(attempts)
             print(f"Current t_ub {curr_t_ub}")
 
         # sample pt
