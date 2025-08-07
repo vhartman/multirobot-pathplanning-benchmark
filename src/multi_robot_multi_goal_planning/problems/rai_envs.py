@@ -2171,7 +2171,7 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.005
-        self.collision_resolution = 0.1
+        self.collision_resolution = 0.01
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -2247,6 +2247,13 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
         self.collision_resolution = 0.01
 
         self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
 def check_all_modes():
