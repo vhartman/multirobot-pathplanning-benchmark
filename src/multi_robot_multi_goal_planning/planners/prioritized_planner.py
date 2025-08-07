@@ -27,6 +27,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
+    RuntimeTerminationCondition,
 )
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
@@ -331,13 +332,52 @@ class Tree:
         ts = np.array([1.0 * n.t for n in n2])
         t_diff = n1.t - ts
 
+        q_dist_for_vel = self.batch_config_dist_fun(n1.q, [n.q for n in n2])
+        v = q_dist_for_vel / t_diff
+
+        mask = (t_diff < 0) | (abs(v) > v_max)
+
+        # # Initialize result
+        # dist = np.full(len(n2), np.inf)
+        
+        # # Only compute expensive stuff for non-masked elements
+        # valid_mask = ~mask
+        
+        # if len(self.robots) > 1:
+        #     # Only process valid nodes for expensive multi-robot computation
+        #     valid_indices = np.where(valid_mask)[0]
+        #     valid_n2 = [n2[i] for i in valid_indices]
+            
+        #     end_times = self.prev_plans.get_end_times(self.robots)
+        #     intermediate_poses = []
+        #     for n in valid_n2:
+        #         p = []
+        #         for i, r in enumerate(self.robots):
+        #             if n1.t > end_times[r] and n.t < end_times[r]:
+        #                 p.extend(self.prev_plans.get_robot_poses_at_time([r], n1.t)[0])
+        #             else:
+        #                 p.extend(n.q[i])
+        #         intermediate_poses.append(self.root.q.from_flat(np.array(p)))
+
+        #     q_dist_to_inter = self.batch_config_dist_fun(n1.q, intermediate_poses, "max_euclidean")
+        #     q_dist_from_inter = batch_config_cost(intermediate_poses, [n.q for n in valid_n2], "max_euclidean")
+
+        #     valid_dist = (q_dist_from_inter + q_dist_to_inter) * l + (1 - l) * t_diff[valid_mask]
+        #     dist[valid_mask] = valid_dist
+        # else:
+        #     # For single robot, avoid recomputing distances for masked elements
+        #     if valid_mask.any():
+        #         valid_q_list = [n2[i].q for i in range(len(n2)) if valid_mask[i]]
+        #         q_dist = self.batch_config_dist_fun(n1.q, valid_q_list, "max_euclidean")
+        #         valid_dist = q_dist * l + (1 - l) * t_diff[valid_mask]
+        #         dist[valid_mask] = valid_dist
+
+        # return dist
+
         if len(self.robots) > 1:
             end_times = self.prev_plans.get_end_times(self.robots)
-            # latest_relevant_end_time = max([end_times[r] for r in self.robots])
-
-            # should_have_intermediate_pose = (n1.t > latest_relevant_end_time) & (ts < latest_relevant_end_time)
-
-            # deal with arrays instead of configs here
+            # TODO: deal with arrays instead of configs here
+            # TODO: only compute the stuff for nodes that are relevant
             intermediate_poses = []
             for n in n2:
                 p = []
@@ -361,11 +401,6 @@ class Tree:
             q_dist = self.batch_config_dist_fun(n1.q, [n.q for n in n2], "max_euclidean")
             dist = q_dist * l + (1 - l) * t_diff
 
-        q_dist_for_vel = self.batch_config_dist_fun(n1.q, [n.q for n in n2])
-        v = q_dist_for_vel / t_diff
-
-        mask = (t_diff < 0) | (abs(v) > v_max)
-
         # print(q_diff)
 
         # q_dist[mask] = np.inf
@@ -383,7 +418,7 @@ class Tree:
 
         # dist[t_diff > 20] = np.inf
 
-        return dist
+        # return dist
 
         # t_diff[q_dist > 2] = np.inf
         # q_dist[t_diff > 10] = np.inf
@@ -746,6 +781,7 @@ def edge_collision_free_with_moving_obs(
 
 
 def plan_in_time_space(
+    ptc, 
     env: BaseProblem,
     t0,
     prev_plans: MultiRobotPath,
@@ -984,6 +1020,9 @@ def plan_in_time_space(
     cnt = 0
     loopy_bois = 0
     while True:
+        if ptc.should_terminate(0, time.time() - computation_start_time):
+            break
+
         loopy_bois += 1
         # increase upper bound that we are sampling
         if cnt % 50:
@@ -1769,10 +1808,10 @@ def shortcut_with_dynamic_obstacles(
 
 
 def plan_robots_in_dyn_env(
-    env, t0, other_paths, robots, q0, end_times, goal, t_lb=-1
+    ptc, env, t0, other_paths, robots, q0, end_times, goal, t_lb=-1
 ) -> Dict[str, TimedPath]:
     # plan
-    path = plan_in_time_space(env, t0, other_paths, robots, end_times, goal, t_lb)
+    path = plan_in_time_space(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
 
     # if len(robots) == 1:
     #     plt.figure()
@@ -1871,35 +1910,7 @@ class PrioritizedPlanner(BasePlanner):
         conf_type = type(self.env.get_start_pos())
 
         robots = self.env.robots
-        # def sample_non_blocking(current_robots, next_robots, next_goal, mode):
-        #     next_robots_joint_names = []
-        #     for r in next_robots:
-        #         next_robots_joint_names.extend(get_robot_joints(env.C, r))
-
-        #     curr_robots_joint_names = []
-        #     for r in current_robots:
-        #         curr_robots_joint_names.extend(get_robot_joints(env.C, r))
-
-        #     lims = env.limits[
-        #         :, env.robot_idx[env.robots[env.robots.index(next_robots[0])]]
-        #     ]
-
-        #     while True:
-        #         qg = next_goal.sample(mode)
-        #         env.C.setJointState(qg, next_robots_joint_names)
-
-        #         q = (
-        #             np.random.rand(env.robot_dims[next_robots[0]])
-        #             * (lims[1, :] - lims[0, :])
-        #             + lims[0, :]
-        #         )
-        #         env.C.setJointState(q, curr_robots_joint_names)
-
-        #         if env.is_collision_free(None, mode):
-        #             return q
-
-        #         # env.C.view(True)
-
+        
         # get a sequence for the tasks from the environment
         # this is a constraint that this planner has, we need to have a sequence for planning
 
@@ -1989,7 +2000,10 @@ class PrioritizedPlanner(BasePlanner):
 
                 # plan actual task
                 # TODO: need to add ptc in here to avoid violating the timings
+                current_time = time.time()
+                planning_ptc = RuntimeTerminationCondition(ptc.max_runtime_in_s - (current_time - computation_start_time))
                 path, final_pose = plan_robots_in_dyn_env(
+                    planning_ptc,
                     env,
                     t0,
                     robot_paths,
@@ -2093,7 +2107,11 @@ class PrioritizedPlanner(BasePlanner):
                     
                     t0 = min([v for k, v in end_times.items()])
 
+                    current_time = time.time()
+                    escape_planning_ptc = RuntimeTerminationCondition(ptc.max_runtime_in_s - (current_time - computation_start_time))
+                    
                     escape_path, _ = plan_robots_in_dyn_env(
+                        escape_planning_ptc,
                         env,
                         t0,
                         robot_paths,
