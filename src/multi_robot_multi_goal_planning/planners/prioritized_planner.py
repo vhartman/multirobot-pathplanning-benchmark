@@ -235,6 +235,22 @@ class MultiRobotPath:
         # print(end_times)
 
         return end_times
+    
+    def get_non_escape_end_times(self, robots):
+        end_times = {}
+
+        for r in robots:
+            if len(self.paths[r]) > 0:
+                if self.paths[r][-1].task_index == -1:
+                    end_times[r] = self.paths[r][-2].path.time[-1]
+                else:
+                    end_times[r] = self.paths[r][-1].path.time[-1]
+            else:
+                end_times[r] = 0
+
+        # print(end_times)
+
+        return end_times
 
     def add_path(self, robots, path, next_mode, is_escape_path=False):
         # print("adding path to multi-robot-path")
@@ -622,7 +638,7 @@ def edge_collision_free_with_moving_obs(
     qe,
     ts,
     te,
-    prev_plans,
+    prev_plans: MultiRobotPath,
     robots,
     end_times,
     resolution=0.1,
@@ -648,8 +664,17 @@ def edge_collision_free_with_moving_obs(
 
     # N = sum(part_indices)
 
-    indices = [i for i in range(N)]
     times = [ts + tdiff * idx / (N - 1) for idx in range(N)]
+            
+    # in addition to the things above, we check the times at which we might start planning again
+    non_escape_end_times = prev_plans.get_non_escape_end_times(env.robots)
+    for r, additional_time_to_check in non_escape_end_times.items():
+        if ts < additional_time_to_check < te or te < additional_time_to_check < ts:
+            times.append(additional_time_to_check)
+
+    times.sort()
+
+    indices = [i for i in range(len(times))]
 
     # print(te, ts)
     # print(times)
@@ -692,7 +717,7 @@ def edge_collision_free_with_moving_obs(
     #         starts_at_zero = False
 
     # if starts_at_zero:
-    indices = generate_binary_search_indices(len(indices))
+    indices = generate_binary_search_indices(len(times))
 
     other_robots = []
     for r in env.robots:
@@ -763,21 +788,6 @@ def edge_collision_free_with_moving_obs(
             other_robots,
         ):
             return False
-
-    # for idx in indices:
-    #     # todo this interpolatoin is wrong if we need to project to the manifold
-    #     t = times[idx]
-
-    #     ql = []
-    #     for i, r in enumerate(robots):
-    #         ql.append(robot_poses[r][idx])
-
-    #     q = np.concatenate(ql)
-
-    #     if not collision_free_with_moving_obs(
-    #         env, t, q, prev_plans, end_times, robots, joint_names, task_idx
-    #     ):
-    #         return False
 
     return True
 
@@ -1451,9 +1461,7 @@ def plan_in_time_space(
     if configurations is None:
         return None
 
-    times = 0
-    configurations = 0
-    return TimedPath(time=times, path=configurations)
+    return None
 
 
 def plan_in_time_space_bidirectional(
@@ -1795,8 +1803,9 @@ def plan_in_time_space_bidirectional(
         other_robots,
     ):
         print("Start pose not feasible")
-        env.C.view(True)
-        assert False
+        # env.C.view(True)
+        # assert False
+        return None
 
     max_iters = 10000
     for cnt in range(max_iters):
@@ -1972,10 +1981,8 @@ def plan_in_time_space_bidirectional(
         t_a = t_b
         t_b = tmp
 
-    times = 0
-    configurations = 0
-    return TimedPath(time=times, path=configurations)
-    
+    return None
+
 
 # def interpolate_in_time_space(
 #     env: rai_env, robots, paths: MultiRobotPath, q0, end_times, goal, t_lb
@@ -2275,6 +2282,9 @@ def plan_robots_in_dyn_env(
     # path = plan_in_time_space(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
     path = plan_in_time_space_bidirectional(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
 
+    if path is None:
+        return None, None
+
     # if len(robots) == 1:
     #     plt.figure()
 
@@ -2387,7 +2397,9 @@ class PrioritizedPlanner(BasePlanner):
         sequence_cache = []
         skipped_sequences = 0
 
-        info = {"costs": [], "times": []}
+        info = {"costs": [], "times": [], "paths": []}
+
+        best_path = None
 
         computation_start_time = time.time()
         while True:
@@ -2547,10 +2559,6 @@ class PrioritizedPlanner(BasePlanner):
                         
                 #             # tprev = t
 
-                robot_done = False
-                if robot_done:
-                    continue
-
                 # print("A")
                 # print(seq_index)
                 # print(env.sequence)
@@ -2594,7 +2602,7 @@ class PrioritizedPlanner(BasePlanner):
 
                     if escape_path is None:
                         print("Failed escape path planning.")
-                        return
+                        break
 
                     # add plan to overall path
                     robot_paths.add_path(
@@ -2623,7 +2631,7 @@ class PrioritizedPlanner(BasePlanner):
                 path = []
 
                 T = robot_paths.get_final_time()
-                N = 5 * int(T)
+                N = 5 * int(np.ceil(T))
                 for i in range(N):
                     t = i * T / (N - 1)
 
@@ -2641,7 +2649,12 @@ class PrioritizedPlanner(BasePlanner):
                 if len(info["costs"]) == 0 or info["costs"][-1] > cost:
                     info["costs"].append(cost)
                     info["times"].append(end_time - computation_start_time)
+                    info["paths"].append(path)
+
+                    best_path = copy.deepcopy(path)
+                    
+                    print(f"Added path with cost {cost}.")
                 else:
                     print(f"Not adding this sequence, cost to high: {cost}")
 
-        return path, info
+        return best_path, info
