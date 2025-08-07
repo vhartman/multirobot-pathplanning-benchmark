@@ -77,6 +77,7 @@ def load_experiment_config(filepath: str) -> Dict[str, Any]:
     planner_default_config_paths["birrtstar"] = "configs/defaults/birrtstar.json"
     planner_default_config_paths["aitstar"] = "configs/defaults/aitstar.json"
     planner_default_config_paths["eitstar"] = "configs/defaults/eitstar.json"
+    planner_default_config_paths["prioritized"] = "configs/defaults/prioritized.json"
 
     for planner_type, default_config_path in planner_default_config_paths.items():
         with open(default_config_path) as f:
@@ -336,6 +337,14 @@ def setup_planner(
                 with_noise=options["with_noise"],
             )
             return EITstar(env, config=eitstar_config).plan(
+                ptc=RuntimeTerminationCondition(runtime),
+                optimize=optimize,
+            )
+    elif planner_config["type"] == "prioritized":
+
+        def planner(env):
+            # options = planner_config["options"]
+            return PrioritizedPlanner(env).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
