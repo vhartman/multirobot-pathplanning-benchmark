@@ -1871,7 +1871,8 @@ def shortcut_with_dynamic_obstacles(
 
             # print("new cost:", path_cost(arrs_to_states(new_path.path), env.batch_config_cost))
 
-        tmp_other_paths.remove_final_escape_path([r for r in robots if r != robots[robot_to_shortcut]])
+        if len(robots) > 1:
+            tmp_other_paths.remove_final_escape_path([r for r in robots if r != robots[robot_to_shortcut]])
 
         # env.show(True)
 
@@ -2095,6 +2096,8 @@ class PrioritizedPlanner(BasePlanner):
                     earliest_end_time,
                 )
 
+                print("final_pose", final_pose)
+
                 if path is None:
                     print("Failed planning")
                     break
@@ -2125,11 +2128,15 @@ class PrioritizedPlanner(BasePlanner):
                     assert len(next_modes) == 1
                     next_mode = next_modes[0]
                 else:
-                    next_mode = None
+                    next_mode = curr_mode
 
                 robot_paths.add_path(
                     involved_robots, Path(path=path, task_index=task_index), next_mode
                 )
+
+                # for r in env.robots:
+                #     for p in robot_paths.paths[r]:
+                #         print(p.path)
 
                 # print("Drawing path")
                 # final_time = robot_paths.get_final_time()
@@ -2238,7 +2245,7 @@ class PrioritizedPlanner(BasePlanner):
                 T = robot_paths.get_final_time()
                 N = 5 * int(T)
                 for i in range(N):
-                    t = i * T / N
+                    t = i * T / (N - 1)
 
                     q = robot_paths.get_robot_poses_at_time(env.robots, t)
                     config = conf_type.from_list(q)
