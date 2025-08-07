@@ -327,7 +327,7 @@ class Tree:
         self.robots = None
 
     def batch_dist_fun(self, n1: Node, n2: List[Node], v_max):
-        l = 0.9
+        l = 0.7
 
         ts = np.array([1.0 * n.t for n in n2])
         t_diff = n1.t - ts
@@ -969,8 +969,8 @@ def plan_in_time_space(
                     lo = mid[i] - c_max * 0.5
                     hi = mid[i] + c_max * 0.5
 
-                    lo = max(lims[1, j], lo)
-                    hi = min(lims[0, j], hi)
+                    lo = max(lims[0, j], lo)
+                    hi = min(lims[1, j], hi)
                 
                     s.append(np.random.uniform(lo, hi))
 
@@ -981,7 +981,7 @@ def plan_in_time_space(
             min_dt_from_start = config_dist(q0, conf) / v_max
             
             min_t_sample = t0 + min_dt_from_start
-            max_t_sample = max_goal_time - config_dist(conf, sampled_goals[0][1])
+            max_t_sample = max_goal_time - config_dist(conf, sampled_goals[0][1]) / v_max
 
             if min_t_sample > max_t_sample:
                 return max_goal_time + 1, q0.from_flat(np.random.rand(len(q0.state())))
@@ -1017,6 +1017,9 @@ def plan_in_time_space(
         offset += dim
     d = config_dist(conf_type.from_list(goal_config), conf_type.from_list(start_poses))
 
+    print("Goal pose", conf_type.from_list(goal_config).state())
+    print("start/goal dist", d)
+
     # compute max time from it
     max_t = t_lb + 1 + (d / v_max) * 25
 
@@ -1044,6 +1047,19 @@ def plan_in_time_space(
         if r not in robots:
             other_robots.append(r)
 
+    # print("Goal pose")
+    # res = collision_free_with_moving_obs(
+    #     env,
+    #     t_lb,
+    #     conf_type.from_list(goal_config).state(),
+    #     env.start_pos.state() * 1.0,
+    #     prev_plans,
+    #     end_times,
+    #     robots,
+    #     other_robots,
+    #     robot_joints,)
+    # print(res)
+    # env.C.view(True)
     
     if not collision_free_with_moving_obs(
         env,
@@ -1068,7 +1084,7 @@ def plan_in_time_space(
 
         attempts += 1
         # increase upper bound that we are sampling
-        if cnt % 50:
+        if attempts % 50:
             curr_t_ub += 1
             curr_t_ub = min(curr_t_ub, max_t)
 
@@ -1082,6 +1098,9 @@ def plan_in_time_space(
         # sample time and position
         t_rnd, q_uni_rnd = sample(curr_t_ub)
         q_rnd = project_sample_to_preplanned_path(t_rnd, q_uni_rnd)
+
+        # print(q_uni_rnd.state())
+        # print(q_rnd.state())
 
         # check if there is a chance that we can reach the goal (or the start)
         time_from_start = t_rnd - t0
@@ -1102,12 +1121,17 @@ def plan_in_time_space(
                 break
 
             d_from_goal = config_dist(qg, q_rnd, "max")
-            if d_from_goal / time_from_goal < v_max:
+            if d_from_goal / time_from_goal <= v_max:
                 reachable_goal = True
                 break
 
+            # print("goal dists", d_from_goal, time_from_goal, d_from_goal/time_from_goal)
+
         if not reachable_goal:
             print("No reachable goal for the sampled node.")
+
+            # print("times", tg, t_rnd)
+
             continue
 
         # check if sample is valid
@@ -1346,6 +1370,8 @@ def plan_in_time_space(
                 print(f"failed at time {t_new}")
                 print(len(tree.nodes))
 
+                # env.C.view(False)
+
         if (
             added_pt
             and goal.satisfies_constraints(q_new.state(), mode=None, tolerance=1e-5)
@@ -1409,13 +1435,14 @@ def plan_in_time_space(
             #             continue # Skip the root node as it has no parent to draw a line from
 
             #         # Parent's coordinates and t-component
-            #         x0 = n.parent.q.state()[0 + k*2] # X-coordinate of parent
-            #         y0 = n.parent.q.state()[1 + k*2] # Y-coordinate of parent
+            #         dim = 3
+            #         x0 = n.parent.q.state()[0 + k*dim] # X-coordinate of parent
+            #         y0 = n.parent.q.state()[1 + k*dim] # Y-coordinate of parent
             #         z0 = n.parent.t             # T-component of parent (now Z)
 
             #         # Current node's coordinates and t-component
-            #         x1 = n.q.state()[0 + k*2] # X-coordinate of current node
-            #         y1 = n.q.state()[1 + k*2] # Y-coordinate of current node
+            #         x1 = n.q.state()[0 + k*dim] # X-coordinate of current node
+            #         y1 = n.q.state()[1 + k*dim] # Y-coordinate of current node
             #         z1 = n.t             # T-component of current node (now Z)
 
             #         # Plot the line segment in 3D
@@ -1442,6 +1469,7 @@ def plan_in_time_space(
 
 
 def plan_in_time_space_bidirectional(
+    ptc, 
     env: BaseProblem,
     t0,
     prev_plans: MultiRobotPath,
@@ -1794,7 +1822,9 @@ def shortcut_with_dynamic_obstacles(
 
         # append paths that are not involved
         if len(robots) > 1:
-            tmp_other_paths = copy.deepcopy(other_paths)
+            tmp_other_paths = other_paths
+
+            # tmp_other_paths = copy.deepcopy(other_paths)
             tmp_paths = {}
             for r in robots:
                 if r != robots[robot_to_shortcut]:
@@ -1834,6 +1864,7 @@ def shortcut_with_dynamic_obstacles(
 
             # print("new cost:", path_cost(arrs_to_states(new_path.path), env.batch_config_cost))
 
+        tmp_other_paths.remove_final_escape_path([r for r in robots if r != robots[robot_to_shortcut]])
 
         # env.show(True)
 
