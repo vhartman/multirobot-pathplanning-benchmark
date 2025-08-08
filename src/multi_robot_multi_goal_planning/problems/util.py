@@ -5,12 +5,20 @@ from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 
-def path_cost(path: List[State], batch_cost_fun) -> float:
+def path_cost(path: List[State], batch_cost_fun, agent_slices=None) -> float:
     """
     Computes the path cost via the batch cost function and summing it up.
     """
-    # batch_costs = batch_cost_fun(path[:-1], path[1:])
-    batch_costs = batch_cost_fun(path, None)
+    if isinstance(path[0], State):
+        pts = [start.q.state() for start in path]
+        agent_slices = path[0].q._array_slice
+        batch_costs = batch_cost_fun(pts, None, tmp_agent_slice=agent_slices)
+    elif isinstance(path[0], np.ndarray) and agent_slices is not None:
+        batch_costs = batch_cost_fun(path, None, tmp_agent_slice=agent_slices)
+    else:
+        raise ValueError("Arguments to path cost seem to be wrong.")
+        
+    # batch_costs = batch_cost_fun(path, None)
     # assert np.allclose(batch_costs, batch_costs_tmp)
 
     return np.sum(batch_costs)
@@ -21,7 +29,6 @@ def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
     Takes a path and interpolates it at the given resolution.
     Uses the euclidean distance between states to do the resolution.
     """
-    config_type = type(path[0].q)
     new_path = []
 
     # discretize path

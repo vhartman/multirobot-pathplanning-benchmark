@@ -1803,7 +1803,7 @@ def plan_in_time_space_bidirectional(
         # assert False
         return None
 
-    max_iters = 10000
+    max_iters = 5000
     for iter in range(max_iters):
         if ptc.should_terminate(0, time.time() - computation_start_time):
             break
@@ -1876,6 +1876,12 @@ def plan_in_time_space_bidirectional(
             # global global_collision_counter
             # if global_collision_counter > 50000:
             # env.show(True)
+            if iter >= 1000 and iter % 500 == 0:
+                # for some reason there is some bug that seems fixed when displaying a conf once.
+                # I do not know what the reason is. I suspect that I am somehow mishandling modes.
+                # Not sure how that would be fixed by doing this though.
+                env.show(False)
+                # env.C.view_close()
             continue
 
         if t_rnd < t0:
@@ -2180,8 +2186,8 @@ def shortcut_with_dynamic_obstacles(
 
         # check if the shortcut improves cost
         if path_cost(
-            arrs_to_states([q0.state(), q1.state()]), env.batch_config_cost
-        ) >= path_cost(arrs_to_states(new_path.path[i:j]), env.batch_config_cost):
+            [q0.state(), q1.state()], env.batch_config_cost, agent_slices=q0._array_slice
+        ) >= path_cost(new_path.path[i:j], env.batch_config_cost, agent_slices=q0._array_slice):
             continue
 
         attempted_shortcuts += 1
@@ -2242,9 +2248,9 @@ def shortcut_with_dynamic_obstacles(
         # times.append(current_time - start_time)
         # costs.append(path_cost(new_path, env.batch_config_cost))
 
-    print("original cost:", path_cost(arrs_to_states(path.path), env.batch_config_cost))
+    print("original cost:", path_cost(path.path, env.batch_config_cost, agent_slices=q0._array_slice))
     print("Attempted shortcuts: ", attempted_shortcuts)
-    print("new cost:", path_cost(arrs_to_states(new_path.path), env.batch_config_cost))
+    print("new cost:", path_cost(new_path.path, env.batch_config_cost, agent_slices=q0._array_slice))
 
     info = {}
 
@@ -2339,16 +2345,16 @@ def plan_robots_in_dyn_env(
 
 @dataclass
 class PrioritizedPlannerConfig:
-    gamma: float = 0.7
+    # gamma: float = 0.7
     # distance_metric: str = "euclidean"
     use_bidirectional_planner: bool = True
-    shortcut: bool = True
+    # shortcut: bool = True
 
 class PrioritizedPlanner(BasePlanner):
     def __init__(
         self,
         env: BaseProblem,
-        config: PrioritizedPlannerConfig = field(default_factory=PrioritizedPlannerConfig),
+        config: PrioritizedPlannerConfig = PrioritizedPlannerConfig()
     ):
         self.env = env
         self.config = config
@@ -2415,8 +2421,8 @@ class PrioritizedPlanner(BasePlanner):
             seq_index = 0
 
             success = False
+            env = copy.deepcopy(self.env)
             while True:
-                env = copy.deepcopy(self.env)
 
                 if ptc.should_terminate(0, time.time() - computation_start_time):
                     break
@@ -2605,6 +2611,8 @@ class PrioritizedPlanner(BasePlanner):
 
                 seq_index += 1
 
+
+
             if False:
                 print("displaying")
                 for k, v in robot_paths.paths.items():
@@ -2644,5 +2652,8 @@ class PrioritizedPlanner(BasePlanner):
                     print(f"Added path with cost {cost}.")
                 else:
                     print(f"Not adding this sequence, cost to high: {cost}")
+            
+            if isinstance(env, rai_env):
+                del env.C
 
         return best_path, info

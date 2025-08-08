@@ -384,15 +384,16 @@ class rai_env(BaseProblem):
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
     def batch_config_cost(
-        self, starts: List[Configuration], ends: List[Configuration]
+        self, starts: List[Configuration], ends: List[Configuration], tmp_agent_slice = None
     ) -> NDArray:
-        return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction)
+        return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction, tmp_agent_slice=tmp_agent_slice)
 
     def show_config(self, q: Configuration, blocking: bool = True):
         self.C.setJointState(q.state())
         self.C.view(blocking)
 
     def show(self, blocking: bool = True):
+        # self.C.view_close()
         self.C.view(blocking)
 
     # Environment functions: collision checking

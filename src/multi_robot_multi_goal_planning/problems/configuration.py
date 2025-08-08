@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import List, Tuple, Union, Any
+from typing import List, Tuple, Union, Any, Optional
 from numpy.typing import NDArray
 import numba
 
@@ -82,7 +82,7 @@ class ListConfiguration(Configuration):
     @classmethod
     def from_list(cls, q_list: List[NDArray]) -> "ListConfiguration":
         return cls(q_list)
-    
+
     def from_flat(self, q: NDArray) -> "ListConfiguration":
         raise NotImplementedError
 
@@ -96,7 +96,12 @@ class ListConfiguration(Configuration):
         return len(self.q)
 
 
-@numba.jit((numba.float64[:, :], numba.int64[:, :]), nopython=True, fastmath=True, boundscheck=False)
+@numba.jit(
+    (numba.float64[:, :], numba.int64[:, :]),
+    nopython=True,
+    fastmath=True,
+    boundscheck=False,
+)
 def compute_sliced_euclidean_dists(diff: NDArray, slices: NDArray) -> NDArray:
     """Compute Euclidean distances for sliced configurations with optimizations."""
     num_slices = len(slices)
@@ -119,7 +124,12 @@ def compute_sliced_euclidean_dists(diff: NDArray, slices: NDArray) -> NDArray:
     return dists
 
 
-@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True, boundscheck=False)
+@numba.jit(
+    numba.float64[:](numba.float64[:, :]),
+    nopython=True,
+    fastmath=True,
+    boundscheck=False,
+)
 def compute_sum_reduction(dists: NDArray) -> NDArray:
     """Compute sum reduction across robot distances."""
     num_slices, num_samples = dists.shape
@@ -136,7 +146,10 @@ def compute_sum_reduction(dists: NDArray) -> NDArray:
 
 
 @numba.jit(
-    numba.float64[:](numba.float64[:, :], numba.float64), nopython=True, fastmath=True, boundscheck=False
+    numba.float64[:](numba.float64[:, :], numba.float64),
+    nopython=True,
+    fastmath=True,
+    boundscheck=False,
 )
 def compute_max_sum_reduction(dists: NDArray, w: float) -> NDArray:
     """Compute max + w*sum reduction across robot distances."""
@@ -156,7 +169,12 @@ def compute_max_sum_reduction(dists: NDArray, w: float) -> NDArray:
     return result
 
 
-@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True, boundscheck=False)
+@numba.jit(
+    numba.float64[:](numba.float64[:, :]),
+    nopython=True,
+    fastmath=True,
+    boundscheck=False,
+)
 def compute_abs_max_reduction(dists: NDArray) -> NDArray:
     """Compute the maximum absolute value along axis 1 for each row."""
     num_rows, num_cols = dists.shape
@@ -177,7 +195,12 @@ def compute_abs_max_reduction(dists: NDArray) -> NDArray:
     return result
 
 
-@numba.jit(numba.float64[:](numba.float64[:, :]), nopython=True, fastmath=True, boundscheck=False)
+@numba.jit(
+    numba.float64[:](numba.float64[:, :]),
+    nopython=True,
+    fastmath=True,
+    boundscheck=False,
+)
 def compute_max_reduction(dists: NDArray) -> NDArray:
     """Compute max + w*sum reduction across robot distances."""
     num_slices, num_samples = dists.shape
@@ -355,7 +378,7 @@ def config_cost(
 #         return compute_max_sum_reduction(all_robot_dists, w)
 #     elif reduction == "sum":
 #         return compute_sum_reduction(all_robot_dists)
-    
+
 #     raise ValueError
 
 
@@ -379,7 +402,7 @@ def config_cost(
 #         return compute_max_sum_reduction(all_robot_dists, w)
 #     elif reduction == "sum":
 #         return compute_sum_reduction(all_robot_dists)
-    
+
 #     raise ValueError
 
 
@@ -402,7 +425,7 @@ def config_cost(
 #         return compute_max_sum_reduction(all_robot_dists, w)
 #     elif reduction == "sum":
 #         return compute_sum_reduction(all_robot_dists)
-    
+
 #     raise ValueError
 
 
@@ -412,6 +435,7 @@ def batch_config_cost(
     metric: str = "max",
     reduction: str = "max",
     w: float = 0.01,
+    tmp_agent_slice: Optional[NDArray] = None
 ) -> NDArray:
     """
     Computes the cost between two lists of configurations.
@@ -424,10 +448,19 @@ def batch_config_cost(
         agent_slices = starts._array_slice
 
     # special case for a path cost computation: We want to compute the cost between the pairs, shifted by one
-    elif batch_other is None:
-        arr = np.array([start.q.state() for start in starts])
-        diff = arr[1:, :] - arr[:-1, :]
-        agent_slices = starts[0].q._array_slice
+    elif batch_other is None and tmp_agent_slice is not None:
+        # TODO: get rid of this
+        # if isinstance(starts[0], State):
+        # arr = np.array([start.q.state() for start in starts])
+        # diff = arr[1:, :] - arr[:-1, :]
+        # agent_slices = starts[0].q._array_slice
+
+        if isinstance(starts[0], np.ndarray):
+            arr = np.array(starts)
+            diff = arr[1:, :] - arr[:-1, :]
+            agent_slices = tmp_agent_slice
+        else:
+            raise ValueError
 
     elif isinstance(starts, list) and isinstance(batch_other, list):
         if isinstance(starts[0], Configuration):
@@ -441,7 +474,18 @@ def batch_config_cost(
                 [other.q.state() for other in batch_other], dtype=np.float64
             )
             agent_slices = starts[0].q._array_slice
+    else:
+        raise ValueError
 
+    return _batch_config_cost_impl(diff, agent_slices, metric, reduction, w)
+
+def _batch_config_cost_impl(
+    diff: NDArray,
+    agent_slices: NDArray,
+    metric: str = "max",
+    reduction: str = "max",
+    w: float = 0.01,
+):
     if metric == "euclidean":
         all_robot_dists = compute_sliced_euclidean_dists(diff, agent_slices)
     else:
@@ -453,5 +497,5 @@ def batch_config_cost(
         return compute_max_sum_reduction(all_robot_dists, w)
     elif reduction == "sum":
         return compute_sum_reduction(all_robot_dists)
-    
+
     raise ValueError
