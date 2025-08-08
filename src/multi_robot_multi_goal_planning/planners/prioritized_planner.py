@@ -2435,6 +2435,7 @@ class PrioritizedPlanner(BasePlanner):
                 print()
                 print("task name", task.name)
                 print("robots:", involved_robots)
+                print(f"sequence index {seq_index}")
 
                 # figure out when this task can end at the earliest
                 earliest_end_time = robot_paths.get_final_non_escape_time()
