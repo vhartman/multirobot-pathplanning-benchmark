@@ -65,6 +65,12 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
         runs.sort()
 
         planner_data = []
+    # config["planners"] = {}
+    # config["planners"]["name"] = []
+    # config["planners"]["type"] = []
+    # config["planners"]["options"] = {}
+
+    # config["environment_name"] = []
 
         for i, run in enumerate(runs):
             run_data = {}
@@ -127,6 +133,7 @@ report_colors = {
 
 # TODO: move this to config?
 planner_name_to_color = {
+    "prioritized": "#FFD61F",
     "rrtstar": report_colors["rrt"],
     "rrtstar_global_sampling": report_colors["rrt_ablation"],
     "rrtstar_no_shortcutting": report_colors["rrt_ablation"],
