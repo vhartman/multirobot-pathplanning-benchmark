@@ -307,8 +307,8 @@ def make_cost_plots(
             )[:, None],
             marker="o",
             color=color,
-            # capsize=5,
-            # capthick=5,
+            capsize=5,
+            capthick=2,
         )
 
     time_discretization = 1e-2
@@ -331,9 +331,14 @@ def make_cost_plots(
 
         max_planner_solution_time = 0
 
+        is_initial_solution_only = True
+
         for single_run_result in results:
             solution_times = single_run_result["times"]
             solution_costs = single_run_result["costs"]
+
+            if len(solution_costs) > 1:
+                is_initial_solution_only = False
 
             discretized_solution_costs = interpolate_costs(
                 interpolated_solution_times, solution_times, solution_costs
@@ -375,6 +380,9 @@ def make_cost_plots(
         ls = "-"
         if planner_name in planner_name_to_style:
             ls = planner_name_to_style[planner_name]
+        
+        if is_initial_solution_only:
+            continue
 
         plt.semilogx(
             interpolated_solution_times[
@@ -402,8 +410,6 @@ def make_cost_plots(
         plt.axhline(y=baseline_cost, color="gray", linestyle="--")
 
         min_non_inf_cost = min(min_non_inf_cost, baseline_cost)
-
-
 
     plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
