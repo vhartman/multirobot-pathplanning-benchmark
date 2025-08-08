@@ -16,6 +16,8 @@ from numpy.typing import NDArray
 from collections import namedtuple
 import copy
 
+from dataclasses import dataclass, field
+
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
@@ -1063,37 +1065,36 @@ def plan_in_time_space(
     # print(res)
     # env.C.view(True)
     
-    if not collision_free_with_moving_obs(
-        env,
-        t0,
-        q0.state(),
-        env.start_pos.state() * 1.0,
-        prev_plans,
-        end_times,
-        robots,
-        other_robots,
-    ):
-        print("Start pose not feasible")
-        env.C.view(True)
-        assert False
+    # if not collision_free_with_moving_obs(
+    #     env,
+    #     t0,
+    #     q0.state(),
+    #     env.start_pos.state() * 1.0,
+    #     prev_plans,
+    #     end_times,
+    #     robots,
+    #     other_robots,
+    # ):
+    #     print("Start pose not feasible")
+    #     env.C.view(True)
+    #     assert False
 
-    cnt = 0
-    attempts = 0
+    iter = 0
     while True:
         if ptc.should_terminate(0, time.time() - computation_start_time):
             break
 
-        attempts += 1
+        iter += 1
         # increase upper bound that we are sampling
-        if attempts % 50:
+        if iter % 50:
             curr_t_ub += 1
             curr_t_ub = min(curr_t_ub, max_t)
 
-        if cnt % 500 == 0:
-            print("cnt", cnt)
-            print(len(tree.nodes))
-            print(attempts)
-            print(f"Current t_ub {curr_t_ub}")
+        # if attempts % 500 == 0:
+        #     print("iter", iter)
+        #     print(len(tree.nodes))
+        #     print(attempts)
+        #     print(f"Current t_ub {curr_t_ub}")
 
         # sample pt
         # sample time and position
@@ -1453,10 +1454,8 @@ def plan_in_time_space(
 
             return TimedPath(time=times[::-1], path=configurations[::-1])
 
-        if cnt > max_iter:
+        if iter > max_iter:
             break
-
-        cnt += 1
 
     if configurations is None:
         return None
@@ -1486,7 +1485,7 @@ def plan_in_time_space_bidirectional(
     q0 = conf_type.from_list(start_configuration)
 
     print("start state", q0.state())
-    print(q0)
+    # print(q0)
 
     t_fwd = Tree(Node(t0, q0))
     t_rev = Tree(None, reverse=True)
@@ -1767,9 +1766,9 @@ def plan_in_time_space_bidirectional(
     # env.C.view(True)
 
     # TODO add goals to rev tree
-    cnt = 0
+    iter = 0
     while True:
-        cnt += 1
+        iter += 1
 
         t_rnd, q_rnd = sample_goal(max_t)
         res = collision_free_with_moving_obs(
@@ -1786,11 +1785,8 @@ def plan_in_time_space_bidirectional(
             t_rev.nodes.append(Node(t_rnd, q_rnd))
             sampled_goals.append((t_rnd, q_rnd))
 
-        if len(sampled_goals) > 0 and cnt > 50:
+        if len(sampled_goals) > 0 and iter > 50:
             break
-
-        if cnt > 500:
-            env.C.view(True)
 
     if not collision_free_with_moving_obs(
         env,
@@ -1808,25 +1804,20 @@ def plan_in_time_space_bidirectional(
         return None
 
     max_iters = 10000
-    for cnt in range(max_iters):
+    for iter in range(max_iters):
         if ptc.should_terminate(0, time.time() - computation_start_time):
             break
 
         # increase upper bound that we are sampling
-        if cnt % 50:
+        if iter % 50:
             curr_t_ub += 1
             curr_t_ub = min(curr_t_ub, max_t)
 
-        if cnt % 500 == 0:
-            print("cnt", cnt)
+        if iter % 500 == 0:
+            print("iter", iter)
             print(len(t_a.nodes))
             print(f"Current t_ub {curr_t_ub}")
 
-        # sample pt
-        # sample time and position
-        rnd = random.random()
-
-        # goal_sampling_probability = 0.01
         # if len(sampled_goals) == 0 or rnd < goal_sampling_probability:
         #     # t_rnd, q_sampled = sample_goal(curr_t_ub)
         #     # sampled_goals.append((t_rnd, q_sampled))
@@ -1919,6 +1910,8 @@ def plan_in_time_space_bidirectional(
             t_a.add_node(Node(t_new, q_new), n_close)            # add to tree
 
             n_close_opposite = t_b.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
+
+            # should we steer here, instead of attempting to connect?
 
             if edge_collision_free_with_moving_obs(
                 env,
@@ -2159,7 +2152,7 @@ def shortcut_with_dynamic_obstacles(
         indices[r] = np.arange(offset, offset+dim)
         offset += dim
 
-    cnt = 0
+    attempted_shortcuts = 0
     for _ in range(max_iter):
         i = np.random.randint(0, num_indices)
         j = np.random.randint(0, num_indices)
@@ -2172,21 +2165,11 @@ def shortcut_with_dynamic_obstacles(
         if abs(j - i) < 2:
             continue
 
-        robot_to_shortcut = np.random.randint(0, len(robots))
+        robot_idx_to_shortcut = np.random.randint(0, len(robots))
+        robot_name_to_shortcut = robots[robot_idx_to_shortcut]
 
         # we skip this attempt of shortcutting if the attempt tries to shortcut a path before the end time of this robot
-        # skip = False
-        # for r in robots:
-        #     if np.sign(new_path.time[i] - end_times[r]) != np.sign(
-        #         new_path.time[j] - end_times[r]
-        #     ):
-        #         skip = True
-        #         break
-
-        # if skip:
-        #     continue
-
-        if new_path.time[i] < end_times[robots[robot_to_shortcut]] or new_path.time[j] < end_times[robots[robot_to_shortcut]]:
+        if new_path.time[i] < end_times[robot_name_to_shortcut] or new_path.time[j] < end_times[robot_name_to_shortcut]:
             continue
 
         q0 = arr_to_config(new_path.path[i])
@@ -2201,17 +2184,10 @@ def shortcut_with_dynamic_obstacles(
         ) >= path_cost(arrs_to_states(new_path.path[i:j]), env.batch_config_cost):
             continue
 
-        cnt += 1
+        attempted_shortcuts += 1
 
-        # robots_to_shortcut = [r for r in robots]
-        # if False:
-        #     random.shuffle(robots_to_shortcut)
-        #     num_robots = 1
-        #     # num_robots = np.random.randint(0, len(robots_to_shortcut))
-        #     robots_to_shortcut = robots_to_shortcut[:num_robots]
-
-        q0 = conf_type.from_list([q0[robot_to_shortcut]])
-        q1 = conf_type.from_list([q1[robot_to_shortcut]])
+        q0 = conf_type.from_list([q0[robot_idx_to_shortcut]])
+        q1 = conf_type.from_list([q1[robot_idx_to_shortcut]])
 
         # append paths that are not involved
         if len(robots) > 1:
@@ -2220,19 +2196,19 @@ def shortcut_with_dynamic_obstacles(
             # tmp_other_paths = copy.deepcopy(other_paths)
             tmp_paths = {}
             for r in robots:
-                if r != robots[robot_to_shortcut]:
+                if r != robot_name_to_shortcut:
                     ind = indices[r]
                     tmp_paths[r] = TimedPath(path=[pt[ind] * 1.0 for pt in new_path.path], time=discretized_time)
 
             # uninvolved_indices = np.array([ind for r, ind in indices.items() if r != robots[robot_to_shortcut]]).flatten()
             # tmp_path = TimedPath(time=discretized_time, path=[pt[uninvolved_indices] for pt in new_path.path])
-            tmp_other_paths.add_path([r for r in robots if r != robots[robot_to_shortcut]], Path(path=tmp_paths, task_index=-1), None, is_escape_path=True)
+            tmp_other_paths.add_path([r for r in robots if r != robot_name_to_shortcut], Path(path=tmp_paths, task_index=-1), None, is_escape_path=True)
         else:
             tmp_other_paths = other_paths
 
         # this is wrong for partial shortcuts atm.
         if edge_collision_free_with_moving_obs(
-            env, q0, q1, t0, t1, tmp_other_paths, [robots[robot_to_shortcut]], end_times, resolution=env.collision_resolution
+            env, q0, q1, t0, t1, tmp_other_paths, [robot_name_to_shortcut], end_times, resolution=env.collision_resolution
         ):
             # if len(robots) > 1:
             #     print("AAA")
@@ -2244,7 +2220,7 @@ def shortcut_with_dynamic_obstacles(
                 #     ql.append(q)
                 
                 for r_idx, r in enumerate(robots):
-                    if r_idx == robot_to_shortcut:
+                    if r_idx == robot_idx_to_shortcut:
                         q = q0[0] + (q1[0] - q0[0]) / (j - i) * k
                     else:
                         q = new_path.path[i+k][indices[r]] * 1.0
@@ -2258,7 +2234,7 @@ def shortcut_with_dynamic_obstacles(
             # print("new cost:", path_cost(arrs_to_states(new_path.path), env.batch_config_cost))
 
         if len(robots) > 1:
-            tmp_other_paths.remove_final_escape_path([r for r in robots if r != robots[robot_to_shortcut]])
+            tmp_other_paths.remove_final_escape_path([r for r in robots if r != robot_name_to_shortcut])
 
         # env.show(True)
 
@@ -2267,7 +2243,7 @@ def shortcut_with_dynamic_obstacles(
         # costs.append(path_cost(new_path, env.batch_config_cost))
 
     print("original cost:", path_cost(arrs_to_states(path.path), env.batch_config_cost))
-    print("Attempted shortcuts: ", cnt)
+    print("Attempted shortcuts: ", attempted_shortcuts)
     print("new cost:", path_cost(arrs_to_states(new_path.path), env.batch_config_cost))
 
     info = {}
@@ -2276,11 +2252,13 @@ def shortcut_with_dynamic_obstacles(
 
 
 def plan_robots_in_dyn_env(
-    ptc, env, t0, other_paths, robots, q0, end_times, goal, t_lb=-1
+    ptc, env, t0, other_paths, robots, q0, end_times, goal, t_lb=-1, use_bidirectional_planner = True
 ) -> Dict[str, TimedPath]:
     # plan
-    # path = plan_in_time_space(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
-    path = plan_in_time_space_bidirectional(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
+    if use_bidirectional_planner:
+        path = plan_in_time_space_bidirectional(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
+    else:
+        path = plan_in_time_space(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
 
     if path is None:
         return None, None
@@ -2359,13 +2337,21 @@ def plan_robots_in_dyn_env(
 
     return separate_paths, postprocessed_path.path[-1]
 
+@dataclass
+class PrioritizedPlannerConfig:
+    gamma: float = 0.7
+    # distance_metric: str = "euclidean"
+    use_bidirectional_planner: bool = True
+    shortcut: bool = True
 
 class PrioritizedPlanner(BasePlanner):
     def __init__(
         self,
         env: BaseProblem,
+        config: PrioritizedPlannerConfig = field(default_factory=PrioritizedPlannerConfig),
     ):
         self.env = env
+        self.config = config
 
         global global_collision_counter
         global_collision_counter = 0
@@ -2486,6 +2472,7 @@ class PrioritizedPlanner(BasePlanner):
                     end_times,
                     task_goal,
                     earliest_end_time,
+                    use_bidirectional_planner=self.config.use_bidirectional_planner
                 )
 
                 print("final_pose", final_pose)
@@ -2595,6 +2582,7 @@ class PrioritizedPlanner(BasePlanner):
                         escape_start_pose,
                         end_times,
                         escape_goal,
+                        use_bidirectional_planner=self.config.use_bidirectional_planner
                     )
 
                     print("escape path")
