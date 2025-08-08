@@ -2565,6 +2565,7 @@ class PrioritizedPlanner(BasePlanner):
                 print("planning escape path")
                 escape_start_time = path[involved_robots[0]].time[-1]
                 end_times = robot_paths.get_end_times(involved_robots)
+                failed_escape_planning = False
 
                 for r in involved_robots:
                     q_non_blocking = env.safe_pose[r]
@@ -2596,6 +2597,7 @@ class PrioritizedPlanner(BasePlanner):
 
                     if escape_path is None:
                         print("Failed escape path planning.")
+                        failed_escape_planning = True
                         break
 
                     # add plan to overall path
@@ -2606,12 +2608,13 @@ class PrioritizedPlanner(BasePlanner):
                         is_escape_path=True,
                     )
 
+                if failed_escape_planning:
+                    break
+
                 # check if there is a task left to do
                 # display_multi_robot_path(env, robot_paths)
 
                 seq_index += 1
-
-
 
             if False:
                 print("displaying")
