@@ -3,7 +3,7 @@
   "environment": "other_hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "sum",
-  "max_planning_time": 200,
+  "max_planning_time": 500,
   "optimize": true,
   "num_runs": 50,
   "seed": 0,
