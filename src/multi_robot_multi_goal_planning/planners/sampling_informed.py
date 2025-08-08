@@ -687,7 +687,7 @@ class InformedSampling:
             # print("inv attempt", obv_inv_attempts)
             # print("coll", sample_in_collision)
 
-        print(len(new_samples) / num_attempts)
+        # print(len(new_samples) / num_attempts)
 
         # fig = plt.figure()
         # ax = fig.add_subplot(projection='3d')
@@ -878,7 +878,7 @@ class InformedSampling:
                     new_transitions.append((q, mode, improving_modes))
                     break
 
-        print(len(new_transitions) / num_attempts)
+        # print(len(new_transitions) / num_attempts)
 
         # fig = plt.figure()
         # ax = fig.add_subplot(projection='3d')
