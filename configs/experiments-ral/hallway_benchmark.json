@@ -3,40 +3,40 @@
   "environment": "other_hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "sum",
-  "max_planning_time": 100,
+  "max_planning_time": 200,
   "optimize": true,
-  "num_runs": 5,
+  "num_runs": 50,
   "seed": 0,
   "planners": [
     {
+      "name": "prioritized",
+      "type": "prioritized",
+      "options": {}
+    },
+    {
       "name": "rrtstar",
       "type": "rrtstar",
-      "options": {
-      }
+      "options": {}
     },
     {
       "name": "birrtstar",
       "type": "birrtstar",
-      "options": {
-      }
+      "options": {}
     },
     {
       "name": "prm",
       "type": "prm",
-      "options": {
-      }
+      "options": {}
     },
     {
       "name": "eitstar",
       "type": "eitstar",
-      "options": {
-      }
+      "options": {}
     },
     {
       "name": "aitstar",
       "type": "aitstar",
-      "options": {
-      }
+      "options": {}
     }
   ]
 }

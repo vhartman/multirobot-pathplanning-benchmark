@@ -3,7 +3,7 @@
   "environment": "box_stacking_dep",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 500,
+  "max_planning_time": 200,
   "optimize": true,
   "num_runs": 50,
   "seed": 2,

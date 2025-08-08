@@ -3,11 +3,16 @@
   "environment": "random_2d",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 100,
+  "max_planning_time": 200,
   "optimize": true,
-  "num_runs": 5,
+  "num_runs": 50,
   "seed": 0,
   "planners": [
+    {
+      "name": "prioritized",
+      "type": "prioritized",
+      "options": {}
+    },
     {
       "name": "rrtstar",
       "type": "rrtstar",
