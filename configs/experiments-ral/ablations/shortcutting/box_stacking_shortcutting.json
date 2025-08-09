@@ -1,5 +1,5 @@
 {
-  "experiment_name": "rrt_planner_convergence",
+  "experiment_name": "shortcutting_exp",
   "environment": "box_stacking_dep",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",

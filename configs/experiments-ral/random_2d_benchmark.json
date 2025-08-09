@@ -1,5 +1,5 @@
 {
-  "experiment_name": "",
+  "experiment_name": "convergence",
   "environment": "random_2d",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",

@@ -1,5 +1,5 @@
 {
-  "experiment_name": "sampling_test",
+  "experiment_name": "global_sampling_exp",
   "environment": "other_hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "sum",

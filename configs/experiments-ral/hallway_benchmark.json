@@ -1,8 +1,8 @@
 {
-  "experiment_name": "",
+  "experiment_name": "convergence",
   "environment": "other_hallway",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "sum",
+  "cost_reduction": "max",
   "max_planning_time": 500,
   "optimize": true,
   "num_runs": 50,

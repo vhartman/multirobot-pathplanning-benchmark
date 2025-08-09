@@ -1,5 +1,5 @@
 {
-  "experiment_name": "shortcutting_test",
+  "experiment_name": "shortcutting_exp",
   "environment": "other_hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "sum",
