@@ -16,7 +16,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import State
 from compute_confidence_intervals import computeConfidenceInterval
 
 
-def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
+def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, List[Any]]:
     all_subfolders = [
         name for name in os.listdir(folder) if os.path.isdir(os.path.join(folder, name))
     ]
@@ -25,11 +25,14 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
 
     all_experiment_data = {}
 
+    loading_start_time = time.time()
+
     for planner_name in planner_names:
         print(f"Loading data for {planner_name}")
         subfolder_path = folder + planner_name + "/"
 
         timestamps = []
+        print("Loading timestamps")
         try:
             with open(subfolder_path + "timestamps.txt") as file:
                 for line in file:
@@ -41,10 +44,19 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
                         timestamps_this_run.append(float(num))
 
                     timestamps.append(timestamps_this_run)
+                # for line in file:
+                #     line = line.strip()
+                #     if not line:
+                #         continue
+                #     # Use map for type conversion
+                #     timestamps_this_run = list(map(float, line.rstrip(',').split(",")))
+                #     timestamps.append(timestamps_this_run)
+
         except FileNotFoundError:
             continue
 
         costs = []
+        print("Loading costs")
         with open(subfolder_path + "costs.txt") as file:
             for line in file:
                 costs_this_run = []
@@ -55,6 +67,15 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
                     costs_this_run.append(float(num))
 
                 costs.append(costs_this_run)
+            # for line in file:
+            #     line = line.strip()
+            #     if not line:
+            #         continue
+            #     # Use map for type conversion
+            #     costs_this_run = list(map(float, line.rstrip(',').split(",")))
+            #     costs.append(costs_this_run)
+
+            #     costs.append(costs_this_run)
 
         runs = [
             int(name)
@@ -87,13 +108,15 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
 
             sorted_files = [x for _, x in sorted(zip(path_nums, onlyfiles))]
 
-            paths = []
-            for file in sorted_files:
-                with open(run_subfolder + file) as f:
-                    path_data = json.load(f)
-                    paths.append(path_data)
+            if load_paths:
+                paths = []
+                for file in sorted_files:
+                    with open(run_subfolder + file) as f:
+                        path_data = json.load(f)
+                        paths.append(path_data)
 
-            run_data["paths"] = paths
+                run_data["paths"] = paths
+                
             try:
                 run_data["costs"] = costs[i]
                 run_data["times"] = timestamps[i]
@@ -103,6 +126,9 @@ def load_data_from_folder(folder: str) -> Dict[str, List[Any]]:
             planner_data.append(run_data)
 
         all_experiment_data[planner_name] = planner_data
+
+    loading_end_time = time.time()
+    print(f"Loading took {loading_end_time - loading_start_time}s")
 
     return all_experiment_data
 
