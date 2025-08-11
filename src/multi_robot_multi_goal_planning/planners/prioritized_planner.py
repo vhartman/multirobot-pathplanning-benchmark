@@ -243,6 +243,8 @@ class MultiRobotPath:
 
         for r in robots:
             if len(self.paths[r]) > 0:
+                # print(len(self.paths[r]))
+                # print(self.paths[r][-1].task_index)
                 if self.paths[r][-1].task_index == -1:
                     end_times[r] = self.paths[r][-2].path.time[-1]
                 else:
@@ -1971,7 +1973,7 @@ def plan_in_time_space_bidirectional(
                     path = path[::-1]
                     times = times[::-1]
 
-                print(times)
+                # print(times)
 
                 # return path
                 return TimedPath(time=times, path=path)
@@ -2065,6 +2067,7 @@ def plan_in_time_space_bidirectional(
 def shortcut_with_dynamic_obstacles(
     env: BaseProblem, other_paths: MultiRobotPath, robots, path, max_iter=500
 ):
+    print("shortcutting")
     # costs = [path_cost(new_path, env.batch_config_cost)]
     # times = [0.0]
 
@@ -2208,7 +2211,7 @@ def shortcut_with_dynamic_obstacles(
 
             # uninvolved_indices = np.array([ind for r, ind in indices.items() if r != robots[robot_to_shortcut]]).flatten()
             # tmp_path = TimedPath(time=discretized_time, path=[pt[uninvolved_indices] for pt in new_path.path])
-            tmp_other_paths.add_path([r for r in robots if r != robot_name_to_shortcut], Path(path=tmp_paths, task_index=-1), None, is_escape_path=True)
+            tmp_other_paths.add_path([r for r in robots if r != robot_name_to_shortcut], Path(path=tmp_paths, task_index=3), None, is_escape_path=True)
         else:
             tmp_other_paths = other_paths
 
@@ -2398,8 +2401,16 @@ class PrioritizedPlanner(BasePlanner):
             if ptc.should_terminate(0, time.time() - computation_start_time):
                 break
 
+            robot_paths = MultiRobotPath(q0, m0, robots)
+
+            seq_index = 0
+
+            success = False
+            env = copy.deepcopy(self.env)
+            env.C_cache = {}
+
             # plan for a single sequence
-            sequence = self.env.get_sequence()
+            sequence = env.get_sequence()
             print()
             print("Planning for sequence\n", sequence)
 
@@ -2416,12 +2427,38 @@ class PrioritizedPlanner(BasePlanner):
             skipped_sequences = 0
             sequence_cache.append(sequence)
 
-            robot_paths = MultiRobotPath(q0, m0, robots)
+            # construct task id sequence
+            task_id_sequence = [env.start_mode.task_ids]
 
-            seq_index = 0
+            for s in range(len(sequence)-1):
+                ids = copy.deepcopy(task_id_sequence[-1])
+                task_idx = sequence[s]
+                task = env.tasks[task_idx]
 
-            success = False
-            env = copy.deepcopy(self.env)
+                # print("s_idx", s)
+                # print("task", task.name)
+                # print("task_robots", task.robots)
+                # print("current ids", ids)
+
+                for robot_idx, r in enumerate(env.robots):
+                    if r not in task.robots:
+                        continue
+
+                    for i in range(s+1, len(sequence)):
+                        next_task_idx = sequence[i]
+                        next_task = env.tasks[next_task_idx]
+
+                        # print(i)
+                        # print(next_task.robots)
+                        
+                        if r in next_task.robots:
+                            ids[robot_idx] = next_task_idx
+                            break
+                
+                task_id_sequence.append(ids)
+
+            print(task_id_sequence)
+
             while True:
 
                 if ptc.should_terminate(0, time.time() - computation_start_time):
@@ -2434,6 +2471,7 @@ class PrioritizedPlanner(BasePlanner):
 
                 print()
                 print("task name", task.name)
+                print("task_index", task_index)
                 print("robots:", involved_robots)
                 print(f"sequence index {seq_index}")
 
@@ -2511,8 +2549,17 @@ class PrioritizedPlanner(BasePlanner):
                     print(q)
                     next_modes = env.get_next_modes(env.start_pos.from_list(q), curr_mode)
                     print(curr_mode, next_modes)
-                    assert len(next_modes) == 1
-                    next_mode = next_modes[0]
+                    if len(next_modes) > 1:
+                        for next_mode in next_modes:
+                            if next_mode.task_ids == task_id_sequence[seq_index+1]:
+                                break
+                            # for this_id, next_id in zip(curr_mode.task_ids, next_mode.task_ids):
+                            #     if this_id != next_id and next_id == sequence[seq_index+1]:
+                            #         break
+                    else:
+                        print("len next modes", len(next_modes))
+                        assert len(next_modes) == 1
+                        next_mode = next_modes[0]
                 else:
                     next_mode = curr_mode
 
@@ -2654,6 +2701,9 @@ class PrioritizedPlanner(BasePlanner):
                     best_path = copy.deepcopy(path)
                     
                     print(f"Added path with cost {cost}.")
+
+                    if not optimize:
+                        break
                 else:
                     print(f"Not adding this sequence, cost to high: {cost}")
             

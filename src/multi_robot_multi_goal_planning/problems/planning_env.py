@@ -676,6 +676,73 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         # print()
 
         return next_modes
+    
+    def get_sequence(self) -> List[int]:
+        while True:
+            m = self.start_mode
+            mode_sequence = [m]
+
+            success = False
+            while True:
+                possible_task_combinations = self.get_valid_next_task_combinations(m)
+
+                random.shuffle(possible_task_combinations)
+
+                valid_next_task_combination = None
+                q_transition = None
+
+                for rnd_next_task_combination in possible_task_combinations:
+                    active_task = self.get_active_task(m, rnd_next_task_combination)
+                    q_goal = active_task.goal.sample(m)
+
+                    q = []
+                    offset = 0
+                    for r in self.robots:
+                        if r in active_task.robots:
+                            dim = self.robot_dims[r]
+                            q.append(q_goal[offset:offset+dim])
+                            offset += dim
+                        else:
+                            q.append(self.safe_pose[r])
+
+                    q = self.start_pos.from_list(q)
+
+                    if self.is_collision_free(q, m):
+                        valid_next_task_combination = rnd_next_task_combination
+                        q_transition = q
+
+                        # print(m.task_ids)
+                        # self.show()
+                        
+                        break
+
+                # unfortunately, all next combinations are bad
+                if valid_next_task_combination is None:
+                    break
+
+                m_possible_next = self.get_next_modes(q_transition, m)
+                m = random.choice(m_possible_next)
+
+                mode_sequence.append(m)
+
+                if self.is_terminal_mode(m):
+                    success = True
+                    break
+
+            if success:
+                task_id_sequence = []
+                for i in range(len(mode_sequence)-1):
+                    for id_this, id_next in zip(mode_sequence[i].task_ids, mode_sequence[i+1].task_ids):
+                        if id_this != id_next:
+                            task_id_sequence.append(id_this)
+                            break
+                            
+                task_id_sequence.append(self.terminal_task)
+
+                return task_id_sequence
+
+        raise NotImplementedError
+    
 
     def is_transition(self, q: Configuration, m: Mode) -> bool:
         if self.is_terminal_mode(m):
@@ -760,6 +827,74 @@ class FreeMixin(BaseModeLogic):
                 pm = pm.prev_mode
 
         return list(set(sorted(finished_task_groups)))
+
+    def get_sequence(self) -> List[int]:
+        while True:
+            m = self.start_mode
+            mode_sequence = [m]
+
+            success = False
+            while True:
+                possible_task_combinations = self.get_valid_next_task_combinations(m)
+
+                random.shuffle(possible_task_combinations)
+
+                valid_next_task_combination = None
+                q_transition = None
+
+                for rnd_next_task_combination in possible_task_combinations:
+                    active_task = self.get_active_task(m, rnd_next_task_combination)
+                    q_goal = active_task.goal.sample(m)
+
+                    q = []
+                    offset = 0
+                    for r in self.robots:
+                        if r in active_task.robots:
+                            dim = self.robot_dims[r]
+                            q.append(q_goal[offset:offset+dim])
+                            offset += dim
+                        else:
+                            q.append(self.safe_pose[r])
+
+                    q = self.start_pos.from_list(q)
+
+                    if self.is_collision_free(q, m):
+                        valid_next_task_combination = rnd_next_task_combination
+                        q_transition = q
+
+                        # print(m.task_ids)
+                        # self.show()
+                        
+                        break
+
+                # unfortunately, all next combinations are bad
+                if valid_next_task_combination is None:
+                    break
+
+                m_possible_next = self.get_next_modes(q_transition, m)
+                m = random.choice(m_possible_next)
+
+                mode_sequence.append(m)
+
+                if self.is_terminal_mode(m):
+                    success = True
+                    break
+
+            if success:
+                task_id_sequence = []
+                for i in range(len(mode_sequence)-1):
+                    for id_this, id_next in zip(mode_sequence[i].task_ids, mode_sequence[i+1].task_ids):
+                        if id_this != id_next:
+                            task_id_sequence.append(id_this)
+                            break
+                            
+                task_id_sequence.append(self.terminal_task)
+
+                return task_id_sequence
+
+        raise NotImplementedError
+
+        # return possible_id_sequence
 
     @cache
     def get_valid_next_task_combinations(self, mode: Mode) -> List[List[int]]:
