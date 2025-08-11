@@ -3964,7 +3964,7 @@ def make_box_pile_env(
         box = (
             c_coll_tmp.addFrame("obj" + str(added_boxes))
             .setParent(c_coll_tmp.getFrame("table"))
-            .setShape(ry.ST.box, [size[0], size[1], size[2], 0.005])
+            .setShape(ry.ST.ssBox, [size[0], size[1], size[2], 0.005])
             .setPosition([pos[0], pos[1], pos[2]])
             .setMass(0.1)
             .setColor(color)

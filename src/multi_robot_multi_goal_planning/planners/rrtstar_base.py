@@ -1039,7 +1039,7 @@ class BaseRRTConfig:
     informed_batch_size: int = 300
     apply_long_horizon: bool = False
     horizon_length: int = 1
-    with_mode_validation: bool = False
+    with_mode_validation: bool = True
     with_noise: bool = False
     with_tree_visualization: bool = False
     # BidirectionalRRTstar
@@ -2049,6 +2049,8 @@ class BaseRRTstar(BasePlanner):
 
             p = []
 
+            # print(len(frontier_modes))
+
             for m in self.modes:
                 if m in frontier_modes:
                     tmp = p_frontier / len(frontier_modes)
@@ -2060,6 +2062,8 @@ class BaseRRTstar(BasePlanner):
                     )
 
                 p.append(tmp)
+
+        # print(len(self.modes), sum(p))
 
         # return np.random.choice(self.modes, p = p)
         return random.choices(self.modes, weights=p, k=1)[0]

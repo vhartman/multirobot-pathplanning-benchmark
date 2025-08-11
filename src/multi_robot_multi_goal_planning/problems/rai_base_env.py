@@ -424,6 +424,12 @@ class rai_env(BaseProblem):
 
         col = self.C.getCollisionsTotalPenetration()
         # print(col)
+        # colls = self.C.getCollisions()
+        # for c in colls:
+        #     if c[2] < 0:
+        #         print(c)
+        # print()
+
         # self.C.view(False)
         if col > collision_tolerance:
             # self.C.view(False)
@@ -489,51 +495,79 @@ class rai_env(BaseProblem):
 
         # self.C.view(True)
 
+        self.C.computeCollisions()
+
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
             return True
+        
+        other_robots = [robot for robot in self.robots if robot not in r]
 
         col = self.C.getCollisionsTotalPenetration()
-        # print(col)
+        # print()
+        # print("orig col", col)
+        # print(r)
         # self.C.view(False)
         if col > collision_tolerance:
             # self.C.view(False)
             colls = self.C.getCollisions()
             for c in colls:
                 # ignore minor collisions
-                if c[2] > -collision_tolerance / 10:
-                    continue
+                # if c[2] > -collision_tolerance / 10:
+                #     continue
 
+                # print(col)
                 # print(c)
                 involves_relevant_robot = False
                 involves_relevant_object = False
                 for robot in r:
                     task_idx = m.task_ids[self.robots.index(robot)]
                     task = self.tasks[task_idx]
-                    if c[2] < 0 and (robot in c[0] or robot in c[1]):
+                    if c[2] < 0 and (robot in c[0] or robot in c[1]) and (c[0] not in other_robots or c[1] not in other_robots):
                         involves_relevant_robot = True
-                    elif c[2] < 0 and (c[0] in task.frames or c[1] in task.frames):
+                    elif c[2] < 0 and (c[0] in task.frames or c[1] in task.frames) and (c[0] not in other_robots or c[1] not in other_robots):
                         involves_relevant_object = True
 
-                if not involves_relevant_robot and not involves_relevant_object:
-                    # print("A")
-                    # print(c)
-                    continue
-                # else:
-                #     print("B")
-                #     print(c)
+                # if involves_relevant_object:
+                #     print("Involves object")
 
-                is_collision_with_other_robot = False
-                for other_robot in self.robots:
-                    if other_robot in r:
-                        continue
-                    if other_robot in c[0] or other_robot in c[1]:
-                        is_collision_with_other_robot = True
-                        break
-
-                if not is_collision_with_other_robot:
-                    # print(c)
+                if involves_relevant_object or involves_relevant_robot:
                     return False
+
+                # if not involves_relevant_robot and not involves_relevant_object:
+                #     # print("A")
+                #     # print(c)
+                #     continue
+                # # else:
+                # #     print("B")
+                # #     print(c)
+
+                # if involves_relevant_object:
+                #     print("Involves object")
+
+                # is_collision_with_other_robot = False
+                # for other_robot in self.robots:
+                #     if other_robot in r:
+                #         continue
+                #     if other_robot in c[0] or other_robot in c[1]:
+                #         is_collision_with_other_robot = True
+                #         break
+
+                # if not is_collision_with_other_robot:
+                #     # print(c)
+                #     return False
+
+        # for _ in range(5):
+        #     noise = np.random.rand(len(q)) * 0.001 - 0.001/2
+        #     self.C.setJointState(q + noise)
+        #     col = self.C.getCollisionsTotalPenetration()
+        #     print("perturbed col", col)
+        #     if col > 0:
+        #         self.show(True)
+
+        # print("A")
+        # self.C.setJointState(q)
+        # self.show(True)
 
         return True
 
