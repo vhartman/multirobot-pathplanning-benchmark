@@ -14,6 +14,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     SingleGoal,
     GoalSet,
     GoalRegion,
+    SafePoseType
 )
 from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
@@ -312,95 +313,103 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
 
 
 class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
-  def __init__(self, num_boxes = 5):
-      self.C, keyframes = rai_config.make_box_pile_env(
+    def __init__(self, num_boxes = 5):
+        self.C, keyframes = rai_config.make_box_pile_env(
             num_boxes=num_boxes, random_orientation=False, compute_all_keyframes=True
-      )
+        )
 
-      self.robots = ["a1_", "a2_"]
+        self.robots = ["a1_", "a2_"]
 
-      rai_env.__init__(self)
+        rai_env.__init__(self)
 
-      self.manipulating_env = True
+        self.manipulating_env = True
 
-      self.tasks = [
-          Task(
-              ["a1_", "a2_"],
-              # GoalRegion(self.limits),
-              SingleGoal(self.C.getJointState())
-          ),
-      ]
-      self.tasks[-1].name = "dummy_start"
+        self.tasks = [
+            Task(
+                ["a1_", "a2_"],
+                # GoalRegion(self.limits),
+                SingleGoal(self.C.getJointState())
+            ),
+        ]
+        self.tasks[-1].name = "dummy_start"
 
-      pick_task_names = ["pick", "place"]
-      handover_task_names = ["pick", "handover", "place"]
+        pick_task_names = ["pick", "place"]
+        handover_task_names = ["pick", "handover", "place"]
 
-      self.task_dependencies = {}
+        self.task_dependencies = {}
 
-      pick_tasks = {}
-      place_tasks = {}
+        pick_tasks = {}
+        place_tasks = {}
 
-      cnt = 0
-      for primitive_type, robots, box_index, qs in keyframes:
-          box_name = "obj" + str(box_index)
+        cnt = 0
+        for primitive_type, robots, box_index, qs in keyframes:
+            box_name = "obj" + str(box_index)
 
-          if box_name not in pick_tasks:
-              pick_tasks[box_name] = []
-              place_tasks[box_name] = []
+            if box_name not in pick_tasks:
+                pick_tasks[box_name] = []
+                place_tasks[box_name] = []
 
-          robot_index = 0
-          if robots[0] == "a2_":
-              robot_index = 1
-          
-          # print("robot index", robot_index)
+            robot_index = 0
+            if robots[0] == "a2_":
+                robot_index = 1
+            
+            # print("robot index", robot_index)
 
-          print(primitive_type)
-          if primitive_type == "pick":
-              for t, k in zip(pick_task_names, qs[0]):
-                  print(robots)
-                  print(k)
-                  if t == "pick":
-                      ee_name = robots[0] + "ur_vacuum"
-                      self.tasks.append(
-                          Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
-                      )
-                      pick_tasks[box_name].append((robot_index, len(self.tasks) - 1))
-                      
-                  else:
-                      self.tasks.append(
-                          Task(robots, SingleGoal(k), t, frames=["tray", box_name])
-                      )
-                      self.task_dependencies[len(self.tasks) - 1] = [
-                          len(self.tasks) - 2
-                      ]
-                      place_tasks[box_name].append((robot_index, len(self.tasks) - 1))
+            print(primitive_type)
+            if primitive_type == "pick":
+                for t, k in zip(pick_task_names, qs[0]):
+                    print(robots)
+                    print(k)
+                    if t == "pick":
+                        ee_name = robots[0] + "ur_vacuum"
+                        self.tasks.append(
+                            Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
+                        )
+                        pick_tasks[box_name].append((robot_index, len(self.tasks) - 1))
+                        
+                    else:
+                        self.tasks.append(
+                            Task(robots, SingleGoal(k), t, frames=["tray", box_name])
+                        )
+                        self.task_dependencies[len(self.tasks) - 1] = [
+                            len(self.tasks) - 2
+                        ]
+                        place_tasks[box_name].append((robot_index, len(self.tasks) - 1))
 
-                  self.tasks[-1].name = (
-                      robots[0] + t + "_" + box_name + "_" + str(cnt)
-                  )
-                  cnt += 1
-          else:
-              assert False
+                    self.tasks[-1].name = (
+                        robots[0] + t + "_" + box_name + "_" + str(cnt)
+                    )
+                    cnt += 1
+            else:
+                assert False
 
-      self.task_groups = []
+        self.task_groups = []
 
-      for k, v in pick_tasks.items():
-          self.task_groups.append(v)
-      for k, v in place_tasks.items():
-          self.task_groups.append(v)
+        for k, v in pick_tasks.items():
+            self.task_groups.append(v)
+        for k, v in place_tasks.items():
+            self.task_groups.append(v)
 
-      print(self.task_groups)
-      print(self.task_dependencies)
+        print(self.task_groups)
+        print(self.task_dependencies)
 
-      self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-      self.tasks[-1].name = "terminal"
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
 
-      self.terminal_task = len(self.tasks) - 1
+        self.terminal_task = len(self.tasks) - 1
 
-      BaseModeLogic.__init__(self)
+        BaseModeLogic.__init__(self)
 
-      # buffer for faster collision checking
-      self.prev_mode = self.start_mode
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
 
-      self.collision_tolerance = 0.01
-      self.collision_resolution = 0.01
+        self.collision_tolerance = 0.00
+        self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])

@@ -15,6 +15,8 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     SingleGoal,
     GoalSet,
     GoalRegion,
+    SafePoseType,
+    ManipulationType
 )
 from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
@@ -77,6 +79,14 @@ class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
         self.collision_tolerance = 0.01
 
         BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.spec.manipulation = ManipulationType.STATIC
+
+        self.safe_pose = {
+            "a1": r1_goal,
+            "a2": r2_goal_1
+        }
 
 
 class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
@@ -350,3 +360,11 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
