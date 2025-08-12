@@ -975,8 +975,16 @@ class BaseGraph(ABC):
             return
 
         if is_goal:
-            self.goal_nodes.append(node)
-            self.goal_node_ids.append(node.id)
+            exists_already = False
+            # for g in self.goal_nodes:
+            #     if g.state.mode == node.state.mode and \
+            #         self.batch_dist_fun(node.state.q, [g.state.q]) < 1e-3:
+            #         exists_already = True
+            #         break
+
+            if not exists_already:
+                self.goal_nodes.append(node)
+                self.goal_node_ids.append(node.id)
 
         if not reverse:
             if mode in self.transition_node_ids:
@@ -1610,8 +1618,10 @@ class BaseGraph(ABC):
             node_ids = self.neighbors_node_ids_cache[node.id]
             if node_ids.size == 0:
                 return self.update_neighbors_with_family_of_node(node, update)
-            blacklist_array = np.fromiter(blacklist, dtype=np.int64)
-            mask = ~np.in1d(node_ids, blacklist_array)
+            
+            # blacklist_array = np.fromiter(blacklist, dtype=np.int64)
+            # mask = ~np.in1d(node_ids, blacklist_array)
+            mask = np.array([n_id not in blacklist for n_id in node_ids])
             if np.any(~mask):
                 self.neighbors_node_ids_cache[node.id] = node_ids[mask]
                 self.neighbors_batch_cost_cache[node.id] = (

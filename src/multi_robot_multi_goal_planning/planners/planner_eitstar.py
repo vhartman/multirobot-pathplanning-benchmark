@@ -399,6 +399,7 @@ class EITstar(BaseITstar):
         self.reverse_closed_set.add(node.id)
         self.reverse_tree_set.add(node.id)
 
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def expand_node_reverse(
         self, nodes: List[Node], first_search: bool = False
     ) -> None:
@@ -413,9 +414,24 @@ class EITstar(BaseITstar):
             None
         """
         g_nodes = self.g.nodes
+
+        root_id = self.g.root.id
+        # goal_node_ids = self.g.goal_node_ids
+        
+        goal_ids           = {n.id for n in self.g.goal_nodes}
+        virtual_goal_ids   = {n.id for n in self.g.virtual_goal_nodes}
+
+        skip_goal_ids = goal_ids | virtual_goal_ids | {root_id}
+
+        # push = self.g.reverse_queue.heappush  # localize function ref
+
+        if not self.dynamic_reverse_search_update:
+            nodes_to_skip = self.reverse_closed_set | self.reverse_tree_set
+
         for node in nodes:
-            if node.id == self.g.root.id or node == self.g.virtual_root:
+            if node.id == root_id or node == self.g.virtual_root:
                 return
+            
             self.reverse_tree_set.add(node.id)
             self.updated_target_nodes.add(node.id)
             neighbors = self.g.get_neighbors(
@@ -423,8 +439,10 @@ class EITstar(BaseITstar):
                 space_extent=self.approximate_space_extent,
                 first_search=first_search,
             )
+            
             if neighbors.size == 0:
                 return
+            
             edge_costs = self.g.tot_neighbors_batch_cost_cache[node.id]
             edge_efforts = self.g.tot_neighbors_batch_effort_cache[node.id]
             # assert (len(edge_costs) == len(edge_efforts)), (
@@ -440,17 +458,36 @@ class EITstar(BaseITstar):
             node_mode = getattr(node.state, "mode", None)
 
             if not self.dynamic_reverse_search_update:
-                nodes_to_skip = self.reverse_closed_set | self.reverse_tree_set
+                # nodes_to_skip = self.reverse_closed_set | self.reverse_tree_set
                 mask_valid = np.array(
                     [nid not in nodes_to_skip for nid in neighbors], dtype=bool
                 )
+                # mask_valid = ~np.isin(neighbors, np.array(nodes_to_skip))
+
+                # assert (mask_valid == mask_valid_new).all()
+
                 neighbors = neighbors[mask_valid]
                 edge_costs = edge_costs[mask_valid]
                 edge_efforts = edge_efforts[mask_valid]
 
-            for id, edge_cost, edge_effort in zip(neighbors, edge_costs, edge_efforts):
-                n = g_nodes[id]
+            # for id, edge_cost, edge_effort in zip(neighbors, edge_costs, edge_efforts):
+            tmp = node.operation.lb_costs_to_come
+            for i in range(len(neighbors)):
+                id = neighbors[i]
 
+                # if id == self.g.root.id:
+                #     continue
+
+                n = g_nodes[id]
+                
+                if n.is_transition:
+                    if not n.is_reverse_transition:
+                        continue
+                    else:
+                        if node_is_transition:
+                            if node_mode != n.state.mode:
+                                continue
+                
                 # if self.current_best_cost is None and edge in self.check:
                 #     continue
                 # if edge in self.check:
@@ -459,37 +496,37 @@ class EITstar(BaseITstar):
                 #         f"Parent and children don't coincide (reverse): parent: {node.id}, child: {n.id}"
                 #         )
                 if (
-                    n in self.g.goal_nodes
-                    or id == self.g.root.id
-                    or n in self.g.virtual_goal_nodes
+                    id in skip_goal_ids
                 ):
                     continue
                 # assert(id not in node_blacklist), (
                 # "neighbors are wrong")
 
-                if n.is_transition:
-                    if not n.is_reverse_transition:
-                        continue
-                    else:
-                        if node_is_transition:
-                            if node_mode != n.state.mode:
-                                continue
                 if node_rev_parent_id == id:
                     continue
+
+                edge_cost = edge_costs[i]
+
                 if id in self.reverse_tree_set:
                     if n.lb_cost_to_go < node_lb_cost_to_go + edge_cost:
                         # assert(n.lb_cost_to_go- (node_lb_cost_to_go + edge_cost) < 1e-5), (
                         #     f"{id}, {node.id}, qwdfertzj"
                         # )
                         continue
+
                 if self.current_best_cost is not None:
                     if (
-                        node_lb_cost_to_go + edge_cost + n.lb_cost_to_come
+                        # node_lb_cost_to_go + edge_cost + n.lb_cost_to_come
+                        node_lb_cost_to_go + edge_cost + tmp[n.id]
                         > self.current_best_cost
                     ):
                         continue
-                edge = (node, n)
-                self.g.reverse_queue.heappush((edge_cost, edge, edge_effort))
+
+                # edge_effort = edge_efforts[i]
+
+                # edge = (node, n)
+                self.g.reverse_queue.heappush((edge_cost, (node, n), edge_efforts[i]))
+                # push((edge_cost, (node, n), edge_effort))
 
     def update_inflation_factor(self) -> None:
         """
@@ -564,6 +601,7 @@ class EITstar(BaseITstar):
                     continue
                 self.expand_node_reverse([n1.transition_neighbors[0]])
                 continue
+
             if n0.id not in n1.whitelist:
                 sparsely_collision_free = False
                 if n0.id not in n1.blacklist:
@@ -594,15 +632,19 @@ class EITstar(BaseITstar):
                             N=N,
                         )
                         self.sparesly_checked_edges[edge_id] = N_max
+
                 if not sparsely_collision_free:
                     self.g.remove_forward_queue(edge_cost, n0, n1, edge_effort)
                     self.g.update_edge_collision_cache(n0, n1, False)
                     self.manage_edge_in_collision(n0, n1, clear=True)
                     continue
+
                 if N_max >= N:
                     # checked it already with env resolution
                     self.g.update_edge_collision_cache(n0, n1, True)
+
             n1.inad.update(n0, edge_cost, edge_effort)
+
             if is_transition:
                 # assert(len(n1.transition_neighbors) ==1), (
                 #         "Transition node has more than one neighbor"
@@ -633,8 +675,10 @@ class EITstar(BaseITstar):
                         not in self.long_horizon.mode_sequence
                     ):
                         continue
+
                     self.expand_node_reverse([n1.transition_neighbors[0]])
                     continue
+
                 self.expand_node_reverse([n1])
 
         if self.config.with_tree_visualization and iter > 0:
@@ -794,8 +838,13 @@ class EITstar(BaseITstar):
         while True:
             num_iter += 1
             self.reverse_search()
+
+            if num_iter % 5000 == 0:
+                print(f"Samples: {self.cnt}; time: {time.time() - self.start_time:.2f}s; {ptc}")
+            
             if num_iter % 100000 == 0:
                 print("Forward Queue: ", len(self.g.cost_bound_queue))
+
             if len(self.g.cost_bound_queue) < 1:
                 print(
                     "------------------------", n1.state.mode.task_ids, n1.id, num_iter
@@ -939,6 +988,7 @@ class EITstar(BaseITstar):
 
             if ptc.should_terminate(self.cnt, time.time() - self.start_time):
                 break
+
         if self.costs != []:
             self.update_results_tracking(self.costs[-1], self.current_best_path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
