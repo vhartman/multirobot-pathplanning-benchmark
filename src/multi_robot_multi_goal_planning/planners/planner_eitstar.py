@@ -428,7 +428,7 @@ class EITstar(BaseITstar):
 
             skip_goal_ids = goal_ids | virtual_goal_ids | {root_id}
 
-        push = self.g.reverse_queue.heappush  # localize function ref
+        # push = self.g.reverse_queue.heappush  # localize function ref
 
         if not self.dynamic_reverse_search_update:
             nodes_to_skip = self.reverse_closed_set | self.reverse_tree_set
