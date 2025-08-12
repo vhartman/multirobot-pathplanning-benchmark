@@ -651,13 +651,13 @@ class AITstar(BaseITstar):
             neighbors = neighbors[mask]
             batch_cost = batch_cost[mask]
 
+        if len(neighbors) == 0:
+            self.update_node_without_available_reverse_parent(node)
+            return
+
         # Ensure neighbors is int64 before indexing (avoids extra conversions)
         # neighbors = neighbors.astype(np.int64, copy=False)
         lb_costs_to_go_expanded = self.operation.lb_costs_to_go_expanded[neighbors]
-        
-        # if len(neighbors) == 0:
-        #     self.update_node_without_available_reverse_parent(node)
-        #     return
 
         # lb_costs_to_go_expanded = self.operation.lb_costs_to_go_expanded[neighbors]
         # if lb_costs_to_go_expanded.size == 0:
