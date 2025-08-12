@@ -278,10 +278,14 @@ class ReverseQueue(EdgeQueue):
         # item[1]: edge (n0, n1)
         # item[2]: edge effort from n0, n1
 
+        # tmp = node.operation.lb_costs_to_come
+
         start_node, target_node = item[1]
+        tmp = start_node.inad
         return (
-            start_node.inad.lb_cost_to_go + item[0] + target_node.lb_cost_to_come,
-            start_node.inad.effort + item[2] + target_node.lb_effort_to_come,
+            # start_node.inad.lb_cost_to_go + item[0] + target_node.lb_cost_to_come,
+            tmp.lb_cost_to_go + item[0] + target_node.operation.lb_costs_to_come[target_node.id],
+            tmp.effort + item[2] + target_node.lb_effort_to_come,
         )
 
 
@@ -401,7 +405,7 @@ class EITstar(BaseITstar):
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def expand_node_reverse(
-        self, nodes: List[Node], first_search: bool = False
+        self, nodes: List[Node], first_search: bool = False, skip_goal_ids = None
     ) -> None:
         """
         Expands nodes in reverse search and updates the reverse search tree.
@@ -418,10 +422,11 @@ class EITstar(BaseITstar):
         root_id = self.g.root.id
         # goal_node_ids = self.g.goal_node_ids
         
-        goal_ids           = {n.id for n in self.g.goal_nodes}
-        virtual_goal_ids   = {n.id for n in self.g.virtual_goal_nodes}
+        if skip_goal_ids is None:
+            goal_ids           = {n.id for n in self.g.goal_nodes}
+            virtual_goal_ids   = {n.id for n in self.g.virtual_goal_nodes}
 
-        skip_goal_ids = goal_ids | virtual_goal_ids | {root_id}
+            skip_goal_ids = goal_ids | virtual_goal_ids | {root_id}
 
         # push = self.g.reverse_queue.heappush  # localize function ref
 
@@ -575,6 +580,11 @@ class EITstar(BaseITstar):
         """
         self.updated_target_nodes = set()
         iter = 0
+        
+        goal_ids           = {n.id for n in self.g.goal_nodes}
+        virtual_goal_ids   = {n.id for n in self.g.virtual_goal_nodes}
+        skip_goal_ids = goal_ids | virtual_goal_ids | {self.g.root.id}
+
         while self.continue_reverse_search(iter):
             iter += 1
             edge_cost, edge, edge_effort = self.g.reverse_queue.heappop()
@@ -599,7 +609,7 @@ class EITstar(BaseITstar):
                     not in self.long_horizon.mode_sequence
                 ):
                     continue
-                self.expand_node_reverse([n1.transition_neighbors[0]])
+                self.expand_node_reverse([n1.transition_neighbors[0]], skip_goal_ids=skip_goal_ids)
                 continue
 
             if n0.id not in n1.whitelist:
@@ -676,10 +686,10 @@ class EITstar(BaseITstar):
                     ):
                         continue
 
-                    self.expand_node_reverse([n1.transition_neighbors[0]])
+                    self.expand_node_reverse([n1.transition_neighbors[0]], skip_goal_ids=skip_goal_ids)
                     continue
 
-                self.expand_node_reverse([n1])
+                self.expand_node_reverse([n1], skip_goal_ids=skip_goal_ids)
 
         if self.config.with_tree_visualization and iter > 0:
             self.save_tree_data((BaseTree.all_vertices, self.reverse_tree_set))
