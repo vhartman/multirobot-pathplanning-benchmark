@@ -353,15 +353,29 @@ class DictIndexHeap(ABC, Generic[T]):
             None: This method does not return any value.
         """
         # idx = len(self.items)
-        item_already_in_heap = item in self.current_entries
+        # item_already_in_heap = item in self.current_entries
+        entry = self.current_entries.get(item)
+
+        item_already_in_heap = entry is not None
+
         priority = self.key(item)
         if item_already_in_heap:
-            latest_priority, idx = self.current_entries[item]
+            # latest_priority, idx = self.current_entries[item]
+            latest_priority, idx = entry
             if latest_priority == priority:
                 return
             self.items_to_skip.add(idx)
 
         self.push_and_sync(item, priority, item_already_in_heap)
+
+        # self.items[DictIndexHeap.idx] = item  # Store only valid items
+        # self.current_entries[item] = (
+        #     priority,
+        #     DictIndexHeap.idx,
+        # )  # always up to date with the newest one!
+        # if entry is None:
+        #     self.add_and_sync(item)
+
         # self.nodes_in_queue[item[1]] = (priority, DictIndexHeap.idx)
         heapq.heappush(self.queue, (priority, DictIndexHeap.idx))
         DictIndexHeap.idx += 1

@@ -216,10 +216,14 @@ class EdgeQueue(DictIndexHeap[Tuple[Any]]):
         # item[0]: edge_cost from n0 to n1
         # item[1]: edge (n0, n1)
 
+        item0 = item[0]
+        item1 = item[1]
+        item1_cost = item1[0].cost
+
         return (
-            item[1][0].cost + item[0] + item[1][1].lb_cost_to_go * self.alpha,
-            item[1][0].cost + item[0],
-            item[1][0].cost,
+            item1_cost + item0 + item1[1].lb_cost_to_go * self.alpha,
+            item1_cost + item0,
+            item1_cost,
         )
 
     def add_and_sync(self, item: Tuple[Any]) -> None:
@@ -300,6 +304,7 @@ class VertexQueue(DictIndexHeap[BaseNode]):
     def key(self, node: BaseNode) -> Tuple[float, float]:
         min_lb = min(node.lb_cost_to_go, node.lb_cost_to_go_expanded)
         return (min_lb + node.lb_cost_to_come, min_lb)
+        # return (min_lb + node.operation.lb_costs_to_come[node.id], min_lb)
 
     def update(self, node_ids: Optional[Set[BaseNode]], type: str) -> None:
         if node_ids is None:
