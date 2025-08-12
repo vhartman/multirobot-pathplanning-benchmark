@@ -428,7 +428,7 @@ class EITstar(BaseITstar):
 
             skip_goal_ids = goal_ids | virtual_goal_ids | {root_id}
 
-        # push = self.g.reverse_queue.heappush  # localize function ref
+        push = self.g.reverse_queue.heappush  # localize function ref
 
         if not self.dynamic_reverse_search_update:
             nodes_to_skip = self.reverse_closed_set | self.reverse_tree_set
@@ -464,8 +464,11 @@ class EITstar(BaseITstar):
 
             if not self.dynamic_reverse_search_update:
                 # nodes_to_skip = self.reverse_closed_set | self.reverse_tree_set
-                mask_valid = np.array(
-                    [nid not in nodes_to_skip for nid in neighbors], dtype=bool
+                # mask_valid = np.array(
+                #     [nid not in nodes_to_skip for nid in neighbors], dtype=bool
+                # )
+                mask_valid = np.fromiter(
+                    (nid not in nodes_to_skip for nid in neighbors), dtype=bool
                 )
                 # mask_valid = ~np.isin(neighbors, np.array(nodes_to_skip))
 
@@ -477,8 +480,16 @@ class EITstar(BaseITstar):
 
             # for id, edge_cost, edge_effort in zip(neighbors, edge_costs, edge_efforts):
             tmp = node.operation.lb_costs_to_come
-            for i in range(len(neighbors)):
-                id = neighbors[i]
+            # for i in range(len(neighbors)):
+                # id = neighbors[i]
+            
+            self_bc = self.current_best_cost
+            if self_bc is not None:
+                intermediate_cost_result = self_bc - node_lb_cost_to_go
+
+            self_reverse_tree_set = self.reverse_tree_set
+
+            for i, id in enumerate(neighbors):
 
                 # if id == self.g.root.id:
                 #     continue
@@ -512,18 +523,20 @@ class EITstar(BaseITstar):
 
                 edge_cost = edge_costs[i]
 
-                if id in self.reverse_tree_set:
+                if id in self_reverse_tree_set:
                     if n.lb_cost_to_go < node_lb_cost_to_go + edge_cost:
                         # assert(n.lb_cost_to_go- (node_lb_cost_to_go + edge_cost) < 1e-5), (
                         #     f"{id}, {node.id}, qwdfertzj"
                         # )
                         continue
 
-                if self.current_best_cost is not None:
+                if self_bc is not None:
                     if (
                         # node_lb_cost_to_go + edge_cost + n.lb_cost_to_come
-                        node_lb_cost_to_go + edge_cost + tmp[n.id]
-                        > self.current_best_cost
+                        # node_lb_cost_to_go + edge_cost + tmp[id]
+                        # > self.current_best_cost
+                        edge_cost + tmp[id]
+                        > intermediate_cost_result
                     ):
                         continue
 
@@ -531,7 +544,7 @@ class EITstar(BaseITstar):
 
                 # edge = (node, n)
                 self.g.reverse_queue.heappush((edge_cost, (node, n), edge_efforts[i]))
-                # push((edge_cost, (node, n), edge_effort))
+                # push((edge_cost, (node, n), edge_efforts[i]))
 
     def update_inflation_factor(self) -> None:
         """
