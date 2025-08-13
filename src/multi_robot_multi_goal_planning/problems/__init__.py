@@ -64,6 +64,7 @@ def get_all_environments():
         "simplified_welding": lambda: re.rai_quadruple_ur10_arm_spot_welding_env(num_robots=2, num_pts=2),
         "box_stacking": lambda: re.rai_ur10_arm_box_stack_env(),
         "box_stacking_two_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=2),
+        "box_stacking_two_robots_four_obj": lambda: re.rai_ur10_arm_box_stack_env(num_robots=2, num_boxes=4),
         "box_stacking_three_robots": lambda: re.rai_ur10_arm_box_stack_env(num_robots=3),
         "box_reorientation": lambda: re.rai_ur10_box_pile_cleanup_env(),
         "box_reorientation_multi_handover": lambda: re.rai_ur10_box_pile_cleanup_env(make_many_handover_poses=True),
@@ -129,6 +130,7 @@ def get_all_environments():
         "unassigned": lambda: rfe.rai_two_dim_env(),
         "unassigned_piano": lambda: rfe.rai_unassigned_piano_mover(),
         "unassigned_cleanup": lambda: rfe.rai_unassigned_pile_cleanup(),
+        "unassigned_stacking": lambda: rfe.rai_unassigned_stacking(num_boxes=4, num_robots=2)
     }
     # fmt: on
 

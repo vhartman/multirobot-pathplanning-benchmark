@@ -82,6 +82,7 @@ class rai_two_dim_env(FreeMixin, rai_env):
         ]
         self.terminal_task = len(self.tasks) - 1
         self.task_dependencies = {}
+        self.task_dependencies_any = {}
 
         self.collision_tolerance = 0.01
 
@@ -252,6 +253,7 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
         ]
 
         self.task_dependencies = {}
+        self.task_dependencies_any = {}
 
         pick_tasks = {"obj1": [], "obj2": []}
         place_tasks = {"obj1": [], "obj2": []}
@@ -337,6 +339,7 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
         handover_task_names = ["pick", "handover", "place"]
 
         self.task_dependencies = {}
+        self.task_dependencies_any = {}
 
         pick_tasks = {}
         place_tasks = {}
@@ -405,6 +408,126 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
 
         self.collision_tolerance = 0.00
         self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+
+class rai_unassigned_stacking(FreeMixin, rai_env):
+    def __init__(self, num_robots=4, num_boxes: int = 8):
+        self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
+            num_robots, num_boxes, make_and_return_all_keyframes=True
+        )
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = [
+            Task(
+                self.robots,
+                # GoalRegion(self.limits),
+                SingleGoal(self.C.getJointState())
+            ),
+        ]
+        self.tasks[-1].name = "dummy_start"
+
+        pick_task_names = ["pick", "place"]
+
+        self.task_dependencies = {}
+
+        pick_tasks = {}
+        place_tasks = {}
+
+        box_order = []
+        for _, box_name, _ in keyframes:
+            if len(box_order) == 0 or box_order[-1] != box_name:
+                box_order.append(box_name)
+
+        for r, box_name, qs in keyframes:
+            if box_name not in pick_tasks:
+                pick_tasks[box_name] = []
+                place_tasks[box_name] = []
+
+            robot_index = self.robots.index(r)
+            print(robot_index)
+            
+            cnt = 0
+            for t, k in zip(pick_task_names, qs):
+                if t == "pick":
+                    ee_name = r + "gripper_center"
+                    self.tasks.append(Task([r], SingleGoal(k), t, frames=[ee_name, box_name]))
+                    pick_tasks[box_name].append((robot_index, len(self.tasks) - 1))
+
+                else:
+                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", box_name]))
+                    place_tasks[box_name].append((robot_index, len(self.tasks) - 1))
+                    self.task_dependencies[len(self.tasks) - 1] = [
+                        len(self.tasks) - 2
+                    ]
+
+                self.tasks[-1].name = r + t + "_" + box_name + "_" + str(cnt)
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+        self.task_dependencies_any = {}
+
+        for i, box_name in enumerate(box_order):
+            if i == 0:
+                continue
+            
+            all_place_task_ids = place_tasks[box_name]
+            all_prev_place_task_ids = place_tasks[box_order[i-1]]
+
+            for r_id, task_id in all_place_task_ids:
+                self.task_dependencies_any[task_id] = [task_id_others for _, task_id_others in all_prev_place_task_ids]
+
+        self.task_groups = []
+
+        for k, v in pick_tasks.items():
+            self.task_groups.append(v)
+        for k, v in place_tasks.items():
+            self.task_groups.append(v)
+
+        print("task groups", self.task_groups)
+        print("dependencies", self.task_dependencies)
+
+        print("Dependencies")
+        for k, v in self.task_dependencies.items():
+            print(self.tasks[k].name)
+            for idx in v:
+                print(self.tasks[idx].name)
+            
+            print()
+
+        print("Dependencies any")
+        for k, v in self.task_dependencies_any.items():
+            print(self.tasks[k].name)
+            for idx in v:
+                print(self.tasks[idx].name)
+            
+            print()
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        self.terminal_task = len(self.tasks) - 1
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.00
+        self.collision_resolution = 0.0025
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 

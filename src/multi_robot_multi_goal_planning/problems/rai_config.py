@@ -2727,7 +2727,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
 
 
 def make_box_stacking_env(
-    num_robots=2, num_boxes=9, mixed_robots: bool = False, view: bool = False
+    num_robots=2, num_boxes=9, mixed_robots: bool = False, view: bool = False, make_and_return_all_keyframes: bool = False
 ):
     assert num_boxes <= 9, "A maximum of 9 boxes are supported"
     assert num_robots <= 4, "A maximum of 4 robots are supported"
@@ -2843,7 +2843,7 @@ def make_box_stacking_env(
             pos = get_pos(j, k)
 
             C.addFrame("obj" + str(j) + str(k)).setParent(table).setShape(
-                ry.ST.box, [size[0], size[1], size[2], 0.005]
+                ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 np.random.rand(3)
             ).setContact(1).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
@@ -3009,52 +3009,92 @@ def make_box_stacking_env(
     # all_robots = ["a1_", "a2_", "a3_", "a4_"]
     # all_robots = all_robots[:num_robots]
 
-    direct_pick_place_keyframes = {}
+    if make_and_return_all_keyframes:
+        direct_pick_place_keyframes = {}
+        
+        for r in all_robots:
+            direct_pick_place_keyframes[r] = {}
 
-    for r in all_robots:
-        direct_pick_place_keyframes[r] = {}
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
 
-    c_tmp = ry.Config()
-    c_tmp.addConfigurationCopy(C)
+        for box, goal in zip(boxes, goals):
+            for r in all_robots:
+                c_tmp_2 = ry.Config()
+                c_tmp_2.addConfigurationCopy(c_tmp)
+                # c_tmp_2.computeCollisions()
 
-    robot_to_use = []
+                r1 = compute_rearrangment(c_tmp_2, r, box, goal)
 
-    for box, goal in zip(boxes, goals):
-        c_tmp_2 = ry.Config()
-        c_tmp_2.addConfigurationCopy(c_tmp)
-        # c_tmp_2.computeCollisions()
+                if r1 is not None:
+                    direct_pick_place_keyframes[r][box] = r1[:2]
 
-        while True:
-            r = random.choice(all_robots)
-            r1 = compute_rearrangment(c_tmp_2, r, box, goal)
-
-            if r1 is not None:
-                break
-
-        direct_pick_place_keyframes[r][box] = r1[:2]
-        robot_to_use.append(r)
-
-        c_tmp.getFrame(box).setRelativePosition(
-            c_tmp.getFrame(goal).getRelativePosition()
-        )
-
-    box_goal = {}
-    for b, g in zip(boxes, goals):
-        box_goal[b] = g
-
-    keyframes = []
-
-    for r, b, g in zip(robot_to_use, boxes, goals):
-        keyframes.append(
-            (
-                r,
-                b,
-                direct_pick_place_keyframes[r][b],
-                goal,
+            c_tmp.getFrame(box).setRelativePosition(
+                c_tmp.getFrame(goal).getRelativePosition()
             )
-        )
 
-    return C, keyframes, all_robots
+        keyframes = []
+
+        # for r, b, g in zip(robot_to_use, boxes, goals):
+        for b in boxes:
+            for r in all_robots:
+                if b in direct_pick_place_keyframes[r]:
+                    keyframes.append(
+                        (
+                            r,
+                            b,
+                            direct_pick_place_keyframes[r][b],
+                        )
+                    )
+                    
+        return C, keyframes, all_robots
+    else:
+        direct_pick_place_keyframes = {}
+
+        for r in all_robots:
+            direct_pick_place_keyframes[r] = {}
+
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_to_use = []
+
+        for box, goal in zip(boxes, goals):
+            c_tmp_2 = ry.Config()
+            c_tmp_2.addConfigurationCopy(c_tmp)
+            # c_tmp_2.computeCollisions()
+
+            while True:
+                r = random.choice(all_robots)
+                r1 = compute_rearrangment(c_tmp_2, r, box, goal)
+
+                if r1 is not None:
+                    break
+
+            direct_pick_place_keyframes[r][box] = r1[:2]
+            robot_to_use.append(r)
+
+            c_tmp.getFrame(box).setRelativePosition(
+                c_tmp.getFrame(goal).getRelativePosition()
+            )
+
+        box_goal = {}
+        for b, g in zip(boxes, goals):
+            box_goal[b] = g
+
+        keyframes = []
+
+        for r, b, g in zip(robot_to_use, boxes, goals):
+            keyframes.append(
+                (
+                    r,
+                    b,
+                    direct_pick_place_keyframes[r][b],
+                    goal,
+                )
+            )
+
+        return C, keyframes, all_robots
 
 
 def make_handover_env(view: bool = False):

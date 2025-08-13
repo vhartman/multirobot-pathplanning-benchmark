@@ -961,7 +961,15 @@ class FreeMixin(BaseModeLogic):
                             if dependency not in finished_tasks:
                                 task_requirements_fulfilled = False
 
-                    if not task_requirements_fulfilled:
+                    any_of_the_tasks_done = True
+                    if t in self.task_dependencies_any:
+                        any_of_the_tasks_done = False
+                        for dependency in self.task_dependencies_any[t]:
+                            if dependency in finished_tasks:
+                                any_of_the_tasks_done = True
+                                break
+
+                    if not task_requirements_fulfilled or not any_of_the_tasks_done:
                         # print(f"dependency unfulfilled for task {t}")
                         continue
 
@@ -1011,7 +1019,15 @@ class FreeMixin(BaseModeLogic):
                             ):
                                 task_requirements_fulfilled = False
 
-                    if not task_requirements_fulfilled:
+                    any_of_the_tasks_done = True
+                    if t in self.task_dependencies_any:
+                        any_of_the_tasks_done = False
+                        for dependency in self.task_dependencies_any[t]:
+                            if dependency in finished_tasks:
+                                any_of_the_tasks_done = True
+                                break
+
+                    if not task_requirements_fulfilled or not any_of_the_tasks_done:
                         # print(f"dependency unfulfilled for task {t}")
                         continue
 
