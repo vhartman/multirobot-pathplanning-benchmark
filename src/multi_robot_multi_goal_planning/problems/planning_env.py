@@ -992,7 +992,8 @@ class FreeMixin(BaseModeLogic):
                             group_origin.append(j)
 
             for state in states_to_remove:
-                next_states.remove(state)
+                if state in next_states:
+                    next_states.remove(state)
                 # print("removing")
 
             # print("possible states from 0")
