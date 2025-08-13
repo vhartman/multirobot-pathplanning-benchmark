@@ -32,7 +32,7 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
         subfolder_path = folder + planner_name + "/"
 
         timestamps = []
-        print("Loading timestamps")
+        # print("Loading timestamps")
         try:
             with open(subfolder_path + "timestamps.txt") as file:
                 for line in file:
@@ -56,7 +56,7 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
             continue
 
         costs = []
-        print("Loading costs")
+        # print("Loading costs")
         with open(subfolder_path + "costs.txt") as file:
             for line in file:
                 costs_this_run = []
@@ -93,6 +93,7 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
 
     # config["environment_name"] = []
 
+        # print("Loading paths")
         for i, run in enumerate(runs):
             run_data = {}
 
@@ -116,7 +117,7 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
                         paths.append(path_data)
 
                 run_data["paths"] = paths
-                
+
             try:
                 run_data["costs"] = costs[i]
                 run_data["times"] = timestamps[i]
@@ -127,8 +128,8 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
 
         all_experiment_data[planner_name] = planner_data
 
-    loading_end_time = time.time()
-    print(f"Loading took {loading_end_time - loading_start_time}s")
+    # loading_end_time = time.time()
+    # print(f"Loading took {loading_end_time - loading_start_time}s")
 
     return all_experiment_data
 
@@ -270,6 +271,7 @@ def make_cost_plots(
     baseline_cost=None,
     add_info: bool = False,
     final_max_time: Optional[float] = None,
+    logscale: bool = False
 ):
     plt.figure("Cost plot")
 
@@ -444,6 +446,9 @@ def make_cost_plots(
     plt.ylabel(f"Cost ({config['cost_reduction']})")
     plt.xlabel("Computation Time [s]")
 
+    if logscale:
+        plt.yscale("log")
+
     if add_legend:
         if add_info:
             legend_title = f"Environment: {config['environment']}\nNumber of runs: {config['num_runs']}"
@@ -615,6 +620,11 @@ def main():
         help="Display the resulting plots at the end. (default: False)",
     )
     parser.add_argument(
+        "--logscale",
+        action="store_true",
+        help="Scale the y axis logarithmically. (default: False)",
+    )
+    parser.add_argument(
         "--baseline_cost", type=float, default=None, help="Baseline"
     )
     parser.add_argument(
@@ -642,6 +652,7 @@ def main():
         baseline_cost=args.baseline_cost,
         add_info = args.info,
         final_max_time=args.limited_max_time,
+        logscale=args.logscale
     )
     make_success_plot(
         all_experiment_data, 
