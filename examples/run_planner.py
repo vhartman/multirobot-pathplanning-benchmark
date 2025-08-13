@@ -8,7 +8,7 @@ import random
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
-# from multi_robot_multi_goal_planning.problems.configuration import config_dist
+from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
 
 # planners
@@ -130,6 +130,12 @@ def main():
         action="store_true",
         help="Generate samples near a previously found path (default: False)",
     )
+    parser.add_argument(
+        "--insert_transition_nodes",
+        action="store_true",
+        help="Shortcut the path. (default: False)",
+    )
+
     args = parser.parse_args()
 
     if args.num_iters is not None and args.max_time is not None:
@@ -156,12 +162,12 @@ def main():
         config = CompositePRMConfig()
 
         config.distance_metric = args.distance_metric
-        config.try_sampling_around_path = args.prm_sample_near_path
-        config.use_k_nearest = args.prm_k_nearest
-        config.try_informed_sampling = args.prm_informed_sampling
-        config.try_shortcutting = args.prm_shortcutting
-        config.try_direct_informed_sampling = args.prm_direct_sampling
-        config.locally_informed_sampling = args.prm_locally_informed_sampling
+        # config.try_sampling_around_path = args.prm_sample_near_path
+        # config.use_k_nearest = args.prm_k_nearest
+        # config.try_informed_sampling = args.prm_informed_sampling
+        # config.try_shortcutting = args.prm_shortcutting
+        # config.try_direct_informed_sampling = args.prm_direct_sampling
+        # config.locally_informed_sampling = args.prm_locally_informed_sampling
 
         planner = CompositePRM(env, config)
 
@@ -194,7 +200,7 @@ def main():
 
     elif args.planner == "prioritized":
         planner = PrioritizedPlanner(env)
-    
+
     path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
 
     if args.save:
@@ -210,8 +216,18 @@ def main():
 
         planner_folder = experiment_folder + args.planner + "/"
         export_planner_data(planner_folder, 0, info)
-    
+
     assert path is not None
+
+    if args.insert_transition_nodes:
+        path_w_doubled_modes = []
+        for i in range(len(path)):
+            path_w_doubled_modes.append(path[i])
+
+            if i + 1 < len(path) and path[i].mode != path[i + 1].mode:
+                path_w_doubled_modes.append(State(path[i].q, path[i + 1].mode))
+
+        path = path_w_doubled_modes
 
     print("robot-mode-shortcut")
     shortcut_path, info_shortcut = robot_mode_shortcut(
