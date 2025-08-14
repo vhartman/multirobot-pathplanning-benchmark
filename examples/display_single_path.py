@@ -165,12 +165,22 @@ def main():
     parser.add_argument(
         "--plot",
         action="store_true",
-        help="Plot the path. (default: True)",
+        help="Plot the path. (default: False)",
+    )
+    parser.add_argument(
+        "--cost_plot",
+        action="store_true",
+        help="Plot the path. (default: False)",
     )
     parser.add_argument(
         "--export",
         action="store_true",
-        help="Plot the path. (default: True)",
+        help="Plot the path. (default: False)",
+    )
+    parser.add_argument(
+        "--pause",
+        action="store_true",
+        help="Plot the path. (default: False)",
     )
     parser.add_argument(
         "--show_coll_config",
@@ -209,6 +219,29 @@ def main():
         plt.figure()
         for i in range(path[0].q.num_agents()):
             plt.plot([pt.q[i][0] for pt in path], [pt.q[i][1] for pt in path], "o-")
+
+        # plt.show(block=False)
+
+        # make_mode_plot(path, env)
+        plt.show()
+    
+    if args.cost_plot:
+        pts = [start.q.state() for start in path]
+        agent_slices = path[0].q._array_slice
+        batch_costs = env.batch_config_cost(pts, None, tmp_agent_slice=agent_slices)
+
+        mode_switch_idx = []
+        prev_mode = None
+        for i, s in enumerate(path):
+            if prev_mode is None or s.mode != prev_mode:
+                mode_switch_idx.append(i)
+                prev_mode = s.mode
+                print(s.mode)
+
+        print(mode_switch_idx)
+
+        plt.figure()
+        plt.plot(batch_costs)
 
         # plt.show(block=False)
 
@@ -263,7 +296,7 @@ def main():
 
     env.display_path(
         path,
-        False,
+        args.pause,
         export=args.export,
         pause_time=0.05,
         stop_at_end=True,
