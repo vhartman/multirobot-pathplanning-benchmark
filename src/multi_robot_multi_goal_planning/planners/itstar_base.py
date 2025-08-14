@@ -2149,7 +2149,7 @@ class InformedSampling(BaseInformedSampling):
         return min_cost
 
     def lb_cost_from_goal(self, state: State, g, lb_attribute_name="lb_cost_to_go"):
-        if state.mode not in g.transition_node_ids:
+        if state.mode not in g.transition_node_ids or len(g.transition_node_ids[state.mode]) == 0:
             return np.inf
 
         if state.mode not in g.transition_node_array_cache:
