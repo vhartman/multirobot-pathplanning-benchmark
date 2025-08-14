@@ -221,6 +221,7 @@ def setup_planner(
                 with_mode_validation=options["with_mode_validation"],
                 with_noise=options["with_noise"],
                 with_tree_visualization=options["with_tree_visualization"],
+                stepsize=options["stepsize"],
             )
 
             return RRTstar(env, config=rrtstar_config).plan(
@@ -255,6 +256,7 @@ def setup_planner(
                 with_mode_validation=options["with_mode_validation"],
                 with_noise=options["with_noise"],
                 with_tree_visualization=options["with_tree_visualization"],
+                stepsize=options["stepsize"],
             )
             return BidirectionalRRTstar(env, config=birrtstar_config).plan(
                 ptc=RuntimeTerminationCondition(runtime),

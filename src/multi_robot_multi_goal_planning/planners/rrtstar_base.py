@@ -1029,7 +1029,7 @@ class BaseRRTConfig:
     p_stay: float = 0.0
     p_uniform: float = 0.2
     shortcutting: bool = True
-    init_mode_sampling_type: str = "frontier"
+    init_mode_sampling_type: str = "greedy"
     frontier_mode_sampling_probability: float = 0.98
     sample_near_path: bool = False
     shortcutting_dim_version: int = 2
@@ -1045,6 +1045,7 @@ class BaseRRTConfig:
     # BidirectionalRRTstar
     transition_nodes: int = 50
     birrtstar_version: int = 2
+    stepsize: float = 0
 
 
 class BaseRRTstar(BasePlanner):
@@ -1060,7 +1061,11 @@ class BaseRRTstar(BasePlanner):
         self.env = env
         self.config = config
         self.dim = sum(self.env.robot_dims.values())
-        self.eta = np.sqrt(self.dim)
+
+        self.eta = self.config.stepsize
+        if self.eta == 0:
+            self.eta = np.sqrt(self.dim)
+            
         self.operation = Operation()
         self.start_single_goal = SingleGoal(self.env.start_pos.q)
         self.modes = []
@@ -1459,7 +1464,11 @@ class BaseRRTstar(BasePlanner):
             q = type(self.env.get_start_pos()).from_list(q)
 
             if self.env.is_collision_free(q, mode):
+                # print("B")
+                # self.env.show()
                 return q
+            # print("A")
+            # self.env.show()
 
             failed_attemps += 1
 
