@@ -536,3 +536,123 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
         for i, r in enumerate(self.robots):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
+    def __init__(self):
+        self.C, keyframes = rai_config.make_bottle_insertion()
+
+        self.robots = ["a0", "a1"]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = [
+            Task(
+                ["a0", "a1"],
+                # GoalRegion(self.limits),
+                SingleGoal(self.C.getJointState())
+            ),
+        ]
+        self.tasks[0].name = "dummy_start"
+
+        self.tasks.extend([
+            Task(
+                ["a0"],
+                SingleGoal(keyframes[0][self.robot_idx["a0"]]),
+                type="pick",
+                frames=["a0_ur_vacuum", "bottle_1"],
+            ),
+            Task(
+                ["a0"],
+                SingleGoal(keyframes[1][self.robot_idx["a0"]]),
+                type="place",
+                frames=["table", "bottle_1"],
+            ),
+            # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
+            Task(
+                ["a0"],
+                SingleGoal(keyframes[3][self.robot_idx["a0"]]),
+                type="pick",
+                frames=["a0_ur_vacuum", "bottle_12"],
+            ),
+            Task(
+                ["a0"],
+                SingleGoal(keyframes[4][self.robot_idx["a0"]]),
+                type="place",
+                frames=["table", "bottle_12"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[6][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1_ur_vacuum", "bottle_3"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[7][self.robot_idx["a1"]]),
+                type="place",
+                frames=["table", "bottle_3"],
+            ),
+            # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[9][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1_ur_vacuum", "bottle_5"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[10][self.robot_idx["a1"]]),
+                type="place",
+                frames=["table", "bottle_5"],
+            ),
+        ])
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+        self.terminal_task = len(self.tasks) - 1
+
+        self.tasks[1].name = "a1_pick_b1"
+        self.tasks[2].name = "a1_place_b1"
+        self.tasks[3].name = "a1_pick_b2"
+        self.tasks[4].name = "a1_place_b2"
+        self.tasks[5].name = "a2_pick_b1"
+        self.tasks[6].name = "a2_place_b1"
+        self.tasks[7].name = "a2_pick_b2"
+        self.tasks[8].name = "a2_place_b2"
+        self.tasks[9].name = "terminal"
+        
+        self.task_dependencies_any = {}
+
+        self.task_dependencies = {}
+        self.task_dependencies[2] = [1]
+        self.task_dependencies[4] = [3]
+        self.task_dependencies[6] = [5]
+        self.task_dependencies[8] = [7]
+
+        self.task_groups = []
+
+        self.task_groups.append([(0, 1)])
+        self.task_groups.append([(0, 2)])
+        self.task_groups.append([(0, 3)])
+        self.task_groups.append([(0, 4)])
+        self.task_groups.append([(1, 5)])
+        self.task_groups.append([(1, 6)])
+        self.task_groups.append([(1, 7)])
+        self.task_groups.append([(1, 8)])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])

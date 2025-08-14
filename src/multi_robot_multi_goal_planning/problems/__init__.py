@@ -127,6 +127,7 @@ def get_all_environments():
         "unordered_circle": lambda: rue.rai_two_dim_circle_env(),
         "unordered_single_agent_circle": lambda: rue.rai_two_dim_circle_single_agent(),
         "unordered_box_reorientation": lambda: rue.rai_unordered_ur10_box_pile_cleanup_env(),
+        "unordered_bottles": lambda: rfe.rai_ur10_arm_bottle_unordered_env(),
 
         ###### UNASSIGNED ENVS
         "unassigned": lambda: rfe.rai_two_dim_env(),
