@@ -1569,6 +1569,119 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
+class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
+    def __init__(self):
+        self.C, keyframes = rai_config.make_bottle_insertion()
+
+        self.robots = ["a0", "a1"]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = [
+            Task(
+                ["a0"],
+                SingleGoal(keyframes[0][self.robot_idx["a0"]]),
+                type="pick",
+                frames=["a0_ur_vacuum", "bottle_1"],
+            ),
+            Task(
+                ["a0"],
+                SingleGoal(keyframes[1][self.robot_idx["a0"]]),
+                type="place",
+                frames=["table", "bottle_1"],
+            ),
+            # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
+            Task(
+                ["a0"],
+                SingleGoal(keyframes[3][self.robot_idx["a0"]]),
+                type="pick",
+                frames=["a0_ur_vacuum", "bottle_12"],
+            ),
+            Task(
+                ["a0"],
+                SingleGoal(keyframes[4][self.robot_idx["a0"]]),
+                type="place",
+                frames=["table", "bottle_12"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[6][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1_ur_vacuum", "bottle_3"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[7][self.robot_idx["a1"]]),
+                type="place",
+                frames=["table", "bottle_3"],
+            ),
+            # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[9][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1_ur_vacuum", "bottle_5"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(keyframes[10][self.robot_idx["a1"]]),
+                type="place",
+                frames=["table", "bottle_5"],
+            ),
+            Task(
+                ["a0", "a1"],
+                SingleGoal(
+                    np.concatenate(
+                        [
+                            keyframes[5][self.robot_idx["a0"]],
+                            keyframes[11][self.robot_idx["a1"]],
+                        ]
+                    )
+                ),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_pick_b1"
+        self.tasks[1].name = "a1_place_b1"
+        self.tasks[2].name = "a1_pick_b2"
+        self.tasks[3].name = "a1_place_b2"
+        self.tasks[4].name = "a2_pick_b1"
+        self.tasks[5].name = "a2_place_b1"
+        self.tasks[6].name = "a2_pick_b2"
+        self.tasks[7].name = "a2_place_b2"
+        self.tasks[8].name = "terminal"
+        
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("a1_place_b1", "a1_pick_b1")
+        self.graph.add_dependency("a1_pick_b2", "a1_place_b1")
+        self.graph.add_dependency("a1_place_b2", "a1_pick_b2")
+
+        self.graph.add_dependency("a2_place_b1", "a2_pick_b1")
+        self.graph.add_dependency("a2_pick_b2", "a2_place_b1")
+        self.graph.add_dependency("a2_place_b2", "a2_pick_b2")
+
+        self.graph.add_dependency("terminal", "a2_place_b2")
+        self.graph.add_dependency("terminal", "a1_place_b2")
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+
+
 class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=2, num_boxes=9, logo: bool = False):
         if not logo:
