@@ -871,6 +871,7 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
+        self.collision_resolution = 0.02
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.spec.manipulation = ManipulationType.STATIC
@@ -1456,7 +1457,9 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
 
 
 class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, num_bottles=2):
+        assert num_bottles in [1,2]
+
         self.C, keyframes = rai_config.make_bottle_insertion()
 
         self.robots = ["a0", "a1"]
@@ -1539,26 +1542,38 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         self.tasks[7].name = "a2_place_b2"
         self.tasks[8].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(
-            [
-                "a1_pick_b1",
-                "a2_pick_b1",
-                "a1_place_b1",
-                "a2_place_b1",
-                "a1_pick_b2",
-                "a2_pick_b2",
-                "a1_place_b2",
-                "a2_place_b2",
-                "terminal",
-            ]
-        )
+        if num_bottles == 2:
+            self.sequence = self._make_sequence_from_names(
+                [
+                    "a1_pick_b1",
+                    "a2_pick_b1",
+                    "a1_place_b1",
+                    "a2_place_b1",
+                    "a1_pick_b2",
+                    "a2_pick_b2",
+                    "a1_place_b2",
+                    "a2_place_b2",
+                    "terminal",
+                ]
+            )
+        else:
+            self.sequence = self._make_sequence_from_names(
+                [
+                    "a1_pick_b1",
+                    "a2_pick_b1",
+                    "a1_place_b1",
+                    "a2_place_b1",
+                    "terminal",
+                ]
+            )
 
         BaseModeLogic.__init__(self)
 
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.collision_tolerance = 0.01
+        self.collision_tolerance = 0.0000
+        self.collision_resolution = 0.001
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -1570,7 +1585,9 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
 
 
 class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
-    def __init__(self):
+    def __init__(self, num_bottles=2):
+        assert num_bottles in [1,2]
+
         self.C, keyframes = rai_config.make_bottle_insertion()
 
         self.robots = ["a0", "a1"]
@@ -1653,24 +1670,34 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
         self.tasks[7].name = "a2_place_b2"
         self.tasks[8].name = "terminal"
         
-        self.graph = DependencyGraph()
-        self.graph.add_dependency("a1_place_b1", "a1_pick_b1")
-        self.graph.add_dependency("a1_pick_b2", "a1_place_b1")
-        self.graph.add_dependency("a1_place_b2", "a1_pick_b2")
+        if num_bottles == 2:
+            self.graph = DependencyGraph()
+            self.graph.add_dependency("a1_place_b1", "a1_pick_b1")
+            self.graph.add_dependency("a1_pick_b2", "a1_place_b1")
+            self.graph.add_dependency("a1_place_b2", "a1_pick_b2")
 
-        self.graph.add_dependency("a2_place_b1", "a2_pick_b1")
-        self.graph.add_dependency("a2_pick_b2", "a2_place_b1")
-        self.graph.add_dependency("a2_place_b2", "a2_pick_b2")
+            self.graph.add_dependency("a2_place_b1", "a2_pick_b1")
+            self.graph.add_dependency("a2_pick_b2", "a2_place_b1")
+            self.graph.add_dependency("a2_place_b2", "a2_pick_b2")
 
-        self.graph.add_dependency("terminal", "a2_place_b2")
-        self.graph.add_dependency("terminal", "a1_place_b2")
+            self.graph.add_dependency("terminal", "a2_place_b2")
+            self.graph.add_dependency("terminal", "a1_place_b2")
+        else:
+            self.graph = DependencyGraph()
+            self.graph.add_dependency("a1_place_b1", "a1_pick_b1")
+
+            self.graph.add_dependency("a2_place_b1", "a2_pick_b1")
+
+            self.graph.add_dependency("terminal", "a2_place_b1")
+            self.graph.add_dependency("terminal", "a1_place_b1")
 
         BaseModeLogic.__init__(self)
 
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.collision_tolerance = 0.01
+        self.collision_tolerance = 0.0000
+        self.collision_resolution = 0.001
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -1937,7 +1964,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.01
-        self.collision_resolution = 0.01
+        self.collision_resolution = 0.02
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -2157,7 +2184,8 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.005
-        self.collision_resolution = 0.005
+        # self.collision_resolution = 0.005
+        self.collision_resolution = 0.01
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -2229,7 +2257,7 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.005
-        self.collision_resolution = 0.005
+        self.collision_resolution = 0.01
 
         self.spec.dependency = DependencyType.UNORDERED
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
@@ -2290,7 +2318,7 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.005
-        self.collision_resolution = 0.01
+        self.collision_resolution = 0.02
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -2363,7 +2391,7 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.005
-        self.collision_resolution = 0.01
+        self.collision_resolution = 0.02
 
         self.spec.dependency = DependencyType.UNORDERED
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
