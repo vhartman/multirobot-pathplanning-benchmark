@@ -131,11 +131,12 @@ def robot_mode_shortcut(
         if abs(j - i) < 2:
             continue
 
-        robots_to_shortcut = [r for r in range(len(env.robots))]
-        random.shuffle(robots_to_shortcut)
-        # num_robots = np.random.randint(0, len(robots_to_shortcut))
-        num_robots = 1
-        robots_to_shortcut = robots_to_shortcut[:num_robots]
+        # robots_to_shortcut = [r for r in range(len(env.robots))]
+        # random.shuffle(robots_to_shortcut)
+        # # num_robots = np.random.randint(0, len(robots_to_shortcut))
+        # num_robots = 1
+        # robots_to_shortcut = robots_to_shortcut[:num_robots]
+        robots_to_shortcut = [np.random.randint(0, len(env.robots))]
 
         can_shortcut_this = True
         for r in robots_to_shortcut:
@@ -199,7 +200,6 @@ def robot_mode_shortcut(
 
         cnt += 1
 
-        # this is wrong for partial shortcuts atm.
         if env.is_path_collision_free(
             path_element, resolution=resolution, tolerance=tolerance
         ):

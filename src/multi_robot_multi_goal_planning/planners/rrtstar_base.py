@@ -1029,7 +1029,7 @@ class BaseRRTConfig:
     p_stay: float = 0.0
     p_uniform: float = 0.2
     shortcutting: bool = True
-    init_mode_sampling_type: str = "greedy"
+    init_mode_sampling_type: str = "frontier"
     frontier_mode_sampling_probability: float = 0.98
     sample_near_path: bool = False
     shortcutting_dim_version: int = 2
@@ -1875,6 +1875,14 @@ class BaseRRTstar(BasePlanner):
         self.costs.append(cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(path)
+
+        modes = []
+        for s in path:
+            if len(modes) == 0 or s.mode.task_ids != modes[-1]:
+                modes.append(s.mode.task_ids)
+
+        print(f"New cost: {cost}")
+        print("Modes: ", modes)
 
     def generate_path(
         self, mode: Mode, n: Node, shortcutting_bool: bool = True

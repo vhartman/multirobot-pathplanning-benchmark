@@ -454,6 +454,9 @@ class InformedSampling:
                     start_ind = random.randint(0, len(path) - 1)
                     end_ind = random.randint(0, len(path) - 1)
 
+                    # if path[start_ind].mode == path[end_ind].mode:
+                    #     continue
+
                     if end_ind - start_ind > 2:
                         # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
                         current_cost = path_segment_costs_cumsum[end_ind - 1] - (path_segment_costs_cumsum[start_ind - 1] if start_ind > 0 else 0)
@@ -465,7 +468,7 @@ class InformedSampling:
                         if lb_cost < current_cost:
                             break
 
-                # TODO: we need to sample from the set of all reachable modes here
+                # we need to sample from the set of all reachable modes here
                 # not only from the modes on the path
                 if (
                     path[start_ind].mode,
@@ -480,9 +483,21 @@ class InformedSampling:
 
                 # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
 
-                m = random.choice(
-                    in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
-                )
+                if False: #g is not None:
+                    samples_per_mode = {}
+                    p = []
+                    for mode in in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]:
+                        samples_per_mode[mode] = len(g.nodes[mode])
+                        p.append(1/len(g.nodes[mode]))
+
+                    m = random.choices(
+                        in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)], weights=p
+                    )[0]
+
+                else:
+                    m = random.choice(
+                        in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
+                    )
 
                 # k = random.randint(start_ind, end_ind)
                 # m = path[k].mode
