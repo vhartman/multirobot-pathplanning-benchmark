@@ -1026,7 +1026,6 @@ class BaseRRTConfig:
     informed_sampling_version: int = 6
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
-    p_stay: float = 0.0
     p_uniform: float = 0.2
     shortcutting: bool = True
     init_mode_sampling_type: str = "frontier"
@@ -2109,10 +2108,6 @@ class BaseRRTstar(BasePlanner):
         # gaussian sampling near the path
         if self.config.sample_near_path and self.operation.init_sol:
             return self._sample_near_path(mode)
-
-        # home pose sampling
-        if np.random.uniform(0, 1) < self.config.p_stay:
-            return self.sample_home_pose(mode)
 
         # uniform sampling
         return self._sample_uniform(mode)

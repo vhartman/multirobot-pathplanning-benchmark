@@ -6,7 +6,6 @@
     "informed_sampling_version": 6,
     "distance_metric": "max_euclidean",
     "p_goal": 0.4,
-    "p_stay": 0.0,
     "p_uniform": 0.2,
     "shortcutting": true,
     "init_mode_sampling_type": "frontier",
