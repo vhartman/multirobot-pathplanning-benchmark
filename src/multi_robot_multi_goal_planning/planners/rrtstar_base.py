@@ -1021,21 +1021,24 @@ class BaseLongHorizon:
 
 @dataclass
 class BaseRRTConfig:
-    general_goal_sampling: bool = False
     informed_sampling: bool = True
     informed_sampling_version: int = 6
+    locally_informed_sampling: bool = True
+    informed_batch_size: int = 300
+    
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
     p_uniform: float = 0.2
+    
     shortcutting: bool = True
-    init_mode_sampling_type: str = "frontier"
-    frontier_mode_sampling_probability: float = 0.98
-    sample_near_path: bool = False
     shortcutting_dim_version: int = 2
     shortcutting_robot_version: int = 1
-    locally_informed_sampling: bool = True
+    
+    init_mode_sampling_type: str = "frontier"
+    frontier_mode_sampling_probability: float = 0.98
+    
+    sample_near_path: bool = False
     remove_redundant_nodes: bool = True
-    informed_batch_size: int = 300
     apply_long_horizon: bool = False
     horizon_length: int = 1
     with_mode_validation: bool = True
