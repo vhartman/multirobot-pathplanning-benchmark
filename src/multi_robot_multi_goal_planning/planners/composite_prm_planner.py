@@ -1426,9 +1426,9 @@ class MultimodalGraph:
 @dataclass
 class CompositePRMConfig:
     mode_sampling_type: str = "greedy"
-    distance_metric: str = "euclidean"
-    try_sampling_around_path: bool = True
-    use_k_nearest: bool = True
+    distance_metric: str = "max_euclidean"
+    try_sampling_around_path: bool = False
+    use_k_nearest: bool = False
     try_informed_sampling: bool = True
     uniform_batch_size: int = 200
     uniform_transition_batch_size: int = 500
@@ -1440,8 +1440,8 @@ class CompositePRMConfig:
     try_shortcutting: bool = True
     try_direct_informed_sampling: bool = True
     inlcude_lb_in_informed_sampling: bool = False
-    init_mode_sampling_type: str = "greedy"
-    frontier_mode_sampling_probability: float = 0.5
+    init_mode_sampling_type: str = "frontier"
+    frontier_mode_sampling_probability: float = 0.98
     init_uniform_batch_size: int = 150
     init_transition_batch_size: int = 90
     with_mode_validation: bool = True
@@ -2327,4 +2327,32 @@ class CompositePRM(BasePlanner):
         times.append(time.time() - start_time)
 
         info = {"costs": costs, "times": times, "paths": all_paths}
+
+        # pts_per_mode = []
+        # transitions_per_mode = []
+        # for m in reached_modes:
+        #     num_transitions = 0
+        #     if m in g.transition_nodes:
+        #         num_transitions += len(g.transition_nodes[m])
+
+        #     num_pts = 0
+
+        #     if m in g.nodes:
+        #         num_pts += len(g.nodes[m])
+
+        #     pts_per_mode.append(num_pts)
+        #     transitions_per_mode.append(num_transitions)
+
+        # plt.figure()
+        # plt.title("pts per mode")
+        # plt.bar([str(mode) for mode in reached_modes], pts_per_mode)
+        # plt.xticks(rotation=90)
+
+        # plt.figure()
+        # plt.title("transitions per mode")
+        # plt.bar([str(mode) for mode in reached_modes], transitions_per_mode)
+        # plt.xticks(rotation=90)
+
+        # plt.show()
+
         return current_best_path, info
