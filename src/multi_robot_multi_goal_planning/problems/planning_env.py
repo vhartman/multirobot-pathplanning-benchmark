@@ -275,12 +275,13 @@ class Task:
     type: str | None
     frames: List[str] | None
     side_effect: str | None
+    side_effect_data: NDArray | None
 
     # things for the future:
     constraints = List[Constraint]
 
     def __init__(
-        self, robots: List[str], goal: Goal, type=None, frames=None, side_effect=None
+        self, robots: List[str], goal: Goal, type=None, frames=None, side_effect=None, side_effect_data=None
     ):
         self.robots = robots
         self.goal = goal
@@ -290,6 +291,7 @@ class Task:
         self.type = type
         self.frames = frames
         self.side_effect = side_effect
+        self.side_effect_data = side_effect_data
 
 
 class Mode:
@@ -842,6 +844,13 @@ class FreeMixin(BaseModeLogic):
                 valid_next_task_combination = None
                 q_transition = None
 
+                # if m != self.start_mode:
+                #     for next_task_combi in possible_task_combinations:
+                #         for i in next_task_combi:
+                #             print(self.tasks[i].name)
+                        
+                #         print()
+
                 for rnd_next_task_combination in possible_task_combinations:
                     active_task = self.get_active_task(m, rnd_next_task_combination)
                     q_goal = active_task.goal.sample(m)
@@ -866,12 +875,20 @@ class FreeMixin(BaseModeLogic):
                         # self.show()
                         
                         break
+                        
+                    # self.show()
 
                 # unfortunately, all next combinations are bad
                 if valid_next_task_combination is None:
+                    # print("AAAA")
                     break
 
                 m_possible_next = self.get_next_modes(q_transition, m)
+
+                # for tmp in m_possible_next:
+                #     if (tmp.task_ids == valid_next_task_combination):
+                #         m = tmp
+                #         break
                 m = random.choice(m_possible_next)
 
                 mode_sequence.append(m)

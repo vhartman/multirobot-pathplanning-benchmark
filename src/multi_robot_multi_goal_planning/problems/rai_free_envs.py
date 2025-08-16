@@ -449,6 +449,9 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
             if len(box_order) == 0 or box_order[-1] != box_name:
                 box_order.append(box_name)
 
+        print("box_order")
+        print(box_order)
+
         for r, box_name, qs in keyframes:
             if box_name not in pick_tasks:
                 pick_tasks[box_name] = []
@@ -487,6 +490,9 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
             all_place_task_ids = place_tasks[box_name]
             all_prev_place_task_ids = place_tasks[box_order[i-1]]
 
+            print("place ids for box", all_place_task_ids)
+            print("prev place ids", all_prev_place_task_ids)
+
             for r_id, task_id in all_place_task_ids:
                 self.task_dependencies_any[task_id] = [task_id_others for _, task_id_others in all_prev_place_task_ids]
 
@@ -510,7 +516,7 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
 
         print("Dependencies any")
         for k, v in self.task_dependencies_any.items():
-            print(self.tasks[k].name)
+            print("curr task", self.tasks[k].name)
             for idx in v:
                 print(self.tasks[idx].name)
             
@@ -526,8 +532,8 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.collision_tolerance = 0.00
-        self.collision_resolution = 0.0025
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 

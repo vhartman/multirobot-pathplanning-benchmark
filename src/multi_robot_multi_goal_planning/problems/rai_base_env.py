@@ -466,6 +466,7 @@ class rai_env(BaseProblem):
         # self.C.view(False)
         if col > collision_tolerance:
             # self.C.view(False)
+            # print(m)
             return False
 
         return True
@@ -748,6 +749,11 @@ class rai_env(BaseProblem):
             #     tmp.view(True)
 
             if self.tasks[prev_mode_index].type is not None:
+                if self.tasks[prev_mode_index].side_effect == "make_appear":
+                    print("Not yet supported")
+                    make_appear_at_pose = self.tasks[prev_mode_index].side_effect_data
+                    tmp.getFrame(self.tasks[prev_mode_index].frames[0]).setPose(make_appear_at_pose)
+
                 if self.tasks[prev_mode_index].type == "goto":
                     pass
                 else:
@@ -758,9 +764,10 @@ class rai_env(BaseProblem):
                     tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
 
                 # postcondition
-                if self.tasks[prev_mode_index].side_effect is not None:
+                if self.tasks[prev_mode_index].side_effect == "remove":
                     box = self.tasks[prev_mode_index].frames[1]
                     tmp.delFrame(box)
+
 
             if show_stuff:
                 tmp.view(True)
