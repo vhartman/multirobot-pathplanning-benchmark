@@ -1425,7 +1425,7 @@ class MultimodalGraph:
 
 @dataclass
 class CompositePRMConfig:
-    mode_sampling_type: str = "greedy"
+    mode_sampling_type: str = "uniform_reached"
     distance_metric: str = "max_euclidean"
     try_sampling_around_path: bool = False
     use_k_nearest: bool = False
@@ -1440,7 +1440,7 @@ class CompositePRMConfig:
     try_shortcutting: bool = True
     try_direct_informed_sampling: bool = True
     inlcude_lb_in_informed_sampling: bool = False
-    init_mode_sampling_type: str = "frontier"
+    init_mode_sampling_type: str = "greedy"
     frontier_mode_sampling_probability: float = 0.98
     init_uniform_batch_size: int = 150
     init_transition_batch_size: int = 90
@@ -1698,7 +1698,7 @@ class CompositePRM(BasePlanner):
             if len(g.goal_nodes) == 0:
                 mode_sampling_type = self.config.init_mode_sampling_type
             else:
-                mode_sampling_type = "uniform_reached"
+                mode_sampling_type = self.config.init_mode_sampling_type
 
             # if we already found goal nodes, we construct the focal points of our ellipse
             if len(g.goal_nodes) > 0:
@@ -1836,6 +1836,7 @@ class CompositePRM(BasePlanner):
                         failed_attemps += 1
                         continue
                 else:
+                    # self.env.show()
                     failed_attemps += 1
                     continue
 
@@ -1851,7 +1852,7 @@ class CompositePRM(BasePlanner):
                     self.sorted_reached_modes = mode_subset_to_sample
 
                     reached_terminal_mode = True
-                    mode_sampling_type = "uniform_reached"
+                    mode_sampling_type = self.config.init_mode_sampling_type
                 elif len(reached_modes) != len(self.sorted_reached_modes):
                     if not reached_terminal_mode:
                         self.sorted_reached_modes = list(
