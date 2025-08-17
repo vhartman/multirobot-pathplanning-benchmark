@@ -2142,6 +2142,58 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
 
         self.spec.dependency = DependencyType.UNORDERED
 
+class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
+    def __init__(self, num_robots=4, num_boxes: int = 6):
+        self.C, keyframes, self.robots = rai_config.make_pyramid_env(
+            num_robots, num_boxes, view=True
+        )
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for r, b, qs, g in keyframes:
+            cnt = 0
+            for t, k in zip(task_names, qs):
+                if t == "pick":
+                    ee_name = r + "gripper_center"
+                    appearance_pose = np.array([0, 0, 0.6])
+                    task = Task([r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
+                    self.tasks.append(task)
+                else:
+                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
+
+                self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.005
+        # self.collision_resolution = 0.005
+        self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
+
 
 # best cost found (max): 21.45
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):

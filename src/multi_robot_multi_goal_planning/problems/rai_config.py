@@ -3095,6 +3095,317 @@ def make_box_stacking_env(
             )
 
         return C, keyframes, all_robots
+    
+def make_pyramid_env(
+    num_robots=2, num_boxes=6, mixed_robots: bool = False, view: bool = False
+):
+    assert num_boxes <= 9, "A maximum of 6 boxes are supported"
+    assert num_robots <= 4, "A maximum of 4 robots are supported"
+
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    ur10_path = os.path.join(
+        os.path.dirname(__file__), "../models/ur10/ur10_two_finger.g"
+    )
+
+    kuka_path = os.path.join(
+        os.path.dirname(__file__), "../models/kuka_drake/kuka_two_finger.g"
+    )
+
+    def get_robot_and_type_prefix(idx: int):
+        if not mixed_robots:
+            return ur10_path, "ur_"
+        else:
+            if idx in [0, 2]:
+                return ur10_path, "ur_"
+            else:
+                return kuka_path, "kuka_"
+
+    # robot_path = ur10_path
+
+    all_robots = []
+
+    robot_path, robot_type_prefix = get_robot_and_type_prefix(0)
+    all_robots.append(f"a1_{robot_type_prefix}")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-5)
+
+    if num_robots >= 2:
+        robot_path, robot_type_prefix = get_robot_and_type_prefix(1)
+        all_robots.append(f"a2_{robot_type_prefix}")
+
+        C.addFile(robot_path, namePrefix="a2_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, -0.7071]
+        ).setJoint(ry.JT.rigid)
+
+    if num_robots >= 3:
+        robot_path, robot_type_prefix = get_robot_and_type_prefix(2)
+        all_robots.append(f"a3_{robot_type_prefix}")
+
+        C.addFile(robot_path, namePrefix="a3_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([+0.5, -0.6, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, 0.7071]
+        ).setJoint(ry.JT.rigid)
+
+    if num_robots >= 4:
+        robot_path, robot_type_prefix = get_robot_and_type_prefix(3)
+        all_robots.append(f"a4_{robot_type_prefix}")
+
+        C.addFile(robot_path, namePrefix="a4_").setParent(
+            C.getFrame("table")
+        ).setRelativePosition([-0.5, -0.6, 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, 0.7071]
+        ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a2_ur_coll0').setContact(-5)
+    height = 0.065
+
+    size = np.array([0.05, 0.05, 0.05])
+
+    poses = [
+        np.array([size[0] * 1.1, 0, height]),
+        np.array([0, 0, height]),
+        np.array([-size[0] * 1.1, 0, height]),
+
+        np.array([size[0] / 2  * 1.1, 0, height + size[2] * 1.1]),
+        np.array([-size[0] / 2  * 1.1, 0, height + size[2] * 1.1]),
+
+        np.array([0, 0, height + 2 * size[2] * 1.1]),
+    ]
+
+    boxes = []
+    goals = []
+
+    for i in range(num_boxes):
+        pose = poses[i]
+
+        goal_name = "goal" + str(i)
+        C.addFrame(goal_name).setParent(table).setShape(
+            ry.ST.box, [size[0], size[1], size[2], 0.005]
+        ).setRelativePosition(
+            [pose[0], pose[1], pose[2]]
+        ).setColor([0, 0, 0.1, 0.5]).setContact(0).setJoint(ry.JT.rigid)
+
+        goals.append(goal_name)
+
+        obj_name = "obj" + str(i)
+        C.addFrame(obj_name).setParent(table).setShape(
+            ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
+        ).setRelativePosition([0, 0, -1]).setMass(0.1).setColor(
+            np.random.rand(3)
+        ).setContact(0).setJoint(ry.JT.rigid)
+
+        boxes.append(obj_name)
+
+    if view:
+        C.view(True)
+
+    def compute_rearrangment(c_tmp, robot_prefix, box, goal):
+        # set everything but the current box to non-contact
+        robot_base = robot_prefix + "base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=2, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "gripper", box])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_gripper_center", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        #     # [0.05],
+        # )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "gripper_center", box],
+            ry.OT.sos,
+            [1e1, 1e1, 1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductZZ,
+            [robot_prefix + "gripper_center", box],
+            ry.OT.sos,
+            [1e1],
+            [-1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXX,
+            [robot_prefix + "gripper_center", box],
+            ry.OT.sos,
+            [1e1],
+            [1],
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductZZ,
+        #     [robot_prefix + "ur_gripper", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+
+        # komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_vacuum", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        #     [0.05],
+        # )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     [robot_prefix + "ur_vacuum", box],
+        #     ry.OT.sos,
+        #     [1e1, 1e1, 1],
+        # )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductYZ,
+        #     [robot_prefix + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductZZ,
+        #     [robot_prefix + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+
+        # for pick and place directly
+        # komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        max_attempts = 5
+        for num_attempt in range(max_attempts):
+            # komo.initRandom()
+            if num_attempt > 0:
+                dim = len(c_tmp.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
+                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            # print(retval)
+
+            # if view:
+            # komo.view(True, "IK solution")
+
+            print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                komo.view(True, "IK solution")
+                keyframes = komo.getPath()
+                return keyframes
+
+        return None
+
+    # all_robots = ["a1_", "a2_", "a3_", "a4_"]
+    # all_robots = all_robots[:num_robots]
+
+    direct_pick_place_keyframes = {}
+
+    for r in all_robots:
+        direct_pick_place_keyframes[r] = {}
+
+    c_tmp = ry.Config()
+    c_tmp.addConfigurationCopy(C)
+
+    robot_to_use = []
+
+    for box, goal in zip(boxes, goals):
+        c_tmp_2 = ry.Config()
+        c_tmp_2.addConfigurationCopy(c_tmp)
+        # c_tmp_2.computeCollisions()
+
+        c_tmp_2.getFrame(box).setRelativePosition([0, 0, 0.6])
+        c_tmp_2.getFrame(box).setContact(1)
+
+        while True:
+            r = random.choice(all_robots)
+            r1 = compute_rearrangment(c_tmp_2, r, box, goal)
+
+            if r1 is not None:
+                break
+
+        direct_pick_place_keyframes[r][box] = r1[:2]
+        robot_to_use.append(r)
+
+        c_tmp.getFrame(box).setRelativePosition(
+            c_tmp.getFrame(goal).getRelativePosition()
+        )
+
+    box_goal = {}
+    for b, g in zip(boxes, goals):
+        box_goal[b] = g
+
+    keyframes = []
+
+    for r, b, g in zip(robot_to_use, boxes, goals):
+        keyframes.append(
+            (
+                r,
+                b,
+                direct_pick_place_keyframes[r][b],
+                goal,
+            )
+        )
+
+    return C, keyframes, all_robots
 
 
 def make_handover_env(view: bool = False):
