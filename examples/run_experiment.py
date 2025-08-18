@@ -495,7 +495,9 @@ def run_planner_process(
 
     finally:
         semaphore.release()
-        print(f"DONE {planner_name} {run_id}")
+        current_datetime = datetime.datetime.now()
+        readable_time = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"DONE {planner_name} {run_id} at time {readable_time}")
 
 
 def run_experiment_in_parallel(
