@@ -1560,7 +1560,7 @@ class CompositePRM(BasePlanner):
             # print(len(new_samples))
             # sample mode
             m = self._sample_mode(
-                self.sorted_reached_modes, graph, "uniform_reached", cost is not None
+                self.sorted_reached_modes, graph, self.config.mode_sampling_type, cost is not None
             )
 
             # print(m)
