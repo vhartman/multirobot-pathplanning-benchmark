@@ -1,0 +1,18 @@
+{
+  "experiment_name": "convergence",
+  "environment": "unassigned_stacking",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 1000,
+  "num_runs": 15,
+  "seed": 2,
+  "optimize": true,
+  "planners": [
+    
+    {
+      "name": "aitstar",
+      "type": "aitstar",
+      "options": {}
+    }
+  ]
+}

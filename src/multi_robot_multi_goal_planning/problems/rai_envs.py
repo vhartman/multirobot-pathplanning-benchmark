@@ -871,7 +871,7 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
-        self.collision_resolution = 0.02
+        self.collision_resolution = 0.1
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.spec.manipulation = ManipulationType.STATIC
@@ -1573,7 +1573,7 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.0000
-        self.collision_resolution = 0.001
+        self.collision_resolution = 0.005
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -1697,7 +1697,7 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.0000
-        self.collision_resolution = 0.001
+        self.collision_resolution = 0.005
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 

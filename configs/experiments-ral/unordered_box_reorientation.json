@@ -1,11 +1,11 @@
 {
-  "experiment_name": "convergence",
-  "environment": "mobile_four_dep",
+  "experiment_name": "",
+  "environment": "unordered_box_reorientation",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 1000,
-  "num_runs": 50,
-  "seed": 0,
+  "max_planning_time": 500,
+  "num_runs": 30,
+  "seed":0,
   "optimize": true,
   "planners": [
     {
@@ -14,29 +14,38 @@
       "options": {}
     },
     {
-      "name": "rrtstar",
-      "type": "rrtstar",
-      "options": {}
+      "name": "eitstar",
+      "type": "eitstar",
+      "options": {
+        }
     },
+    
     {
       "name": "birrtstar",
       "type": "birrtstar",
-      "options": {}
+      "options": {
+        
+      }
     },
     {
       "name": "prm",
       "type": "prm",
-      "options": {}
+      "options": {
+              }
     },
     {
-      "name": "eitstar",
-      "type": "eitstar",
-      "options": {}
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+
+      }
     },
     {
       "name": "aitstar",
       "type": "aitstar",
-      "options": {}
+      "options": {
+      
+      }
     }
   ]
 }

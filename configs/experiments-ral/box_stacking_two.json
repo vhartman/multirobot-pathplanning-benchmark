@@ -1,11 +1,11 @@
 {
   "experiment_name": "convergence",
-  "environment": "mobile_four_dep",
+  "environment": "box_stacking_two_robots",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 1000,
-  "num_runs": 50,
-  "seed": 0,
+  "max_planning_time": 500,
+  "num_runs": 20,
+  "seed": 2,
   "optimize": true,
   "planners": [
     {

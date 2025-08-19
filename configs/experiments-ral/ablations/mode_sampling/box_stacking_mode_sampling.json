@@ -1,9 +1,9 @@
 {
   "experiment_name": "mode_sampling",
-  "environment": "other_hallway",
+  "environment": "box_stacking",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "sum",
-  "max_planning_time": 500,
+  "cost_reduction": "max",
+  "max_planning_time": 1000,
   "num_runs": 50,
   "seed": 2,
   "optimize": true,
@@ -29,8 +29,15 @@
       "name": "prm uniform",
       "type": "prm",
       "options": {
+        "init_mode_sampling_type": "uniform"
+      }
+    },
+    {
+      "name": "prm uniform_2",
+      "type": "prm",
+      "options": {
         "init_mode_sampling_type": "uniform",
-        "with_noise": true
+        "with_mode_validation": false
       }
     },
     {

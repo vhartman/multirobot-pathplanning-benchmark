@@ -3,19 +3,11 @@
   "environment": "other_hallway",
   "per_agent_cost": "euclidean",
   "cost_reduction": "sum",
-  "max_planning_time": 200,
+  "max_planning_time": 500,
   "num_runs": 50,
   "optimize": true,
-  "seed": 0,
+  "seed": 2,
   "planners": [
-    {
-      "name": "rrtstar_global_sampling",
-      "type": "rrtstar",
-      "options": {
-        "shortcutting": false,
-        "locally_informed_sampling": false
-      }
-    },
     {
       "name": "birrtstar_global_sampling",
       "type": "birrtstar",
@@ -41,21 +33,6 @@
       }
     },
     {
-      "name": "aitstar_global_sampling",
-      "type": "aitstar",
-      "options": {
-        "locally_informed_sampling": false,
-        "shortcutting": false
-      }
-    },
-    {
-      "name": "rrtstar",
-      "type": "rrtstar",
-      "options": {
-        "shortcutting": false
-      }
-    },
-    {
       "name": "birrtstar",
       "type": "birrtstar",
       "options": {
@@ -72,13 +49,6 @@
     {
       "name": "eitstar",
       "type": "eitstar",
-      "options": {
-        "shortcutting": false
-      }
-    },
-    {
-      "name": "aitstar",
-      "type": "aitstar",
       "options": {
         "shortcutting": false
       }
