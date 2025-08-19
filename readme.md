@@ -3,7 +3,7 @@
 This repository provides some multi-robot-multi-goal motion planning problems, and some baseline-planners.
 There are also some utilities for visualizing plans, and plotting convergence and success rates of planners.
 
-The corresponding paper can be found [here](https://vhartmann.com/assets/mrmg/a_benchmark_for_mr_mg_pf.pdf), and more videos can be seen on the [paper website](https://vhartmann.com/mrmg-planning/).
+<!-- The corresponding paper can be found [here](https://vhartmann.com/assets/mrmg/a_benchmark_for_mr_mg_pf.pdf), and more videos can be seen on the [paper website](https://vhartmann.com/mrmg-planning/). -->
 
 # Installation
 Most of the problems we propose here are originally built on top of [rai](https://marctoussaint.github.io/robotic/index.html) ([github](https://github.com/MarcToussaint/robotic)). We would recommend using the virtual environment of your choice to make sure nothing break with rai.
@@ -150,6 +150,7 @@ In the moment, we only support formulating the task structure as dependency grap
 It would theoretically be possible to use the formulation we propse here to implement and benchmark task and motion planning solvers.
 This would require minor changes in how the starting mode is currently used.
 
+<!-- 
 # Citation
 If you use this codebase in your research, please cite:
 
@@ -160,4 +161,4 @@ If you use this codebase in your research, please cite:
   journal={arXiv preprint arXiv:2503.03509},
   year={2025}
 }
-```
+``` -->
