@@ -195,22 +195,22 @@ planner_name_to_color = {
     "prm same": report_colors["prm_ablation"],
     "prm uniform": report_colors["prm_ablation"],
     "prm without": report_colors["prm_ablation"],    
-    "globally_informed_prm": report_colors["prm"],
+    "globally_informed_prm": report_colors["prm_ablation"],
 }
 
 planner_name_to_style = {
     "rrtstar without": "--",
     "rrtstar_global_sampling": ":",
-    "rrtstar_no_shortcutting": ":",
+    "rrtstar_no_shortcutting": "--",
     "rrtstar uniform": "--",
 
-    "birrtstar_global_sampling": ":",
-    "birrtstar_no_shortcutting": ":",
+    "birrtstar_global_sampling": "--",
+    "birrtstar_no_shortcutting": "--",
     "birrtstar uniform":"--",
     "birrtstar without":"--",
 
     "globally_informed_prm": "--",
-    "prm_no_shortcutting": ":",
+    "prm_no_shortcutting": "--",
     "prm same":"--",
     "prm uniform":"--",
     "prm without":"--",
@@ -221,11 +221,11 @@ planner_name_to_style = {
     "aitstar without": "--",
     "aitstar_global_sampling": ":",
 
-    "eitstar_no_shortcutting": ":",
+    "eitstar_no_shortcutting": "--",
     "eitstar same": "--",
     "eitstar uniform": "--",
     "eitstar without": "--",
-    "eitstar_global_sampling": ":",
+    "eitstar_global_sampling": "--",
 }
 
 
@@ -435,11 +435,11 @@ def make_cost_plots(
         )
 
     if baseline_cost is not None:
-        plt.axhline(y=baseline_cost, color="gray", linestyle="--")
+        plt.axhline(y=baseline_cost, color="tab:blue", linestyle="--")
 
         min_non_inf_cost = min(min_non_inf_cost, baseline_cost)
 
-    plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
+    plt.ylim([0.8 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
     plt.grid(which="both", axis="both", ls="--")
 
