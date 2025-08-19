@@ -1,11 +1,11 @@
 {
-  "experiment_name": "convergence",
-  "environment": "box_stacking_dep",
+  "experiment_name": "",
+  "environment": "unassigned_cleanup",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 200,
+  "max_planning_time": 1000,
   "num_runs": 50,
-  "seed": 2,
+  "seed":0,
   "optimize": true,
   "planners": [
     {
@@ -14,29 +14,39 @@
       "options": {}
     },
     {
-      "name": "rrtstar",
-      "type": "rrtstar",
-      "options": {}
+      "name": "eitstar",
+      "type": "eitstar",
+      "options": {
+        }
     },
+    
     {
       "name": "birrtstar",
       "type": "birrtstar",
-      "options": {}
+      "options": {
+        
+      }
     },
     {
       "name": "prm",
       "type": "prm",
-      "options": {}
+      "options": {
+              }
     },
     {
-      "name": "eitstar",
-      "type": "eitstar",
-      "options": {}
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+
+      }
     },
     {
       "name": "aitstar",
       "type": "aitstar",
-      "options": {}
+      "options": {
+      
+      }
     }
+
   ]
 }

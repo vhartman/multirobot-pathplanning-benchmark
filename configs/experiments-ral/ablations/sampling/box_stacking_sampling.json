@@ -1,21 +1,13 @@
 {
   "experiment_name": "global_sampling_exp",
-  "environment": "box_stacking_dep",
+  "environment": "box_stacking",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 200,
+  "max_planning_time": 1000,
   "num_runs": 50,
   "seed": 2,
   "optimize": true,
   "planners": [
-    {
-      "name": "rrtstar_global_sampling",
-      "type": "rrtstar",
-      "options": {
-        "shortcutting": false,
-        "locally_informed_sampling": false
-      }
-    },
     {
       "name": "birrtstar_global_sampling",
       "type": "birrtstar",
@@ -41,21 +33,6 @@
       }
     },
     {
-      "name": "aitstar_global_sampling",
-      "type": "aitstar",
-      "options": {
-        "locally_informed_sampling": false,
-        "shortcutting": false
-      }
-    },
-    {
-      "name": "rrtstar",
-      "type": "rrtstar",
-      "options": {
-        "shortcutting": false
-      }
-    },
-    {
       "name": "birrtstar",
       "type": "birrtstar",
       "options": {
@@ -72,13 +49,6 @@
     {
       "name": "eitstar",
       "type": "eitstar",
-      "options": {
-        "shortcutting": false
-      }
-    },
-    {
-      "name": "aitstar",
-      "type": "aitstar",
       "options": {
         "shortcutting": false
       }

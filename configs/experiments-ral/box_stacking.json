@@ -1,12 +1,12 @@
 {
   "experiment_name": "convergence",
-  "environment": "random_2d",
+  "environment": "box_stacking",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 500,
-  "optimize": true,
+  "max_planning_time": 1000,
   "num_runs": 50,
-  "seed": 0,
+  "seed": 2,
+  "optimize": true,
   "planners": [
     {
       "name": "prioritized",
