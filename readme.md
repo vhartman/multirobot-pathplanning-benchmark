@@ -150,6 +150,13 @@ In the moment, we only support formulating the task structure as dependency grap
 It would theoretically be possible to use the formulation we propse here to implement and benchmark task and motion planning solvers.
 This would require minor changes in how the starting mode is currently used.
 
+#### C++ implementations of planners
+We noted that the more complex planners (EIT/AIT/sometimes PRM) spend much time in python operations, that should not be the bottleneck of the planner.
+Thus, we feel like it makes sense to port much of this benchmark to cpp.
+
+#### More backends
+This should be somewhat self explanatory: I want to have parallelized (faster) backends for collision checking.
+
 <!-- 
 # Citation
 If you use this codebase in your research, please cite:
