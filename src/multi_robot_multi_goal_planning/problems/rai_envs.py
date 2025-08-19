@@ -871,7 +871,7 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
-        self.collision_resolution = 0.1
+        self.collision_resolution = 0.02
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.spec.manipulation = ManipulationType.STATIC
@@ -1086,21 +1086,6 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env
 ##############################
 # 3 dimensional environments #
 ##############################
-
-
-# single robot neighbourhood
-class rai_single_ur10_arm_waypoint_env:
-    pass
-
-
-# sample poses -> difficult since pick influences place pose
-class rai_single_ur10_arm_pick_and_place_env:
-    pass
-
-
-# goals are neighbourhoods
-class rai_dual_ur10_arm_inspection_env:
-    pass
 
 
 # TODO: this is messy (currrently pick/place without actual manip)
@@ -1573,7 +1558,7 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.0000
-        self.collision_resolution = 0.005
+        self.collision_resolution = 0.001
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -1697,7 +1682,7 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.collision_tolerance = 0.0000
-        self.collision_resolution = 0.005
+        self.collision_resolution = 0.001
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
@@ -2142,6 +2127,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
 
         self.spec.dependency = DependencyType.UNORDERED
 
+
 class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 6):
         self.C, keyframes, self.robots = rai_config.make_pyramid_env(
@@ -2455,6 +2441,16 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
+class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, keyframes = rai_config.make_strut_nccr_env()
+
+        self.robots = ["a0", "a1"]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
 def check_all_modes():
     all_envs = [
         "piano",
@@ -2523,7 +2519,6 @@ def check_all_modes():
             ms = env.get_next_modes(None, m)
             assert len(ms) == 0
             m = ms[0]
-
 
 
 def export_env(env: rai_env):

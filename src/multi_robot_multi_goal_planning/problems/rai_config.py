@@ -5091,6 +5091,24 @@ def make_strut_assembly_problem():
 
         C.view(True)
 
+def make_strut_nccr_env():
+    C = ry.Config()
+    robot_path = os.path.join(
+        os.path.dirname(__file__), "../models/abb_robot/dual_cell.g"
+    )
+
+    C.addFile(robot_path)
+    joint_names_a0 = get_robot_joints(C, "a0")
+    joint_names_a1 = get_robot_joints(C, "a1")
+
+    q_original_home = C.getJointState()
+
+    # TODO: load sequence, compute keyframes, return sequence.
+
+    C.view(True)
+
+    return C
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
