@@ -453,6 +453,7 @@ def run_planner_process(
     experiment_folder: str,
     results: List,  # Changed from Queue to List
     semaphore,
+    num_runs,
     print_to_file_and_stdout: bool = False,
 ):
     try:
@@ -497,7 +498,7 @@ def run_planner_process(
         semaphore.release()
         current_datetime = datetime.datetime.now()
         readable_time = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"DONE {planner_name} {run_id} at time {readable_time}")
+        print(f"DONE {planner_name} {run_id}/{num_runs} at time {readable_time}")
 
 
 def run_experiment_in_parallel(
@@ -533,6 +534,7 @@ def run_experiment_in_parallel(
                             experiment_folder,
                             results,  # Use manager.list instead of Queue
                             semaphore,
+                            config["num_runs"]
                         ),
                     )
                     p.daemon = True  # Make processes daemon
