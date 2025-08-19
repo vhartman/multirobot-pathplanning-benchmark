@@ -1698,7 +1698,7 @@ class CompositePRM(BasePlanner):
             if len(g.goal_nodes) == 0:
                 mode_sampling_type = self.config.init_mode_sampling_type
             else:
-                mode_sampling_type = self.config.init_mode_sampling_type
+                mode_sampling_type = self.config.mode_sampling_type
 
             # if we already found goal nodes, we construct the focal points of our ellipse
             if len(g.goal_nodes) > 0:
@@ -1852,7 +1852,7 @@ class CompositePRM(BasePlanner):
                     self.sorted_reached_modes = mode_subset_to_sample
 
                     reached_terminal_mode = True
-                    mode_sampling_type = self.config.init_mode_sampling_type
+                    mode_sampling_type = self.config.mode_sampling_type
                 elif len(reached_modes) != len(self.sorted_reached_modes):
                     if not reached_terminal_mode:
                         self.sorted_reached_modes = list(
