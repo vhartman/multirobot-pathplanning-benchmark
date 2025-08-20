@@ -78,6 +78,12 @@ def get_all_environments():
         "crl_four": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=4, logo=True), # 2 robots, 9 boxes
         "crl_two": lambda: re.rai_ur10_arm_box_rearrangement_env(num_robots=2, logo=True), # 2 robots, 9 boxes
 
+        "three_robot_truss": lambda: re.rai_coop_tamp_architecture("three_robot_truss"),
+        "spiral_tower": lambda: re.rai_coop_tamp_architecture("spiral_tower"),
+        "spiral_tower_two": lambda: re.rai_coop_tamp_architecture("spiral_tower_two"),
+        "cube_four": lambda: re.rai_coop_tamp_architecture("cube_four"),
+        "extreme_beam_test": lambda: re.rai_coop_tamp_architecture("extreme_beam_test"),
+
         # mobile
         "mobile_wall_four": lambda: re.rai_mobile_manip_wall(num_robots=4),
         "mobile_wall_three": lambda: re.rai_mobile_manip_wall(num_robots=3),

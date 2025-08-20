@@ -1041,7 +1041,7 @@ class BaseRRTConfig:
     remove_redundant_nodes: bool = True
     apply_long_horizon: bool = False
     horizon_length: int = 1
-    with_mode_validation: bool = True
+    with_mode_validation: bool = False
     with_noise: bool = False
     with_tree_visualization: bool = False
     # BidirectionalRRTstar
