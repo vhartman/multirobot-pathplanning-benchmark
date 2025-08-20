@@ -1444,7 +1444,7 @@ class CompositePRMConfig:
     frontier_mode_sampling_probability: float = 0.98
     init_uniform_batch_size: int = 150
     init_transition_batch_size: int = 90
-    with_mode_validation: bool = True
+    with_mode_validation: bool = False
     with_noise: bool = False
 
 
