@@ -5092,6 +5092,335 @@ def make_strut_assembly_problem():
         C.view(True)
 
 
+def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="two_finger"):
+    C = ry.Config()
+    
+    C.addFrame("table").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(1)
+
+    if assembly_name == "three_robot_truss":
+        assembly_filename = "three_robot_truss"
+    elif assembly_name == "spiral_tower":
+        assembly_filename = "spiral_tower_four"
+    elif assembly_name == "spiral_tower_two":
+        assembly_filename = "spiral_tower_two"
+    elif assembly_name == "cube_four":
+        assembly_filename = "cube_four"
+    elif assembly_name == "extreme_beam_test":
+        assembly_filename = "extreme_beam_test"
+    else:
+        raise ValueError("Assembly name not existent.")
+        # path = os.path.join(
+        #     "/home/valentin/Downloads/assembly_roadmap-master/data/problems/spiral_tower_side_welding/problem.json"
+        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/truss_bridge_three_robots_welding/problem.json"
+        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/truss_bridge/problem.json"
+        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/truss_boat_three_robots/problem.json"
+        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/extreme_beam_test/problem.json"
+        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/cube_four_robots/problem.json"
+        # )
+    
+    path = os.path.join(
+        os.path.dirname(__file__), f"../problems/desc/{assembly_filename}.json"
+    )
+
+    if gripper_type == "vacuum":
+        robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_vacuum.g")
+    else:
+        robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_two_finger.g")
+
+    start_poses = {}
+    goal_poses = {}
+    objects = []
+    robots = []
+
+    with open(path) as f:
+        d = json.load(f)
+
+        agents = d["agents"]
+        for i, agent in enumerate(agents):
+            relative_base_pos = np.array(agent["base_link_position"])
+            relative_base_quat = np.array(agent["base_link_orientation"])
+            relative_base_quat = np.array([relative_base_quat[3], relative_base_quat[0], relative_base_quat[1], relative_base_quat[2]])
+
+            C.addFile(robot_path, namePrefix=f"a{i}_").setParent(
+                C.getFrame("table")
+            ).setRelativePosition(relative_base_pos).setRelativeQuaternion(
+                relative_base_quat
+            ).setJoint(ry.JT.rigid)
+
+            robots.append(f"a{i}_ur_")
+
+        components = d["components"]
+        for i, component in enumerate(components):
+            start_position = np.array(component["start_position"])
+            start_orientation = np.array(component["start_orientation"])
+            start_orientation = np.array([start_orientation[3], start_orientation[0], start_orientation[1], start_orientation[2]])
+
+            goal_position = np.array(component["goal_position"])
+            goal_orientation = np.array(component["goal_orientation"])
+            goal_orientation = np.array([goal_orientation[3], goal_orientation[0], goal_orientation[1], goal_orientation[2]])
+
+            p1 = np.array(component["geometry_data"]["axis_points"][0])
+            p2 = np.array(component["geometry_data"]["axis_points"][1])
+
+            shrink = component["geometry_data"]["shrink"]
+
+            length = np.linalg.norm(p2 - p1)
+            shrinked_length = np.linalg.norm(p2 - p1) - 2  * shrink
+
+            obj_name = "start_" + str(i)
+            start_poses[obj_name] = {
+                "position": start_position,
+                "orientation": start_orientation
+            }
+
+            goal_poses[obj_name] = {
+                "position": goal_position,
+                "orientation": goal_orientation
+            }
+
+            r = component["geometry_data"]["radius"]
+
+            C.addFrame(obj_name).setParent(
+                C.getFrame("table")
+            ).setPosition(start_position).setShape(
+                ry.ST.cylinder, size=[r, shrinked_length, 0.005]
+            ).setColor([1, 0.3, 0.3, 1]).setContact(0).setQuaternion(start_orientation).setJoint(ry.JT.rigid)
+
+            C.addFrame("goal_" + str(i)).setParent(
+                C.getFrame("table")
+            ).setPosition(goal_position).setShape(
+                ry.ST.cylinder, size=[r, length, 0.005]
+            ).setColor([0.3, 0.3, 0.3, 0.2]).setContact(0).setQuaternion(goal_orientation)
+
+            objects.append(obj_name)
+
+            # C.view(True)
+    
+    def compute_rearrangment(c_tmp, robot_prefix, box, goal, gripper_type="vacuum"):
+        # set everything but the current box to non-contact
+        robot_base = robot_prefix + "base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=2, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        if gripper_type == "vacuum":
+            ee_name = robot_prefix + "vacuum"
+        else:
+            ee_name = robot_prefix + "gripper_center"
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [ee_name, box])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_gripper_center", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        #     # [0.05],
+        # )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [ee_name, box],
+            ry.OT.sos,
+            [1e1, 1e1, 1],
+        )
+        
+        if gripper_type == "two_finger":
+            komo.addObjective(
+                [1, 2],
+                ry.FS.scalarProductXZ,
+                [ee_name, box],
+                ry.OT.eq,
+                [1e1],
+                [1],
+            )
+            komo.addObjective(
+                [1, 2],
+                ry.FS.positionDiff,
+                [ee_name, box],
+                ry.OT.eq,
+                [1e0],
+                [0, 0, 0]
+            )
+        else:
+            komo.addObjective(
+                [1, 2],
+                ry.FS.scalarProductXZ,
+                [ee_name, box],
+                ry.OT.sos,
+                [1e1],
+                [0],
+            )
+            komo.addObjective(
+                [1, 2],
+                ry.FS.distance,
+                [ee_name, box],
+                ry.OT.eq,
+                [1e0],
+                [0.05],
+            )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductZZ,
+        #     [robot_prefix + "ur_gripper", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+
+        # komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+        
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     [robot_prefix + "ur_vacuum", box],
+        #     ry.OT.sos,
+        #     [1e1, 1e1, 1],
+        # )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductYZ,
+        #     [robot_prefix + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductZZ,
+        #     [robot_prefix + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e1],
+        # )
+
+        # for pick and place directly
+        # komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[0, 3],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        max_attempts = 5
+        for num_attempt in range(max_attempts):
+            # komo.initRandom()
+            if num_attempt > 0:
+                dim = len(c_tmp.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
+                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            # print(retval)
+
+            # if view:
+            # komo.view(True, "IK solution")
+
+            print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                komo.view(True, "IK solution")
+                keyframes = komo.getPath()
+                return keyframes
+
+        return None
+
+    C.view(True)
+    
+    # sort objects by z component of their goal position
+    sorted_objects = sorted(objects, key=lambda obj: goal_poses[obj]["position"][2]) 
+    objects = sorted_objects
+
+    direct_pick_place_keyframes = {}
+
+    for r in robots:
+        direct_pick_place_keyframes[r] = {}
+
+    c_tmp = ry.Config()
+    c_tmp.addConfigurationCopy(C)
+
+    robot_to_use = []
+
+    for obj in objects:
+        c_tmp_2 = ry.Config()
+        c_tmp_2.addConfigurationCopy(c_tmp)
+
+        c_tmp_2.getFrame(obj).setContact(1)
+
+        # c_tmp_2.computeCollisions()
+
+        goal = "goal" + obj[5:]
+
+        while True:
+            r = random.choice(robots)
+            r1 = compute_rearrangment(c_tmp_2, r, obj, goal, gripper_type=gripper_type)
+
+            if r1 is not None:
+                break
+
+        direct_pick_place_keyframes[r][obj] = r1[:2]
+        robot_to_use.append(r)
+
+        c_tmp.getFrame(obj).setRelativePosition(
+            c_tmp.getFrame(goal).getRelativePosition()
+        )
+        c_tmp.getFrame(obj).setRelativeQuaternion(
+            c_tmp.getFrame(goal).getRelativeQuaternion()
+        )
+
+        c_tmp.getFrame(obj).setContact(1)
+
+    # set poses to somewhere hidden and collect couple of info things
+    keyframes = []
+
+    for i, obj in enumerate(objects):
+        C.getFrame(obj).setPosition([0, 0, -2])
+        start_pose = np.concatenate([start_poses[obj]["position"], start_poses[obj]["orientation"]])
+
+        ee_name = robot_to_use[i] + "gripper_center"
+        if gripper_type == "vacuum":
+            ee_name = robot_to_use[i] + "vacuum"
+
+        keyframes.append(
+            (
+                robot_to_use[i], ee_name, obj, direct_pick_place_keyframes[robot_to_use[i]][obj], start_pose
+            )
+        )
+
+    return C, robots, keyframes
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Env shower")
     parser.add_argument("env", nargs="?", default="default", help="env to show")

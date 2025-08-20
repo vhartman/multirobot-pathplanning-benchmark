@@ -751,7 +751,8 @@ class rai_env(BaseProblem):
             if self.tasks[prev_mode_index].type is not None:
                 if self.tasks[prev_mode_index].side_effect == "make_appear":
                     make_appear_at_pose = self.tasks[prev_mode_index].side_effect_data
-                    tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setRelativePosition(make_appear_at_pose)
+                    tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setRelativePosition(make_appear_at_pose[:3])
+                    tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setRelativeQuaternion(make_appear_at_pose[3:])
 
                 if self.tasks[prev_mode_index].type == "goto":
                     pass

@@ -157,6 +157,10 @@ Thus, we feel like it makes sense to port much of this benchmark to cpp.
 #### More backends
 This should be somewhat self explanatory: I want to have parallelized (faster) backends for collision checking.
 
+#### More scenarios
+We are currently covering many aspects in multi-arm manipulation/planning, but less so in mobile manipulation.
+Further, more long horizon scenarios would be fun.
+
 <!-- 
 # Citation
 If you use this codebase in your research, please cite:
