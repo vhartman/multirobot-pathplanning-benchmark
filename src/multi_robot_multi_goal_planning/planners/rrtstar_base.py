@@ -1470,7 +1470,7 @@ class BaseRRTstar(BasePlanner):
                 # self.env.show()
                 return q
             # print("A")
-            # self.env.show()
+            # self.env.show(False)
 
             failed_attemps += 1
 
@@ -1593,6 +1593,7 @@ class BaseRRTstar(BasePlanner):
 
             if self.env.is_collision_free(q, mode):
                 return q
+            # self.env.show(False)
 
     def sample_informed(
         self,
