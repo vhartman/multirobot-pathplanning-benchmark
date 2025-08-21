@@ -1773,6 +1773,9 @@ def plan_in_time_space_bidirectional(
         iter += 1
 
         t_rnd, q_rnd = sample_goal(max_t)
+        if iter == 1:
+            t_rnd = max_t
+
         res = collision_free_with_moving_obs(
             env,
             t_rnd,
@@ -1786,6 +1789,9 @@ def plan_in_time_space_bidirectional(
         if res:
             t_rev.nodes.append(Node(t_rnd, q_rnd))
             sampled_goals.append((t_rnd, q_rnd))
+
+            # if max_t > 290:
+            #     env.C.view(True)
 
         if len(sampled_goals) > 0 and iter > 50:
             break
@@ -1805,8 +1811,12 @@ def plan_in_time_space_bidirectional(
         # assert False
         return None
 
-    max_iters = 5000
+    max_iters = 10000
     for iter in range(max_iters):
+        tmp = t_a
+        t_a = t_b
+        t_b = tmp
+        
         if ptc.should_terminate(0, time.time() - computation_start_time):
             break
 
@@ -1817,7 +1827,7 @@ def plan_in_time_space_bidirectional(
 
         if iter % 500 == 0:
             print("iter", iter)
-            print(len(t_a.nodes))
+            print("num nodes", len(t_a.nodes), len(t_b.nodes))
             print(f"Current t_ub {curr_t_ub}")
 
         # if len(sampled_goals) == 0 or rnd < goal_sampling_probability:
@@ -1978,9 +1988,12 @@ def plan_in_time_space_bidirectional(
                 # return path
                 return TimedPath(time=times, path=path)
         
-        tmp = t_a
-        t_a = t_b
-        t_b = tmp
+        # if len(t_a.nodes) == 51:
+        #     env.show(True)
+
+        # tmp = t_a
+        # t_a = t_b
+        # t_b = tmp
 
     return None
 

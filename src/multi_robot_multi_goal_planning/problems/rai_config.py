@@ -5043,6 +5043,10 @@ def make_strut_assembly_problem():
     C.addFile(mobile_robot_path, namePrefix="a0_").setPosition([1, 2, 0.2])
     C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([-1, 2, 0.2])
 
+    C.addFrame("strut_table").setParent(C.getFrame("table")).setRelativePosition([0, 2.5, 0.15]).setShape(
+        ry.ST.box, size=[0.3, 1, 0.27, 0.005]
+    ).setColor([0.3, 0.3, 0.3, 1]).setContact(1)
+
     robots = ["a0_", "a1_"]
 
     # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/yijiang_strut.json")
@@ -5096,7 +5100,7 @@ def make_strut_assembly_problem():
                 ry.ST.box, size=[0.01, 0.01, length, 0.005]
             ).setColor([0.3, 0.3, 0.3, 0.5]).setContact(0).setQuaternion(quat)
 
-            C.addFrame(obj_name).setParent(C.getFrame("table")).setPosition(np.array([0, 2, 0.3])).setShape(
+            C.addFrame(obj_name).setParent(C.getFrame("table")).setPosition(np.array([0, 2.5, 0.3])).setShape(
                 ry.ST.cylinder, size=[length, 0.007]
             ).setColor([1, 0.3, 0.3, 1]).setContact(0).setQuaternion([1, 1, 0, 0]).setJoint(ry.JT.rigid)
 
@@ -5248,6 +5252,7 @@ def make_strut_assembly_problem():
         )
 
         c_tmp.getFrame(obj).setContact(1)
+        # c_tmp.view(False)
 
     # c_tmp.view(True)
 
@@ -5378,7 +5383,7 @@ def make_strut_nccr_env():
             c_tmp, phases=2, slicesPerPhase=1, kOrder=1, enableCollisions=True
         )
         komo.addObjective(
-            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e2], [-0.0]
         )
 
         komo.addObjective([], ry.FS.jointLimits, [], ry.OT.ineq, [1e1], [-0.0])

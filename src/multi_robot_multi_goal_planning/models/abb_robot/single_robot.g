@@ -19,9 +19,9 @@ tool0: {}
 
 joint_1_origin (tmp): { Q: [0 0 0.265] }
 joint_1 (joint_1_origin link_1): { joint: hingeZ, limits: [-3.559265359 3.5159265359], ctrl_limits: [2.18166156499 -1 150],}
-joint_2 (link_1 link_2): { joint: hingeY, limits: [-3.559265359 3.5159265359], ctrl_limits: [2.18166156499 -1 150],}
+joint_2 (link_1 link_2): { joint: hingeY, limits: [-1.559265359 1.5159265359], ctrl_limits: [2.18166156499 -1 150],}
 joint_3_origin (link_2): { Q: [0 0 0.444] }
-joint_3 (joint_3_origin link_3): { joint: hingeY, limits: [-3.92699081699 5.4835298642], ctrl_limits: [2.44346095279 -1 150],}
+joint_3 (joint_3_origin link_3): { joint: hingeY, limits: [-2.92699081699 1.4835298642], ctrl_limits: [2.44346095279 -1 150],}
 joint_4_origin (link_3): { Q: [0 0 0.110] }
 joint_4 (joint_4_origin link_4): { joint: hingeX, limits: [-3.559265359 3.5159265359], ctrl_limits: [3.49065850399 -1 150],}
 joint_5_origin (link_4): { Q: [0.470 0 0] }
