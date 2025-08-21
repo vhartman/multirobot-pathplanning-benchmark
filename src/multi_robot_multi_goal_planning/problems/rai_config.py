@@ -5100,16 +5100,16 @@ def make_strut_assembly_problem():
                 ry.ST.cylinder, size=[length, 0.007]
             ).setColor([1, 0.3, 0.3, 1]).setContact(0).setQuaternion([1, 1, 0, 0]).setJoint(ry.JT.rigid)
 
-            C.addFrame(f"marker_{i}").setParent(C.getFrame(obj_name)).setRelativePosition(np.array([0, 0, 0])).setShape(
-                ry.ST.marker, size=[0.1]
-            ).setColor([1, 0.3, 0.3, 1])
+            # C.addFrame(f"marker_{i}").setParent(C.getFrame(obj_name)).setRelativePosition(np.array([0, 0, 0])).setShape(
+            #     ry.ST.marker, size=[0.1]
+            # ).setColor([1, 0.3, 0.3, 1])
 
             # C.view(True)
 
             objects.append(obj_name)
             goals.append(goal_name)
 
-        C.view(True)
+        # C.view(True)
 
     def compute_pick_and_place(c_tmp, robot_prefix, box, goal):
         ee = "gripper"
@@ -5249,6 +5249,8 @@ def make_strut_assembly_problem():
 
         c_tmp.getFrame(obj).setContact(1)
 
+    # c_tmp.view(True)
+
     for i, obj in enumerate(objects):
         C.getFrame(obj).setPosition([0, 0, -2])
 
@@ -5327,9 +5329,9 @@ def make_strut_nccr_env():
                 .setRelativeQuaternion(goal_quat)
             )
 
-            C.addFrame(f"goal_marker_{str(obj['index'])}").setParent(goal_frame).setShape(
-                ry.ST.marker, size=[0.1]
-            )
+            # C.addFrame(f"goal_marker_{str(obj['index'])}").setParent(goal_frame).setShape(
+            #     ry.ST.marker, size=[0.1]
+            # )
 
             if obj["robot_id"] == "A":
                 start_pos = np.array([-0.4, 0.0, 0.15])
@@ -5349,9 +5351,9 @@ def make_strut_nccr_env():
                 .setRelativeQuaternion(start_quat)
                 .setJoint(ry.JT.rigid)
             )
-            C.addFrame(f"start_marker_{str(obj['index'])}").setParent(start_frame).setShape(
-                ry.ST.marker, size=[0.1]
-            )
+            # C.addFrame(f"start_marker_{str(obj['index'])}").setParent(start_frame).setShape(
+            #     ry.ST.marker, size=[0.1]
+            # )
 
             start_poses[obj_name] = {
                 "position": start_pos,
@@ -5363,7 +5365,7 @@ def make_strut_nccr_env():
 
             asssigned_robots.append("a0_" if obj["robot_id"] == "A" else "a1_")
 
-            # C.view(True)
+    # C.view(True)
 
     def compute_rearrangement(c_tmp, robot_prefix, box, goal, gripper_type="vacuum"):
         # set everything but the current box to non-contact

@@ -2484,9 +2484,9 @@ class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {}
-        dim = 6
+        dim = 7
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
+            print(self.C.getJointState()[0:dim])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
@@ -2534,9 +2534,9 @@ class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {}
-        dim = 6
+        dim = 7
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
+            print(self.C.getJointState()[0:dim])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 

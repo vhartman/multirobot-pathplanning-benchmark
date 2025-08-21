@@ -1,7 +1,7 @@
 World 	{}    
 
 table (World){
-    shape:ssBox, Q:[0 0 -.025], size:[5 5 .05 .002], color:[.3 .3 .3]
+    shape:ssBox, Q:[0 0 -.0], size:[10, 10 .05 .002], color:[.9 .9 .9]
     contact:1, logical:{ }
 }
 
