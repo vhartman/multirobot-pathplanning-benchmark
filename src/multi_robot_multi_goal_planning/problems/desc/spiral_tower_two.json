@@ -6,10 +6,10 @@
                 0
             ],
             "base_link_position": [
-                0.75,
-                0,
-                1.6
-            ],
+                0.64389475555095044, 
+                -0.6705990916872826, 
+                0.0
+            ], 
             "urdf": "models/kuka_kr6_r900/urdf/kuka_kr6_r900.urdf",
             "name": "R0",
             "reset_configurations": [
@@ -36,10 +36,11 @@
             ],
             "gripper_base_link_name": "eef_base_link",
             "base_link_orientation": [
-                0.7071067811865475,
-                0.7071067811865476,
+                
                 0.0,
-                0.0
+                0.0,
+                0.7071067811865475,
+                0.7071067811865476
             ],
             "base_link_name": "robot_base_link",
             "abilities": [

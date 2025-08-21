@@ -5032,25 +5032,30 @@ def quaternion_from_z_to_target(target_z):
 def make_strut_assembly_problem():
     C = ry.Config()
 
-    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+    C.addFrame("table").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
 
     mobile_robot_path = os.path.join(
-        os.path.dirname(__file__), "../models/mobile-manipulator-restricted.g"
+        os.path.dirname(__file__), "../models/mobile_manipulator_additional_gripper_rot.g"
     )
 
-    C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([1, 2, 0.2])
+    C.addFile(mobile_robot_path, namePrefix="a0_").setPosition([1, 2, 0.2])
     C.addFile(mobile_robot_path, namePrefix="a1_").setPosition([-1, 2, 0.2])
 
+    robots = ["a0_", "a1_"]
+
     # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/yijiang_strut.json")
-    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/florian_strut.json")
+    assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/florian_strut.json")
     # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/z_shape.json")
     # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/tower.json")
     # assembly_path = os.path.join(os.path.dirname(__file__), "../models/strut_assemblies/bridge.json")
-    assembly_path = os.path.join(
-        os.path.dirname(__file__), "../models/strut_assemblies/roboarch.json"
-    )
+    # assembly_path = os.path.join(
+    #     os.path.dirname(__file__), "../models/strut_assemblies/roboarch.json"
+    # )
+
+    objects = []
+    goals = []
 
     with open(assembly_path) as f:
         d = json.load(f)
@@ -5069,8 +5074,6 @@ def make_strut_assembly_problem():
         else:
             assembly_sequence = np.arange(0, num_parts)
 
-        print(assembly_sequence)
-
         for i in assembly_sequence:
             s = sequence[i]
             i1, i2 = s["end_node_inds"]
@@ -5081,15 +5084,175 @@ def make_strut_assembly_problem():
 
             z_vec = p2 - p1
             origin = p1 + (p2 - p1) / 2
-            length = np.linalg.norm(p2 - p1) * 0.95
+            origin[2] += 0.05
+            length = np.linalg.norm(p2 - p1) * 0.92
 
             quat = quaternion_from_z_to_target(z_vec)
 
-            C.addFrame("goal_" + str(i)).setPosition(origin).setShape(
+            goal_name = "goal_" + str(i)
+            obj_name = "obj_" + str(i)
+
+            C.addFrame(goal_name).setParent(C.getFrame("table")).setRelativePosition(origin).setShape(
                 ry.ST.box, size=[0.01, 0.01, length, 0.005]
             ).setColor([0.3, 0.3, 0.3, 0.5]).setContact(0).setQuaternion(quat)
 
+            C.addFrame(obj_name).setParent(C.getFrame("table")).setPosition(np.array([0, 2, 0.3])).setShape(
+                ry.ST.cylinder, size=[length, 0.007]
+            ).setColor([1, 0.3, 0.3, 1]).setContact(0).setQuaternion([1, 1, 0, 0]).setJoint(ry.JT.rigid)
+
+            C.addFrame(f"marker_{i}").setParent(C.getFrame(obj_name)).setRelativePosition(np.array([0, 0, 0])).setShape(
+                ry.ST.marker, size=[0.1]
+            ).setColor([1, 0.3, 0.3, 1])
+
+            # C.view(True)
+
+            objects.append(obj_name)
+            goals.append(goal_name)
+
         C.view(True)
+
+    def compute_pick_and_place(c_tmp, robot_prefix, box, goal):
+        ee = "gripper"
+
+        robot_base = robot_prefix + "base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=2, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e2], [-0.0])
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + ee, box])
+        # komo.addObjective(
+        #     [1, 2], ry.FS.distance, [robot_prefix + ee, box], ry.OT.sos, [1e1], [-0.01]
+        # )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "gripper_marker", box],
+            ry.OT.eq,
+            [1e0, 1e0, 1e1],
+            [0, 0, 0.]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductZZ,
+            [robot_prefix + ee, box],
+            ry.OT.sos,
+            [1e0],
+            [0],
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     ["a1_" + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, ["a2"], ry.OT.sos, [1e0, 1e1, 0], [1., -0.5, 0]
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, [box], ry.OT.sos, [1e0, 1e0, 0], [1, -1, 0]
+        # )
+
+        komo.addModeSwitch([2, -1], ry.SY.stable, [goal, box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        max_attempts = 100
+        for num_attempt in range(max_attempts):
+            # komo.initRandom()
+            if num_attempt > 0:
+                dim = len(c_tmp.getJointState())
+                x_init = np.random.rand(dim) * 5. - 2.5
+                komo.initWithConstant(x_init)
+                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            # print(retval)
+
+            # if view:
+            print(retval)
+
+            # komo.view(True, "IK solution")
+
+            # print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+                keyframes = komo.getPath()
+                return keyframes
+
+    keyframes = []
+    assigned_robots = []
+
+    c_tmp = ry.Config()
+    c_tmp.addConfigurationCopy(C)
+
+    for i, obj in enumerate(objects):
+        c_tmp_2 = ry.Config()
+        c_tmp_2.addConfigurationCopy(c_tmp)
+
+        c_tmp_2.getFrame(obj).setContact(1)
+        c_tmp_2.computeCollisions()
+
+        obj_name = objects[i]
+        goal_name = goals[i]
+
+        while True:
+            r = random.choice(robots)
+            r1 = compute_pick_and_place(c_tmp_2, r, obj, goal_name)
+
+            if r1 is not None:
+                break
+
+        ee_name = r + "gripper"
+        assigned_robots.append(r)
+        start_pose = np.concatenate([c_tmp.getFrame(obj).getRelativePosition(), c_tmp.getFrame(obj).getRelativeQuaternion()])
+
+        keyframes.append(
+            (
+                r, ee_name, obj_name, r1[:2], start_pose
+            )
+        )
+
+        c_tmp.getFrame(obj).setRelativePosition(
+            c_tmp.getFrame(goal_name).getRelativePosition()
+        )
+        c_tmp.getFrame(obj).setRelativeQuaternion(
+            c_tmp.getFrame(goal_name).getRelativeQuaternion()
+        )
+
+        c_tmp.getFrame(obj).setContact(1)
+
+    for i, obj in enumerate(objects):
+        C.getFrame(obj).setPosition([0, 0, -2])
+
+    return C, robots, keyframes
 
 def make_strut_nccr_env():
     from scipy.spatial.transform import Rotation as R

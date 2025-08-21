@@ -83,6 +83,8 @@ def get_all_environments():
         "spiral_tower_two": lambda: re.rai_coop_tamp_architecture("spiral_tower_two"),
         "cube_four": lambda: re.rai_coop_tamp_architecture("cube_four"),
         "extreme_beam_test": lambda: re.rai_coop_tamp_architecture("extreme_beam_test"),
+        
+        "mobile_strut": lambda: re.rai_mobile_strut_assembly_env(),
 
         # mobile
         "mobile_wall_four": lambda: re.rai_mobile_manip_wall(num_robots=4),

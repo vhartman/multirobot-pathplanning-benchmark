@@ -2441,6 +2441,56 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
+class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, self.robots, keyframes = rai_config.make_strut_assembly_problem()
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for r, ee_name, b, qs, appearance_pose in keyframes:
+            cnt = 0
+            for t, k in zip(task_names, qs):
+                if t == "pick":
+                    task = Task([r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
+                    self.tasks.append(task)
+                else:
+                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
+
+                self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
+        self.tasks[-1].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.005
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+
+
 class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, self.robots, keyframes = rai_config.make_strut_nccr_env()
