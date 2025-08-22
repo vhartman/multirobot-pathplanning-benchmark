@@ -236,13 +236,22 @@ def delete_visual_only_frames(C):
     C_coll = ry.Config()
     C_coll.addConfigurationCopy(C)
 
+    collidable_pairs = C_coll.getCollidablePairs()
+    collidable_objects = set()
+    for pair in collidable_pairs:
+        collidable_objects.add(pair)
+
     # go through all frames, and delete the ones that are only visual
     # that is, the frames that do not have a child, and are not
     # contact frames
     for f in C_coll.getFrames():
-        info = f.info()
-        if "shape" in info and info["shape"] == "mesh":
-            C_coll.delFrame(f.name)
+        if hasattr(f, 'info'):
+            info = f.info()
+            if "shape" in info and info["shape"] == "mesh":
+                C_coll.delFrame(f.name)
+        # else:
+        #     if f.name not in collidable_objects:
+        #         C_coll.delFrame(f.name)
 
     return C_coll
 
@@ -456,6 +465,8 @@ class rai_env(BaseProblem):
             self.C.setJointState(q)
 
         # self.C.view()
+
+        # self.C.computeCollisions()
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
@@ -779,6 +790,7 @@ class rai_env(BaseProblem):
             # self.C = None
             viewer = self.C.get_viewer()
             self.C_cache[m].set_viewer(viewer)
+            # self.C_cache[m].computeCollisions()
             self.C = self.C_cache[m]
 
         else:

@@ -2221,7 +2221,7 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.collision_tolerance = 0.005
+        self.collision_tolerance = 0.00
         # self.collision_resolution = 0.005
         self.collision_resolution = 0.01
 
