@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pinocchio = ["pin>=3.4" , "meshcat"]
-rai = ["robotic==0.2.2"]
+rai = ["robotic>=0.2.2,<0.3.0"]
 all = ["pin>=3.4", "meshcat", "robotic==0.2.2"]
 
 [tool.setuptools]
