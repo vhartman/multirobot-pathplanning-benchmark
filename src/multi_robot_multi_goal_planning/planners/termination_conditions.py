@@ -37,7 +37,7 @@ class RuntimeTerminationCondition(PlannerTerminationCondition):
     def should_terminate(
         self, current_iterations: int | None = None, current_time: float | None = None
     ) -> bool:
-        assert current_time
+        assert current_time is not None
 
         if self.max_runtime_in_s < current_time:
             return True
