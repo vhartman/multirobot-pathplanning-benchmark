@@ -201,6 +201,9 @@ def main():
     elif args.planner == "prioritized":
         planner = PrioritizedPlanner(env)
 
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+
     path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
 
     if args.save:
