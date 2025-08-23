@@ -19,13 +19,13 @@ python3 -m pip install -e .[all]
 ```
 
 which also installs this module.
-You can choose whatever backends you want from the start - [all] gives you al of them, but [pin] or [rai] is possible as well.
+You can choose whatever backends you want from the start - [all] gives you all of them, but [pin] or [rai] is possible as well.
 
 This also works with uv (and is definitely quite a bit faster)
 ```
 uv sync --extra all
 ```
-Does the same thing as the command above, and is recommended.
+Does the same thing as the command above, and is recommended. In that case, the commands below need to be adapted to use `uv run [rest of the command]`.
 
 # Overview and Usage
 
