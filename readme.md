@@ -21,6 +21,12 @@ python3 -m pip install -e .[all]
 which also installs this module.
 You can choose whatever backends you want from the start - [all] gives you al of them, but [pin] or [rai] is possible as well.
 
+This also works with uv (and is definitely quite a bit faster)
+```
+uv sync --extra all
+```
+Does the same thing as the command above, and is recommended.
+
 # Overview and Usage
 
 We formulate some multi-robot multi-goal motion planning problems, and provide some baselines and base-classes to formulate your own problems.
