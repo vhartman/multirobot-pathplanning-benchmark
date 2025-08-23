@@ -57,12 +57,13 @@ A planner can be run with
 python3 examples/run_planner.py [env] [options]
 ```
 
-A concrete example would for example be
+which runs the default planer on the environment with the default configuratoin. A concrete example would for example be
 
 ```
 python3 examples/run_planner.py 2d_handover --optimize --num_iters=10000 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max --prm_informed_sampling=True --save --prm_locally_informed_sampling --prm_shortcutting
 ```
 
+Not all options can be set throught the cli interface.
 An experiment (i.e., multiple runs of multiple planners or of the same planer with multiple options) can be run with 
 
 ```

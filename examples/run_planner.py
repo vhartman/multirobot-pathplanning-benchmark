@@ -6,6 +6,8 @@ import datetime
 import os
 import random
 
+import copy
+
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
 from multi_robot_multi_goal_planning.problems.planning_env import State
@@ -40,7 +42,6 @@ from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
 from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
 
 from run_experiment import export_planner_data
-
 
 def main():
     parser = argparse.ArgumentParser(description="Planner runner")
@@ -148,7 +149,7 @@ def main():
     env.cost_reduction = args.cost_reduction
     env.cost_metric = args.per_agent_cost_function
 
-    env.show()
+    # env.show()
 
     termination_condition = None
     if args.num_iters is not None:
@@ -157,6 +158,8 @@ def main():
         termination_condition = RuntimeTerminationCondition(args.max_time)
 
     assert termination_condition is not None
+
+    # env_copy = copy.deepcopy(env)
 
     if args.planner == "composite_prm":
         config = CompositePRMConfig()
