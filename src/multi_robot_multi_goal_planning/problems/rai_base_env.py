@@ -413,7 +413,7 @@ class rai_env(BaseProblem):
         self,
         q: Optional[Configuration],
         m: Optional[Mode],
-        collision_tolerance: float | None = None,
+        collision_tolerance: Optional[float] = None,
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -449,8 +449,8 @@ class rai_env(BaseProblem):
     def is_collision_free_np(
         self,
         q: Optional[Configuration],
-        m: Mode,
-        collision_tolerance: float = None,
+        m: Optional[Mode],
+        collision_tolerance: Optional[float] = None,
         set_mode: bool = True,
     ) -> bool:
         if collision_tolerance is None:
@@ -484,7 +484,7 @@ class rai_env(BaseProblem):
 
     def is_collision_free_for_robot(
         self,
-        r: str,
+        r: List[str] | str,
         q: NDArray,
         m: Mode | None = None,
         collision_tolerance: float | None = None,
@@ -609,7 +609,7 @@ class rai_env(BaseProblem):
             N = max(2, N)
 
         if N_start > N:
-            return None
+            assert False
 
         if N_max is None:
             N_max = N
@@ -660,7 +660,7 @@ class rai_env(BaseProblem):
                 movable_objects.append(frame.name)
 
                 relative_pose = np.round(frame.getRelativeTransform(), 3)
-                relative_pose[abs(relative_pose) < 1e-6] = 0.0
+                relative_pose = np.where(abs(relative_pose) < 1e-6, 0.0, relative_pose)
                 relative_pose.flags.writeable = False
 
                 sg[frame.name] = (

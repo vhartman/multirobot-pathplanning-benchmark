@@ -16,7 +16,7 @@ from numpy.typing import NDArray
 from collections import namedtuple
 import copy
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
@@ -333,7 +333,7 @@ class Node:
 
 
 class Tree:
-    def __init__(self, start: Node, reverse=False):
+    def __init__(self, start: Optional[Node], reverse=False):
         self.reverse = reverse
 
         if start is not None:
@@ -463,7 +463,7 @@ class Tree:
 
         # print(q_diff)
 
-    def get_nearest_neighbor(self, node: Node, v_max) -> Node:
+    def get_nearest_neighbor(self, node: Node, v_max) -> Optional[Node]:
         # print("node")
         # print(node)
         # print('nodes')
@@ -594,9 +594,6 @@ def collision_free_with_moving_obs(
     env.C.setJointState(q_buffer)
 
     if env.is_collision_free(None, None):
-        global global_collision_counter
-
-        global_collision_counter += 1
         return True
 
     # # involves_robot_we_plan_for = False
@@ -1159,8 +1156,6 @@ def plan_in_time_space(
             other_robots,
         ):
             # print('invalid sample')
-            # global global_collision_counter
-            # if global_collision_counter > 50000:
             # env.show(True)
             continue
 
@@ -1402,10 +1397,6 @@ def plan_in_time_space(
 
             computation_end_time = time.time()
             print(f"\t\tTook {computation_end_time - computation_start_time}s")
-
-            global global_collision_counter
-            print(global_collision_counter)
-            global_collision_counter = 0
 
             # for k in range(len(robots)):
             #     # plt.figure()
@@ -1885,8 +1876,6 @@ def plan_in_time_space_bidirectional(
             other_robots,
         ):
             # print('invalid sample')
-            # global global_collision_counter
-            # if global_collision_counter > 50000:
             # env.show(True)
             if iter >= 1000 and iter % 500 == 0:
                 # for some reason there is some bug that seems fixed when displaying a conf once.
@@ -2108,13 +2097,6 @@ def shortcut_with_dynamic_obstacles(
         # return conf_type.from_list(ql)
         return tmp_conf.from_flat(q)
 
-    def arr_to_state(q):
-        return State(arr_to_config(q), None)
-
-    def arrs_to_states(qs):
-        configs = [arr_to_state(q) for q in qs]
-        return configs
-
     robot_joints = {}
     for r in env.robots:
         robot_joints[r] = get_robot_joints(env.C, r)
@@ -2275,7 +2257,7 @@ def shortcut_with_dynamic_obstacles(
 
 def plan_robots_in_dyn_env(
     ptc, env, t0, other_paths, robots, q0, end_times, goal, t_lb=-1, use_bidirectional_planner = True
-) -> Dict[str, TimedPath]:
+) -> Tuple[Optional[Dict[str, TimedPath]], Optional[NDArray]]:
     # plan
     if use_bidirectional_planner:
         path = plan_in_time_space_bidirectional(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
@@ -2374,9 +2356,6 @@ class PrioritizedPlanner(BasePlanner):
     ):
         self.env = env
         self.config = config
-
-        global global_collision_counter
-        global_collision_counter = 0
 
     def plan(
         self,

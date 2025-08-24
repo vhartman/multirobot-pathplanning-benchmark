@@ -2,13 +2,12 @@ import numpy as np
 
 from typing import List, Tuple, Union, Any, Optional
 from numpy.typing import NDArray
-import numba
+from numba import jit, float64, int64 # ty: ignore[possibly-unbound-import]
 
 from abc import ABC, abstractmethod
 
 # TODO: make batch dist support everything, not just np config
 # TODO: This is all very inconsistent atm
-
 
 class Configuration(ABC):
     """
@@ -16,6 +15,9 @@ class Configuration(ABC):
     A multirobot configuration needs to provide all robots' states
     How this is done is up to the actual implementations.
     """
+
+    _array_slice: NDArray
+    _num_agents: int
 
     @abstractmethod
     def num_agents(self) -> int:
@@ -96,8 +98,8 @@ class ListConfiguration(Configuration):
         return len(self.q)
 
 
-@numba.jit(
-    (numba.float64[:, :], numba.int64[:, :]),
+@jit(
+    (float64[:, :], int64[:, :]),
     nopython=True,
     fastmath=True,
     boundscheck=False,
@@ -124,8 +126,8 @@ def compute_sliced_euclidean_dists(diff: NDArray, slices: NDArray) -> NDArray:
     return dists
 
 
-@numba.jit(
-    numba.float64[:](numba.float64[:, :]),
+@jit(
+    float64[:](float64[:, :]),
     nopython=True,
     fastmath=True,
     boundscheck=False,
@@ -145,8 +147,8 @@ def compute_sum_reduction(dists: NDArray) -> NDArray:
     return result
 
 
-@numba.jit(
-    numba.float64[:](numba.float64[:, :], numba.float64),
+@jit(
+    float64[:](float64[:, :], float64),
     nopython=True,
     fastmath=True,
     boundscheck=False,
@@ -169,8 +171,8 @@ def compute_max_sum_reduction(dists: NDArray, w: float) -> NDArray:
     return result
 
 
-@numba.jit(
-    numba.float64[:](numba.float64[:, :]),
+@jit(
+    float64[:](float64[:, :]),
     nopython=True,
     fastmath=True,
     boundscheck=False,
@@ -195,8 +197,8 @@ def compute_abs_max_reduction(dists: NDArray) -> NDArray:
     return result
 
 
-@numba.jit(
-    numba.float64[:](numba.float64[:, :]),
+@jit(
+    float64[:](float64[:, :]),
     nopython=True,
     fastmath=True,
     boundscheck=False,
@@ -436,7 +438,7 @@ def batch_config_cost(
     reduction: str = "max",
     w: float = 0.01,
     tmp_agent_slice: Optional[NDArray] = None
-) -> NDArray:
+) -> NDArray[float]:
     """
     Computes the cost between two lists of configurations.
     - Possible values for the metric are ['max', 'euclidean']

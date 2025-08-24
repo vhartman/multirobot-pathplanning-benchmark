@@ -39,10 +39,10 @@ from pinocchio.visualize import MeshcatVisualizer
 
 import time
 import sys
-import numba
+from numba import jit, float64 # ty: ignore[possibly-unbound-import]
 
 
-@numba.jit((numba.float64[:, :], numba.float64[:, :]), nopython=True)
+@jit((float64[:, :], float64[:, :]), nopython=True)
 def multiply_4x4_matrices(mat1, mat2):
     result = np.zeros((4, 4))
     for i in range(4):
@@ -454,7 +454,7 @@ class PinocchioEnvironment(BaseProblem):
         return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction)
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def is_collision_free(self, q: Optional[Configuration], mode: Mode):
+    def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         if q is None:
             raise ValueError
 
@@ -547,7 +547,7 @@ class PinocchioEnvironment(BaseProblem):
         return True
 
     def is_collision_free_for_robot(
-        self, r: str, q: NDArray, m: Mode = None, collision_tolerance: float = None, set_mode: bool = True
+        self, r: List[str] | str, q: NDArray, m: Optional[Mode] = None, collision_tolerance: Optional[float] = None, set_mode: bool = True
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -642,12 +642,12 @@ class PinocchioEnvironment(BaseProblem):
         q1: Configuration,
         q2: Configuration,
         mode: Mode,
-        resolution: float = None,
-        tolerance: float = None,
+        resolution: Optional[float] = None,
+        tolerance: Optional[float] = None,
         include_endpoints: bool = False,
         N_start: int = 0,
-        N_max: int = None,
-        N: int = None,
+        N_max: Optional[int] = None,
+        N: Optional[int] = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
@@ -662,7 +662,7 @@ class PinocchioEnvironment(BaseProblem):
             N = max(2, N)
 
         if N_start > N:
-            return None
+            assert False
 
         if N_max is None:
             N_max = N

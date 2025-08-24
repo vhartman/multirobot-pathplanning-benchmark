@@ -174,7 +174,7 @@ class AbstractEnvironment(BaseProblem):
             plt.gca().add_artist(artist)
 
         # get the tabular color rotation
-        colors = plt.cm.tab20.colors
+        colors = plt.cm.tab20.colors # type: ignore[attr-defined]
         for i in range(self.start_pos.num_agents()):
             circle = plt.Circle(
                 self.start_pos[i], self.agent_radii[i], color=colors[i % len(colors)]
@@ -203,7 +203,7 @@ class AbstractEnvironment(BaseProblem):
             plt.gca().add_artist(artist)
 
         # get the tabular color rotation
-        colors = plt.cm.tab20.colors
+        colors = plt.cm.tab20.colors # type: ignore[attr-defined]
         for i in range(self.start_pos.num_agents()):
             circle = plt.Circle(
                 q[i], self.agent_radii[i], color=colors[i % len(colors)]
@@ -242,7 +242,7 @@ class AbstractEnvironment(BaseProblem):
     ) -> NDArray:
         return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction)
 
-    def is_collision_free(self, q: Optional[Configuration], mode: Mode):
+    def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         if q is None:
             raise ValueError
 
@@ -293,12 +293,12 @@ class AbstractEnvironment(BaseProblem):
         q1: Configuration,
         q2: Configuration,
         mode: Mode,
-        resolution: float = None,
-        tolerance: float = None,
+        resolution: Optional[float] = None,
+        tolerance: Optional[float] = None,
         include_endpoints: bool = False,
         N_start: int = 0,
-        N_max: int = None,
-        N: int = None,
+        N_max: Optional[int] = None,
+        N: Optional[int] = None,
     ) -> bool:
         if resolution is None:
             resolution = self.collision_resolution
@@ -313,7 +313,7 @@ class AbstractEnvironment(BaseProblem):
             N = max(2, N)
 
         if N_start > N:
-            return None
+            assert False
 
         if N_max is None:
             N_max = N

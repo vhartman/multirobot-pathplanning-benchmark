@@ -69,7 +69,7 @@ class BasePlanner(ABC):
         return (
             problem_spec.agent_type in caps.supports_agent_types
             and problem_spec.constraints in caps.supports_constraints
-            and problem_spec.goal in caps.supports_goal_type
+            and problem_spec.goals in caps.supports_goal_type
             and problem_spec.dynamics in caps.supports_dependency_type
             and problem_spec.dependency in caps.supports_dependency_type
             and problem_spec.manipulation in caps.supports_manipulation

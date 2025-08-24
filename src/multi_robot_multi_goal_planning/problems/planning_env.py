@@ -28,7 +28,7 @@ from scipy.spatial.transform import Rotation as R
 
 
 @cache
-def generate_binary_search_indices(N):
+def generate_binary_search_indices(N: int):
     sequence = [0] * N
     queue = deque([(0, N - 1)])
 
@@ -88,6 +88,8 @@ class GoalRegion(Goal):
     def satisfies_constraints(self, q: NDArray, mode: "Mode", tolerance: float) -> bool:
         if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
             return True
+        
+        return False
 
     def sample(self, mode: "Mode") -> NDArray:
         q = (
@@ -1888,7 +1890,7 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def is_collision_free(self, q: Optional[Configuration], mode: Mode) -> bool:
+    def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]) -> bool:
         """
         Computes if a configuration is collision free if a configuration and a mode is given.
         Computes if the currently set configuration is collision free if no configuration is given.
@@ -1899,7 +1901,7 @@ class BaseProblem(ABC):
 
     def is_collision_free_for_robot(
         self,
-        r: str,
+        r: List[str] | str,
         q: NDArray,
         m: Mode,
         collision_tolerance: float = 0.01,
@@ -1994,9 +1996,14 @@ class BaseProblem(ABC):
                     mode = path[i].mode
                     if i not in Ns:
                         Ns[i] = int(config_dist(q1, q2, "max") / resolution) + 1
+                        Ns[i] = max(2, Ns[i])
                     if N_start == 0:
                         if not self.is_collision_free(q1, mode):
                             return False
+                        
+                    if N_start > Ns[i]:
+                        edges_to_remove.append(i)
+                        continue
 
                     res = self.is_edge_collision_free(
                         q1,
@@ -2007,12 +2014,12 @@ class BaseProblem(ABC):
                         include_endpoints=False,
                         N_start=N_start,
                         N_max=N_max,
-                        # N = Ns[i]
+                        N = Ns[i]
                     )
 
-                    if res is None:
-                        edges_to_remove.append(i)
-                        continue
+                    # if res is None:
+                    #     edges_to_remove.append(i)
+                    #     continue
 
                     if not res:
                         return False

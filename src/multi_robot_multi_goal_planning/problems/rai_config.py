@@ -4448,6 +4448,7 @@ def make_box_pile_env(
         )
 
         if relative_pose_at_handover is not None:
+            assert ref_pose is not None
             komo.addObjective([1, 1], ry.FS.qItself, [], ry.OT.eq, [1e1], ref_pose[0])
             komo.addObjective(
                 [2, 2],

@@ -178,7 +178,7 @@ class EfficientEdgeQueue:
         # Min-heap of (cost, edge_cost, (node1, node2))
         self.heap = []
         # Dictionary mapping node2 to a set of edges for quick removal
-        self.edges_by_node = collections.defaultdict(set)
+        self.edges_by_node = defaultdict(set)
 
     def heappush(self, item):
         """Add a new edge to the queue."""
