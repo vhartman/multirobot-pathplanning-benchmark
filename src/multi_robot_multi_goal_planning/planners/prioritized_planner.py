@@ -1883,7 +1883,9 @@ def plan_in_time_space_bidirectional(
                 # for some reason there is some bug that seems fixed when displaying a conf once.
                 # I do not know what the reason is. I suspect that I am somehow mishandling modes.
                 # Not sure how that would be fixed by doing this though.
-                env.show(False)
+                # env.show(False)
+                if isinstance(env, rai_env):
+                    env.C.view_recopyMeshes()
                 # env.C.view_close()
             continue
 
@@ -2345,7 +2347,7 @@ def plan_robots_in_dyn_env(
         # plt.show()
 
 
-    return separate_paths, postprocessed_path.path[-1]
+    return separate_paths, path.path[-1]
 
 @dataclass
 class PrioritizedPlannerConfig:

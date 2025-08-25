@@ -301,6 +301,8 @@ class rai_env(BaseProblem):
 
         self.C_cache = {}
 
+        self.C.view_recopyMeshes()
+
         self.C_orig = ry.Config()
         self.C_orig.addConfigurationCopy(self.C)
 
@@ -700,6 +702,7 @@ class rai_env(BaseProblem):
         tmp = ry.Config()
 
         # self.C.clear()
+        # self.C_base.computeCollisions()
         tmp.addConfigurationCopy(self.C_base)
 
         mode_sequence = []
@@ -791,12 +794,16 @@ class rai_env(BaseProblem):
             viewer = self.C.get_viewer()
             self.C_cache[m].set_viewer(viewer)
             # self.C_cache[m].computeCollisions()
+            self.C_cache[m].view_recopyMeshes()
             self.C = self.C_cache[m]
 
         else:
             viewer = self.C.get_viewer()
             tmp.set_viewer(viewer)
             self.C = tmp
+
+        # self.C.computeCollisions()
+        # self.C.view(False)
 
     def display_path(
         self,
