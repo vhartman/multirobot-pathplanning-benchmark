@@ -2412,6 +2412,7 @@ class BaseITstar(BasePlanner):
         """
         return BaseOperation()
 
+    @abstractmethod
     def _create_graph(self, root_state: State) -> BaseGraph:
         """
         Creates and returns a graph instance for the given root state.
@@ -2422,18 +2423,7 @@ class BaseITstar(BasePlanner):
         Returns:
             BaseGraph: The created graph instance.
         """
-        return BaseGraph(
-            root_state=root_state,
-            operation=self.operation,
-            batch_dist_fun=lambda a, b, c=None: batch_config_dist(
-                a, b, c or self.config.distance_metric
-            ),
-            batch_cost_fun=lambda a, b: self.env.batch_config_cost(a, b),
-            is_edge_collision_free=self.env.is_edge_collision_free,
-            get_next_modes=self.env.get_next_modes,
-            collision_resolution=self.env.collision_resolution,
-            node_cls=BaseNode,
-        )
+        raise NotImplementedError
 
     def _create_long_horizon(self) -> BaseLongHorizon:
         """
@@ -4181,7 +4171,7 @@ class BaseITstar(BasePlanner):
         self.sorted_reached_modes = tuple(
             sorted(self.reached_modes, key=lambda m: m.id)
         )
-        # initilaize graph
+        # initialize graph
         self.g = self._create_graph(State(q0, m0))
         # initialize all queues (edge-queues)
         self.g.add_vertex_to_tree(self.g.root)

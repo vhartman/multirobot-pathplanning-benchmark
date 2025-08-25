@@ -423,69 +423,6 @@ def find_nearest_indices(set_dists: NDArray, r: float) -> NDArray:
     return np.nonzero(set_dists <= r)[0]
 
 
-@njit
-def cumulative_sum(batch_cost: NDArray) -> NDArray:
-    """
-    Computes the cumulative sum of the input cost array, where each element is the sum of all previous elements including itself.
-
-    Args:
-        batch_cost (NDArray): Array of cost values.
-
-    Returns:
-        NDArray: Array containing the cumulative sums.
-    """
-    cost = np.empty(len(batch_cost), dtype=np.float64)
-    for idx in range(0, len(batch_cost)):
-        cost[idx] = np.sum(batch_cost[: idx + 1])
-    return cost
-
-
-@njit
-def get_mode_task_ids_of_active_task_in_path(
-    path_modes, task_id: List[int], r_idx: int
-) -> List[int]:
-    """
-    Retrieves mode task ID for the active task in a given path by selecting the last occurrence that matches the specified task id.
-
-    Args:
-        path_modes (NDArray): Sequence of mode task IDs along the path.
-        task_id (List[int]): Task IDs to search for in the path.
-        r_idx (int): Corresponding idx of robot.
-
-    Returns:
-        NDArray: Mode task ID associated with the last occurrence of the specified active task for the desired robot.
-    """
-
-    last_index = 0
-    for i in range(len(path_modes)):
-        if path_modes[i][r_idx] == task_id:
-            last_index = i
-    return path_modes[last_index]
-
-
-@njit
-def get_mode_task_ids_of_home_pose_in_path(
-    path_modes, task_id: List[int], r_idx: int
-) -> List[int]:
-    """
-    Retrieves mode task ID for the active task in a given path by selecting the first occurrence that matches the specified task id.
-
-    Args:
-        path_modes (NDArray): Sequence of mode task IDs along the path.
-        task_id (List[int]): Task IDs to search for in the path.
-        r_idx (int): Corresponding idx of robot.
-
-    Returns:
-        NDArray: Mode task ID associated with the first occurrence of the specified active task for the desired robot ( = home pose).
-    """
-
-    for i in range(len(path_modes)):
-        if path_modes[i][r_idx] == task_id:
-            if i == 0:
-                return np.array([-1])  # if its at the start pose
-            return path_modes[i - 1]
-
-
 def save_data(data: dict, tree: bool = False):
     # Directory Handling: Ensure directory exists
     parent_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1202,7 +1139,7 @@ class BaseRRTstar(BasePlanner):
         q_rand: Configuration,
         dist: NDArray,
         i: int = 1,
-    ) -> State:
+    ) -> Optional[State]:
         """
         Steers from the nearest node toward the target configuration by taking an incremental step.
 
