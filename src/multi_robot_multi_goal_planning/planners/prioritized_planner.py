@@ -34,6 +34,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.configuration import (
+    Configuration,
     batch_config_dist,
     config_dist,
     batch_config_cost
@@ -65,7 +66,7 @@ class MultiRobotPath:
         "times",
     ]
 
-    def __init__(self, q0, m0, robots):
+    def __init__(self, q0: Configuration, m0: Mode, robots: List[str]):
         self.robots = robots
         self.paths = {}
         self.q0 = q0
@@ -86,7 +87,7 @@ class MultiRobotPath:
         for r in robots:
             self.paths[r] = []
 
-    def get_mode_at_time(self, t) -> Mode:
+    def get_mode_at_time(self, t: float) -> Mode:
         # """
         # Iterate over all the stored modes and give the one back that we are in at a certain time.
         # """
@@ -160,7 +161,7 @@ class MultiRobotPath:
     #     return poses
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-    def get_robot_poses_at_time(self, robots, t):
+    def get_robot_poses_at_time(self, robots: List[str], t: float):
         poses = []
 
         # print('r at t')
@@ -225,7 +226,7 @@ class MultiRobotPath:
 
         return poses
 
-    def get_end_times(self, robots):
+    def get_end_times(self, robots: List[str]):
         end_times = {}
 
         for r in robots:
@@ -238,7 +239,7 @@ class MultiRobotPath:
 
         return end_times
     
-    def get_non_escape_end_times(self, robots):
+    def get_non_escape_end_times(self, robots: List[str]):
         end_times = {}
 
         for r in robots:
@@ -256,7 +257,7 @@ class MultiRobotPath:
 
         return end_times
 
-    def add_path(self, robots, path, next_mode, is_escape_path=False):
+    def add_path(self, robots: List[str], path: Path, next_mode: Optional[Mode], is_escape_path: bool=False):
         # print("adding path to multi-robot-path")
         for r in robots:
             # get robot-path from the original path
@@ -277,7 +278,7 @@ class MultiRobotPath:
             self.timed_mode_sequence.append((final_time, next_mode))
             self.times.append(final_time)
 
-    def remove_final_escape_path(self, robots):
+    def remove_final_escape_path(self, robots: List[str]):
         for r in robots:
             if not self.paths[r]:
                 continue
@@ -313,7 +314,8 @@ def display_multi_robot_path(env: rai_env, path: MultiRobotPath):
         poses = path.get_robot_poses_at_time(env.robots, t)
         mode = path.get_mode_at_time(t)
         env.set_to_mode(mode)
-        env.C.setJointState(np.concatenate(poses))
+        env.show_config(env.start_pos.from_flat(np.concatenate(poses)))
+        # env.C.setJointState(np.concatenate(poses))
 
         if not env.is_collision_free(None, None):
             print(f"Collision at time {t}")
@@ -324,7 +326,7 @@ def display_multi_robot_path(env: rai_env, path: MultiRobotPath):
 
 
 class Node:
-    def __init__(self, t, q):
+    def __init__(self, t: float, q: Configuration):
         self.t = t
         self.q = q
 
@@ -577,7 +579,7 @@ def collision_free_with_moving_obs(
     # print(t, q)
 
     mode = prev_plans.get_mode_at_time(t)
-    env.set_to_mode(mode)
+    # env.set_to_mode(mode)
 
     robot_poses = prev_plans.get_robot_poses_at_time(other_robots, t)
     for i, r in enumerate(other_robots):
@@ -591,9 +593,9 @@ def collision_free_with_moving_obs(
         q_buffer[env.robot_idx[r]] = q[offset : offset + dim]
         offset += dim
 
-    env.C.setJointState(q_buffer)
+    # env.C.setJointState(q_buffer)
 
-    if env.is_collision_free(None, None):
+    if env.is_collision_free_np(q_buffer, mode):
         return True
 
     # # involves_robot_we_plan_for = False
@@ -1690,7 +1692,7 @@ def plan_in_time_space_bidirectional(
 
         return t_rnd, conf
 
-    def project_sample_to_preplanned_path(t, q):
+    def project_sample_to_preplanned_path(t: float, q: Configuration) -> Configuration:
         q_new = q
 
         for i, r in enumerate(robots):
@@ -1891,13 +1893,15 @@ def plan_in_time_space_bidirectional(
         # find closest pt in tree
         n_close = t_a.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
 
+        assert n_close is not None
+
         # go in dir and check collision
         if t_a.reverse:
             t_new, q_new = reverse_steer(n_close, Node(t_rnd, q_rnd), max_stepsize=10)
         else:
             t_new, q_new = steer(n_close, Node(t_rnd, q_rnd), max_stepsize=10)
 
-        if t_new is None:
+        if t_new is None or q_new is None:
             continue
 
         q_new = project_sample_to_preplanned_path(t_new, q_new)
@@ -1917,6 +1921,8 @@ def plan_in_time_space_bidirectional(
             t_a.add_node(Node(t_new, q_new), n_close)            # add to tree
 
             n_close_opposite = t_b.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
+
+            assert n_close_opposite is not None
 
             # should we steer here, instead of attempting to connect?
 
