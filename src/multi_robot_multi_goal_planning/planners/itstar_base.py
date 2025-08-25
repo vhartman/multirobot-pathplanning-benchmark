@@ -396,7 +396,7 @@ class DictIndexHeap(ABC, Generic[T]):
 
     def push_and_sync(
         self, item: T, priority: Tuple, item_already_in_heap: bool = False
-    ) -> float:
+    ) -> None:
         """
         Updates the heap and tracking dictionaries with the new item and its priority.
 
@@ -448,6 +448,8 @@ class DictIndexHeap(ABC, Generic[T]):
             _, idx = heapq.heappop(self.queue)
             _ = self.items.pop(idx)
             continue
+            
+        raise ValueError
 
     def remove(self, item: T, in_current_entries: bool = False) -> None:
         """
@@ -641,7 +643,7 @@ class BaseTree:
         self,
         node: BaseNode,
         potential_parent: BaseNode,
-        batch_cost: NDArray,
+        batch_cost: NDArray[float],
         n_near_costs: NDArray,
         node_indices: NDArray,
         goal_node_ids: NDArray,
@@ -695,7 +697,7 @@ class BaseTree:
         batch_cost: NDArray,
         n_near_costs: NDArray,
         node_indices: NDArray,
-    ) -> bool:
+    ) -> None:
         """
         Rewires neighboring nodes by updating their parent connection to the new node if a lower-cost path is established.
 
@@ -2035,7 +2037,7 @@ class BaseGraph(ABC):
         self,
         edge_cost: float,
         edge: Tuple[BaseNode, BaseNode],
-        edge_effort: float = None,
+        edge_effort: Optional[float] = None,
     ) -> None:
         """
         Updates the forward search queue with a new edge and its associated cost and effort.

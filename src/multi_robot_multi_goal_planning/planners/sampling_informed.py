@@ -605,7 +605,8 @@ class InformedSampling:
                                     )
 
                                 qr = sample_phs_with_given_matrices(
-                                    *precomputed_phs_matrices[i],
+                                    precomputed_phs_matrices[i][0],
+                                    precomputed_phs_matrices[i][1],
                                     n=num_samples_at_a_time,
                                 )
 

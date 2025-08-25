@@ -2,7 +2,8 @@ import numpy as np
 import time as time
 import math as math
 import random
-import multi_robot_multi_goal_planning.planners as mrmgp
+from multi_robot_multi_goal_planning.planners.composite_prm_planner import interpolate_path
+from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut, remove_interpolated_nodes
 import os
 import pickle
 from abc import ABC, abstractmethod
@@ -11,10 +12,7 @@ from numpy.typing import NDArray
 from numba import njit
 from dataclasses import dataclass, field
 
-try:
-    from scipy.stats.qmc import Halton
-except ImportError:
-    Halton = None
+from scipy.stats.qmc import Halton
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
@@ -408,479 +406,6 @@ class BidirectionalTree(BaseTree):
         return len(self.subtree) + len(self.subtree_b)
 
 
-class BaseInformed(ABC):
-    """
-    Represents an informed sampling instance, providing methods for sampling within an informed set.
-    """
-
-    def __init__(self):
-        pass
-
-    def rotation_to_world_frame(
-        self, start: Configuration, goal: Configuration, n: int
-    ) -> Tuple[float, NDArray]:
-        """
-        Computes rotation from the hyperellipsoid-aligned to the world frame based on the difference between the start and goal configs.
-
-        Args:
-            start (Configuration): Start configuration
-            goal (Configuration): Goal configuration
-            n (int): Dimensionality of the state space.
-
-        Returns:
-            Tuple:
-                - float: Norm of difference between goal and start configs
-                - NDArray: Representing the rotation matrix from the hyperellipsoid-aligned frame to the world frame."""
-        diff = goal.state() - start.state()
-        norm = np.linalg.norm(diff)
-        if norm < 1e-3:
-            return None, None
-        a1 = diff / norm
-
-        # Create first column of the identity matrix
-        e1 = np.zeros(n)
-        e1[0] = 1
-
-        # Compute SVD directly on the outer product
-        U, _, Vt = np.linalg.svd(np.outer(a1, e1))
-        V = Vt.T
-
-        # Construct the rotation matrix C
-        det_factor = np.linalg.det(U) * np.linalg.det(V)
-        C = U @ np.diag([1] * (n - 1) + [det_factor]) @ Vt
-
-        return norm, C
-
-    def initialize(self) -> None:
-        """
-        Initializes dimensions of each robot
-
-        Args:
-            None
-
-        Returns:
-            None: This method does not return any value."""
-        for robot in self.env.robots:
-            r_idx = self.env.robots.index(robot)
-            self.n[r_idx] = self.env.robot_dims[robot]
-
-    def cholesky_decomposition(
-        self, r_indices: List[int], r_idx: int, path_nodes: List[Node]
-    ) -> Optional[NDArray]:
-        """
-        Computes cholesky decomposition of hyperellipsoid matrix
-
-        Args:
-            r_indices (List[int]): List of indices of robot with idx r_idx.
-            r_idx (int): Idx of robot
-            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
-
-        Returns:
-            NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None."""
-        cmax = self.get_right_side_of_eq(r_indices, r_idx, path_nodes)
-        if not cmax or self.cmin[r_idx] < 0:
-            return
-        r1 = cmax / 2
-        r2 = np.sqrt(cmax**2 - self.cmin[r_idx] ** 2) / 2
-        return np.diag(np.concatenate([[r1], np.repeat(r2, self.n[r_idx] - 1)]))
-
-    @abstractmethod
-    def get_right_side_of_eq(
-        self, r_indices: List[int], r_idx: int, path_nodes: List[Node]
-    ) -> float:
-        """
-        Computes right-hand side of informed set description
-
-        Args:
-            r_indices (List[int]): List of indices of robot with idx r_idx.
-            r_idx (int): Idx of robot
-            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
-
-        Returns:
-            float: Value of right-hand side (= cost)
-        """
-        pass
-
-
-class InformedVersion0(BaseInformed):
-    """
-    Locally informed sampling for each robot separately (start and goal config are equal to home pose and task).
-    Upper bound cost is determined by cost of one robot.
-
-    """
-
-    def __init__(self, env: BaseProblem, cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
-
-    def get_right_side_of_eq(
-        self, r_indices: List[int], r_idx: int, path_nodes: List[Node]
-    ) -> float:
-        # need to calculate the cost only cnsidering one agent (euclidean distance)
-        n1 = NpConfiguration.from_numpy(path_nodes[0].state.q.state()[r_indices])
-        cost = 0
-        if self.mode_task_ids_home_poses[r_idx] == [-1]:
-            start_cost = 0
-            self.start[r_idx] = n1
-        for node in path_nodes[1:]:
-            n2 = NpConfiguration.from_numpy(node.state.q.state()[r_indices])
-            cost += self.cost_fct(n1, n2)
-            # need to work with task IDs as same mode can have different configs
-            if (
-                node.transition
-                and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]
-            ):
-                start_cost = cost
-                self.start[r_idx] = n2
-            if (
-                node.transition
-                and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]
-            ):
-                goal_cost = cost
-                self.goal[r_idx] = n2
-                break
-            n1 = n2
-        norm, self.C[r_idx] = self.rotation_to_world_frame(
-            self.start[r_idx], self.goal[r_idx], self.n[r_idx]
-        )
-
-        if norm is None:
-            return
-        self.cmin[r_idx] = norm - 2 * self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state()) / 2
-        return goal_cost - start_cost
-
-
-class InformedVersion1(BaseInformed):
-    """
-    Globally informed sampling considering whole state space.
-    Upper bound cost is determined by subtracting a lower bound from the path cost.
-
-    """
-
-    def __init__(self, env: BaseProblem, cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = []
-        self.cmin = None
-        self.C = None
-        self.start = None
-        self.goal = None
-        self.mode_task_ids_home_poses = []
-        self.center = None
-        self.cost_fct = cost_fct
-        self.n = None
-        self.L = None
-        self.cost = np.inf
-        self.active_robots_idx = []
-
-    def get_right_side_of_eq(self, path_nodes: List[Node]) -> float:
-        """
-        Computes right-hand side of informed set description
-
-        Args:
-            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
-
-        Returns:
-            float: Value of right-hand side (= cost)
-        """
-        if len(self.active_robots_idx) == 1:
-            idx = self.active_robots_idx[0]
-        else:
-            idx = random.choice(self.active_robots_idx)
-
-        mode_task_ids_home_pose = self.mode_task_ids_home_poses[idx]
-        mode_task_ids_task = self.mode_task_ids_task[idx]
-
-        if mode_task_ids_home_pose == [-1]:
-            self.start = path_nodes[0]
-
-        for node in path_nodes:
-            if node.transition and node.state.mode.task_ids == mode_task_ids_home_pose:
-                self.start = node
-            if node.transition and node.state.mode.task_ids == mode_task_ids_task:
-                self.goal = node
-                break
-        lb_goal = self.cost_fct(self.goal.state.q, path_nodes[-1].state.q)
-        lb_start = self.cost_fct(path_nodes[0].state.q, self.start.state.q)
-        norm, self.C = self.rotation_to_world_frame(
-            self.start.state.q, self.goal.state.q, self.n
-        )
-        self.cmin = norm - 2 * self.env.collision_tolerance
-        self.center = (self.goal.state.q.state() + self.start.state.q.state()) / 2
-        return path_nodes[-1].cost - lb_goal - lb_start
-
-    def initialize(self, mode: Mode, next_ids: List[int]) -> None:
-        """
-        Initializes dimensions of each robot
-
-        Args:
-            mode (Mode): Current active mode used to determine active tasks.
-            next_ids (List[int]): List containing next task IDs
-
-        Returns:
-            None: This method does not return any value."""
-        active_robots = self.env.get_active_task(mode, next_ids).robots
-        for robot in self.env.robots:
-            if robot in active_robots:
-                self.active_robots_idx.append(self.env.robots.index(robot))
-        self.n = sum(self.env.robot_dims.values())
-
-    def cholesky_decomposition(self, path_nodes: List[Node]) -> NDArray:
-        """
-        Computes cholesky decomposition of hyperellipsoid matrix
-
-        Args:
-            path_nodes (List[Node]): Path consisting of nodes used to compute right-hand side of informed set description.
-
-        Returns:
-            NDArray: Cholesky decomposition (=diagonal matrix) if conditions are met, otherwise it returns None."""
-        cmax = self.get_right_side_of_eq(path_nodes)
-        r1 = cmax / 2
-        r2 = np.sqrt(cmax**2 - self.cmin**2) / 2
-        return np.diag(np.concatenate([np.repeat(r1, 1), np.repeat(r2, self.n - 1)]))
-
-
-class InformedVersion2(BaseInformed):
-    """
-    Globally informed sampling for each agent separately (start and goal config are equal to home pose and task).
-    Upper bound cost is determined by subtracting a lower bound from the path cost.
-    """
-
-    def __init__(self, env: BaseProblem, cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
-
-    def get_right_side_of_eq(
-        self, r_indices: List[int], r_idx: int, path_nodes: List[Node]
-    ):
-        if self.mode_task_ids_home_poses[r_idx] == [-1]:
-            start_node = path_nodes[0]
-            self.start[r_idx] = NpConfiguration.from_numpy(
-                start_node.state.q.state()[r_indices]
-            )
-        for node in path_nodes[1:]:
-            # need to work with task IDs as same mode can have different configs
-            if (
-                node.transition
-                and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]
-            ):
-                start_node = node
-                self.start[r_idx] = NpConfiguration.from_numpy(
-                    node.state.q.state()[r_indices]
-                )
-            if (
-                node.transition
-                and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]
-            ):
-                goal_node = node
-                self.goal[r_idx] = NpConfiguration.from_numpy(
-                    node.state.q.state()[r_indices]
-                )
-                break
-
-        lb_goal = self.cost_fct(goal_node.state.q, path_nodes[-1].state.q)
-        lb_start = self.cost_fct(path_nodes[0].state.q, start_node.state.q)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(
-            self.start[r_idx], self.goal[r_idx], self.n[r_idx]
-        )
-        if norm is None:
-            return
-        self.cmin[r_idx] = norm - 2 * self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state()) / 2
-        return path_nodes[-1].cost - lb_goal - lb_start
-
-
-class InformedVersion3(BaseInformed):
-    """
-    Locally informed sampling for each agent seperately (randomly select start and goal config between home pose and task).
-    Upper bound cost is determined by subtracting a lower bound from the path cost between start and goal config.
-    """
-
-    def __init__(self, env: BaseProblem, cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
-
-    def get_right_side_of_eq(
-        self, r_indices: List[int], r_idx: int, path_nodes: List[Node]
-    ):
-        if self.mode_task_ids_home_poses[r_idx] == [-1]:
-            start_node = path_nodes[0]
-            self.start[r_idx] = NpConfiguration.from_numpy(
-                start_node.state.q.state()[r_indices]
-            )
-            start_idx = 0
-        for idx, node in enumerate(path_nodes[1:]):
-            # need to work with task IDs as same mode can have different configs
-            if (
-                node.transition
-                and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]
-            ):
-                start_node = node
-                self.start[r_idx] = NpConfiguration.from_numpy(
-                    node.state.q.state()[r_indices]
-                )
-                start_idx = idx
-            if (
-                node.transition
-                and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]
-            ):
-                goal_node = node
-                self.goal[r_idx] = NpConfiguration.from_numpy(
-                    node.state.q.state()[r_indices]
-                )
-                goal_idx = idx
-                break
-        idx1 = np.random.randint(0, start_idx + 1)
-        idx2 = np.random.randint(goal_idx, len(path_nodes))
-
-        lb_goal = self.cost_fct(goal_node.state.q, path_nodes[idx2].state.q)
-        lb_start = self.cost_fct(path_nodes[idx1].state.q, start_node.state.q)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(
-            self.start[r_idx], self.goal[r_idx], self.n[r_idx]
-        )
-        if norm is None:
-            return
-        self.cmin[r_idx] = norm - 2 * self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state()) / 2
-
-        return path_nodes[idx2].cost - path_nodes[idx1].cost - lb_goal - lb_start
-
-
-class InformedVersion4(BaseInformed):
-    """
-    Globally informed sampling for each agent separately (randomly select start and end config on whole path).
-    Upper bound cost is determined by subtracting a lower bound from the path cost.
-    """
-
-    def __init__(self, env: BaseProblem, cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
-
-    def get_right_side_of_eq(
-        self, r_indices: List[int], r_idx: int, path_nodes: List[Node]
-    ):
-        while True:
-            idx1 = np.random.randint(0, len(path_nodes))
-            idx2 = np.random.randint(0, len(path_nodes))
-            if idx2 < idx1:
-                idx1, idx2 = idx2, idx1
-            if idx2 - idx1 > 2:
-                break
-        goal = path_nodes[idx2]
-        start = path_nodes[idx1]
-        self.start[r_idx] = NpConfiguration.from_numpy(start.state.q.state()[r_indices])
-        self.goal[r_idx] = NpConfiguration.from_numpy(goal.state.q.state()[r_indices])
-
-        lb_goal = self.cost_fct(goal.state.q, path_nodes[-1].state.q)
-        lb_start = self.cost_fct(path_nodes[0].state.q, start.state.q)
-        norm, self.C[r_idx] = self.rotation_to_world_frame(
-            self.start[r_idx], self.goal[r_idx], self.n[r_idx]
-        )
-        if norm is None:
-            return
-        self.cmin[r_idx] = norm - 2 * self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state()) / 2
-        return path_nodes[-1].cost - lb_goal - lb_start
-
-
-class InformedVersion5(BaseInformed):
-    """
-    Globally informed sampling for each agent separately (start and goal config are equal to home pose and task).
-    Upper bound cost is determined by the path cost between start and goal node.
-    """
-
-    def __init__(self, env: BaseProblem, cost_fct: Callable):
-        self.env = env
-        self.mode_task_ids_task = {}
-        self.cmin = {}
-        self.C = {}
-        self.start = {}
-        self.goal = {}
-        self.mode_task_ids_home_poses = {}
-        self.center = {}
-        self.cost_fct = cost_fct
-        self.n = {}
-        self.L = {}
-        self.cost = np.inf
-
-    def get_right_side_of_eq(
-        self, r_indices: List[int], r_idx: int, path_nodes: List[Node]
-    ) -> float:
-        if self.mode_task_ids_home_poses[r_idx] == [-1]:
-            start_node = path_nodes[0]
-            self.start[r_idx] = NpConfiguration.from_numpy(
-                start_node.state.q.state()[r_indices]
-            )
-        for node in path_nodes[1:]:
-            # need to work with task IDs as same mode can have different configs
-            if (
-                node.transition
-                and node.state.mode.task_ids == self.mode_task_ids_home_poses[r_idx]
-            ):
-                start_node = node
-                self.start[r_idx] = NpConfiguration.from_numpy(
-                    node.state.q.state()[r_indices]
-                )
-            if (
-                node.transition
-                and node.state.mode.task_ids == self.mode_task_ids_task[r_idx]
-            ):
-                goal_node = node
-                self.goal[r_idx] = NpConfiguration.from_numpy(
-                    node.state.q.state()[r_indices]
-                )
-                break
-
-        norm, self.C[r_idx] = self.rotation_to_world_frame(
-            self.start[r_idx], self.goal[r_idx], self.n[r_idx]
-        )
-        if norm is None:
-            return
-        self.cmin[r_idx] = norm - 2 * self.env.collision_tolerance
-        self.center[r_idx] = (self.goal[r_idx].state() + self.start[r_idx].state()) / 2
-        return goal_node.cost - start_node.cost
-
-
 @njit(fastmath=True, cache=True)
 def find_nearest_indices(set_dists: NDArray, r: float) -> NDArray:
     """
@@ -1120,8 +645,8 @@ class BaseRRTstar(BasePlanner):
 
     def add_new_mode(
         self,
-        q: Configuration = None,
-        mode: Mode = None,
+        q: Optional[Configuration] = None,
+        mode: Optional[Mode] = None,
         tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None,
     ) -> None:
         """
@@ -1923,7 +1448,7 @@ class BaseRRTstar(BasePlanner):
             ::-1
         ]  # includes transiiton node twice
         self.operation.path_shortcutting_interpolated = (
-            mrmgp.composite_prm_planner.interpolate_path(path_shortcutting)
+            interpolate_path(path_shortcutting)
         )
         if (
             (
@@ -1935,7 +1460,7 @@ class BaseRRTstar(BasePlanner):
             and shortcutting_bool
         ):
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path_, result = mrmgp.shortcutting.robot_mode_shortcut(
+            shortcut_path_, result = robot_mode_shortcut(
                 self.env,
                 self.operation.path_shortcutting,
                 250,
@@ -1944,7 +1469,7 @@ class BaseRRTstar(BasePlanner):
             )
             if self.config.remove_redundant_nodes:
                 # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
-                shortcut_path = mrmgp.shortcutting.remove_interpolated_nodes(
+                shortcut_path = remove_interpolated_nodes(
                     shortcut_path_
                 )
             else:
