@@ -1879,13 +1879,13 @@ def plan_in_time_space_bidirectional(
         ):
             # print('invalid sample')
             # env.show(True)
-            if iter >= 1000 and iter % 500 == 0:
-                # for some reason there is some bug that seems fixed when displaying a conf once.
-                # I do not know what the reason is. I suspect that I am somehow mishandling modes.
-                # Not sure how that would be fixed by doing this though.
-                # env.show(False)
-                if isinstance(env, rai_env):
-                    env.C.view_recopyMeshes()
+            # if iter >= 1000 and iter % 500 == 0:
+            #     # for some reason there is some bug that seems fixed when displaying a conf once.
+            #     # I do not know what the reason is. I suspect that I am somehow mishandling modes.
+            #     # Not sure how that would be fixed by doing this though.
+            #     # env.show(False)
+            #     if isinstance(env, rai_env):
+            #         env.C.view_recopyMeshes()
                 # env.C.view_close()
             continue
 
