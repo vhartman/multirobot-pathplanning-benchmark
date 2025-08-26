@@ -88,7 +88,7 @@ class GoalRegion(Goal):
     def satisfies_constraints(self, q: NDArray, mode: "Mode", tolerance: float) -> bool:
         if np.all(q > self.limits[0, :]) and np.all(q < self.limits[1, :]):
             return True
-        
+
         return False
 
     def sample(self, mode: "Mode") -> NDArray:
@@ -283,7 +283,13 @@ class Task:
     constraints = List[Constraint]
 
     def __init__(
-        self, robots: List[str], goal: Goal, type=None, frames=None, side_effect=None, side_effect_data=None
+        self,
+        robots: List[str],
+        goal: Goal,
+        type=None,
+        frames=None,
+        side_effect=None,
+        side_effect_data=None,
     ):
         self.robots = robots
         self.goal = goal
@@ -680,7 +686,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
         # print()
 
         return next_modes
-    
+
     def get_sequence(self) -> List[int]:
         while True:
             m = self.start_mode
@@ -704,7 +710,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                     for r in self.robots:
                         if r in active_task.robots:
                             dim = self.robot_dims[r]
-                            q.append(q_goal[offset:offset+dim])
+                            q.append(q_goal[offset : offset + dim])
                             offset += dim
                         else:
                             q.append(self.safe_pose[r])
@@ -717,7 +723,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
                         # print(m.task_ids)
                         # self.show()
-                        
+
                         break
 
                 # unfortunately, all next combinations are bad
@@ -735,18 +741,19 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
             if success:
                 task_id_sequence = []
-                for i in range(len(mode_sequence)-1):
-                    for id_this, id_next in zip(mode_sequence[i].task_ids, mode_sequence[i+1].task_ids):
+                for i in range(len(mode_sequence) - 1):
+                    for id_this, id_next in zip(
+                        mode_sequence[i].task_ids, mode_sequence[i + 1].task_ids
+                    ):
                         if id_this != id_next:
                             task_id_sequence.append(id_this)
                             break
-                            
+
                 task_id_sequence.append(self.terminal_task)
 
                 return task_id_sequence
 
         raise NotImplementedError
-    
 
     def is_transition(self, q: Configuration, m: Mode) -> bool:
         if self.is_terminal_mode(m):
@@ -850,7 +857,7 @@ class FreeMixin(BaseModeLogic):
                 #     for next_task_combi in possible_task_combinations:
                 #         for i in next_task_combi:
                 #             print(self.tasks[i].name)
-                        
+
                 #         print()
 
                 for rnd_next_task_combination in possible_task_combinations:
@@ -862,7 +869,7 @@ class FreeMixin(BaseModeLogic):
                     for r in self.robots:
                         if r in active_task.robots:
                             dim = self.robot_dims[r]
-                            q.append(q_goal[offset:offset+dim])
+                            q.append(q_goal[offset : offset + dim])
                             offset += dim
                         else:
                             q.append(self.safe_pose[r])
@@ -875,9 +882,9 @@ class FreeMixin(BaseModeLogic):
 
                         # print(m.task_ids)
                         # self.show()
-                        
+
                         break
-                        
+
                     # self.show()
 
                 # unfortunately, all next combinations are bad
@@ -901,12 +908,14 @@ class FreeMixin(BaseModeLogic):
 
             if success:
                 task_id_sequence = []
-                for i in range(len(mode_sequence)-1):
-                    for id_this, id_next in zip(mode_sequence[i].task_ids, mode_sequence[i+1].task_ids):
+                for i in range(len(mode_sequence) - 1):
+                    for id_this, id_next in zip(
+                        mode_sequence[i].task_ids, mode_sequence[i + 1].task_ids
+                    ):
                         if id_this != id_next:
                             task_id_sequence.append(id_this)
                             break
-                            
+
                 task_id_sequence.append(self.terminal_task)
 
                 return task_id_sequence
@@ -1890,7 +1899,9 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]) -> bool:
+    def is_collision_free(
+        self, q: Optional[Configuration], mode: Optional[Mode]
+    ) -> bool:
         """
         Computes if a configuration is collision free if a configuration and a mode is given.
         Computes if the currently set configuration is collision free if no configuration is given.
@@ -1931,10 +1942,11 @@ class BaseProblem(ABC):
     def is_path_collision_free(
         self,
         path: List[State],
-        binary_order=True,
-        resolution=None,
-        tolerance=None,
-        check_edges_in_order=False,
+        binary_order: bool = True,
+        resolution: Optional[float] = None,
+        tolerance: Optional[float] = None,
+        check_edges_in_order: bool = False,
+        check_start_and_end: bool = True,
     ) -> bool:
         if tolerance is None:
             tolerance = self.collision_tolerance
@@ -1954,12 +1966,17 @@ class BaseProblem(ABC):
         if check_edges_in_order:
             # sparsely check if newly generated points are in collision
             for i in idx:
+                if i == 0 and not check_start_and_end:
+                    continue
+
                 q1 = path[i].q
                 mode = path[i].mode
                 if not self.is_collision_free(q1, mode):
                     return False
-            if not self.is_collision_free(path[-1].q, path[-1].mode):
+            
+            if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
                 return False
+            
             # check whole edge
             for i in idx:
                 q1 = path[i].q
@@ -1998,9 +2015,9 @@ class BaseProblem(ABC):
                         Ns[i] = int(config_dist(q1, q2, "max") / resolution) + 1
                         Ns[i] = max(2, Ns[i])
                     if N_start == 0:
-                        if not self.is_collision_free(q1, mode):
+                        if (i != 0 or (check_start_and_end and i == 0)) and not self.is_collision_free(q1, mode):
                             return False
-                        
+
                     if N_start > Ns[i]:
                         edges_to_remove.append(i)
                         continue
@@ -2014,7 +2031,7 @@ class BaseProblem(ABC):
                         include_endpoints=False,
                         N_start=N_start,
                         N_max=N_max,
-                        N = Ns[i]
+                        N=Ns[i],
                     )
 
                     # if res is None:
@@ -2030,7 +2047,7 @@ class BaseProblem(ABC):
                 N_start += checks_per_iteration
                 N_max += checks_per_iteration
 
-            if not self.is_collision_free(path[-1].q, path[-1].mode):
+            if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
                 return False
 
         return True
