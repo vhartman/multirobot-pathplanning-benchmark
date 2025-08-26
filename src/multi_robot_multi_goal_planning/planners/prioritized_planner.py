@@ -595,7 +595,8 @@ def collision_free_with_moving_obs(
 
     # env.C.setJointState(q_buffer)
 
-    if env.is_collision_free_np(q_buffer, mode):
+    # if env.is_collision_free_np(q_buffer, mode):
+    if env.is_collision_free(env.start_pos.from_flat(q_buffer), mode):
         return True
 
     # # involves_robot_we_plan_for = False
@@ -2104,10 +2105,6 @@ def shortcut_with_dynamic_obstacles(
         #     offset += dim
         # return conf_type.from_list(ql)
         return tmp_conf.from_flat(q)
-
-    robot_joints = {}
-    for r in env.robots:
-        robot_joints[r] = get_robot_joints(env.C, r)
 
     new_path = copy.copy(path)
 

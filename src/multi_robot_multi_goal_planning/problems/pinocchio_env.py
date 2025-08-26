@@ -27,6 +27,14 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     GoalRegion,
     ConditionalGoal,
     BaseProblem,
+    ProblemSpec,
+    AgentType,
+    GoalType,
+    ConstraintType,
+    DynamicsType,
+    ManipulationType,
+    DependencyType,
+    SafePoseType,
 )
 
 import pinocchio as pin
@@ -117,6 +125,16 @@ class PinocchioEnvironment(BaseProblem):
         mat = np.zeros((n, n)) - self.collision_tolerance
 
         self.geom_data.setSecurityMargins(self.collision_model, mat)
+
+        self.spec = ProblemSpec(
+            agent_type=AgentType.MULTI_AGENT,
+            constraints=ConstraintType.UNCONSTRAINED,
+            manipulation=ManipulationType.MANIPULATION,
+            dependency=DependencyType.FULLY_ORDERED,
+            dynamics=DynamicsType.GEOMETRIC,
+            goals=GoalType.MULTI_GOAL,
+            home_pose=SafePoseType.HAS_NO_SAFE_HOME_POSE,
+        )
 
     def setup_visualization(self):
         self.viz = MeshcatVisualizer(
@@ -449,9 +467,9 @@ class PinocchioEnvironment(BaseProblem):
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
     def batch_config_cost(
-        self, starts: List[Configuration], ends: List[Configuration]
+        self, starts: List[Configuration], ends: List[Configuration], tmp_agent_slice = None
     ) -> NDArray:
-        return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction)
+        return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction, tmp_agent_slice=tmp_agent_slice)
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
@@ -821,8 +839,16 @@ class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
         BaseModeLogic.__init__(self)
 
-        # self.collision_resolution = 0.01
-        # self.collision_tolerance = 0.01
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.02
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.spec.manipulation = ManipulationType.STATIC
+
+        self.safe_pose = {
+            "a1": np.array(np.array([-1.5, 1, np.pi / 2])),
+            "a2": np.array(np.array([1.5, 1, 0]))
+        }
 
 
 def make_2d_handover():
