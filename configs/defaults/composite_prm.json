@@ -23,6 +23,6 @@
     "frontier_mode_sampling_probability": 0.98,
     "shortcutting_mode": "random",
     "shortcutting_interpolation_resolution": 0.1,
-    "shortcutting_iters": 250
+    "shortcutting_iters": 100
   }
 }
