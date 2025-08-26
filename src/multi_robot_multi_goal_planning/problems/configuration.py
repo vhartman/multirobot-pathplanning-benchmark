@@ -449,6 +449,10 @@ def batch_config_cost(
         diff = starts.state() - batch_other
         agent_slices = starts._array_slice
 
+    elif isinstance(starts, np.ndarray) and isinstance(batch_other, np.ndarray):
+        diff = starts - batch_other
+        agent_slices = tmp_agent_slice
+
     # special case for a path cost computation: We want to compute the cost between the pairs, shifted by one
     elif batch_other is None and tmp_agent_slice is not None:
         # TODO: get rid of this

@@ -405,20 +405,44 @@ class Tree:
             end_times = self.prev_plans.get_end_times(self.robots)
             # TODO: deal with arrays instead of configs here
             # TODO: only compute the stuff for nodes that are relevant
-            intermediate_poses = []
-            for n in n2:
-                p = []
-                for i, r in enumerate(self.robots):
-                    if n1.t > end_times[r] and n.t < end_times[r]:
-                        p.extend(self.prev_plans.get_robot_poses_at_time([r], n1.t)[0])
-                    else:
-                        p.extend(n.q[i])
-                intermediate_poses.append(self.nodes[0].q.from_flat(np.array(p)))
+            # intermediate_poses = []
+            # for n in n2:
+            #     p = []
+            #     for i, r in enumerate(self.robots):
+            #         if n1.t > end_times[r] and n.t < end_times[r]:
+            #             p.extend(self.prev_plans.get_robot_poses_at_time([r], n1.t)[0])
+            #         else:
+            #             p.extend(n.q[i])
+            #     intermediate_poses.append(self.nodes[0].q.from_flat(np.array(p)))
 
-            q_dist_to_inter = self.batch_config_dist_fun(n1.q, intermediate_poses, "max")
-            q_dist_from_inter = batch_config_cost(intermediate_poses, [n.q for n in n2], "max")
+            intermediate_poses_arr = np.zeros((len(n2), len(self.nodes[0].q.state())))
+            for i in range(len(n2)):
+                n = n2[i]
+                offset = 0
+                for j, r in enumerate(self.robots):
+                    if n1.t > end_times[r] and n.t < end_times[r]:
+                        p = self.prev_plans.get_robot_poses_at_time([r], n1.t)[0]
+                    else:
+                        p = n.q[j]
+
+                    dim = len(p)
+                    intermediate_poses_arr[i, offset: offset+dim] = 1. * p
+                    offset += dim
+
+            q_dist_to_inter = self.batch_config_dist_fun(n1.q, intermediate_poses_arr, "max")
+            q_dist_from_inter = batch_config_cost(intermediate_poses_arr, np.array([n.q.state() for n in n2]), "max", tmp_agent_slice=n.q._array_slice)
+
+            # print("AA")
+            # print(intermediate_poses_arr)
+            # print([q.state() for q in intermediate_poses])
+
+            # q_dist_to_inter = self.batch_config_dist_fun(n1.q, intermediate_poses, "max")
+            # q_dist_from_inter = batch_config_cost(intermediate_poses, [n.q for n in n2], "max")
     
             dist = (q_dist_from_inter + q_dist_to_inter) * self.gamma + (1 - self.gamma) * t_diff
+
+            # print(q_dist_to_inter_tmp - q_dist_to_inter)
+            # print(q_dist_from_inter_tmp - q_dist_from_inter)
 
         # print("time diffs")
         # print(n1.t)
