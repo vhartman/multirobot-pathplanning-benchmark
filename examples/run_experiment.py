@@ -189,6 +189,9 @@ def setup_planner(
                 init_transition_batch_size=options["init_transition_batch_size"],
                 with_mode_validation=options["with_mode_validation"],
                 with_noise=options["with_noise"],
+                shortcutting_mode=options["shortcutting_mode"],
+                shortcutting_interpolation_resolution=options["shortcutting_interpolation_resolution"],
+                shortcutting_iters=options["shortcutting_iters"]
             )
 
             return CompositePRM(env, config=prm_config).plan(

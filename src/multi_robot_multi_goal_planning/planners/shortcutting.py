@@ -91,6 +91,8 @@ def robot_mode_shortcut(
     max_iter: int = 1000,
     resolution=0.001,
     tolerance=0.01,
+    robot_choice = "round_robin",
+    interpolation_resolution: float=0.1
 ):
     """
     Shortcutting the composite path one robot at a time, but allowing shortcutting over the modes as well if the
@@ -100,7 +102,7 @@ def robot_mode_shortcut(
     collision free.
     """
     non_redundant_path = remove_interpolated_nodes(path)
-    new_path = interpolate_path(non_redundant_path, 0.1)
+    new_path = interpolate_path(non_redundant_path, interpolation_resolution)
 
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
@@ -113,8 +115,11 @@ def robot_mode_shortcut(
 
     cnt = 0
     # for iter in range(max_iter):
-    max_attempts = max_iter * 10
+    max_attempts = 250 * 10
     iter = 0
+
+    rr_robot = 0
+
     while True:
         iter += 1
         if cnt >= max_iter or iter >= max_attempts:
@@ -136,7 +141,11 @@ def robot_mode_shortcut(
         # # num_robots = np.random.randint(0, len(robots_to_shortcut))
         # num_robots = 1
         # robots_to_shortcut = robots_to_shortcut[:num_robots]
-        robots_to_shortcut = [np.random.randint(0, len(env.robots))]
+        if robot_choice == "round_robin":
+            robots_to_shortcut = [rr_robot % len(env.robots)]
+            rr_robot += 1
+        else:
+            robots_to_shortcut = [np.random.randint(0, len(env.robots))]
 
         can_shortcut_this = True
         for r in robots_to_shortcut:
@@ -201,7 +210,7 @@ def robot_mode_shortcut(
         cnt += 1
 
         if env.is_path_collision_free(
-            path_element, resolution=resolution, tolerance=tolerance
+            path_element, resolution=resolution, tolerance=tolerance, check_start_and_end=False
         ):
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
@@ -211,6 +220,8 @@ def robot_mode_shortcut(
         # else:
         #     print("in colllision")
         # env.show(True)
+
+        # print(i, j, len(path_element))
 
         current_time = time.time()
         times.append(current_time - start_time)

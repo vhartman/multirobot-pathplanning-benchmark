@@ -1438,6 +1438,9 @@ class CompositePRMConfig:
     locally_informed_sampling: bool = True
     try_informed_transitions: bool = True
     try_shortcutting: bool = True
+    shortcutting_mode: str = "round_robin"
+    shortcutting_iters: int = 250
+    shortcutting_interpolation_resolution: float = 0.1
     try_direct_informed_sampling: bool = True
     inlcude_lb_in_informed_sampling: bool = False
     init_mode_sampling_type: str = "greedy"
@@ -2253,9 +2256,11 @@ class CompositePRM(BasePlanner):
                                 shortcut_path, _ = shortcutting.robot_mode_shortcut(
                                     self.env,
                                     path,
-                                    250,
+                                    max_iter=self.config.shortcutting_iters,
                                     resolution=self.env.collision_resolution,
                                     tolerance=self.env.collision_tolerance,
+                                    robot_choice=self.config.shortcutting_mode,
+                                    interpolation_resolution=self.config.shortcutting_interpolation_resolution
                                 )
 
                                 shortcut_path = shortcutting.remove_interpolated_nodes(

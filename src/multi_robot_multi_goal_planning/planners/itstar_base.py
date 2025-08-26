@@ -3677,7 +3677,7 @@ class BaseITstar(BasePlanner):
                     or self.config.apply_long_horizon
                     and self.long_horizon.reached_terminal_mode
                 ):
-                    iter = 250
+                    iter = 100
                     rewire = self.config.with_rewiring
                 else:
                     iter = 0
@@ -3685,7 +3685,7 @@ class BaseITstar(BasePlanner):
                         rewire = self.config.with_rewiring
                         iter = 15
                         if self.env.is_terminal_mode(path[-1].mode):
-                            iter = 250
+                            iter = 100
                     else:
                         return
                     print(iter)

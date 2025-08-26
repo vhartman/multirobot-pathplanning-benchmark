@@ -1400,7 +1400,7 @@ class BaseRRTstar(BasePlanner):
             shortcut_path_, result = robot_mode_shortcut(
                 self.env,
                 self.operation.path_shortcutting,
-                250,
+                100,
                 resolution=self.env.collision_resolution,
                 tolerance=self.env.collision_tolerance,
             )
