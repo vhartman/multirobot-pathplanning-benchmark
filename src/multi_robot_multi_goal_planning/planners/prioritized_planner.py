@@ -340,8 +340,10 @@ class Tree:
 
         if start is not None:
             self.nodes = [start]
+            self.configs = [[start.q[i] for i in range(start.q.num_agents())]]
         else:
             self.nodes = []
+            self.configs = []
         
         self.batch_config_dist_fun = batch_config_dist
 
@@ -423,7 +425,9 @@ class Tree:
                     if n1.t > end_times[r] and n.t < end_times[r]:
                         p = self.prev_plans.get_robot_poses_at_time([r], n1.t)[0]
                     else:
-                        p = n.q[j]
+                        # p = n.q[j]
+                        # print(len(self.configs), len(n2))
+                        p = self.configs[i][j]
 
                     dim = len(p)
                     intermediate_poses_arr[i, offset: offset+dim] = 1. * p
@@ -577,12 +581,15 @@ class Tree:
         best_nodes = [node_list[i] for i in topk]
         return best_nodes
 
-    def add_node(self, new_node: Node, parent: Node) -> None:
+    def add_node(self, new_node: Node, parent: Optional[Node]) -> None:
         node_list = self.nodes
         node_list.append(new_node)
 
-        new_node.parent = parent
-        parent.children.append(new_node)
+        self.configs.append([new_node.q[i] for i in range(new_node.q.num_agents())])
+
+        if parent is not None:
+            new_node.parent = parent
+            parent.children.append(new_node)
 
 
 # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
@@ -1805,7 +1812,7 @@ def plan_in_time_space_bidirectional(
             other_robots)
 
         if res:
-            t_rev.nodes.append(Node(t_rnd, q_rnd))
+            t_rev.add_node(Node(t_rnd, q_rnd), None)
             sampled_goals.append((t_rnd, q_rnd))
 
             # if max_t > 290:
