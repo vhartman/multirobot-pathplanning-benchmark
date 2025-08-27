@@ -637,9 +637,9 @@ class EITstar(BaseITstar):
                     edge_id = (n_start.id, n_end.id)
 
                     previously_checked = edge_id in self.sparesly_checked_edges
-                    valid_check = previously_checked and (
+                    valid_check = (previously_checked and (
                         self.sparesly_checked_edges[edge_id] >= N_max
-                    )
+                    )) or N_start > N
                     if valid_check:
                         sparsely_collision_free = True
                     else:
@@ -933,14 +933,18 @@ class EITstar(BaseITstar):
                                     self.sparse_number_of_points
                                 )
                             N = max(2, int(edge_effort))
-                            collision_free = self.env.is_edge_collision_free(
-                                n_start.state.q,
-                                n_end.state.q,
-                                n_start.state.mode,
-                                N_start=N_start,
-                                N_max=N,
-                                N=N,
-                            )
+
+                            if N_start > N:
+                                collision_free = True
+                            else:
+                                collision_free = self.env.is_edge_collision_free(
+                                    n_start.state.q,
+                                    n_end.state.q,
+                                    n_start.state.mode,
+                                    N_start=N_start,
+                                    N_max=N,
+                                    N=N,
+                                )
 
                         if not collision_free:
                             self.g.update_edge_collision_cache(n0, n1, collision_free)
