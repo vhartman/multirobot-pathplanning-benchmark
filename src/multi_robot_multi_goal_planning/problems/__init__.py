@@ -150,7 +150,9 @@ def get_all_environments():
 
 
         ##### Constrained envs
-        "pose_constraint_2d_test": lambda: rec.rai_two_dim_env_relative_pose_constraint()
+        "pose_constraint_2d_test": lambda: rec.rai_two_dim_env_relative_pose_constraint(),
+        "pose_constraint_arm": lambda: rec.rai_two_arm_grasping(),
+        
     }
     # fmt: on
 

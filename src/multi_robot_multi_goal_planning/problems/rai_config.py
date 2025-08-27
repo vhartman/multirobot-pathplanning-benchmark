@@ -3567,6 +3567,219 @@ def make_handover_env(view: bool = False):
     return C, keyframes
 
 
+def make_bimanual_grasping_env(view: bool = False):
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    # C.addFile(ry.raiPath('panda/panda.g'), namePrefix='a1_') \
+    #         .setParent(C.getFrame('table')) \
+    #         .setRelativePosition([-0.3, 0.5, 0]) \
+    #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
+    robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_vacuum.g")
+
+    print(robot_path)
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(table).setRelativePosition(
+        [-0.75, 0, 0.0]
+    ).setRelativeQuaternion([1, 0, 0, 0]).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-2)
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(table).setRelativePosition(
+        [+0.75, 0, 0.0]
+    ).setRelativeQuaternion([0, 0, 0, 1]).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj1").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.4, 0.2, 0.005]
+    ).setColor([1, 0.5, 0, 1]).setContact(1).setRelativePosition(
+        [0, -0.75, 0.15]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.4, 0.2, 0.005]
+    ).setColor([1, 0.5, 0, 0.2]).setContact(0).setRelativePosition(
+        [-0., 0., 0.15]
+    ).setJoint(ry.JT.rigid).setRelativeQuaternion([0.7071, 0, 0, -0.7071])
+
+    C.addFrame("obj_marker").setParent(
+        C.getFrame("obj1")
+    ).setShape(
+        ry.ST.marker, [0.2]
+    ).setRelativePosition([0, 0, 0]).setColor(
+        [0, 0, 0.1, 0.1]
+    ).setContact(0).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_marker").setParent(
+        C.getFrame("goal1")
+    ).setShape(
+        ry.ST.marker, [0.2]
+    ).setRelativePosition([0, 0, 0]).setColor(
+        [0, 0, 0.1, 0.1]
+    ).setContact(0).setJoint(ry.JT.rigid)
+
+    C.addFrame("ee_marker").setParent(
+        C.getFrame("a1_ur_ee_marker")
+    ).setShape(
+        ry.ST.marker, [0.2]
+    ).setRelativePosition([0, 0, 0]).setColor(
+        [0, 0, 0.1, 0.1]
+    ).setContact(0).setJoint(ry.JT.rigid)
+
+
+    # C.addFrame("obs1").setParent(table).setRelativePosition([-0.5, 1, 0.7]).setShape(
+    #     ry.ST.box, size=[1, 1, 0.1, 0.005]
+    # ).setColor([0.3, 0.3, 0.3]).setContact(1)
+
+    # C.addFrame("obs2").setParent(table).setRelativePosition([0.5, -1, 0.7]).setShape(
+    #     ry.ST.box, size=[1, 1, 0.1, 0.005]
+    # ).setColor([0.3, 0.3, 0.3]).setContact(1)
+
+    robots = ["a1_", "a2_"]
+
+    if view:
+        C.view(True)
+
+    qHome = C.getJointState()
+    box = "obj1"
+
+    komo = ry.KOMO(C, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0])
+
+    komo.addControlObjective([], 0, 1e-1)
+    # komo.addControlObjective([], 1, 1e-1)
+    # komo.addControlObjective([], 2, 1e-1)
+
+    komo.addModeSwitch([1, 2], ry.SY.stable, ["a1_" + "ur_vacuum", box])
+    # komo.addObjective(
+    #     [1, 2], ry.FS.distance, ["a1_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.0]
+    # )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.positionRel,
+        ["a1_" + "ur_vacuum", box],
+        ry.OT.eq,
+        [1e1, 1e1, 1e1],
+        [-0.2, 0, 0]
+    )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.positionRel,
+        ["a2_" + "ur_vacuum", box],
+        ry.OT.eq,
+        [1e1, 1e1, 1e1],
+        [0.2, 0, 0]
+    )
+
+    # komo.addObjective(
+    #     [1, 2],
+    #     ry.FS.positionDiff,
+    #     ["a1_" + "ur_ee_marker", box],
+    #     ry.OT.sos,
+    #     [1e0],
+    # )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.scalarProductXZ,
+        ["a1_" + "ur_ee_marker", box],
+        ry.OT.eq,
+        [1e1],
+        [-1]
+    )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.scalarProductXZ,
+        ["a2_" + "ur_ee_marker", box],
+        ry.OT.eq,
+        [1e1],
+        [-1]
+    )
+
+    komo.addObjective(
+        [1, 2],
+        ry.FS.scalarProductXZ,
+        [box, "a1_" + "ur_ee_marker"],
+        ry.OT.eq,
+        [1e1],
+        [1]
+    )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.scalarProductYX,
+        ["a2_" + "ur_ee_marker", box],
+        ry.OT.eq,
+        [1e1],
+        [-1]
+    )
+
+    # komo.addObjective(
+    #     [1, 2],
+    #     ry.FS.scalarProductZZ,
+    #     ["a1_" + "ur_ee_marker", box],
+    #     ry.OT.sos,
+    #     [1e0],
+    # )
+
+    komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+    komo.addObjective([2, -1], ry.FS.poseDiff, ["goal1", box], ry.OT.eq, [1e1])
+
+    komo.addObjective(
+        times=[3],
+        feature=ry.FS.jointState,
+        frames=[],
+        type=ry.OT.sos,
+        scale=[1e0],
+        target=qHome,
+    )
+
+    max_attempts = 30
+    for i in range(max_attempts):
+        if i > 0:
+            komo.initRandom()
+            # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
+            # x_init = q_home + np.random.randn(len(q_home)) * 0.1
+            # komo.initWithConstant(x_init)
+
+        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+        # options.nonStrictSteps = 50;
+
+        # solver.setOptions(damping=0.01, wolfe=0.001)
+        # solver.setOptions(damping=0.001)
+        retval = solver.solve()
+        retval = retval.dict()
+
+        print(retval)
+
+        keyframes = komo.getPath()
+
+        print(keyframes)
+
+        if view:
+            komo.view(True, "IK solution")
+        # komo.view(True, "IK solution")
+
+        # print(retval)
+
+        if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+            komo.view(True, "IK solution")
+
+            keyframes = keyframes[:-1, :]
+            break
+            # return keyframes[:-1, :]
+
+    return C, robots, keyframes
+
+
 def make_panda_waypoint_env(
     num_robots: int = 3,
     num_waypoints: int = 6,

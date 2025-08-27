@@ -137,8 +137,63 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
 
 class rai_two_arm_grasping(SequenceMixin, rai_env):
     def __init__(self):
-        self.C = rai_config.make_bimanual_grasping_env()
+        self.C, self.robots, keyframes = rai_config.make_bimanual_grasping_env()
         # self.C.view(True)
+
+        rai_env.__init__(self)
+
+        pick_pose = keyframes[0]
+        place_pose = keyframes[-1]
+
+        home_pose = self.C.getJointState()
+
+        self.C.setJointState(pick_pose)
+        a1_pose = self.C.getFrame("a1_ur_ee_marker").getPose()
+        a2_pose = self.C.getFrame("a2_ur_ee_marker").getPose()
+        rel_pose = relative_pose(a1_pose, a2_pose)
+
+        self.C.setJointState(home_pose)
+
+        self.manipulating_env = True
+
+        self.tasks = [
+            # joint
+            Task(
+                self.robots,
+                SingleGoal(pick_pose),
+                type="pick", 
+                frames=["a1_ur_ee_marker", "obj1"]
+            ),
+            Task(
+                self.robots,
+                SingleGoal(place_pose),
+                type="place", 
+                frames=["table", "obj1"],
+                constraints=[FrameRelativePoseConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], rel_pose)]
+            ),            
+            # terminal mode
+            Task(
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+
+        self.tasks[0].name = "joint_pick"
+        self.tasks[1].name = "joint_place"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["joint_pick", "joint_place", "terminal"]
+        )
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.manipulation = ManipulationType.STATIC
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
 
 
 class rai_stacking_with_holding(SequenceMixin, rai_env):
