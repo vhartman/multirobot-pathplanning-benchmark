@@ -193,13 +193,13 @@ class Constraint(ABC):
     def is_fulfilled(self, q: Configuration, env) -> bool:
         pass
 
-    @abstractmethod
-    def get_gradient(self, q, env):
-        pass
+    # @abstractmethod
+    # def get_gradient(self, q, env):
+    #     pass
 
-    @abstractmethod
-    def project_to_manifold(self, q, env):
-        pass
+    # @abstractmethod
+    # def project_to_manifold(self, q, env):
+    #     pass
 
 
 def get_axes_from_quaternion(quat):
@@ -215,7 +215,21 @@ def get_axes_from_quaternion(quat):
     return x_axis, y_axis, z_axis
 
 
+class EqualityConstraint(Constraint):
+    def __init__(self, frame_name, pose, eps=1e-3):
+        self.frame_name = frame_name
+        self.constraint_pose = pose
+        self.eps = eps
+
+    def is_fulfilled(self, q: Configuration, env) -> bool:
+        frame_pose = env.get_frame_pose(self.frame_name)
+
+        return np.isclose(frame_pose, self.constraint, self.eps)
+
 class FrameOrientationConstraint(Constraint):
+    """
+    Pose of a single frame.
+    """
     def __init__(self, frame_name, desired_orientation_vector, epsilon):
         self.frame_name = frame_name
         self.desired_orientation_vector = desired_orientation_vector
@@ -231,6 +245,12 @@ class FrameOrientationConstraint(Constraint):
 
 
 class PathConstraint(Constraint):
+    """
+    Describes a constraint that imposes that we move a long a specified path.
+    This is a proxy for a skill.
+
+    Ideally this would have timing/phase information as well, but this is currently not supported by the rest of the framework.
+    """
     def __init__(self, frame_name, path, epsilon):
         self.frame_name = frame_name
         self.path = path
@@ -242,21 +262,44 @@ class PathConstraint(Constraint):
         # find closest element on path
 
         return True
+    
+
+def relative_pose(a, b):
+    """
+    a, b: 7D poses [x, y, z, qw, qx, qy, qz]
+    returns: relative pose b_in_a as [x, y, z, qw, qx, qy, qz]
+    """
+    pa, qa = np.array(a[:3]), np.array(a[3:])
+    pb, qb = np.array(b[:3]), np.array(b[3:])
+
+    # rotation matrices
+    Ra = R.from_quat([qa[1], qa[2], qa[3], qa[0]])  # scipy expects (x,y,z,w)
+    Rb = R.from_quat([qb[1], qb[2], qb[3], qb[0]])
+
+    # relative position
+    prel = Ra.inv().apply(pb - pa)
+
+    # relative orientation
+    qrel = Ra.inv() * Rb
+    qrel = qrel.as_quat()  # (x,y,z,w)
+    qrel = np.array([qrel[3], qrel[0], qrel[1], qrel[2]])  # back to (w,x,y,z)
+
+    return np.concatenate([prel, qrel])
 
 
-class FrameRelativeOrientationConstraint(Constraint):
-    def __init__(self, frame_names: List, relative_pose):
+class FrameRelativePoseConstraint(Constraint):
+    def __init__(self, frame_names: List[str], rel_pose, eps: float=1e-3):
         self.frames = frame_names
-        self.relative_pose = relative_pose
+        self.desired_relative_pose = rel_pose
+        self.eps = eps
 
     def is_fulfilled(self, q, env):
         frame_1_pose = env.get_frame_pose(self.frames[0])
         frame_2_pose = env.get_frame_pose(self.frames[1])
 
-        # TODO: this is very wrong
-        relative_pose = np.zeros(7)
+        rel_pose = relative_pose(frame_1_pose, frame_2_pose)
 
-        return np.isclose(relative_pose, self.relative_pose)
+        return np.isclose(rel_pose, self.desired_relative_pose, self.eps)
 
 
 class Task:
@@ -290,6 +333,7 @@ class Task:
         frames=None,
         side_effect=None,
         side_effect_data=None,
+        constraints = []
     ):
         self.robots = robots
         self.goal = goal
@@ -300,6 +344,8 @@ class Task:
         self.frames = frames
         self.side_effect = side_effect
         self.side_effect_data = side_effect_data
+
+        self.constraints = constraints
 
 
 class Mode:

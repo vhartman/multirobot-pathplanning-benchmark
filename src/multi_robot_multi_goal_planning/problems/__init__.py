@@ -8,6 +8,7 @@ import multi_robot_multi_goal_planning.problems.rai_envs as re
 import multi_robot_multi_goal_planning.problems.rai_single_goal_envs as rsge
 import multi_robot_multi_goal_planning.problems.rai_unordered_envs as rue
 import multi_robot_multi_goal_planning.problems.rai_free_envs as rfe
+import multi_robot_multi_goal_planning.problems.rai_envs_constrained as rec
 
 import multi_robot_multi_goal_planning.problems.abstract_env as ae
 
@@ -145,7 +146,11 @@ def get_all_environments():
         "unassigned": lambda: rfe.rai_two_dim_env(),
         "unassigned_piano": lambda: rfe.rai_unassigned_piano_mover(),
         "unassigned_cleanup": lambda: rfe.rai_unassigned_pile_cleanup(),
-        "unassigned_stacking": lambda: rfe.rai_unassigned_stacking(num_boxes=4, num_robots=4)
+        "unassigned_stacking": lambda: rfe.rai_unassigned_stacking(num_boxes=4, num_robots=4),
+
+
+        ##### Constrained envs
+        "pose_constraint_2d_test": lambda: rec.rai_two_dim_env_relative_pose_constraint()
     }
     # fmt: on
 
