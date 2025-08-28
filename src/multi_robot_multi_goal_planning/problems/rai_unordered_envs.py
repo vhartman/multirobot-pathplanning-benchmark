@@ -152,7 +152,7 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
             [0, 0, 0]
         ).setJoint(ry.JT.rigid)
 
-        self.C.view(True)
+        # self.C.view(True)
 
         self.robots = ["a1", "a2"]
 

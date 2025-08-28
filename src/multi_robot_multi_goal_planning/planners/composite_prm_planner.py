@@ -1569,7 +1569,7 @@ class CompositePRM(BasePlanner):
                         failed_attemps += 1
                         continue
                 else:
-                    # self.env.show()
+                    # self.env.show(False)
                     failed_attemps += 1
                     continue
 
@@ -1656,6 +1656,9 @@ class CompositePRM(BasePlanner):
 
         cnt = 0
         while True:
+            if ptc.should_terminate(cnt, time.time() - start_time):
+                break
+            
             if current_best_path is not None and current_best_cost is not None:
                 # prune
                 num_pts_for_removal = 0
@@ -2037,11 +2040,9 @@ class CompositePRM(BasePlanner):
             if not optimize and current_best_cost is not None:
                 break
 
-            if ptc.should_terminate(cnt, time.time() - start_time):
-                break
-
-        costs.append(costs[-1])
-        times.append(time.time() - start_time)
+        if len(costs) > 0:
+            costs.append(costs[-1])
+            times.append(time.time() - start_time)
 
         info = {"costs": costs, "times": times, "paths": all_paths}
 

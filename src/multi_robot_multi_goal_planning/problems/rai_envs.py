@@ -876,7 +876,7 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
 
 class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate)
+        self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -1757,6 +1757,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
         for r in self.robots:
             robot_gripper_free[r] = True
 
+        assert self.tasks[0].name is not None
         robot_gripper_free[self.tasks[0].name[:3]] = False
         location_is_free = {}
 
@@ -2123,7 +2124,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
 class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 6):
         self.C, keyframes, self.robots = rai_config.make_pyramid_env(
-            num_robots, num_boxes, view=True
+            num_robots, num_boxes, view=False
         )
 
         rai_env.__init__(self)

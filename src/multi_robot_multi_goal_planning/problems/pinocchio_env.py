@@ -91,8 +91,10 @@ class PinocchioEnvironment(BaseProblem):
 
         self.viz = None
 
-        self.collision_tolerance = 0.01
-        self.collision_resolution = 0.01
+        if not hasattr(self, "collision_tolerance"):
+            self.collision_tolerance = 0.00
+        if not hasattr(self, "collision_resolution"):
+            self.collision_resolution = 0.01
 
         self.cost_metric = "euclidean"
         self.cost_reduction = "max"
@@ -901,6 +903,8 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
         robots = ["a1", "a2"]
         root_name = "table_0"
 
+        self.collision_tolerance = 0.01
+
         PinocchioEnvironment.__init__(
             self, model, collision_model, visual_model, start_pos, robots, root_name
         )
@@ -1316,8 +1320,8 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
             ]
         )
 
-        q = NpConfiguration.from_list([q[:6], q[6:]])
-        self.show_config(q)
+        # q = NpConfiguration.from_list([q[:6], q[6:]])
+        # self.show_config(q)
 
         # for j in range(6):
         #     low = model.lowerPositionLimit

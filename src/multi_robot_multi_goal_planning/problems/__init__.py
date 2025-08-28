@@ -3,6 +3,8 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
+from typing import Dict
+
 from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
 
 import multi_robot_multi_goal_planning.problems.rai_envs as re
@@ -14,7 +16,7 @@ import multi_robot_multi_goal_planning.problems.abstract_env as ae
 
 import multi_robot_multi_goal_planning.problems.pinocchio_env as pe
 
-def get_all_environments():
+def get_all_environments() -> Dict:
     # fmt: off
     environment_configs = {
         "abstract_test": lambda: ae.abstract_env_two_dim_middle_obs(),
