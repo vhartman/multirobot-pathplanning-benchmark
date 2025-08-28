@@ -195,6 +195,11 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
+class rai_hold_glass_upright(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_arm_orientation_env()
+        # self.C.view(True)
+
 
 class rai_stacking_with_holding(SequenceMixin, rai_env):
     def __init__(self):
