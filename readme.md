@@ -157,11 +157,6 @@ However, in some applications, this is necessary to e.g. formulate a constraint 
 #### Kinodynamic motion planning
 Similarly as above, the formulation we propose here allows for kinodynamic motion planning, but we do not have a scene at the moment that tests this.
 
-#### More flexible task planning
-In the moment, we only support formulating the task structure as dependency graph or as sequence.
-It would theoretically be possible to use the formulation we propse here to implement and benchmark task and motion planning solvers.
-This would require minor changes in how the starting mode is currently used.
-
 #### C++ implementations of planners
 We noted that the more complex planners (EIT/AIT/sometimes PRM) spend much time in python operations, that should not be the bottleneck of the planner.
 Thus, we feel like it makes sense to port much of this benchmark to cpp.
@@ -172,6 +167,12 @@ This should be somewhat self explanatory: I want to have parallelized (faster) b
 #### More scenarios
 We are currently covering many aspects in multi-arm manipulation/planning, but less so in mobile manipulation.
 Further, more long horizon scenarios would be fun.
+
+#### More planners
+Long horizon tasks and large robot teams are currenly difficult for the planners for the reason that we do plan in composite space over the full horizon.
+While that gives us optimality, and completeness, this makes the planner slow in those settings.
+The prioritized planner already shows what might be possible for a suboptimal planner.
+Some e.g. receding horizon planner that plans in the composite space might be a nice compromise.
 
 <!-- 
 # Citation
