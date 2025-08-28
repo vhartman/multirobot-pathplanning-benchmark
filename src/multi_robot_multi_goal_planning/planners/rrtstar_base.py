@@ -2,7 +2,7 @@ import numpy as np
 import time as time
 import math as math
 import random
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import interpolate_path
+from multi_robot_multi_goal_planning.problems.util import interpolate_path
 from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut, remove_interpolated_nodes
 import os
 import pickle

@@ -1455,10 +1455,10 @@ class CompositePRM(BasePlanner):
     def __init__(
         self,
         env: BaseProblem,
-        config: CompositePRMConfig = field(default_factory=CompositePRMConfig),
+        config: CompositePRMConfig | None = None
     ):
         self.env = env
-        self.config = config
+        self.config = config if config is not None else CompositePRMConfig()
         self.mode_validation = ModeValidation(
             self.env,
             self.config.with_mode_validation,
@@ -1472,8 +1472,8 @@ class CompositePRM(BasePlanner):
 
     def _sample_mode(
         self,
-        reached_modes,
-        graph,
+        reached_modes: List[Mode],
+        graph: MultimodalGraph,
         mode_sampling_type: str = "uniform_reached",
         found_solution: bool = False,
     ) -> Mode:
@@ -1546,7 +1546,7 @@ class CompositePRM(BasePlanner):
         return random.choice(reached_modes)
 
     def _sample_valid_uniform_batch(
-        self, graph, batch_size: int, cost: float | None
+        self, graph: MultimodalGraph, batch_size: int, cost: float | None
     ) -> Tuple[List[State], int]:
         new_samples = []
         num_attempts = 0
@@ -1585,7 +1585,7 @@ class CompositePRM(BasePlanner):
 
         return new_samples, num_attempts
 
-    def _sample_around_path(self, path):
+    def _sample_around_path(self, path: List[State]):
         conf_type = type(self.env.get_start_pos())
 
         interpolated_path = interpolate_path(path)
@@ -1868,7 +1868,7 @@ class CompositePRM(BasePlanner):
 
             return reached_modes
 
-        def get_init_mode_sequence(mode):
+        def get_init_mode_sequence(mode: Mode):
             if self.found_init_mode_sequence:
                 return []
 
@@ -1881,7 +1881,7 @@ class CompositePRM(BasePlanner):
 
             return mode_seq
 
-        def create_initial_mode_sequence(mode):
+        def create_initial_mode_sequence(mode: Mode):
             init_search_modes = [mode]
             self.init_next_ids[mode] = None
 
