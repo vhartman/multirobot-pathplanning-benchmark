@@ -449,7 +449,7 @@ class rai_env(BaseProblem):
 
     def is_collision_free_np(
         self,
-        q: Optional[Configuration],
+        q: Optional[NDArray],
         m: Optional[Mode],
         collision_tolerance: Optional[float] = None,
         set_mode: bool = True,

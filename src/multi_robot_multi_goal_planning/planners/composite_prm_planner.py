@@ -379,7 +379,7 @@ class BucketIndexHeap:
 
         value: Any = self.items[idx]
         return value
-    
+
 
 class DiscreteBucketIndexHeap:
     __slots__ = ["granularity", "queues", "priority_lookup", "items", "len"]
@@ -1231,6 +1231,7 @@ class MultimodalGraph:
 
         return path
 
+
 @dataclass
 class CompositePRMConfig:
     mode_sampling_type: str = "uniform_reached"
@@ -1258,11 +1259,7 @@ class CompositePRMConfig:
 
 
 class CompositePRM(BasePlanner):
-    def __init__(
-        self,
-        env: BaseProblem,
-        config: CompositePRMConfig | None = None
-    ):
+    def __init__(self, env: BaseProblem, config: CompositePRMConfig | None = None):
         self.env = env
         self.config = config if config is not None else CompositePRMConfig()
         self.mode_validation = ModeValidation(
@@ -1348,7 +1345,7 @@ class CompositePRM(BasePlanner):
                     num_nodes += len(graph.transition_nodes[m])
                 w.append(1 / max(1, num_nodes))
             return random.choices(tuple(reached_modes), weights=w)[0]
-        
+
         return random.choice(reached_modes)
 
     def _sample_valid_uniform_batch(
@@ -1369,7 +1366,10 @@ class CompositePRM(BasePlanner):
             # print(len(new_samples))
             # sample mode
             m = self._sample_mode(
-                self.sorted_reached_modes, graph, self.config.mode_sampling_type, cost is not None
+                self.sorted_reached_modes,
+                graph,
+                self.config.mode_sampling_type,
+                cost is not None,
             )
 
             # print(m)
@@ -1390,7 +1390,218 @@ class CompositePRM(BasePlanner):
         print("Percentage of succ. attempts", num_valid / num_attempts)
 
         return new_samples, num_attempts
-    
+
+    # TODO:
+    # - Introduce mode_subset_to_sample
+    # - Fix function below:
+    # -- reduce side-effects
+    # -- introducing specific sampling strategy for 'reached terminal mode, but no solution yet' might help?
+    def sample_valid_uniform_transitions(
+        self,
+        g,
+        transistion_batch_size: int,
+        cost: float | None,
+        reached_modes: Set[Mode],
+    ) -> Set[Mode]:
+        transitions, failed_attemps = 0, 0
+        reached_terminal_mode = False
+
+        # if we did not yet reach the goal mode, sample using the specified initial sampling strategy
+        if len(g.goal_nodes) == 0:
+            mode_sampling_type = self.config.init_mode_sampling_type
+        else:
+            mode_sampling_type = self.config.mode_sampling_type
+
+        # if we already found goal nodes, we construct the focal points of our ellipse
+        if len(g.goal_nodes) > 0:
+            focal_points = np.array(
+                [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
+                dtype=np.float64,
+            )
+
+        # if we reached the goal, but we have not found a path yet, we set reached_terminal_mode to True
+        # reason: only sample the mode sequence that lead us to the terminal mode
+        if cost is None and len(g.goal_nodes) > 0 and self.config.with_mode_validation:
+            reached_terminal_mode = True
+
+        # If sorted_reached_modes is not up to date, update it
+        # I am not sure if this should be happening here -> symptom for other problems?
+        if len(reached_modes) != len(self.sorted_reached_modes):
+            if not reached_terminal_mode:
+                self.sorted_reached_modes = sorted(reached_modes, key=lambda m: m.id)
+
+        # sorted reached modes is mainly for debugging and reproducability
+        mode_subset_to_sample = self.sorted_reached_modes
+
+        while (
+            transitions < transistion_batch_size
+            and failed_attemps < 5 * transistion_batch_size
+        ):
+            # sample mode
+            mode = self._sample_mode(
+                mode_subset_to_sample, g, mode_sampling_type, cost is None
+            )
+
+            # sample transition at the end of this mode
+            if reached_terminal_mode:
+                # init next ids: caches version of next ids
+                next_ids = self.init_next_ids[mode]
+            else:
+                next_ids = self.mode_validation.get_valid_next_ids(mode)
+
+            active_task = self.env.get_active_task(mode, next_ids)
+            constrained_robot = active_task.robots
+            goal_sample = active_task.goal.sample(mode)
+
+            # sample a configuration
+            q = []
+            end_idx = 0
+            for robot in self.env.robots:
+                if robot in constrained_robot:
+                    dim = self.env.robot_dims[robot]
+                    q.append(goal_sample[end_idx : end_idx + dim])
+                    end_idx += dim
+                else:
+                    r_idx = self.env.robot_idx[robot]
+                    lims = self.env.limits[:, r_idx]
+                    q.append(np.random.uniform(lims[0], lims[1]))
+            q = self.env.start_pos.from_list(q)
+
+            # could this transition possibly improve the path?
+            if (
+                cost is not None
+                and sum(self.env.batch_config_cost(q, focal_points)) > cost
+            ):
+                failed_attemps += 1
+                continue
+
+            # check if the transition is collision free
+            if self.env.is_collision_free(q, mode):
+                if self.env.is_terminal_mode(mode):
+                    valid_next_modes = None
+                else:
+                    # we only cache the ones that are in the valid sequence
+                    if reached_terminal_mode:
+                        # we cache the next modes only if they are on the mode path
+                        if mode not in self.init_next_modes:
+                            next_modes = self.env.get_next_modes(q, mode)
+                            valid_next_modes = self.mode_validation.get_valid_modes(
+                                mode, list(next_modes)
+                            )
+                            self.init_next_modes[mode] = valid_next_modes
+
+                        valid_next_modes = self.init_next_modes[mode]
+                    else:
+                        next_modes = self.env.get_next_modes(q, mode)
+                        valid_next_modes = self.mode_validation.get_valid_modes(
+                            mode, list(next_modes)
+                        )
+
+                        assert not (
+                            set(valid_next_modes)
+                            & self.mode_validation.invalid_next_ids.get(mode, set())
+                        ), "There are invalid modes in the 'next_modes'."
+
+                        # if there are no valid next modes, we add this mode to the invalid modes (and remove them from the reached modes)
+                        if valid_next_modes == []:
+                            reached_modes = self.mode_validation.track_invalid_modes(
+                                mode, reached_modes
+                            )
+
+                # if the mode is not (anymore) in the reachable modes, do not add this to the transitions
+                if mode not in reached_modes:
+                    if not reached_terminal_mode:
+                        self.sorted_reached_modes = list(
+                            sorted(reached_modes, key=lambda m: m.id)
+                        )
+                        mode_subset_to_sample = self.sorted_reached_modes
+                    continue
+
+                # add the transition to the graph
+                g.add_transition_nodes([(q, mode, valid_next_modes)])
+
+                # this seems to be a very strange way of checking if the transition was added?
+                # but this seems wrong
+                if (
+                    len(list(chain.from_iterable(g.transition_nodes.values())))
+                    > transitions
+                ):
+                    transitions += 1
+
+                    # if the mode that we added is the root mode with the state being equal to the root state, do not add it
+                    if (
+                        mode == g.root.state.mode
+                        and np.equal(q.state(), g.root.state.q.state()).all()
+                    ):
+                        reached_modes.discard(mode)
+                        self.dummy_start_mode = True
+
+                else:
+                    failed_attemps += 1
+                    continue
+            else:
+                # self.env.show(False)
+                failed_attemps += 1
+                continue
+
+            if valid_next_modes is not None and len(valid_next_modes) > 0:
+                reached_modes.update(valid_next_modes)
+
+            def get_init_mode_sequence(mode: Mode, current_best_cost):
+                if self.found_init_mode_sequence:
+                    return []
+
+                mode_seq = []
+                if current_best_cost is None and len(g.goal_nodes) > 0:
+                    assert self.env.is_terminal_mode(mode)
+
+                    self.found_init_mode_sequence = True
+                    mode_seq = create_initial_mode_sequence(mode)
+
+                return mode_seq
+
+            def create_initial_mode_sequence(mode: Mode):
+                init_search_modes = [mode]
+                self.init_next_ids[mode] = None
+
+                # go through the chain of modes that lead us to this mode.
+                while True:
+                    prev_mode = mode.prev_mode
+                    if prev_mode is not None:
+                        init_search_modes.append(prev_mode)
+                        self.init_next_ids[prev_mode] = mode.task_ids
+                        mode = prev_mode
+                    else:
+                        break
+
+                init_search_modes = init_search_modes[::-1]
+
+                if self.dummy_start_mode and init_search_modes[0] == g.root.state.mode:
+                    init_search_modes = init_search_modes[1:]
+
+                return init_search_modes
+
+            # This is called exactly once: when we reach the terminal mode
+            init_mode_seq = get_init_mode_sequence(mode, cost)
+            if init_mode_seq and self.config.with_mode_validation:
+                mode_subset_to_sample = init_mode_seq
+
+                # We override sorted_reached modes for the moment, since this is used as the set we sample from
+                self.sorted_reached_modes = mode_subset_to_sample
+
+                reached_terminal_mode = True
+                mode_sampling_type = self.config.mode_sampling_type
+            elif len(reached_modes) != len(self.sorted_reached_modes):
+                if not reached_terminal_mode:
+                    self.sorted_reached_modes = list(
+                        sorted(reached_modes, key=lambda m: m.id)
+                    )
+                    mode_subset_to_sample = self.sorted_reached_modes
+
+        print(f"Adding {transitions} transitions")
+        print(self.mode_validation.counter)
+
+        return reached_modes
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def plan(
@@ -1407,230 +1618,12 @@ class CompositePRM(BasePlanner):
         reached_modes = set([m0])
         self.sorted_reached_modes = list(sorted(reached_modes, key=lambda m: m.id))
 
-        conf_type = type(self.env.get_start_pos())
         informed = InformedSampling(
             self.env,
             "graph_based",
             self.config.locally_informed_sampling,
             include_lb=self.config.inlcude_lb_in_informed_sampling,
         )
-
-        # TODO:
-        # - Introduce mode_subset_to_sample
-        # - Fix function below:
-        # -- reduce side-effects
-        # -- introducing specific sampling strategy for 'reached terminal mode, but no solution yet' might help?
-
-        def sample_valid_uniform_transitions(
-            transistion_batch_size: int, cost: float | None, reached_modes: Set[Mode]
-        ) -> Set[Mode]:
-            transitions, failed_attemps = 0, 0
-            reached_terminal_mode = False
-
-            # if we did not yet reach the goal mode, sample using the specified initial sampling strategy
-            if len(g.goal_nodes) == 0:
-                mode_sampling_type = self.config.init_mode_sampling_type
-            else:
-                mode_sampling_type = self.config.mode_sampling_type
-
-            # if we already found goal nodes, we construct the focal points of our ellipse
-            if len(g.goal_nodes) > 0:
-                focal_points = np.array(
-                    [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
-                    dtype=np.float64,
-                )
-
-            # if we reached the goal, but we have not found a path yet, we set reached_terminal_mode to True
-            # reason: only sample the mode sequence that lead us to the terminal mode
-            if (
-                cost is None
-                and len(g.goal_nodes) > 0
-                and self.config.with_mode_validation
-            ):
-                reached_terminal_mode = True
-
-            # If sorted_reached_modes is not up to date, update it
-            # I am not sure if this should be happening here -> symptom for other problems?
-            if len(reached_modes) != len(self.sorted_reached_modes):
-                if not reached_terminal_mode:
-                    self.sorted_reached_modes = sorted(
-                        reached_modes, key=lambda m: m.id
-                    )
-
-            # sorted reached modes is mainly for debugging and reproducability
-            mode_subset_to_sample = self.sorted_reached_modes
-
-            while (
-                transitions < transistion_batch_size
-                and failed_attemps < 5 * transistion_batch_size
-            ):
-                # sample mode
-                mode = self._sample_mode(
-                    mode_subset_to_sample, g, mode_sampling_type, cost is None
-                )
-
-                # sample transition at the end of this mode
-                if reached_terminal_mode:
-                    # init next ids: caches version of next ids
-                    next_ids = self.init_next_ids[mode]
-                else:
-                    next_ids = self.mode_validation.get_valid_next_ids(mode)
-
-                active_task = self.env.get_active_task(mode, next_ids)
-                constrained_robot = active_task.robots
-                goal_sample = active_task.goal.sample(mode)
-
-                # sample a configuration
-                q = []
-                end_idx = 0
-                for robot in self.env.robots:
-                    if robot in constrained_robot:
-                        dim = self.env.robot_dims[robot]
-                        q.append(goal_sample[end_idx : end_idx + dim])
-                        end_idx += dim
-                    else:
-                        r_idx = self.env.robot_idx[robot]
-                        lims = self.env.limits[:, r_idx]
-                        q.append(np.random.uniform(lims[0], lims[1]))
-                q = conf_type.from_list(q)
-
-                # could this transition possibly improve the path?
-                if (
-                    cost is not None
-                    and sum(self.env.batch_config_cost(q, focal_points)) > cost
-                ):
-                    failed_attemps += 1
-                    continue
-
-                # check if the transition is collision free
-                if self.env.is_collision_free(q, mode):
-                    if self.env.is_terminal_mode(mode):
-                        valid_next_modes = None
-                    else:
-                        # we only cache the ones that are in the valid sequence
-                        if reached_terminal_mode:
-                            # we cache the next modes only if they are on the mode path
-                            if mode not in self.init_next_modes:
-                                next_modes = self.env.get_next_modes(q, mode)
-                                valid_next_modes = self.mode_validation.get_valid_modes(
-                                    mode, list(next_modes)
-                                )
-                                self.init_next_modes[mode] = valid_next_modes
-
-                            valid_next_modes = self.init_next_modes[mode]
-                        else:
-                            next_modes = self.env.get_next_modes(q, mode)
-                            valid_next_modes = self.mode_validation.get_valid_modes(
-                                mode, list(next_modes)
-                            )
-
-                            assert not (
-                                set(valid_next_modes)
-                                & self.mode_validation.invalid_next_ids.get(mode, set())
-                            ), "There are invalid modes in the 'next_modes'."
-
-                            # if there are no valid next modes, we add this mode to the invalid modes (and remove them from the reached modes)
-                            if valid_next_modes == []:
-                                reached_modes = (
-                                    self.mode_validation.track_invalid_modes(
-                                        mode, reached_modes
-                                    )
-                                )
-
-                    # if the mode is not (anymore) in the reachable modes, do not add this to the transitions
-                    if mode not in reached_modes:
-                        if not reached_terminal_mode:
-                            self.sorted_reached_modes = list(
-                                sorted(reached_modes, key=lambda m: m.id)
-                            )
-                            mode_subset_to_sample = self.sorted_reached_modes
-                        continue
-
-                    # add the transition to the graph
-                    g.add_transition_nodes([(q, mode, valid_next_modes)])
-
-                    # this seems to be a very strange way of checking if the transition was added?
-                    # but this seems wrong
-                    if (
-                        len(list(chain.from_iterable(g.transition_nodes.values())))
-                        > transitions
-                    ):
-                        transitions += 1
-
-                        # if the mode that we added is the root mode with the state being equal to the root state, do not add it
-                        if (
-                            mode == g.root.state.mode
-                            and np.equal(q.state(), g.root.state.q.state()).all()
-                        ):
-                            reached_modes.discard(mode)
-                            self.dummy_start_mode = True
-
-                    else:
-                        failed_attemps += 1
-                        continue
-                else:
-                    # self.env.show(False)
-                    failed_attemps += 1
-                    continue
-
-                if valid_next_modes is not None and len(valid_next_modes) > 0:
-                    reached_modes.update(valid_next_modes)
-
-                # This is called exactly once: when we reach the terminal mode
-                init_mode_seq = get_init_mode_sequence(mode)
-                if init_mode_seq and self.config.with_mode_validation:
-                    mode_subset_to_sample = init_mode_seq
-
-                    # We override sorted_reached modes for the moment, since this is used as the set we sample from
-                    self.sorted_reached_modes = mode_subset_to_sample
-
-                    reached_terminal_mode = True
-                    mode_sampling_type = self.config.mode_sampling_type
-                elif len(reached_modes) != len(self.sorted_reached_modes):
-                    if not reached_terminal_mode:
-                        self.sorted_reached_modes = list(
-                            sorted(reached_modes, key=lambda m: m.id)
-                        )
-                        mode_subset_to_sample = self.sorted_reached_modes
-
-            print(f"Adding {transitions} transitions")
-            print(self.mode_validation.counter)
-
-            return reached_modes
-
-        def get_init_mode_sequence(mode: Mode):
-            if self.found_init_mode_sequence:
-                return []
-
-            mode_seq = []
-            if current_best_cost is None and len(g.goal_nodes) > 0:
-                assert self.env.is_terminal_mode(mode)
-
-                self.found_init_mode_sequence = True
-                mode_seq = create_initial_mode_sequence(mode)
-
-            return mode_seq
-
-        def create_initial_mode_sequence(mode: Mode):
-            init_search_modes = [mode]
-            self.init_next_ids[mode] = None
-
-            # go through the chain of modes that lead us to this mode.
-            while True:
-                prev_mode = mode.prev_mode
-                if prev_mode is not None:
-                    init_search_modes.append(prev_mode)
-                    self.init_next_ids[prev_mode] = mode.task_ids
-                    mode = prev_mode
-                else:
-                    break
-
-            init_search_modes = init_search_modes[::-1]
-
-            if self.dummy_start_mode and init_search_modes[0] == g.root.state.mode:
-                init_search_modes = init_search_modes[1:]
-
-            return init_search_modes
 
         g = MultimodalGraph(
             State(q0, m0),
@@ -1658,7 +1651,7 @@ class CompositePRM(BasePlanner):
         while True:
             if ptc.should_terminate(cnt, time.time() - start_time):
                 break
-            
+
             if current_best_path is not None and current_best_cost is not None:
                 # prune
                 num_pts_for_removal = 0
@@ -1753,7 +1746,8 @@ class CompositePRM(BasePlanner):
 
                 # if self.env.terminal_mode not in reached_modes:
                 print("Sampling transitions")
-                reached_modes = sample_valid_uniform_transitions(
+                reached_modes = self.sample_valid_uniform_transitions(
+                    g,
                     transistion_batch_size=effective_uniform_transition_batch_size,
                     cost=current_best_cost,
                     reached_modes=reached_modes,
@@ -1974,7 +1968,7 @@ class CompositePRM(BasePlanner):
                                     resolution=self.env.collision_resolution,
                                     tolerance=self.env.collision_tolerance,
                                     robot_choice=self.config.shortcutting_mode,
-                                    interpolation_resolution=self.config.shortcutting_interpolation_resolution
+                                    interpolation_resolution=self.config.shortcutting_interpolation_resolution,
                                 )
 
                                 shortcut_path = shortcutting.remove_interpolated_nodes(
