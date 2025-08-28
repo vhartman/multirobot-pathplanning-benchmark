@@ -158,11 +158,14 @@ However, in some applications, this is necessary to e.g. formulate a constraint 
 Similarly as above, the formulation we propose here allows for kinodynamic motion planning, but we do not have a scene at the moment that tests this.
 
 #### C++ implementations of planners
-We noted that the more complex planners (EIT/AIT/sometimes PRM) spend much time in python operations, that should not be the bottleneck of the planner.
+We noted that the more complex planners (EIT/AIT/sometimes PRM) spend much time in python operations.
+Ideally those types of operations should not be the bottleneck of the planner.
 Thus, we feel like it makes sense to port much of this benchmark to cpp.
 
 #### More backends
-This should be somewhat self explanatory: I want to have parallelized (faster) backends for collision checking.
+This should be somewhat self explanatory: I want to have parallelized (faster) backends for collision checking. 
+Warp seems promising, Mujoco MJX, or Genesis also seem fun.
+I assume tht much of the python bottleneck would become worse in those settings, if the collision checking is not the bottleneck anymore.
 
 #### More scenarios
 We are currently covering many aspects in multi-arm manipulation/planning, but less so in mobile manipulation.

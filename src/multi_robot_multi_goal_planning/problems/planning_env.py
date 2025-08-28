@@ -1973,8 +1973,9 @@ class BaseProblem(ABC):
                 if not self.is_collision_free(q1, mode):
                     return False
             
-            if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
-                return False
+            # print('end', path[-1].q.state())
+            # if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
+            #     return False
             
             # check whole edge
             for i in idx:

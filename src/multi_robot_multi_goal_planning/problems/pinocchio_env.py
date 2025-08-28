@@ -986,6 +986,8 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
         root_name = "table_0"
         robots = ["a1", "a2"]
 
+        self.collision_tolerance = 0.01
+
         PinocchioEnvironment.__init__(
             self, model, collision_model, visual_model, start_pos, robots, root_name
         )

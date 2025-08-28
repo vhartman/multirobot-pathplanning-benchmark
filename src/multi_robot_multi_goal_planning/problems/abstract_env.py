@@ -345,9 +345,10 @@ class AbstractEnvironment(BaseProblem):
         return True
 
     def set_to_mode(self, m: List[int]):
-        return
-
-        raise NotImplementedError("This is not supported for this environment.")
+        if not self.manipulating_env:
+            return
+        else:
+            raise NotImplementedError("This is not supported for this environment.")
 
 
 def make_middle_obstacle_n_dim_env(dim=2):
