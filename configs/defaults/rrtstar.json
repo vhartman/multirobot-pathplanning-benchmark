@@ -9,7 +9,6 @@
     "shortcutting": true,
     "init_mode_sampling_type": "frontier",
     "frontier_mode_sampling_probability": 0.98,
-    "sample_near_path": false,
     "locally_informed_sampling": true,
     "informed_batch_size": 300,
     "remove_redundant_nodes": true,

@@ -2319,7 +2319,6 @@ class BaseLongHorizon:
 class BaseITConfig:
     init_mode_sampling_type: str = "greedy"
     distance_metric: str = "euclidean"
-    try_sampling_around_path: bool = False
     try_informed_sampling: bool = True
     init_uniform_batch_size: int = 150
     init_transition_batch_size: int = 50
@@ -2327,7 +2326,6 @@ class BaseITConfig:
     uniform_transition_batch_size: int = 50
     informed_batch_size: int = 350
     informed_transition_batch_size: int = 250
-    path_batch_size: int = 0
     locally_informed_sampling: bool = True
     try_informed_transitions: bool = True
     try_shortcutting: bool = True
@@ -2811,91 +2809,6 @@ class BaseITstar(BasePlanner):
         self.sorted_reached_modes = self.init_search_modes
         print(self.sorted_reached_modes)
 
-    def sample_around_path(self, path: List[State]) -> Tuple[List[State], List[Tuple]]:
-        """
-        Samples new states and transitions around a given path by adding noise to configurations.
-
-        Args:
-            path (List[State]): The reference path to sample around.
-
-        Returns:
-            Tuple[List[State], List[Tuple]]:
-                - List of new State objects sampled around the path.
-                - List of new transition tuples (q, mode, next_mode) sampled around transitions in the path.
-        """
-        # sample index
-        interpolated_path = interpolate_path(path)
-        # interpolated_path = current_best_path
-        new_states_from_path_sampling = []
-        new_transitions_from_path_sampling = []
-        for _ in range(200):
-            idx = random.randint(0, len(interpolated_path) - 2)
-            state = interpolated_path[idx]
-
-            # this is a transition. we would need to figure out which robots are active and not sample those
-            q = []
-            if (
-                state.mode != interpolated_path[idx + 1].mode
-                and np.linalg.norm(
-                    state.q.state() - interpolated_path[idx + 1].q.state()
-                )
-                < 1e-5
-            ):
-                next_task_ids = interpolated_path[idx + 1].mode.task_ids
-
-                # TODO: this seems to move transitions around
-                task = self.env.get_active_task(state.mode, next_task_ids)
-                involved_robots = task.robots
-                for i in range(len(self.env.robots)):
-                    r = self.env.robots[i]
-                    if r in involved_robots:
-                        qr = state.q[i] * 1.0
-                    else:
-                        qr_mean = state.q[i] * 1.0
-
-                        qr = np.random.rand(len(qr_mean)) * 0.2 + qr_mean
-
-                        lims = self.env.limits[:, self.env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = np.clip(qr, lims[0, :], lims[1, :])
-
-                    q.append(qr)
-
-                q = self.conf_type.from_list(q)
-
-                if self.env.is_collision_free(q, state.mode):
-                    new_transitions_from_path_sampling.append(
-                        (q, state.mode, interpolated_path[idx + 1].mode)
-                    )
-
-            else:
-                for i in range(len(self.env.robots)):
-                    r = self.env.robots[i]
-                    qr_mean = state.q[i]
-
-                    qr = np.random.rand(len(qr_mean)) * 0.2 + qr_mean
-
-                    lims = self.env.limits[:, self.env.robot_idx[r]]
-                    if lims[0, 0] < lims[1, 0]:
-                        qr = np.clip(qr, lims[0, :], lims[1, :])
-
-                    q.append(qr)
-
-                q = self.conf_type.from_list(q)
-
-                if self.env.is_collision_free(q, state.mode):
-                    rnd_state = State(q, state.mode)
-                    new_states_from_path_sampling.append(rnd_state)
-
-        # fig = plt.figure()
-        # ax = fig.add_subplot(projection='3d')
-        # ax.scatter([a.q[0][0] for a in new_states_from_path_sampling], [a.q[0][1] for a in new_states_from_path_sampling], [a.q[0][2] for a in new_states_from_path_sampling])
-        # ax.scatter([a.q[1][0] for a in new_states_from_path_sampling], [a.q[1][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
-        # ax.scatter([a.q[2][0] for a in new_states_from_path_sampling], [a.q[2][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
-        # plt.show()
-
-        return new_states_from_path_sampling, new_transitions_from_path_sampling
-
     def add_sample_batch(self) -> None:
         """
         Adds a new batch of nodes and transitions to the graph, including uniform, informed, and path-based samples.
@@ -3024,21 +2937,6 @@ class BaseITstar(BasePlanner):
 
                     # g.compute_lb_cost_to_go(self.env.batch_config_cost)
                     # g.compute_lower_bound_from_start(self.env.batch_config_cost)
-
-            if (
-                self.config.try_sampling_around_path
-                and self.current_best_path is not None
-            ):
-                print("Sampling around path")
-                path_samples, path_transitions = self.sample_around_path(
-                    self.current_best_path
-                )
-
-                self.g.add_states(path_samples)
-                print(f"Adding {len(path_samples)} path samples")
-
-                self.g.add_transition_nodes(path_transitions)
-                print(f"Adding {len(path_transitions)} path transitions")
 
             if len(self.g.goal_nodes) != 0:
                 break

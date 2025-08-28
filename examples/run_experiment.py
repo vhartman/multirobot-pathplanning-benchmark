@@ -163,7 +163,6 @@ def setup_planner(
             prm_config = CompositePRMConfig(
                 # Map dictionary keys to dataclass attributes
                 distance_metric=options["distance_metric"],
-                try_sampling_around_path=options["sample_near_path"],
                 use_k_nearest=options["connection_strategy"] == "k_nearest",
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],
@@ -173,7 +172,6 @@ def setup_planner(
                 informed_transition_batch_size=options[
                     "informed_transition_batch_size"
                 ],
-                path_batch_size=options["path_batch_size"],
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
@@ -215,7 +213,6 @@ def setup_planner(
                 ],
                 locally_informed_sampling=options["locally_informed_sampling"],
                 informed_batch_size=options["informed_batch_size"],
-                sample_near_path=options["sample_near_path"],
                 remove_redundant_nodes=options["remove_redundant_nodes"],
                 apply_long_horizon=options["apply_long_horizon"],
                 horizon_length=options["horizon_length"],
@@ -245,7 +242,6 @@ def setup_planner(
                     "frontier_mode_sampling_probability"
                 ],
                 locally_informed_sampling=options["locally_informed_sampling"],
-                sample_near_path=options["sample_near_path"],
                 transition_nodes=options["transition_nodes"],
                 birrtstar_version=options["birrtstar_version"],
                 informed_batch_size=options["informed_batch_size"],
@@ -268,7 +264,6 @@ def setup_planner(
             aitstar_config = BaseITConfig(
                 init_mode_sampling_type=options["init_mode_sampling_type"],
                 distance_metric=options["distance_metric"],
-                try_sampling_around_path=options["sample_near_path"],
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],
                 init_uniform_batch_size=options["init_uniform_batch_size"],
@@ -279,7 +274,6 @@ def setup_planner(
                 informed_transition_batch_size=options[
                     "informed_transition_batch_size"
                 ],
-                path_batch_size=options["path_batch_size"],
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],
@@ -308,7 +302,6 @@ def setup_planner(
             eitstar_config = BaseITConfig(
                 init_mode_sampling_type=options["init_mode_sampling_type"],
                 distance_metric=options["distance_metric"],
-                try_sampling_around_path=options["sample_near_path"],
                 try_informed_sampling=options["informed_sampling"],
                 try_informed_transitions=options["informed_transition_sampling"],
                 init_uniform_batch_size=options["init_uniform_batch_size"],
@@ -319,7 +312,6 @@ def setup_planner(
                 informed_transition_batch_size=options[
                     "informed_transition_batch_size"
                 ],
-                path_batch_size=options["path_batch_size"],
                 locally_informed_sampling=options["locally_informed_sampling"],
                 try_shortcutting=options["shortcutting"],
                 try_direct_informed_sampling=options["direct_informed_sampling"],

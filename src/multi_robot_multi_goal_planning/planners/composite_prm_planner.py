@@ -379,56 +379,7 @@ class BucketIndexHeap:
 
         value: Any = self.items[idx]
         return value
-
-
-# class DiscreteBucketIndexHeap:
-#     def __init__(self, granularity=1000):
-#         self.granularity = granularity
-
-#         self.queues = {}
-#         self.priority_lookup = []
-
-#         self.items = []
-
-#         self.len = 0
-
-#     def __len__(self):
-#         # num_elements = 0
-#         # for k, v in self.queues.items():
-#         #     num_elements += len(v)
-
-#         # return num_elements
-#         return self.len
-
-#     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-#     def heappush(self, item):
-#         self.len += 1
-#         priority = int(item[0] * self.granularity)
-
-#         idx = len(self.items)
-#         self.items.append(item)
-
-#         if priority not in self.queues:
-#             self.queues[priority] = []
-#             heapq.heappush(self.priority_lookup, priority)
-
-#         self.queues[priority].append((item[0], idx))
-
-#     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
-#     def heappop(self):
-#         self.len -= 1
-
-#         min_priority = self.priority_lookup[0]
-#         _, idx = self.queues[min_priority].pop()
-
-#         if not self.queues[min_priority]:
-#             del self.queues[min_priority]
-#             heapq.heappop(self.priority_lookup)
-
-#         value = self.items[idx]
-
-#         return value
-
+    
 
 class DiscreteBucketIndexHeap:
     __slots__ = ["granularity", "queues", "priority_lookup", "items", "len"]
@@ -1280,161 +1231,16 @@ class MultimodalGraph:
 
         return path
 
-    def search_with_vertex_queue(
-        self,
-        start_node: Node,
-        goal_nodes: List[Node],
-        env: BaseProblem,
-        best_cost: Optional[float] = None,
-        resolution: float = 0.1,
-        approximate_space_extent: float | None = None,
-    ) -> List[Node]:
-        open_queue = []
-
-        goal = None
-
-        h_cache = {}
-
-        def h(node):
-            # return 0
-            if node.id in h_cache:
-                return h_cache[node.id]
-
-            if node.state.mode not in self.transition_node_array_cache:
-                self.transition_node_array_cache[node.state.mode] = np.array(
-                    [n.state.q.q for n in self.transition_nodes[node.state.mode]],
-                    dtype=np.float64,
-                )
-
-            if node.state.mode not in self.transition_node_lb_cache:
-                self.transition_node_lb_cache[node.state.mode] = np.array(
-                    [n.lb_cost_to_goal for n in self.transition_nodes[node.state.mode]],
-                    dtype=np.float64,
-                )
-
-            costs_to_transitions = env.batch_config_cost(
-                node.state.q,
-                self.transition_node_array_cache[node.state.mode],
-            )
-
-            min_cost = np.min(
-                self.transition_node_lb_cache[node.state.mode] - costs_to_transitions
-            )
-
-            h_cache[node.id] = min_cost
-            return min_cost
-
-        def d(n0, n1):
-            # return 1.0
-            cost = env.config_cost(n0.state.q, n1.state.q)
-            return cost
-
-        parents = {start_node: None}
-        gs = {start_node: 0.0}  # best cost to get to a node
-
-        # populate open_queue and fs
-
-        # fs = {start_node: h(start_node)}  # total cost of a node (f = g + h)
-        heapq.heappush(open_queue, (0, start_node))
-
-        num_iter = 0
-        while open_queue:
-            num_iter += 1
-
-            if num_iter % 1000 == 0:
-                print(len(open_queue))
-
-            f_val, node = heapq.heappop(open_queue)
-            # print('g:', v)
-
-            # print(num_iter, len(open_queue))
-
-            # if n0.state.mode == [0, 3]:
-            #     env.show(True)
-
-            if node in goal_nodes:
-                goal = node
-                break
-
-            # get_neighbors
-            neighbors, tmp = self.get_neighbors(
-                node, space_extent=approximate_space_extent
-            )
-
-            edge_costs = env.batch_config_cost(node.state.q, tmp)
-            # add neighbors to open_queue
-            for i, n in enumerate(neighbors):
-                if n == node:
-                    continue
-
-                if node.id in n.blacklist:
-                    continue
-
-                g_new = gs[node] + edge_costs[i]
-
-                if n not in gs or g_new < gs[n]:
-                    # collision check
-
-                    collision_free = False
-                    if n.id in node.whitelist:
-                        collision_free = True
-                    else:
-                        if n.id in node.blacklist:
-                            continue
-
-                        collision_free = env.is_edge_collision_free(
-                            node.state.q, n.state.q, n.state.mode, resolution=0.1
-                        )
-
-                        if not collision_free:
-                            node.blacklist.add(n.id)
-                            n.blacklist.add(node.id)
-                            continue
-                        # else:
-                        #     node.whitelist.add(n.id)
-                        #     n.whitelist.add(node.id)
-
-                    # cost to get to neighbor:
-                    gs[n] = g_new
-                    cost = g_new + h(n)
-                    parents[n] = node
-
-                    if best_cost is not None and cost > best_cost:
-                        continue
-
-                    # if n not in open_queue:
-                    heapq.heappush(open_queue, (cost, n))
-
-        path = []
-
-        if goal is not None:
-            path.append(goal)
-
-            n = goal
-
-            while n is not None and parents[n] is not None:
-                path.append(parents[n])
-                n = parents[n]
-
-            path.append(n)
-
-            path = path[::-1]
-
-        return path
-
-
 @dataclass
 class CompositePRMConfig:
     mode_sampling_type: str = "uniform_reached"
     distance_metric: str = "max_euclidean"
-    try_sampling_around_path: bool = False
     use_k_nearest: bool = False
     try_informed_sampling: bool = True
     uniform_batch_size: int = 200
     uniform_transition_batch_size: int = 500
     informed_batch_size: int = 500
     informed_transition_batch_size: int = 500
-    path_batch_size: int = 500
     locally_informed_sampling: bool = True
     try_informed_transitions: bool = True
     try_shortcutting: bool = True
@@ -1584,83 +1390,7 @@ class CompositePRM(BasePlanner):
         print("Percentage of succ. attempts", num_valid / num_attempts)
 
         return new_samples, num_attempts
-
-    def _sample_around_path(self, path: List[State]):
-        conf_type = type(self.env.get_start_pos())
-
-        interpolated_path = interpolate_path(path)
-
-        new_states_from_path_sampling = []
-        new_transitions_from_path_sampling = []
-
-        for _ in range(self.config.path_batch_size):
-            # sample index
-            idx = random.randint(0, len(interpolated_path) - 2)
-            state = interpolated_path[idx]
-
-            # this is a transition. we would need to figure out which robots are active and not sample those
-            q = []
-            if (
-                state.mode != interpolated_path[idx + 1].mode
-                and np.linalg.norm(
-                    state.q.state() - interpolated_path[idx + 1].q.state()
-                )
-                < 1e-5
-            ):
-                next_task_ids = interpolated_path[idx + 1].mode.task_ids
-
-                # TODO: this seems to move transitions around
-                task = self.env.get_active_task(state.mode, next_task_ids)
-                involved_robots = task.robots
-                for i in range(len(self.env.robots)):
-                    r = self.env.robots[i]
-                    if r in involved_robots:
-                        qr = state.q[i] * 1.0
-                    else:
-                        qr_mean = state.q[i] * 1.0
-
-                        qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
-
-                        lims = self.env.limits[:, self.env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = np.clip(qr, lims[0, :], lims[1, :])
-
-                    q.append(qr)
-
-                q = conf_type.from_list(q)
-
-                if self.env.is_collision_free(q, state.mode):
-                    new_transitions_from_path_sampling.append(
-                        (q, state.mode, interpolated_path[idx + 1].mode)
-                    )
-
-            else:
-                for i in range(len(self.env.robots)):
-                    r = self.env.robots[i]
-                    qr_mean = state.q[i]
-
-                    qr = np.random.rand(len(qr_mean)) * 0.5 + qr_mean
-
-                    lims = self.env.limits[:, self.env.robot_idx[r]]
-                    if lims[0, 0] < lims[1, 0]:
-                        qr = np.clip(qr, lims[0, :], lims[1, :])
-
-                    q.append(qr)
-
-                q = conf_type.from_list(q)
-
-                if self.env.is_collision_free(q, state.mode):
-                    rnd_state = State(q, state.mode)
-                    new_states_from_path_sampling.append(rnd_state)
-
-        # fig = plt.figure()
-        # ax = fig.add_subplot(projection='3d')
-        # ax.scatter([a.q[0][0] for a in new_states_from_path_sampling], [a.q[0][1] for a in new_states_from_path_sampling], [a.q[0][2] for a in new_states_from_path_sampling])
-        # ax.scatter([a.q[1][0] for a in new_states_from_path_sampling], [a.q[1][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
-        # ax.scatter([a.q[2][0] for a in new_states_from_path_sampling], [a.q[2][1] for a in new_states_from_path_sampling], [a.q[1][2] for a in new_states_from_path_sampling])
-        # plt.show()
-
-        return new_states_from_path_sampling, new_transitions_from_path_sampling
+    
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def plan(
@@ -2106,21 +1836,6 @@ class CompositePRM(BasePlanner):
                         # g.compute_lower_bound_to_goal(self.env.batch_config_cost)
                         # g.compute_lower_bound_from_start(self.env.batch_config_cost)
 
-                if (
-                    self.config.try_sampling_around_path
-                    and current_best_path is not None
-                ):
-                    print("Sampling around path")
-                    path_samples, path_transitions = self._sample_around_path(
-                        current_best_path
-                    )
-
-                    g.add_states(path_samples)
-                    print(f"Adding {len(path_samples)} path samples")
-
-                    g.add_transition_nodes(path_transitions)
-                    print(f"Adding {len(path_transitions)} path transitions")
-
                 g.compute_lower_bound_to_goal(
                     self.env.batch_config_cost, current_best_cost
                 )
@@ -2182,11 +1897,7 @@ class CompositePRM(BasePlanner):
                     approximate_space_extent,
                 )
 
-                # sparsely_checked_path = g.search_with_vertex_queue(
-                #     g.root, g.goal_nodes, env, current_best_cost, resolution, approximate_space_extent
-                # )
-
-                # 2. in case this found a path, search with dense check from the other side
+                # in case this found a path, search with dense check from the other side
                 if sparsely_checked_path:
                     add_new_batch = False
 

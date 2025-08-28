@@ -499,7 +499,6 @@ class BaseRRTConfig:
     init_mode_sampling_type: str = "frontier"
     frontier_mode_sampling_probability: float = 0.98
     
-    sample_near_path: bool = False
     remove_redundant_nodes: bool = True
     apply_long_horizon: bool = False
     horizon_length: int = 1
@@ -1037,18 +1036,6 @@ class BaseRRTstar(BasePlanner):
             if attemps > 100:  # if home pose causes failed attemps
                 return
 
-    def _sample_near_path(self, mode: Mode):
-        while True:
-            path_state = np.random.choice(self.operation.path)
-            standard_deviation = np.random.uniform(0, 5.0)
-            # standar_deviation = 0.5
-            noise = np.random.normal(0, standard_deviation, path_state.q.state().shape)
-
-            q = self.env.get_start_pos().from_flat(path_state.q.state() + noise)
-
-            if self.env.is_collision_free(q, mode):
-                return q
-
     def _sample_uniform(self, mode: Mode):
         while True:
             q = self.env.sample_config_uniform_in_limits()
@@ -1570,10 +1557,6 @@ class BaseRRTstar(BasePlanner):
         if self.config.informed_sampling and self.operation.init_sol:
             # informed_sampling
             return self.sample_informed(mode)
-
-        # gaussian sampling near the path
-        if self.config.sample_near_path and self.operation.init_sol:
-            return self._sample_near_path(mode)
 
         # uniform sampling
         return self._sample_uniform(mode)
