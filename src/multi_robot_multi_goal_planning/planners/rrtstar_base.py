@@ -526,7 +526,6 @@ class BaseRRTstar(BasePlanner):
             self.eta = np.sqrt(self.dim)
             
         self.operation = Operation()
-        self.start_single_goal = SingleGoal(self.env.start_pos.q)
         self.modes = []
         self.trees = {}
         self.transition_node_ids = {}
@@ -986,48 +985,6 @@ class BaseRRTstar(BasePlanner):
                 q = type(self.env.get_start_pos()).from_list(q_noise)
                 if self.env.is_collision_free(q, mode):
                     return q
-
-    def sample_home_pose(
-        self,
-        mode: Mode,
-    ):
-        next_ids = self.mode_validation.get_valid_next_ids(mode)
-        if not next_ids and not self.env.is_terminal_mode(mode):
-            return
-
-        constrained_robots = self.env.get_active_task(mode, next_ids).robots
-        attemps = 0  # needed if home poses are in collision
-
-        q_home = self.get_home_poses(mode)
-
-        while True:
-            attemps += 1
-
-            q = []
-            for robot in self.env.robots:
-                r_idx = self.env.robots.index(robot)
-                if (
-                    robot not in constrained_robots
-                ):  # can cause problems if several robots are not constrained and their home poses are in collision
-                    q.append(q_home[r_idx])
-                    continue
-
-                if np.array_equal(
-                    self.get_task_goal_of_agent(mode, robot), q_home[r_idx]
-                ):
-                    if np.random.uniform(0, 1) > self.config.p_goal:  # goal sampling
-                        q.append(q_home[r_idx])
-                        continue
-
-                lims = self.env.limits[:, self.env.robot_idx[robot]]
-                q.append(np.random.uniform(lims[0], lims[1]))
-
-            q = type(self.env.get_start_pos()).from_list(q)
-            if self.env.is_collision_free(q, mode):
-                return q
-
-            if attemps > 100:  # if home pose causes failed attemps
-                return
 
     def _sample_uniform(self, mode: Mode):
         while True:

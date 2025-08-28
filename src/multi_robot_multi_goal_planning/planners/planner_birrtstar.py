@@ -24,11 +24,6 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 )
 
 
-@njit
-def compute_child_costs(parent_cost, cost_to_parents):
-    return parent_cost + cost_to_parents
-
-
 class BidirectionalRRTstar(BaseRRTstar):
     """Represents the class for the Bidirectional RRT* based planner"""
 
@@ -84,7 +79,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
-            
+
             # Initialize transition nodes
             node = None
             for i in range(self.config.transition_nodes):
