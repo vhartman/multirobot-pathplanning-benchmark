@@ -27,7 +27,6 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
-    batch_config_dist,
 )
 from multi_robot_multi_goal_planning.planners.rrtstar_base import (
     find_nearest_indices,

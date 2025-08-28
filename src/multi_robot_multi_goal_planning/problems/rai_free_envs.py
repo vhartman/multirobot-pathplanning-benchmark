@@ -1,15 +1,9 @@
 import robotic as ry
 import numpy as np
-import random
-import time
-
-from typing import List, Dict, Optional
-from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseModeLogic,
     FreeMixin,
-    State,
     Task,
     SingleGoal,
     GoalSet,
@@ -336,7 +330,6 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
         self.tasks[-1].name = "dummy_start"
 
         pick_task_names = ["pick", "place"]
-        handover_task_names = ["pick", "handover", "place"]
 
         self.task_dependencies = {}
         self.task_dependencies_any = {}

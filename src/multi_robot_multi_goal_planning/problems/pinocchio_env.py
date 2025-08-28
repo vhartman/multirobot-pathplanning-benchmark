@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import List, Dict, Optional
+from typing import List, Optional
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
@@ -478,7 +478,7 @@ class PinocchioEnvironment(BaseProblem):
 
         # self.show_config(q, blocking=False)
 
-        q_orig = q
+        # q_orig = q
 
         # print(mode)
 

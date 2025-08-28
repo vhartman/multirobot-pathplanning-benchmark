@@ -1,9 +1,8 @@
 import numpy as np
 import time as time
 import math as math
-from typing import Tuple, Optional, Union, List, Dict, Any
+from typing import Tuple, Optional, List, Dict, Any
 from numpy.typing import NDArray
-from numba import njit
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,

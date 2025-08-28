@@ -7,7 +7,6 @@ from typing import (
     Optional,
     Set,
     Any,
-    Union,
 )
 
 import time

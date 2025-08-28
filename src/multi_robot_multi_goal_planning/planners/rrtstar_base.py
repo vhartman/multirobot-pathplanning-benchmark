@@ -18,12 +18,9 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
     Mode,
-    SingleGoal,
 )
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
-    NpConfiguration,
-    config_dist,
     batch_config_dist,
 )
 from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling

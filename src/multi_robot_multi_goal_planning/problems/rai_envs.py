@@ -1,21 +1,14 @@
-import robotic as ry
 import numpy as np
 import random
-
-from typing import List, Dict, Optional
-from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
-from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
-# from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseModeLogic,
     SequenceMixin,
     DependencyGraphMixin,
-    State,
     Task,
     SingleGoal,
     GoalSet,
@@ -188,7 +181,6 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
 
 # for the case of the dependency graph, the optimal solution should be 4.1
 class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):

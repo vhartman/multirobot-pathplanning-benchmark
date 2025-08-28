@@ -1,13 +1,12 @@
 import robotic as ry
 import numpy as np
 
-from typing import List, Dict, Optional
+from typing import List, Optional
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
-    SequenceMixin,
     Mode,
     State,
     Task,

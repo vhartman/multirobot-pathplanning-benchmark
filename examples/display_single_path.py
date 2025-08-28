@@ -1,7 +1,6 @@
 import argparse
 from matplotlib import pyplot as plt
 
-import datetime
 from pathlib import Path
 import json
 import os
@@ -18,7 +17,6 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 from multi_robot_multi_goal_planning.planners.shortcutting import (
-    single_mode_shortcut,
     robot_mode_shortcut,
 )
 from run_experiment import load_experiment_config

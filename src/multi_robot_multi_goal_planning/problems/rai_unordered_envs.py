@@ -1,16 +1,8 @@
 import robotic as ry
 import numpy as np
-import random
-import time
-
-from typing import List, Dict, Optional
-from numpy.typing import NDArray
-
-from multi_robot_multi_goal_planning.problems.rai_config import *
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseModeLogic,
     UnorderedButAssignedMixin,
-    State,
     Task,
     SingleGoal,
     GoalSet,
@@ -24,7 +16,7 @@ import multi_robot_multi_goal_planning.problems.rai_config as rai_config
 
 class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
+        self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -91,7 +83,7 @@ class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
 
 class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
-        self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
+        self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -151,7 +143,7 @@ class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
 
 class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=False):
-        self.C = make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
+        self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
 
         self.C.addFrame("obs0").setParent(self.C.getFrame("table")).setPosition(
@@ -225,7 +217,7 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
 
 class rai_two_dim_circle_single_agent(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=False):
-        self.C, keyframes = make_random_two_dim_single_goal(
+        self.C, keyframes = rai_config.make_random_two_dim_single_goal(
             num_agents=1,
             num_obstacles=0,
             agents_can_rotate=agents_can_rotate,
@@ -306,7 +298,6 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
         self.tasks[-1].name = "dummy_start"
 
         pick_task_names = ["pick", "place"]
-        handover_task_names = ["pick", "handover", "place"]
 
         self.per_robot_tasks = [[], []]
         self.task_dependencies = {}

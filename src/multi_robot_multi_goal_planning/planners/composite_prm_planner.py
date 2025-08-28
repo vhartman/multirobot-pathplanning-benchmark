@@ -11,7 +11,7 @@ from typing import (
     Set,
     Tuple,
 )
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 from matplotlib import pyplot as plt

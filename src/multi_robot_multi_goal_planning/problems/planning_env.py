@@ -6,7 +6,7 @@ import copy
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from typing import List, Dict, Optional, Set, Any, Tuple
+from typing import List, Dict, Optional, Any, Tuple
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.configuration import (
@@ -14,7 +14,6 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     config_dist,
 )
 from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
-# from multi_robot_multi_goal_planning.problems.util import generate_binary_search_indices
 
 
 from functools import cache
