@@ -204,7 +204,6 @@ def setup_planner(
                 informed_sampling=options["informed_sampling"],
                 distance_metric=options["distance_metric"],
                 p_goal=options["p_goal"],
-                p_uniform=options["p_uniform"],
                 shortcutting=options["shortcutting"],
                 init_mode_sampling_type=options["init_mode_sampling_type"],
                 frontier_mode_sampling_probability=options[
@@ -233,7 +232,6 @@ def setup_planner(
                 informed_sampling=options["informed_sampling"],
                 distance_metric=options["distance_metric"],
                 p_goal=options["p_goal"],
-                p_uniform=options["p_uniform"],
                 shortcutting=options["shortcutting"],
                 init_mode_sampling_type=options["init_mode_sampling_type"],
                 frontier_mode_sampling_probability=options[

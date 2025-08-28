@@ -4,7 +4,6 @@
     "informed_sampling": true,
     "distance_metric": "max_euclidean",
     "p_goal": 0.4,
-    "p_uniform": 0.2,
     "shortcutting": true,
     "init_mode_sampling_type": "frontier",
     "frontier_mode_sampling_probability": 0.98,

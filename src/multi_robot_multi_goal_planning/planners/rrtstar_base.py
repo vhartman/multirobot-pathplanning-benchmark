@@ -489,11 +489,8 @@ class BaseRRTConfig:
     
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
-    p_uniform: float = 0.2
     
     shortcutting: bool = True
-    shortcutting_dim_version: int = 2
-    shortcutting_robot_version: int = 1
     
     init_mode_sampling_type: str = "frontier"
     frontier_mode_sampling_probability: float = 0.98
