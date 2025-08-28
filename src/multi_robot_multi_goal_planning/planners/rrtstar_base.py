@@ -2,7 +2,7 @@ import numpy as np
 import time as time
 import math as math
 import random
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import interpolate_path
+from multi_robot_multi_goal_planning.problems.util import interpolate_path
 from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut, remove_interpolated_nodes
 import os
 import pickle
@@ -18,12 +18,9 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
     Mode,
-    SingleGoal,
 )
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
-    NpConfiguration,
-    config_dist,
     batch_config_dist,
 )
 from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
@@ -484,22 +481,17 @@ class BaseLongHorizon:
 @dataclass
 class BaseRRTConfig:
     informed_sampling: bool = True
-    informed_sampling_version: int = 6
     locally_informed_sampling: bool = True
     informed_batch_size: int = 300
     
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
-    p_uniform: float = 0.2
     
     shortcutting: bool = True
-    shortcutting_dim_version: int = 2
-    shortcutting_robot_version: int = 1
     
     init_mode_sampling_type: str = "frontier"
     frontier_mode_sampling_probability: float = 0.98
     
-    sample_near_path: bool = False
     remove_redundant_nodes: bool = True
     apply_long_horizon: bool = False
     horizon_length: int = 1
@@ -531,7 +523,6 @@ class BaseRRTstar(BasePlanner):
             self.eta = np.sqrt(self.dim)
             
         self.operation = Operation()
-        self.start_single_goal = SingleGoal(self.env.start_pos.q)
         self.modes = []
         self.trees = {}
         self.transition_node_ids = {}
@@ -615,8 +606,6 @@ class BaseRRTstar(BasePlanner):
 
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
-            if self.config.informed_sampling_version != 6:
-                assert False
 
         if self.config.apply_long_horizon and mode in self.modes:
             self.long_horizon.update(mode, self.operation.init_sol)
@@ -961,8 +950,7 @@ class BaseRRTstar(BasePlanner):
 
             if self.operation.init_sol:
                 if (
-                    self.config.informed_sampling_version == 6
-                    and not self.env.is_terminal_mode(mode)
+                    not self.env.is_terminal_mode(mode)
                 ):
                     q = self.informed.generate_transitions(
                         self.modes,
@@ -994,60 +982,6 @@ class BaseRRTstar(BasePlanner):
                 q = type(self.env.get_start_pos()).from_list(q_noise)
                 if self.env.is_collision_free(q, mode):
                     return q
-
-    def sample_home_pose(
-        self,
-        mode: Mode,
-    ):
-        next_ids = self.mode_validation.get_valid_next_ids(mode)
-        if not next_ids and not self.env.is_terminal_mode(mode):
-            return
-
-        constrained_robots = self.env.get_active_task(mode, next_ids).robots
-        attemps = 0  # needed if home poses are in collision
-
-        q_home = self.get_home_poses(mode)
-
-        while True:
-            attemps += 1
-
-            q = []
-            for robot in self.env.robots:
-                r_idx = self.env.robots.index(robot)
-                if (
-                    robot not in constrained_robots
-                ):  # can cause problems if several robots are not constrained and their home poses are in collision
-                    q.append(q_home[r_idx])
-                    continue
-
-                if np.array_equal(
-                    self.get_task_goal_of_agent(mode, robot), q_home[r_idx]
-                ):
-                    if np.random.uniform(0, 1) > self.config.p_goal:  # goal sampling
-                        q.append(q_home[r_idx])
-                        continue
-
-                lims = self.env.limits[:, self.env.robot_idx[robot]]
-                q.append(np.random.uniform(lims[0], lims[1]))
-
-            q = type(self.env.get_start_pos()).from_list(q)
-            if self.env.is_collision_free(q, mode):
-                return q
-
-            if attemps > 100:  # if home pose causes failed attemps
-                return
-
-    def _sample_near_path(self, mode: Mode):
-        while True:
-            path_state = np.random.choice(self.operation.path)
-            standard_deviation = np.random.uniform(0, 5.0)
-            # standar_deviation = 0.5
-            noise = np.random.normal(0, standard_deviation, path_state.q.state().shape)
-
-            q = self.env.get_start_pos().from_flat(path_state.q.state() + noise)
-
-            if self.env.is_collision_free(q, mode):
-                return q
 
     def _sample_uniform(self, mode: Mode):
         while True:
@@ -1570,10 +1504,6 @@ class BaseRRTstar(BasePlanner):
         if self.config.informed_sampling and self.operation.init_sol:
             # informed_sampling
             return self.sample_informed(mode)
-
-        # gaussian sampling near the path
-        if self.config.sample_near_path and self.operation.init_sol:
-            return self._sample_near_path(mode)
 
         # uniform sampling
         return self._sample_uniform(mode)

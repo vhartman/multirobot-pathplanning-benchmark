@@ -849,7 +849,7 @@ def make_two_dim_handover(view: bool = False):
             target=q_home,
         )
 
-        for _ in range(1000):
+        for _ in range(2000):
             # komo.initRandom()
             komo.initWithConstant(np.random.rand(6) * 2)
 
@@ -2297,8 +2297,8 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
             robot = random.choice(all_robots)
 
             if (
-                obj_to_move in direct_pick_place_keyframes[robot]
-                or obj_to_move in direct_pick_place_keyframes[robot]
+                (place_directly and obj_to_move in direct_pick_place_keyframes[robot])
+                or obj_to_move in indirect_pick_place_keyframes[robot]
             ):
                 break
 
@@ -2400,7 +2400,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
                 ]
             )
             C.addFrame("obj" + str(j) + str(k)).setParent(table).setShape(
-                ry.ST.box, [size[0], size[1], size[2], 0.5]
+                ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 np.random.rand(3)
             ).setContact(1).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
@@ -3348,7 +3348,7 @@ def make_pyramid_env(
             print(retval)
 
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                komo.view(True, "IK solution")
+                # komo.view(True, "IK solution")
                 keyframes = komo.getPath()
                 return keyframes
 
@@ -5115,7 +5115,7 @@ def make_depalletizing_env():
         np.random.rand(3)
     ).setContact(0).setJoint(ry.JT.rigid)
 
-    C.view(True)
+    # C.view(True)
 
     def compute_pick_and_place(box, goal, robot_prefix):
         ee = "ur_vacuum"
@@ -5189,7 +5189,7 @@ def make_depalletizing_env():
             retval = retval.dict()
 
             print(retval)
-            komo.view(True, "IK solution")
+            # komo.view(True, "IK solution")
 
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                 keyframes = komo.getPath()
@@ -5754,7 +5754,7 @@ def make_strut_nccr_env():
             target=q_home,
         )
 
-        max_attempts = 100
+        max_attempts = 200
         for num_attempt in range(max_attempts):
             # komo.initRandom()
             if num_attempt > 0:
@@ -6093,13 +6093,13 @@ def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="t
             print(retval)
 
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                komo.view(True, "IK solution")
+                # komo.view(True, "IK solution")
                 keyframes = komo.getPath()
                 return keyframes
 
         return None
 
-    C.view(True)
+    # C.view(True)
     
     # sort objects by z component of their goal position
     sorted_objects = sorted(objects, key=lambda obj: goal_poses[obj]["position"][2]) 

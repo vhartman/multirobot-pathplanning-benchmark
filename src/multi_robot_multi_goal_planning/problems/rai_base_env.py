@@ -1,13 +1,12 @@
 import robotic as ry
 import numpy as np
 
-from typing import List, Dict, Optional
+from typing import List, Optional
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
-    SequenceMixin,
     Mode,
     State,
     Task,
@@ -450,7 +449,7 @@ class rai_env(BaseProblem):
 
     def is_collision_free_np(
         self,
-        q: Optional[Configuration],
+        q: Optional[NDArray],
         m: Optional[Mode],
         collision_tolerance: Optional[float] = None,
         set_mode: bool = True,

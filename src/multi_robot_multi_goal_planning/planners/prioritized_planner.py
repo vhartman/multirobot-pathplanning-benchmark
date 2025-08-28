@@ -4,11 +4,9 @@ import time
 
 from typing import (
     Any,
-    ClassVar,
     Dict,
     List,
     Optional,
-    Set,
     Tuple,
 )
 from numpy.typing import NDArray
@@ -32,7 +30,6 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
-from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist,
@@ -47,12 +44,10 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from mpl_toolkits.mplot3d import Axes3D # Import for 3D plotting
 
+import bisect
 
 TimedPath = namedtuple("TimedPath", ["time", "path"])
 Path = namedtuple("Path", ["path", "task_index"])
-
-import bisect
-
 
 class MultiRobotPath:
     __slots__ = [

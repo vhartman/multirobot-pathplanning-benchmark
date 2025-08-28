@@ -2,17 +2,14 @@ import argparse
 from matplotlib import pyplot as plt
 
 import time
-import datetime
 import json
 import os
 import pathlib
 
 import numpy as np
-import random
 
 from typing import List, Dict, Optional, Any
 
-from multi_robot_multi_goal_planning.problems.planning_env import State
 from compute_confidence_intervals import computeConfidenceInterval
 
 
@@ -25,7 +22,7 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
 
     all_experiment_data = {}
 
-    loading_start_time = time.time()
+    # loading_start_time = time.time()
 
     for planner_name in planner_names:
         print(f"Loading data for {planner_name}")
@@ -562,7 +559,7 @@ def make_success_plot(
 
             plt.legend()
     plt.grid(which="both", axis="both", ls="--")  
-    plt.ylabel(f"Success [%]")
+    plt.ylabel("Success [%]")
     plt.xlabel("Computation Time [s]")
 
     if save:

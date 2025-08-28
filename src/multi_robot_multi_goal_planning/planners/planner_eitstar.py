@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import List, Dict, Tuple, Optional, Union, Any, Set
+from typing import List, Dict, Tuple, Optional, Any, Set
 import time
 import math
 from itertools import chain

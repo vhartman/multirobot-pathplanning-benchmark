@@ -1,4 +1,4 @@
-from typing import List, Tuple, Set
+from typing import List, Set
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,

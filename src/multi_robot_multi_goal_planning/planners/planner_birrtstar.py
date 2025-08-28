@@ -1,9 +1,8 @@
 import numpy as np
 import time as time
 import math as math
-from typing import Tuple, Optional, Union, List, Dict, Any
+from typing import Tuple, Optional, List, Dict, Any
 from numpy.typing import NDArray
-from numba import njit
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
@@ -22,11 +21,6 @@ from multi_robot_multi_goal_planning.planners.rrtstar_base import (
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-
-
-@njit
-def compute_child_costs(parent_cost, cost_to_parents):
-    return parent_cost + cost_to_parents
 
 
 class BidirectionalRRTstar(BaseRRTstar):
@@ -84,8 +78,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
-            if self.config.informed_sampling_version != 6:
-                self.initialize_informed_sampling(new_mode)
+
             # Initialize transition nodes
             node = None
             for i in range(self.config.transition_nodes):

@@ -539,7 +539,6 @@ class InformedSampling:
             is_almost_the_same = {}
 
             obv_inv_attempts = 0
-            sample_in_collision = 0
 
             num_samples_at_a_time = 10
 

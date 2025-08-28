@@ -95,11 +95,6 @@ def main():
         help="Use k-nearest (default: False)",
     )
     parser.add_argument(
-        "--prm_sample_near_path",
-        action="store_true",
-        help="Generate samples near a previously found path (default: False)",
-    )
-    parser.add_argument(
         "--prm_informed_sampling",
         type=lambda x: x.lower() in ["true", "1", "yes"],
         default=True,
@@ -165,7 +160,6 @@ def main():
         config = CompositePRMConfig()
 
         config.distance_metric = args.distance_metric
-        # config.try_sampling_around_path = args.prm_sample_near_path
         # config.use_k_nearest = args.prm_k_nearest
         # config.try_informed_sampling = args.prm_informed_sampling
         # config.try_shortcutting = args.prm_shortcutting

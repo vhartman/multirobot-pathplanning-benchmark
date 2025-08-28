@@ -1,25 +1,15 @@
 import argparse
 from matplotlib import pyplot as plt
 
-import datetime
 import json
-import os
 import random
 
 import numpy as np
 
-# from typing import Dict, Any, Callable, Tuple, List
-
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
 from multi_robot_multi_goal_planning.problems.planning_env import State
-from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
-from multi_robot_multi_goal_planning.planners.shortcutting import (
-    single_mode_shortcut,
-    robot_mode_shortcut,
-)
-
-# from multi_robot_multi_goal_planning.problems.configuration import config_dist
+from multi_robot_multi_goal_planning.problems.util import interpolate_path
 
 
 def load_path(filename):
