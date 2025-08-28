@@ -484,7 +484,6 @@ class BaseLongHorizon:
 @dataclass
 class BaseRRTConfig:
     informed_sampling: bool = True
-    informed_sampling_version: int = 6
     locally_informed_sampling: bool = True
     informed_batch_size: int = 300
     
@@ -614,8 +613,6 @@ class BaseRRTstar(BasePlanner):
 
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
-            if self.config.informed_sampling_version != 6:
-                assert False
 
         if self.config.apply_long_horizon and mode in self.modes:
             self.long_horizon.update(mode, self.operation.init_sol)
@@ -960,8 +957,7 @@ class BaseRRTstar(BasePlanner):
 
             if self.operation.init_sol:
                 if (
-                    self.config.informed_sampling_version == 6
-                    and not self.env.is_terminal_mode(mode)
+                    not self.env.is_terminal_mode(mode)
                 ):
                     q = self.informed.generate_transitions(
                         self.modes,

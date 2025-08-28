@@ -2,7 +2,6 @@
   "type": "rrtstar",
   "options": {
     "informed_sampling": true,
-    "informed_sampling_version": 6,
     "distance_metric": "max_euclidean",
     "p_goal": 0.4,
     "p_uniform": 0.2,

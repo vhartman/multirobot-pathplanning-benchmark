@@ -202,7 +202,6 @@ def setup_planner(
             options = planner_config["options"]
             rrtstar_config = BaseRRTConfig(
                 informed_sampling=options["informed_sampling"],
-                informed_sampling_version=options["informed_sampling_version"],
                 distance_metric=options["distance_metric"],
                 p_goal=options["p_goal"],
                 p_uniform=options["p_uniform"],
@@ -232,7 +231,6 @@ def setup_planner(
             options = planner_config["options"]
             birrtstar_config = BaseRRTConfig(
                 informed_sampling=options["informed_sampling"],
-                informed_sampling_version=options["informed_sampling_version"],
                 distance_metric=options["distance_metric"],
                 p_goal=options["p_goal"],
                 p_uniform=options["p_uniform"],

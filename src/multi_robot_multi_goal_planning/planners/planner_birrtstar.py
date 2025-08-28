@@ -84,8 +84,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 continue
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
-            if self.config.informed_sampling_version != 6:
-                self.initialize_informed_sampling(new_mode)
+            
             # Initialize transition nodes
             node = None
             for i in range(self.config.transition_nodes):
