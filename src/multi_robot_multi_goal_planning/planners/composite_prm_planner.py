@@ -1365,7 +1365,7 @@ class CompositePRM(BasePlanner):
             num_attempts += 1
             if num_attempts > 100 * batch_size:
                 break
-            
+
             # print(len(new_samples))
             # sample mode
             m = self._sample_mode(
@@ -1389,6 +1389,8 @@ class CompositePRM(BasePlanner):
             if self.env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
                 num_valid += 1
+            
+            # self.env.show(False)
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
 

@@ -1265,6 +1265,9 @@ class SequenceMixin(BaseModeLogic):
     def make_start_mode(self) -> Mode:
         mode_dict = {}
 
+        print("seq")
+        print(self.sequence)
+
         for task_index in self.sequence:
             task_robots = self.tasks[task_index].robots
 

@@ -30,7 +30,7 @@ from multi_robot_multi_goal_planning.problems.util import path_cost
 @dataclass
 class RecedingHorizonConfig:
     low_level_solver: str = "composite_prm"
-    horizon_length: int = 2
+    horizon_length: int = 3
     execution_length: int = 1
     low_level_max_time: float = 5
     constrain_free_robots_to_home: bool = True
@@ -63,10 +63,11 @@ class RecedingHorizonPlanner(BasePlanner):
         print("Constructing short horizon env")
         print(f"Start index {seq_start_idx}")
 
-        short_horizon_env = copy.deepcopy(self.base_env)
+        # short_horizon_env = copy.deepcopy(self.base_env)
+        short_horizon_env = self.this_env
 
         final_task_index = min(
-            len(short_horizon_env.sequence), seq_start_idx + self.config.horizon_length
+            len(self.base_env.sequence), seq_start_idx + self.config.horizon_length
         )
         # short_horizon_env.sequence = short_horizon_env.sequence[
         #     seq_start_idx:final_task_index
@@ -105,6 +106,7 @@ class RecedingHorizonPlanner(BasePlanner):
                         goal_sample_offset += dim
                     offset += dim
 
+                # print("goal pose")
                 # self.base_env.show_config(self.base_env.start_pos.from_flat(goal_pose))
 
                 new_terminal_task = Task(self.base_env.robots, SingleGoal(goal_pose))
@@ -130,7 +132,7 @@ class RecedingHorizonPlanner(BasePlanner):
                 new_terminal_task = Task(self.base_env.robots, GoalRegion(goal_region))
 
             short_horizon_env.tasks.append(new_terminal_task)
-            short_horizon_env.tasks[-1].name = "dummy_terminal"
+            short_horizon_env.tasks[-1].name = f"dummy_terminal_{seq_start_idx}"
             # short_horizon_env.sequence[-1] = len(short_horizon_env.tasks)
 
             original_named_sequence = [
@@ -139,11 +141,15 @@ class RecedingHorizonPlanner(BasePlanner):
             short_horizon_sequence = original_named_sequence[
                 seq_start_idx:final_task_index
             ]
-            short_horizon_sequence[-1] = "dummy_terminal"
+            print(short_horizon_sequence)
+            short_horizon_sequence[-1] = f"dummy_terminal_{seq_start_idx}"
+            print(short_horizon_sequence)
 
             short_horizon_env.sequence = short_horizon_env._make_sequence_from_names(
                 short_horizon_sequence
             )
+            print(short_horizon_env.sequence)
+
             short_horizon_env.start_mode = short_horizon_env.make_start_mode()
 
             short_horizon_env._terminal_task_ids = [
@@ -161,11 +167,16 @@ class RecedingHorizonPlanner(BasePlanner):
                 short_horizon_sequence
             )
             short_horizon_env.start_mode = short_horizon_env.make_start_mode()
+            print(short_horizon_env.start_mode)
+            task_idx = None
 
-        return short_horizon_env
+            short_horizon_env._terminal_task_ids = copy.deepcopy(self.base_env._terminal_task_ids)
+
+        return short_horizon_env, task_idx, len(short_horizon_env.tasks) - 1
 
     def __init__(self, env: BaseProblem, config: RecedingHorizonConfig | None = None):
         self.base_env = env
+        self.this_env = copy.deepcopy(env)
         self.config = config if config is not None else RecedingHorizonConfig()
 
     def plan(
@@ -208,10 +219,13 @@ class RecedingHorizonPlanner(BasePlanner):
                 if start_pos is None:
                     start_pos = complete_plan[-1].q
 
-            sh_env = self.make_short_horizon_env(current_task_index, start_pos)
+            sh_env, original_task_id, dummy_task_id = self.make_short_horizon_env(current_task_index, start_pos)
+            sh_env.set_to_mode(sh_env.start_mode)
 
-            # print("start_pose")
-            # sh_env.show_config(sh_env.start_pos)
+            print("start_pose")
+            sh_env.show_config(sh_env.start_pos)
+            sh_env.C.setJointState(sh_env.start_pos.state() * 0)
+            sh_env.C.view(True)
 
             short_horizon_planner = self.construct_planner(sh_env)
 
@@ -220,8 +234,24 @@ class RecedingHorizonPlanner(BasePlanner):
 
             if short_horizon_plan is None:
                 return None, {}
+            
+            print(dummy_task_id)
 
-            complete_plan.extend(short_horizon_plan)
+            if original_task_id is not None:
+                for i in range(len(short_horizon_plan)):
+                    if dummy_task_id in short_horizon_plan[i].mode.task_ids:
+                        short_horizon_plan[i].mode.task_ids = [original_task_id if x == dummy_task_id else x for x in short_horizon_plan[i].mode.task_ids]
+
+            idx = 0
+            for i in range(1, len(short_horizon_plan)):
+                print(short_horizon_plan[i].mode)
+                if short_horizon_plan[i].mode != short_horizon_plan[i - 1].mode:
+                    idx += 1
+
+                if idx == current_task_index + self.config.execution_length:
+                    break
+
+            complete_plan.extend(short_horizon_plan[:i+1])
 
             # self.base_env.display_path(complete_plan, stop=True)
 
@@ -229,6 +259,9 @@ class RecedingHorizonPlanner(BasePlanner):
                 break
 
             current_task_index += self.config.execution_length
+
+        print("Finished planning")
+        print()
 
         costs = [path_cost(complete_plan, self.base_env.batch_config_cost)]
         times = [time.time() - start_time]
