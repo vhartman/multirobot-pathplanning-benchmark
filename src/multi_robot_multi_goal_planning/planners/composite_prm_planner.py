@@ -1363,6 +1363,9 @@ class CompositePRM(BasePlanner):
 
         while len(new_samples) < batch_size:
             num_attempts += 1
+            if num_attempts > 100 * batch_size:
+                break
+            
             # print(len(new_samples))
             # sample mode
             m = self._sample_mode(
