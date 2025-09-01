@@ -40,6 +40,7 @@ from multi_robot_multi_goal_planning.planners.itstar_base import BaseITConfig
 
 from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
 from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
+from multi_robot_multi_goal_planning.planners.receding_horizon_wrapper import RecedingHorizonPlanner
 
 from run_experiment import export_planner_data
 
@@ -67,6 +68,7 @@ def main():
             "birrt_star",
             "aitstar",
             "eitstar",
+            "short_horizon",
         ],
         default="composite_prm",
         help="Planner to use (default: composite_prm)",
@@ -197,6 +199,9 @@ def main():
 
     elif args.planner == "prioritized":
         planner = PrioritizedPlanner(env)
+
+    elif args.planner == "short_horizon":
+        planner = RecedingHorizonPlanner(env)
 
     np.random.seed(args.seed)
     random.seed(args.seed)
