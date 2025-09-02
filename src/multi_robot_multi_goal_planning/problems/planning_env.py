@@ -1262,11 +1262,8 @@ class SequenceMixin(BaseModeLogic):
 
         return sequence
 
-    def make_start_mode(self) -> Mode:
+    def get_start_task_ids(self):
         mode_dict = {}
-
-        print("seq")
-        print(self.sequence)
 
         for task_index in self.sequence:
             task_robots = self.tasks[task_index].robots
@@ -1278,6 +1275,11 @@ class SequenceMixin(BaseModeLogic):
         task_ids = []
         for r in self.robots:
             task_ids.append(mode_dict[r])
+
+        return task_ids
+
+    def make_start_mode(self) -> Mode:
+        task_ids = self.get_start_task_ids()
 
         start_mode = Mode(task_ids, self.start_pos)
         sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)  # type: ignore[attr-defined]

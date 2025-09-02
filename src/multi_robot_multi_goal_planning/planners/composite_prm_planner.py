@@ -1620,6 +1620,8 @@ class CompositePRM(BasePlanner):
         q0 = self.env.get_start_pos()
         m0 = self.env.get_start_mode()
 
+        assert self.env.is_collision_free(q0, m0)
+
         reached_modes = set([m0])
         self.sorted_reached_modes = list(sorted(reached_modes, key=lambda m: m.id))
 
