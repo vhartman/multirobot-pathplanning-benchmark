@@ -30,7 +30,7 @@ from multi_robot_multi_goal_planning.problems.util import path_cost
 @dataclass
 class RecedingHorizonConfig:
     low_level_solver: str = "composite_prm"
-    horizon_length: int = 5
+    horizon_length: int = 1
     execution_length: int = 1
     low_level_max_time: float = 10
     constrain_free_robots_to_home: bool = True
@@ -42,15 +42,7 @@ class RecedingHorizonPlanner(BasePlanner):
     Mostly for tests how suboptimal a solution is if we only consider parts of the whole plan.
 
     Takes a planner, and only runs it on a subsequence of the whole planning sequence.
-    Takes the solution to the subsequence as fixed, and continues on from there.
-    To not plan to a nonsensical solution, we always ensure that all agents have > N goals.
-    This can imply that some agents might have more than N goals.
-    But we need to deal with this somehow. Maybe N = 1 means actually only planning for one goal, all other agents keep home pose?
-    We need to decide how long we plan for on a given subsequence.
-    Same termination criterion as usually + convergence test + run shortcutter after.
-
-    So, approach: N gives the horizon/number of tasks we consider.
-    we can do receding horizon by moving horizon only 1 or N.
+    'Executes" part of the solution, and continues from there.
     """
 
     def construct_planner(self, env: BaseProblem) -> BasePlanner:
@@ -60,6 +52,7 @@ class RecedingHorizonPlanner(BasePlanner):
     def make_short_horizon_env(
         self, seq_start_idx, start_pos: Configuration, start_mode, path
     ) -> Tuple[BaseProblem, int, int]:
+        print()
         print("Constructing short horizon env")
         print(f"Start index {seq_start_idx}")
 

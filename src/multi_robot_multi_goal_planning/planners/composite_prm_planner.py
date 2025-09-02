@@ -807,6 +807,9 @@ class MultimodalGraph:
                     [n.state.q.q for n in node_list], dtype=np.float64
                 )
 
+            if len(self.node_array_cache[key]) == 0:
+                return [], None
+
             dists = self.batch_dist_fun(
                 node.state.q, self.node_array_cache[key]
             )  # this, and the list copm below are the slowest parts
