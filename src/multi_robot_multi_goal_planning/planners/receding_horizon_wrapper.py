@@ -79,8 +79,8 @@ class RecedingHorizonPlanner(BasePlanner):
         #     seq_start_idx:final_task_index
         # ]
 
-        print("Final task incdex: ", final_task_index)
-        print("seq len", len(self.base_env.sequence))
+        # print("Final task incdex: ", final_task_index)
+        # print("seq len", len(self.base_env.sequence))
 
         short_horizon_env.start_pos = copy.deepcopy(start_pos)
 
@@ -112,8 +112,8 @@ class RecedingHorizonPlanner(BasePlanner):
                         goal_sample_offset += dim
                     offset += dim
 
-                print("goal pose")
-                print(goal_pose)
+                # print("goal pose")
+                # print(goal_pose)
                 # self.base_env.show_config(self.base_env.start_pos.from_flat(goal_pose))
 
                 new_terminal_task = Task(self.base_env.robots, SingleGoal(goal_pose))
@@ -149,40 +149,40 @@ class RecedingHorizonPlanner(BasePlanner):
                 # seq_start_idx:final_task_index
                 0:final_task_index
             ]
-            print(short_horizon_sequence)
+            # print(short_horizon_sequence)
             short_horizon_sequence[-1] = f"dummy_terminal_{seq_start_idx}"
-            print(short_horizon_sequence)
+            # print(short_horizon_sequence)
 
             short_horizon_env.sequence = short_horizon_env._make_sequence_from_names(
                 short_horizon_sequence
             )
-            print(short_horizon_env.sequence)
-            
+            # print(short_horizon_env.sequence)
+
             curr_mode = short_horizon_env.make_start_mode()
 
             for i in range(1, len(path)):
-                print(i)
-                print(path[i].mode)
-                print(curr_mode)
-                if path[i].mode != path[i-1].mode:
+                # print(i)
+                # print(path[i].mode)
+                # print(curr_mode)
+                if path[i].mode != path[i - 1].mode:
                     print("switch")
                     next_mode = short_horizon_env.get_next_modes(
-                        path[i-1].q, curr_mode
+                        path[i - 1].q, curr_mode
                     )[0]
                     curr_mode = next_mode
                     short_horizon_env.set_to_mode(next_mode)
                     # short_horizon_env.show_config(path[i].q)
                 elif i == len(path) - 1:
-                    next_mode = short_horizon_env.get_next_modes(
-                        path[i].q, curr_mode
-                    )[0]
+                    next_mode = short_horizon_env.get_next_modes(path[i].q, curr_mode)[
+                        0
+                    ]
                     curr_mode = next_mode
                     short_horizon_env.set_to_mode(next_mode)
 
             short_horizon_env.start_mode = curr_mode
 
             # print(short_horizon_env.start_mode)
-            
+
             short_horizon_sequence = original_named_sequence[
                 # seq_start_idx:final_task_index
                 0:final_task_index
@@ -192,7 +192,7 @@ class RecedingHorizonPlanner(BasePlanner):
             short_horizon_env.sequence = short_horizon_env._make_sequence_from_names(
                 short_horizon_sequence
             )
-            print(short_horizon_env.C_cache.items())
+            # print(short_horizon_env.C_cache.items())
             # if start_mode is not None:
             #     short_horizon_env.start_mode = start_mode
             #     start_task_ids = copy.deepcopy(short_horizon_env.make_start_mode().task_ids)
@@ -218,46 +218,46 @@ class RecedingHorizonPlanner(BasePlanner):
                 len(short_horizon_env.tasks) - 1
             ] * len(self.base_env.robots)
 
-            print("start_moe", short_horizon_env.start_mode)
-            print("sequence", short_horizon_env.sequence)
+            # print("start_moe", short_horizon_env.start_mode)
+            # print("sequence", short_horizon_env.sequence)
         else:
             original_named_sequence = [
                 self.base_env.tasks[idx].name for idx in self.base_env.sequence
             ]
             short_horizon_sequence = original_named_sequence
-            print(short_horizon_sequence)
+            # print(short_horizon_sequence)
 
             short_horizon_env.sequence = short_horizon_env._make_sequence_from_names(
                 short_horizon_sequence
             )
-            print(short_horizon_env.sequence)
-            
+            # print(short_horizon_env.sequence)
+
             curr_mode = short_horizon_env.make_start_mode()
             for i in range(1, len(path)):
-                if path[i].mode != path[i-1].mode:
+                if path[i].mode != path[i - 1].mode:
                     next_mode = short_horizon_env.get_next_modes(
-                        path[i-1].q, curr_mode
+                        path[i - 1].q, curr_mode
                     )[0]
                     curr_mode = next_mode
                     short_horizon_env.set_to_mode(next_mode)
 
                     # short_horizon_env.show_config(path[i].q)
                 elif i == len(path) - 1:
-                    next_mode = short_horizon_env.get_next_modes(
-                        path[i].q, curr_mode
-                    )[0]
+                    next_mode = short_horizon_env.get_next_modes(path[i].q, curr_mode)[
+                        0
+                    ]
                     curr_mode = next_mode
                     short_horizon_env.set_to_mode(next_mode)
 
             short_horizon_env.start_mode = curr_mode
-            
+
             short_horizon_sequence = original_named_sequence
 
             short_horizon_env.sequence = short_horizon_env._make_sequence_from_names(
                 short_horizon_sequence
             )
-            
-            print(short_horizon_env.start_mode)
+
+            # print(short_horizon_env.start_mode)
             task_idx = None
 
             short_horizon_env._terminal_task_ids = copy.deepcopy(
@@ -317,26 +317,26 @@ class RecedingHorizonPlanner(BasePlanner):
             #     print("STARTMODE")
             #     print(start_mode)
             #     print(sh_env.start_mode)
-                # sh_env.set_to_mode(start_mode)
-                # sh_env.set_to_mode(sh_env.start_mode)
-                # sh_env.set_to_mode(start_mode)
-                # sh_env.set_to_mode(sh_env.start_mode)
+            # sh_env.set_to_mode(start_mode)
+            # sh_env.set_to_mode(sh_env.start_mode)
+            # sh_env.set_to_mode(start_mode)
+            # sh_env.set_to_mode(sh_env.start_mode)
 
-                # print("QQQQQQQQQQQQQ")
-                # print(start_mode)
-                # sh_env.set_to_mode(start_mode, config=sh_env.C_base)
+            # print("QQQQQQQQQQQQQ")
+            # print(start_mode)
+            # sh_env.set_to_mode(start_mode, config=sh_env.C_base)
 
-                # sh_env.C_base.view(True)
+            # sh_env.C_base.view(True)
 
-                # sh_env.C.setJointState(sh_env.start_pos.state() * 0)
-                # sh_env.C.view(True)
+            # sh_env.C.setJointState(sh_env.start_pos.state() * 0)
+            # sh_env.C.view(True)
 
             sh_env, original_task_id, dummy_task_id = self.make_short_horizon_env(
                 current_task_index, start_pos, start_mode, complete_plan
             )
 
-            print("start_pose")
-            print(start_pos.state())
+            # print("start_pose")
+            # print(start_pos.state())
             # sh_env.show_config(sh_env.start_pos)
             # if len(complete_plan) > 0:
             #     self.base_env.C.setJointState(complete_plan[-1].q.state())
@@ -347,12 +347,12 @@ class RecedingHorizonPlanner(BasePlanner):
 
             inner_ptc = RuntimeTerminationCondition(self.config.low_level_max_time)
             short_horizon_plan, _ = short_horizon_planner.plan(inner_ptc, optimize=True)
-            
+
             # print("AAAAAAAA")
             # for i in range(len(short_horizon_plan)):
             #     print(short_horizon_plan[i].mode)
             # print("AAAAAAAA")
-                
+
             if short_horizon_plan is None:
                 return None, {}
 
@@ -365,9 +365,8 @@ class RecedingHorizonPlanner(BasePlanner):
 
             # for i in range(len(short_horizon_plan)):
             #     print(short_horizon_plan[i].mode)
-                
 
-            print('og modes')
+            # print('og modes')
             # if original_task_id is not None:
             #     for i in range(len(short_horizon_plan)):
             #         # print(short_horizon_plan[i].mode)
@@ -380,7 +379,7 @@ class RecedingHorizonPlanner(BasePlanner):
             if self.base_env.is_terminal_mode(short_horizon_plan[-1].mode):
                 complete_plan.extend(short_horizon_plan)
             else:
-                print("overwritten")
+                # print("overwritten")
                 idx = 0
                 if start_mode is None:
                     curr_mode = self.base_env.start_mode
@@ -396,22 +395,22 @@ class RecedingHorizonPlanner(BasePlanner):
                     if idx == self.config.execution_length:
                         break
 
-                    print(short_horizon_plan[i].mode)
+                    # print(short_horizon_plan[i].mode)
                     if not self.base_env.is_terminal_mode(short_horizon_plan[i].mode):
                         if short_horizon_plan[i].mode != short_horizon_plan[i - 1].mode:
                             idx += 1
                             next_mode = self.base_env.get_next_modes(
-                                short_horizon_plan[i-1].q, curr_mode
+                                short_horizon_plan[i - 1].q, curr_mode
                             )[0]
                             start_mode = next_mode
                             curr_mode = next_mode
 
-                            print("AAAAAAA")
-                            print("AAAAAAA")
-                            print("AAAAAAA")
+                            # print("AAAAAAA")
+                            # print("AAAAAAA")
+                            # print("AAAAAAA")
 
                             # print("next mode", next_mode)
-                        elif  i == len(short_horizon_plan)-1:
+                        elif i == len(short_horizon_plan) - 1:
                             idx += 1
                             next_mode = self.base_env.get_next_modes(
                                 short_horizon_plan[i].q, curr_mode
@@ -419,12 +418,11 @@ class RecedingHorizonPlanner(BasePlanner):
                             start_mode = next_mode
                             curr_mode = next_mode
 
-
                 # complete_plan.extend(short_horizon_plan[:i])
 
-            print("complete plan")
-            for s in complete_plan:
-                print(s.mode, s.q.state())
+            # print("complete plan")
+            # for s in complete_plan:
+            #     print(s.mode, s.q.state())
 
             # env_cpy = copy.deepcopy(self.base_env)
             # env_cpy.display_path(complete_plan)
