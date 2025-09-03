@@ -1,8 +1,8 @@
 import numpy as np
 from typing import List
 
-from multi_robot_multi_goal_planning.problems.planning_env import State
-from multi_robot_multi_goal_planning.problems.configuration import config_dist
+from .planning_env import State
+from .configuration import config_dist
 
 
 def path_cost(path: List[State], batch_cost_fun, agent_slices=None) -> float:

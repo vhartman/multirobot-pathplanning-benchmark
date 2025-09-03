@@ -3,11 +3,11 @@ import numpy as np
 from typing import List, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.planning_env import (
+from .planning_env import (
     generate_binary_search_indices,
 )
 
-from multi_robot_multi_goal_planning.problems.configuration import (
+from .configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
@@ -15,7 +15,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     batch_config_cost,
 )
 
-from multi_robot_multi_goal_planning.problems.planning_env import (
+from .planning_env import (
     BaseModeLogic,
     SequenceMixin,
     DependencyGraphMixin,

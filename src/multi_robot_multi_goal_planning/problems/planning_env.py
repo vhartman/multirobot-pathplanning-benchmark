@@ -9,11 +9,11 @@ from enum import Enum
 from typing import List, Dict, Optional, Any, Tuple
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.configuration import (
+from .configuration import (
     Configuration,
     config_dist,
 )
-from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
+from .dependency_graph import DependencyGraph
 
 
 from functools import cache
