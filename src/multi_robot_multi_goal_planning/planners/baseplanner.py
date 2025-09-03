@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Set, List, Dict, Any, Tuple
 
 
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
+from .termination_conditions import (
     PlannerTerminationCondition,
 )
 from multi_robot_multi_goal_planning.problems.planning_env import (

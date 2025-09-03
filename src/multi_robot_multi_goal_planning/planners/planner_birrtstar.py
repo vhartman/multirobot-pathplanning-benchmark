@@ -11,14 +11,14 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.problems.configuration import Configuration
 
-from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+from .rrtstar_base import (
     BaseRRTConfig,
     BaseRRTstar,
     Node,
     BidirectionalTree,
     save_data,
 )
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
+from .termination_conditions import (
     PlannerTerminationCondition,
 )
 

@@ -2,6 +2,8 @@ import numpy as np
 import random
 import time
 
+import bisect
+
 from typing import (
     Any,
     Dict,
@@ -16,6 +18,10 @@ import copy
 
 from dataclasses import dataclass
 
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from mpl_toolkits.mplot3d import Axes3D  # Import for 3D plotting
+
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
@@ -25,7 +31,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     generate_binary_search_indices,
     SingleGoal,
 )
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
+from .termination_conditions import (
     PlannerTerminationCondition,
     RuntimeTerminationCondition,
 )
@@ -34,20 +40,16 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist,
     config_dist,
-    batch_config_cost
+    batch_config_cost,
 )
-from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
+from .baseplanner import BasePlanner
 
 from multi_robot_multi_goal_planning.problems.util import path_cost
 
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from mpl_toolkits.mplot3d import Axes3D # Import for 3D plotting
-
-import bisect
 
 TimedPath = namedtuple("TimedPath", ["time", "path"])
 Path = namedtuple("Path", ["path", "task_index"])
+
 
 class MultiRobotPath:
     __slots__ = [
@@ -233,7 +235,7 @@ class MultiRobotPath:
         # print(end_times)
 
         return end_times
-    
+
     def get_non_escape_end_times(self, robots: List[str]):
         end_times = {}
 
@@ -252,7 +254,13 @@ class MultiRobotPath:
 
         return end_times
 
-    def add_path(self, robots: List[str], path: Path, next_mode: Optional[Mode], is_escape_path: bool=False):
+    def add_path(
+        self,
+        robots: List[str],
+        path: Path,
+        next_mode: Optional[Mode],
+        is_escape_path: bool = False,
+    ):
         # print("adding path to multi-robot-path")
         for r in robots:
             # get robot-path from the original path
@@ -339,7 +347,7 @@ class Tree:
         else:
             self.nodes = []
             self.configs = []
-        
+
         self.batch_config_dist_fun = batch_config_dist
 
         self.prev_plans = None
@@ -349,10 +357,10 @@ class Tree:
 
     def batch_dist_fun(self, n1: Node, n2: List[Node], v_max):
         ts = np.array([1.0 * n.t for n in n2])
-        
+
         if self.reverse:
             t_diff = ts - n1.t
-        
+
         else:
             t_diff = n1.t - ts
 
@@ -363,15 +371,15 @@ class Tree:
 
         # # Initialize result
         # dist = np.full(len(n2), np.inf)
-        
+
         # # Only compute expensive stuff for non-masked elements
         # valid_mask = ~mask
-        
+
         # if len(self.robots) > 1:
         #     # Only process valid nodes for expensive multi-robot computation
         #     valid_indices = np.where(valid_mask)[0]
         #     valid_n2 = [n2[i] for i in valid_indices]
-            
+
         #     end_times = self.prev_plans.get_end_times(self.robots)
         #     intermediate_poses = []
         #     for n in valid_n2:
@@ -425,11 +433,18 @@ class Tree:
                         p = self.configs[i][j]
 
                     dim = len(p)
-                    intermediate_poses_arr[i, offset: offset+dim] = 1. * p
+                    intermediate_poses_arr[i, offset : offset + dim] = 1.0 * p
                     offset += dim
 
-            q_dist_to_inter = self.batch_config_dist_fun(n1.q, intermediate_poses_arr, "max")
-            q_dist_from_inter = batch_config_cost(intermediate_poses_arr, np.array([n.q.state() for n in n2]), "max", tmp_agent_slice=n.q._array_slice)
+            q_dist_to_inter = self.batch_config_dist_fun(
+                n1.q, intermediate_poses_arr, "max"
+            )
+            q_dist_from_inter = batch_config_cost(
+                intermediate_poses_arr,
+                np.array([n.q.state() for n in n2]),
+                "max",
+                tmp_agent_slice=n.q._array_slice,
+            )
 
             # print("AA")
             # print(intermediate_poses_arr)
@@ -437,8 +452,10 @@ class Tree:
 
             # q_dist_to_inter = self.batch_config_dist_fun(n1.q, intermediate_poses, "max")
             # q_dist_from_inter = batch_config_cost(intermediate_poses, [n.q for n in n2], "max")
-    
-            dist = (q_dist_from_inter + q_dist_to_inter) * self.gamma + (1 - self.gamma) * t_diff
+
+            dist = (q_dist_from_inter + q_dist_to_inter) * self.gamma + (
+                1 - self.gamma
+            ) * t_diff
 
             # print(q_dist_to_inter_tmp - q_dist_to_inter)
             # print(q_dist_from_inter_tmp - q_dist_from_inter)
@@ -498,7 +515,7 @@ class Tree:
 
         if np.isinf(batch_dists[batch_idx]):
             return None
-        
+
         # print(batch_dists[batch_idx], config_dist(node.q, self.nodes[batch_idx].q), node.t - self.nodes[batch_idx].t)
 
         # print('time', node.t)
@@ -640,8 +657,8 @@ def collision_free_with_moving_obs(
 
     # return True
 
-        # if c[2] < 0:
-        #     print(c)
+    # if c[2] < 0:
+    #     print(c)
 
     # colls = env.C.getCollisions()
     # for c in colls:
@@ -695,7 +712,7 @@ def edge_collision_free_with_moving_obs(
     # N = sum(part_indices)
 
     times = [ts + tdiff * idx / (N - 1) for idx in range(N)]
-            
+
     # in addition to the things above, we check the times at which we might start planning again
     non_escape_end_times = prev_plans.get_non_escape_end_times(env.robots)
     for r, additional_time_to_check in non_escape_end_times.items():
@@ -823,7 +840,7 @@ def edge_collision_free_with_moving_obs(
 
 
 def plan_in_time_space(
-    ptc, 
+    ptc,
     env: BaseProblem,
     t0,
     prev_plans: MultiRobotPath,
@@ -831,7 +848,7 @@ def plan_in_time_space(
     end_times,
     goal,
     t_lb,
-    v_max = 0.5
+    v_max=0.5,
 ) -> TimedPath:
     computation_start_time = time.time()
 
@@ -874,7 +891,7 @@ def plan_in_time_space(
         length = config_dist(rnd_node.q, close_node.q)
 
         v = length / t_diff
-        
+
         # if length < 1e-3:
         #     return None, None
 
@@ -898,7 +915,7 @@ def plan_in_time_space(
             return rnd_node.t, rnd_node.q
 
         # t_m = min(max_q / v_max, max_stepsize)
-        t_m = min(max_stepsize * 1., t_diff)
+        t_m = min(max_stepsize * 1.0, t_diff)
 
         if length < 1e-3:
             return None, None
@@ -966,17 +983,19 @@ def plan_in_time_space(
 
                     lo = max(lims[0, j], lo)
                     hi = min(lims[1, j], hi)
-                
+
                     s.append(np.random.uniform(lo, hi))
 
                     i += 1
-            
+
             conf = q0.from_flat(np.array(s))
 
             min_dt_from_start = config_dist(q0, conf) / v_max
-            
+
             min_t_sample = t0 + min_dt_from_start
-            max_t_sample = max_goal_time - config_dist(conf, sampled_goals[0][1]) / v_max
+            max_t_sample = (
+                max_goal_time - config_dist(conf, sampled_goals[0][1]) / v_max
+            )
 
             if min_t_sample > max_t_sample:
                 return max_goal_time + 1, q0.from_flat(np.random.rand(len(q0.state())))
@@ -1015,7 +1034,7 @@ def plan_in_time_space(
 
                 q_rnd.append(q * 1.0)
                 # q_rnd.append(rnd_config[i])
-            
+
             conf = conf_type.from_list(q_rnd)
 
             # print(q_rnd)
@@ -1092,7 +1111,7 @@ def plan_in_time_space(
     #     robot_joints,)
     # print(res)
     # env.C.view(True)
-    
+
     # if not collision_free_with_moving_obs(
     #     env,
     #     t0,
@@ -1135,7 +1154,7 @@ def plan_in_time_space(
             print(f"Adding goal at {t_rnd}")
         else:
             t_rnd, q_sampled = sample_uniform(curr_t_ub)
-        
+
         q_rnd = project_sample_to_preplanned_path(t_rnd, q_sampled)
 
         # print(q_uni_rnd.state())
@@ -1209,7 +1228,7 @@ def plan_in_time_space(
         #         # print(x0, x1, y0, y1)
 
         #         plt.plot([x0, x1], [y0, y1])
-            
+
         #     plt.figure()
         #     for n in tree.nodes:
         #         if n.parent is None:
@@ -1471,7 +1490,7 @@ def plan_in_time_space(
             #         # array that contained multiple robot states. Here, we assume n.q.state()
             #         # directly gives the x, y for the current robot, and n.t is its time.
             #         ax.plot([x0, x1], [y0, y1], [z0, z1], marker='o', linestyle='-')
-            
+
             # plt.show()
 
             return TimedPath(time=times[::-1], path=configurations[::-1])
@@ -1486,7 +1505,7 @@ def plan_in_time_space(
 
 
 def plan_in_time_space_bidirectional(
-    ptc, 
+    ptc,
     env: BaseProblem,
     t0,
     prev_plans: MultiRobotPath,
@@ -1494,7 +1513,7 @@ def plan_in_time_space_bidirectional(
     end_times,
     goal,
     t_lb,
-    v_max = 0.5
+    v_max=0.5,
 ) -> TimedPath:
     computation_start_time = time.time()
     conf_type = type(env.get_start_pos())
@@ -1534,7 +1553,7 @@ def plan_in_time_space_bidirectional(
         length = config_dist(rnd_node.q, close_node.q)
 
         v = length / t_diff
-        
+
         # if length < 1e-3:
         #     return None, None
 
@@ -1556,7 +1575,7 @@ def plan_in_time_space_bidirectional(
             return rnd_node.t, rnd_node.q
 
         # t_m = min(max_q / v_max, max_stepsize)
-        t_m = min(max_stepsize * 1., t_diff)
+        t_m = min(max_stepsize * 1.0, t_diff)
 
         if length < 1e-3:
             return None, None
@@ -1582,7 +1601,7 @@ def plan_in_time_space_bidirectional(
             offset += dim
 
         return t, conf_type.from_list(q_list)
-    
+
     # we still steer from close to rnd.
     # But we now assume that close node has a higher time.
     def reverse_steer(close_node: Node, rnd_node: Node, max_stepsize=30):
@@ -1606,7 +1625,7 @@ def plan_in_time_space_bidirectional(
         if t_diff < max_stepsize:
             return rnd_node.t, rnd_node.q
 
-        t_m = min(max_stepsize * 1., t_diff)
+        t_m = min(max_stepsize * 1.0, t_diff)
 
         if length < 1e-3:
             return None, None
@@ -1663,17 +1682,19 @@ def plan_in_time_space_bidirectional(
 
                     lo = max(lims[0, j], lo)
                     hi = min(lims[1, j], hi)
-                
+
                     s.append(np.random.uniform(lo, hi))
 
                     i += 1
-            
+
             conf = q0.from_flat(np.array(s))
 
             min_dt_from_start = config_dist(q0, conf) / v_max
-            
+
             min_t_sample = t0 + min_dt_from_start
-            max_t_sample = max_goal_time - config_dist(conf, sampled_goals[0][1]) / v_max
+            max_t_sample = (
+                max_goal_time - config_dist(conf, sampled_goals[0][1]) / v_max
+            )
 
             if min_t_sample > max_t_sample:
                 return max_goal_time + 1, q0.from_flat(np.random.rand(len(q0.state())))
@@ -1712,7 +1733,7 @@ def plan_in_time_space_bidirectional(
 
                 q_rnd.append(q * 1.0)
                 # q_rnd.append(rnd_config[i])
-            
+
             conf = conf_type.from_list(q_rnd)
 
             # print(q_rnd)
@@ -1804,7 +1825,8 @@ def plan_in_time_space_bidirectional(
             prev_plans,
             end_times,
             robots,
-            other_robots)
+            other_robots,
+        )
 
         if res:
             t_rev.add_node(Node(t_rnd, q_rnd), None)
@@ -1836,7 +1858,7 @@ def plan_in_time_space_bidirectional(
         tmp = t_a
         t_a = t_b
         t_b = tmp
-        
+
         if ptc.should_terminate(0, time.time() - computation_start_time):
             break
 
@@ -1857,7 +1879,7 @@ def plan_in_time_space_bidirectional(
         #     pass
         # else:
         t_rnd, q_sampled = sample_uniform(curr_t_ub)
-        
+
         q_rnd = project_sample_to_preplanned_path(t_rnd, q_sampled)
 
         # print(q_uni_rnd.state())
@@ -1913,7 +1935,7 @@ def plan_in_time_space_bidirectional(
             #     # env.show(False)
             #     if isinstance(env, rai_env):
             #         env.C.view_recopyMeshes()
-                # env.C.view_close()
+            # env.C.view_close()
             continue
 
         if t_rnd < t0:
@@ -1934,7 +1956,7 @@ def plan_in_time_space_bidirectional(
             continue
 
         q_new = project_sample_to_preplanned_path(t_new, q_new)
-        
+
         if edge_collision_free_with_moving_obs(
             env,
             n_close.q,
@@ -1947,7 +1969,7 @@ def plan_in_time_space_bidirectional(
             resolution=env.collision_resolution,
         ):
             # add to tree
-            t_a.add_node(Node(t_new, q_new), n_close)            # add to tree
+            t_a.add_node(Node(t_new, q_new), n_close)  # add to tree
 
             n_close_opposite = t_b.get_nearest_neighbor(Node(t_rnd, q_rnd), v_max)
 
@@ -1967,7 +1989,7 @@ def plan_in_time_space_bidirectional(
                 resolution=env.collision_resolution,
             ):
                 print("found a path")
-                
+
                 # extract path from first tree
                 configurations = [q_new.state()]
                 times = [t_new]
@@ -2011,7 +2033,7 @@ def plan_in_time_space_bidirectional(
 
                 # return path
                 return TimedPath(time=times, path=path)
-        
+
         # if len(t_a.nodes) == 51:
         #     env.show(True)
 
@@ -2184,7 +2206,7 @@ def shortcut_with_dynamic_obstacles(
     offset = 0
     for r in robots:
         dim = env.robot_dims[r]
-        indices[r] = np.arange(offset, offset+dim)
+        indices[r] = np.arange(offset, offset + dim)
         offset += dim
 
     attempted_shortcuts = 0
@@ -2204,7 +2226,10 @@ def shortcut_with_dynamic_obstacles(
         robot_name_to_shortcut = robots[robot_idx_to_shortcut]
 
         # we skip this attempt of shortcutting if the attempt tries to shortcut a path before the end time of this robot
-        if new_path.time[i] < end_times[robot_name_to_shortcut] or new_path.time[j] < end_times[robot_name_to_shortcut]:
+        if (
+            new_path.time[i] < end_times[robot_name_to_shortcut]
+            or new_path.time[j] < end_times[robot_name_to_shortcut]
+        ):
             continue
 
         q0 = arr_to_config(new_path.path[i])
@@ -2215,8 +2240,12 @@ def shortcut_with_dynamic_obstacles(
 
         # check if the shortcut improves cost
         if path_cost(
-            [q0.state(), q1.state()], env.batch_config_cost, agent_slices=q0._array_slice
-        ) >= path_cost(new_path.path[i:j], env.batch_config_cost, agent_slices=q0._array_slice):
+            [q0.state(), q1.state()],
+            env.batch_config_cost,
+            agent_slices=q0._array_slice,
+        ) >= path_cost(
+            new_path.path[i:j], env.batch_config_cost, agent_slices=q0._array_slice
+        ):
             continue
 
         attempted_shortcuts += 1
@@ -2233,34 +2262,50 @@ def shortcut_with_dynamic_obstacles(
             for r in robots:
                 if r != robot_name_to_shortcut:
                     ind = indices[r]
-                    tmp_paths[r] = TimedPath(path=[pt[ind] * 1.0 for pt in new_path.path], time=discretized_time)
+                    tmp_paths[r] = TimedPath(
+                        path=[pt[ind] * 1.0 for pt in new_path.path],
+                        time=discretized_time,
+                    )
 
             # uninvolved_indices = np.array([ind for r, ind in indices.items() if r != robots[robot_to_shortcut]]).flatten()
             # tmp_path = TimedPath(time=discretized_time, path=[pt[uninvolved_indices] for pt in new_path.path])
-            tmp_other_paths.add_path([r for r in robots if r != robot_name_to_shortcut], Path(path=tmp_paths, task_index=3), None, is_escape_path=True)
+            tmp_other_paths.add_path(
+                [r for r in robots if r != robot_name_to_shortcut],
+                Path(path=tmp_paths, task_index=3),
+                None,
+                is_escape_path=True,
+            )
         else:
             tmp_other_paths = other_paths
 
         # this is wrong for partial shortcuts atm.
         if edge_collision_free_with_moving_obs(
-            env, q0, q1, t0, t1, tmp_other_paths, [robot_name_to_shortcut], end_times, resolution=env.collision_resolution
+            env,
+            q0,
+            q1,
+            t0,
+            t1,
+            tmp_other_paths,
+            [robot_name_to_shortcut],
+            end_times,
+            resolution=env.collision_resolution,
         ):
             # if len(robots) > 1:
             #     print("AAA")
-            
+
             for k in range(j - i):
                 ql = []
                 # for r_idx, r in enumerate(robots_to_shortcut):
                 #     q = q0[r_idx] + (q1[r_idx] - q0[r_idx]) / (j - i) * k
                 #     ql.append(q)
-                
+
                 for r_idx, r in enumerate(robots):
                     if r_idx == robot_idx_to_shortcut:
                         q = q0[0] + (q1[0] - q0[0]) / (j - i) * k
                     else:
-                        q = new_path.path[i+k][indices[r]] * 1.0
+                        q = new_path.path[i + k][indices[r]] * 1.0
                     ql.append(q)
-                    
+
                 new_path.path[i + k] = np.concatenate(ql)
                 new_path.time[i + k] = new_path.time[i] + k / (j - i) * (
                     new_path.time[j] - new_path.time[i]
@@ -2269,7 +2314,9 @@ def shortcut_with_dynamic_obstacles(
             # print("new cost:", path_cost(arrs_to_states(new_path.path), env.batch_config_cost))
 
         if len(robots) > 1:
-            tmp_other_paths.remove_final_escape_path([r for r in robots if r != robot_name_to_shortcut])
+            tmp_other_paths.remove_final_escape_path(
+                [r for r in robots if r != robot_name_to_shortcut]
+            )
 
         # env.show(True)
 
@@ -2277,9 +2324,15 @@ def shortcut_with_dynamic_obstacles(
         # times.append(current_time - start_time)
         # costs.append(path_cost(new_path, env.batch_config_cost))
 
-    print("original cost:", path_cost(path.path, env.batch_config_cost, agent_slices=q0._array_slice))
+    print(
+        "original cost:",
+        path_cost(path.path, env.batch_config_cost, agent_slices=q0._array_slice),
+    )
     print("Attempted shortcuts: ", attempted_shortcuts)
-    print("new cost:", path_cost(new_path.path, env.batch_config_cost, agent_slices=q0._array_slice))
+    print(
+        "new cost:",
+        path_cost(new_path.path, env.batch_config_cost, agent_slices=q0._array_slice),
+    )
 
     info = {}
 
@@ -2287,13 +2340,26 @@ def shortcut_with_dynamic_obstacles(
 
 
 def plan_robots_in_dyn_env(
-    ptc, env, t0, other_paths, robots, q0, end_times, goal, t_lb=-1, use_bidirectional_planner = True
+    ptc,
+    env,
+    t0,
+    other_paths,
+    robots,
+    q0,
+    end_times,
+    goal,
+    t_lb=-1,
+    use_bidirectional_planner=True,
 ) -> Tuple[Optional[Dict[str, TimedPath]], Optional[NDArray]]:
     # plan
     if use_bidirectional_planner:
-        path = plan_in_time_space_bidirectional(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
+        path = plan_in_time_space_bidirectional(
+            ptc, env, t0, other_paths, robots, end_times, goal, t_lb
+        )
     else:
-        path = plan_in_time_space(ptc, env, t0, other_paths, robots, end_times, goal, t_lb)
+        path = plan_in_time_space(
+            ptc, env, t0, other_paths, robots, end_times, goal, t_lb
+        )
 
     if path is None:
         return None, None
@@ -2367,10 +2433,10 @@ def plan_robots_in_dyn_env(
     #         y = [pt[1] for pt in separate_paths[r].path]
 
     #         plt.plot(x, y)
-        # plt.show()
-
+    # plt.show()
 
     return separate_paths, path.path[-1]
+
 
 @dataclass
 class PrioritizedPlannerConfig:
@@ -2379,11 +2445,12 @@ class PrioritizedPlannerConfig:
     use_bidirectional_planner: bool = True
     # shortcut: bool = True
 
+
 class PrioritizedPlanner(BasePlanner):
     def __init__(
         self,
         env: BaseProblem,
-        config: PrioritizedPlannerConfig = PrioritizedPlannerConfig()
+        config: PrioritizedPlannerConfig = PrioritizedPlannerConfig(),
     ):
         self.env = env
         self.config = config
@@ -2393,14 +2460,13 @@ class PrioritizedPlanner(BasePlanner):
         ptc: PlannerTerminationCondition,
         optimize: bool = True,
     ) -> Tuple[List[State] | None, Dict[str, Any]]:
-
         q0 = self.env.get_start_pos()
         m0 = self.env.get_start_mode()
 
         conf_type = type(self.env.get_start_pos())
 
         robots = self.env.robots
-        
+
         # get a sequence for the tasks from the environment
         # this is a constraint that this planner has, we need to have a sequence for planning
 
@@ -2408,8 +2474,10 @@ class PrioritizedPlanner(BasePlanner):
             raise ValueError("No safe home pose")
 
         # life is easier if we just assume that we get a sequence-env for now
-        if self.env.spec.dependency != DependencyType.FULLY_ORDERED \
-            and self.env.spec.dependency != DependencyType.UNORDERED:
+        if (
+            self.env.spec.dependency != DependencyType.FULLY_ORDERED
+            and self.env.spec.dependency != DependencyType.UNORDERED
+        ):
             raise ValueError
 
         sequence_cache = []
@@ -2453,7 +2521,7 @@ class PrioritizedPlanner(BasePlanner):
             # construct task id sequence
             task_id_sequence = [env.start_mode.task_ids]
 
-            for s in range(len(sequence)-1):
+            for s in range(len(sequence) - 1):
                 ids = copy.deepcopy(task_id_sequence[-1])
                 task_idx = sequence[s]
                 task = env.tasks[task_idx]
@@ -2467,23 +2535,22 @@ class PrioritizedPlanner(BasePlanner):
                     if r not in task.robots:
                         continue
 
-                    for i in range(s+1, len(sequence)):
+                    for i in range(s + 1, len(sequence)):
                         next_task_idx = sequence[i]
                         next_task = env.tasks[next_task_idx]
 
                         # print(i)
                         # print(next_task.robots)
-                        
+
                         if r in next_task.robots:
                             ids[robot_idx] = next_task_idx
                             break
-                
+
                 task_id_sequence.append(ids)
 
             print(task_id_sequence)
 
             while True:
-
                 if ptc.should_terminate(0, time.time() - computation_start_time):
                     break
 
@@ -2503,10 +2570,10 @@ class PrioritizedPlanner(BasePlanner):
                 print("earliest end time", earliest_end_time)
 
                 # remove escape path from plan
-                
-                # if 
+
+                # if
                 robot_paths.remove_final_escape_path(involved_robots)
-                
+
                 end_times = robot_paths.get_end_times(involved_robots)
                 t0 = min([v for k, v in end_times.items()])
 
@@ -2529,7 +2596,9 @@ class PrioritizedPlanner(BasePlanner):
                 # plan actual task
                 # TODO: need to add ptc in here to avoid violating the timings
                 current_time = time.time()
-                planning_ptc = RuntimeTerminationCondition(ptc.max_runtime_in_s - (current_time - computation_start_time))
+                planning_ptc = RuntimeTerminationCondition(
+                    ptc.max_runtime_in_s - (current_time - computation_start_time)
+                )
                 path, final_pose = plan_robots_in_dyn_env(
                     planning_ptc,
                     env,
@@ -2540,7 +2609,7 @@ class PrioritizedPlanner(BasePlanner):
                     end_times,
                     task_goal,
                     earliest_end_time,
-                    use_bidirectional_planner=self.config.use_bidirectional_planner
+                    use_bidirectional_planner=self.config.use_bidirectional_planner,
                 )
 
                 print("final_pose", final_pose)
@@ -2570,11 +2639,13 @@ class PrioritizedPlanner(BasePlanner):
                     print("curr mode", curr_mode)
                     print("final pose in path", final_pose)
                     print(q)
-                    next_modes = env.get_next_modes(env.start_pos.from_list(q), curr_mode)
+                    next_modes = env.get_next_modes(
+                        env.start_pos.from_list(q), curr_mode
+                    )
                     print(curr_mode, next_modes)
                     if len(next_modes) > 1:
                         for next_mode in next_modes:
-                            if next_mode.task_ids == task_id_sequence[seq_index+1]:
+                            if next_mode.task_ids == task_id_sequence[seq_index + 1]:
                                 break
                             # for this_id, next_id in zip(curr_mode.task_ids, next_mode.task_ids):
                             #     if this_id != next_id and next_id == sequence[seq_index+1]:
@@ -2606,9 +2677,8 @@ class PrioritizedPlanner(BasePlanner):
                 #         y.append(p[1])
 
                 #     plt.plot(x, y)
-                
-                # plt.show()
 
+                # plt.show()
 
                 # for r in robots:
                 #     print("___________________")
@@ -2620,7 +2690,7 @@ class PrioritizedPlanner(BasePlanner):
                 #         for t in segment.path.time:
                 #             # if t < tprev:
                 #             print(t)
-                        
+
                 #             # tprev = t
 
                 # print("A")
@@ -2645,12 +2715,14 @@ class PrioritizedPlanner(BasePlanner):
                     escape_start_pose = robot_paths.get_robot_poses_at_time(
                         [r], escape_start_time
                     )
-                    
+
                     t0 = min([v for k, v in end_times.items()])
 
                     current_time = time.time()
-                    escape_planning_ptc = RuntimeTerminationCondition(ptc.max_runtime_in_s - (current_time - computation_start_time))
-                    
+                    escape_planning_ptc = RuntimeTerminationCondition(
+                        ptc.max_runtime_in_s - (current_time - computation_start_time)
+                    )
+
                     escape_path, _ = plan_robots_in_dyn_env(
                         escape_planning_ptc,
                         env,
@@ -2660,7 +2732,7 @@ class PrioritizedPlanner(BasePlanner):
                         escape_start_pose,
                         end_times,
                         escape_goal,
-                        use_bidirectional_planner=self.config.use_bidirectional_planner
+                        use_bidirectional_planner=self.config.use_bidirectional_planner,
                     )
 
                     print("escape path")
@@ -2722,14 +2794,14 @@ class PrioritizedPlanner(BasePlanner):
                     info["paths"].append(path)
 
                     best_path = copy.deepcopy(path)
-                    
+
                     print(f"Added path with cost {cost}.")
 
                     if not optimize:
                         break
                 else:
                     print(f"Not adding this sequence, cost to high: {cost}")
-            
+
             if isinstance(env, rai_env):
                 del env.C
 

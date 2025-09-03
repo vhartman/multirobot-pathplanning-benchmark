@@ -7,14 +7,14 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
 )
-from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+from .rrtstar_base import (
     BaseRRTConfig,
     BaseRRTstar,
     Node,
     SingleTree,
     save_data,
 )
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
+from .termination_conditions import (
     PlannerTerminationCondition,
 )
 

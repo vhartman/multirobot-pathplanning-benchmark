@@ -23,9 +23,9 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist,
 )
-from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
-from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
-from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
+from .sampling_informed import InformedSampling
+from .mode_validation import ModeValidation
+from .baseplanner import BasePlanner
 
 
 class Operation:

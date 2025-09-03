@@ -20,14 +20,6 @@ from sortedcontainers import SortedList
 from collections import defaultdict
 from itertools import chain
 
-
-from multi_robot_multi_goal_planning.planners import shortcutting
-from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
-from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
-from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
-    PlannerTerminationCondition,
-)
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist,
@@ -39,6 +31,13 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
+from multi_robot_multi_goal_planning.planners import shortcutting
+from .baseplanner import BasePlanner
+from .sampling_informed import InformedSampling
+from .mode_validation import ModeValidation
+from .termination_conditions import (
+    PlannerTerminationCondition,
+)
 
 class Node:
     __slots__ = [
