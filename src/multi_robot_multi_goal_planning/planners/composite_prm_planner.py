@@ -822,6 +822,9 @@ class MultimodalGraph:
                     [n.state.q.q for n in transition_node_list], dtype=np.float64
                 )
 
+            if len(self.transition_node_array_cache[key]) == 0:
+                return [], None
+            
             transition_dists = self.batch_dist_fun(
                 node.state.q, self.transition_node_array_cache[key]
             )
