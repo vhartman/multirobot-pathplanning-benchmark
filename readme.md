@@ -19,13 +19,22 @@ python3 -m pip install -e .[all]
 ```
 
 which also installs this module.
-You can choose whatever backends you want from the start - [all] gives you all of them, but [pin] or [rai] is possible as well.
+You can choose whatever backends you want. [all] gives you all of them, but [pin] or [rai] is possible as well and installs only Pinocchio or only RAI.
 
-This also works with uv (and is definitely quite a bit faster)
+This also works with uv (and is definitely quite a bit faster).
+The command
 ```
 uv sync --extra all
 ```
 Does the same thing as the command above, and is recommended. In that case, the commands below need to be adapted to use `uv run [rest of the command]`.
+
+After the installation, you can run 
+```
+python3 examples/run_planner.py abstract_test  --max_time=10 --optimize
+```
+to test if the installation went well.
+This runs one of the abstract environments that do not require any more fancy backend with the default planner.
+After it finished, it shows an animation of the found path.
 
 # Overview and Usage
 
@@ -63,14 +72,14 @@ A planner can be run with
 python3 examples/run_planner.py [env] [options]
 ```
 
-which runs the default planer on the environment with the default configuratoin. A concrete example would for example be
+which runs the default planner on the environment with the default configuratoin. A concrete example would be
 
 ```
 python3 examples/run_planner.py 2d_handover --optimize --num_iters=10000 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max --prm_informed_sampling=True --save --prm_locally_informed_sampling --prm_shortcutting
 ```
 
 Not all options can be set throught the cli interface.
-An experiment (i.e., multiple runs of multiple planners or of the same planer with multiple options) can be run with 
+An experiment (i.e., multiple runs of multiple planners or of the same planner with multiple options) can be run with 
 
 ```
 python3 ./examples/run_experiment.py [path to config]
@@ -96,6 +105,10 @@ and finally, a path can be visualized  and possibly exported with
 ```
 python3 examples/display_single_path.py [filename] [environment_name]
 ```
+
+## Planners
+Currently, for the optimal planners, we have implementations of RRT, Bidirectional RRT, PRM, AIT and EIT.
+As baselines for suboptimal planners, we implemented prioritized planners, and receding horizon planning versions of the optimal planners.
 
 ## Problem description
 
@@ -135,7 +148,9 @@ There are two examples that implement other environments than the rai-based ones
 
 #### Specifying your own problems
 
-A problem consists of the initial scene, and a task sequence or a dependency graph.
+A problem consists of 
+- the initial scene, and 
+- a description of the task ordering. This can be a task sequence or a dependency graph, or a set of tasks that need to be done, and dependencies between them.
 
 #### Implementing your own planner
 
@@ -146,7 +161,7 @@ The information that is needed for plots, is a list of all paths that were found
 
 # Tests
 There are initial tests in the `tests/` folder.
-But this could and should be expanded.
+This could and should be expanded.
 
 # Extension & Future work
 
@@ -177,10 +192,26 @@ While that gives us optimality, and completeness, this makes the planner slow in
 The prioritized planner already shows what might be possible for a suboptimal planner.
 Some e.g. receding horizon planner that plans in the composite space might be a nice compromise.
 
-<!-- 
-# Citation
-If you use this codebase in your research, please cite:
+### More concrete TODOs
+Some of these could be PRs:
 
+- [ ] Document implementation of the own planner better.
+- [ ] Document implementation of an own environment/problem better.
+- [ ] Planner cleanup: Many of the planners have a mix of historic experimentation still in them. Much of that can and should be removed.
+- [ ] Extend abstract environment
+  - [ ] Parallel collision checking
+  - [ ] More complex (3D/robot) scenarios (using JAX?)
+- [ ] Implement support for Mujoco/Genesis/Isaac(?) as backend
+- [ ] More cost functions (such as clearance) to minimize
+
+# Citation
+If you use this codebase in your research, please cite
+
+```
+Currently anonymized for review.
+```
+
+<!-- 
 ```
 @article{hartmann2025benchmark,
   title={A Benchmark for Optimal Multi-Modal Multi-Robot Multi-Goal Path Planning with Given Robot Assignment},
