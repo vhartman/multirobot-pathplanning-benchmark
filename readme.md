@@ -3,10 +3,6 @@
 This repository provides some multi-robot-multi-goal motion planning problems, and some baseline-planners.
 There are also some utilities for visualizing plans, and plotting convergence and success rates of planners.
 
-The benchmark contains some problems (and data) from previous work, mostly from 
-- ["Cooperative Task and Motion Planning for Multi-Arm Assembly Systems"](https://arxiv.org/pdf/2203.02475)
-- ["Human-Robot Interaction - Workshop at Design Modeling Symposium 2024"](https://infoscience.epfl.ch/entities/publication/26958110-4f6b-4762-bccb-63ecf36c7725)
-
 <!-- The corresponding paper can be found [here](https://vhartmann.com/assets/mrmg/a_benchmark_for_mr_mg_pf.pdf), and more videos can be seen on the [paper website](https://vhartmann.com/mrmg-planning/). -->
 
 # Installation
@@ -220,3 +216,8 @@ Currently anonymized for review.
   year={2025}
 }
 ``` -->
+
+# Acknowledgements
+The benchmark contains some problems (and data) from previous work, mostly from 
+- ["Cooperative Task and Motion Planning for Multi-Arm Assembly Systems"](https://arxiv.org/pdf/2203.02475)
+- ["Human-Robot Interaction - Workshop at Design Modeling Symposium 2024"](https://infoscience.epfl.ch/entities/publication/26958110-4f6b-4762-bccb-63ecf36c7725)
