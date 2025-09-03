@@ -19,28 +19,21 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
 
-from multi_robot_multi_goal_planning.planners.prioritized_planner import (
+from multi_robot_multi_goal_planning.planners import (
     PrioritizedPlanner,
-)
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
-    CompositePRMConfig,
     CompositePRM,
-)
-from multi_robot_multi_goal_planning.planners.shortcutting import (
+    CompositePRMConfig,
     single_mode_shortcut,
     robot_mode_shortcut,
-)
-from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
-from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BaseRRTConfig,
+    RRTstar,
     BidirectionalRRTstar,
+    BaseITConfig,
+    AITstar,
+    EITstar,
+    RecedingHorizonConfig,
+    RecedingHorizonPlanner,
 )
-
-from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTConfig
-from multi_robot_multi_goal_planning.planners.itstar_base import BaseITConfig
-
-from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
-from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
-from multi_robot_multi_goal_planning.planners.receding_horizon_wrapper import RecedingHorizonPlanner
 
 from run_experiment import export_planner_data
 

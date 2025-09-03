@@ -3,7 +3,7 @@ from typing import Tuple, List, Dict, Any
 import copy
 import time
 
-from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
+from .baseplanner import BasePlanner
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     State,
@@ -15,24 +15,24 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
     Configuration,
 )
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
+from .termination_conditions import (
     PlannerTerminationCondition,
     RuntimeTerminationCondition,
 )
 
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
+from .composite_prm_planner import (
     CompositePRM,
     CompositePRMConfig,
 )
-from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTConfig
-from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
-from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+from .rrtstar_base import BaseRRTConfig
+from .planner_rrtstar import RRTstar
+from .planner_birrtstar import (
     BidirectionalRRTstar,
 )
 
-from multi_robot_multi_goal_planning.planners.itstar_base import BaseITConfig
-from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
-from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
+from .itstar_base import BaseITConfig
+from .planner_aitstar import AITstar
+from .planner_eitstar import EITstar
 
 from multi_robot_multi_goal_planning.problems.util import path_cost
 

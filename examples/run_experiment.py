@@ -26,23 +26,22 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.prioritized_planner import (
+from make_plots import make_cost_plots
+# np.random.seed(100)
+
+from multi_robot_multi_goal_planning.planners import (
     PrioritizedPlanner,
-)
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
     CompositePRM,
     CompositePRMConfig,
-)
-from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
-from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BaseRRTConfig,
+    RRTstar,
     BidirectionalRRTstar,
+    BaseITConfig,
+    AITstar,
+    EITstar,
+    RecedingHorizonConfig,
+    RecedingHorizonPlanner,
 )
-from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTConfig
-from multi_robot_multi_goal_planning.planners.itstar_base import BaseITConfig
-from make_plots import make_cost_plots
-from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
-from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
-# np.random.seed(100)
 
 
 def merge_config(
