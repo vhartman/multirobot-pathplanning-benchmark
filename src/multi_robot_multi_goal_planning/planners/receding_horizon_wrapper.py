@@ -24,6 +24,16 @@ from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
     CompositePRM,
     CompositePRMConfig,
 )
+from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTConfig
+from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
+from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BidirectionalRRTstar,
+)
+
+from multi_robot_multi_goal_planning.planners.itstar_base import BaseITConfig
+from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
+from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
+
 from multi_robot_multi_goal_planning.problems.util import path_cost
 
 
@@ -36,6 +46,10 @@ class RecedingHorizonConfig:
     constrain_free_robots_to_home: bool = True
 
 
+# TODO:
+# - add cost convergence as early stopping in low level planners
+# - add all planners/getters for planners
+# - somehow allow configuring planners
 class RecedingHorizonPlanner(BasePlanner):
     """
     Receding horizon planner wrapper.
@@ -46,7 +60,32 @@ class RecedingHorizonPlanner(BasePlanner):
     """
 
     def construct_planner(self, env: BaseProblem) -> BasePlanner:
-        planner = CompositePRM(env)
+        if self.config.low_level_solver == "composite_prm":
+            planner = CompositePRM(env)
+        elif self.config.low_level_solver == "rrt_star":
+            assert False
+            # not yet supported
+
+            config = BaseRRTConfig()
+            planner = RRTstar(env, config)
+        elif self.config.low_level_solver == "birrt_star":
+            assert False
+            # not yet supported
+            
+            config = BaseRRTConfig()
+            planner = BidirectionalRRTstar(env, config)
+        elif self.config.low_level_solver == "aitstar":
+            assert False
+            # not yet supported
+
+            config = BaseITConfig()
+            planner = AITstar(env, config)
+        elif self.config.low_level_solver == "eitstar":
+            assert False
+            # not yet supported
+
+            config = BaseITConfig()
+            planner = EITstar(env, config)
         return planner
 
     def make_short_horizon_env(
@@ -73,7 +112,7 @@ class RecedingHorizonPlanner(BasePlanner):
 
         short_horizon_env.start_pos = copy.deepcopy(start_pos)
 
-        if final_task_index <  len(self.base_env.sequence):
+        if final_task_index < len(self.base_env.sequence):
             if self.config.constrain_free_robots_to_home:
                 goal_pose = self.base_env.start_pos.state() * 1.0
 
@@ -122,11 +161,9 @@ class RecedingHorizonPlanner(BasePlanner):
 
             short_horizon_env.tasks.append(new_terminal_task)
             short_horizon_env.tasks[-1].name = f"dummy_terminal_{seq_start_idx}"
-        
-        short_horizon_sequence = original_named_sequence[
-            0:final_task_index
-        ]
-        if final_task_index <  len(self.base_env.sequence):
+
+        short_horizon_sequence = original_named_sequence[0:final_task_index]
+        if final_task_index < len(self.base_env.sequence):
             short_horizon_sequence[-1] = f"dummy_terminal_{seq_start_idx}"
 
         short_horizon_env.sequence = short_horizon_env._make_sequence_from_names(
@@ -137,26 +174,24 @@ class RecedingHorizonPlanner(BasePlanner):
 
         for i in range(1, len(path)):
             if path[i].mode != path[i - 1].mode:
-                next_mode = short_horizon_env.get_next_modes(
-                    path[i - 1].q, curr_mode
-                )[0]
-                curr_mode = next_mode
-                short_horizon_env.set_to_mode(next_mode)
-
-            elif i == len(path) - 1:
-                next_mode = short_horizon_env.get_next_modes(path[i].q, curr_mode)[
+                next_mode = short_horizon_env.get_next_modes(path[i - 1].q, curr_mode)[
                     0
                 ]
                 curr_mode = next_mode
                 short_horizon_env.set_to_mode(next_mode)
 
+            elif i == len(path) - 1:
+                next_mode = short_horizon_env.get_next_modes(path[i].q, curr_mode)[0]
+                curr_mode = next_mode
+                short_horizon_env.set_to_mode(next_mode)
+
         short_horizon_env.start_mode = curr_mode
 
-        if final_task_index <  len(self.base_env.sequence):
+        if final_task_index < len(self.base_env.sequence):
             short_horizon_env._terminal_task_ids = [
                 len(short_horizon_env.tasks) - 1
             ] * len(self.base_env.robots)
-            
+
         return short_horizon_env
 
     def __init__(self, env: BaseProblem, config: RecedingHorizonConfig | None = None):
@@ -254,7 +289,6 @@ class RecedingHorizonPlanner(BasePlanner):
                             start_mode = next_mode
                             curr_mode = next_mode
 
-           
             # env_cpy = copy.deepcopy(self.base_env)
             # env_cpy.display_path(complete_plan)
 
