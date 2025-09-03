@@ -2044,6 +2044,12 @@ class CompositePRM(BasePlanner):
                     add_new_batch = True
                     break
 
+            if current_best_cost is not None:
+                # check if we might have reached the optimal cost? Straightline connection
+                if np.linalg.norm(current_best_cost - self.env.config_cost(q0, g.goal_nodes[0].state.q)) < 1e-6:
+                    break
+            
+
             if not optimize and current_best_cost is not None:
                 break
 
