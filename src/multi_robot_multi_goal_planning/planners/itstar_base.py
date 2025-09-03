@@ -2455,6 +2455,9 @@ class BaseITstar(BasePlanner):
                 dtype=np.float64,
             )
 
+            if cost is not None and np.linalg.norm(cost - self.env.config_cost(self.g.root.state.q, self.g.goal_nodes[0].state.q)) < 1e-6:
+                return new_samples, num_attempts
+
         if (
             self.config.apply_long_horizon
             and not self.long_horizon.init
@@ -2468,6 +2471,10 @@ class BaseITstar(BasePlanner):
 
         while len(new_samples) < batch_size:
             num_attempts += 1
+
+            if num_attempts > 100 * batch_size:
+                break
+
             m = self.sample_mode(mode_seq, "uniform_reached", found_solution)
 
             # sample configuration

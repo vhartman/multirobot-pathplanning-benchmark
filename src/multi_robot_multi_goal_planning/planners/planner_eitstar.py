@@ -1016,6 +1016,9 @@ class EITstar(BaseITstar):
             if ptc.should_terminate(self.cnt, time.time() - self.start_time):
                 break
 
+            if self.current_best_cost is not None and np.linalg.norm(self.current_best_cost - self.env.config_cost(self.g.root.state.q, self.g.goal_nodes[0].state.q)) < 1e-6:
+                break
+
         if self.costs != []:
             self.update_results_tracking(self.costs[-1], self.current_best_path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
