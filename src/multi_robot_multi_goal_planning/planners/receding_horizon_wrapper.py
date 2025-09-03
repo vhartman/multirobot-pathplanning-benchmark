@@ -39,7 +39,7 @@ from multi_robot_multi_goal_planning.problems.util import path_cost
 
 @dataclass
 class RecedingHorizonConfig:
-    low_level_solver: str = "composite_prm"
+    low_level_solver: str = "eitstar"
     horizon_length: int = 2
     execution_length: int = 1
     low_level_max_time: float = 10
@@ -63,27 +63,15 @@ class RecedingHorizonPlanner(BasePlanner):
         if self.config.low_level_solver == "composite_prm":
             planner = CompositePRM(env)
         elif self.config.low_level_solver == "rrt_star":
-            assert False
-            # not yet supported
-
             config = BaseRRTConfig()
             planner = RRTstar(env, config)
         elif self.config.low_level_solver == "birrt_star":
-            assert False
-            # not yet supported
-            
             config = BaseRRTConfig()
             planner = BidirectionalRRTstar(env, config)
         elif self.config.low_level_solver == "aitstar":
-            assert False
-            # not yet supported
-
             config = BaseITConfig()
             planner = AITstar(env, config)
         elif self.config.low_level_solver == "eitstar":
-            assert False
-            # not yet supported
-
             config = BaseITConfig()
             planner = EITstar(env, config)
         return planner
@@ -240,6 +228,8 @@ class RecedingHorizonPlanner(BasePlanner):
             sh_env = self.make_short_horizon_env(
                 current_task_index, start_pos, complete_plan
             )
+
+            # sh_env.show_config(sh_env.start_pos)
 
             short_horizon_planner = self.construct_planner(sh_env)
 

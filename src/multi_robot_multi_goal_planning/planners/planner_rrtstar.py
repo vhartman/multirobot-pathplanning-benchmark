@@ -185,4 +185,15 @@ class RRTstar(BaseRRTstar):
         self.update_results_tracking(self.operation.cost, self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
         # print('Path is collision free:', self.env.is_path_collision_free(self.operation.path))
+
+        # ensure that the mode-switch nodes are there once in every mode.
+        path_w_doubled_modes = []
+        for i in range(len(self.operation.path)):
+            path_w_doubled_modes.append(self.operation.path[i])
+
+            if i + 1 < len(self.operation.path) and self.operation.path[i].mode != self.operation.path[i + 1].mode:
+                path_w_doubled_modes.append(State(self.operation.path[i].q, self.operation.path[i + 1].mode))
+
+        self.operation.path = path_w_doubled_modes
+
         return self.operation.path, info

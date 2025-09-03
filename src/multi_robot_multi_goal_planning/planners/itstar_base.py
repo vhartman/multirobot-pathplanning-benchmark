@@ -2524,6 +2524,9 @@ class BaseITstar(BasePlanner):
             return
         if not self.expanded_modes:
             return
+        if self.last_expanded_mode == self.env.start_mode:
+            return 
+        
         transition_nodes = self.g.transition_node_ids[self.last_expanded_mode]
         for transition in transition_nodes:
             node = self.g.nodes[transition]
@@ -2537,7 +2540,7 @@ class BaseITstar(BasePlanner):
                     self.sorted_reached_modes = potential_sorted_reached_modes
                 return
         prev_mode = self.last_expanded_mode.prev_mode
-        if prev_mode is None:
+        if prev_mode is None or self.last_expanded_mode == self.env.start_mode:
             self.g.virtual_root = self.g.root
         else:
             for transition in self.g.transition_node_ids[prev_mode]:
@@ -3441,7 +3444,7 @@ class BaseITstar(BasePlanner):
                 if len(self.g.transition_node_ids[virtual_root_mode]) == 0:
                     self.empty_transition_nodes = virtual_root_mode
                 prev_mode = virtual_root_mode.prev_mode
-                if prev_mode is not None:
+                if prev_mode is not None and virtual_root_mode != self.env.start_mode:
                     self.last_expanded_mode = virtual_root_mode.prev_mode
                     self.expanded_modes.add(virtual_root_mode.prev_mode)
 

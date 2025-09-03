@@ -934,7 +934,7 @@ class BaseRRTstar(BasePlanner):
         # goal sampling
         while True:
             if tree_order == -1:
-                if mode.prev_mode is None:
+                if mode.prev_mode is None or mode == self.env.start_mode:
                     return self.env.start_pos
                 else:
                     transition_nodes_id = transition_node_ids[mode.prev_mode]
