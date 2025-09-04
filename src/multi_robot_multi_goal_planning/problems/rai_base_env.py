@@ -292,6 +292,8 @@ class rai_env(BaseProblem):
 
         self.limits = self.C.getJointLimits()
 
+        print(self.limits)
+
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
 

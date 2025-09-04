@@ -83,8 +83,9 @@ def visualize_modes(env: rai_env, export_images: bool = False):
         assert len(ms) == 1
         m = ms[0]
 
-
-
+    if hasattr(env, "close"):
+        env.close()
+    
 def benchmark_collision_checking(env: rai_env, N=10000):
     conf_type = type(env.get_start_pos())
 

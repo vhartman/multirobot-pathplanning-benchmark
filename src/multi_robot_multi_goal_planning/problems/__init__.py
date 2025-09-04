@@ -15,6 +15,7 @@ import multi_robot_multi_goal_planning.problems.rai_free_envs as rfe
 import multi_robot_multi_goal_planning.problems.abstract_env as ae
 
 import multi_robot_multi_goal_planning.problems.pinocchio_env as pe
+import multi_robot_multi_goal_planning.problems.mujoco_env as me
 
 def get_all_environments() -> Dict:
     # fmt: off
@@ -148,7 +149,10 @@ def get_all_environments() -> Dict:
         "unassigned": lambda: rfe.rai_two_dim_env(),
         "unassigned_piano": lambda: rfe.rai_unassigned_piano_mover(),
         "unassigned_cleanup": lambda: rfe.rai_unassigned_pile_cleanup(),
-        "unassigned_stacking": lambda: rfe.rai_unassigned_stacking(num_boxes=4, num_robots=4)
+        "unassigned_stacking": lambda: rfe.rai_unassigned_stacking(num_boxes=4, num_robots=4),
+
+        ##### mujoco
+        "four_panda_mujoco": lambda: me.four_arm_mujoco_env()
     }
     # fmt: on
 
