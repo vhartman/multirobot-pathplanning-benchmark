@@ -188,6 +188,7 @@ class MujocoEnvironment(BaseProblem):
             self._enter_pressed = False
             while self.viewer.is_running() and not self._enter_pressed:
                 self.viewer.sync()
+                time.sleep(0.01)
 
     def show_config(self, q, blocking=True):
         """Display a configuration `q` in the viewer."""
@@ -206,6 +207,7 @@ class MujocoEnvironment(BaseProblem):
             self._enter_pressed = False
             while self.viewer.is_running() and not self._enter_pressed:
                 self.viewer.sync()
+                time.sleep(0.01)
 
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
@@ -304,14 +306,6 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
     """
 
     def __init__(self, xml_path, n_data_pool: int = 4):
-        # Auto-determine optimal pool size if not specified
-        if n_data_pool is None:
-            import multiprocessing
-
-            n_data_pool = min(
-                multiprocessing.cpu_count(), 8
-            )  # Cap at 8 for memory reasons
-
         super().__init__(xml_path, n_data_pool)
 
         # Create thread pool executor for reuse
@@ -501,7 +495,7 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self, agents_can_rotate=True):
         path = (
-            "/home/valentin/Downloads/roboballet/data/mujoco_world/4_pandas_world.xml"
+            "/home/valentin/Downloads/roboballet/data/mujoco_world/4_pandas_world_closer.xml"
         )
 
         self.robots = [
@@ -518,10 +512,10 @@ class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         OptimizedMujocoEnvironment.__init__(self, path)
 
         self.tasks = [
-            Task(["panda1"], SingleGoal(np.array([1, -0.5, 0, -2, 0, 2, -0.5]))),
-            Task(["panda2"], SingleGoal(np.array([1, -0.5, 0, -2, 0, 2, -0.5]))),
-            Task(["panda3"], SingleGoal(np.array([1, -0.5, 0, -2, 0, 2, -0.5]))),
-            Task(["panda4"], SingleGoal(np.array([1, -0.5, 0, -2, 0, 2, -0.5]))),
+            Task(["panda1"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))),
+            Task(["panda2"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))),
+            Task(["panda3"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))),
+            Task(["panda4"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))),
             # terminal mode
             Task(
                 self.robots,
@@ -543,4 +537,4 @@ class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         BaseModeLogic.__init__(self)
 
         self.collision_resolution = 0.01
-        self.collision_tolerance = 0.01
+        self.collision_tolerance = 0.00
