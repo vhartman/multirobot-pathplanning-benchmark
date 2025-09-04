@@ -1,8 +1,6 @@
 import numpy as np
 
 import time
-import sys
-import select
 
 from typing import List, Optional
 from numpy.typing import NDArray
@@ -40,9 +38,11 @@ from .planning_env import (
 import mujoco
 import mujoco.viewer
 
-from concurrent.futures import ProcessPoolExecutor
 import threading
-from queue import Queue
+from concurrent.futures import ThreadPoolExecutor
+
+import copy
+
 
 class MujocoEnvironment(BaseProblem):
     """
@@ -89,7 +89,7 @@ class MujocoEnvironment(BaseProblem):
 
         return joint_ids
 
-    def __init__(self, xml_path, n_data_pool:int = 1):
+    def __init__(self, xml_path, n_data_pool: int = 1):
         self.limits = None
 
         self.cost_metric = "euclidean"
@@ -297,35 +297,35 @@ class MujocoEnvironment(BaseProblem):
         else:
             raise NotImplementedError("This is not supported for this environment.")
 
-from concurrent.futures import ThreadPoolExecutor
 
 class OptimizedMujocoEnvironment(MujocoEnvironment):
     """
     Optimized version with better parallel collision checking
     """
-    
-    def __init__(self, xml_path, n_data_pool: int = 5):
+
+    def __init__(self, xml_path, n_data_pool: int = 4):
         # Auto-determine optimal pool size if not specified
         if n_data_pool is None:
             import multiprocessing
-            n_data_pool = min(multiprocessing.cpu_count(), 8)  # Cap at 8 for memory reasons
-        
-        print("AAAAAAAAAA")
-        print(n_data_pool)
+
+            n_data_pool = min(
+                multiprocessing.cpu_count(), 8
+            )  # Cap at 8 for memory reasons
 
         super().__init__(xml_path, n_data_pool)
-        
+
         # Create thread pool executor for reuse
-        self._executor = ThreadPoolExecutor(max_workers=n_data_pool, 
-                                          thread_name_prefix="collision_checker")
+        self._executor = ThreadPoolExecutor(
+            max_workers=n_data_pool, thread_name_prefix="collision_checker"
+        )
         self._pool_lock = threading.Lock()
         self._available_data = list(range(len(self._data_pool)))
-        
+
     def close(self):
         super().close()
-        if hasattr(self, '_executor'):
+        if hasattr(self, "_executor"):
             self._executor.shutdown(wait=True)
-    
+
     def _get_data_object(self):
         """Thread-safe way to get a data object from pool"""
         with self._pool_lock:
@@ -333,109 +333,108 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
                 idx = self._available_data.pop()
                 return idx, self._data_pool[idx]
             return None, None
-    
+
     def _return_data_object(self, idx):
         """Thread-safe way to return a data object to pool"""
         with self._pool_lock:
             self._available_data.append(idx)
-    
-    def _check_collision_batch(self, qs_batch, start_idx, collision_found):
+
+    def _check_collision_batch(self, qs_batch, collision_found):
         """Check collision for a batch of configurations"""
-        idx, data = self._get_data_object()
+        data_idx, data = self._get_data_object()
         if data is None:
-            return []
-        
+            return True  # Assume collision if can't get data object
+
         try:
-            results = []
-            for i, q in enumerate(qs_batch):
-                # Early termination if collision already found
+            for q in qs_batch:
+                # Early termination if collision already found by another thread
                 if collision_found.is_set():
-                    break
-                    
+                    return False  # Another thread found collision, this batch is irrelevant
+
                 data.qpos[:] = q
                 data.qvel[:] = 0
                 mujoco.mj_forward(self.model, data)
-                
+
                 # Check for collision
-                has_collision = False
                 for c_idx in range(data.ncon):
                     if data.contact[c_idx].dist < self.collision_tolerance:
-                        has_collision = True
                         collision_found.set()  # Signal other threads to stop
-                        break
-                
-                results.append(not has_collision)
-                
-                if has_collision:
-                    break
-                    
-            return results
+                        return True  # This batch found collision
+
+            return False  # No collision found in this batch
         finally:
-            self._return_data_object(idx)
-    
+            self._return_data_object(data_idx)
+
     def _batch_is_collision_free_optimized(self, qs: List[np.ndarray]) -> bool:
         """
-        Optimized batch collision checking with early stopping and better threading
+        Optimized batch collision checking with CORRECT batching
         """
-
         if not qs:
             return True
-            
+
         n = len(qs)
-        
+
         # For small batches, sequential is often faster due to overhead
         if n < 10:
             return self._sequential_collision_check(qs)
-        
-        # Determine optimal batch size per thread
+
         num_threads = min(len(self._data_pool), n)
-        batch_size = max(1, n // num_threads)
-        
         collision_found = threading.Event()
-        
-        # Create batches
+
+        # Create batches ensuring ALL indices are covered - THIS IS THE FIX!
         batches = []
-        for i in range(0, n, batch_size):
-            batch = qs[i:i + batch_size]
-            batches.append((batch, i))
-        
-        # Use ThreadPoolExecutor for better thread management
+        for i in range(num_threads):
+            # Calculate start and end indices for this thread
+            start_idx = i * n // num_threads
+            end_idx = (i + 1) * n // num_threads
+
+            # For the last thread, ensure we go to the very end
+            if i == num_threads - 1:
+                end_idx = n
+
+            if start_idx < end_idx:  # Only create batch if there's work to do
+                batch = qs[start_idx:end_idx]
+                batches.append(batch)
+
+        # Submit all batch jobs
         futures = []
-        for batch, start_idx in batches:
-            future = self._executor.submit(self._check_collision_batch, 
-                                         batch, start_idx, collision_found)
+        for batch in batches:
+            future = self._executor.submit(
+                self._check_collision_batch, batch, collision_found
+            )
             futures.append(future)
-        
-        # Wait for results or early termination
-        all_collision_free = True
+
+        # Wait for results - any collision means edge is not collision-free
+        collision_detected = False
+
         for future in futures:
             try:
-                batch_results = future.result(timeout=10.0)  # Add timeout
-                if not all(batch_results):
-                    all_collision_free = False
-                    collision_found.set()  # Stop other threads
+                has_collision = future.result(timeout=10.0)
+                if has_collision:
+                    collision_detected = True
+                    collision_found.set()  # Signal other threads to stop
                     break
             except Exception as e:
                 print(f"Error in collision checking: {e}")
-                all_collision_free = False
+                collision_detected = True  # Assume collision on error
                 break
-        
+
         # Cancel remaining futures if collision found
-        if collision_found.is_set():
+        if collision_detected:
             for future in futures:
                 future.cancel()
-        
-        return all_collision_free
-    
+
+        return not collision_detected
+
     def _sequential_collision_check(self, qs: List[np.ndarray]) -> bool:
         """Fallback sequential collision checking"""
         data = self._data_pool[0]  # Use first data object for sequential
-        
+
         for q in qs:
             data.qpos[:] = q
             data.qvel[:] = 0
             mujoco.mj_forward(self.model, data)
-            
+
             for c_idx in range(data.ncon):
                 if data.contact[c_idx].dist < self.collision_tolerance:
                     return False
@@ -492,11 +491,11 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 
         # Decide whether to use parallel or sequential based on problem size
         use_parallel = force_parallel or (len(qs) >= 20 and len(self._data_pool) > 1)
-        
+
         if use_parallel:
-            return self._batch_is_collision_free_optimized(qs)
+            return self._batch_is_collision_free_optimized(copy.deepcopy(qs))
         else:
-            return self._sequential_collision_check(qs)
+            return self._sequential_collision_check(copy.deepcopy(qs))
 
 
 class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
