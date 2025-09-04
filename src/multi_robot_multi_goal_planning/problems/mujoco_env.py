@@ -42,6 +42,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import copy
+import os.path
 
 
 class MujocoEnvironment(BaseProblem):
@@ -88,6 +89,18 @@ class MujocoEnvironment(BaseProblem):
         ]
 
         return joint_ids
+    
+    def collect_adr(self, root_name):
+        robot_body_ids = self.get_body_ids(root_name)
+
+        joint_addr = [
+            self.model.jnt_qposadr[j]
+            for j in range(self.model.njnt)
+            if self.model.jnt_bodyid[j] in robot_body_ids
+        ]
+
+        return joint_addr
+    
 
     def __init__(self, xml_path, n_data_pool: int = 1):
         self.limits = None
@@ -101,23 +114,40 @@ class MujocoEnvironment(BaseProblem):
         self.viewer = None
         self._enter_pressed = False
 
-        self.limits = np.zeros((2, self.model.njnt))
-
         # Preallocated pool for parallel collision checking
         self._data_pool = [mujoco.MjData(self.model) for _ in range(n_data_pool)]
-
-        for i in range(self.model.njnt):
-            self.limits[0, i] = self.model.jnt_range[i, 0]  # lower limit
-            self.limits[1, i] = self.model.jnt_range[i, 1]  # upper limit
 
         self.robot_idx = {}
         self.robot_dims = {}
         self.robot_joints = {}
+        self._mujoco_joint_adr = {}
+        self._mujoco_q_adr = {}
 
+        offset = 0
         for r in self.robots:
             self.robot_joints[r] = self.collect_joints(r)
-            self.robot_idx[r] = self.collect_joint_ids(r)
+            self.robot_idx[r] = np.arange(offset, offset + len(self.robot_joints[r]))
             self.robot_dims[r] = len(self.robot_joints[r])
+
+            self._mujoco_joint_adr[r] = self.collect_adr(r)
+            self._mujoco_q_adr[r] = self.collect_joint_ids(r)
+
+            offset += self.robot_dims[r]
+
+        self._all_robot_idx = np.array(
+            [self._mujoco_joint_adr[r] for r in self.robots]
+        ).flatten()
+
+        self._mujoco_joint_id_mapping = np.array(
+            [self._mujoco_q_adr[r] for r in self.robots]
+        ).flatten()
+
+        self.limits = np.zeros((2, len(self._mujoco_joint_id_mapping)))
+
+        for idx, i in enumerate(self._mujoco_joint_id_mapping):
+            self.limits[0, idx] = self.model.jnt_range[i, 0]  # lower limit
+            self.limits[1, idx] = self.model.jnt_range[i, 1]  # upper limit
+
 
         self.spec = ProblemSpec(
             agent_type=AgentType.MULTI_AGENT,
@@ -197,7 +227,7 @@ class MujocoEnvironment(BaseProblem):
                 self.model, self.data, key_callback=self._key_callback
             )
 
-        self.data.qpos[:] = q.state()
+        self.data.qpos[self._all_robot_idx] = q.state()
         self.data.qvel[:] = 0
         mujoco.mj_forward(self.model, self.data)
 
@@ -228,7 +258,7 @@ class MujocoEnvironment(BaseProblem):
 
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         # data = mujoco.MjData(self.model)
-        self.data.qpos[:] = q.state()
+        self.data.qpos[self._all_robot_idx] = q.state()
         mujoco.mj_forward(self.model, self.data)
 
         # If any contact distance < 0, collision
@@ -294,6 +324,8 @@ class MujocoEnvironment(BaseProblem):
         return True
 
     def set_to_mode(self, m: List[int]):
+        # self.data.
+
         if not self.manipulating_env:
             return
         else:
@@ -316,9 +348,9 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
         self._available_data = list(range(len(self._data_pool)))
 
     def close(self):
-        super().close()
         if hasattr(self, "_executor"):
             self._executor.shutdown(wait=True)
+        super().close()
 
     def _get_data_object(self):
         """Thread-safe way to get a data object from pool"""
@@ -345,7 +377,7 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
                 if collision_found.is_set():
                     return False  # Another thread found collision, this batch is irrelevant
 
-                data.qpos[:] = q
+                data.qpos[self._all_robot_idx] = q
                 data.qvel[:] = 0
                 mujoco.mj_forward(self.model, data)
 
@@ -425,7 +457,7 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
         data = self._data_pool[0]  # Use first data object for sequential
 
         for q in qs:
-            data.qpos[:] = q
+            data.qpos[self._all_robot_idx] = q
             data.qvel[:] = 0
             mujoco.mj_forward(self.model, data)
 
@@ -494,9 +526,7 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 
 class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self, agents_can_rotate=True):
-        path = (
-            "/home/valentin/Downloads/roboballet/data/mujoco_world/4_pandas_world_closer.xml"
-        )
+        path = "/home/valentin/Downloads/roboballet/data/mujoco_world/4_pandas_world_closer.xml"
 
         self.robots = [
             "panda1",
@@ -512,10 +542,18 @@ class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         OptimizedMujocoEnvironment.__init__(self, path)
 
         self.tasks = [
-            Task(["panda1"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))),
-            Task(["panda2"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))),
-            Task(["panda3"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))),
-            Task(["panda4"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))),
+            Task(
+                ["panda1"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
+            ),
+            Task(
+                ["panda2"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
+            ),
+            Task(
+                ["panda3"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
+            ),
+            Task(
+                ["panda4"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
+            ),
             # terminal mode
             Task(
                 self.robots,
@@ -538,3 +576,67 @@ class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
 
         self.collision_resolution = 0.01
         self.collision_tolerance = 0.00
+
+
+class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
+    def __init__(self, agents_can_rotate=True):
+        path = os.path.join(
+            os.path.dirname(__file__), "../models/mujoco_4_ur10_world_closer.xml"
+        )
+
+        self.robots = [
+            "ur10_1",
+            "ur10_2",
+            "ur10_3",
+            "ur10_4",
+        ]
+
+        self.start_pos = NpConfiguration.from_list(
+            [np.array([0, -2, 1.0, -1.0, -1.57, 1.0]) for r in self.robots]
+        )
+
+        OptimizedMujocoEnvironment.__init__(self, path)
+
+        self.tasks = [
+            Task(
+                ["ur10_1"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))
+            ),
+            Task(
+                ["ur10_2"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))
+            ),
+            Task(
+                ["ur10_3"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))
+            ),
+            Task(
+                ["ur10_4"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))
+            ),
+            # terminal mode
+            Task(
+                self.robots,
+                SingleGoal(self.start_pos.state()),
+            ),
+        ]
+
+        self.tasks[0].name = "p1_goal"
+        self.tasks[1].name = "p2_goal"
+        self.tasks[2].name = "p3_goal"
+        self.tasks[3].name = "p4_goal"
+        self.tasks[4].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["p1_goal", "p2_goal", "p3_goal", "p4_goal", "terminal"]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {
+            "ur10_1": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
+            "ur10_2": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
+            "ur10_3": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
+            "ur10_4": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
+        }

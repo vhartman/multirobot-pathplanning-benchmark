@@ -152,7 +152,8 @@ def get_all_environments() -> Dict:
         "unassigned_stacking": lambda: rfe.rai_unassigned_stacking(num_boxes=4, num_robots=4),
 
         ##### mujoco
-        "four_panda_mujoco": lambda: me.four_arm_mujoco_env()
+        "four_panda_mujoco": lambda: me.four_arm_mujoco_env(),
+        "four_ur10_mujoco": lambda: me.four_arm_ur10_mujoco_env(),
     }
     # fmt: on
 
