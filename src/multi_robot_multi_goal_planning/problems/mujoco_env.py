@@ -36,6 +36,8 @@ from .planning_env import (
 )
 
 import mujoco
+from mujoco import mjx
+
 import mujoco.viewer
 
 import threading
@@ -110,6 +112,12 @@ class MujocoEnvironment(BaseProblem):
 
         self.model = mujoco.MjModel.from_xml_path(xml_path)
         self.data = mujoco.MjData(self.model)
+
+        # mjx_model = mjx.put_model(self.model)
+
+        # mjx_data = mjx.make_data(mjx_model)
+        # qvel = mjx_data.qvel.at[0].set(0)
+        # mjx.mj_forward(mjx_model, mjx_data)
 
         self.viewer = None
         self._enter_pressed = False

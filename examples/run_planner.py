@@ -143,7 +143,7 @@ def main():
     env.cost_reduction = args.cost_reduction
     env.cost_metric = args.per_agent_cost_function
 
-    env.show()
+    # env.show()
 
     termination_condition = None
     if args.num_iters is not None:
