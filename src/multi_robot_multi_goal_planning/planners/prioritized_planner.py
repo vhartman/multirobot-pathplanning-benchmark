@@ -441,7 +441,7 @@ def collision_free_with_moving_obs(
     other_robots,
 ):
     logger.debug(f"coll check for {robots} at time {t}")
-    logger.debug(f"Config {q}")
+    logger.debug("Config %s", q)
 
     mode = prev_plans.get_mode_at_time(t)
     # env.set_to_mode(mode)
@@ -462,6 +462,7 @@ def collision_free_with_moving_obs(
 
     # if env.is_collision_free_np(q_buffer, mode):
     if env.is_collision_free(env.start_pos.from_flat(q_buffer), mode):
+        # env.show(blocking=False)
         return True
 
     # # involves_robot_we_plan_for = False
@@ -514,6 +515,10 @@ def edge_collision_free_with_moving_obs(
 ):
     logger.debug(f"edge check for {robots}")
     logger.debug(f"start/end time: {ts}, {te}")
+
+    if te < ts:
+        te, ts = ts, te
+        qs, qe = copy.deepcopy(qe), copy.deepcopy(qs)
 
     # # compute discretizatoin step
     N = config_dist(qe, qs) / resolution
@@ -1168,7 +1173,7 @@ def plan_in_time_space(
             # print(times)
 
             computation_end_time = time.time()
-            # print(f"\t\tTook {computation_end_time - computation_start_time}s")
+            logger.debug(f"Took {computation_end_time - computation_start_time}s")
 
             # for k in range(len(robots)):
             #     # plt.figure()
