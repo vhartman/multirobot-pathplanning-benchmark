@@ -37,6 +37,10 @@ from multi_robot_multi_goal_planning.planners import (
 
 from run_experiment import export_planner_data
 
+import logging
+# logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+
 def main():
     parser = argparse.ArgumentParser(description="Planner runner")
     parser.add_argument("env", nargs="?", default="default", help="env to show")
@@ -139,7 +143,7 @@ def main():
     env.cost_reduction = args.cost_reduction
     env.cost_metric = args.per_agent_cost_function
 
-    # env.show()
+    env.show()
 
     termination_condition = None
     if args.num_iters is not None:
