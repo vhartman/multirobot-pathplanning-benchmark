@@ -19,8 +19,8 @@
     <geom name="floor" pos="0 0 -0.05" size="0 0 0.05" type="plane" material="groundplane"/>
     
     <body name="obj1" pos="0 0 0.9">
-	<freejoint/>
-	<geom size="0.1 0.1 0.05" type="box"/>
+      <freejoint/>
+      <geom size="0.1 0.1 0.05" type="box"/>
     </body>
 
     <body name="ur10_1" pos="0.5 -0.5 0.02" euler="0 0 0" mocap="true">
