@@ -201,7 +201,9 @@ def main():
         planner = PrioritizedPlanner(env, config)
 
     elif args.planner == "short_horizon":
-        planner = RecedingHorizonPlanner(env)
+        config = RecedingHorizonConfig()
+
+        planner = RecedingHorizonPlanner(env, config)
 
     np.random.seed(args.seed)
     random.seed(args.seed)

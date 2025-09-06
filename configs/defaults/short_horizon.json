@@ -1,0 +1,10 @@
+{
+  "type": "short_horizon",
+  "options": {
+    "low_level_solver": "eitstar",
+    "horizon_length": 2,
+    "execution_length": 1,
+    "low_level_max_time": 10.0,
+    "constrain_free_robots_to_home": true
+  }
+}
