@@ -21,6 +21,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 
 from multi_robot_multi_goal_planning.planners import (
     PrioritizedPlanner,
+    PrioritizedPlannerConfig,
     CompositePRM,
     CompositePRMConfig,
     single_mode_shortcut,
@@ -143,7 +144,7 @@ def main():
     env.cost_reduction = args.cost_reduction
     env.cost_metric = args.per_agent_cost_function
 
-    env.show()
+    # env.show()
 
     termination_condition = None
     if args.num_iters is not None:
@@ -195,7 +196,9 @@ def main():
         planner = EITstar(env, config=config)
 
     elif args.planner == "prioritized":
-        planner = PrioritizedPlanner(env)
+        config = PrioritizedPlannerConfig()
+
+        planner = PrioritizedPlanner(env, config)
 
     elif args.planner == "short_horizon":
         planner = RecedingHorizonPlanner(env)
