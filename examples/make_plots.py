@@ -334,6 +334,7 @@ def make_cost_plots(
             color=color,
             capsize=5,
             capthick=2,
+            label=planner_name,
         )
 
     time_discretization = 1e-2
@@ -416,7 +417,7 @@ def make_cost_plots(
             median_solution_cost[
                 interpolated_solution_times < max_planner_solution_time
             ],
-            label=planner_name,
+            # label=planner_name,
             color=color,
             ls = ls
         )
@@ -452,7 +453,6 @@ def make_cost_plots(
             existing_handles, _ = plt.gca().get_legend_handles_labels()
             plt.legend(handles=existing_handles, title=legend_title, title_fontsize='medium', loc='best', alignment='left')
         else:
-
             plt.legend()
 
     if save:
