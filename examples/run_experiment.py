@@ -356,6 +356,7 @@ def setup_planner(
                 execution_length=options["execution_length"],
                 low_level_max_time=options["low_level_max_time"],
                 constrain_free_robots_to_home=options["constrain_free_robots_to_home"],
+                optimize_low_level=options["optimize_low_level"],
             )
             return RecedingHorizonPlanner(env, config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
