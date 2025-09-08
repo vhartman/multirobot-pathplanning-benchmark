@@ -2503,7 +2503,10 @@ class BaseITstar(BasePlanner):
             if self.env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
                 num_valid += 1
+                # self.env.show(False)
+
             else:
+                # self.env.show(False)
                 failed_attempts += 1
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
@@ -2750,6 +2753,7 @@ class BaseITstar(BasePlanner):
                 mode_seq = init_mode_seq
                 reached_terminal_mode = True
                 mode_sampling_type = "uniform_reached"
+
             elif len(self.reached_modes) != len(self.sorted_reached_modes):
                 if update and not reached_terminal_mode:
                     self.sorted_reached_modes = tuple(
@@ -2802,7 +2806,7 @@ class BaseITstar(BasePlanner):
         self.init_next_ids[mode] = None
         while True:
             prev_mode = mode.prev_mode
-            if prev_mode is not None:
+            if prev_mode is not None and mode != self.env.start_mode:
                 self.init_search_modes.append(prev_mode)
                 self.init_next_ids[prev_mode] = mode.task_ids
                 mode = prev_mode
