@@ -13,7 +13,9 @@ from .planning_env import (
 from .rai_base_env import rai_env
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
 
+from .registry import register
 
+@register("rai.unordered")
 class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
@@ -80,7 +82,7 @@ class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
             "a2": r2_goal_1
         }
 
-
+@register("unordered_square")
 class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
@@ -140,7 +142,7 @@ class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-
+@register("unordered_circle")
 class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=False):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
@@ -215,6 +217,7 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
         BaseModeLogic.__init__(self)
 
 
+@register("unordered_single_agent_circle")
 class rai_two_dim_circle_single_agent(UnorderedButAssignedMixin, rai_env):
     def __init__(self, agents_can_rotate=False):
         self.C, keyframes = rai_config.make_random_two_dim_single_goal(
@@ -276,6 +279,7 @@ class rai_two_dim_circle_single_agent(UnorderedButAssignedMixin, rai_env):
         BaseModeLogic.__init__(self)
 
 
+@register("unordered_box_reorientation")
 class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env):
     def __init__(self, num_boxes=6):
         self.C, keyframes = rai_config.make_box_pile_env(

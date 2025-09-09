@@ -20,7 +20,13 @@ from .planning_env import (
 )
 from .rai_base_env import rai_env
 
+from .registry import register
 
+
+@register([
+    ("rai.two_dim_single_goal", {}),
+    ("rai.two_dim_single_goal_no_rot", {"agents_can_rotate": False}),
+])
 class rai_two_dim_env(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = make_2d_rai_env(agents_can_rotate=agents_can_rotate)
@@ -54,6 +60,10 @@ class rai_two_dim_env(SequenceMixin, rai_env):
         self.collision_resolution = 0.005
 
 
+@register([
+    ("rai.random_2d_single_goal", {"agents_can_rotate": True}),
+    ("rai.random_2d_single_goal_no_rot", {"agents_can_rotate": False}),
+])
 class rai_random_two_dim(SequenceMixin, rai_env):
     def __init__(self, num_robots=3, agents_can_rotate=False):
         self.C, keyframes = make_random_two_dim_single_goal(
@@ -84,6 +94,10 @@ class rai_random_two_dim(SequenceMixin, rai_env):
         self.collision_resolution = 0.005
 
 
+@register([
+    ("rai.two_dim_single_robot_single_goal", {}),
+    ("rai.two_dim_single_robot_single_goal_w_rot", {"agents_can_rotate": True}),
+])
 class rai_random_two_dim_single_agent(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=False):
         self.C, keyframes = make_random_two_dim_single_goal(
@@ -114,6 +128,10 @@ class rai_random_two_dim_single_agent(SequenceMixin, rai_env):
 
 # best cost found (max): 4.79 (independent of rotation)
 # best cost found (sum): 6.917 (independent of rotation)
+@register([
+    ("rai.hallway_single_goal", {}),
+    ("rai.hallway_single_goal_no_rot", {"agents_can_rotate": False}),
+])
 class rai_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
@@ -142,6 +160,7 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
         self.collision_resolution = 0.005
 
 
+@register("multi_agent_panda_single_goal")
 class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
     def __init__(self, num_robots: int = 3):
         self.C, keyframes = make_panda_single_joint_goal_env(num_robots=num_robots)
@@ -178,6 +197,7 @@ class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.1
 
 
+@register("single_panda_arm_single_goal")
 class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_panda_single_joint_goal_env(num_robots=1)
@@ -212,7 +232,7 @@ class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
-
+@register("handover_single_goal")
 class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = make_handover_env()
