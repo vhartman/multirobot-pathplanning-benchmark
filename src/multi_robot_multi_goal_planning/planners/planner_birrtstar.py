@@ -11,14 +11,14 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.problems.configuration import Configuration
 
-from multi_robot_multi_goal_planning.planners.rrtstar_base import (
+from .rrtstar_base import (
     BaseRRTConfig,
     BaseRRTstar,
     Node,
     BidirectionalTree,
     save_data,
 )
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
+from .termination_conditions import (
     PlannerTerminationCondition,
 )
 
@@ -434,5 +434,16 @@ class BidirectionalRRTstar(BaseRRTstar):
 
         self.update_results_tracking(self.operation.cost, self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
-        print(self.mode_validation.counter)
+        # print(self.mode_validation.counter)
+
+        # ensure that the mode-switch nodes are there once in every mode.
+        path_w_doubled_modes = []
+        for i in range(len(self.operation.path)):
+            path_w_doubled_modes.append(self.operation.path[i])
+
+            if i + 1 < len(self.operation.path) and self.operation.path[i].mode != self.operation.path[i + 1].mode:
+                path_w_doubled_modes.append(State(self.operation.path[i].q, self.operation.path[i + 1].mode))
+
+        self.operation.path = path_w_doubled_modes
+
         return self.operation.path, info

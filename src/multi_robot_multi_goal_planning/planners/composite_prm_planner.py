@@ -20,14 +20,6 @@ from sortedcontainers import SortedList
 from collections import defaultdict
 from itertools import chain
 
-
-from multi_robot_multi_goal_planning.planners import shortcutting
-from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
-from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
-from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
-    PlannerTerminationCondition,
-)
 from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist,
@@ -39,6 +31,13 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
+from multi_robot_multi_goal_planning.planners import shortcutting
+from .baseplanner import BasePlanner
+from .sampling_informed import InformedSampling
+from .mode_validation import ModeValidation
+from .termination_conditions import (
+    PlannerTerminationCondition,
+)
 
 class Node:
     __slots__ = [
@@ -807,6 +806,9 @@ class MultimodalGraph:
                     [n.state.q.q for n in node_list], dtype=np.float64
                 )
 
+            if len(self.node_array_cache[key]) == 0:
+                return [], None
+
             dists = self.batch_dist_fun(
                 node.state.q, self.node_array_cache[key]
             )  # this, and the list copm below are the slowest parts
@@ -819,6 +821,9 @@ class MultimodalGraph:
                     [n.state.q.q for n in transition_node_list], dtype=np.float64
                 )
 
+            if len(self.transition_node_array_cache[key]) == 0:
+                return [], None
+            
             transition_dists = self.batch_dist_fun(
                 node.state.q, self.transition_node_array_cache[key]
             )
@@ -1363,6 +1368,9 @@ class CompositePRM(BasePlanner):
 
         while len(new_samples) < batch_size:
             num_attempts += 1
+            if num_attempts > 100 * batch_size:
+                break
+
             # print(len(new_samples))
             # sample mode
             m = self._sample_mode(
@@ -1386,6 +1394,8 @@ class CompositePRM(BasePlanner):
             if self.env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
                 num_valid += 1
+            
+            # self.env.show(False)
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
 
@@ -1614,6 +1624,8 @@ class CompositePRM(BasePlanner):
         """
         q0 = self.env.get_start_pos()
         m0 = self.env.get_start_mode()
+
+        assert self.env.is_collision_free(q0, m0)
 
         reached_modes = set([m0])
         self.sorted_reached_modes = list(sorted(reached_modes, key=lambda m: m.id))
@@ -2030,6 +2042,12 @@ class CompositePRM(BasePlanner):
                     print("Did not find a solution")
                     add_new_batch = True
                     break
+
+            if current_best_cost is not None:
+                # check if we might have reached the optimal cost? Straightline connection
+                if np.linalg.norm(current_best_cost - self.env.config_cost(q0, g.goal_nodes[0].state.q)) < 1e-6:
+                    break
+            
 
             if not optimize and current_best_cost is not None:
                 break

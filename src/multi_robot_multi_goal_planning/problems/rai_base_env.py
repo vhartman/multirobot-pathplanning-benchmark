@@ -4,8 +4,8 @@ import numpy as np
 from typing import List, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.rai_config import get_robot_joints
-from multi_robot_multi_goal_planning.problems.planning_env import (
+from .rai_config import get_robot_joints
+from .planning_env import (
     BaseProblem,
     Mode,
     State,
@@ -19,7 +19,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     DependencyType,
     SafePoseType,
 )
-from multi_robot_multi_goal_planning.problems.configuration import (
+from .configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
@@ -27,7 +27,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     batch_config_cost,
 )
 
-from multi_robot_multi_goal_planning.problems.planning_env import (
+from .planning_env import (
     generate_binary_search_indices,
 )
 
@@ -536,9 +536,10 @@ class rai_env(BaseProblem):
                 for robot in r:
                     task_idx = m.task_ids[self.robots.index(robot)]
                     task = self.tasks[task_idx]
-                    if c[2] < 0 and (robot in c[0] or robot in c[1]) and (c[0] not in other_robots or c[1] not in other_robots):
+                    collision_with_other_robot = any(other_r in c[0] or other_r in c[1] for other_r in other_robots)
+                    if c[2] < 0 and (robot in c[0] or robot in c[1]) and not collision_with_other_robot:
                         involves_relevant_robot = True
-                    elif c[2] < 0 and (c[0] in task.frames or c[1] in task.frames) and (c[0] not in other_robots or c[1] not in other_robots):
+                    elif c[2] < 0 and (c[0] in task.frames or c[1] in task.frames) and not collision_with_other_robot:
                         involves_relevant_object = True
 
                 # if involves_relevant_object:

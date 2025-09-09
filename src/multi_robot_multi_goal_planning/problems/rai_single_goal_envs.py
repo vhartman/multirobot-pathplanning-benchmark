@@ -6,10 +6,10 @@ import time
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
+from .dependency_graph import DependencyGraph
 
-from multi_robot_multi_goal_planning.problems.rai_config import *
-from multi_robot_multi_goal_planning.problems.planning_env import (
+from .rai_config import *
+from .planning_env import (
     BaseModeLogic,
     SequenceMixin,
     State,
@@ -18,7 +18,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     GoalSet,
     GoalRegion,
 )
-from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
+from .rai_base_env import rai_env
 
 
 class rai_two_dim_env(SequenceMixin, rai_env):

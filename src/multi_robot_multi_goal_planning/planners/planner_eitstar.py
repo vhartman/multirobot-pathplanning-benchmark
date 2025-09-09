@@ -4,6 +4,8 @@ from typing import List, Dict, Tuple, Optional, Any, Set
 import time
 import math
 from itertools import chain
+from functools import cache
+
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
@@ -14,7 +16,7 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     PlannerTerminationCondition,
 )
-from multi_robot_multi_goal_planning.planners.itstar_base import (
+from .itstar_base import (
     BaseITConfig,
     BaseITstar,
     BaseGraph,
@@ -22,8 +24,7 @@ from multi_robot_multi_goal_planning.planners.itstar_base import (
     BaseNode,
     BaseTree,
 )
-from functools import cache
-from multi_robot_multi_goal_planning.planners.planner_aitstar import EdgeQueue
+from .planner_aitstar import EdgeQueue
 
 
 class InadmissibleHeuristics:
@@ -1014,6 +1015,9 @@ class EITstar(BaseITstar):
                 break
 
             if ptc.should_terminate(self.cnt, time.time() - self.start_time):
+                break
+
+            if self.current_best_cost is not None and np.linalg.norm(self.current_best_cost - self.env.config_cost(self.g.root.state.q, self.g.goal_nodes[0].state.q)) < 1e-6:
                 break
 
         if self.costs != []:

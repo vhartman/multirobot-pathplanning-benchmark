@@ -19,29 +19,28 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
 
-from multi_robot_multi_goal_planning.planners.prioritized_planner import (
+from multi_robot_multi_goal_planning.planners import (
     PrioritizedPlanner,
-)
-from multi_robot_multi_goal_planning.planners.composite_prm_planner import (
-    CompositePRMConfig,
+    PrioritizedPlannerConfig,
     CompositePRM,
-)
-from multi_robot_multi_goal_planning.planners.shortcutting import (
+    CompositePRMConfig,
     single_mode_shortcut,
     robot_mode_shortcut,
-)
-from multi_robot_multi_goal_planning.planners.planner_rrtstar import RRTstar
-from multi_robot_multi_goal_planning.planners.planner_birrtstar import (
+    BaseRRTConfig,
+    RRTstar,
     BidirectionalRRTstar,
+    BaseITConfig,
+    AITstar,
+    EITstar,
+    RecedingHorizonConfig,
+    RecedingHorizonPlanner,
 )
-
-from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTConfig
-from multi_robot_multi_goal_planning.planners.itstar_base import BaseITConfig
-
-from multi_robot_multi_goal_planning.planners.planner_aitstar import AITstar
-from multi_robot_multi_goal_planning.planners.planner_eitstar import EITstar
 
 from run_experiment import export_planner_data
+
+import logging
+# logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 def main():
     parser = argparse.ArgumentParser(description="Planner runner")
@@ -67,6 +66,7 @@ def main():
             "birrt_star",
             "aitstar",
             "eitstar",
+            "short_horizon",
         ],
         default="composite_prm",
         help="Planner to use (default: composite_prm)",
@@ -196,7 +196,14 @@ def main():
         planner = EITstar(env, config=config)
 
     elif args.planner == "prioritized":
-        planner = PrioritizedPlanner(env)
+        config = PrioritizedPlannerConfig()
+
+        planner = PrioritizedPlanner(env, config)
+
+    elif args.planner == "short_horizon":
+        config = RecedingHorizonConfig()
+
+        planner = RecedingHorizonPlanner(env, config)
 
     np.random.seed(args.seed)
     random.seed(args.seed)

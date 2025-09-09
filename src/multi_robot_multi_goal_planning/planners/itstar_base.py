@@ -2455,6 +2455,9 @@ class BaseITstar(BasePlanner):
                 dtype=np.float64,
             )
 
+            if cost is not None and np.linalg.norm(cost - self.env.config_cost(self.g.root.state.q, self.g.goal_nodes[0].state.q)) < 1e-6:
+                return new_samples, num_attempts
+
         if (
             self.config.apply_long_horizon
             and not self.long_horizon.init
@@ -2468,6 +2471,10 @@ class BaseITstar(BasePlanner):
 
         while len(new_samples) < batch_size:
             num_attempts += 1
+
+            if num_attempts > 100 * batch_size:
+                break
+
             m = self.sample_mode(mode_seq, "uniform_reached", found_solution)
 
             # sample configuration
@@ -2496,7 +2503,10 @@ class BaseITstar(BasePlanner):
             if self.env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
                 num_valid += 1
+                # self.env.show(False)
+
             else:
+                # self.env.show(False)
                 failed_attempts += 1
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
@@ -2517,6 +2527,9 @@ class BaseITstar(BasePlanner):
             return
         if not self.expanded_modes:
             return
+        if self.last_expanded_mode == self.env.start_mode:
+            return 
+        
         transition_nodes = self.g.transition_node_ids[self.last_expanded_mode]
         for transition in transition_nodes:
             node = self.g.nodes[transition]
@@ -2530,7 +2543,7 @@ class BaseITstar(BasePlanner):
                     self.sorted_reached_modes = potential_sorted_reached_modes
                 return
         prev_mode = self.last_expanded_mode.prev_mode
-        if prev_mode is None:
+        if prev_mode is None or self.last_expanded_mode == self.env.start_mode:
             self.g.virtual_root = self.g.root
         else:
             for transition in self.g.transition_node_ids[prev_mode]:
@@ -2740,6 +2753,7 @@ class BaseITstar(BasePlanner):
                 mode_seq = init_mode_seq
                 reached_terminal_mode = True
                 mode_sampling_type = "uniform_reached"
+
             elif len(self.reached_modes) != len(self.sorted_reached_modes):
                 if update and not reached_terminal_mode:
                     self.sorted_reached_modes = tuple(
@@ -2792,7 +2806,7 @@ class BaseITstar(BasePlanner):
         self.init_next_ids[mode] = None
         while True:
             prev_mode = mode.prev_mode
-            if prev_mode is not None:
+            if prev_mode is not None and mode != self.env.start_mode:
                 self.init_search_modes.append(prev_mode)
                 self.init_next_ids[prev_mode] = mode.task_ids
                 mode = prev_mode
@@ -3434,7 +3448,7 @@ class BaseITstar(BasePlanner):
                 if len(self.g.transition_node_ids[virtual_root_mode]) == 0:
                     self.empty_transition_nodes = virtual_root_mode
                 prev_mode = virtual_root_mode.prev_mode
-                if prev_mode is not None:
+                if prev_mode is not None and virtual_root_mode != self.env.start_mode:
                     self.last_expanded_mode = virtual_root_mode.prev_mode
                     self.expanded_modes.add(virtual_root_mode.prev_mode)
 

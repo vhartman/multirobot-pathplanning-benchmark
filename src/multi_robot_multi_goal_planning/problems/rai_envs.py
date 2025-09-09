@@ -1,11 +1,11 @@
 import numpy as np
 import random
 
-from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
+from .dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
 
-from multi_robot_multi_goal_planning.problems.planning_env import (
+from .planning_env import (
     BaseModeLogic,
     SequenceMixin,
     DependencyGraphMixin,
@@ -23,7 +23,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     DependencyType,
     SafePoseType,
 )
-from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
+from .rai_base_env import rai_env
 
 # In the follwoing, we want to test planners on a variety of tings
 # In particular, we first want to establish a few simple problems

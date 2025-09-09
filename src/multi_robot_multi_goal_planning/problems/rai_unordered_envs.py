@@ -1,6 +1,6 @@
 import robotic as ry
 import numpy as np
-from multi_robot_multi_goal_planning.problems.planning_env import (
+from .planning_env import (
     BaseModeLogic,
     UnorderedButAssignedMixin,
     Task,
@@ -10,7 +10,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     SafePoseType,
     ManipulationType
 )
-from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
+from .rai_base_env import rai_env
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
 
 

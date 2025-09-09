@@ -23,9 +23,9 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist,
 )
-from multi_robot_multi_goal_planning.planners.sampling_informed import InformedSampling
-from multi_robot_multi_goal_planning.planners.mode_validation import ModeValidation
-from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
+from .sampling_informed import InformedSampling
+from .mode_validation import ModeValidation
+from .baseplanner import BasePlanner
 
 
 class Operation:
@@ -934,7 +934,7 @@ class BaseRRTstar(BasePlanner):
         # goal sampling
         while True:
             if tree_order == -1:
-                if mode.prev_mode is None:
+                if mode.prev_mode is None or mode == self.env.start_mode:
                     return self.env.start_pos
                 else:
                     transition_nodes_id = transition_node_ids[mode.prev_mode]

@@ -766,9 +766,17 @@ class InformedSampling:
             if self.locally_informed_sampling:
                 path_segment_costs_cumsum = np.cumsum(path_segment_costs)
 
+                num_idx_attempts = 0
+                found_potential_indices = True
                 while True:
+                    num_idx_attempts += 1
+
                     start_ind = random.randint(0, len(path) - 1)
                     end_ind = random.randint(0, len(path) - 1)
+                    
+                    if num_idx_attempts > 1000:
+                        found_potential_indices = False
+                        break
 
                     if (
                         path[end_ind].mode != path[start_ind].mode
@@ -784,6 +792,9 @@ class InformedSampling:
 
                         if lb_cost < current_cost:
                             break
+
+                if not found_potential_indices:
+                    break
 
                 if (
                     path[start_ind].mode,

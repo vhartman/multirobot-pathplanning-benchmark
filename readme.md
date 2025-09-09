@@ -3,10 +3,6 @@
 This repository provides some multi-robot-multi-goal motion planning problems, and some baseline-planners.
 There are also some utilities for visualizing plans, and plotting convergence and success rates of planners.
 
-The benchmark contains some problems (and data) from previous work, mostly from 
-- ["Cooperative Task and Motion Planning for Multi-Arm Assembly Systems"](https://arxiv.org/pdf/2203.02475)
-- ["Human-Robot Interaction - Workshop at Design Modeling Symposium 2024"](https://infoscience.epfl.ch/entities/publication/26958110-4f6b-4762-bccb-63ecf36c7725)
-
 <!-- The corresponding paper can be found [here](https://vhartmann.com/assets/mrmg/a_benchmark_for_mr_mg_pf.pdf), and more videos can be seen on the [paper website](https://vhartmann.com/mrmg-planning/). -->
 
 # Installation
@@ -19,13 +15,22 @@ python3 -m pip install -e .[all]
 ```
 
 which also installs this module.
-You can choose whatever backends you want from the start - [all] gives you all of them, but [pin] or [rai] is possible as well.
+You can choose whatever backends you want. [all] gives you all of them, but [pin] or [rai] is possible as well and installs only Pinocchio or only RAI.
 
-This also works with uv (and is definitely quite a bit faster)
+This also works with uv (and is definitely quite a bit faster).
+The command
 ```
 uv sync --extra all
 ```
 Does the same thing as the command above, and is recommended. In that case, the commands below need to be adapted to use `uv run [rest of the command]`.
+
+After the installation, you can run 
+```
+python3 examples/run_planner.py abstract_test  --max_time=10 --optimize
+```
+to test if the installation went well.
+This runs one of the abstract environments that do not require any more fancy backend with the default planner.
+After it finished, it shows an animation of the found path.
 
 # Overview and Usage
 
@@ -63,14 +68,14 @@ A planner can be run with
 python3 examples/run_planner.py [env] [options]
 ```
 
-which runs the default planer on the environment with the default configuratoin. A concrete example would for example be
+which runs the default planner on the environment with the default configuratoin. A concrete example would be
 
 ```
 python3 examples/run_planner.py 2d_handover --optimize --num_iters=10000 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max --prm_informed_sampling=True --save --prm_locally_informed_sampling --prm_shortcutting
 ```
 
 Not all options can be set throught the cli interface.
-An experiment (i.e., multiple runs of multiple planners or of the same planer with multiple options) can be run with 
+An experiment (i.e., multiple runs of multiple planners or of the same planner with multiple options) can be run with 
 
 ```
 python3 ./examples/run_experiment.py [path to config]
@@ -96,6 +101,10 @@ and finally, a path can be visualized  and possibly exported with
 ```
 python3 examples/display_single_path.py [filename] [environment_name]
 ```
+
+## Planners
+Currently, for the optimal planners, we have implementations of RRT, Bidirectional RRT, PRM, AIT and EIT.
+As baselines for suboptimal planners, we implemented prioritized planners, and receding horizon planning versions of the optimal planners.
 
 ## Problem description
 
@@ -135,7 +144,9 @@ There are two examples that implement other environments than the rai-based ones
 
 #### Specifying your own problems
 
-A problem consists of the initial scene, and a task sequence or a dependency graph.
+A problem consists of 
+- the initial scene, and 
+- a description of the task ordering. This can be a task sequence or a dependency graph, or a set of tasks that need to be done, and dependencies between them.
 
 #### Implementing your own planner
 
@@ -146,7 +157,7 @@ The information that is needed for plots, is a list of all paths that were found
 
 # Tests
 There are initial tests in the `tests/` folder.
-But this could and should be expanded.
+This could and should be expanded.
 
 # Extension & Future work
 
@@ -157,26 +168,46 @@ However, in some applications, this is necessary to e.g. formulate a constraint 
 #### Kinodynamic motion planning
 Similarly as above, the formulation we propose here allows for kinodynamic motion planning, but we do not have a scene at the moment that tests this.
 
-#### More flexible task planning
-In the moment, we only support formulating the task structure as dependency graph or as sequence.
-It would theoretically be possible to use the formulation we propse here to implement and benchmark task and motion planning solvers.
-This would require minor changes in how the starting mode is currently used.
-
 #### C++ implementations of planners
-We noted that the more complex planners (EIT/AIT/sometimes PRM) spend much time in python operations, that should not be the bottleneck of the planner.
+We noted that the more complex planners (EIT/AIT/sometimes PRM) spend much time in python operations.
+Ideally those types of operations should not be the bottleneck of the planner.
 Thus, we feel like it makes sense to port much of this benchmark to cpp.
 
 #### More backends
-This should be somewhat self explanatory: I want to have parallelized (faster) backends for collision checking.
+This should be somewhat self explanatory: I want to have parallelized (faster) backends for collision checking. 
+Warp seems promising, Mujoco MJX, or Genesis also seem fun.
+I assume tht much of the python bottleneck would become worse in those settings, if the collision checking is not the bottleneck anymore.
 
 #### More scenarios
 We are currently covering many aspects in multi-arm manipulation/planning, but less so in mobile manipulation.
 Further, more long horizon scenarios would be fun.
 
-<!-- 
-# Citation
-If you use this codebase in your research, please cite:
+#### More planners
+Long horizon tasks and large robot teams are currenly difficult for the planners for the reason that we do plan in composite space over the full horizon.
+While that gives us optimality, and completeness, this makes the planner slow in those settings.
+The prioritized planner already shows what might be possible for a suboptimal planner.
+Some e.g. receding horizon planner that plans in the composite space might be a nice compromise.
 
+### More concrete TODOs
+Some of these could be PRs:
+
+- [ ] Document implementation of the own planner better.
+- [ ] Document implementation of an own environment/problem better.
+- [ ] Planner cleanup: Many of the planners have a mix of historic experimentation still in them. Much of that can and should be removed.
+- [ ] Extend abstract environment
+  - [ ] Parallel collision checking
+  - [ ] More complex (3D/robot) scenarios (using JAX?)
+- [ ] Implement support for Mujoco/Genesis/Isaac(?) as backend
+- [ ] More cost functions (such as clearance) to minimize
+
+# Citation
+If you use this codebase in your research, please cite
+
+```
+Currently anonymized for review.
+```
+
+<!-- 
 ```
 @article{hartmann2025benchmark,
   title={A Benchmark for Optimal Multi-Modal Multi-Robot Multi-Goal Path Planning with Given Robot Assignment},
@@ -185,3 +216,8 @@ If you use this codebase in your research, please cite:
   year={2025}
 }
 ``` -->
+
+# Acknowledgements
+The benchmark contains some problems (and data) from previous work, mostly from 
+- ["Cooperative Task and Motion Planning for Multi-Arm Assembly Systems"](https://arxiv.org/pdf/2203.02475)
+- ["Human-Robot Interaction - Workshop at Design Modeling Symposium 2024"](https://infoscience.epfl.ch/entities/publication/26958110-4f6b-4762-bccb-63ecf36c7725)

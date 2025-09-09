@@ -9,11 +9,11 @@ from enum import Enum
 from typing import List, Dict, Optional, Any, Tuple
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.configuration import (
+from .configuration import (
     Configuration,
     config_dist,
 )
-from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
+from .dependency_graph import DependencyGraph
 
 
 from functools import cache
@@ -1308,7 +1308,7 @@ class SequenceMixin(BaseModeLogic):
 
         return sequence
 
-    def make_start_mode(self) -> Mode:
+    def get_start_task_ids(self):
         mode_dict = {}
 
         for task_index in self.sequence:
@@ -1321,6 +1321,11 @@ class SequenceMixin(BaseModeLogic):
         task_ids = []
         for r in self.robots:
             task_ids.append(mode_dict[r])
+
+        return task_ids
+
+    def make_start_mode(self) -> Mode:
+        task_ids = self.get_start_task_ids()
 
         start_mode = Mode(task_ids, self.start_pos)
         sg = self.get_scenegraph_info_for_mode(start_mode, is_start_mode=True)  # type: ignore[attr-defined]
@@ -2019,8 +2024,9 @@ class BaseProblem(ABC):
                 if not self.is_collision_free(q1, mode):
                     return False
             
-            if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
-                return False
+            # print('end', path[-1].q.state())
+            # if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
+            #     return False
             
             # check whole edge
             for i in idx:

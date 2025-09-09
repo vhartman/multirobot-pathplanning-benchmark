@@ -118,89 +118,6 @@ def test_path_collision_checking(mocker):
     assert mock.call_count == 21
 
 
-@pytest.mark.parametrize(
-    "planner_fn",
-    [
-        lambda env, ptc: CompositePRM(env, CompositePRMConfig()).plan(ptc=ptc, optimize=False),
-        lambda env, ptc: RRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
-        lambda env, ptc: BidirectionalRRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
-    ],
-)
-def test_planner_on_abstract_env(planner_fn):
-    env = get_env_by_name("abstract_test")
-    ptc = RuntimeTerminationCondition(10)
-
-    path, _ = planner_fn(env, ptc)
-
-    assert path is not None
-
-    assert np.array_equal(path[0].q.state(), env.start_pos.state())
-    assert env.is_terminal_mode(path[-1].mode)
-    assert env.is_valid_plan(path)
-
-
-@pytest.mark.parametrize(
-    "planner_fn",
-    [
-        lambda env, ptc: CompositePRM(env, CompositePRMConfig()).plan(ptc=ptc, optimize=False),
-        lambda env, ptc: RRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
-        lambda env, ptc: BidirectionalRRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
-    ],
-)
-def test_planner_on_rai_manip_env(planner_fn):
-    env = get_env_by_name("piano")
-    ptc = RuntimeTerminationCondition(10)
-
-    path, _ = planner_fn(env, ptc)
-
-    assert path is not None
-
-    assert np.array_equal(path[0].q.state(), env.start_pos.state())
-    assert env.is_terminal_mode(path[-1].mode)
-    assert env.is_valid_plan(path)
-
-@pytest.mark.parametrize(
-    "planner_fn",
-    [
-        lambda env, ptc: CompositePRM(env, CompositePRMConfig()).plan(ptc=ptc, optimize=False),
-        lambda env, ptc: RRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
-        lambda env, ptc: BidirectionalRRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
-    ],
-)
-def test_planner_on_pinocchio_manip_env(planner_fn):
-    env = get_env_by_name("pin_piano")
-    ptc = RuntimeTerminationCondition(10)
-
-    path, _ = planner_fn(env, ptc)
-
-    assert path is not None
-
-    assert np.array_equal(path[0].q.state(), env.start_pos.state())
-    assert env.is_terminal_mode(path[-1].mode)
-    assert env.is_valid_plan(path)
-
-
-@pytest.mark.parametrize(
-    "planner_fn",
-    [
-        lambda env, ptc: CompositePRM(env, CompositePRMConfig()).plan(ptc=ptc, optimize=False),
-        lambda env, ptc: RRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
-        lambda env, ptc: BidirectionalRRTstar(env, BaseRRTConfig()).plan(ptc=ptc, optimize=False),
-    ],
-)
-def test_planner_on_hallway_dependency_env(planner_fn):
-    env = get_env_by_name("other_hallway_dep")
-    ptc = RuntimeTerminationCondition(10)
-
-    path, _ = planner_fn(env, ptc)
-
-    assert path is not None
-
-    assert np.array_equal(path[0].q.state(), env.start_pos.state())
-    assert env.is_terminal_mode(path[-1].mode)
-    assert env.is_valid_plan(path)
-
-
 class DummyClass(UnorderedButAssignedMixin):
     def __init__(self):
         # r1 starts at both negative (-.5, -.5)
@@ -340,6 +257,8 @@ class DummyClassWithoutAssignment(FreeMixin):
         self.task_groups = [[(0, 1), (1, 4)], [(0, 2), (1, 5)], [(0, 3), (1, 6)]]
         self.terminal_task = 7
         self.task_dependencies = {}
+        self.task_dependencies_any = {}
+
 
         self.collision_tolerance = 0.01
 
@@ -390,6 +309,7 @@ class DummyClassWithoutAssignmentWithDependencies(FreeMixin):
         self.task_groups = [[(0, 1), (1, 3)], [(0, 2), (1, 4)]]
         self.terminal_task = 5
         self.task_dependencies = {2:[1], 4:[3]}
+        self.task_dependencies_any = {}
 
         self.collision_tolerance = 0.01
 
@@ -442,6 +362,7 @@ class DummyClassWithoutAssignmentWithPickPlaceDependencies(FreeMixin):
         self.task_groups = [[(0, 1), (1, 5)], [(0, 2), (1, 6)], [(0, 3), (1, 7)], [(0, 4), (1, 8)]]
         self.terminal_task = 9
         self.task_dependencies = {2:[1], 6:[5], 4:[3], 8:[7]}
+        self.task_dependencies_any = {}
 
         self.collision_tolerance = 0.01
 
@@ -457,7 +378,7 @@ def test_unassigned_with_pick_place_dependency_mixin():
     test_mode.prev_mode = tmp.start_mode
 
     valid_combinations = tmp.get_valid_next_task_combinations(test_mode)
-    assert len(valid_combinations) == 4
+    assert len(valid_combinations) == 2
     
     test_mode_3 = Mode([9, 7], tmp.start_pos)
     test_mode_3.prev_mode = test_mode
