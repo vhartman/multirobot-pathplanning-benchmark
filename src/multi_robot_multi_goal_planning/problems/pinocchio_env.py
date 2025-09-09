@@ -1,5 +1,10 @@
 import numpy as np
 
+import time
+import sys
+from numba import jit, float64  # ty: ignore[possibly-unbound-import]
+import json
+
 from typing import List, Optional
 from numpy.typing import NDArray
 
@@ -41,13 +46,9 @@ import pinocchio as pin
 import hppfcl as fcl
 from pathlib import Path
 
-import json
-
 from pinocchio.visualize import MeshcatVisualizer
 
-import time
-import sys
-from numba import jit, float64 # ty: ignore[possibly-unbound-import]
+from .registry import register
 
 
 @jit((float64[:, :], float64[:, :]), nopython=True)
@@ -469,9 +470,18 @@ class PinocchioEnvironment(BaseProblem):
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
     def batch_config_cost(
-        self, starts: List[Configuration], ends: List[Configuration], tmp_agent_slice = None
+        self,
+        starts: List[Configuration],
+        ends: List[Configuration],
+        tmp_agent_slice=None,
     ) -> NDArray:
-        return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction, tmp_agent_slice=tmp_agent_slice)
+        return batch_config_cost(
+            starts,
+            ends,
+            self.cost_metric,
+            self.cost_reduction,
+            tmp_agent_slice=tmp_agent_slice,
+        )
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
@@ -567,7 +577,12 @@ class PinocchioEnvironment(BaseProblem):
         return True
 
     def is_collision_free_for_robot(
-        self, r: List[str] | str, q: NDArray, m: Optional[Mode] = None, collision_tolerance: Optional[float] = None, set_mode: bool = True
+        self,
+        r: List[str] | str,
+        q: NDArray,
+        m: Optional[Mode] = None,
+        collision_tolerance: Optional[float] = None,
+        set_mode: bool = True,
     ) -> bool:
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
@@ -611,7 +626,7 @@ class PinocchioEnvironment(BaseProblem):
         # print(q)
         # print('colliding')
         # self.show_config(q, blocking=True)
-        #TODO need to be tested properly
+        # TODO need to be tested properly
         collisionPairs = self.collision_model.collisionPairs.tolist()
         if total_penetration > self.collision_tolerance:
             for k in range(len(self.collision_model.collisionPairs)):
@@ -619,8 +634,12 @@ class PinocchioEnvironment(BaseProblem):
                 # ignore minor collisions
                 if min_dist[k] > -collision_tolerance / 10:
                     continue
-                object1 = self.collision_model.geometryObjects[collisionPairs[k].first].name
-                object2 = self.collision_model.geometryObjects[collisionPairs[k].second].name
+                object1 = self.collision_model.geometryObjects[
+                    collisionPairs[k].first
+                ].name
+                object2 = self.collision_model.geometryObjects[
+                    collisionPairs[k].second
+                ].name
                 # print(c)
                 involves_relevant_robot = False
                 involves_relevant_object = False
@@ -629,10 +648,11 @@ class PinocchioEnvironment(BaseProblem):
                     task = self.tasks[task_idx]
                     if dist < 0 and (robot in object1 or robot in object2):
                         involves_relevant_robot = True
-                    elif dist < 0 and(object1 in task.frames or object2 in task.frames):
+                    elif dist < 0 and (
+                        object1 in task.frames or object2 in task.frames
+                    ):
                         involves_relevant_object = True
-                
-                
+
                 if not involves_relevant_robot and not involves_relevant_object:
                     # print("A")
                     # print(c)
@@ -727,6 +747,7 @@ def make_pin_middle_obstacle_two_dim_env():
     return model, collision_model, visual_model
 
 
+@register("pinocchio.middle_obs")
 class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
     def __init__(self, agents_can_rotate=True):
         model, collision_model, visual_model = make_pin_middle_obstacle_two_dim_env()
@@ -804,6 +825,7 @@ def make_pin_other_hallway_two_dim_env():
     return model, collision_model, visual_model
 
 
+@register("pinocchio.other_hallway")
 class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
     def __init__(self):
         model, collision_model, visual_model = make_pin_other_hallway_two_dim_env()
@@ -849,7 +871,7 @@ class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
 
         self.safe_pose = {
             "a1": np.array(np.array([-1.5, 1, np.pi / 2])),
-            "a2": np.array(np.array([1.5, 1, 0]))
+            "a2": np.array(np.array([1.5, 1, 0])),
         }
 
 
@@ -894,6 +916,7 @@ def make_2d_handover():
     return model, collision_model, visual_model
 
 
+@register("pinocchio.2d_handover")
 class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
     def __init__(self):
         model, collision_model, visual_model = make_2d_handover()
@@ -978,6 +1001,7 @@ def make_piano():
     return model, collision_model, visual_model
 
 
+@register("pinocchio.piano")
 class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
     def __init__(self):
         model, collision_model, visual_model = make_piano()
@@ -1246,6 +1270,7 @@ def make_dual_ur5_waypoint_env():
     return model, collision_model, visual_model
 
 
+@register("pinocchio.random_ur5")
 class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
     def sample_random_valid_state(self):
         while True:
@@ -1583,6 +1608,7 @@ def make_dual_ur5_reorientation_env():
     return model, collision_model, visual_model
 
 
+@register("pinocchio.reorientation")
 class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
     def sample_random_valid_state(self):
         while True:

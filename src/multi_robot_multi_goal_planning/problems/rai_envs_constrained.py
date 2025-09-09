@@ -35,7 +35,9 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
+from .registry import register
 
+@register("rai.constrained_pose")
 class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
     def __init__(self):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=True)
@@ -80,6 +82,7 @@ class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
+@register("rai.constrained_relative_pose")
 class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
     def __init__(self):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=False)
@@ -135,6 +138,7 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
+@register("rai.grasping")
 class rai_two_arm_grasping(SequenceMixin, rai_env):
     def __init__(self):
         self.C, self.robots, keyframes = rai_config.make_bimanual_grasping_env()
