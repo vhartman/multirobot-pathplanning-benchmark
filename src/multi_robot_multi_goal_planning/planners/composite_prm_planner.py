@@ -1613,6 +1613,164 @@ class CompositePRM(BasePlanner):
 
         return reached_modes
 
+    def _prune(self, g, current_best_cost):
+        num_pts_for_removal = 0
+        focal_points = np.array(
+            [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
+            dtype=np.float64,
+        )
+        # for mode, nodes in g.nodes.items():
+        #     for n in nodes:
+        #         if sum(self.env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
+        #             num_pts_for_removal += 1
+
+        # for mode, nodes in g.transition_nodes.items():
+        #     for n in nodes:
+        #         if sum(self.env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
+        #             num_pts_for_removal += 1
+        # Remove elements from g.nodes
+        for mode in list(
+            g.nodes.keys()
+        ):  # Avoid modifying dict while iterating
+            original_count = len(g.nodes[mode])
+            g.nodes[mode] = [
+                n
+                for n in g.nodes[mode]
+                if sum(self.env.batch_config_cost(n.state.q, focal_points))
+                <= current_best_cost
+            ]
+            num_pts_for_removal += original_count - len(g.nodes[mode])
+
+        # Remove elements from g.transition_nodes
+        for mode in list(g.transition_nodes.keys()):
+            original_count = len(g.transition_nodes[mode])
+            g.transition_nodes[mode] = [
+                n
+                for n in g.transition_nodes[mode]
+                if sum(self.env.batch_config_cost(n.state.q, focal_points))
+                <= current_best_cost
+            ]
+            num_pts_for_removal += original_count - len(
+                g.transition_nodes[mode]
+            )
+
+        for mode in list(g.reverse_transition_nodes.keys()):
+            original_count = len(g.reverse_transition_nodes[mode])
+            g.reverse_transition_nodes[mode] = [
+                n
+                for n in g.reverse_transition_nodes[mode]
+                if sum(self.env.batch_config_cost(n.state.q, focal_points))
+                <= current_best_cost
+            ]
+            # num_pts_for_removal += original_count - len(g.reverse_transition_nodes[mode])
+
+        print(f"Removed {num_pts_for_removal} nodes")
+
+    def _refine_approximation(self, g, informed, reached_modes, current_best_path, current_best_cost):
+        # add new batch of nodes
+        effective_uniform_batch_size = (
+            self.config.uniform_batch_size
+            if not self.first_search
+            else self.config.init_uniform_batch_size
+        )
+        effective_uniform_transition_batch_size = (
+            self.config.uniform_transition_batch_size
+            if not self.first_search
+            else self.config.init_transition_batch_size
+        )
+        self.first_search = False
+
+        # if self.env.terminal_mode not in reached_modes:
+        print("Sampling transitions")
+        reached_modes = self.sample_valid_uniform_transitions(
+            g,
+            transistion_batch_size=effective_uniform_transition_batch_size,
+            cost=current_best_cost,
+            reached_modes=reached_modes,
+        )
+        # g.add_transition_nodes(new_transitions)
+        # print(f"Adding {len(new_transitions)} transitions")
+
+        print("Sampling uniform")
+        new_states, required_attempts_this_batch = (
+            self._sample_valid_uniform_batch(
+                g,
+                batch_size=effective_uniform_batch_size,
+                cost=current_best_cost,
+            )
+        )
+        g.add_states(new_states)
+        print(f"Adding {len(new_states)} new states")
+
+        # nodes_per_state = []
+        # for m in reached_modes:
+        #     num_nodes = 0
+        #     for n in new_states:
+        #         if n.mode == m:
+        #             num_nodes += 1
+
+        #     nodes_per_state.append(num_nodes)
+
+        # plt.figure("Uniform states")
+        # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
+        # plt.show()
+
+        approximate_space_extent = float(
+            np.prod(np.diff(self.env.limits, axis=0))
+            * len(new_states)
+            / required_attempts_this_batch
+        )
+
+        # print(reached_modes)
+
+        if not g.goal_nodes:
+            return None
+
+        # g.compute_lower_bound_to_goal(self.env.batch_config_cost)
+        # g.compute_lower_bound_from_start(self.env.batch_config_cost)
+
+        if (
+            current_best_cost is not None
+            and current_best_path is not None
+            and (
+                self.config.try_informed_sampling
+                or self.config.try_informed_transitions
+            )
+        ):
+            interpolated_path = interpolate_path(current_best_path)
+            # interpolated_path = current_best_path
+
+            if self.config.try_informed_sampling:
+                print("Generating informed samples")
+                new_informed_states = informed.generate_samples(
+                    list(reached_modes),
+                    self.config.informed_batch_size,
+                    interpolated_path,
+                    try_direct_sampling=self.config.try_direct_informed_sampling,
+                    g=g,
+                )
+                g.add_states(new_informed_states)
+
+                print(f"Adding {len(new_informed_states)} informed samples")
+
+            if self.config.try_informed_transitions:
+                print("Generating informed transitions")
+                new_informed_transitions = informed.generate_transitions(
+                    list(reached_modes),
+                    self.config.informed_transition_batch_size,
+                    interpolated_path,
+                    g=g,
+                )
+                g.add_transition_nodes(new_informed_transitions)
+                print(
+                    f"Adding {len(new_informed_transitions)} informed transitions"
+                )
+
+                # g.compute_lower_bound_to_goal(self.env.batch_config_cost)
+                # g.compute_lower_bound_from_start(self.env.batch_config_cost)
+
+        return approximate_space_extent
+
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def plan(
         self,
@@ -1637,7 +1795,7 @@ class CompositePRM(BasePlanner):
             include_lb=self.config.inlcude_lb_in_informed_sampling,
         )
 
-        g = MultimodalGraph(
+        graph = MultimodalGraph(
             State(q0, m0),
             lambda a, b: batch_config_dist(a, b, self.config.distance_metric),
             use_k_nearest=self.config.use_k_nearest,
@@ -1666,190 +1824,25 @@ class CompositePRM(BasePlanner):
 
             if current_best_path is not None and current_best_cost is not None:
                 # prune
-                num_pts_for_removal = 0
-                focal_points = np.array(
-                    [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
-                    dtype=np.float64,
-                )
-                # for mode, nodes in g.nodes.items():
-                #     for n in nodes:
-                #         if sum(self.env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
-                #             num_pts_for_removal += 1
-
-                # for mode, nodes in g.transition_nodes.items():
-                #     for n in nodes:
-                #         if sum(self.env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
-                #             num_pts_for_removal += 1
-                # Remove elements from g.nodes
-                for mode in list(
-                    g.nodes.keys()
-                ):  # Avoid modifying dict while iterating
-                    original_count = len(g.nodes[mode])
-                    g.nodes[mode] = [
-                        n
-                        for n in g.nodes[mode]
-                        if sum(self.env.batch_config_cost(n.state.q, focal_points))
-                        <= current_best_cost
-                    ]
-                    num_pts_for_removal += original_count - len(g.nodes[mode])
-
-                # Remove elements from g.transition_nodes
-                for mode in list(g.transition_nodes.keys()):
-                    original_count = len(g.transition_nodes[mode])
-                    g.transition_nodes[mode] = [
-                        n
-                        for n in g.transition_nodes[mode]
-                        if sum(self.env.batch_config_cost(n.state.q, focal_points))
-                        <= current_best_cost
-                    ]
-                    num_pts_for_removal += original_count - len(
-                        g.transition_nodes[mode]
-                    )
-
-                for mode in list(g.reverse_transition_nodes.keys()):
-                    original_count = len(g.reverse_transition_nodes[mode])
-                    g.reverse_transition_nodes[mode] = [
-                        n
-                        for n in g.reverse_transition_nodes[mode]
-                        if sum(self.env.batch_config_cost(n.state.q, focal_points))
-                        <= current_best_cost
-                    ]
-                    # num_pts_for_removal += original_count - len(g.reverse_transition_nodes[mode])
-
-                print(f"Removed {num_pts_for_removal} nodes")
+                self._prune(graph, current_best_cost)
 
             print()
             print(f"Samples: {cnt}; time: {time.time() - start_time:.2f}s; {ptc}")
             print(f"Currently {len(reached_modes)} modes")
 
-            # for mode in reached_modes:
-            # items = [v[0] for k,v  in mode.sg.items()]
-            # transforms = [np.frombuffer(v[1]) for k,v  in mode.sg.items()]
-            # print(mode, mode.additional_hash_info, mode.task_ids)
-            # print(mode, mode.additional_hash_info, mode.task_ids, hash(mode))
-            #     if mode.task_ids == [9,9]:
-            #         print(hash(frozenset(mode.sg)))
-            #         mode._cached_hash = None
-            #         print(hash(mode))
-            #         sg_fitered = {
-            #             k: (v[0], v[1], v[2]) if len(v) > 2 else v for k, v in mode.sg.items()
-            #         }
-            #         sg_hash = hash(frozenset(sg_fitered.items()))
-            #         print(mode.sg)
-            #         print(sg_fitered)
-            #         print(sg_hash)
-            # print(mode, mode.additional_hash_info, mode.task_ids, transforms)
-
-            samples_in_graph_before = g.get_num_samples()
+            samples_in_graph_before = graph.get_num_samples()
 
             if add_new_batch:
-                # add new batch of nodes
-                effective_uniform_batch_size = (
-                    self.config.uniform_batch_size
-                    if not self.first_search
-                    else self.config.init_uniform_batch_size
-                )
-                effective_uniform_transition_batch_size = (
-                    self.config.uniform_transition_batch_size
-                    if not self.first_search
-                    else self.config.init_transition_batch_size
-                )
-                self.first_search = False
-
-                # if self.env.terminal_mode not in reached_modes:
-                print("Sampling transitions")
-                reached_modes = self.sample_valid_uniform_transitions(
-                    g,
-                    transistion_batch_size=effective_uniform_transition_batch_size,
-                    cost=current_best_cost,
-                    reached_modes=reached_modes,
-                )
-                # g.add_transition_nodes(new_transitions)
-                # print(f"Adding {len(new_transitions)} transitions")
-
-                print("Sampling uniform")
-                new_states, required_attempts_this_batch = (
-                    self._sample_valid_uniform_batch(
-                        g,
-                        batch_size=effective_uniform_batch_size,
-                        cost=current_best_cost,
-                    )
-                )
-                g.add_states(new_states)
-                print(f"Adding {len(new_states)} new states")
-
-                # nodes_per_state = []
-                # for m in reached_modes:
-                #     num_nodes = 0
-                #     for n in new_states:
-                #         if n.mode == m:
-                #             num_nodes += 1
-
-                #     nodes_per_state.append(num_nodes)
-
-                # plt.figure("Uniform states")
-                # plt.bar([str(mode) for mode in reached_modes], nodes_per_state)
-                # plt.show()
-
-                approximate_space_extent = float(
-                    np.prod(np.diff(self.env.limits, axis=0))
-                    * len(new_states)
-                    / required_attempts_this_batch
-                )
-
-                # print(reached_modes)
-
-                if not g.goal_nodes:
+                approximate_space_extent = self._refine_approximation(graph, informed, reached_modes, current_best_path, current_best_cost)
+                
+                if approximate_space_extent is None:
                     continue
 
-                # g.compute_lower_bound_to_goal(self.env.batch_config_cost)
-                # g.compute_lower_bound_from_start(self.env.batch_config_cost)
-
-                if (
-                    current_best_cost is not None
-                    and current_best_path is not None
-                    and (
-                        self.config.try_informed_sampling
-                        or self.config.try_informed_transitions
-                    )
-                ):
-                    interpolated_path = interpolate_path(current_best_path)
-                    # interpolated_path = current_best_path
-
-                    if self.config.try_informed_sampling:
-                        print("Generating informed samples")
-                        new_informed_states = informed.generate_samples(
-                            list(reached_modes),
-                            self.config.informed_batch_size,
-                            interpolated_path,
-                            try_direct_sampling=self.config.try_direct_informed_sampling,
-                            g=g,
-                        )
-                        g.add_states(new_informed_states)
-
-                        print(f"Adding {len(new_informed_states)} informed samples")
-
-                    if self.config.try_informed_transitions:
-                        print("Generating informed transitions")
-                        new_informed_transitions = informed.generate_transitions(
-                            list(reached_modes),
-                            self.config.informed_transition_batch_size,
-                            interpolated_path,
-                            g=g,
-                        )
-                        g.add_transition_nodes(new_informed_transitions)
-                        print(
-                            f"Adding {len(new_informed_transitions)} informed transitions"
-                        )
-
-                        # g.compute_lower_bound_to_goal(self.env.batch_config_cost)
-                        # g.compute_lower_bound_from_start(self.env.batch_config_cost)
-
-                g.compute_lower_bound_to_goal(
+                graph.compute_lower_bound_to_goal(
                     self.env.batch_config_cost, current_best_cost
                 )
 
-            samples_in_graph_after = g.get_num_samples()
+            samples_in_graph_after = graph.get_num_samples()
             cnt += samples_in_graph_after - samples_in_graph_before
 
             # search over nodes:
@@ -1894,12 +1887,9 @@ class CompositePRM(BasePlanner):
             # plt.show()
 
             while True:
-                # print([node.neighbors[0].state.mode for node in g.reverse_transition_nodes[g.goal_nodes[0].state.mode]])
-                # print([node.neighbors[0].state.mode for node in g.transition_nodes[g.root.state.mode]])
-
-                sparsely_checked_path = g.search(
-                    g.root,
-                    g.goal_nodes,
+                sparsely_checked_path = graph.search(
+                    graph.root,
+                    graph.goal_nodes,
                     self.env,
                     current_best_cost,
                     resolution,
@@ -2014,7 +2004,7 @@ class CompositePRM(BasePlanner):
                                             != interpolated_path[i + 1].mode
                                         ):
                                             # add as transition
-                                            g.add_transition_nodes(
+                                            graph.add_transition_nodes(
                                                 [
                                                     (
                                                         s.q,
@@ -2025,7 +2015,7 @@ class CompositePRM(BasePlanner):
                                             )
                                             pass
                                         else:
-                                            g.add_states([s])
+                                            graph.add_states([s])
 
                         add_new_batch = True
 
@@ -2045,7 +2035,7 @@ class CompositePRM(BasePlanner):
 
             if current_best_cost is not None:
                 # check if we might have reached the optimal cost? Straightline connection
-                if np.linalg.norm(current_best_cost - self.env.config_cost(q0, g.goal_nodes[0].state.q)) < 1e-6:
+                if np.linalg.norm(current_best_cost - self.env.config_cost(q0, graph.goal_nodes[0].state.q)) < 1e-6:
                     break
             
 
