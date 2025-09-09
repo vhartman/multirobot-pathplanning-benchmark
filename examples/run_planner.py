@@ -21,6 +21,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
 
 from multi_robot_multi_goal_planning.planners import (
     PrioritizedPlanner,
+    PrioritizedPlannerConfig,
     CompositePRM,
     CompositePRMConfig,
     single_mode_shortcut,
@@ -195,10 +196,14 @@ def main():
         planner = EITstar(env, config=config)
 
     elif args.planner == "prioritized":
-        planner = PrioritizedPlanner(env)
+        config = PrioritizedPlannerConfig()
+
+        planner = PrioritizedPlanner(env, config)
 
     elif args.planner == "short_horizon":
-        planner = RecedingHorizonPlanner(env)
+        config = RecedingHorizonConfig()
+
+        planner = RecedingHorizonPlanner(env, config)
 
     np.random.seed(args.seed)
     random.seed(args.seed)

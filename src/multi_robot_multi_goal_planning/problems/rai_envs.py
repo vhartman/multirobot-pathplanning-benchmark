@@ -25,6 +25,8 @@ from .planning_env import (
 )
 from .rai_base_env import rai_env
 
+from .registry import register
+
 # In the follwoing, we want to test planners on a variety of tings
 # In particular, we first want to establish a few simple problems
 # that can be used for debugging, and can be visualized easily
@@ -77,6 +79,10 @@ from .rai_base_env import rai_env
 ##############################
 
 
+@register([
+    ("rai.simple", {}),
+    ("rai.simple_no_rot", {"agents_can_rotate": False}),
+])
 class rai_two_dim_env(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_2d_rai_env(
@@ -127,6 +133,10 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 # make the robots go back and forth.
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
 # Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
+@register([
+    ("rai.one_agent_many_goals", {}),
+    ("rai.one_agent_many_goals_no_rot", {"agents_can_rotate": False}),
+])
 class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
@@ -183,6 +193,10 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 # for the case of the dependency graph, the optimal solution should be 4.1
+@register([
+    ("rai.two_agents_many_goals_dep", {}),
+    ("rai.two_agents_many_goals_dep_no_rot", {"agents_can_rotate": False}),
+])
 class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
@@ -248,6 +262,10 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
 # trivial environment for planing
 # challenging to get the optimal solution dpeending on the approach
 # optimal solution is 5.15 (independent of rotation or not)
+@register([
+    ("rai.three_agent_many_goals", {}),
+    ("rai.three_agent_many_goals_no_rot", {"agents_can_rotate": False}),
+])
 class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = rai_config.make_2d_rai_env_no_obs_three_agents(
@@ -321,6 +339,7 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
         self.spec.manipulation = ManipulationType.STATIC
 
 
+@register("rai.single_agent_mover")
 class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_single_agent_mover_env(
@@ -376,6 +395,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
 
 # best max-cost sol: 3.41
 # best sum-cost sol: 5.922
+@register("rai.piano")
 class rai_two_dim_simple_manip(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_piano_mover_env()
@@ -456,7 +476,7 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
             "a2": np.array(keyframes[1][self.robot_idx["a2"]])
         }
 
-
+@register("rai.piano_dep")
 class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_piano_mover_env()
@@ -542,6 +562,7 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
 
 # best cost found for max-cost is 17.64
 # best cost found for sum-cost is 25.28
+@register("rai.handover")
 class rai_two_dim_handover(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_two_dim_handover()
@@ -647,6 +668,7 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
 
 
+@register("rai.2d_handover_dep")
 class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_two_dim_handover()
@@ -749,6 +771,13 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 
 # best solution found with sum-cost: 49.48
 # best solution found with max-cost: xx
+@register([
+    ("rai.random_2d", {}),
+    ("rai.random_2d_three_goals", {"num_goals": 3}),
+    ("rai.random_2d_two_goals", {"num_goals": 2}),
+    ("rai.random_2d_one_goals", {"num_goals": 1}),
+    ("rai.random_2d_no_rot", {"agents_can_rotate": False}),
+])
 class rai_random_two_dim(SequenceMixin, rai_env):
     def __init__(
         self, num_robots=3, num_goals=4, num_obstacles=10, agents_can_rotate=True
@@ -798,6 +827,10 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
 # best solution found with sum-cost: 14.08 (independent of rotation)
 # best solution found with max-cost: 9.7 (independent of rotation)
+@register([
+    ("rai.hallway", {}),
+    ("rai.hallway_no_rot", {"agents_can_rotate": False}),
+])
 class rai_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_two_dim_tunnel_env(
@@ -834,6 +867,10 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
 # best solution found with sum-cost: xx (independent of rotation)
 # best solution found with max-cost: xx (independent of rotation)
+@register([
+    ("rai.other_hallway", {}),
+    ("rai.other_hallway_no_rot", {"agents_can_rotate": False}),
+])
 class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_two_dim_short_tunnel_env(
@@ -874,6 +911,7 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
         }
 
 
+@register("rai.hallway_dep")
 class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
@@ -910,7 +948,7 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
         self.spec.manipulation = ManipulationType.STATIC
         self.spec.dependency = DependencyType.UNORDERED
 
-
+@register("rai.other_hallway_dep")
 class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_two_dim_short_tunnel_env(
@@ -957,6 +995,7 @@ class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai
 
 # best sum-cost: 12.9
 # best max-cost: 6.56
+@register("rai.three_agents")
 class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_2d_rai_env_3_agents()
@@ -1014,7 +1053,7 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
 
-
+@register("rai.three_agent_many_goals_dep")
 class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_2d_rai_env_3_agents()
@@ -1127,6 +1166,7 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
         self.spec.manipulation = ManipulationType.STATIC
 
 
+@register("rai.triple_waypoints")
 class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
     def __init__(
         self, num_robots: int = 3, num_waypoints: int = 6, shuffle_goals: bool = False
@@ -1176,6 +1216,10 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
 
 
 # goals are poses
+@register([
+    ("rai.welding", {}),
+    ("rai.simplified_welding", {"num_robots": 2, "num_pts": 2}),
+])
 class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_pts: int = 6, shuffle_goals: bool = False):
         self.C, keyframes = rai_config.make_welding_env(
@@ -1218,6 +1262,10 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
 
+@register([
+    ("rai.eggs", {}),
+    ("rai.eggs_five", {"num_boxes": 5}),
+])
 class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes: int = 9):
         self.C, keyframes = rai_config.make_egg_carton_env(num_boxes)
@@ -1287,7 +1335,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
 
         # self.C_base.view(True)
 
-
+@register("rai.box_sorting")
 class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
     def __init__(self):
         super().__init__()
@@ -1373,6 +1421,7 @@ class rai_ur10_arm_conveyor_env:
 
 
 # best max cost: 9.24
+@register("rai.handover")
 class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_handover_env()
@@ -1433,6 +1482,10 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
+@register([
+    ("rai.bottles", {}),
+    ("rai.bottles_single", {"num_bottles": 1}),
+])
 class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
     def __init__(self, num_bottles=2):
         assert num_bottles in [1,2]
@@ -1560,7 +1613,10 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
-
+@register([
+    ("rai.bottles_dep", {}),
+    ("rai.bottles_single_dep", {"num_bottles": 1}),
+])
 class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
     def __init__(self, num_bottles=2):
         assert num_bottles in [1,2]
@@ -1685,7 +1741,14 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
-
+@register([
+    ("rai.box_rearrangement", {}),
+    ("rai.box_rearrangement_five_boxes", {"num_boxes": 5}),
+    ("rai.box_rearrangement_four_robots", {"num_robots": 4}),
+    ("rai.box_rearrangement_one_robot", {"num_robots": 1, "num_boxes": 2}),
+    ("rai.crl_four_robots", {"num_robots": 4, "logo": True}),
+    ("rai.crl_two_robots", {"num_robots": 2, "logo": True}),
+])
 class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=2, num_boxes=9, logo: bool = False):
         if not logo:
@@ -1837,7 +1900,10 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
-
+@register([
+    ("rai.box_reorientation", {}),
+    ("rai.box_reorientation_multi_handover", {"make_many_handover_poses": True}),
+])
 class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
     def __init__(self, num_boxes=9, make_many_handover_poses: bool = False):
         if not make_many_handover_poses:
@@ -1953,7 +2019,10 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
-
+@register([
+    ("rai.box_reorientation_dep", {}),
+    ("rai.box_reorientation_handover_set_dep", {"make_many_handover_poses": True}),
+])
 class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
     def __init__(self, num_boxes=9, make_many_handover_poses: bool = False):
         if not make_many_handover_poses:
@@ -2121,6 +2190,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
         self.spec.dependency = DependencyType.UNORDERED
 
 
+@register("rai.pyramid")
 class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 6):
         self.C, keyframes, self.robots = rai_config.make_pyramid_env(
@@ -2175,6 +2245,13 @@ class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
 
 
 # best cost found (max): 21.45
+@register([
+    ("rai.box_stacking", {}),
+    ("rai.box_stacking_two_robots", {"num_robots": 2}),
+    ("rai.box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
+    ("rai.box_stacking_three_robots", {"num_robots": 3}),
+    ("rai.box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
+])
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 8):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
@@ -2226,6 +2303,11 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 
+@register([
+    ("rai.box_stacking_dep", {}),
+    ("rai.box_stacking_two_robots_dep", {"num_robots": 2}),
+    ("rai.box_stacking_three_robots_dep", {"num_robots": 3}),
+])
 class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 8):
         np.random.seed(1)
@@ -2300,6 +2382,11 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
 
 
 # mobile manip
+@register([
+    ("rai.mobile_wall_four", {"num_robots": 4}),
+    ("rai.mobile_wall_three", {"num_robots": 3}),
+    ("rai.mobile_wall_two", {"num_robots": 2}),
+])
 class rai_mobile_manip_wall(SequenceMixin, rai_env):
     def __init__(self, num_robots=4):
         self.C, keyframes = rai_config.make_mobile_manip_env(num_robots)
@@ -2359,7 +2446,13 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
-
+@register([
+    ("rai.mobile_wall_five_dep", {"num_robots": 5}),
+    ("rai.mobile_wall_four_dep", {"num_robots": 4}),
+    ("rai.mobile_wall_three_dep", {"num_robots": 3}),
+    ("rai.mobile_wall_two_dep", {"num_robots": 2}),
+    ("rai.mobile_wall_single_dep", {"num_robots": 1}),
+])
 class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
     def __init__(self, num_robots=3):
         self.C, keyframes = rai_config.make_mobile_manip_env(num_robots)
@@ -2434,6 +2527,7 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
+@register("rai.mobile_strut")
 class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, self.robots, keyframes = rai_config.make_strut_assembly_problem()
@@ -2483,7 +2577,7 @@ class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
-
+@register("rai.strut_assembly")
 class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, self.robots, keyframes = rai_config.make_strut_nccr_env()
@@ -2532,7 +2626,13 @@ class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
             print(self.C.getJointState()[0:dim])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
-
+@register([
+    ("rai.three_robot_truss", {"assembly_name": "three_robot_truss"}),
+    ("rai.spiral_tower", {"assembly_name": "spiral_tower"}),
+    ("rai.spiral_tower_two", {"assembly_name": "spiral_tower_two"}),
+    ("rai.cube_four", {"assembly_name": "cube_four"}),
+    ("rai.extreme_beam_test", {"assembly_name": "extreme_beam_test"}),
+])
 class rai_coop_tamp_architecture(SequenceMixin, rai_env):
     def __init__(self, assembly_name):
         self.C, self.robots, keyframes = rai_config.coop_tamp_architecture_env(assembly_name=assembly_name)

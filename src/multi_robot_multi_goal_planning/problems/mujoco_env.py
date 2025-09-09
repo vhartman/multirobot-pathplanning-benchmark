@@ -35,6 +35,8 @@ from .planning_env import (
     SingleGoal,
 )
 
+from .registry import register
+
 import mujoco
 from mujoco import mjx
 
@@ -531,7 +533,7 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
         else:
             return self._sequential_collision_check(copy.deepcopy(qs))
 
-
+@register("mujoco.four_panda")
 class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self, agents_can_rotate=True):
         path = "/home/valentin/Downloads/roboballet/data/mujoco_world/4_pandas_world_closer.xml"
@@ -586,6 +588,7 @@ class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         self.collision_tolerance = 0.00
 
 
+@register("mujoco.four_ur10")
 class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self, agents_can_rotate=True):
         path = os.path.join(

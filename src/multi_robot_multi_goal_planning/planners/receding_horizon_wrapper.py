@@ -40,10 +40,11 @@ from multi_robot_multi_goal_planning.problems.util import path_cost
 @dataclass
 class RecedingHorizonConfig:
     low_level_solver: str = "eitstar"
-    horizon_length: int = 2
+    horizon_length: int = 7
     execution_length: int = 1
     low_level_max_time: float = 10
     constrain_free_robots_to_home: bool = True
+    optimize_low_level: bool = False
 
 
 # TODO:
@@ -126,6 +127,7 @@ class RecedingHorizonPlanner(BasePlanner):
                     offset += dim
 
                 new_terminal_task = Task(self.base_env.robots, SingleGoal(goal_pose))
+                
             else:
                 goal_region = self.base_env.limits
                 # get active robot, set it to the correct pose
@@ -234,7 +236,7 @@ class RecedingHorizonPlanner(BasePlanner):
             short_horizon_planner = self.construct_planner(sh_env)
 
             inner_ptc = RuntimeTerminationCondition(self.config.low_level_max_time)
-            short_horizon_plan, _ = short_horizon_planner.plan(inner_ptc, optimize=True)
+            short_horizon_plan, _ = short_horizon_planner.plan(inner_ptc, optimize=self.config.optimize_low_level)
 
             if short_horizon_plan is None:
                 print("Was not able to find a path.")

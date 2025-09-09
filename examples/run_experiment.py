@@ -31,6 +31,7 @@ from make_plots import make_cost_plots
 
 from multi_robot_multi_goal_planning.planners import (
     PrioritizedPlanner,
+    PrioritizedPlannerConfig,
     CompositePRM,
     CompositePRMConfig,
     BaseRRTConfig,
@@ -76,6 +77,9 @@ def load_experiment_config(filepath: str) -> Dict[str, Any]:
     planner_default_config_paths["aitstar"] = "configs/defaults/aitstar.json"
     planner_default_config_paths["eitstar"] = "configs/defaults/eitstar.json"
     planner_default_config_paths["prioritized"] = "configs/defaults/prioritized.json"
+    planner_default_config_paths["short_horizon"] = (
+        "configs/defaults/short_horizon.json"
+    )
 
     for planner_type, default_config_path in planner_default_config_paths.items():
         with open(default_config_path) as f:
@@ -186,8 +190,10 @@ def setup_planner(
                 with_mode_validation=options["with_mode_validation"],
                 with_noise=options["with_noise"],
                 shortcutting_mode=options["shortcutting_mode"],
-                shortcutting_interpolation_resolution=options["shortcutting_interpolation_resolution"],
-                shortcutting_iters=options["shortcutting_iters"]
+                shortcutting_interpolation_resolution=options[
+                    "shortcutting_interpolation_resolution"
+                ],
+                shortcutting_iters=options["shortcutting_iters"],
             )
 
             return CompositePRM(env, config=prm_config).plan(
@@ -330,8 +336,29 @@ def setup_planner(
     elif planner_config["type"] == "prioritized":
 
         def planner(env):
-            # options = planner_config["options"]
-            return PrioritizedPlanner(env).plan(
+            options = planner_config["options"]
+            prio_config = PrioritizedPlannerConfig(
+                use_bidirectional_planner=options["use_bidirectional_planner"],
+                shortcut_iters=options["shortcut_iters"],
+                multirobot_shortcut_iters=options["multirobot_shortcut_iters"],
+            )
+            return PrioritizedPlanner(env, prio_config).plan(
+                ptc=RuntimeTerminationCondition(runtime),
+                optimize=optimize,
+            )
+    elif planner_config["type"] == "short_horizon":
+
+        def planner(env):
+            options = planner_config["options"]
+            config = RecedingHorizonConfig(
+                low_level_solver=options["low_level_solver"],
+                horizon_length=options["horizon_length"],
+                execution_length=options["execution_length"],
+                low_level_max_time=options["low_level_max_time"],
+                constrain_free_robots_to_home=options["constrain_free_robots_to_home"],
+                optimize_low_level=options["optimize_low_level"],
+            )
+            return RecedingHorizonPlanner(env, config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
@@ -340,6 +367,7 @@ def setup_planner(
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
 
     return name, planner
+
 
 def setup_env(env_config):
     pass
@@ -523,7 +551,7 @@ def run_experiment_in_parallel(
                             experiment_folder,
                             results,  # Use manager.list instead of Queue
                             semaphore,
-                            config["num_runs"]
+                            config["num_runs"],
                         ),
                     )
                     p.daemon = True  # Make processes daemon

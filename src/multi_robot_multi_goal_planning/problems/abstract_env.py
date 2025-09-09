@@ -1,7 +1,10 @@
 import numpy as np
+import time
 
 from typing import List, Optional
 from numpy.typing import NDArray
+
+import matplotlib.pyplot as plt
 
 from .planning_env import (
     generate_binary_search_indices,
@@ -29,9 +32,8 @@ from .planning_env import (
     BaseProblem,
 )
 
-import matplotlib.pyplot as plt
 
-import time
+from .registry import register
 
 
 class Sphere:
@@ -109,6 +111,7 @@ class AbstractEnvironment(BaseProblem):
     """
     Simple environment, only supporting rectangle and sphere obstacles, and spherical agents.
     """
+
     def __init__(self):
         self.limits = None
         self.agent_radii = None
@@ -174,7 +177,7 @@ class AbstractEnvironment(BaseProblem):
             plt.gca().add_artist(artist)
 
         # get the tabular color rotation
-        colors = plt.cm.tab20.colors # type: ignore[attr-defined]
+        colors = plt.cm.tab20.colors  # type: ignore[attr-defined]
         for i in range(self.start_pos.num_agents()):
             circle = plt.Circle(
                 self.start_pos[i], self.agent_radii[i], color=colors[i % len(colors)]
@@ -203,7 +206,7 @@ class AbstractEnvironment(BaseProblem):
             plt.gca().add_artist(artist)
 
         # get the tabular color rotation
-        colors = plt.cm.tab20.colors # type: ignore[attr-defined]
+        colors = plt.cm.tab20.colors  # type: ignore[attr-defined]
         for i in range(self.start_pos.num_agents()):
             circle = plt.Circle(
                 q[i], self.agent_radii[i], color=colors[i % len(colors)]
@@ -237,12 +240,20 @@ class AbstractEnvironment(BaseProblem):
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
-
     def batch_config_cost(
-        self, starts: List[Configuration], ends: List[Configuration], tmp_agent_slice = None
+        self,
+        starts: List[Configuration],
+        ends: List[Configuration],
+        tmp_agent_slice=None,
     ) -> NDArray:
-        return batch_config_cost(starts, ends, self.cost_metric, self.cost_reduction, tmp_agent_slice=tmp_agent_slice)
-    
+        return batch_config_cost(
+            starts,
+            ends,
+            self.cost_metric,
+            self.cost_reduction,
+            tmp_agent_slice=tmp_agent_slice,
+        )
+
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         if q is None:
             raise ValueError
@@ -369,6 +380,7 @@ def make_middle_obstacle_n_dim_env(dim=2):
     return start_poses, joint_limits, obstacles
 
 
+@register("abstract.test")
 class abstract_env_two_dim_middle_obs(SequenceMixin, AbstractEnvironment):
     def __init__(self, agents_can_rotate=True):
         AbstractEnvironment.__init__(self)
@@ -433,6 +445,10 @@ def make_center_rectangle_nd(dim, num_agents=2):
     return start_poses, joint_limits, obstacles
 
 
+@register([
+    ("abstract.center_rect_2d", {"n": 2}),
+    ("abstract.center_rect_10d", {"n": 10})
+])
 class abstract_env_center_rect_nd(SequenceMixin, AbstractEnvironment):
     def __init__(self, n=2):
         AbstractEnvironment.__init__(self)

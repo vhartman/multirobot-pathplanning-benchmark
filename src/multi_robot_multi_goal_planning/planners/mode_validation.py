@@ -37,6 +37,7 @@ class ModeValidation:
 
         self.counter += 1
         # TODO what if its a Goal Region? Does that matter?
+        # TODO: the start position is not necessarily always free
         start_pos = self.env.start_pos.state()
         valid_modes = []
         for mode in modes:
@@ -48,7 +49,7 @@ class ModeValidation:
                 valid_modes.append(mode)
                 continue
 
-            if mode.prev_mode is None:
+            if mode == self.env.start_mode:
                 self.whitelist_modes.add(mode)
                 valid_modes.append(mode)
                 continue
@@ -102,8 +103,11 @@ class ModeValidation:
                         ):
                             self.add_invalid_mode(mode)
                             # when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
+                            # print("AAA")
+                            # self.env.show()
                             is_in_collision = True
                             break
+                        # self.env.show()
 
                         whitelist_robots.add(robot)
                         set_mode = False
@@ -167,14 +171,17 @@ class ModeValidation:
             return
 
         # if the mode that we ar trying to add is the start mode, we dont
-        if mode.prev_mode is None:
+        if mode == self.env.start_mode:
             assert False, "Tried to add initial mode to the invalid modes."
             return
 
         self.blacklist_modes.add(mode)
+        # print("added to blacklist")
         if mode.prev_mode not in self.invalid_next_ids:
             self.invalid_next_ids[mode.prev_mode] = set()
         self.invalid_next_ids[mode.prev_mode].add(tuple(mode.task_ids))
+
+        assert False
 
     # TODO: split in adding to blacklist, and removing from the list
     def track_invalid_modes(
@@ -193,18 +200,24 @@ class ModeValidation:
             return modes
 
         # we go backwards from the current mode, and add all the modes that do not have valid follow up modes/task ids
+        print(mode)
+        print(modes)
         while True:
+            # if mode == self.env.start_mode:
+            #     break
+
             invalid_next_ids = self.invalid_next_ids.get(mode, set())
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(
                 mode
             )
+            print(invalid_next_ids, possible_next_task_combinations)
             # if there are more possible task combinations than invalid task combinations, that means that there is a 
             # feasible combination.
             if len(invalid_next_ids) < len(possible_next_task_combinations):
                 break
             modes.remove(mode)
             self.add_invalid_mode(mode)
-            if mode.prev_mode is None:
+            if mode == self.env.start_mode:
                 break
             mode = mode.prev_mode
 
