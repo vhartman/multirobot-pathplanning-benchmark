@@ -80,8 +80,8 @@ from .registry import register
 
 
 @register([
-    ("2d.simple", {}),
-    ("2d.simple_no_rot", {"agents_can_rotate": False}),
+    ("rai.simple", {}),
+    ("rai.simple_no_rot", {"agents_can_rotate": False}),
 ])
 class rai_two_dim_env(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
@@ -134,8 +134,8 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
 # Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
 @register([
-    ("2d.one_agent_many_goals", {}),
-    ("2d.one_agent_many_goals_no_rot", {"agents_can_rotate": False}),
+    ("rai.one_agent_many_goals", {}),
+    ("rai.one_agent_many_goals_no_rot", {"agents_can_rotate": False}),
 ])
 class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
@@ -263,8 +263,8 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
 # challenging to get the optimal solution dpeending on the approach
 # optimal solution is 5.15 (independent of rotation or not)
 @register([
-    ("2d.three_agent_many_goals", {}),
-    ("2d.three_agent_many_goals_no_rot", {"agents_can_rotate": False}),
+    ("rai.three_agent_many_goals", {}),
+    ("rai.three_agent_many_goals_no_rot", {"agents_can_rotate": False}),
 ])
 class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
@@ -339,7 +339,7 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
         self.spec.manipulation = ManipulationType.STATIC
 
 
-@register("single_agent_mover")
+@register("rai.single_agent_mover")
 class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_single_agent_mover_env(
@@ -562,7 +562,7 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
 
 # best cost found for max-cost is 17.64
 # best cost found for sum-cost is 25.28
-@register("2d.handover")
+@register("rai.handover")
 class rai_two_dim_handover(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_two_dim_handover()
@@ -772,11 +772,11 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
 # best solution found with sum-cost: 49.48
 # best solution found with max-cost: xx
 @register([
-    ("2d.random_2d", {}),
-    ("2d.random_2d_three_goals", {"num_goals": 3}),
-    ("2d.random_2d_two_goals", {"num_goals": 2}),
-    ("2d.random_2d_one_goals", {"num_goals": 1}),
-    ("2d.random_2d_no_rot", {"agents_can_rotate": False}),
+    ("rai.random_2d", {}),
+    ("rai.random_2d_three_goals", {"num_goals": 3}),
+    ("rai.random_2d_two_goals", {"num_goals": 2}),
+    ("rai.random_2d_one_goals", {"num_goals": 1}),
+    ("rai.random_2d_no_rot", {"agents_can_rotate": False}),
 ])
 class rai_random_two_dim(SequenceMixin, rai_env):
     def __init__(
@@ -828,8 +828,8 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 # best solution found with sum-cost: 14.08 (independent of rotation)
 # best solution found with max-cost: 9.7 (independent of rotation)
 @register([
-    ("2d.hallway", {}),
-    ("2d.hallway_no_rot", {"agents_can_rotate": False}),
+    ("rai.hallway", {}),
+    ("rai.hallway_no_rot", {"agents_can_rotate": False}),
 ])
 class rai_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
@@ -868,8 +868,8 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 # best solution found with sum-cost: xx (independent of rotation)
 # best solution found with max-cost: xx (independent of rotation)
 @register([
-    ("2d.other_hallway", {}),
-    ("2d.other_hallway_no_rot", {"agents_can_rotate": False}),
+    ("rai.other_hallway", {}),
+    ("rai.other_hallway_no_rot", {"agents_can_rotate": False}),
 ])
 class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
@@ -911,7 +911,7 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
         }
 
 
-@register("hallway_dep")
+@register("rai.hallway_dep")
 class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
@@ -995,7 +995,7 @@ class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai
 
 # best sum-cost: 12.9
 # best max-cost: 6.56
-@register("2d.three_agents")
+@register("rai.three_agents")
 class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_2d_rai_env_3_agents()
@@ -1053,7 +1053,7 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
 
-@register("three_agent_many_goals_dep")
+@register("rai.three_agent_many_goals_dep")
 class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_2d_rai_env_3_agents()
@@ -1166,7 +1166,7 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
         self.spec.manipulation = ManipulationType.STATIC
 
 
-@register("triple_waypoints")
+@register("rai.triple_waypoints")
 class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
     def __init__(
         self, num_robots: int = 3, num_waypoints: int = 6, shuffle_goals: bool = False
@@ -1335,7 +1335,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
 
         # self.C_base.view(True)
 
-@register("box_sorting")
+@register("rai.box_sorting")
 class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
     def __init__(self):
         super().__init__()
@@ -1421,7 +1421,7 @@ class rai_ur10_arm_conveyor_env:
 
 
 # best max cost: 9.24
-@register("handover")
+@register("rai.handover")
 class rai_ur10_handover_env(SequenceMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_handover_env()

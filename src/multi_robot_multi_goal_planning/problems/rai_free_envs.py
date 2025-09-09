@@ -15,7 +15,7 @@ import multi_robot_multi_goal_planning.problems.rai_config as rai_config
 
 from .registry import register
 
-@register("unassigned_two_dim")
+@register("rai.unassigned_two_dim")
 class rai_two_dim_env(FreeMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
@@ -220,7 +220,7 @@ def make_piano_mover_env(view: bool = False):
 
     return C, all_keyframes
 
-@register("unassigned_piano")
+@register("rai.unassigned_piano")
 class rai_unassigned_piano_mover(FreeMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, all_keyframes = make_piano_mover_env()
@@ -310,7 +310,7 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
         BaseModeLogic.__init__(self)
 
 
-@register("unassigned_cleanup")
+@register("rai.unassigned_cleanup")
 class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
     def __init__(self, num_boxes = 5):
         self.C, keyframes = rai_config.make_box_pile_env(
@@ -413,7 +413,7 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
-@register("unassigned_stacking")
+@register("rai.unassigned_stacking")
 class rai_unassigned_stacking(FreeMixin, rai_env):
     def __init__(self, num_robots=4, num_boxes: int = 8):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
@@ -539,7 +539,7 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
-@register("unordered_bottles")
+@register("rai.unordered_bottles")
 class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_bottle_insertion()
