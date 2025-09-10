@@ -34,6 +34,7 @@ class RRTstar(BaseRRTstar):
                 for _, child in enumerate(children):
                     child.cost = current_node.cost + child.cost_to_parent
                     # child.agent_dists = current_node.agent_dists + child.agent_dists_to_parent
+        
                 stack.extend(children)
 
     def manage_transition(self, mode: Mode, n_new: Node) -> None:
@@ -43,11 +44,13 @@ class RRTstar(BaseRRTstar):
             self.add_new_mode(n_new.state.q, mode, SingleTree)
             self.save_tree_data()
             self.convert_node_to_transition_node(mode, n_new)
+        
         # check if termination is reached
         if self.env.done(n_new.state.q, mode):
             self.convert_node_to_transition_node(mode, n_new)
             if not self.operation.init_sol:
                 self.operation.init_sol = True
+
         self.find_lb_transition_node()
 
     def initialize_planner(self) -> None:
@@ -89,6 +92,7 @@ class RRTstar(BaseRRTstar):
         except Exception:
             data["all_transition_nodes"] = []
             data["all_transition_nodes_mode"] = []
+
         data["all_nodes_mode"] = [
             self.trees[m].subtree[id].state.mode.task_ids
             for m in self.modes
@@ -111,6 +115,7 @@ class RRTstar(BaseRRTstar):
                     else:
                         data[type]["parents"].append(None)
             break
+        
         data["pathnodes"] = []
         data["pathparents"] = []
         if self.operation.path_nodes is not None:
@@ -139,12 +144,14 @@ class RRTstar(BaseRRTstar):
             q_rand = self.sample_configuration(active_mode)
             if not q_rand:
                 continue
+
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
             )
             state_new = self.steer(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
+            
             if self.env.is_collision_free(
                 state_new.q, active_mode
             ) and self.env.is_edge_collision_free(
@@ -159,6 +166,7 @@ class RRTstar(BaseRRTstar):
                     N_near_batch, n_near_costs, node_indices = self.near(
                         active_mode, n_new, n_nearest_idx
                     )
+            
                 batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
                 self.find_parent(
                     active_mode,
@@ -168,10 +176,12 @@ class RRTstar(BaseRRTstar):
                     batch_cost,
                     n_near_costs,
                 )
+            
                 if self.rewire(
                     active_mode, node_indices, n_new, batch_cost, n_near_costs
                 ):
                     self.update_cost(active_mode, n_new)
+            
                 self.manage_transition(active_mode, n_new)
 
             if not optimize and self.operation.init_sol:
@@ -191,8 +201,13 @@ class RRTstar(BaseRRTstar):
         for i in range(len(self.operation.path)):
             path_w_doubled_modes.append(self.operation.path[i])
 
-            if i + 1 < len(self.operation.path) and self.operation.path[i].mode != self.operation.path[i + 1].mode:
-                path_w_doubled_modes.append(State(self.operation.path[i].q, self.operation.path[i + 1].mode))
+            if (
+                i + 1 < len(self.operation.path)
+                and self.operation.path[i].mode != self.operation.path[i + 1].mode
+            ):
+                path_w_doubled_modes.append(
+                    State(self.operation.path[i].q, self.operation.path[i + 1].mode)
+                )
 
         self.operation.path = path_w_doubled_modes
 

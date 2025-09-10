@@ -71,11 +71,14 @@ class BidirectionalRRTstar(BaseRRTstar):
             new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
             if new_modes == []:
                 self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
+        
         for new_mode in new_modes:
             if new_mode in self.modes:
                 continue
+        
             if new_mode in self.blacklist_mode:
                 continue
+        
             self.modes.append(new_mode)
             self.add_tree(new_mode, tree_instance)
 
@@ -87,8 +90,10 @@ class BidirectionalRRTstar(BaseRRTstar):
                     if new_mode in self.modes:
                         self.modes.remove(new_mode)
                     break
+        
                 if i > 0 and np.equal(q.state(), node.state.q.state()).all():
                     break
+        
                 node = Node(State(q, new_mode), self.operation)
                 node.cost_to_parent = 0.0
                 self.mark_node_as_transition(new_mode, node)
@@ -110,6 +115,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                     self.add_new_mode(n_new.state.q, mode, BidirectionalTree)
                     self.save_tree_data()
                     self.convert_node_to_transition_node(mode, n_new)
+        
                 # check if termination is reached
                 if self.env.done(n_new.state.q, mode):
                     self.trees[mode].connected = True
@@ -159,6 +165,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                     self.transition_node_ids[mode].remove(n_parent.id)
                     self.mark_node_as_transition(mode, n_parent)
                 return
+        
             # print(n.state.mode)
             n.children.remove(n_parent)
 
@@ -215,6 +222,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 n_nearest_b.state.q, n_new.state.q, mode
             ):
                 return
+        
             self.update_tree(mode, n_new, n_nearest_b, cost[0])
 
         else:
@@ -222,6 +230,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 n_new.state.q, n_nearest_b.state.q, mode
             ):
                 return
+        
             self.update_tree(mode, n_nearest_b, n_new, cost[0])
 
         transition_node = self.get_transition_node(
@@ -236,6 +245,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             elif transition_node.cost != np.inf:
                 self.operation.init_sol = True
                 # print(time.time()-self.start_time)
+        
         # need to do that after the next mode was initialized
         self.convert_node_to_transition_node(mode, transition_node)
 
@@ -264,6 +274,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 not state_new or np.equal(state_new.q.state(), q.state()).all()
             ):  # Reached
                 return n_nearest_b
+            
             if self.env.is_collision_free(
                 state_new.q, mode
             ) and self.env.is_edge_collision_free(
@@ -328,11 +339,13 @@ class BidirectionalRRTstar(BaseRRTstar):
                     ids = self.trees[m].get_node_ids_subtree("A")
                 else:
                     ids = self.trees[m].get_node_ids_subtree("B")
+                
                 for id in ids:
                     if type == "forward":
                         node = self.trees[m].subtree[id]
                     else:
                         node = self.trees[m].subtree_b[id]
+                    
                     data[type]["nodes"].append(node.state.q.state())
                     data[type]["modes"].append(node.state.mode.task_ids)
                     parent = node.parent
@@ -383,6 +396,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             q_rand = self.sample_configuration(active_mode)
             if not q_rand:
                 continue
+            
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
             )
@@ -415,12 +429,14 @@ class BidirectionalRRTstar(BaseRRTstar):
                     batch_cost,
                     n_near_costs,
                 )
+
                 if self.rewire(
                     active_mode, node_indices, n_new, batch_cost, n_near_costs
                 ):
                     self.update_cost(active_mode, n_new)
                 self.connect(active_mode, n_new)
                 self.manage_transition(active_mode, n_new)
+            
             if self.swap:
                 self.trees[active_mode].swap()
 

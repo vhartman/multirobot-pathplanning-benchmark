@@ -200,8 +200,6 @@ class ModeValidation:
             return modes
 
         # we go backwards from the current mode, and add all the modes that do not have valid follow up modes/task ids
-        print(mode)
-        print(modes)
         while True:
             # if mode == self.env.start_mode:
             #     break
