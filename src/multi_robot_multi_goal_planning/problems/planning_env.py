@@ -214,7 +214,7 @@ def get_axes_from_quaternion(quat):
     return x_axis, y_axis, z_axis
 
 
-class EqualityConstraint(Constraint):
+class TaskSpaceEqualityConstraint(Constraint):
     def __init__(self, frame_name, pose, eps=1e-3):
         self.frame_name = frame_name
         self.constraint_pose = pose
@@ -223,12 +223,32 @@ class EqualityConstraint(Constraint):
     def is_fulfilled(self, q: Configuration, env) -> bool:
         frame_pose = env.get_frame_pose(self.frame_name)
 
-        return np.isclose(frame_pose, self.constraint, self.eps)
+        return np.isclose(frame_pose, self.constraint_pose, self.eps)
+
+
+class ConfigurationSpaceEqualityConstraint(Constraint):
+    def __init__(self, indices, pose, eps=1e-3):
+        self.constraint_pose = pose
+        self.eps = eps
+
+    def is_fulfilled(self, q: Configuration, env) -> bool:
+        return np.isclose(q.state(), self.constraint_pose, self.eps)
+
+
+class ConfigurationSpaceRelativeConstraint(Constraint):
+    def __init__(self, indices, pose, eps=1e-3):
+        self.constraint_pose = pose
+        self.eps = eps
+
+    def is_fulfilled(self, q: Configuration, env) -> bool:
+        return np.isclose(q.state(), self.constraint_pose, self.eps)
+
 
 class FrameOrientationConstraint(Constraint):
     """
     Pose of a single frame.
     """
+
     def __init__(self, frame_name, desired_orientation_vector, epsilon):
         self.frame_name = frame_name
         self.desired_orientation_vector = desired_orientation_vector
@@ -250,6 +270,7 @@ class PathConstraint(Constraint):
 
     Ideally this would have timing/phase information as well, but this is currently not supported by the rest of the framework.
     """
+
     def __init__(self, frame_name, path, epsilon):
         self.frame_name = frame_name
         self.path = path
@@ -261,7 +282,7 @@ class PathConstraint(Constraint):
         # find closest element on path
 
         return True
-    
+
 
 def relative_pose(a, b):
     """
@@ -287,7 +308,7 @@ def relative_pose(a, b):
 
 
 class FrameRelativePoseConstraint(Constraint):
-    def __init__(self, frame_names: List[str], rel_pose, eps: float=1e-3):
+    def __init__(self, frame_names: List[str], rel_pose, eps: float = 1e-3):
         self.frames = frame_names
         self.desired_relative_pose = rel_pose
         self.eps = eps
@@ -332,7 +353,7 @@ class Task:
         frames=None,
         side_effect=None,
         side_effect_data=None,
-        constraints = []
+        constraints=[],
     ):
         self.robots = robots
         self.goal = goal
@@ -2023,11 +2044,11 @@ class BaseProblem(ABC):
                 mode = path[i].mode
                 if not self.is_collision_free(q1, mode):
                     return False
-            
+
             # print('end', path[-1].q.state())
             # if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
             #     return False
-            
+
             # check whole edge
             for i in idx:
                 q1 = path[i].q
@@ -2066,7 +2087,9 @@ class BaseProblem(ABC):
                         Ns[i] = int(config_dist(q1, q2, "max") / resolution) + 1
                         Ns[i] = max(2, Ns[i])
                     if N_start == 0:
-                        if (i != 0 or (check_start_and_end and i == 0)) and not self.is_collision_free(q1, mode):
+                        if (
+                            i != 0 or (check_start_and_end and i == 0)
+                        ) and not self.is_collision_free(q1, mode):
                             return False
 
                     if N_start > Ns[i]:
@@ -2098,7 +2121,9 @@ class BaseProblem(ABC):
                 N_start += checks_per_iteration
                 N_max += checks_per_iteration
 
-            if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
+            if check_start_and_end and not self.is_collision_free(
+                path[-1].q, path[-1].mode
+            ):
                 return False
 
         return True
