@@ -14,9 +14,12 @@ from .planning_env import (
     SequenceMixin,
     State,
     Task,
+)
+from .goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
+    ConditionalGoal,
 )
 from .rai_base_env import rai_env
 

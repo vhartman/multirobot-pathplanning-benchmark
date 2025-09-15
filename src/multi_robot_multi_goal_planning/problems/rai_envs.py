@@ -10,10 +10,6 @@ from .planning_env import (
     SequenceMixin,
     DependencyGraphMixin,
     Task,
-    SingleGoal,
-    GoalSet,
-    GoalRegion,
-    ConditionalGoal,
     ProblemSpec,
     AgentType,
     GoalType,
@@ -22,6 +18,12 @@ from .planning_env import (
     ManipulationType,
     DependencyType,
     SafePoseType,
+)
+from .goals import (
+    SingleGoal,
+    GoalSet,
+    GoalRegion,
+    ConditionalGoal,
 )
 from .rai_base_env import rai_env
 

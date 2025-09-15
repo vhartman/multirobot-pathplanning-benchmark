@@ -9,11 +9,13 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     SequenceMixin,
     Task,
+    Mode,
+    Configuration,
+)
+from multi_robot_multi_goal_planning.problems.goals import (
     SingleGoal,
     GoalRegion,
     GoalSet,
-    Mode,
-    Configuration,
 )
 from .termination_conditions import (
     PlannerTerminationCondition,

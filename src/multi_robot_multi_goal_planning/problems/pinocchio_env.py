@@ -27,10 +27,6 @@ from .planning_env import (
     State,
     Mode,
     Task,
-    SingleGoal,
-    GoalSet,
-    GoalRegion,
-    ConditionalGoal,
     BaseProblem,
     ProblemSpec,
     AgentType,
@@ -40,6 +36,12 @@ from .planning_env import (
     ManipulationType,
     DependencyType,
     SafePoseType,
+)
+from .goals import (
+    SingleGoal,
+    GoalSet,
+    GoalRegion,
+    ConditionalGoal,
 )
 
 import pinocchio as pin

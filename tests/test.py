@@ -11,11 +11,15 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     UnorderedButAssignedMixin,
     FreeMixin,
-    SingleGoal,
-    GoalRegion,
     Task,
     BaseModeLogic,
     Mode,
+)
+from multi_robot_multi_goal_planning.problems.goals import (
+    SingleGoal,
+    GoalSet,
+    GoalRegion,
+    ConditionalGoal,
 )
 
 from multi_robot_multi_goal_planning.planners.composite_prm_planner import CompositePRM, CompositePRMConfig

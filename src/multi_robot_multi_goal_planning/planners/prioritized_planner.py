@@ -29,8 +29,8 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     SafePoseType,
     DependencyType,
     generate_binary_search_indices,
-    SingleGoal,
 )
+from multi_robot_multi_goal_planning.problems.goals import SingleGoal
 from .termination_conditions import (
     PlannerTerminationCondition,
     RuntimeTerminationCondition,

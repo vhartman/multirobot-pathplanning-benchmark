@@ -5,10 +5,13 @@ from .planning_env import (
     BaseModeLogic,
     FreeMixin,
     Task,
+    SafePoseType
+)
+from .goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
-    SafePoseType
+    ConditionalGoal,
 )
 from .rai_base_env import rai_env
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config

@@ -25,11 +25,13 @@ from .planning_env import (
     State,
     Mode,
     Task,
+    BaseProblem,
+)
+from .goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
     ConditionalGoal,
-    BaseProblem,
 )
 
 
