@@ -8,10 +8,10 @@ from numpy.typing import NDArray
 from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
-from multi_robot_multi_goal_planning.problems.configuration import config_dist
+from .configuration import config_dist
 
 # from multi_robot_multi_goal_planning.problems.rai_config import *
-from multi_robot_multi_goal_planning.problems.planning_env import (
+from .planning_env import (
     BaseModeLogic,
     SequenceMixin,
     DependencyGraphMixin,
@@ -29,11 +29,13 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     ManipulationType,
     DependencyType,
     SafePoseType,
+)
+from .rai_base_env import rai_env
+from .constraints import (
     FrameRelativePoseConstraint,
     FrameOrientationConstraint,
     relative_pose
 )
-from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 
 from .registry import register
 
