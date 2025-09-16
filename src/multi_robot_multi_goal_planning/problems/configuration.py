@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import List, Tuple, Union, Any, Optional
+from typing import List, Tuple, Union, Any, Optional, Sequence
 from numpy.typing import NDArray
 from numba import jit, float64, int64 # ty: ignore[possibly-unbound-import]
 
@@ -40,7 +40,7 @@ class Configuration(ABC):
 
     @classmethod
     @abstractmethod
-    def from_list(cls, q_list: List[NDArray]) -> "Configuration":
+    def from_list(cls, q_list: Sequence[Union[List[float], NDArray]]) -> "Configuration":
         pass
 
     @abstractmethod
@@ -82,7 +82,7 @@ class ListConfiguration(Configuration):
         self.q[ind] = data
 
     @classmethod
-    def from_list(cls, q_list: List[NDArray]) -> "ListConfiguration":
+    def from_list(cls, q_list: Sequence[Union[List[float], NDArray]]) -> "ListConfiguration":
         return cls(q_list)
 
     def from_flat(self, q: NDArray) -> "ListConfiguration":
@@ -258,7 +258,7 @@ class NpConfiguration(Configuration):
 
     @classmethod
     # @profile # run with kernprof -l examples/run_planner.py [your environment]
-    def from_list(cls, q_list: List[NDArray]) -> "NpConfiguration":
+    def from_list(cls, q_list: Sequence[Union[List[float], NDArray]]) -> "NpConfiguration":
         if len(q_list) == 1:
             return cls(q_list[0], [(0, len(q_list[0]))])
 
