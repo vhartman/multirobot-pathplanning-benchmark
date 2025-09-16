@@ -1866,6 +1866,7 @@ class BaseProblem(ABC):
 
         mode = self.start_mode
         collision = False
+        constraint_violation = False
         for i in range(len(path)):
             mode = path[i].mode
 
@@ -1877,6 +1878,18 @@ class BaseProblem(ABC):
                 # self.show()
                 collision = True
 
+            next_mode_ids = None
+            for j in range(i, len(path)):
+                if path[j].mode != mode:
+                    next_mode_ids = path[j].mode.task_ids
+
+            constraints = self.get_active_task(mode, next_mode_ids).constraints
+            for c in constraints:
+                if not c.is_fulfilled(path[i].q, self):
+                    print(f"Constraint violated at index {i}")
+                    constraint_violation = True
+
+
             # if the next mode is a transition, check where to go
             # if i < len(path) - 1 and self.is_transition(path[i].q, mode):
             #     # TODO: this does not work if multiple switches are possible at the same time
@@ -1886,11 +1899,15 @@ class BaseProblem(ABC):
             #         mode = next_mode
 
         if not self.done(path[-1].q, path[-1].mode):
-            print("Final mode not reached")
+            print("Final mode not reached.")
             return False
 
         if collision:
-            print("There was a collision")
+            print("There was a collision.")
+            return False
+
+        if constraint_violation:
+            print("Constraints were violated.")
             return False
 
         return True

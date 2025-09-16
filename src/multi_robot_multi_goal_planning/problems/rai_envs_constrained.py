@@ -204,6 +204,71 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
+class rai_bimanual_husky(SequenceMixin, rai_env):
+    def __init__(self):
+        pass
+
+
+@register("rai.constrained_2d_puzzle")
+class rai_linked_2d_puzzle(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_linked_puzzle_env(agents_can_rotate=True)
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        r1_goal = np.array([-0.5, -0.5, 0])
+        r2_goal = np.array([-0.5, 0.5, 0])
+
+        self.tasks = [
+            # joint
+            Task(
+                ["a1"],
+                SingleGoal(r1_goal),
+                # constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([1, 0, 0, -1, 0, 0]), 0)]
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(r2_goal),
+                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, -1, 0, 0]]), np.array([0]))]
+            ),            
+            # terminal mode
+            Task(
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+
+        self.tasks[0].name = "r1_goal"
+        self.tasks[1].name = "r2_goal"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["r1_goal", "r2_goal", "terminal"]
+        )
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.manipulation = ManipulationType.STATIC
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+
+class rai_rfl_two_only(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_two_arms_on_a_gantry()
+        
+
+class rai_rfl(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_four_arms_on_a_gantry()
+
+
 class rai_hold_glass_upright(SequenceMixin, rai_env):
     def __init__(self):
         self.C = rai_config.make_arm_orientation_env()

@@ -349,6 +349,99 @@ def make_2d_rai_env(view: bool = False, agents_can_rotate=True):
     return C, keyframes
 
 
+def make_linked_puzzle_env(view: bool = False, agents_can_rotate=True):
+    if not isinstance(agents_can_rotate, list):
+        agents_can_rotate = [agents_can_rotate] * 2
+    else:
+        assert len(agents_can_rotate) == 2
+
+    C = make_table_with_walls(2, 2)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    if agents_can_rotate[0]:
+        C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
+        ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+        ).setJointState([0.75, -0.5, 0])
+    else:
+        C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+            ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
+        ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXY, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+        ).setJointState([0.75, -0.5])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0, 0.5, 0.07])
+        .setPosition(table.getPosition() + [0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    if agents_can_rotate[1]:
+        C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+            ry.ST.box,
+            size=[0.1, 0.2, 0.06, 0.005],
+            # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
+        ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+        ).setJointState([0.75, 0.5, 0])
+    else:
+        C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+            ry.ST.box,
+            size=[0.1, 0.2, 0.06, 0.005],
+            # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
+        ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+            ry.JT.transXY, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+        ).setJointState([0.75, 0.5])
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-0.5, -0.5, 0.07])
+
+    C.addFrame("goal2").setParent(table).setShape(
+        ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([-0.5, 0.5, 0.07])
+
+    C.addFrame("obs1").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.0, 0, 0.07]
+    ).setShape(ry.ST.box, size=[1.9, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs2").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [0.3, 0.4, 0.07]
+    ).setShape(ry.ST.box, size=[0.1, 0.5, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obs3").setParent(table).setPosition(
+        C.getFrame("table").getPosition() + [-0.1, 0.65, 0.07]
+    ).setShape(ry.ST.box, size=[0.1, 0.5, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    if view:
+        C.view(True)
+
+    return C
+
+
 def make_random_two_dim(
     num_agents: int = 3,
     num_obstacles: int = 5,

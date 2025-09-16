@@ -46,8 +46,8 @@ class AffineTaskSpaceEqualityConstraint(Constraint):
         self.constraint_pose = pose
         self.eps = eps
 
-        assert self.mat.shape[0] == 7
-        assert self.mat.shape[1] == len(self.constraint_pose)
+        assert self.mat.shape[0] == len(self.constraint_pose)
+        assert self.mat.shape[1] == 7
 
     def is_fulfilled(self, q: Configuration, env) -> bool:
         frame_pose = env.get_frame_pose(self.frame_name)
@@ -87,6 +87,9 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         self.desired_relative_pose = rel_pose
         self.eps = eps
 
+        assert self.mat.shape[0] == len(self.constraint_pose)
+        assert self.mat.shape[1] == 7
+
     def is_fulfilled(self, q, env):
         frame_1_pose = env.get_frame_pose(self.frames[0])
         frame_2_pose = env.get_frame_pose(self.frames[1])
@@ -105,7 +108,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
         self.constraint_pose = pose
         self.eps = eps
 
-        assert self.mat.shape[1] == len(self.constraint_pose)
+        assert self.mat.shape[0] == len(self.constraint_pose)
 
     def is_fulfilled(self, q: Configuration, env) -> bool:
         return np.isclose(self.mat @ q.state(), self.constraint_pose, self.eps)
@@ -118,14 +121,16 @@ class AffineFrameOrientationConstraint(Constraint):
         self.desired_orientation_vector = desired_orientation_vector
         self.epsilon = epsilon
 
+        raise NotImplementedError
+
     def is_fulfilled(self, q, env):
         frame_pose = env.get_frame_pose(self.frame_name)
 
         # get vector from quaternion
         x_axis, y_axis, z_axis = get_axes_from_quaternion(frame_pose[3:])
 
-        assert False
-
+        raise NotImplementedError
+    
 
 # projects the pose of a frame to a path 
 class TaskSpacePathConstraint(Constraint):
