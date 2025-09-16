@@ -36,6 +36,7 @@ from .rai_base_env import rai_env
 from .constraints import (
     RelativeAffineTaskSpaceEqualityConstraint,
     AffineTaskSpaceEqualityConstraint,
+    AffineConfigurationSpaceEqualityConstraint,
     relative_pose
 )
 
@@ -56,7 +57,7 @@ class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
         self.tasks = [
             Task(
                 ["a1"],
-                SingleGoal(np.array([-0.5, -0.5, 0])), constraints=[AffineTaskSpaceEqualityConstraint("a1", np.array([1, 0, 0, 0]))]
+                SingleGoal(np.array([-0.5, -0.5, 0])), constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[0, 0, 1, 0, 0, 0]]), np.array([0]), 0) ]
             ),
             Task(
                 ["a2"],
@@ -116,7 +117,7 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
             ),
             Task(
                 ["a1", "a2"],
-                SingleGoal(rel_movement_end), constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], rel_pose)]
+                SingleGoal(rel_movement_end), constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], np.eye(7), rel_pose)]
             ),            
             # terminal mode
             Task(
@@ -177,7 +178,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 SingleGoal(place_pose),
                 type="place", 
                 frames=["table", "obj1"],
-                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], rel_pose)]
+                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7),  rel_pose)]
             ),            
             # terminal mode
             Task(
