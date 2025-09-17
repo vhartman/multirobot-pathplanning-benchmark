@@ -87,7 +87,7 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         self.desired_relative_pose = rel_pose
         self.eps = eps
 
-        assert self.mat.shape[0] == len(self.constraint_pose)
+        assert self.mat.shape[0] == len(self.desired_relative_pose)
         assert self.mat.shape[1] == 7
 
     def is_fulfilled(self, q, env):
