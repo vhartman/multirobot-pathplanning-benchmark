@@ -93,7 +93,7 @@ class MujocoEnvironment(BaseProblem):
         ]
 
         return joint_ids
-    
+
     def collect_adr(self, root_name):
         robot_body_ids = self.get_body_ids(root_name)
 
@@ -104,7 +104,6 @@ class MujocoEnvironment(BaseProblem):
         ]
 
         return joint_addr
-    
 
     def __init__(self, xml_path, n_data_pool: int = 1):
         self.limits = None
@@ -120,6 +119,8 @@ class MujocoEnvironment(BaseProblem):
         # mjx_data = mjx.make_data(mjx_model)
         # qvel = mjx_data.qvel.at[0].set(0)
         # mjx.mj_forward(mjx_model, mjx_data)
+
+        self.manipulating_env = False
 
         self.viewer = None
         self._enter_pressed = False
@@ -158,6 +159,46 @@ class MujocoEnvironment(BaseProblem):
             self.limits[0, idx] = self.model.jnt_range[i, 0]  # lower limit
             self.limits[1, idx] = self.model.jnt_range[i, 1]  # upper limit
 
+        def get_freejoint_id(name):
+            body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "my_body")
+
+            # joints attached to this body start at model.body_jntadr[body_id]
+            jnt_adr = self.model.body_jntadr[body_id]
+            jnt_count = self.model.body_jntnum[body_id]
+
+            if jnt_count > 1:
+                raise ValueError
+
+            return jnt_adr
+
+        self.initial_sg = {}
+
+        self.root_name = "table"
+
+        # for i in range(self.model.nbody):
+        #     # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i)
+        #     obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, i)
+        #     # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, i)
+
+        #     pos  = self.data.geom_xpos[i]   # runtime info
+        #     print(obj_name, pos)
+        #     if obj_name is None:
+        #         continue
+
+        #     if obj_name[:3] == "obj" or obj_name[:3] == "box":
+
+        #     parent = collision_model.geometryObjects[id_1].parentJoint
+        #     placement = collision_model.geometryObjects[id_1].placement
+        #     # print(obj_name)
+        #     # print(placement)
+        #     self.initial_sg[id_1] = (
+        #         self.root_name,
+        #         parent,
+        #         np.round(placement, 3).tobytes(),
+        #         pin.SE3(placement),
+        #     )
+
+        # self.current_scenegraph = self.initial_sg.copy()
 
         self.spec = ProblemSpec(
             agent_type=AgentType.MULTI_AGENT,
@@ -268,6 +309,10 @@ class MujocoEnvironment(BaseProblem):
 
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         # data = mujoco.MjData(self.model)
+
+        if mode:
+            self._set_to_scenegraph(mode.sg)
+
         self.data.qpos[self._all_robot_idx] = q.state()
         mujoco.mj_forward(self.model, self.data)
 
@@ -277,6 +322,16 @@ class MujocoEnvironment(BaseProblem):
                 return False
 
         return True
+
+    def is_collision_free_for_robot(
+        self,
+        r: List[str] | str,
+        q: NDArray,
+        m: Optional[Mode] = None,
+        collision_tolerance: Optional[float] = None,
+        set_mode: bool = True,
+    ) -> bool:
+        raise NotImplementedError
 
     def is_edge_collision_free(
         self,
@@ -333,13 +388,51 @@ class MujocoEnvironment(BaseProblem):
 
         return True
 
-    def set_to_mode(self, m: List[int]):
-        # self.data.
-
+    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         if not self.manipulating_env:
-            return
-        else:
-            raise NotImplementedError("This is not supported for this environment.")
+            return {}
+
+        # self.set_to_mode(mode)
+        prev_mode = mode.prev_mode
+        if prev_mode is None:
+            return self.initial_sg
+        sg = prev_mode.sg.copy()
+
+        active_task = self.get_active_task(prev_mode, mode.task_ids)
+
+        # mode_switching_robots = self.get_goal_constrained_robots(mode)
+        mode_switching_robots = active_task.robots
+
+        # set robot to config
+        prev_mode_index = prev_mode.task_ids[
+            self.robots.index(mode_switching_robots[0])
+        ]
+        # robot = self.robots[mode_switching_robots]
+
+        q_new = []
+        for r in self.robots:
+            if r in mode_switching_robots:
+                q_new.append(mode.entry_configuration[self.robots.index(r)])
+            else:
+                q_new.append(np.zeros(self.robot_dims[r]))
+
+        assert mode is not None
+        assert mode.entry_configuration is not None
+
+        q = np.concatenate(q_new)
+
+    def _set_to_scenegraph(self, sg):
+        for frame_id, (parent, parent_joint, pose, placement) in sg.items():
+            pass
+
+    def set_to_mode(
+        self,
+        mode: Mode,
+        config=None,
+        use_cached: bool = True,
+        place_in_cache: bool = True,
+    ):
+        pass
 
 
 class OptimizedMujocoEnvironment(MujocoEnvironment):
@@ -526,12 +619,116 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
             return True
 
         # Decide whether to use parallel or sequential based on problem size
-        use_parallel = force_parallel or (len(qs) >= 20 and len(self._data_pool) > 1)
+        # use_parallel = force_parallel or (len(qs) >= 20 and len(self._data_pool) > 1)
+        use_parallel = False
 
         if use_parallel:
-            return self._batch_is_collision_free_optimized(copy.deepcopy(qs))
+            return self._batch_is_collision_free_optimized(qs)
         else:
-            return self._sequential_collision_check(copy.deepcopy(qs))
+            return self._sequential_collision_check(qs)
+
+
+@register("mujoco.swap")
+class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
+    def __init__(self):
+        path = os.path.join(
+            os.path.dirname(__file__), "../models/mj_two_dim.xml"
+        )
+        self.robots = [
+            "a1",
+            "a2",
+        ]
+
+        self.start_pos = NpConfiguration.from_list(
+            [
+                np.array([0, -1, 0]),
+                np.array([0, 1, 0]),
+            ]
+        )
+
+        OptimizedMujocoEnvironment.__init__(self, path)
+
+        self.tasks = [
+            Task(
+                ["a1"], SingleGoal(np.array([0, 1, 0.]))
+            ),
+            Task(
+                ["a2"], SingleGoal(np.array([0.0, -1, 0.]))
+            ),
+            # terminal mode
+            Task(
+                self.robots,
+                SingleGoal(self.start_pos.state()),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_goal"
+        self.tasks[1].name = "a2_goal"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_goal", "a2_goal", "terminal"]
+        )
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.00
+
+        # self.show_config(self.start_pos)
+
+
+@register("mujoco.hallway")
+class simple_mujoco_env(SequenceMixin, MujocoEnvironment):
+    def __init__(self):
+        path = os.path.join(
+            os.path.dirname(__file__), "../models/mj_hallway.xml"
+        )
+        self.robots = [
+            "a1",
+            "a2",
+        ]
+
+        self.start_pos = NpConfiguration.from_list(
+            [
+                np.array([1.5, 0., 0]),
+                np.array([-1.5, 0., 0]),
+            ]
+        )
+
+        MujocoEnvironment.__init__(self, path)
+
+        self.tasks = [
+            Task(
+                ["a1"], SingleGoal(np.array([-1.5, 1, np.pi/2]))
+            ),
+            Task(
+                ["a2"], SingleGoal(np.array([1.5, 1, 0.]))
+            ),
+            # terminal mode
+            Task(
+                self.robots,
+                SingleGoal(self.start_pos.state()),
+            ),
+        ]
+
+        self.tasks[0].name = "a1_goal"
+        self.tasks[1].name = "a2_goal"
+        self.tasks[2].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_goal", "a2_goal", "terminal"]
+        )
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.00
+
+        # self.show_config(self.start_pos)
+
 
 @register("mujoco.four_panda")
 class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
@@ -609,18 +806,10 @@ class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         OptimizedMujocoEnvironment.__init__(self, path)
 
         self.tasks = [
-            Task(
-                ["ur10_1"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))
-            ),
-            Task(
-                ["ur10_2"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))
-            ),
-            Task(
-                ["ur10_3"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))
-            ),
-            Task(
-                ["ur10_4"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))
-            ),
+            Task(["ur10_1"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))),
+            Task(["ur10_2"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))),
+            Task(["ur10_3"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))),
+            Task(["ur10_4"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))),
             # terminal mode
             Task(
                 self.robots,
