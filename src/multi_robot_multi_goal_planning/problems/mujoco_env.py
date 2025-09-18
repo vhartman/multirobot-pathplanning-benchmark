@@ -631,9 +631,7 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 @register("mujoco.swap")
 class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self):
-        path = os.path.join(
-            os.path.dirname(__file__), "../models/mj_two_dim.xml"
-        )
+        path = os.path.join(os.path.dirname(__file__), "../models/mj_two_dim.xml")
         self.robots = [
             "a1",
             "a2",
@@ -649,12 +647,8 @@ class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         OptimizedMujocoEnvironment.__init__(self, path)
 
         self.tasks = [
-            Task(
-                ["a1"], SingleGoal(np.array([0, 1, 0.]))
-            ),
-            Task(
-                ["a2"], SingleGoal(np.array([0.0, -1, 0.]))
-            ),
+            Task(["a1"], SingleGoal(np.array([0, 1, 0.0]))),
+            Task(["a2"], SingleGoal(np.array([0.0, -1, 0.0]))),
             # terminal mode
             Task(
                 self.robots,
@@ -682,9 +676,7 @@ class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
 @register("mujoco.hallway")
 class simple_mujoco_env(SequenceMixin, MujocoEnvironment):
     def __init__(self):
-        path = os.path.join(
-            os.path.dirname(__file__), "../models/mj_hallway.xml"
-        )
+        path = os.path.join(os.path.dirname(__file__), "../models/mj_hallway.xml")
         self.robots = [
             "a1",
             "a2",
@@ -692,20 +684,16 @@ class simple_mujoco_env(SequenceMixin, MujocoEnvironment):
 
         self.start_pos = NpConfiguration.from_list(
             [
-                np.array([1.5, 0., 0]),
-                np.array([-1.5, 0., 0]),
+                np.array([1.5, 0.0, 0]),
+                np.array([-1.5, 0.0, 0]),
             ]
         )
 
         MujocoEnvironment.__init__(self, path)
 
         self.tasks = [
-            Task(
-                ["a1"], SingleGoal(np.array([-1.5, 1, np.pi/2]))
-            ),
-            Task(
-                ["a2"], SingleGoal(np.array([1.5, 1, 0.]))
-            ),
+            Task(["a1"], SingleGoal(np.array([-1.5, 1, np.pi / 2]))),
+            Task(["a2"], SingleGoal(np.array([1.5, 1, 0.0]))),
             # terminal mode
             Task(
                 self.robots,
@@ -719,6 +707,64 @@ class simple_mujoco_env(SequenceMixin, MujocoEnvironment):
 
         self.sequence = self._make_sequence_from_names(
             ["a1_goal", "a2_goal", "terminal"]
+        )
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.00
+
+        # self.show_config(self.start_pos)
+
+
+@register("mujoco.manip")
+class manip_mujoco_env(SequenceMixin, MujocoEnvironment):
+    def __init__(self):
+        path = os.path.join(os.path.dirname(__file__), "../models/mj_manip.xml")
+        self.robots = [
+            "a1",
+            "a2",
+        ]
+
+        self.start_pos = NpConfiguration.from_list(
+            [
+                np.array([1.5, 0.0, 0]),
+                np.array([-1.5, 0.0, 0]),
+            ]
+        )
+
+        MujocoEnvironment.__init__(self, path)
+        self.manipulating_env = True
+
+        self.tasks = [
+            Task(
+                ["a2"],
+                SingleGoal(np.array([1.0, 0.6, 0])),
+                type="pick",
+                frames=["a1", "obj1"],
+            ),
+            Task(["a1"], SingleGoal(np.array([-1.5, 1, 0.0]))),
+            Task(
+                ["a2"],
+                SingleGoal(np.array([-1.0, -1.1, 0])),
+                type="place",
+                frames=["floor", "obj1"],
+            ),
+            # terminal mode
+            Task(
+                self.robots,
+                SingleGoal(self.start_pos.state()),
+            ),
+        ]
+
+        self.tasks[0].name = "a2_pick"
+        self.tasks[1].name = "a1_goal"
+        self.tasks[2].name = "a2_place"
+        self.tasks[3].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a2_pick", "a1_goal", "a2_place", "terminal"]
         )
 
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
