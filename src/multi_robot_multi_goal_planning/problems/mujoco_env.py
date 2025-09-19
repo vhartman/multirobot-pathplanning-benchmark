@@ -807,7 +807,7 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 @register("mujoco.swap")
 class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self):
-        path = os.path.join(os.path.dirname(__file__), "../models/mj_two_dim.xml")
+        path = os.path.join(os.path.dirname(__file__), "../models/mujoco/mj_two_dim.xml")
         self.robots = [
             "a1",
             "a2",
@@ -852,7 +852,7 @@ class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
 @register("mujoco.hallway")
 class simple_mujoco_env(SequenceMixin, MujocoEnvironment):
     def __init__(self):
-        path = os.path.join(os.path.dirname(__file__), "../models/mj_hallway.xml")
+        path = os.path.join(os.path.dirname(__file__), "../models/mujoco/mj_hallway.xml")
         self.robots = [
             "a1",
             "a2",
@@ -897,7 +897,7 @@ class simple_mujoco_env(SequenceMixin, MujocoEnvironment):
 @register("mujoco.manip")
 class manip_mujoco_env(SequenceMixin, MujocoEnvironment):
     def __init__(self):
-        path = os.path.join(os.path.dirname(__file__), "../models/mj_manip.xml")
+        path = os.path.join(os.path.dirname(__file__), "../models/mujoco/mj_manip.xml")
         self.robots = [
             "a1",
             "a2",
@@ -955,7 +955,7 @@ class manip_mujoco_env(SequenceMixin, MujocoEnvironment):
 @register("mujoco.piano")
 class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
     def __init__(self):
-        path = os.path.join(os.path.dirname(__file__), "../models/mj_piano.xml")
+        path = os.path.join(os.path.dirname(__file__), "../models/mujoco/mj_piano.xml")
         self.robots = [
             "a1",
             "a2",
@@ -1081,7 +1081,7 @@ class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
 class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self, agents_can_rotate=True):
         path = os.path.join(
-            os.path.dirname(__file__), "../models/mujoco_4_ur10_world_closer.xml"
+            os.path.dirname(__file__), "../models/mujoco/mujoco_4_ur10_world_closer.xml"
         )
 
         self.robots = [
