@@ -134,6 +134,8 @@ class MujocoEnvironment(BaseProblem):
         self._mujoco_joint_adr = {}
         self._mujoco_q_adr = {}
 
+        self.body_id_q_adr = {}
+
         offset = 0
         for r in self.robots:
             self.robot_joints[r] = self.collect_joints(r)
@@ -159,33 +161,55 @@ class MujocoEnvironment(BaseProblem):
             self.limits[0, idx] = self.model.jnt_range[i, 0]  # lower limit
             self.limits[1, idx] = self.model.jnt_range[i, 1]  # upper limit
 
-        def get_freejoint_id(name):
-            body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "my_body")
-
-            # joints attached to this body start at model.body_jntadr[body_id]
-            jnt_adr = self.model.body_jntadr[body_id]
-            jnt_count = self.model.body_jntnum[body_id]
-
-            if jnt_count > 1:
-                raise ValueError
-
-            return jnt_adr
-
         self.initial_sg = {}
 
-        self.root_name = "table"
+        self.root_name = "floor"
 
-        # for i in range(self.model.nbody):
-        #     # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i)
-        #     obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, i)
-        #     # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, i)
+        mujoco.mj_forward(self.model, self.data)
 
-        #     pos  = self.data.geom_xpos[i]   # runtime info
-        #     print(obj_name, pos)
-        #     if obj_name is None:
-        #         continue
+        for i in range(self.model.nbody):
+            # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i)
+            obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, i)
+            # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, i)
 
-        #     if obj_name[:3] == "obj" or obj_name[:3] == "box":
+            pos = self.data.geom_xpos[i]  # runtime info
+            # print(obj_name, pos)
+            if obj_name is None:
+                continue
+
+            if obj_name[:3] == "obj" or obj_name[:3] == "box":
+                parent_id = self.model.body_parentid[i]
+                parent_name = mujoco.mj_id2name(
+                    self.model, mujoco.mjtObj.mjOBJ_BODY, parent_id
+                )
+
+                pos_w = self.data.xpos[i]
+                quat_w = self.data.xquat[i]
+
+                parent_pos_w = self.data.xpos[parent_id]
+                parent_quat_w = self.data.xquat[parent_id]
+
+                # relative translation
+                dp = pos_w - parent_pos_w
+                inv_parent = np.zeros(4)
+                mujoco.mju_negQuat(inv_parent, parent_quat_w)
+
+                rel_pos = np.zeros(3)
+                mujoco.mju_rotVecQuat(rel_pos, dp, inv_parent)
+
+                # relative quaternion: q_rel = q_parent^-1 * q_child
+                rel_quat = np.zeros(4)
+                mujoco.mju_mulQuat(rel_quat, inv_parent, quat_w)
+
+                # print(rel_pos)
+                # print(rel_quat)
+
+                self.initial_sg[i] = (
+                    parent_name,
+                    parent_id,
+                    np.round(rel_pos, 3).tobytes(),
+                    np.round(rel_quat, 3).tobytes(),
+                )
 
         #     parent = collision_model.geometryObjects[id_1].parentJoint
         #     placement = collision_model.geometryObjects[id_1].placement
@@ -198,7 +222,7 @@ class MujocoEnvironment(BaseProblem):
         #         pin.SE3(placement),
         #     )
 
-        # self.current_scenegraph = self.initial_sg.copy()
+        self.current_scenegraph = self.initial_sg.copy()
 
         self.spec = ProblemSpec(
             agent_type=AgentType.MULTI_AGENT,
@@ -227,6 +251,7 @@ class MujocoEnvironment(BaseProblem):
     ) -> None:
         for i in range(len(path)):
             self.show_config(path[i].q, stop)
+            self._set_to_scenegraph(path[i].mode.sg)
 
             # if export:
             #     self.C.view_savePng("./z.vid/")
@@ -248,9 +273,6 @@ class MujocoEnvironment(BaseProblem):
         q = self.start_pos.from_flat(rnd)
 
         return q
-
-    def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
-        return {}
 
     def _key_callback(self, key):
         # Enter key toggles pause
@@ -309,12 +331,27 @@ class MujocoEnvironment(BaseProblem):
 
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         # data = mujoco.MjData(self.model)
+        # self.show(blocking=False)
+
+        # if mode:
+        #     self._set_to_scenegraph(mode.sg)
+
+        # self.data.qpos[self._all_robot_idx] = q.state()
+        # mujoco.mj_forward(self.model, self.data)
+
+        # mujoco.mj_kinematics(self.model, self.data)
 
         if mode:
-            self._set_to_scenegraph(mode.sg)
+            self.data.qpos[self._all_robot_idx] = q.state()
+            mujoco.mj_kinematics(self.model, self.data)
 
-        self.data.qpos[self._all_robot_idx] = q.state()
-        mujoco.mj_forward(self.model, self.data)
+            self._set_to_scenegraph(mode.sg)
+            mujoco.mj_forward(self.model, self.data)
+            # mujoco.mj_collision(self.model, self.data)
+        else:
+            self.data.qpos[self._all_robot_idx] = q.state()
+            mujoco.mj_forward(self.model, self.data)
+            # mujoco.mj_collision(self.model, self.data)
 
         # If any contact distance < 0, collision
         for i in range(self.data.ncon):
@@ -421,9 +458,142 @@ class MujocoEnvironment(BaseProblem):
 
         q = np.concatenate(q_new)
 
+        # TODO: set world to q
+        self.data.qpos[self._all_robot_idx] = q
+        # mujoco.mj_forward(self.model, self.data)
+        mujoco.mj_kinematics(self.model, self.data)
+
+        # print("BBBB")
+        # self.show(blocking=True)
+
+        self._set_to_scenegraph(sg)
+        mujoco.mj_forward(self.model, self.data)
+
+        # print("PPPPPP")
+        # self.show(blocking=True)
+
+        last_task = self.tasks[prev_mode_index]
+
+        if last_task.type is not None:
+            if last_task.type == "goto":
+                pass
+            else:
+                pass
+                # get id from frame name
+                # obj_id = self.collision_model.getGeometryId(last_task.frames[1])
+                # new_parent_id = self.collision_model.getGeometryId(last_task.frames[0])
+                obj_bid = mujoco.mj_name2id(
+                    self.model, mujoco.mjtObj.mjOBJ_BODY.value, last_task.frames[1]
+                )
+                new_parent_bid = mujoco.mj_name2id(
+                    self.model, mujoco.mjtObj.mjOBJ_BODY.value, last_task.frames[0]
+                )
+
+                # print("obj", last_task.frames[1])
+                # print("new parent", last_task.frames[0])
+
+                obj_xpos = self.data.xpos[obj_bid].copy()
+                obj_xquat = self.data.xquat[obj_bid].copy()
+                parent_xpos = self.data.xpos[new_parent_bid].copy()
+                parent_xquat = self.data.xquat[new_parent_bid].copy()
+
+                # print("new parent pose", parent_xpos)
+                # print("obj_pose", obj_xpos)
+
+                # compute relative orientation
+                inv_parent = np.array(
+                    [
+                        parent_xquat[0],
+                        -parent_xquat[1],
+                        -parent_xquat[2],
+                        -parent_xquat[3],
+                    ]
+                )
+                relative_quat = np.empty(4)
+                mujoco.mju_mulQuat(relative_quat, inv_parent, obj_xquat)
+
+                # compute relative position
+                diff = obj_xpos - parent_xpos
+                relative_pose = np.empty(3)
+                mujoco.mju_rotVecQuat(relative_pose, diff, inv_parent)
+
+                # print()
+                # print("AAAAAAAAAAA")
+                # print(relative_pose)
+                # print(relative_quat)
+
+                # update scenegraph
+                sg[obj_bid] = (
+                    last_task.frames[0],
+                    new_parent_bid,
+                    np.round(relative_pose, 3).tobytes(),
+                    np.round(relative_quat, 3).tobytes(),
+                )
+
+        # print("NNNNN")
+        # self.show(blocking=True)
+
+        return sg
+
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def _set_to_scenegraph(self, sg):
-        for frame_id, (parent, parent_joint, pose, placement) in sg.items():
-            pass
+        child_xquat = np.empty(4)
+        rotated = np.empty(3)
+        pose_buf = np.empty(7)
+
+        for body_id, (parent_name, parent_bid, position_binary, rotation_binary) in sg.items():
+            # if the body is already at the location it is supposed to be,
+            # dont do anything
+            if (
+                body_id in self.current_scenegraph
+                and parent_name == self.root_name
+                and parent_name == self.current_scenegraph[body_id][0]
+                and self.current_scenegraph[body_id][2] == position_binary
+                and self.current_scenegraph[body_id][3] == rotation_binary
+            ):
+                continue
+
+            position = np.frombuffer(position_binary)
+            rotation = np.frombuffer(rotation_binary)
+
+            # get pose of body according to scenegraph
+            # i.e., pose relative to new parent frame
+            # get parent frame pose
+            # parent_bid = mujoco.mj_name2id(
+            #     self.model, mujoco.mjtObj.mjOBJ_BODY.value, parent_name
+            # )
+
+            parent_xpos = self.data.xpos[parent_bid]
+            parent_xquat = self.data.xquat[parent_bid]
+
+            # child world orientation: parent ⊗ child_rel
+            mujoco.mju_mulQuat(child_xquat, parent_xquat, rotation)
+
+            # child world position: parent + R_parent * pos_rel
+            mujoco.mju_rotVecQuat(rotated, position, parent_xquat)
+            # child_xpos = parent_xpos + rotated
+
+            # set freejoint qpos
+            if body_id not in self.body_id_q_adr:
+                self.body_id_q_adr[body_id] = self.model.jnt_qposadr[self.model.body_jntadr[body_id]]
+    
+            jadr = self.body_id_q_adr[body_id]
+
+            # self.data.qpos[jadr : jadr + 3] = child_xpos
+            # self.data.qpos[jadr + 3 : jadr + 7] = child_xquat
+            # pose_buf[:3] = parent_xpos + rotated
+            np.add(parent_xpos, rotated, out=pose_buf[:3])
+            pose_buf[3:] = child_xquat
+            
+            self.data.qpos[jadr:jadr+7] = pose_buf
+
+            # print()
+            # print(parent_name)
+            # print(parent_xpos)
+            # print(position)
+            # print(rotation)
+
+            self.current_scenegraph[body_id] = sg[body_id]
 
     def set_to_mode(
         self,
@@ -742,7 +912,7 @@ class manip_mujoco_env(SequenceMixin, MujocoEnvironment):
                 ["a2"],
                 SingleGoal(np.array([1.0, 0.6, 0])),
                 type="pick",
-                frames=["a1", "obj1"],
+                frames=["a2", "obj1"],
             ),
             Task(["a1"], SingleGoal(np.array([-1.5, 1, 0.0]))),
             Task(
@@ -765,6 +935,76 @@ class manip_mujoco_env(SequenceMixin, MujocoEnvironment):
 
         self.sequence = self._make_sequence_from_names(
             ["a2_pick", "a1_goal", "a2_place", "terminal"]
+        )
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.00
+
+        # self.show_config(self.start_pos)
+
+
+@register("mujoco.piano")
+class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
+    def __init__(self):
+        path = os.path.join(os.path.dirname(__file__), "../models/mj_piano.xml")
+        self.robots = [
+            "a1",
+            "a2",
+        ]
+
+        self.start_pos = NpConfiguration.from_list(
+            [
+                np.array([1.5, 0.0, 0]),
+                np.array([-1.5, 0.0, 0]),
+            ]
+        )
+
+        MujocoEnvironment.__init__(self, path)
+        self.manipulating_env = True
+
+        self.tasks = [
+            Task(
+                ["a2"],
+                SingleGoal(np.array([1.0, 0.6, 0])),
+                type="pick",
+                frames=["a2", "obj1"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(np.array([-1., -0.6, 0.0])),
+                type="pick",
+                frames=["a1", "obj2"],
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(np.array([-1.0, -1.1, 0])),
+                type="place",
+                frames=["floor", "obj1"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(np.array([1.0, 1.1, 0])),
+                type="place",
+                frames=["floor", "obj2"],
+            ),
+            # terminal mode
+            Task(
+                self.robots,
+                SingleGoal(self.start_pos.state()),
+            ),
+        ]
+
+        self.tasks[0].name = "a2_pick"
+        self.tasks[1].name = "a1_pick"
+        self.tasks[2].name = "a2_place"
+        self.tasks[3].name = "a1_place"
+        self.tasks[4].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"]
         )
 
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)

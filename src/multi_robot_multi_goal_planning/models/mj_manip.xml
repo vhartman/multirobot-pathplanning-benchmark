@@ -14,8 +14,10 @@
     <light pos="1.5 1.5 5.0" diffuse="2 1.9 1.9"/>
     <light pos="-1.5 -1.5 5.0" diffuse="2 1.9 1.9"/>
 
-    <geom name="floor" pos="0 0 -0.05" size="0 0 0.05" type="plane" material="groundplane"/>
-    
+    <body name="floor" pos="0 0 -0.05">
+      <geom  pos="0 0 0." size="0 0 0.05" type="plane" material="groundplane"/>
+    </body>
+
     <body name="obs" pos="0 0 0.1">
       <geom type="box" pos="0 2 0" size="1.9 0.1 0.1" rgba="0.2 0.2 0.2 1"/>
       <geom type="box" pos="0 -2 0" size="1.9 0.1 0.1" rgba="0.2 0.2 0.2 1"/>
