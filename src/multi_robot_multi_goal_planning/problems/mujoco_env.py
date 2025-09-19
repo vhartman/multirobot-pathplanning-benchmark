@@ -652,6 +652,9 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 
                 data.qpos[self._all_robot_idx] = q
                 data.qvel[:] = 0
+                # TODO: deal with set to scenegraph
+                assert not self.manipulating_env
+
                 mujoco.mj_forward(self.model, data)
 
                 # Check for collision
@@ -732,6 +735,9 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
         for q in qs:
             data.qpos[self._all_robot_idx] = q
             data.qvel[:] = 0
+            # TODO: deal with set to scenegraph
+            assert not self.manipulating_env
+
             mujoco.mj_forward(self.model, data)
 
             for c_idx in range(data.ncon):
