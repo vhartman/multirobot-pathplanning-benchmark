@@ -5,6 +5,8 @@ import time
 from typing import List, Optional
 from numpy.typing import NDArray
 
+from numba import jit, float64, int64  # ty: ignore[possibly-unbound-import]
+
 from .planning_env import (
     generate_binary_search_indices,
 )
@@ -48,6 +50,21 @@ from concurrent.futures import ThreadPoolExecutor
 import copy
 import os.path
 
+
+@jit(
+    (float64[:], float64[:], float64[:]),
+    nopython=True,
+    fastmath=True,
+    boundscheck=False,
+)
+def mul_quat(out, q1, q2):
+    """Quaternion multiplication q1 ⊗ q2 -> out"""
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    out[0] = w1*w2 - x1*x2 - y1*y2 - z1*z2
+    out[1] = w1*x2 + x1*w2 + y1*z2 - z1*y2
+    out[2] = w1*y2 - x1*z2 + y1*w2 + z1*x2
+    out[3] = w1*z2 + x1*y2 - y1*x2 + z1*w2
 
 class MujocoEnvironment(BaseProblem):
     """
@@ -168,6 +185,11 @@ class MujocoEnvironment(BaseProblem):
         mujoco.mj_forward(self.model, self.data)
 
         for i in range(self.model.nbody):
+            if i not in self.body_id_q_adr:
+                self.body_id_q_adr[i] = self.model.jnt_qposadr[
+                    self.model.body_jntadr[i]
+                ]
+
             # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i)
             obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, i)
             # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, i)
@@ -210,6 +232,16 @@ class MujocoEnvironment(BaseProblem):
                     np.round(rel_pos, 3).tobytes(),
                     np.round(rel_quat, 3).tobytes(),
                 )
+    
+        # self.qpos_body_views = {}
+        self.qpos_body_views_pos = {}
+        self.qpos_body_views_quat = {}
+    
+        for body_id in self.body_id_q_adr.keys():
+            jadr = self.body_id_q_adr[body_id]
+            # self.qpos_body_views[body_id] = self.data.qpos[jadr:jadr+7]
+            self.qpos_body_views_pos[body_id] = self.data.qpos[jadr:jadr+3]
+            self.qpos_body_views_quat[body_id] = self.data.qpos[jadr+3:jadr+7]
 
         #     parent = collision_model.geometryObjects[id_1].parentJoint
         #     placement = collision_model.geometryObjects[id_1].placement
@@ -233,6 +265,9 @@ class MujocoEnvironment(BaseProblem):
             goals=GoalType.MULTI_GOAL,
             home_pose=SafePoseType.HAS_NO_SAFE_HOME_POSE,
         )
+
+        self.child_xquat_buf = np.empty(4)
+        self.rotated_buf = np.empty(3)
 
     def close(self):
         if self.viewer is not None:
@@ -535,57 +570,80 @@ class MujocoEnvironment(BaseProblem):
 
         return sg
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def _set_to_scenegraph(self, sg):
-        child_xquat = np.empty(4)
-        rotated = np.empty(3)
-        pose_buf = np.empty(7)
+        # child_xquat = np.empty(4)
+        # rotated = np.empty(3)
+        # pose_buf = np.empty(7)
 
-        for body_id, (parent_name, parent_bid, position_binary, rotation_binary) in sg.items():
+        # qpos_cpy = np.array(self.data.qpos)
+
+        for body_id, (
+            parent_name,
+            parent_bid,
+            position_binary,
+            rotation_binary,
+        ) in sg.items():
             # if the body is already at the location it is supposed to be,
             # dont do anything
             if (
-                body_id in self.current_scenegraph
-                and parent_name == self.root_name
+                parent_name == self.root_name
+                and body_id in self.current_scenegraph
                 and parent_name == self.current_scenegraph[body_id][0]
                 and self.current_scenegraph[body_id][2] == position_binary
                 and self.current_scenegraph[body_id][3] == rotation_binary
             ):
                 continue
 
-            position = np.frombuffer(position_binary)
-            rotation = np.frombuffer(rotation_binary)
+            position = np.array(np.frombuffer(position_binary))
+            rotation = np.array(np.frombuffer(rotation_binary))
 
-            # get pose of body according to scenegraph
-            # i.e., pose relative to new parent frame
-            # get parent frame pose
-            # parent_bid = mujoco.mj_name2id(
-            #     self.model, mujoco.mjtObj.mjOBJ_BODY.value, parent_name
-            # )
+            # position = np.frombuffer(position_binary)
+            # rotation = np.frombuffer(rotation_binary)
 
             parent_xpos = self.data.xpos[parent_bid]
             parent_xquat = self.data.xquat[parent_bid]
 
             # child world orientation: parent ⊗ child_rel
-            mujoco.mju_mulQuat(child_xquat, parent_xquat, rotation)
+            # mujoco.mju_mulQuat(self.child_xquat_buf, parent_xquat, rotation)
+            mul_quat(self.child_xquat_buf, parent_xquat, rotation)
 
             # child world position: parent + R_parent * pos_rel
-            mujoco.mju_rotVecQuat(rotated, position, parent_xquat)
+            mujoco.mju_rotVecQuat(self.rotated_buf, position, parent_xquat)
             # child_xpos = parent_xpos + rotated
 
             # set freejoint qpos
-            if body_id not in self.body_id_q_adr:
-                self.body_id_q_adr[body_id] = self.model.jnt_qposadr[self.model.body_jntadr[body_id]]
-    
-            jadr = self.body_id_q_adr[body_id]
+            # jadr = self.body_id_q_adr[body_id]
 
             # self.data.qpos[jadr : jadr + 3] = child_xpos
             # self.data.qpos[jadr + 3 : jadr + 7] = child_xquat
             # pose_buf[:3] = parent_xpos + rotated
-            np.add(parent_xpos, rotated, out=pose_buf[:3])
-            pose_buf[3:] = child_xquat
+            # np.add(parent_xpos, rotated, out=qpos_cpy[jadr + 0: jadr + 3])
+            # np.add(parent_xpos, rotated, out=pose_buf[:3])
+            # pose_buf[3:] = child_xquat
+
+            # qpos_cpy[jadr + 0: jadr + 7] = pose_buf
+            # np.copyto(qpos_cpy[jadr : jadr + 7], pose_buf)
+            # np.copyto(self.data.qpos[jadr : jadr + 7], pose_buf)
+
+            # self.data.qpos[jadr : jadr + 7] = pose_buf
+            # qpos_slice = self.data.qpos[jadr:jadr+7]
+            # qpos_slice[:3] = parent_xpos + self.rotated_buf  # This creates temp but unavoidable
+            # qpos_slice[3:] = self.child_xquat_buf
+
+            # body_qpos = self.qpos_body_views[body_id]  # Just a dict lookup!
+            # body_qpos[:3] = parent_xpos + self.rotated_buf
+            # body_qpos[3:] = self.child_xquat_buf
+
+            # self.qpos_body_views_pos[body_id] = parent_xpos + self.rotated_buf * 1.
+            # self.qpos_body_views_quat[body_id] = self.child_xquat_buf * 1.
+            pos_view = self.qpos_body_views_pos[body_id]
+            quat_view = self.qpos_body_views_quat[body_id]
             
-            self.data.qpos[jadr:jadr+7] = pose_buf
+            # Direct operations on exact-sized views
+            # pos_view[:] = parent_xpos + self.rotated_buf
+            np.add(parent_xpos, self.rotated_buf, out=pos_view)
+            quat_view[:] = self.child_xquat_buf
 
             # print()
             # print(parent_name)
@@ -594,6 +652,8 @@ class MujocoEnvironment(BaseProblem):
             # print(rotation)
 
             self.current_scenegraph[body_id] = sg[body_id]
+
+        # self.data.qpos[:] = qpos_cpy
 
     def set_to_mode(
         self,
@@ -807,7 +867,9 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 @register("mujoco.swap")
 class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self):
-        path = os.path.join(os.path.dirname(__file__), "../models/mujoco/mj_two_dim.xml")
+        path = os.path.join(
+            os.path.dirname(__file__), "../models/mujoco/mj_two_dim.xml"
+        )
         self.robots = [
             "a1",
             "a2",
@@ -852,7 +914,9 @@ class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
 @register("mujoco.hallway")
 class simple_mujoco_env(SequenceMixin, MujocoEnvironment):
     def __init__(self):
-        path = os.path.join(os.path.dirname(__file__), "../models/mujoco/mj_hallway.xml")
+        path = os.path.join(
+            os.path.dirname(__file__), "../models/mujoco/mj_hallway.xml"
+        )
         self.robots = [
             "a1",
             "a2",
@@ -980,7 +1044,7 @@ class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
             ),
             Task(
                 ["a1"],
-                SingleGoal(np.array([-1., -0.6, 0.0])),
+                SingleGoal(np.array([-1.0, -0.6, 0.0])),
                 type="pick",
                 frames=["a1", "obj2"],
             ),
