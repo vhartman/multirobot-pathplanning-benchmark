@@ -1016,59 +1016,59 @@ class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
         # self.show_config(self.start_pos)
 
 
-@register("mujoco.four_panda")
-class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
-    def __init__(self, agents_can_rotate=True):
-        path = "/home/valentin/Downloads/roboballet/data/mujoco_world/4_pandas_world_closer.xml"
+# @register("mujoco.four_panda")
+# class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
+#     def __init__(self, agents_can_rotate=True):
+#         path = "/home/valentin/Downloads/roboballet/data/mujoco_world/4_pandas_world_closer.xml"
 
-        self.robots = [
-            "panda1",
-            "panda2",
-            "panda3",
-            "panda4",
-        ]
+#         self.robots = [
+#             "panda1",
+#             "panda2",
+#             "panda3",
+#             "panda4",
+#         ]
 
-        self.start_pos = NpConfiguration.from_list(
-            [np.array([0, -0.5, 0, -2, 0, 2, -0.5]) for r in self.robots]
-        )
+#         self.start_pos = NpConfiguration.from_list(
+#             [np.array([0, -0.5, 0, -2, 0, 2, -0.5]) for r in self.robots]
+#         )
 
-        OptimizedMujocoEnvironment.__init__(self, path)
+#         OptimizedMujocoEnvironment.__init__(self, path)
 
-        self.tasks = [
-            Task(
-                ["panda1"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
-            ),
-            Task(
-                ["panda2"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
-            ),
-            Task(
-                ["panda3"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
-            ),
-            Task(
-                ["panda4"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
-            ),
-            # terminal mode
-            Task(
-                self.robots,
-                SingleGoal(self.start_pos.state()),
-            ),
-        ]
+#         self.tasks = [
+#             Task(
+#                 ["panda1"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
+#             ),
+#             Task(
+#                 ["panda2"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
+#             ),
+#             Task(
+#                 ["panda3"], SingleGoal(np.array([-1, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
+#             ),
+#             Task(
+#                 ["panda4"], SingleGoal(np.array([0.2, 0.05, 0.4, -2, 0.17, 2.5, -1.5]))
+#             ),
+#             # terminal mode
+#             Task(
+#                 self.robots,
+#                 SingleGoal(self.start_pos.state()),
+#             ),
+#         ]
 
-        self.tasks[0].name = "p1_goal"
-        self.tasks[1].name = "p2_goal"
-        self.tasks[2].name = "p3_goal"
-        self.tasks[3].name = "p4_goal"
-        self.tasks[4].name = "terminal"
+#         self.tasks[0].name = "p1_goal"
+#         self.tasks[1].name = "p2_goal"
+#         self.tasks[2].name = "p3_goal"
+#         self.tasks[3].name = "p4_goal"
+#         self.tasks[4].name = "terminal"
 
-        self.sequence = self._make_sequence_from_names(
-            ["p1_goal", "p2_goal", "p3_goal", "p4_goal", "terminal"]
-        )
+#         self.sequence = self._make_sequence_from_names(
+#             ["p1_goal", "p2_goal", "p3_goal", "p4_goal", "terminal"]
+#         )
 
-        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
-        BaseModeLogic.__init__(self)
+#         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+#         BaseModeLogic.__init__(self)
 
-        self.collision_resolution = 0.01
-        self.collision_tolerance = 0.00
+#         self.collision_resolution = 0.01
+#         self.collision_tolerance = 0.00
 
 
 @register("mujoco.four_ur10")
