@@ -394,13 +394,19 @@ def make_linked_puzzle_env(view: bool = False, agents_can_rotate=True):
     )
 
     if agents_can_rotate[1]:
-        C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        x = C.addFrame("a2_x").setParent(pre_agent_2_frame).setJoint(
+            ry.JT.transX, limits=np.array([-1, 1])
+        ).setJointState([0.75])
+        y = C.addFrame("a2_y").setParent(x).setJoint(
+            ry.JT.transY, limits=np.array([0, 1])
+        ).setJointState([0.5])
+        C.addFrame("a2_phi").setParent(y).setShape(
             ry.ST.box,
             size=[0.1, 0.2, 0.06, 0.005],
             # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
         ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
-            ry.JT.transXYPhi, limits=np.array([-1, 1, 0, 1, -3.14, 3.14])
-        ).setJointState([0.75, 0.5, 0])
+            ry.JT.hingeZ, limits=np.array([-3.14, 3.14])
+        ).setJointState([0])
     else:
         C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
             ry.ST.box,
@@ -410,11 +416,11 @@ def make_linked_puzzle_env(view: bool = False, agents_can_rotate=True):
             ry.JT.transXY, limits=np.array([-1, 1, 0, 1, -3.14, 3.14])
         ).setJointState([0.75, 0.5])
 
-    # C.addFrame("linkage").setParent(C.getFrame("a2")).setShape(
-    #     ry.ST.box,
-    #     size=[0.05, 2, 0.06, 0.005],
-    #     # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
-    # ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, -1, 0.1])
+    C.addFrame("linkage").setParent(C.getFrame("a2_x")).setShape(
+        ry.ST.box,
+        size=[0.05, 2, 0.06, 0.005],
+        # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
+    ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.1])
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]
