@@ -827,46 +827,6 @@ class rai_random_two_dim(SequenceMixin, rai_env):
         self.spec.manipulation = ManipulationType.STATIC
 
 
-# best solution found with sum-cost: 14.08 (independent of rotation)
-# best solution found with max-cost: 9.7 (independent of rotation)
-@register([
-    ("rai.hallway", {}),
-    ("rai.hallway_no_rot", {"agents_can_rotate": False}),
-])
-class rai_hallway_two_dim(SequenceMixin, rai_env):
-    def __init__(self, agents_can_rotate=True):
-        self.C, keyframes = rai_config.make_two_dim_tunnel_env(
-            agents_can_rotate=agents_can_rotate
-        )
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2"]
-
-        rai_env.__init__(self)
-
-        self.tasks = []
-        self.sequence = []
-
-        self.tasks = [
-            Task(["a1"], SingleGoal(keyframes[0])),
-            Task(["a2"], SingleGoal(keyframes[1])),
-            Task(["a1", "a2"], SingleGoal(keyframes[2])),
-        ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a2_goal_1"
-        self.tasks[2].name = "terminal"
-
-        self.sequence = [0, 1, 2]
-
-        BaseModeLogic.__init__(self)
-
-        self.collision_tolerance = 0.01
-        self.collision_resolution = 0.005
-
-        self.spec.manipulation = ManipulationType.STATIC
-
-
 # best solution found with sum-cost: xx (independent of rotation)
 # best solution found with max-cost: xx (independent of rotation)
 @register([
@@ -912,43 +872,6 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
             "a2": np.array(keyframes[1])
         }
 
-
-@register("rai.hallway_dep")
-class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
-    def __init__(self, agents_can_rotate=True):
-        self.C, keyframes = rai_config.make_two_dim_tunnel_env(agents_can_rotate=agents_can_rotate)
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2"]
-
-        rai_env.__init__(self)
-
-        self.tasks = []
-        self.sequence = []
-
-        self.tasks = [
-            Task(["a1"], SingleGoal(keyframes[0])),
-            Task(["a2"], SingleGoal(keyframes[1])),
-            Task(["a1", "a2"], SingleGoal(keyframes[2])),
-        ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a2_goal_1"
-        self.tasks[2].name = "terminal"
-
-        self.graph = DependencyGraph()
-        self.graph.add_dependency("terminal", "a1_goal_1")
-        self.graph.add_dependency("terminal", "a2_goal_1")
-
-        print(self.graph)
-
-        BaseModeLogic.__init__(self)
-
-        self.collision_tolerance = 0.01
-
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        self.spec.manipulation = ManipulationType.STATIC
-        self.spec.dependency = DependencyType.UNORDERED
 
 @register("rai.other_hallway_dep")
 class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
