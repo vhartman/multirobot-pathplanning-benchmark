@@ -37,6 +37,7 @@ from .constraints import (
     RelativeAffineTaskSpaceEqualityConstraint,
     AffineTaskSpaceEqualityConstraint,
     AffineConfigurationSpaceEqualityConstraint,
+    AffineFrameOrientationConstraint,
     relative_pose
 )
 
@@ -268,11 +269,70 @@ class rai_rfl(SequenceMixin, rai_env):
     def __init__(self):
         self.C = rai_config.make_four_arms_on_a_gantry()
 
-
+@register("rai.arm_ee_pose")
 class rai_hold_glass_upright(SequenceMixin, rai_env):
     def __init__(self):
-        self.C = rai_config.make_arm_orientation_env()
+        self.C, [r1_keyframes, r2_keyframes] = rai_config.make_ur10_arm_orientation_env()
         # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        self.tasks = [
+            # joint
+            Task(
+                ["a1"],
+                SingleGoal(r1_keyframes[0]),
+                "pick",
+                frames=["a1_ur_vacuum", "obj_1"],
+            ),
+            Task(
+                ["a1"],
+                SingleGoal(r1_keyframes[1]),
+                "place",
+                frames=["table", "obj_1"],
+                constraints=[AffineFrameOrientationConstraint("obj_1", np.array([[0, 0, 1]]), np.array([0]))]
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(r2_keyframes[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj_2"],
+            ),
+            Task(
+                ["a2"],
+                SingleGoal(r2_keyframes[1]),
+                "place",
+                frames=["table", "obj_2"],
+                constraints=[AffineFrameOrientationConstraint("obj_2", np.array([[0, 0, 1]]), np.array([0]))]
+            ),
+            # terminal mode
+            Task(
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+
+        self.tasks[0].name = "r1_pick"
+        self.tasks[1].name = "r1_place"
+        self.tasks[2].name = "r2_pick"
+        self.tasks[3].name = "r2_place"
+        self.tasks[4].name = "terminal"
+
+        self.sequence = self._make_sequence_from_names(
+            ["r1_pick", "r2_pick", "r1_place", "r2_place", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.manipulation = ManipulationType.STATIC
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
 class rai_stacking_with_holding(SequenceMixin, rai_env):

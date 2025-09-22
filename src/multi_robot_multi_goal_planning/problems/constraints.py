@@ -11,6 +11,10 @@ from .configuration import Configuration
 class Constraint(ABC):
     @abstractmethod
     def is_fulfilled(self, q: Configuration, env) -> bool:
+        """
+        Method to check if a constraint is fulfilled.
+        Returns boolean only.
+        """
         pass
 
     # @abstractmethod
@@ -115,9 +119,8 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 
 
 class AffineFrameOrientationConstraint(Constraint):
-    def __init__(self, frame_name, mat, desired_orientation_vector, epsilon):
+    def __init__(self, frame_name, desired_orientation_vector, epsilon):
         self.frame_name = frame_name
-        self.mat = mat
         self.desired_orientation_vector = desired_orientation_vector
         self.epsilon = epsilon
 

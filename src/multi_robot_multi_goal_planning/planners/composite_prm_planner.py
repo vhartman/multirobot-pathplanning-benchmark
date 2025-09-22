@@ -39,6 +39,7 @@ from .termination_conditions import (
     PlannerTerminationCondition,
 )
 
+
 class Node:
     __slots__ = [
         "state",
@@ -823,7 +824,7 @@ class MultimodalGraph:
 
             if len(self.transition_node_array_cache[key]) == 0:
                 return [], None
-            
+
             transition_dists = self.batch_dist_fun(
                 node.state.q, self.transition_node_array_cache[key]
             )
@@ -1394,7 +1395,7 @@ class CompositePRM(BasePlanner):
             if self.env.is_collision_free(q, m):
                 new_samples.append(State(q, m))
                 num_valid += 1
-            
+
             # self.env.show(False)
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
@@ -1629,9 +1630,7 @@ class CompositePRM(BasePlanner):
         #         if sum(self.env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
         #             num_pts_for_removal += 1
         # Remove elements from g.nodes
-        for mode in list(
-            g.nodes.keys()
-        ):  # Avoid modifying dict while iterating
+        for mode in list(g.nodes.keys()):  # Avoid modifying dict while iterating
             original_count = len(g.nodes[mode])
             g.nodes[mode] = [
                 n
@@ -1650,9 +1649,7 @@ class CompositePRM(BasePlanner):
                 if sum(self.env.batch_config_cost(n.state.q, focal_points))
                 <= current_best_cost
             ]
-            num_pts_for_removal += original_count - len(
-                g.transition_nodes[mode]
-            )
+            num_pts_for_removal += original_count - len(g.transition_nodes[mode])
 
         for mode in list(g.reverse_transition_nodes.keys()):
             original_count = len(g.reverse_transition_nodes[mode])
@@ -1666,7 +1663,9 @@ class CompositePRM(BasePlanner):
 
         print(f"Removed {num_pts_for_removal} nodes")
 
-    def _refine_approximation(self, g, informed, reached_modes, current_best_path, current_best_cost):
+    def _refine_approximation(
+        self, g, informed, reached_modes, current_best_path, current_best_cost
+    ):
         # add new batch of nodes
         effective_uniform_batch_size = (
             self.config.uniform_batch_size
@@ -1692,12 +1691,10 @@ class CompositePRM(BasePlanner):
         # print(f"Adding {len(new_transitions)} transitions")
 
         print("Sampling uniform")
-        new_states, required_attempts_this_batch = (
-            self._sample_valid_uniform_batch(
-                g,
-                batch_size=effective_uniform_batch_size,
-                cost=current_best_cost,
-            )
+        new_states, required_attempts_this_batch = self._sample_valid_uniform_batch(
+            g,
+            batch_size=effective_uniform_batch_size,
+            cost=current_best_cost,
         )
         g.add_states(new_states)
         print(f"Adding {len(new_states)} new states")
@@ -1762,9 +1759,7 @@ class CompositePRM(BasePlanner):
                     g=g,
                 )
                 g.add_transition_nodes(new_informed_transitions)
-                print(
-                    f"Adding {len(new_informed_transitions)} informed transitions"
-                )
+                print(f"Adding {len(new_informed_transitions)} informed transitions")
 
                 # g.compute_lower_bound_to_goal(self.env.batch_config_cost)
                 # g.compute_lower_bound_from_start(self.env.batch_config_cost)
@@ -1833,8 +1828,10 @@ class CompositePRM(BasePlanner):
             samples_in_graph_before = graph.get_num_samples()
 
             if add_new_batch:
-                approximate_space_extent = self._refine_approximation(graph, informed, reached_modes, current_best_path, current_best_cost)
-                
+                approximate_space_extent = self._refine_approximation(
+                    graph, informed, reached_modes, current_best_path, current_best_cost
+                )
+
                 # update the lower bound to goal cost estimation of nodes.
                 graph.compute_lower_bound_to_goal(
                     self.env.batch_config_cost, current_best_cost
@@ -2033,9 +2030,14 @@ class CompositePRM(BasePlanner):
 
             if current_best_cost is not None:
                 # check if we might have reached the optimal cost? Straightline connection
-                if np.linalg.norm(current_best_cost - self.env.config_cost(q0, graph.goal_nodes[0].state.q)) < 1e-6:
+                if (
+                    np.linalg.norm(
+                        current_best_cost
+                        - self.env.config_cost(q0, graph.goal_nodes[0].state.q)
+                    )
+                    < 1e-6
+                ):
                     break
-            
 
             if not optimize and current_best_cost is not None:
                 break
