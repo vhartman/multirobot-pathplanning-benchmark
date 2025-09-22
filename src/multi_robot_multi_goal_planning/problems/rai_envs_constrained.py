@@ -250,7 +250,7 @@ class rai_linked_2d_puzzle(SequenceMixin, rai_env):
             ["r1_goal", "r2_goal", "terminal"]
         )
 
-        self.collision_tolerance = 0.001
+        self.collision_tolerance = 0.00
         self.collision_resolution = 0.005
 
         BaseModeLogic.__init__(self)

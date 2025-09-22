@@ -1619,7 +1619,7 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def show(self) -> None:
+    def show(self, blocking: bool = False) -> None:
         pass
 
     ## General methods
