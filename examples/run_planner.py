@@ -350,6 +350,9 @@ def main():
         stop_at_mode=args.stop_at_mode,
     )
 
+    if hasattr(env, "close"):
+        env.close()
+
 
 if __name__ == "__main__":
     main()

@@ -1835,9 +1835,7 @@ class CompositePRM(BasePlanner):
             if add_new_batch:
                 approximate_space_extent = self._refine_approximation(graph, informed, reached_modes, current_best_path, current_best_cost)
                 
-                if approximate_space_extent is None:
-                    continue
-
+                # update the lower bound to goal cost estimation of nodes.
                 graph.compute_lower_bound_to_goal(
                     self.env.batch_config_cost, current_best_cost
                 )
@@ -1845,8 +1843,6 @@ class CompositePRM(BasePlanner):
             samples_in_graph_after = graph.get_num_samples()
             cnt += samples_in_graph_after - samples_in_graph_before
 
-            # search over nodes:
-            # 1. search from goal state with sparse check
             reached_terminal_mode = False
             for m in reached_modes:
                 if self.env.is_terminal_mode(m):
@@ -1886,6 +1882,8 @@ class CompositePRM(BasePlanner):
 
             # plt.show()
 
+            # search over nodes:
+            # 1. search from goal state with sparse check
             while True:
                 sparsely_checked_path = graph.search(
                     graph.root,

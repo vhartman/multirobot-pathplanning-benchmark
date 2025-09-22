@@ -15,7 +15,7 @@ python3 -m pip install -e .[all]
 ```
 
 which also installs this module.
-You can choose whatever backends you want. [all] gives you all of them, but [pin] or [rai] is possible as well and installs only Pinocchio or only RAI.
+You can choose whatever backends you want. [all] gives you all of them, but [pin], [mujoco] or [rai] is possible as well and installs only the chosen environments.
 
 This also works with uv (and is definitely quite a bit faster).
 The command
@@ -140,7 +140,8 @@ There are two main requirements:
 
 To implement your own problem, you need to implement the required functions of the `env` base-class.
 
-There are two examples that implement other environments than the rai-based ones. There is an abstract environment, which is _extremely_ basic, and a slightly more complex version that shows how [pinocchio](https://github.com/stack-of-tasks/pinocchio) can be used.
+There are three examples that implement other environments than the rai-based ones. There is an abstract environment, which is _extremely_ basic, and a slightly more complex version that shows how [pinocchio](https://github.com/stack-of-tasks/pinocchio) can be used.
+Mujoco is also supported as backend.
 
 #### Specifying your own problems
 
@@ -197,7 +198,7 @@ Some of these could be PRs:
 - [ ] Extend abstract environment
   - [ ] Parallel collision checking
   - [ ] More complex (3D/robot) scenarios (using JAX?)
-- [ ] Implement support for Mujoco/Genesis/Isaac(?) as backend
+- [ ] Implement support for Genesis/Isaac(?) as backend
 - [ ] More cost functions (such as clearance) to minimize
 
 # Citation

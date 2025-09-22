@@ -226,7 +226,6 @@ class PinocchioEnvironment(BaseProblem):
             # placement = pin.SE3(np.frombuffer(pose).reshape(4, 4))
 
             # print(frame_id)
-
             if (
                 frame_id in self.current_scenegraph
                 and parent == self.current_scenegraph[frame_id][0]
@@ -322,23 +321,7 @@ class PinocchioEnvironment(BaseProblem):
         )
         self._set_to_scenegraph(sg)
 
-        # self.viz.updatePlacements(pin.GeometryType.COLLISION)
-        # self.viz.updatePlacements(pin.GeometryType.VISUAL)
-
-        # self.viz.display()
-        # input("BB")
-
-        # self.viz.display(q)
-
         last_task = self.tasks[prev_mode_index]
-
-        # print("prev mode")
-        # print(mode_switching_robots)
-        # print(q)
-        # print(prev_mode)
-
-        # print(last_task.name)
-        # print(active_task.name)
 
         if last_task.type is not None:
             if last_task.type == "goto":
@@ -376,26 +359,6 @@ class PinocchioEnvironment(BaseProblem):
                     obj_frame_abs_pose.inverse() * new_parent_frame_abs_pose
                 )
 
-                # print("new paren tpose", last_task.frames[0])
-                # print(new_parent_frame_abs_pose)
-
-                # print("obj pose in new frame", last_task.frames[1])
-                # print(obj_pose_in_new_frame)
-
-                # self.viz.display()
-                # input("BB")
-
-                # rel_pose_in_world_frame = obj_frame_abs_pose.actInv(
-                #     new_parent_frame_abs_pose
-                # )
-                # rel_pose_in_joint_frame = (
-                #     new_parent_frame_abs_pose * rel_pose_in_world_frame
-                # )
-
-                # print(last_task.frames[0])
-                # print(last_task.frames[1])
-                # print(rel_pose_in_joint_frame)
-
                 sg[obj_id] = (
                     # sg[last_task.frames[1]] = (
                     last_task.frames[0],
@@ -403,44 +366,6 @@ class PinocchioEnvironment(BaseProblem):
                     np.round(obj_pose_in_new_frame.inverse(), 3).tobytes(),
                     pin.SE3(obj_pose_in_new_frame.inverse()),
                 )
-
-                # if last_task.name == "a1_pick_obj1":
-                #     print(last_task.frames[1])
-                #     print(old_parent_frame_abs_pose)
-                #     print(last_task.frames[0])
-                #     print(new_parent_frame_abs_pose)
-                #     print("obj abs pose")
-                #     print(obj_frame_abs_pose)
-                #     print("obj rel pose")
-                #     print(rel_pose_in_world_frame)
-                #     print("obj rel pose in new joint frame")
-                #     print(rel_pose_in_joint_frame)
-
-                #     print(sg)
-                # tmp.attach(
-                #     self.tasks[prev_mode_index].frames[0],
-                #     self.tasks[prev_mode_index].frames[1],
-                # )
-                # tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
-
-            # postcondition
-            # if self.tasks[prev_mode_index].side_effect is not None:
-            #     box = self.tasks[prev_mode_index].frames[1]
-            #     tmp.delFrame(box)
-
-        # print(last_task.name)
-        # print(sg)
-        # print(rel_pose_in_joint_frame)
-        # self.show()
-
-        # if last_task.name == "a1_pick_obj1":
-        #     print(mode)
-        #     print(last_task.name)
-        #     print(sg)
-
-        #     print(rel_pose_in_joint_frame)
-
-        # self.show()
 
         return sg
 

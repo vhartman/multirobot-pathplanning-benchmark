@@ -1253,7 +1253,6 @@ class DependencyGraphMixin(BaseModeLogic):
 
     def _make_terminal_mode_from_sequence(self, sequence) -> List[int]:
         mode_dict = {}
-        _completed_symbolic_tasks_cache: Dict[Mode, List[str]]
 
         for task_index in sequence:
             task_robots = self.tasks[task_index].robots
