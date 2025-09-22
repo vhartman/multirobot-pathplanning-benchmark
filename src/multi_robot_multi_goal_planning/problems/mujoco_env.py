@@ -66,6 +66,27 @@ def mul_quat(out, q1, q2):
     out[2] = w1*y2 - x1*z2 + y1*w2 + z1*x2
     out[3] = w1*z2 + x1*y2 - y1*x2 + z1*w2
 
+@jit((float64[:], float64[:], float64[:]), nopython=True, fastmath=True, boundscheck=False)
+def rot_vec_quat(out, vec, quat):
+    """Rotate vector by quaternion using efficient formula: out = quat * vec * quat_conj
+    
+    This uses the efficient formula: v' = v + 2 * cross(q.xyz, cross(q.xyz, v) + q.w * v)
+    where q = [w, x, y, z] and v is the 3D vector
+    """
+    w, x, y, z = quat
+    vx, vy, vz = vec
+    
+    # First cross product: cross(q.xyz, v) + q.w * v
+    cx = y * vz - z * vy + w * vx
+    cy = z * vx - x * vz + w * vy  
+    cz = x * vy - y * vx + w * vz
+    
+    # Second cross product: cross(q.xyz, first_cross)
+    out[0] = vx + 2.0 * (y * cz - z * cy)
+    out[1] = vy + 2.0 * (z * cx - x * cz)
+    out[2] = vz + 2.0 * (x * cy - y * cx)
+
+
 class MujocoEnvironment(BaseProblem):
     """
     Simple environment, only supporting rectangle and sphere obstacles, and spherical agents.
@@ -570,7 +591,7 @@ class MujocoEnvironment(BaseProblem):
 
         return sg
 
-    @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def _set_to_scenegraph(self, sg):
         # child_xquat = np.empty(4)
         # rotated = np.empty(3)
@@ -609,7 +630,8 @@ class MujocoEnvironment(BaseProblem):
             mul_quat(self.child_xquat_buf, parent_xquat, rotation)
 
             # child world position: parent + R_parent * pos_rel
-            mujoco.mju_rotVecQuat(self.rotated_buf, position, parent_xquat)
+            # mujoco.mju_rotVecQuat(self.rotated_buf, position, parent_xquat)
+            rot_vec_quat(self.rotated_buf, position, parent_xquat)
             # child_xpos = parent_xpos + rotated
 
             # set freejoint qpos
@@ -1196,3 +1218,8 @@ class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
             "ur10_3": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
             "ur10_4": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
         }
+
+
+
+# @register("mujoco.rfl")
+# class rfl_mujoco(SequenceMixin, OptimizedMujocoEnvironment):
