@@ -124,16 +124,14 @@ class AffineFrameOrientationConstraint(Constraint):
         self.desired_orientation_vector = desired_orientation_vector
         self.epsilon = epsilon
 
-        # raise NotImplementedError
-
     def is_fulfilled(self, q, env):
         frame_pose = env.get_frame_pose(self.frame_name)
 
         # get vector from quaternion
         x_axis, y_axis, z_axis = get_axes_from_quaternion(frame_pose[3:])
 
-        # raise NotImplementedError
-    
+        return np.isclose(z_axis, self.desired_orientation_vector, self.epsilon)
+
 
 # projects the pose of a frame to a path 
 class TaskSpacePathConstraint(Constraint):
