@@ -57,23 +57,22 @@ class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
 
         self.tasks = [
             Task(
+                "joint_pick",
                 ["a1"],
                 SingleGoal(np.array([-0.5, -0.5, 0])), constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[0, 0, 1, 0, 0, 0]]), np.array([0]), 0) ]
             ),
             Task(
+                "joint_place",
                 ["a2"],
                 SingleGoal(np.array([0.5, 0.5, 0])),
             ),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(home_pose),
             ),
         ]
-
-        self.tasks[0].name = "joint_pick"
-        self.tasks[1].name = "joint_place"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["joint_pick", "joint_place", "terminal"]
@@ -113,23 +112,22 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
         self.tasks = [
             # joint
             Task(
+                "joint_pick",
                 ["a1", "a2"],
                 SingleGoal(joint_goal),
             ),
             Task(
+                "joint_place",
                 ["a1", "a2"],
                 SingleGoal(rel_movement_end), constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], np.eye(7), rel_pose)]
             ),            
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(home_pose),
             ),
         ]
-
-        self.tasks[0].name = "joint_pick"
-        self.tasks[1].name = "joint_place"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["joint_pick", "joint_place", "terminal"]
@@ -169,12 +167,14 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         self.tasks = [
             # joint
             Task(
+                "joint_pick",
                 self.robots,
                 SingleGoal(pick_pose),
                 type="pick", 
                 frames=["a1_ur_ee_marker", "obj1"]
             ),
             Task(
+                "joint_place",
                 self.robots,
                 SingleGoal(place_pose),
                 type="place", 
@@ -183,14 +183,11 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
             ),            
             # terminal mode
             Task(
+                "terminal",
                 self.robots,
                 SingleGoal(home_pose),
             ),
         ]
-
-        self.tasks[0].name = "joint_pick"
-        self.tasks[1].name = "joint_place"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["joint_pick", "joint_place", "terminal"]
@@ -227,26 +224,25 @@ class rai_linked_2d_puzzle(SequenceMixin, rai_env):
         self.tasks = [
             # joint
             Task(
+                "r1_goal",
                 ["a1"],
                 SingleGoal(r1_goal),
                 # constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([1, 0, 0, -1, 0, 0]), 0)]
             ),
             Task(
+                "r2_goal",
                 ["a2"],
                 SingleGoal(r2_goal),
                 constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, -1, 0, 0]]), np.array([0]))]
             ),            
             # terminal mode
             Task(
+                "terminal",
                 self.robots,
                 SingleGoal(home_pose),
                 constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, -1, 0, 0]]), np.array([0]))]
             ),
         ]
-
-        self.tasks[0].name = "r1_goal"
-        self.tasks[1].name = "r2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["r1_goal", "r2_goal", "terminal"]
@@ -285,12 +281,14 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
         self.tasks = [
             # joint
             Task(
+                "r1_pick",
                 ["a1"],
                 SingleGoal(r1_keyframes[0]),
                 "pick",
                 frames=["a1_ur_vacuum", "obj_1"],
             ),
             Task(
+                "r1_place",
                 ["a1"],
                 SingleGoal(r1_keyframes[1]),
                 "place",
@@ -298,12 +296,14 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 constraints=[AffineFrameOrientationConstraint("obj_1", np.array([[0, 0, 1]]), np.array([0]))]
             ),
             Task(
+                "r2_pick",
                 ["a2"],
                 SingleGoal(r2_keyframes[0]),
                 "pick",
                 frames=["a2_ur_vacuum", "obj_2"],
             ),
             Task(
+                "r2_place",
                 ["a2"],
                 SingleGoal(r2_keyframes[1]),
                 "place",
@@ -312,17 +312,12 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
             ),
             # terminal mode
             Task(
+                "terminal",
                 self.robots,
                 SingleGoal(home_pose),
             ),
         ]
-
-        self.tasks[0].name = "r1_pick"
-        self.tasks[1].name = "r1_place"
-        self.tasks[2].name = "r2_pick"
-        self.tasks[3].name = "r2_place"
-        self.tasks[4].name = "terminal"
-
+        
         self.sequence = self._make_sequence_from_names(
             ["r1_pick", "r2_pick", "r1_place", "r2_place", "terminal"]
         )
