@@ -77,6 +77,7 @@ class Task:
 
     def __init__(
         self,
+        name,
         robots: List[str],
         goal: Goal,
         type=None,
@@ -87,7 +88,9 @@ class Task:
     ):
         self.robots = robots
         self.goal = goal
-        self.name = None
+        self.name = name
+
+        assert isinstance(name, str)
 
         # constraints
         self.type = type
@@ -1602,13 +1605,13 @@ class BaseProblem(ABC):
                 assert goal is not None
 
                 task = Task(
+                    task_data["name"],
                     robots=task_data["robots"],
                     goal=goal,
                     type=task_data["type"],
                     frames=task_data["frames"],
                     side_effect=task_data["side_effect"],
                 )
-                task.name = task_data["name"]
                 task_list.append(task)
 
             self.tasks = task_list

@@ -45,33 +45,27 @@ class rai_two_dim_env(FreeMixin, rai_env):
 
         self.tasks = [
             Task(
+                "init",
                 ["a1", "a2"],
                 SingleGoal(self.C.getJointState()),
             ),
             # r1
-            Task(["a1"], SingleGoal(r1_goal)),
-            Task(["a1"], SingleGoal(r2_goal_1)),
-            Task(["a1"], SingleGoal(r2_goal_2)),
-            Task(["a1"], SingleGoal(r2_goal_3)),
+            Task("a1_0", ["a1"], SingleGoal(r1_goal)),
+            Task("a1_1", ["a1"], SingleGoal(r2_goal_1)),
+            Task("a1_2", ["a1"], SingleGoal(r2_goal_2)),
+            Task("a1_3", ["a1"], SingleGoal(r2_goal_3)),
             # r2
-            Task(["a2"], SingleGoal(r1_goal)),
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
-            Task(["a2"], SingleGoal(r2_goal_3)),
+            Task("a2_", ["a2"], SingleGoal(r1_goal)),
+            Task("a2_", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_", ["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_", ["a2"], SingleGoal(r2_goal_3)),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(self.C.getJointState()),
             ),
         ]
-
-        # self.tasks[0].name = "dummy_start"
-        # self.tasks[1].name = "a1_goal"
-        # self.tasks[2].name = "a2_goal_0"
-        # self.tasks[3].name = "a2_goal_1"
-        # self.tasks[4].name = "a2_goal_2"
-        # self.tasks[5].name = "a2_goal_3"
-        # self.tasks[6].name = "terminal"
 
         self.task_groups = [
             [(0, 1), (1, 5)],
@@ -245,6 +239,7 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
             #     GoalRegion(self.limits[:, 3:]),
             # ),
             Task(
+                "dummy_start",
                 ["a1", "a2"],
                 # GoalRegion(self.limits),
                 SingleGoal(self.C.getJointState())
@@ -260,6 +255,7 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
         for agent, object, keyframes in all_keyframes:
             self.tasks.append(
                 Task(
+                    f"pick_{agent}_{object}",
                     [agent],
                     SingleGoal(keyframes[0, :]),
                     type="pick",
@@ -268,6 +264,7 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
             )
             self.tasks.append(
                 Task(
+                    f"place_{agent}_{object}",
                     [agent],
                     SingleGoal(keyframes[1, :]),
                     type="place",
@@ -281,17 +278,6 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
             # place is dependent on pick
             self.task_dependencies[len(self.tasks) - 1] = [len(self.tasks) - 2]
 
-            self.tasks[-2].name = f"pick_{agent}_{object}"
-            self.tasks[-1].name = f"place_{agent}_{object}"
-
-        # self.tasks[0].name = "dummy_start"
-        # self.tasks[1].name = "a1_goal"
-        # self.tasks[2].name = "a2_goal_0"
-        # self.tasks[3].name = "a2_goal_1"
-        # self.tasks[4].name = "a2_goal_2"
-        # self.tasks[5].name = "a2_goal_3"
-        # self.tasks[6].name = "terminal"
-
         self.task_groups = []
 
         for k, v in pick_tasks.items():
@@ -302,6 +288,7 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
         self.tasks.append(
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(self.C.getJointState()),
             ),
@@ -328,12 +315,12 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
 
         self.tasks = [
             Task(
+                "dummy_start",
                 ["a1_", "a2_"],
                 # GoalRegion(self.limits),
                 SingleGoal(self.C.getJointState())
             ),
         ]
-        self.tasks[-1].name = "dummy_start"
 
         pick_task_names = ["pick", "place"]
 
@@ -365,22 +352,19 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
-                            Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
+                            Task(robots[0] + t + "_" + box_name + "_" + str(cnt), robots, SingleGoal(k), t, frames=[ee_name, box_name])
                         )
                         pick_tasks[box_name].append((robot_index, len(self.tasks) - 1))
                         
                     else:
                         self.tasks.append(
-                            Task(robots, SingleGoal(k), t, frames=["tray", box_name])
+                            Task(robots[0] + t + "_" + box_name + "_" + str(cnt), robots, SingleGoal(k), t, frames=["tray", box_name])
                         )
                         self.task_dependencies[len(self.tasks) - 1] = [
                             len(self.tasks) - 2
                         ]
                         place_tasks[box_name].append((robot_index, len(self.tasks) - 1))
 
-                    self.tasks[-1].name = (
-                        robots[0] + t + "_" + box_name + "_" + str(cnt)
-                    )
                     cnt += 1
             else:
                 assert False
@@ -395,8 +379,7 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
         print(self.task_groups)
         print(self.task_dependencies)
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.terminal_task = len(self.tasks) - 1
 
@@ -429,12 +412,12 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
 
         self.tasks = [
             Task(
+                "dummy_start",
                 self.robots,
                 # GoalRegion(self.limits),
                 SingleGoal(self.C.getJointState())
             ),
         ]
-        self.tasks[-1].name = "dummy_start"
 
         pick_task_names = ["pick", "place"]
 
@@ -463,17 +446,17 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
             for t, k in zip(pick_task_names, qs):
                 if t == "pick":
                     ee_name = r + "gripper_center"
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=[ee_name, box_name]))
+                    self.tasks.append(Task(r + t + "_" + box_name + "_" + str(cnt), [r], SingleGoal(k), t, frames=[ee_name, box_name]))
                     pick_tasks[box_name].append((robot_index, len(self.tasks) - 1))
 
                 else:
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", box_name]))
+                    self.tasks.append(Task(r + t + "_" + box_name + "_" + str(cnt), [r], SingleGoal(k), t, frames=["table", box_name]))
                     place_tasks[box_name].append((robot_index, len(self.tasks) - 1))
                     self.task_dependencies[len(self.tasks) - 1] = [
                         len(self.tasks) - 2
                     ]
 
-                self.tasks[-1].name = r + t + "_" + box_name + "_" + str(cnt)
+                # self.tasks[-1].name = r + t + "_" + box_name + "_" + str(cnt)
                 cnt += 1
 
                 # if b in action_names:
@@ -521,8 +504,7 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
             
             print()
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.terminal_task = len(self.tasks) - 1
 
@@ -555,21 +537,24 @@ class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
 
         self.tasks = [
             Task(
+                "dummy_start",
                 ["a0", "a1"],
                 # GoalRegion(self.limits),
                 SingleGoal(self.C.getJointState())
             ),
         ]
-        self.tasks[0].name = "dummy_start"
+        # self.tasks[0].name = "dummy_start"
 
         self.tasks.extend([
             Task(
+                "a1_pick_b1",
                 ["a0"],
                 SingleGoal(keyframes[0][self.robot_idx["a0"]]),
                 type="pick",
                 frames=["a0_ur_vacuum", "bottle_1"],
             ),
             Task(
+                "a1_place_b1",
                 ["a0"],
                 SingleGoal(keyframes[1][self.robot_idx["a0"]]),
                 type="place",
@@ -577,24 +562,28 @@ class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
             ),
             # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
             Task(
+                "a1_pick_b2",
                 ["a0"],
                 SingleGoal(keyframes[3][self.robot_idx["a0"]]),
                 type="pick",
                 frames=["a0_ur_vacuum", "bottle_12"],
             ),
             Task(
+                "a1_place_b2",
                 ["a0"],
                 SingleGoal(keyframes[4][self.robot_idx["a0"]]),
                 type="place",
                 frames=["table", "bottle_12"],
             ),
             Task(
+                "a2_pick_b1",
                 ["a1"],
                 SingleGoal(keyframes[6][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1_ur_vacuum", "bottle_3"],
             ),
             Task(
+                "a2_place_b1",
                 ["a1"],
                 SingleGoal(keyframes[7][self.robot_idx["a1"]]),
                 type="place",
@@ -602,12 +591,14 @@ class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
             ),
             # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
             Task(
+                "a2_pick_b2",
                 ["a1"],
                 SingleGoal(keyframes[9][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1_ur_vacuum", "bottle_5"],
             ),
             Task(
+                "a2_place_b2",
                 ["a1"],
                 SingleGoal(keyframes[10][self.robot_idx["a1"]]),
                 type="place",
@@ -615,19 +606,8 @@ class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
             ),
         ])
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
         self.terminal_task = len(self.tasks) - 1
-
-        self.tasks[1].name = "a1_pick_b1"
-        self.tasks[2].name = "a1_place_b1"
-        self.tasks[3].name = "a1_pick_b2"
-        self.tasks[4].name = "a1_place_b2"
-        self.tasks[5].name = "a2_pick_b1"
-        self.tasks[6].name = "a2_place_b1"
-        self.tasks[7].name = "a2_pick_b2"
-        self.tasks[8].name = "a2_place_b2"
-        self.tasks[9].name = "terminal"
         
         self.task_dependencies_any = {}
 

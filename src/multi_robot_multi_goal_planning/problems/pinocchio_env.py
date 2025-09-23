@@ -688,19 +688,16 @@ class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(np.array([0, 0.8, 0]))),
+            Task("a1_goal", ["a1"], SingleGoal(np.array([0, 0.8, 0]))),
             # r2
-            Task(["a2"], SingleGoal(np.array([0, -0.8, 0]))),
+            Task("a2_goal", ["a2"], SingleGoal(np.array([0, -0.8, 0]))),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(np.array([0, -0.8, 0, 0, 0.8, 0])),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_goal", "a1_goal", "terminal"]
@@ -769,19 +766,16 @@ class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
         # self.C.view(True)
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(np.array([-1.5, 1, np.pi / 2]))),
+            Task("a1_goal", ["a1"], SingleGoal(np.array([-1.5, 1, np.pi / 2]))),
             # r2
-            Task(["a2"], SingleGoal(np.array([1.5, 1, 0]))),
+            Task("a2_goal", ["a2"], SingleGoal(np.array([1.5, 1, 0]))),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(np.array([1.5, 0.0, 0, -1.5, 0.0, 0])),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_goal", "a1_goal", "terminal"]
@@ -963,12 +957,14 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
         self.tasks = [
             # a1
             Task(
+                "a1_pick",
                 ["a1"],
                 SingleGoal(task_1_pose),
                 type="pick",
                 frames=["a1_0", "obj1_0"],
             ),
             Task(
+                "a1_place",
                 ["a1"],
                 SingleGoal(task_2_pose),
                 type="place",
@@ -976,12 +972,14 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
             ),
             # a2
             Task(
+                "a2_pick",
                 ["a2"],
                 SingleGoal(task_3_pose),
                 type="pick",
                 frames=["a2_0", "obj2_0"],
             ),
             Task(
+                "a2_place",
                 ["a2"],
                 SingleGoal(task_4_pose),
                 type="place",
@@ -989,16 +987,11 @@ class pinocchio_piano_two_dim(SequenceMixin, PinocchioEnvironment):
             ),
             # terminal
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(task_5_pose),
             ),
         ]
-
-        self.tasks[0].name = "a1_pick"
-        self.tasks[1].name = "a1_place"
-        self.tasks[2].name = "a2_pick"
-        self.tasks[3].name = "a2_place"
-        self.tasks[4].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"]
@@ -1230,24 +1223,23 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         self.tasks = [
             # r1
             Task(
+                "a1_goal",
                 ["a1"],
                 SingleGoal(q_inter[0]),
             ),
             # r2
             Task(
+                "a2_goal",
                 ["a2"],
                 SingleGoal(q_inter[1]),
             ),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(q_goal.state()),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_goal", "a1_goal", "terminal"]

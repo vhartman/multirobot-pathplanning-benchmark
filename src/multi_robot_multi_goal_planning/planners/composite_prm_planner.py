@@ -433,7 +433,11 @@ class DiscreteBucketIndexHeap:
 
 class MultimodalGraph:
     """ "
-    The graph that we will construct and refine and search on.
+    The graph that we will construct and refine and search on for the prm
+    planner. Maintains all the search/construction and the functions necessary for it.
+
+    Consists effectively of a list of nodes that is split into transition nodes
+    and general mode-nodes for efficiency reasons.
     """
 
     root: Node
@@ -527,6 +531,7 @@ class MultimodalGraph:
 
             # neighbors = []
 
+            # this is the same code as below, but slightly more legible
             # for n in self.reverse_transition_nodes[node.state.mode]:
             #     for q in n.neighbors:
             #         neighbors.append(q)
@@ -561,30 +566,10 @@ class MultimodalGraph:
                     continue
 
                 id = n.id
-                # current_cost = costs.get(id, float('inf'))
-                # if cost < current_cost:
-                #     costs[id] = cost
-                #     n.lb_cost_to_goal = cost
-                #     n.neighbors[0].lb_cost_to_goal = cost
-
-                # print(cost)
-                # parents[n] = node
                 if id not in costs or cost < costs[id]:
-                    # if n.neighbors[0].lb_cost_to_goal is not None:
-                    #     print(n.neighbors[0].lb_cost_to_goal)
-                    #     print(cost)
-                    #     print()
-
                     costs[id] = cost
                     n.lb_cost_to_goal = cost
 
-                    # if n.neighbors[0].lb_cost_to_goal is not None and n.neighbors[0].lb_cost_to_goal > cost:
-                    #     print("AAAA")
-                    #     n.neighbors[0].lb_cost_to_goal = cost
-
-                    #     # parents[n] = node
-
-                    # queue.append(n)
                     heapq.heappush(queue, (cost, n))
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
@@ -602,23 +587,13 @@ class MultimodalGraph:
         costs[self.root.id] = 0
 
         while len(queue) > 0:
-            # node = queue.pop(0)
             _, node = heapq.heappop(queue)
-            # print(node)
-
-            # if node.id in costs and:
-            # continue
 
             if node.id in closed_set:
                 continue
 
             if node.state.mode.task_ids == self.goal_nodes[0].state.mode.task_ids:
                 continue
-
-            # print(node.state.mode)
-            # # print(node.neighbors[0].state.mode)
-            # print(len(self.goal_nodes))
-            # print(self.goal_nodes[0].state.mode.task_ids)
 
             if node.state.mode not in self.transition_nodes:
                 continue
@@ -645,30 +620,10 @@ class MultimodalGraph:
             for edge_cost, n in zip(edge_costs, neighbors):
                 cost = parent_cost + edge_cost
                 id = n.id
-                # current_cost = costs.get(id, float('inf'))
-                # if cost < current_cost:
-                #     costs[id] = cost
-                #     n.lb_cost_to_goal = cost
-                #     n.neighbors[0].lb_cost_to_goal = cost
-
-                # print(cost)
-                # parents[n] = node
                 if id not in costs or cost < costs[id]:
-                    # if n.neighbors[0].lb_cost_to_goal is not None:
-                    #     print(n.neighbors[0].lb_cost_to_goal)
-                    #     print(cost)
-                    #     print()
-
                     costs[id] = cost
                     n.lb_cost_from_start = cost
 
-                    # if n.neighbors[0].lb_cost_to_goal is not None and n.neighbors[0].lb_cost_to_goal > cost:
-                    #     print("AAAA")
-                    #     n.neighbors[0].lb_cost_to_goal = cost
-
-                    #     # parents[n] = node
-
-                    # queue.append(n)
                     heapq.heappush(queue, (cost, n))
 
     def add_node(self, new_node: Node) -> None:
@@ -696,6 +651,9 @@ class MultimodalGraph:
 
         A transition node consists of a configuration, the mode it is in, and the modes it is a transition to.
         The configuration is added as node to the current mode, and to all the following modes.
+
+        Also adds/updates the caches and ensures that transitions nodes are not added
+        multiple times.
         """
 
         self.transition_node_array_cache = {}
@@ -711,7 +669,6 @@ class MultimodalGraph:
                 this_mode in self.transition_nodes
                 and len(self.transition_nodes[this_mode]) > 0
             ):
-                is_in_transition_nodes_already = False
                 # print("A", this_mode, len(self.transition_nodes[this_mode]))
                 dists = self.batch_dist_fun(
                     node_this_mode.state.q,
@@ -719,19 +676,9 @@ class MultimodalGraph:
                 )
                 # print("B")
 
+                # if the transition node is very close to another one
+                # we treat it as already added and do not add it again
                 if min(dists) < 1e-6:
-                    is_in_transition_nodes_already = True
-                # for n in self.transition_nodes[this_mode]:
-                #     if (
-                #         np.linalg.norm(
-                #             n.state.q.state() - node_this_mode.state.q.state()
-                #         )
-                #         < 1e-3
-                #     ):
-                #         is_in_transition_nodes_already = True
-                #         break
-
-                if is_in_transition_nodes_already:
                     continue
 
             if next_modes is None:
@@ -993,7 +940,6 @@ class MultimodalGraph:
                     dtype=np.float64,
                 )
 
-            # print(len(self.transition_node_array_cache[node.state.mode]))
             if len(self.transition_node_array_cache[node.state.mode]) == 0:
                 return np.inf
 
@@ -1046,13 +992,6 @@ class MultimodalGraph:
                 queue.heappush((cost, edge_cost, e))
                 # open_queue.append((cost, edge_cost, e))
 
-        # open_queue.sort(reverse=True)
-
-        # for k, v in self.transition_nodes.items():
-        #     for n in v:
-        #         if len(n.neighbors) > 0:
-        #             assert(n.lb_cost_to_goal == n.neighbors[0].lb_cost_to_goal)
-
         wasted_pops = 0
         processed_edges = 0
 
@@ -1061,58 +1000,18 @@ class MultimodalGraph:
 
         num_iter = 0
         while queue:
-            # while len(open_queue) > 0:
             num_iter += 1
 
-            # print(len(queue))
-
             if num_iter % 100000 == 0:
-                # print(len(open_queue))
                 print(len(queue))
 
-            # f_pred, edge_cost, (n0, n1) = heapq.heappop(open_queue)
             f_pred, edge_cost, (n0, n1) = queue_pop()
-            # print(open_queue[-1])
-            # print(open_queue[-2])
-            # f_pred, edge_cost, edge = open_queue.pop()
-            # n0, n1 = edge
 
-            # g_tentative = gs[n0.id] + edge_cost
-
-            # if we found a better way to get there before, do not expand this edge
-            # if n1.id in gs:
-            #     print(f_pred)
-            #     print(gs[n0.id])
-            #     print('new_cost/oldcost', g_tentative, gs[n1.id])
-            #     print('n0id/n1id', n0.id, n1.id)
-            #     print('n0mode/n1mode', n0.state.mode, n1.state.mode)
-            #     print('n0trans/n1trans', n0.is_transition, n1.is_transition)
-
-            #     print("root", self.root.state.q.state())
-
-            #     if (n1.is_transition):
-            #         print('n1 is transition')
-            #         print(n1.neighbors[0].id)
-            #         print(n1.neighbors[0].state.mode)
-            #         print(n1.neighbors[0].state.q.state())
-
-            #     if (n0.is_transition):
-            #         print('n0 is transition')
-            #         print(n0.neighbors[0].id)
-
-            #     print(edge_cost)
-
-            #     print(gs[n0.id] + h(n0))
-            #     print(gs[n1.id] + h(n1))
-
-            #     assert(g_tentative >= gs[n1.id])
-
-            # if n1.id in gs and g_tentative >= gs[n1.id]:
             if n1.id in gs:
                 wasted_pops += 1
                 continue
 
-            # check edge sparsely now. if it is not valid, blacklist it, and continue with the next edge
+            # check edge now. if it is not valid, blacklist it, and continue with the next edge
             collision_free = False
 
             if n0.id in n1.whitelist:
@@ -1137,21 +1036,9 @@ class MultimodalGraph:
 
             processed_edges += 1
 
-            # remove all other edges with this goal from the queue
-
-            # if n0.state.mode not in reached_modes:
-            #     reached_modes.append(n0.state.mode)
-
-            # print('reached modes', reached_modes)
-
-            # print('adding', n1.id)
             g_tentative = gs[n0.id] + edge_cost
             gs[n1.id] = g_tentative
             parents[n1] = n0
-
-            # if len(queue) > 1e6:
-            #     for node in parents:
-            #         queue.remove_by_node(n1)
 
             if n1 in goal_nodes:
                 goal = n1
@@ -1181,42 +1068,17 @@ class MultimodalGraph:
                 #     print(n.id)
 
                 if n.id not in gs:
-                    # if n.id not in gs or g_new < gs[n.id]:
-                    # sparsely check only when expanding
-                    # cost to get to neighbor:
-                    # q0 = n1.state.q
-                    # q1 = n.state.q
-                    # collision_free = env.is_edge_collision_free(
-                    #     q0, q1, n1.state.mode, 5
-                    # )
-                    # if not collision_free:
-                    #     n.blacklist.add(n1.id)
-                    #     n1.blacklist.add(n.id)
-
-                    #     continue
-
                     g_new = g_tentative + edge_cost
                     f_node = g_new + h(n)
-                    # fs[(n1, n)] = f_node
 
                     if f_node > best_cost:
                         continue
 
-                    # if n not in closed_list:
-                    # heapq.heappush(open_queue, (f_node, edge_cost, (n1, n)))
                     queue_push((f_node, edge_cost, (n1, n)))
-                    # new_edges.append((f_node, edge_cost, (n1, n)))
-
-                    # added_edge = True
-                    # queue.append((f_node, edge_cost, (n1, n)))
-            # heapq.heapify(open_queue)
-            # open_queue.sort(reverse=True)
-
-            # if len(new_edges) > 0:
-            #     queue.heappush_list(new_edges)
 
         path = []
 
+        # if we found a path to a goal, we reconstruct the path
         if goal is not None:
             path.append(goal)
 
@@ -1225,9 +1087,6 @@ class MultimodalGraph:
             while n is not None and parents[n] is not None:
                 path.append(parents[n])
                 n = parents[n]
-
-                # print(gs[n.id] + h(n))
-                # print('\t\t', h(n))
 
             path.append(n)
             path = path[::-1]
@@ -1402,11 +1261,38 @@ class CompositePRM(BasePlanner):
 
         return new_samples, num_attempts
 
+    def _sample_uniform_transition_configuration(self, mode, reached_terminal_mode):
+        # sample transition at the end of this mode
+        if reached_terminal_mode:
+            # init next ids: caches version of next ids
+            next_ids = self.init_next_ids[mode]
+        else:
+            next_ids = self.mode_validation.get_valid_next_ids(mode)
+
+        active_task = self.env.get_active_task(mode, next_ids)
+        constrained_robot = active_task.robots
+        goal_sample = active_task.goal.sample(mode)
+
+        # sample a configuration
+        q = []
+        end_idx = 0
+        for robot in self.env.robots:
+            if robot in constrained_robot:
+                dim = self.env.robot_dims[robot]
+                q.append(goal_sample[end_idx : end_idx + dim])
+                end_idx += dim
+            else:
+                r_idx = self.env.robot_idx[robot]
+                lims = self.env.limits[:, r_idx]
+                q.append(np.random.uniform(lims[0], lims[1]))
+        q = self.env.start_pos.from_list(q)
+
+        return q
+
     # TODO:
     # - Introduce mode_subset_to_sample
     # - Fix function below:
     # -- reduce side-effects
-    # -- introducing specific sampling strategy for 'reached terminal mode, but no solution yet' might help?
     def sample_valid_uniform_transitions(
         self,
         g,
@@ -1453,30 +1339,9 @@ class CompositePRM(BasePlanner):
                 mode_subset_to_sample, g, mode_sampling_type, cost is None
             )
 
-            # sample transition at the end of this mode
-            if reached_terminal_mode:
-                # init next ids: caches version of next ids
-                next_ids = self.init_next_ids[mode]
-            else:
-                next_ids = self.mode_validation.get_valid_next_ids(mode)
-
-            active_task = self.env.get_active_task(mode, next_ids)
-            constrained_robot = active_task.robots
-            goal_sample = active_task.goal.sample(mode)
-
-            # sample a configuration
-            q = []
-            end_idx = 0
-            for robot in self.env.robots:
-                if robot in constrained_robot:
-                    dim = self.env.robot_dims[robot]
-                    q.append(goal_sample[end_idx : end_idx + dim])
-                    end_idx += dim
-                else:
-                    r_idx = self.env.robot_idx[robot]
-                    lims = self.env.limits[:, r_idx]
-                    q.append(np.random.uniform(lims[0], lims[1]))
-            q = self.env.start_pos.from_list(q)
+            q = self._sample_uniform_transition_configuration(
+                mode, reached_terminal_mode
+            )
 
             # could this transition possibly improve the path?
             if (
@@ -1620,15 +1485,6 @@ class CompositePRM(BasePlanner):
             [g.root.state.q.state(), g.goal_nodes[0].state.q.state()],
             dtype=np.float64,
         )
-        # for mode, nodes in g.nodes.items():
-        #     for n in nodes:
-        #         if sum(self.env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
-        #             num_pts_for_removal += 1
-
-        # for mode, nodes in g.transition_nodes.items():
-        #     for n in nodes:
-        #         if sum(self.env.batch_config_cost(n.state.q, focal_points)) > current_best_cost:
-        #             num_pts_for_removal += 1
         # Remove elements from g.nodes
         for mode in list(g.nodes.keys()):  # Avoid modifying dict while iterating
             original_count = len(g.nodes[mode])
@@ -1816,9 +1672,9 @@ class CompositePRM(BasePlanner):
         while True:
             if ptc.should_terminate(cnt, time.time() - start_time):
                 break
-
+            
+            # prune
             if current_best_path is not None and current_best_cost is not None:
-                # prune
                 self._prune(graph, current_best_cost)
 
             print()
@@ -1840,6 +1696,8 @@ class CompositePRM(BasePlanner):
             samples_in_graph_after = graph.get_num_samples()
             cnt += samples_in_graph_after - samples_in_graph_before
 
+            # we need to keep adding samples until we have reached a terminal mode
+            # with our transitions before we can run a search.
             reached_terminal_mode = False
             for m in reached_modes:
                 if self.env.is_terminal_mode(m):

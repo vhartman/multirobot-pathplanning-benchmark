@@ -907,18 +907,15 @@ class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         OptimizedMujocoEnvironment.__init__(self, path)
 
         self.tasks = [
-            Task(["a1"], SingleGoal(np.array([0, 1, 0.0]))),
-            Task(["a2"], SingleGoal(np.array([0.0, -1, 0.0]))),
+            Task("a1_goal", ["a1"], SingleGoal(np.array([0, 1, 0.0]))),
+            Task("a2_goal", ["a2"], SingleGoal(np.array([0.0, -1, 0.0]))),
             # terminal mode
             Task(
+                "terminal",
                 self.robots,
                 SingleGoal(self.start_pos.state()),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a1_goal", "a2_goal", "terminal"]
@@ -954,18 +951,15 @@ class simple_mujoco_env(SequenceMixin, MujocoEnvironment):
         MujocoEnvironment.__init__(self, path)
 
         self.tasks = [
-            Task(["a1"], SingleGoal(np.array([-1.5, 1, np.pi / 2]))),
-            Task(["a2"], SingleGoal(np.array([1.5, 1, 0.0]))),
+            Task("a1_goal", ["a1"], SingleGoal(np.array([-1.5, 1, np.pi / 2]))),
+            Task("a2_goal", ["a2"], SingleGoal(np.array([1.5, 1, 0.0]))),
             # terminal mode
             Task(
+                "terminal",
                 self.robots,
                 SingleGoal(self.start_pos.state()),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a1_goal", "a2_goal", "terminal"]
@@ -1001,13 +995,15 @@ class manip_mujoco_env(SequenceMixin, MujocoEnvironment):
 
         self.tasks = [
             Task(
+                "a2_pick",
                 ["a2"],
                 SingleGoal(np.array([1.0, 0.6, 0])),
                 type="pick",
                 frames=["a2", "obj1"],
             ),
-            Task(["a1"], SingleGoal(np.array([-1.5, 1, 0.0]))),
+            Task("a1_goal", ["a1"], SingleGoal(np.array([-1.5, 1, 0.0]))),
             Task(
+                "a2_place",
                 ["a2"],
                 SingleGoal(np.array([-1.0, -1.1, 0])),
                 type="place",
@@ -1015,15 +1011,11 @@ class manip_mujoco_env(SequenceMixin, MujocoEnvironment):
             ),
             # terminal mode
             Task(
+                "terminal",
                 self.robots,
                 SingleGoal(self.start_pos.state()),
             ),
         ]
-
-        self.tasks[0].name = "a2_pick"
-        self.tasks[1].name = "a1_goal"
-        self.tasks[2].name = "a2_place"
-        self.tasks[3].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_pick", "a1_goal", "a2_place", "terminal"]
@@ -1059,24 +1051,28 @@ class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
 
         self.tasks = [
             Task(
+                "a2_pick",
                 ["a2"],
                 SingleGoal(np.array([1.0, 0.6, 0])),
                 type="pick",
                 frames=["a2", "obj1"],
             ),
             Task(
+                "a1_pick",
                 ["a1"],
                 SingleGoal(np.array([-1.0, -0.6, 0.0])),
                 type="pick",
                 frames=["a1", "obj2"],
             ),
             Task(
+                "a2_place",
                 ["a2"],
                 SingleGoal(np.array([-1.0, -1.1, 0])),
                 type="place",
                 frames=["floor", "obj1"],
             ),
             Task(
+                "a1_place",
                 ["a1"],
                 SingleGoal(np.array([1.0, 1.1, 0])),
                 type="place",
@@ -1084,16 +1080,11 @@ class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
             ),
             # terminal mode
             Task(
+                "terminal",
                 self.robots,
                 SingleGoal(self.start_pos.state()),
             ),
         ]
-
-        self.tasks[0].name = "a2_pick"
-        self.tasks[1].name = "a1_pick"
-        self.tasks[2].name = "a2_place"
-        self.tasks[3].name = "a1_place"
-        self.tasks[4].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"]
@@ -1184,22 +1175,17 @@ class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         OptimizedMujocoEnvironment.__init__(self, path)
 
         self.tasks = [
-            Task(["ur10_1"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))),
-            Task(["ur10_2"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))),
-            Task(["ur10_3"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))),
-            Task(["ur10_4"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))),
+            Task("p1_goal", ["ur10_1"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))),
+            Task("p2_goal", ["ur10_2"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))),
+            Task("p3_goal", ["ur10_3"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))),
+            Task("p4_goal", ["ur10_4"], SingleGoal(np.array([1, -1, 1.3, -1.0, -1.57, 1.0]))),
             # terminal mode
             Task(
+                "terminal",
                 self.robots,
                 SingleGoal(self.start_pos.state()),
             ),
         ]
-
-        self.tasks[0].name = "p1_goal"
-        self.tasks[1].name = "p2_goal"
-        self.tasks[2].name = "p3_goal"
-        self.tasks[3].name = "p4_goal"
-        self.tasks[4].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["p1_goal", "p2_goal", "p3_goal", "p4_goal", "terminal"]

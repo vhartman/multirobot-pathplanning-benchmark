@@ -401,19 +401,16 @@ class abstract_env_two_dim_middle_obs(SequenceMixin, AbstractEnvironment):
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(np.array([0.8, 0]))),
+            Task("a1_goal", ["a1"], SingleGoal(np.array([0.8, 0]))),
             # r2
-            Task(["a2"], SingleGoal(np.array([-0.8, 0]))),
+            Task("a2_goal", ["a2"], SingleGoal(np.array([-0.8, 0]))),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(np.array([-0.8, 0, 0.8, 0])),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_goal", "a1_goal", "terminal"]
@@ -474,19 +471,16 @@ class abstract_env_center_rect_nd(SequenceMixin, AbstractEnvironment):
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(np.array(r2_start))),
+            Task("a1_goal", ["a1"], SingleGoal(np.array(r2_start))),
             # r2
-            Task(["a2"], SingleGoal(np.array(r1_start))),
+            Task("a2_goal", ["a2"], SingleGoal(np.array(r1_start))),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(self.start_pos.state()),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_goal", "a1_goal", "terminal"]
