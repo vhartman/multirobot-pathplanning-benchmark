@@ -40,31 +40,25 @@ class rai_two_dim_env(UnorderedButAssignedMixin, rai_env):
 
         self.tasks = [
             Task(
+                "dummy_start",
                 ["a1", "a2"],
                 # GoalRegion(self.C.getJointLimits()),
                 SingleGoal(self.C.getJointState())
             ),
             # r1
-            Task(["a1"], SingleGoal(r1_goal)),
+            Task("a1_goal", ["a1"], SingleGoal(r1_goal)),
             # r2
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_0", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_1", ["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_2", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_3", ["a2"], SingleGoal(r2_goal_2)),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(self.C.getJointState()),
             ),
         ]
-
-        self.tasks[0].name = "dummy_start"
-        self.tasks[1].name = "a1_goal"
-        self.tasks[2].name = "a2_goal_0"
-        self.tasks[3].name = "a2_goal_1"
-        self.tasks[4].name = "a2_goal_2"
-        self.tasks[5].name = "a2_goal_3"
-        self.tasks[6].name = "terminal"
 
         self.per_robot_tasks = [[1], [2, 3, 4, 5]]
         self.terminal_task = 6
@@ -109,30 +103,25 @@ class rai_two_dim_square_env(UnorderedButAssignedMixin, rai_env):
 
         self.tasks = [
             Task(
+                "dummy_start",
                 ["a1", "a2"],
                 # GoalRegion(self.C.getJointLimits()),
                 SingleGoal(self.C.getJointState())
             ),
             # r1
-            Task(["a1"], SingleGoal(r1_goal)),
+            Task("a1_goal", ["a1"], SingleGoal(r1_goal)),
             # r2
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
-            Task(["a2"], SingleGoal(r2_goal_3)),
+            Task("a2_goal_0", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_1", ["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_2", ["a2"], SingleGoal(r2_goal_3)),
             # Task(["a2"], SingleGoal(r2_goal_3)),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(self.C.getJointState()),
             ),
         ]
-
-        self.tasks[0].name = "dummy_start"
-        self.tasks[1].name = "a1_goal"
-        self.tasks[2].name = "a2_goal_0"
-        self.tasks[3].name = "a2_goal_1"
-        self.tasks[4].name = "a2_goal_2"
-        self.tasks[5].name = "terminal"
 
         self.per_robot_tasks = [[1], [2, 3, 4]]
         self.terminal_task = 5
@@ -183,30 +172,27 @@ class rai_two_dim_circle_env(UnorderedButAssignedMixin, rai_env):
 
         self.tasks = [
             Task(
+                "dummy_start",
                 ["a1", "a2"],
                 # GoalRegion(self.C.getJointLimits()),
                 SingleGoal(self.C.getJointState())
             ),
             # r1
-            Task(["a1"], SingleGoal(r1_goal)),
+            Task("a1_goal", ["a1"], SingleGoal(r1_goal)),
         ]
 
         for i, g in enumerate(r2_goals):
             self.tasks.append(
-                Task(["a2"], SingleGoal(g)),
+                Task(f"a2_goal_{i}", ["a2"], SingleGoal(g)),
             )
-            self.tasks[-1].name = f"a2_goal_{i}"
 
         self.tasks.append(  # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(self.C.getJointState()),
             ),
         )
-        self.tasks[-1].name = "terminal"
-
-        self.tasks[0].name = "dummy_start"
-        self.tasks[1].name = "a1_goal"
 
         self.per_robot_tasks = [[1], [2 + i for i in range(len(r2_goals))]]
         self.terminal_task = len(self.tasks) - 1
@@ -248,6 +234,7 @@ class rai_two_dim_circle_single_agent(UnorderedButAssignedMixin, rai_env):
 
         self.tasks = [
             Task(
+                "dummy_start",
                 ["a0"],
                 # GoalRegion(self.C.getJointLimits()),
                 SingleGoal(self.C.getJointState())
@@ -256,19 +243,16 @@ class rai_two_dim_circle_single_agent(UnorderedButAssignedMixin, rai_env):
 
         for i, g in enumerate(goals):
             self.tasks.append(
-                Task(["a0"], SingleGoal(g)),
+                Task(f"a2_goal_{i}", ["a0"], SingleGoal(g)),
             )
-            self.tasks[-1].name = f"a2_goal_{i}"
 
         self.tasks.append(  # terminal mode
             Task(
+                "terminal",
                 ["a0"],
                 SingleGoal(self.C.getJointState()),
             ),
         )
-        self.tasks[-1].name = "terminal"
-
-        self.tasks[0].name = "dummy_start"
 
         self.per_robot_tasks = [[1 + i for i in range(len(goals))]]
         self.terminal_task = len(self.tasks) - 1
@@ -294,12 +278,12 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
 
         self.tasks = [
             Task(
+                "dummy_start",
                 ["a1_", "a2_"],
                 # GoalRegion(self.limits),
                 SingleGoal(self.C.getJointState())
             ),
         ]
-        self.tasks[-1].name = "dummy_start"
 
         pick_task_names = ["pick", "place"]
 
@@ -324,11 +308,11 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
-                            Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
+                            Task(robots[0] + t + "_" + box_name + "_" + str(cnt), robots, SingleGoal(k), t, frames=[ee_name, box_name])
                         )
                     else:
                         self.tasks.append(
-                            Task(robots, SingleGoal(k), t, frames=["tray", box_name])
+                            Task(robots[0] + t + "_" + box_name + "_" + str(cnt), robots, SingleGoal(k), t, frames=["tray", box_name])
                         )
                         self.task_dependencies[len(self.tasks) - 1] = [
                             len(self.tasks) - 2
@@ -336,15 +320,11 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
 
                     self.per_robot_tasks[robot_index].append(len(self.tasks) - 1)
 
-                    self.tasks[-1].name = (
-                        robots[0] + t + "_" + box_name + "_" + str(cnt)
-                    )
                     cnt += 1
             else:
                 assert False
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.terminal_task = len(self.tasks) - 1
 

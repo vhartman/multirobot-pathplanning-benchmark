@@ -38,6 +38,7 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 
         self.tasks = [
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(
                     np.concatenate(
@@ -49,8 +50,6 @@ class rai_two_dim_env(SequenceMixin, rai_env):
                 ),
             ),
         ]
-
-        self.tasks[0].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(["terminal"])
 
@@ -78,8 +77,7 @@ class rai_random_two_dim(SequenceMixin, rai_env):
         rai_env.__init__(self)
 
         self.tasks = []
-        self.tasks.append(Task(self.robots, SingleGoal(keyframes[0])))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(keyframes[0])))
 
         self.sequence = []
         self.sequence.append(len(self.tasks) - 1)
@@ -112,8 +110,7 @@ class rai_random_two_dim_single_agent(SequenceMixin, rai_env):
         rai_env.__init__(self)
 
         self.tasks = []
-        self.tasks.append(Task(self.robots, SingleGoal(keyframes[0])))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(keyframes[0])))
 
         self.sequence = []
         self.sequence.append(len(self.tasks) - 1)
@@ -146,11 +143,9 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
 
         self.tasks = [
             Task(
-                ["a1", "a2"], SingleGoal(np.concatenate([keyframes[0], keyframes[1]]))
+                "terminal", ["a1", "a2"], SingleGoal(np.concatenate([keyframes[0], keyframes[1]]))
             ),
         ]
-
-        self.tasks[0].name = "terminal"
 
         self.sequence = [0]
 
@@ -188,8 +183,7 @@ class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
 
         rai_env.__init__(self)
 
-        self.tasks = [Task(self.robots, SingleGoal(keyframes[0]))]
-        self.tasks[0].name = "terminal"
+        self.tasks = [Task("terminal", self.robots, SingleGoal(keyframes[0]))]
         self.sequence = [0]
 
         BaseModeLogic.__init__(self)
@@ -224,8 +218,7 @@ class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
 
         rai_env.__init__(self)
 
-        self.tasks = [Task(self.robots, SingleGoal(keyframes[0]))]
-        self.tasks[0].name = "terminal"
+        self.tasks = [Task("terminal", self.robots, SingleGoal(keyframes[0]))]
         self.sequence = [0]
 
         BaseModeLogic.__init__(self)
@@ -262,6 +255,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
 
         self.tasks = [
             Task(
+                "goal",
                 ["a1", "a2"],
                 SingleGoal(
                     np.concatenate(

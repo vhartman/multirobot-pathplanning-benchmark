@@ -96,11 +96,12 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
+            Task("a1_goal", ["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
             # r2
-            Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
+            Task("a2_goal", ["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(
                     np.concatenate(
@@ -112,10 +113,6 @@ class rai_two_dim_env(SequenceMixin, rai_env):
                 ),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_goal", "a1_goal", "terminal"]
@@ -161,25 +158,19 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(r1_goal)),
+            Task("a1_goal", ["a1"], SingleGoal(r1_goal)),
             # r2
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_0", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_1", ["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_2", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_3", ["a2"], SingleGoal(r2_goal_2)),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(self.C.getJointState()),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal_0"
-        self.tasks[2].name = "a2_goal_1"
-        self.tasks[3].name = "a2_goal_2"
-        self.tasks[4].name = "a2_goal_3"
-        self.tasks[5].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_goal_0", "a2_goal_1", "a2_goal_2", "a2_goal_3", "a1_goal", "terminal"]
@@ -221,25 +212,19 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(r1_goal)),
+            Task("a1_goal", ["a1"], SingleGoal(r1_goal)),
             # r2
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_0", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_1", ["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_2", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_3", ["a2"], SingleGoal(r2_goal_2)),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(self.C.getJointState()),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal_0"
-        self.tasks[2].name = "a2_goal_1"
-        self.tasks[3].name = "a2_goal_2"
-        self.tasks[4].name = "a2_goal_3"
-        self.tasks[5].name = "terminal"
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("a2_goal_1", "a2_goal_0")
@@ -298,28 +283,21 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
 
         self.tasks = [
             # r1
-            Task(["a1"], SingleGoal(r1_goal)),
+            Task("a1_goal", ["a1"], SingleGoal(r1_goal)),
             # r2
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
-            Task(["a2"], SingleGoal(r2_goal_1)),
-            Task(["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_0", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_1", ["a2"], SingleGoal(r2_goal_2)),
+            Task("a2_goal_2", ["a2"], SingleGoal(r2_goal_1)),
+            Task("a2_goal_3", ["a2"], SingleGoal(r2_goal_2)),
             # r3
-            Task(["a3"], SingleGoal(r3_goal)),
+            Task("a3_goal", ["a3"], SingleGoal(r3_goal)),
             # terminal mode
             Task(
+                "terminal",
                 ["a1", "a2", "a3"],
                 SingleGoal(self.C.getJointState()),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal"
-        self.tasks[1].name = "a2_goal_0"
-        self.tasks[2].name = "a2_goal_1"
-        self.tasks[3].name = "a2_goal_2"
-        self.tasks[4].name = "a2_goal_3"
-        self.tasks[5].name = "a3_goal"
-        self.tasks[6].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             [
@@ -354,6 +332,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         self.manipulating_env = True
 
         pick_task = Task(
+            "a1_pick",
             ["a1"],
             GoalSet([k[0] for k in keyframes]),
             type="pick",
@@ -361,6 +340,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         )
 
         place_task = Task(
+            "a1_place",
             ["a1"],
             ConditionalGoal([k[0] for k in keyframes], [k[1] for k in keyframes]),
             type="place",
@@ -368,6 +348,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         )
 
         terminal_task = Task(
+            "terminal",
             ["a1"],
             SingleGoal(
                 keyframes[0][2],
@@ -375,10 +356,6 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         )
 
         self.tasks = [pick_task, place_task, terminal_task]
-
-        self.tasks[0].name = "a1_pick"
-        self.tasks[1].name = "a1_place"
-        self.tasks[2].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a1_pick", "a1_place", "terminal"]
@@ -410,12 +387,14 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
         self.tasks = [
             # a1
             Task(
+                "a1_pick",
                 ["a1"],
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1", "obj1"],
             ),
             Task(
+                "a1_place",
                 ["a1"],
                 SingleGoal(keyframes[1][self.robot_idx["a1"]]),
                 type="place",
@@ -423,12 +402,14 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
             ),
             # a2
             Task(
+                "a2_pick",
                 ["a2"],
                 SingleGoal(keyframes[0][self.robot_idx["a2"]]),
                 type="pick",
                 frames=["a2", "obj2"],
             ),
             Task(
+                "a2_place",
                 ["a2"],
                 SingleGoal(keyframes[1][self.robot_idx["a2"]]),
                 type="place",
@@ -436,6 +417,7 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
             ),
             # terminal
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(
                     np.concatenate(
@@ -447,16 +429,6 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
                 ),
             ),
         ]
-
-        # for t in self.tasks:
-        #     arr = t.goal.sample(None)
-        #     print(np.array2string(np.array(arr), separator=", "))
-
-        self.tasks[0].name = "a1_pick"
-        self.tasks[1].name = "a1_place"
-        self.tasks[2].name = "a2_pick"
-        self.tasks[3].name = "a2_place"
-        self.tasks[4].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"]
@@ -491,12 +463,14 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
         self.tasks = [
             # a1
             Task(
+                "a1_pick",
                 ["a1"],
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1", "obj1"],
             ),
             Task(
+                "a1_place",
                 ["a1"],
                 SingleGoal(keyframes[1][self.robot_idx["a1"]]),
                 type="place",
@@ -504,12 +478,14 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
             ),
             # a2
             Task(
+                "a2_pick",
                 ["a2"],
                 SingleGoal(keyframes[0][self.robot_idx["a2"]]),
                 type="pick",
                 frames=["a2", "obj2"],
             ),
             Task(
+                "a2_place",
                 ["a2"],
                 SingleGoal(keyframes[1][self.robot_idx["a2"]]),
                 type="place",
@@ -517,6 +493,7 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
             ),
             # terminal
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(
                     np.concatenate(
@@ -528,12 +505,6 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
                 ),
             ),
         ]
-
-        self.tasks[0].name = "a1_pick"
-        self.tasks[1].name = "a1_place"
-        self.tasks[2].name = "a2_pick"
-        self.tasks[3].name = "a2_place"
-        self.tasks[4].name = "terminal"
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("a1_place", "a1_pick")
@@ -602,12 +573,14 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
         self.tasks = [
             # a1
             Task(
+                "a1_pick_obj1",
                 ["a1"],
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1", "obj1"],
             ),
             Task(
+                "handover",
                 ["a1", "a2"],
                 GoalSet(translated_handover_poses),
                 # SingleGoal(keyframes[1]),
@@ -615,18 +588,21 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
                 frames=["a2", "obj1"],
             ),
             Task(
+                "a2_place",
                 ["a2"],
                 SingleGoal(keyframes[2][self.robot_idx["a2"]]),
                 type="place",
                 frames=["table", "obj1"],
             ),
             Task(
+                "a1_pick_obj2",
                 ["a1"],
                 SingleGoal(keyframes[4][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1", "obj2"],
             ),
             Task(
+                "a1_place_obj2",
                 ["a1"],
                 SingleGoal(keyframes[5][self.robot_idx["a1"]]),
                 type="place",
@@ -634,18 +610,11 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
             ),
             # terminal
             # Task(["a1", "a2"], SingleGoal(keyframes[3])),
-            Task(["a1", "a2"], GoalSet(rotated_terminal_poses)),
+            Task("terminal", ["a1", "a2"], GoalSet(rotated_terminal_poses)),
         ]
 
         # for t in self.tasks:
             # print(t.goal.sample(None))
-
-        self.tasks[0].name = "a1_pick_obj1"
-        self.tasks[1].name = "handover"
-        self.tasks[2].name = "a2_place"
-        self.tasks[3].name = "a1_pick_obj2"
-        self.tasks[4].name = "a1_place_obj2"
-        self.tasks[5].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             [
@@ -706,12 +675,14 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
         self.tasks = [
             # a1
             Task(
+                "a1_pick_obj1",
                 ["a1"],
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1", "obj1"],
             ),
             Task(
+                "a2_handover",
                 ["a1", "a2"],
                 GoalSet(translated_handover_poses),
                 # SingleGoal(keyframes[1]),
@@ -719,18 +690,21 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
                 frames=["a2", "obj1"],
             ),
             Task(
+                "a2_place",
                 ["a2"],
                 SingleGoal(keyframes[2][self.robot_idx["a2"]]),
                 type="place",
                 frames=["table", "obj1"],
             ),
             Task(
+                "a1_pick_obj2",
                 ["a1"],
                 SingleGoal(keyframes[4][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1", "obj2"],
             ),
             Task(
+                "a1_place_obj2",
                 ["a1"],
                 SingleGoal(keyframes[5][self.robot_idx["a1"]]),
                 type="place",
@@ -738,15 +712,8 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
             ),
             # terminal
             # Task(["a1", "a2"], SingleGoal(keyframes[3])),
-            Task(["a1", "a2"], GoalSet(rotated_terminal_poses)),
+            Task("terminal", ["a1", "a2"], GoalSet(rotated_terminal_poses)),
         ]
-
-        self.tasks[0].name = "a1_pick_obj1"
-        self.tasks[1].name = "a2_handover"
-        self.tasks[2].name = "a2_place"
-        self.tasks[3].name = "a1_pick_obj2"
-        self.tasks[4].name = "a1_place_obj2"
-        self.tasks[5].name = "terminal"
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("a2_handover", "a1_pick_obj1")
@@ -802,16 +769,14 @@ class rai_random_two_dim(SequenceMixin, rai_env):
         cnt = 0
         for r in self.robots:
             for i in range(num_goals):
-                self.tasks.append(Task([r], SingleGoal(keyframes[cnt])))
-                self.tasks[-1].name = f"goal_{r}_{i}"
+                self.tasks.append(Task(f"goal_{r}_{i}", [r], SingleGoal(keyframes[cnt])))
                 self.sequence.append(cnt)
 
                 cnt += 1
 
         q_home = self.C.getJointState()
         # self.tasks.append(Task(self.robots, GoalRegion(self.limits)))
-        self.tasks.append(Task(self.robots, SingleGoal(q_home)))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(q_home)))
 
         random.shuffle(self.sequence)
         self.sequence.append(len(self.tasks) - 1)
@@ -846,14 +811,10 @@ class rai_hallway_two_dim(SequenceMixin, rai_env):
         self.sequence = []
 
         self.tasks = [
-            Task(["a1"], SingleGoal(keyframes[0])),
-            Task(["a2"], SingleGoal(keyframes[1])),
-            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+            Task("a1_goal_1", ["a1"], SingleGoal(keyframes[0])),
+            Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1])),
+            Task("terminal", ["a1", "a2"], SingleGoal(keyframes[2])),
         ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a2_goal_1"
-        self.tasks[2].name = "terminal"
 
         self.sequence = [0, 1, 2]
 
@@ -886,14 +847,10 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
         self.sequence = []
 
         self.tasks = [
-            Task(["a1"], SingleGoal(keyframes[0])),
-            Task(["a2"], SingleGoal(keyframes[1])),
-            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+            Task("a1_goal_1", ["a1"], SingleGoal(keyframes[0])),
+            Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1])),
+            Task("terminal", ["a1", "a2"], SingleGoal(keyframes[2])),
         ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a2_goal_1"
-        self.tasks[2].name = "terminal"
 
         self.sequence = [0, 1, 2]
 
@@ -925,14 +882,10 @@ class rai_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
         self.sequence = []
 
         self.tasks = [
-            Task(["a1"], SingleGoal(keyframes[0])),
-            Task(["a2"], SingleGoal(keyframes[1])),
-            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+            Task("a1_goal_1", ["a1"], SingleGoal(keyframes[0])),
+            Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1])),
+            Task("terminal", ["a1", "a2"], SingleGoal(keyframes[2])),
         ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a2_goal_1"
-        self.tasks[2].name = "terminal"
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("terminal", "a1_goal_1")
@@ -964,14 +917,10 @@ class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai
         self.sequence = []
 
         self.tasks = [
-            Task(["a1"], SingleGoal(keyframes[0])),
-            Task(["a2"], SingleGoal(keyframes[1])),
-            Task(["a1", "a2"], SingleGoal(keyframes[2])),
+            Task("a1_goal_1", ["a1"], SingleGoal(keyframes[0])),
+            Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1])),
+            Task("terminal", ["a1", "a2"], SingleGoal(keyframes[2])),
         ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a2_goal_1"
-        self.tasks[2].name = "terminal"
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("terminal", "a1_goal_1")
@@ -1007,15 +956,16 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
 
         self.tasks = [
             # a1
-            Task(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
-            Task(["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]])),
+            Task("a1_goal_1", ["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
+            Task("a1_goal_2", ["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]])),
             # a2
-            Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
-            Task(["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
+            Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
+            Task("a2_goal_2", ["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
             # a3
-            Task(["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
+            Task("a3_goal_1", ["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
             # terminal
             Task(
+                "terminal",
                 ["a1", "a2", "a3"],
                 SingleGoal(
                     np.concatenate(
@@ -1028,13 +978,6 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
                 ),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a1_goal_2"
-        self.tasks[2].name = "a2_goal_1"
-        self.tasks[3].name = "a2_goal_2"
-        self.tasks[4].name = "a3_goal_1"
-        self.tasks[5].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             [
@@ -1065,15 +1008,16 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env
 
         self.tasks = [
             # a1
-            Task(["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
-            Task(["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]])),
+            Task("a1_goal_1", ["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
+            Task("a1_goal_2", ["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]])),
             # a2
-            Task(["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
-            Task(["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
+            Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
+            Task("a2_goal_2", ["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
             # a3
-            Task(["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
+            Task("a3_goal_1", ["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
             # terminal
             Task(
+                "terminal",
                 ["a1", "a2", "a3"],
                 SingleGoal(
                     np.concatenate(
@@ -1086,13 +1030,6 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env
                 ),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a1_goal_2"
-        self.tasks[2].name = "a2_goal_1"
-        self.tasks[3].name = "a2_goal_2"
-        self.tasks[4].name = "a3_goal_1"
-        self.tasks[5].name = "terminal"
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("a1_goal_2", "a1_goal_1")
@@ -1130,13 +1067,14 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
 
         self.tasks = [
             # a1
-            Task(["a1"], SingleGoal(self.keyframes[0][self.robot_idx["a1"]])),
-            Task(["a1"], SingleGoal(self.keyframes[1][self.robot_idx["a1"]])),
+            Task("a1_goal_1", ["a1"], SingleGoal(self.keyframes[0][self.robot_idx["a1"]])),
+            Task("a1_goal_2", ["a1"], SingleGoal(self.keyframes[1][self.robot_idx["a1"]])),
             # a2
-            Task(["a2"], SingleGoal(self.keyframes[3][self.robot_idx["a2"]])),
-            Task(["a2"], SingleGoal(self.keyframes[4][self.robot_idx["a2"]])),
+            Task("a2_goal_1", ["a2"], SingleGoal(self.keyframes[3][self.robot_idx["a2"]])),
+            Task("a2_goal_2", ["a2"], SingleGoal(self.keyframes[4][self.robot_idx["a2"]])),
             # terminal
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(
                     np.concatenate(
@@ -1148,12 +1086,6 @@ class rai_dual_ur10_arm_env(SequenceMixin, rai_env):
                 ),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a1_goal_2"
-        self.tasks[2].name = "a2_goal_1"
-        self.tasks[3].name = "a2_goal_2"
-        self.tasks[4].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a1_goal_1", "a2_goal_1", "a1_goal_2", "a2_goal_2", "terminal"]
@@ -1186,14 +1118,14 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
         for r in self.robots:
             self.tasks.extend(
                 [
-                    Task([r], SingleGoal(keyframes[cnt + i][self.robot_idx[r]]))
+                    Task("", [r], SingleGoal(keyframes[cnt + i][self.robot_idx[r]]))
                     for i in range(num_waypoints)
                 ]
             )
             cnt += num_waypoints + 1
 
         q_home = self.C.getJointState()
-        self.tasks.append(Task(["a0", "a1", "a2"], SingleGoal(q_home)))
+        self.tasks.append(Task("terminal", ["a0", "a1", "a2"], SingleGoal(q_home)))
 
         self.sequence = []
 
@@ -1236,14 +1168,14 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
         for r in self.robots:
             for _ in range(num_pts):
                 self.tasks.append(
-                    Task([r], SingleGoal(keyframes[cnt][self.robot_idx[r]]))
+                    Task("", [r], SingleGoal(keyframes[cnt][self.robot_idx[r]]))
                 )
                 # self.robot_goals[-1].name =
                 cnt += 1
             cnt += 1
 
         q_home = self.C.getJointState()
-        self.tasks.append(Task(self.robots, SingleGoal(q_home)))
+        self.tasks.append(Task("", self.robots, SingleGoal(q_home)))
 
         self.sequence = []
         for i in range(num_pts):
@@ -1292,6 +1224,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
 
                     self.tasks.append(
                         Task(
+                            robot_name + "_" + task_name + t[0],
                             [robot_name],
                             SingleGoal(t[1][i][self.robot_idx[robot_name]]),
                             type=task_name,
@@ -1299,19 +1232,16 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
                             side_effect=sideeffect,
                         )
                     )
-                    name = robot_name + "_" + task_name + t[0]
-
-                    self.tasks[-1].name = name
 
                 obj_tasks.append((self.tasks[-2].name, self.tasks[-1].name))
 
         self.tasks.append(
             Task(
+                "terminal",
                 ["a1_", "a2_"],
                 SingleGoal(self.C.getJointState()),
             ),
         )
-        self.tasks[-1].name = "terminal"
 
         named_sequence = []
         random.shuffle(obj_tasks)
@@ -1344,12 +1274,14 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
 
         self.tasks = [
             Task(
+                "a1_goal_1",
                 ["a1"],
                 SingleGoal(self.keyframes[0][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1_ur_vacuum", "obj100"],
             ),
             Task(
+                "a1_goal_2",
                 ["a1"],
                 SingleGoal(self.keyframes[1][self.robot_idx["a1"]]),
                 type="place",
@@ -1357,12 +1289,14 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
                 side_effect="remove",
             ),
             Task(
+                "a2_goal_1",
                 ["a2"],
                 SingleGoal(self.keyframes[3][self.robot_idx["a2"]]),
                 type="pick",
                 frames=["a2_ur_vacuum", "obj101"],
             ),
             Task(
+                "a2_goal_2",
                 ["a2"],
                 SingleGoal(self.keyframes[4][self.robot_idx["a2"]]),
                 type="place",
@@ -1370,6 +1304,7 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
                 side_effect="remove",
             ),
             Task(
+                "terminal",
                 ["a1", "a2"],
                 SingleGoal(
                     np.concatenate(
@@ -1381,12 +1316,6 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
                 ),
             ),
         ]
-
-        self.tasks[0].name = "a1_goal_1"
-        self.tasks[1].name = "a1_goal_2"
-        self.tasks[2].name = "a2_goal_1"
-        self.tasks[3].name = "a2_goal_2"
-        self.tasks[4].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a1_goal_1", "a2_goal_1", "a1_goal_2", "a2_goal_2", "terminal"]
@@ -1436,30 +1365,28 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
 
         self.tasks = [
             Task(
+                "a1_pick",
                 ["a1"],
                 SingleGoal(keyframes[0][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1_ur_vacuum", "obj1"],
             ),
             Task(
+                "handover",
                 ["a1", "a2"],
                 SingleGoal(keyframes[1]),
                 type="handover",
                 frames=["a2_ur_vacuum", "obj1"],
             ),
             Task(
+                "a2_place",
                 ["a2"],
                 SingleGoal(keyframes[2][self.robot_idx["a2"]]),
                 type="place",
                 frames=["table", "obj1"],
             ),
-            Task(["a1", "a2"], SingleGoal(keyframes[3])),
+            Task("terminal", ["a1", "a2"], SingleGoal(keyframes[3])),
         ]
-
-        self.tasks[0].name = "a1_pick"
-        self.tasks[1].name = "handover"
-        self.tasks[2].name = "a2_place"
-        self.tasks[3].name = "terminal"
 
         self.sequence = self._make_sequence_from_names(
             ["a1_pick", "handover", "a2_place", "terminal"]
@@ -1500,12 +1427,14 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
 
         self.tasks = [
             Task(
+                "a1_pick_b1",
                 ["a0"],
                 SingleGoal(keyframes[0][self.robot_idx["a0"]]),
                 type="pick",
                 frames=["a0_ur_vacuum", "bottle_1"],
             ),
             Task(
+                "a1_place_b1",
                 ["a0"],
                 SingleGoal(keyframes[1][self.robot_idx["a0"]]),
                 type="place",
@@ -1513,24 +1442,28 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
             ),
             # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
             Task(
+                "a1_pick_b2",
                 ["a0"],
                 SingleGoal(keyframes[3][self.robot_idx["a0"]]),
                 type="pick",
                 frames=["a0_ur_vacuum", "bottle_12"],
             ),
             Task(
+                "a1_place_b2",
                 ["a0"],
                 SingleGoal(keyframes[4][self.robot_idx["a0"]]),
                 type="place",
                 frames=["table", "bottle_12"],
             ),
             Task(
+                "a2_pick_b1",
                 ["a1"],
                 SingleGoal(keyframes[6][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1_ur_vacuum", "bottle_3"],
             ),
             Task(
+                "a2_place_b1",
                 ["a1"],
                 SingleGoal(keyframes[7][self.robot_idx["a1"]]),
                 type="place",
@@ -1538,18 +1471,21 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
             ),
             # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
             Task(
+                "a2_pick_b2",
                 ["a1"],
                 SingleGoal(keyframes[9][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1_ur_vacuum", "bottle_5"],
             ),
             Task(
+                "a2_place_b2",
                 ["a1"],
                 SingleGoal(keyframes[10][self.robot_idx["a1"]]),
                 type="place",
                 frames=["table", "bottle_5"],
             ),
             Task(
+                "terminal",
                 ["a0", "a1"],
                 SingleGoal(
                     np.concatenate(
@@ -1561,16 +1497,6 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
                 ),
             ),
         ]
-
-        self.tasks[0].name = "a1_pick_b1"
-        self.tasks[1].name = "a1_place_b1"
-        self.tasks[2].name = "a1_pick_b2"
-        self.tasks[3].name = "a1_place_b2"
-        self.tasks[4].name = "a2_pick_b1"
-        self.tasks[5].name = "a2_place_b1"
-        self.tasks[6].name = "a2_pick_b2"
-        self.tasks[7].name = "a2_place_b2"
-        self.tasks[8].name = "terminal"
 
         if num_bottles == 2:
             self.sequence = self._make_sequence_from_names(
@@ -1631,12 +1557,14 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
 
         self.tasks = [
             Task(
+                "a1_pick_b1",
                 ["a0"],
                 SingleGoal(keyframes[0][self.robot_idx["a0"]]),
                 type="pick",
                 frames=["a0_ur_vacuum", "bottle_1"],
             ),
             Task(
+                "a1_place_b1",
                 ["a0"],
                 SingleGoal(keyframes[1][self.robot_idx["a0"]]),
                 type="place",
@@ -1644,24 +1572,28 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
             ),
             # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
             Task(
+                "a1_pick_b2",
                 ["a0"],
                 SingleGoal(keyframes[3][self.robot_idx["a0"]]),
                 type="pick",
                 frames=["a0_ur_vacuum", "bottle_12"],
             ),
             Task(
+                "a1_place_b2",
                 ["a0"],
                 SingleGoal(keyframes[4][self.robot_idx["a0"]]),
                 type="place",
                 frames=["table", "bottle_12"],
             ),
             Task(
+                "a2_pick_b1",
                 ["a1"],
                 SingleGoal(keyframes[6][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1_ur_vacuum", "bottle_3"],
             ),
             Task(
+                "a2_place_b1",
                 ["a1"],
                 SingleGoal(keyframes[7][self.robot_idx["a1"]]),
                 type="place",
@@ -1669,18 +1601,21 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
             ),
             # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
             Task(
+                "a2_pick_b2",
                 ["a1"],
                 SingleGoal(keyframes[9][self.robot_idx["a1"]]),
                 type="pick",
                 frames=["a1_ur_vacuum", "bottle_5"],
             ),
             Task(
+                "a2_place_b2",
                 ["a1"],
                 SingleGoal(keyframes[10][self.robot_idx["a1"]]),
                 type="place",
                 frames=["table", "bottle_5"],
             ),
             Task(
+                "terminal",
                 ["a0", "a1"],
                 SingleGoal(
                     np.concatenate(
@@ -1692,16 +1627,6 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
                 ),
             ),
         ]
-
-        self.tasks[0].name = "a1_pick_b1"
-        self.tasks[1].name = "a1_place_b1"
-        self.tasks[2].name = "a1_pick_b2"
-        self.tasks[3].name = "a1_place_b2"
-        self.tasks[4].name = "a2_pick_b1"
-        self.tasks[5].name = "a2_place_b1"
-        self.tasks[6].name = "a2_pick_b2"
-        self.tasks[7].name = "a2_place_b2"
-        self.tasks[8].name = "terminal"
         
         if num_bottles == 2:
             self.graph = DependencyGraph()
@@ -1790,14 +1715,13 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
                 if t == "pick":
                     ee_name = robot + "ur_vacuum"
                     self.tasks.append(
-                        Task([robot], SingleGoal(k), t, frames=[ee_name, obj])
+                        Task(robot + t + "_" + obj + "_" + str(cnt), [robot], SingleGoal(k), t, frames=[ee_name, obj])
                     )
                 else:
                     self.tasks.append(
-                        Task([robot], SingleGoal(k), t, frames=["table", obj])
+                        Task(robot + t + "_" + obj + "_" + str(cnt), [robot], SingleGoal(k), t, frames=["table", obj])
                     )
 
-                self.tasks[-1].name = robot + t + "_" + obj + "_" + str(cnt)
                 cnt += 1
 
                 if obj in action_names:
@@ -1805,8 +1729,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
                 else:
                     action_names[obj] = [self.tasks[-1].name]
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         # initialize the sequence with picking the first object
         named_sequence = [self.tasks[0].name]
@@ -1934,16 +1857,13 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
-                            Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
+                            Task(robots[0] + t + "_" + box_name + "_" + str(cnt), robots, SingleGoal(k), t, frames=[ee_name, box_name])
                         )
                     else:
                         self.tasks.append(
-                            Task(robots, SingleGoal(k), t, frames=["tray", box_name])
+                            Task(robots[0] + t + "_" + box_name + "_" + str(cnt), robots, SingleGoal(k), t, frames=["tray", box_name])
                         )
 
-                    self.tasks[-1].name = (
-                        robots[0] + t + "_" + box_name + "_" + str(cnt)
-                    )
                     cnt += 1
             else:
                 for t, k in zip(handover_task_names, qs[0]):
@@ -1951,6 +1871,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
                             Task(
+                                robots[0] + t + "_" + box_name + "_" + str(cnt),
                                 [robots[0]],
                                 SingleGoal(k[self.robot_idx[robots[0]]]),
                                 t,
@@ -1967,6 +1888,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                             #     frames=[ee_name, box_name],
                             # )
                             Task(
+                                robots[0] + t + "_" + box_name + "_" + str(cnt),
                                 self.robots,
                                 GoalSet([q[1] for q in qs]),
                                 t,
@@ -1976,6 +1898,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                     else:
                         self.tasks.append(
                             Task(
+                                robots[0] + t + "_" + box_name + "_" + str(cnt),
                                 [robots[1]],
                                 SingleGoal(k[self.robot_idx[robots[1]]]),
                                 t,
@@ -1983,13 +1906,9 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
                             )
                         )
 
-                    self.tasks[-1].name = (
-                        robots[0] + t + "_" + box_name + "_" + str(cnt)
-                    )
                     cnt += 1
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         # for t in self.tasks:
         #     arr = t.goal.sample(None)
@@ -2071,16 +1990,14 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
-                            Task(robots, SingleGoal(k), t, frames=[ee_name, box_name])
+                            Task(task_name, robots, SingleGoal(k), t, frames=[ee_name, box_name])
                         )
                         last_robot_task[robots[0]] = task_name
                     else:
                         self.tasks.append(
-                            Task(robots, SingleGoal(k), t, frames=["tray", box_name])
+                            Task(task_name, robots, SingleGoal(k), t, frames=["tray", box_name])
                         )
                         last_robot_task[robots[0]] = task_name
-
-                    self.tasks[-1].name = task_name
 
                     if prev_task is not None:
                         self.graph.add_dependency(task_name, prev_task)
@@ -2096,6 +2013,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
                             Task(
+                                task_name,
                                 [robots[0]],
                                 SingleGoal(k[self.robot_idx[robots[0]]]),
                                 t,
@@ -2124,6 +2042,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
                             #     frames=[ee_name, box_name],
                             # )
                             Task(
+                                task_name,
                                 self.robots,
                                 GoalSet([q[1] for q in qs]),
                                 t,
@@ -2147,6 +2066,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
 
                         self.tasks.append(
                             Task(
+                                task_name,
                                 [robots[1]],
                                 SingleGoal(k[self.robot_idx[robots[1]]]),
                                 t,
@@ -2173,8 +2093,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
 
                     cnt += 1
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         for r in self.robots:
             self.graph.add_dependency("terminal", last_robot_task[r])
@@ -2209,12 +2128,11 @@ class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
                 if t == "pick":
                     ee_name = r + "gripper_center"
                     appearance_pose = np.array([0, 0, 0.6, 1, 0, 0, 0])
-                    task = Task([r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
+                    task = Task(r + t + "_" + b + "_" + str(cnt), [r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
                     self.tasks.append(task)
                 else:
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
+                    self.tasks.append(Task(r + t + "_" + b + "_" + str(cnt), [r], SingleGoal(k), t, frames=["table", b]))
 
-                self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
                 cnt += 1
 
                 # if b in action_names:
@@ -2222,8 +2140,7 @@ class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
                 # else:
                 #     action_names[b] = [self.tasks[-1].name]
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
 
@@ -2267,13 +2184,13 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         for r, b, qs, g in keyframes:
             cnt = 0
             for t, k in zip(task_names, qs):
+                task_name = r + t + "_" + b + "_" + str(cnt)
                 if t == "pick":
                     ee_name = r + "gripper_center"
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=[ee_name, b]))
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b]))
                 else:
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b]))
 
-                self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
                 cnt += 1
 
                 # if b in action_names:
@@ -2281,8 +2198,7 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
                 # else:
                 #     action_names[b] = [self.tasks[-1].name]
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
 
@@ -2338,11 +2254,10 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
 
                 if t == "pick":
                     ee_name = r + "gripper_center"
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=[ee_name, b]))
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b]))
                 else:
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b]))
 
-                self.tasks[-1].name = task_name
                 cnt += 1
 
                 if prev_task_names[r] is not None:
@@ -2356,8 +2271,7 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
 
                 prev_task_names[r] = task_name
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         for r in self.robots:
             self.graph.add_dependency("terminal", prev_task_names[r])
@@ -2403,21 +2317,23 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
             for box, poses in robot_tasks:
                 cnt = 0
                 for t, k in zip(task_names, poses):
+                    task_name = robot_prefix + t + "_" + box + "_" + str(cnt)
                     if t == "pick":
                         ee_name = robot_prefix + "gripper"
                         self.tasks.append(
                             Task(
+                                task_name,
                                 [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
                             )
                         )
                     else:
                         self.tasks.append(
                             Task(
+                                task_name,
                                 [robot_prefix], SingleGoal(k), t, frames=["table", box]
                             )
                         )
 
-                    self.tasks[-1].name = robot_prefix + t + "_" + box + "_" + str(cnt)
                     cnt += 1
 
                     # if b in action_names:
@@ -2425,8 +2341,7 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
                     # else:
                     #     action_names[b] = [self.tasks[-1].name]
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
 
@@ -2478,12 +2393,14 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
                         ee_name = robot_prefix + "gripper"
                         self.tasks.append(
                             Task(
+                                task_name,
                                 [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
                             )
                         )
                     else:
                         self.tasks.append(
                             Task(
+                                task_name,
                                 [robot_prefix], SingleGoal(k), t, frames=["table", box]
                             )
                         )
@@ -2491,14 +2408,12 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
                     if prev_task_name is not None:
                         self.graph.add_dependency(task_name, prev_task_name)
 
-                    self.tasks[-1].name = task_name
                     prev_task_name = task_name
                     cnt += 1
 
             self.graph.add_dependency("terminal", prev_task_name)
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         # random.shuffle(self.tasks)
 
@@ -2541,13 +2456,13 @@ class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
         for r, ee_name, b, qs, appearance_pose in keyframes:
             cnt = 0
             for t, k in zip(task_names, qs):
+                task_name = r + t + "_" + b + "_" + str(cnt)
                 if t == "pick":
-                    task = Task([r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
+                    task = Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
                     self.tasks.append(task)
                 else:
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b]))
 
-                self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
                 cnt += 1
 
                 # if b in action_names:
@@ -2555,8 +2470,7 @@ class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
                 # else:
                 #     action_names[b] = [self.tasks[-1].name]
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
 
@@ -2591,13 +2505,13 @@ class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
         for r, ee_name, b, qs, appearance_pose in keyframes:
             cnt = 0
             for t, k in zip(task_names, qs):
+                task_name = r + t + "_" + b + "_" + str(cnt)
                 if t == "pick":
-                    task = Task([r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
+                    task = Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
                     self.tasks.append(task)
                 else:
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b]))
 
-                self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
                 cnt += 1
 
                 # if b in action_names:
@@ -2605,8 +2519,7 @@ class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
                 # else:
                 #     action_names[b] = [self.tasks[-1].name]
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
 
@@ -2646,13 +2559,13 @@ class rai_coop_tamp_architecture(SequenceMixin, rai_env):
         for r, ee_name, b, qs, appearance_pose in keyframes:
             cnt = 0
             for t, k in zip(task_names, qs):
+                task_name = r + t + "_" + b + "_" + str(cnt)
                 if t == "pick":
-                    task = Task([r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
+                    task = Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b], side_effect="make_appear", side_effect_data=appearance_pose)
                     self.tasks.append(task)
                 else:
-                    self.tasks.append(Task([r], SingleGoal(k), t, frames=["table", b]))
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b]))
 
-                self.tasks[-1].name = r + t + "_" + b + "_" + str(cnt)
                 cnt += 1
 
                 # if b in action_names:
@@ -2660,8 +2573,7 @@ class rai_coop_tamp_architecture(SequenceMixin, rai_env):
                 # else:
                 #     action_names[b] = [self.tasks[-1].name]
 
-        self.tasks.append(Task(self.robots, SingleGoal(self.C.getJointState())))
-        self.tasks[-1].name = "terminal"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
 
