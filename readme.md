@@ -26,7 +26,7 @@ Does the same thing as the command above, and is recommended. In that case, the 
 
 After the installation, you can run 
 ```
-python3 examples/run_planner.py abstract_test  --max_time=10 --optimize
+python3 examples/run_planner.py abstract.test  --max_time=10 --optimize
 ```
 to test if the installation went well.
 This runs one of the abstract environments that do not require any more fancy backend with the default planner.
