@@ -240,6 +240,7 @@ class rai_linked_2d_puzzle(SequenceMixin, rai_env):
             Task(
                 self.robots,
                 SingleGoal(home_pose),
+                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, -1, 0, 0]]), np.array([0]))]
             ),
         ]
 
