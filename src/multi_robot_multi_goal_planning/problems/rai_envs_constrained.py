@@ -202,9 +202,14 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
-class rai_bimanual_husky(SequenceMixin, rai_env):
+class rai_bimanual_husky_stacking(SequenceMixin, rai_env):
     def __init__(self):
-        pass
+        self.C = rai_config.make_bimanual_husky_box_stacking_env()
+
+
+class rai_bimanual_husky_strut(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_bimanual_husky_strut_env()
 
 
 @register("rai.constrained_2d_puzzle")
