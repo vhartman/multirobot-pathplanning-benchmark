@@ -90,33 +90,6 @@ def main():
         help="How the agent specific cost functions are reduced to one single number (default: max)",
     )
     parser.add_argument(
-        "--prm_k_nearest",
-        action="store_true",
-        help="Use k-nearest (default: False)",
-    )
-    parser.add_argument(
-        "--prm_informed_sampling",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=True,
-        help="Generate samples near a previously found path (default: False)",
-    )
-    parser.add_argument(
-        "--prm_shortcutting",
-        action="store_true",
-        help="Try shortcutting the solution.",
-    )
-    parser.add_argument(
-        "--prm_locally_informed_sampling",
-        action="store_true",
-        help="Try shortcutting the solution.",
-    )
-    parser.add_argument(
-        "--prm_direct_sampling",
-        type=lambda x: x.lower() in ["true", "1", "yes"],
-        default=True,
-        help="Generate samples near a previously found path (default: False)",
-    )
-    parser.add_argument(
         "--save",
         action="store_true",
         help="Try shortcutting the solution.",
@@ -130,6 +103,11 @@ def main():
         "--insert_transition_nodes",
         action="store_true",
         help="Shortcut the path. (default: False)",
+    )
+    parser.add_argument(
+        "--show_plots",
+        action="store_true",
+        help="Show some analytics plots. (default: False)",
     )
 
     args = parser.parse_args()
@@ -160,11 +138,6 @@ def main():
         config = CompositePRMConfig()
 
         config.distance_metric = args.distance_metric
-        # config.use_k_nearest = args.prm_k_nearest
-        # config.try_informed_sampling = args.prm_informed_sampling
-        # config.try_shortcutting = args.prm_shortcutting
-        # config.try_direct_informed_sampling = args.prm_direct_sampling
-        # config.locally_informed_sampling = args.prm_locally_informed_sampling
 
         planner = CompositePRM(env, config)
 
@@ -251,6 +224,7 @@ def main():
     )
 
     interpolated_path = interpolate_path(path, 0.05)
+    shortcut_discretized_path = interpolate_path(shortcut_path)
 
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))
@@ -264,76 +238,77 @@ def main():
     print("cost", info["costs"])
     print("comp_time", info["times"])
 
-    plt.figure()
-    plt.plot(info["times"], info["costs"], "-o", drawstyle="steps-post")
+    if args.show_plots:
+        plt.figure()
+        plt.plot(info["times"], info["costs"], "-o", drawstyle="steps-post")
 
-    plt.figure()
-    for name, info in zip(
-        ["task-shortcut", "mode-shortcut"], [info_shortcut, info_single_mode_shortcut]
-    ):
-        plt.plot(info[1], info[0], drawstyle="steps-post", label=name)
+        plt.figure()
+        for name, info in zip(
+            ["task-shortcut", "mode-shortcut"], [info_shortcut, info_single_mode_shortcut]
+        ):
+            plt.plot(info[1], info[0], drawstyle="steps-post", label=name)
 
-    plt.xlabel("time")
-    plt.ylabel("cost")
-    plt.legend()
+        plt.xlabel("time")
+        plt.ylabel("cost")
+        plt.legend()
 
-    mode_switch_indices = []
-    for i in range(len(interpolated_path) - 1):
-        if interpolated_path[i].mode != interpolated_path[i + 1].mode:
-            mode_switch_indices.append(i)
+        mode_switch_indices = []
+        for i in range(len(interpolated_path) - 1):
+            if interpolated_path[i].mode != interpolated_path[i + 1].mode:
+                mode_switch_indices.append(i)
 
-    plt.figure("Path cost")
-    plt.plot(
-        env.batch_config_cost(interpolated_path[:-1], interpolated_path[1:]),
-        label="Original",
-    )
-    plt.plot(
-        env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:]), label="Shortcut"
-    )
-    plt.plot(mode_switch_indices, [0.1] * len(mode_switch_indices), "o")
-    plt.legend()
+        plt.figure("Path cost")
+        plt.plot(
+            env.batch_config_cost(interpolated_path[:-1], interpolated_path[1:]),
+            label="Original",
+        )
+        plt.plot(
+            env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:]), label="Shortcut"
+        )
+        plt.plot(mode_switch_indices, [0.1] * len(mode_switch_indices), "o")
+        plt.legend()
 
-    plt.figure("Cumulative path cost")
-    plt.plot(
-        np.cumsum(env.batch_config_cost(interpolated_path[:-1], interpolated_path[1:])),
-        label="Original",
-    )
-    plt.plot(
-        np.cumsum(env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])),
-        label="Shortcut",
-    )
-    plt.plot(mode_switch_indices, [0.1] * len(mode_switch_indices), "o")
-    plt.legend()
+        plt.figure("Cumulative path cost")
+        plt.plot(
+            np.cumsum(env.batch_config_cost(interpolated_path[:-1], interpolated_path[1:])),
+            label="Original",
+        )
+        plt.plot(
+            np.cumsum(env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])),
+            label="Shortcut",
+        )
+        plt.plot(mode_switch_indices, [0.1] * len(mode_switch_indices), "o")
+        plt.legend()
 
-    shortcut_discretized_path = interpolate_path(shortcut_path)
+        plt.figure()
 
-    plt.figure()
+        plt.plot(
+            [pt.q[0][0] for pt in interpolated_path],
+            [pt.q[0][1] for pt in interpolated_path],
+            "o-",
+        )
+        plt.plot(
+            [pt.q[1][0] for pt in interpolated_path],
+            [pt.q[1][1] for pt in interpolated_path],
+            "o-",
+        )
 
-    plt.plot(
-        [pt.q[0][0] for pt in interpolated_path],
-        [pt.q[0][1] for pt in interpolated_path],
-        "o-",
-    )
-    plt.plot(
-        [pt.q[1][0] for pt in interpolated_path],
-        [pt.q[1][1] for pt in interpolated_path],
-        "o-",
-    )
+        plt.plot(
+            [pt.q[0][0] for pt in shortcut_discretized_path],
+            [pt.q[0][1] for pt in shortcut_discretized_path],
+            "o--",
+        )
+        plt.plot(
+            [pt.q[1][0] for pt in shortcut_discretized_path],
+            [pt.q[1][1] for pt in shortcut_discretized_path],
+            "o--",
+        )
 
-    plt.plot(
-        [pt.q[0][0] for pt in shortcut_discretized_path],
-        [pt.q[0][1] for pt in shortcut_discretized_path],
-        "o--",
-    )
-    plt.plot(
-        [pt.q[1][0] for pt in shortcut_discretized_path],
-        [pt.q[1][1] for pt in shortcut_discretized_path],
-        "o--",
-    )
-
-    plt.show()
+        plt.show()
 
     print("displaying path from planner")
+    # display starting configuration to not run it immediately
+    env.show(blocking=True)
     env.display_path(
         interpolated_path,
         stop=False,
