@@ -131,12 +131,7 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 # very simple task:
 # make the robots go back and forth.
 # should be trivial for decoupled methods, hard for joint methods that sample partial goals
-# Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
-@register([
-    ("rai.one_agent_many_goals", {}),
-    ("rai.one_agent_many_goals_no_rot", {"agents_can_rotate": False}),
-])
-class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
+class rai_two_dim_env_no_obs_base(rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
         # self.C.view(True)
@@ -173,6 +168,15 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
                 SingleGoal(self.C.getJointState()),
             ),
         ]
+
+# Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
+@register([
+    ("rai.one_agent_many_goals", {}),
+    ("rai.one_agent_many_goals_no_rot", {"agents_can_rotate": False}),
+])
+class rai_two_dim_env_no_obs(SequenceMixin, rai_two_dim_env_no_obs_base):
+    def __init__(self, agents_can_rotate=True):
+        rai_two_dim_env_no_obs_base.__init__(self, agents_can_rotate)
 
         self.sequence = self._make_sequence_from_names(
             ["a2_goal_0", "a2_goal_1", "a2_goal_2", "a2_goal_3", "a1_goal", "terminal"]
@@ -190,43 +194,9 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_env):
     ("rai.two_agents_many_goals_dep", {}),
     ("rai.two_agents_many_goals_dep_no_rot", {"agents_can_rotate": False}),
 ])
-class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
+class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_two_dim_env_no_obs_base):
     def __init__(self, agents_can_rotate=True):
-        self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2"]
-
-        rai_env.__init__(self)
-
-        # r1 starts at both negative
-        r1_state = self.C.getJointState()[self.robot_idx["a1"]]
-        # r2 starts at both positive
-        r2_state = self.C.getJointState()[self.robot_idx["a2"]]
-
-        r1_goal = r1_state * 1.0
-        r1_goal[:2] = [-0.5, 0.5]
-
-        r2_goal_1 = r2_state * 1.0
-        r2_goal_1[:2] = [0.5, -0.5]
-        r2_goal_2 = r2_state * 1.0
-        r2_goal_2[:2] = [0.5, 0.5]
-
-        self.tasks = [
-            # r1
-            Task("a1_goal", ["a1"], SingleGoal(r1_goal)),
-            # r2
-            Task("a2_goal_0", ["a2"], SingleGoal(r2_goal_1)),
-            Task("a2_goal_1", ["a2"], SingleGoal(r2_goal_2)),
-            Task("a2_goal_2", ["a2"], SingleGoal(r2_goal_1)),
-            Task("a2_goal_3", ["a2"], SingleGoal(r2_goal_2)),
-            # terminal mode
-            Task(
-                "terminal",
-                ["a1", "a2"],
-                SingleGoal(self.C.getJointState()),
-            ),
-        ]
+        rai_two_dim_env_no_obs_base.__init__(self, agents_can_rotate)
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("a2_goal_1", "a2_goal_0")
@@ -236,7 +206,7 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_env):
         self.graph.add_dependency("terminal", "a1_goal")
         self.graph.add_dependency("terminal", "a2_goal_3")
 
-        print(self.graph)
+        # print(self.graph)
 
         self.collision_tolerance = 0.001
 
@@ -372,10 +342,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         self.spec.manipulation = ManipulationType.STATIC
 
 
-# best max-cost sol: 3.41
-# best sum-cost sol: 5.922
-@register("rai.piano")
-class rai_two_dim_simple_manip(SequenceMixin, rai_env):
+class rai_two_dim_simple_manip_base(rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_piano_mover_env()
         # self.C.view(True)
@@ -431,6 +398,20 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
                 ),
             ),
         ]
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {
+            "a1": np.array(keyframes[0][self.robot_idx["a1"]]),
+            "a2": np.array(keyframes[1][self.robot_idx["a2"]])
+        }
+
+# best max-cost sol: 3.41
+# best sum-cost sol: 5.922
+@register("rai.piano")
+class rai_two_dim_simple_manip(SequenceMixin, rai_two_dim_simple_manip_base):
+    def __init__(self):
+        rai_two_dim_simple_manip_base.__init__(self)
 
         self.sequence = self._make_sequence_from_names(
             ["a2_pick", "a1_pick", "a2_place", "a1_place", "terminal"]
@@ -443,70 +424,10 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_env):
 
         self.prev_mode = self.start_mode
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {
-            "a1": np.array(keyframes[0][self.robot_idx["a1"]]),
-            "a2": np.array(keyframes[1][self.robot_idx["a2"]])
-        }
-
 @register("rai.piano_dep")
-class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
+class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_two_dim_simple_manip_base):
     def __init__(self):
-        self.C, keyframes = rai_config.make_piano_mover_env()
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2"]
-
-        rai_env.__init__(self)
-
-        self.manipulating_env = True
-
-        self.tasks = [
-            # a1
-            Task(
-                "a1_pick",
-                ["a1"],
-                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1", "obj1"],
-            ),
-            Task(
-                "a1_place",
-                ["a1"],
-                SingleGoal(keyframes[1][self.robot_idx["a1"]]),
-                type="place",
-                frames=["table", "obj1"],
-            ),
-            # a2
-            Task(
-                "a2_pick",
-                ["a2"],
-                SingleGoal(keyframes[0][self.robot_idx["a2"]]),
-                type="pick",
-                frames=["a2", "obj2"],
-            ),
-            Task(
-                "a2_place",
-                ["a2"],
-                SingleGoal(keyframes[1][self.robot_idx["a2"]]),
-                type="place",
-                frames=["table", "obj2"],
-            ),
-            # terminal
-            Task(
-                "terminal",
-                ["a1", "a2"],
-                SingleGoal(
-                    np.concatenate(
-                        [
-                            keyframes[2][self.robot_idx["a1"]],
-                            keyframes[2][self.robot_idx["a2"]],
-                        ]
-                    )
-                ),
-            ),
-        ]
+        rai_two_dim_simple_manip_base.__init__(self)
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("a1_place", "a1_pick")
@@ -515,8 +436,6 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
         self.graph.add_dependency("terminal", "a1_place")
         self.graph.add_dependency("terminal", "a2_place")
 
-        print(self.graph)
-
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
@@ -524,19 +443,9 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_env):
         self.prev_mode = self.start_mode
 
         self.spec.dependency = DependencyType.UNORDERED
-        
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {
-            "a1": np.array(keyframes[0][self.robot_idx["a1"]]),
-            "a2": np.array(keyframes[1][self.robot_idx["a2"]])
-        }
 
 
-# best cost found for max-cost is 17.64
-# best cost found for sum-cost is 25.28
-@register("rai.handover")
-class rai_two_dim_handover(SequenceMixin, rai_env):
+class rai_two_dim_handover_base(rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_two_dim_handover()
         # self.C.view(True)
@@ -615,19 +524,15 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
             Task("terminal", ["a1", "a2"], GoalSet(rotated_terminal_poses)),
         ]
 
-        # for t in self.tasks:
-            # print(t.goal.sample(None))
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
 
-        self.sequence = self._make_sequence_from_names(
-            [
-                "a1_pick_obj1",
-                "handover",
-                "a1_pick_obj2",
-                "a1_place_obj2",
-                "a2_place",
-                "terminal",
-            ]
-        )
+# best cost found for max-cost is 17.64
+# best cost found for sum-cost is 25.28
+@register("rai.handover")
+class rai_two_dim_handover(SequenceMixin, rai_two_dim_handover_base):
+    def __init__(self):
+        rai_two_dim_handover_base.__init__(self)
 
         # self.export_tasks("2d_handover_tasks.txt")
 
@@ -640,82 +545,9 @@ class rai_two_dim_handover(SequenceMixin, rai_env):
 
 
 @register("rai.2d_handover_dep")
-class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_env):
+class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_two_dim_handover_base):
     def __init__(self):
-        self.C, keyframes = rai_config.make_two_dim_handover()
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2"]
-
-        rai_env.__init__(self)
-
-        self.manipulating_env = True
-
-        translated_handover_poses = []
-        for _ in range(100):
-            new_pose = keyframes[1] * 1.0
-            translation = np.random.rand(2) * 1 - 0.5
-            new_pose[0:2] += translation
-            new_pose[3:5] += translation
-
-            translated_handover_poses.append(new_pose)
-
-        translated_handover_poses.append(keyframes[1])
-
-        # generate set of random translations of the original keyframe
-        rotated_terminal_poses = []
-        for _ in range(100):
-            new_pose = keyframes[3] * 1.0
-            rot = np.random.rand(2) * 6 - 3
-            new_pose[2] = rot[0]
-            new_pose[5] = rot[1]
-
-            rotated_terminal_poses.append(new_pose)
-
-        rotated_terminal_poses.append(keyframes[3])
-
-        self.tasks = [
-            # a1
-            Task(
-                "a1_pick_obj1",
-                ["a1"],
-                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1", "obj1"],
-            ),
-            Task(
-                "a2_handover",
-                ["a1", "a2"],
-                GoalSet(translated_handover_poses),
-                # SingleGoal(keyframes[1]),
-                type="hanover",
-                frames=["a2", "obj1"],
-            ),
-            Task(
-                "a2_place",
-                ["a2"],
-                SingleGoal(keyframes[2][self.robot_idx["a2"]]),
-                type="place",
-                frames=["table", "obj1"],
-            ),
-            Task(
-                "a1_pick_obj2",
-                ["a1"],
-                SingleGoal(keyframes[4][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1", "obj2"],
-            ),
-            Task(
-                "a1_place_obj2",
-                ["a1"],
-                SingleGoal(keyframes[5][self.robot_idx["a1"]]),
-                type="place",
-                frames=["table", "obj2"],
-            ),
-            # terminal
-            # Task(["a1", "a2"], SingleGoal(keyframes[3])),
-            Task("terminal", ["a1", "a2"], GoalSet(rotated_terminal_poses)),
-        ]
+        rai_two_dim_handover_base.__init__(self)
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("a2_handover", "a1_pick_obj1")
@@ -791,13 +623,7 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
 
-# best solution found with sum-cost: xx (independent of rotation)
-# best solution found with max-cost: xx (independent of rotation)
-@register([
-    ("rai.other_hallway", {}),
-    ("rai.other_hallway_no_rot", {"agents_can_rotate": False}),
-])
-class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
+class rai_alternative_hallway_two_dim_base(rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C, keyframes = rai_config.make_two_dim_short_tunnel_env(
             agents_can_rotate=agents_can_rotate
@@ -816,10 +642,6 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
             Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1])),
             Task("terminal", ["a1", "a2"], SingleGoal(keyframes[2])),
         ]
-
-        self.sequence = [0, 1, 2]
-
-        BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.02
@@ -832,27 +654,26 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_env):
             "a2": np.array(keyframes[1])
         }
 
+# best solution found with sum-cost: xx (independent of rotation)
+# best solution found with max-cost: xx (independent of rotation)
+@register([
+    ("rai.other_hallway", {}),
+    ("rai.other_hallway_no_rot", {"agents_can_rotate": False}),
+])
+class rai_alternative_hallway_two_dim(SequenceMixin, rai_alternative_hallway_two_dim_base):
+    def __init__(self, agents_can_rotate=True):
+        rai_alternative_hallway_two_dim_base.__init__(self, agents_can_rotate)
+
+        self.sequence = [0, 1, 2]
+
+        BaseModeLogic.__init__(self)
+
 
 @register("rai.other_hallway_dep")
-class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_env):
+class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_alternative_hallway_two_dim_base):
     def __init__(self, agents_can_rotate=True):
-        self.C, keyframes = rai_config.make_two_dim_short_tunnel_env(
-            agents_can_rotate=agents_can_rotate
-        )
-        # self.C.view(True)
+        rai_alternative_hallway_two_dim_base.__init__(self, agents_can_rotate)
 
-        self.robots = ["a1", "a2"]
-
-        rai_env.__init__(self)
-
-        self.tasks = []
-        self.sequence = []
-
-        self.tasks = [
-            Task("a1_goal_1", ["a1"], SingleGoal(keyframes[0])),
-            Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1])),
-            Task("terminal", ["a1", "a2"], SingleGoal(keyframes[2])),
-        ]
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("terminal", "a1_goal_1")
@@ -862,22 +683,10 @@ class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai
 
         BaseModeLogic.__init__(self)
 
-        self.collision_tolerance = 0.01
-
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        self.spec.manipulation = ManipulationType.STATIC
         self.spec.dependency = DependencyType.UNORDERED
 
-        self.safe_pose = {
-            "a1": np.array(keyframes[0]),
-            "a2": np.array(keyframes[1])
-        }
 
-
-# best sum-cost: 12.9
-# best max-cost: 6.56
-@register("rai.three_agents")
-class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
+class rai_two_dim_three_agent_env_base(rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_2d_rai_env_3_agents()
         # self.C.view(True)
@@ -910,6 +719,18 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
                 ),
             ),
         ]
+
+        self.collision_tolerance = 0.01
+
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.manipulation = ManipulationType.STATIC
+
+# best sum-cost: 12.9
+# best max-cost: 6.56
+@register("rai.three_agents")
+class rai_two_dim_three_agent_env(SequenceMixin, rai_two_dim_three_agent_env_base):
+    def __init__(self):
+        rai_two_dim_three_agent_env_base.__init__(self)
 
         self.sequence = self._make_sequence_from_names(
             [
@@ -924,44 +745,10 @@ class rai_two_dim_three_agent_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.collision_tolerance = 0.01
-
-        self.spec.manipulation = ManipulationType.STATIC
-
 @register("rai.three_agent_many_goals_dep")
-class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env):
+class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_two_dim_three_agent_env_base):
     def __init__(self):
-        self.C, keyframes = rai_config.make_2d_rai_env_3_agents()
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2", "a3"]
-
-        rai_env.__init__(self)
-
-        self.tasks = [
-            # a1
-            Task("a1_goal_1", ["a1"], SingleGoal(keyframes[0][self.robot_idx["a1"]])),
-            Task("a1_goal_2", ["a1"], SingleGoal(keyframes[4][self.robot_idx["a1"]])),
-            # a2
-            Task("a2_goal_1", ["a2"], SingleGoal(keyframes[1][self.robot_idx["a2"]])),
-            Task("a2_goal_2", ["a2"], SingleGoal(keyframes[3][self.robot_idx["a2"]])),
-            # a3
-            Task("a3_goal_1", ["a3"], SingleGoal(keyframes[2][self.robot_idx["a3"]])),
-            # terminal
-            Task(
-                "terminal",
-                ["a1", "a2", "a3"],
-                SingleGoal(
-                    np.concatenate(
-                        [
-                            keyframes[5][self.robot_idx["a1"]],
-                            keyframes[5][self.robot_idx["a2"]],
-                            keyframes[5][self.robot_idx["a3"]],
-                        ]
-                    )
-                ),
-            ),
-        ]
+        rai_two_dim_three_agent_env_base.__init__(self)
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("a1_goal_2", "a1_goal_1")
@@ -976,11 +763,6 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_env
 
         print(self.start_mode)
         print(self._terminal_task_ids)
-
-        self.collision_tolerance = 0.01
-
-        self.spec.dependency = DependencyType.UNORDERED
-        self.spec.manipulation = ManipulationType.STATIC
 
 
 ##############################
@@ -1340,12 +1122,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
-
-@register([
-    ("rai.bottles", {}),
-    ("rai.bottles_single", {"num_bottles": 1}),
-])
-class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
+class rai_ur10_arm_bottle_env_base(rai_env):
     def __init__(self, num_bottles=2):
         assert num_bottles in [1,2]
 
@@ -1429,6 +1206,25 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
                 ),
             ),
         ]
+
+        self.collision_tolerance = 0.0000
+        self.collision_resolution = 0.001
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+@register([
+    ("rai.bottles", {}),
+    ("rai.bottles_single", {"num_bottles": 1}),
+])
+class rai_ur10_arm_bottle_env(SequenceMixin, rai_ur10_arm_bottle_env_base):
+    def __init__(self, num_bottles=2):
+        rai_ur10_arm_bottle_env_base.__init__(self, num_bottles)
 
         if num_bottles == 2:
             self.sequence = self._make_sequence_from_names(
@@ -1460,105 +1256,14 @@ class rai_ur10_arm_bottle_env(SequenceMixin, rai_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.collision_tolerance = 0.0000
-        self.collision_resolution = 0.001
-
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
-
 @register([
     ("rai.bottles_dep", {}),
     ("rai.bottles_single_dep", {"num_bottles": 1}),
 ])
-class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
+class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_ur10_arm_bottle_env_base):
     def __init__(self, num_bottles=2):
-        assert num_bottles in [1,2]
+        rai_ur10_arm_bottle_env_base.__init__(self, num_bottles)
 
-        self.C, keyframes = rai_config.make_bottle_insertion()
-
-        self.robots = ["a0", "a1"]
-
-        rai_env.__init__(self)
-
-        self.manipulating_env = True
-
-        self.tasks = [
-            Task(
-                "a1_pick_b1",
-                ["a0"],
-                SingleGoal(keyframes[0][self.robot_idx["a0"]]),
-                type="pick",
-                frames=["a0_ur_vacuum", "bottle_1"],
-            ),
-            Task(
-                "a1_place_b1",
-                ["a0"],
-                SingleGoal(keyframes[1][self.robot_idx["a0"]]),
-                type="place",
-                frames=["table", "bottle_1"],
-            ),
-            # SingleGoal(keyframes[2][self.robot_idx["a1"]]),
-            Task(
-                "a1_pick_b2",
-                ["a0"],
-                SingleGoal(keyframes[3][self.robot_idx["a0"]]),
-                type="pick",
-                frames=["a0_ur_vacuum", "bottle_12"],
-            ),
-            Task(
-                "a1_place_b2",
-                ["a0"],
-                SingleGoal(keyframes[4][self.robot_idx["a0"]]),
-                type="place",
-                frames=["table", "bottle_12"],
-            ),
-            Task(
-                "a2_pick_b1",
-                ["a1"],
-                SingleGoal(keyframes[6][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1_ur_vacuum", "bottle_3"],
-            ),
-            Task(
-                "a2_place_b1",
-                ["a1"],
-                SingleGoal(keyframes[7][self.robot_idx["a1"]]),
-                type="place",
-                frames=["table", "bottle_3"],
-            ),
-            # SingleGoal(keyframes[8][self.robot_idx["a1"]]),
-            Task(
-                "a2_pick_b2",
-                ["a1"],
-                SingleGoal(keyframes[9][self.robot_idx["a1"]]),
-                type="pick",
-                frames=["a1_ur_vacuum", "bottle_5"],
-            ),
-            Task(
-                "a2_place_b2",
-                ["a1"],
-                SingleGoal(keyframes[10][self.robot_idx["a1"]]),
-                type="place",
-                frames=["table", "bottle_5"],
-            ),
-            Task(
-                "terminal",
-                ["a0", "a1"],
-                SingleGoal(
-                    np.concatenate(
-                        [
-                            keyframes[5][self.robot_idx["a0"]],
-                            keyframes[11][self.robot_idx["a1"]],
-                        ]
-                    )
-                ),
-            ),
-        ]
         
         if num_bottles == 2:
             self.graph = DependencyGraph()
@@ -1585,18 +1290,7 @@ class rai_ur10_arm_bottle_dep_env(DependencyGraphMixin, rai_env):
 
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
-
-        self.collision_tolerance = 0.0000
-        self.collision_resolution = 0.001
-
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
-
+        
 
 @register([
     ("rai.box_rearrangement", {}),
