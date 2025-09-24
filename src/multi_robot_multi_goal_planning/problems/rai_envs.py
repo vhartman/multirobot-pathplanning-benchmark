@@ -169,6 +169,11 @@ class rai_two_dim_env_no_obs_base(rai_env):
             ),
         ]
 
+        self.collision_tolerance = 0.001
+
+        self.spec.manipulation = ManipulationType.STATIC
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
 # Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
 @register([
     ("rai.one_agent_many_goals", {}),
@@ -182,12 +187,7 @@ class rai_two_dim_env_no_obs(SequenceMixin, rai_two_dim_env_no_obs_base):
             ["a2_goal_0", "a2_goal_1", "a2_goal_2", "a2_goal_3", "a1_goal", "terminal"]
         )
 
-        self.collision_tolerance = 0.001
-
         BaseModeLogic.__init__(self)
-
-        self.spec.manipulation = ManipulationType.STATIC
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 # for the case of the dependency graph, the optimal solution should be 4.1
 @register([
@@ -208,12 +208,9 @@ class rai_two_dim_env_no_obs_dep_graph(DependencyGraphMixin, rai_two_dim_env_no_
 
         # print(self.graph)
 
-        self.collision_tolerance = 0.001
-
         BaseModeLogic.__init__(self)
 
         self.spec.dependency = DependencyType.UNORDERED
-        self.spec.manipulation = ManipulationType.STATIC
 
 
 # trivial environment for planing
@@ -399,6 +396,8 @@ class rai_two_dim_simple_manip_base(rai_env):
             ),
         ]
 
+        self.collision_tolerance = 0.01
+
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {
@@ -418,8 +417,6 @@ class rai_two_dim_simple_manip(SequenceMixin, rai_two_dim_simple_manip_base):
         )
         # self.sequence = [2, 0, 3, 1, 4]
 
-        self.collision_tolerance = 0.01
-
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
@@ -437,8 +434,6 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_two_di
         self.graph.add_dependency("terminal", "a2_place")
 
         BaseModeLogic.__init__(self)
-
-        self.collision_tolerance = 0.01
 
         self.prev_mode = self.start_mode
 
@@ -536,10 +531,18 @@ class rai_two_dim_handover(SequenceMixin, rai_two_dim_handover_base):
 
         # self.export_tasks("2d_handover_tasks.txt")
 
-        BaseModeLogic.__init__(self)
+        self.sequence = self._make_sequence_from_names(
+            [
+                "a1_pick_obj1",
+                "handover",
+                "a1_pick_obj2",
+                "a1_place_obj2",
+                "a2_place",
+                "terminal",
+            ]
+        )
 
-        self.collision_tolerance = 0.01
-        self.collision_resolution = 0.01
+        BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
 
@@ -550,20 +553,17 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_two_dim_ha
         rai_two_dim_handover_base.__init__(self)
 
         self.graph = DependencyGraph()
-        self.graph.add_dependency("a2_handover", "a1_pick_obj1")
-        self.graph.add_dependency("a1_pick_obj2", "a2_handover")
+        self.graph.add_dependency("handover", "a1_pick_obj1")
+        self.graph.add_dependency("a1_pick_obj2", "handover")
         self.graph.add_dependency("a1_place_obj2", "a1_pick_obj2")
         self.graph.add_dependency("terminal", "a1_place_obj2")
-        self.graph.add_dependency("a2_place", "a2_handover")
+        self.graph.add_dependency("a2_place", "handover")
         self.graph.add_dependency("terminal", "a2_place")
 
         print(self.graph)
         # self.graph.visualize()
 
         BaseModeLogic.__init__(self)
-
-        self.collision_tolerance = 0.01
-        self.collision_resolution = 0.01
 
         self.prev_mode = self.start_mode
 
@@ -673,7 +673,6 @@ class rai_alternative_hallway_two_dim(SequenceMixin, rai_alternative_hallway_two
 class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai_alternative_hallway_two_dim_base):
     def __init__(self, agents_can_rotate=True):
         rai_alternative_hallway_two_dim_base.__init__(self, agents_can_rotate)
-
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("terminal", "a1_goal_1")
