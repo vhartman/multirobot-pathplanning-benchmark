@@ -1884,7 +1884,10 @@ class BaseProblem(ABC):
             for j in range(i, len(path)):
                 if path[j].mode != mode:
                     next_mode_ids = path[j].mode.task_ids
+                    break
 
+            # print(i)
+            # print(next_mode_ids)
             constraints = self.get_active_task(mode, next_mode_ids).constraints
             for c in constraints:
                 if not c.is_fulfilled(path[i].q, self):
