@@ -1615,7 +1615,7 @@ def make_box_sorting_env(view: bool = False):
     #         .setParent(C.getFrame('table')) \
     #         .setRelativePosition([-0.3, 0.5, 0]) \
     #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -1844,7 +1844,7 @@ def make_ur10_arm_orientation_env(num_robots=2):
     #         .setParent(C.getFrame('table')) \
     #         .setRelativePosition([-0.3, 0.5, 0]) \
     #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -1991,7 +1991,7 @@ def make_egg_carton_env(num_boxes=9, view: bool = False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -2183,7 +2183,7 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -2601,7 +2601,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -3004,11 +3004,11 @@ def make_box_stacking_env(
     )
 
     ur10_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/ur10/ur10_two_finger.g"
+        os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_two_finger.g"
     )
 
     kuka_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/kuka_drake/kuka_two_finger.g"
+        os.path.dirname(__file__), "../assets/models/rai/kuka_drake/kuka_two_finger.g"
     )
 
     def get_robot_and_type_prefix(idx: int):
@@ -3374,11 +3374,11 @@ def make_pyramid_env(
     )
 
     ur10_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/ur10/ur10_two_finger.g"
+        os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_two_finger.g"
     )
 
     kuka_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/kuka_drake/kuka_two_finger.g"
+        os.path.dirname(__file__), "../assets/models/rai/kuka_drake/kuka_two_finger.g"
     )
 
     def get_robot_and_type_prefix(idx: int):
@@ -3684,7 +3684,7 @@ def make_handover_env(view: bool = False):
     #         .setParent(C.getFrame('table')) \
     #         .setRelativePosition([-0.3, 0.5, 0]) \
     #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     print(robot_path)
 
@@ -3843,7 +3843,7 @@ def make_bimanual_grasping_env(view: bool = False):
     #         .setParent(C.getFrame('table')) \
     #         .setRelativePosition([-0.3, 0.5, 0]) \
     #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/ur10/ur10_vacuum.g")
 
     print(robot_path)
 
@@ -4061,10 +4061,10 @@ def make_panda_waypoint_env(
 
     panda_path = ry.raiPath("panda/panda.g")
     ur10_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/ur10/ur10_two_finger.g"
+        os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_two_finger.g"
     )
     kuka_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/kuka_drake/kuka_two_finger.g"
+        os.path.dirname(__file__), "../assets/models/rai/kuka_drake/kuka_two_finger.g"
     )
 
     C.addFile(panda_path, namePrefix="a0_").setParent(
@@ -4317,7 +4317,7 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur_welding.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur_welding.g")
 
     C.addFrame("table").setPosition([0, 0, 0.5]).setShape(
         ry.ST.box, size=[2, 2, 0.06, 0.005]
@@ -4499,7 +4499,7 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
 
-    path = os.path.join(os.path.dirname(__file__), "../models/rai/bottle.g")
+    path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/bottle.g")
     C.addFile(path).setPosition([1, 0, 0.2])
 
     if remove_non_moved_bottles:
@@ -4714,7 +4714,7 @@ def make_box_pile_env(
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
@@ -5138,7 +5138,7 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
     )
 
     mobile_robot_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/mobile-manipulator-restricted.g"
+        os.path.dirname(__file__), "../assets/models/rai/mobile-manipulator-restricted.g"
     )
 
     robots = []
@@ -5331,10 +5331,10 @@ def make_mobile_manip_env(num_robots=5, view: bool = False):
 def make_depalletizing_env():
     C = ry.Config()
 
-    path = os.path.join(os.path.dirname(__file__), "../models/rai/rollcage.g")
+    path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/rollcage.g")
     C.addFile(path).setPosition([0, 0, 0.0])
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     C.addFrame("robot_1_base").setPosition([0.4, 0.8, 0.1]).setShape(
         ry.ST.box, size=[0.2, 0.2, 0.2, 0.005]
@@ -5508,7 +5508,7 @@ def make_strut_assembly_problem():
     ).setColor([0.9, 0.9, 0.9]).setContact(0)
 
     mobile_robot_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/mobile_manipulator_additional_gripper_rot.g"
+        os.path.dirname(__file__), "../assets/models/rai/mobile_manipulator_additional_gripper_rot.g"
     )
 
     C.addFile(mobile_robot_path, namePrefix="a0_").setPosition([1, 2, 0.2])
@@ -5520,13 +5520,13 @@ def make_strut_assembly_problem():
 
     robots = ["a0_", "a1_"]
 
-    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/rai/strut_assemblies/yijiang_strut.json")
-    assembly_path = os.path.join(os.path.dirname(__file__), "../models/rai/strut_assemblies/florian_strut.json")
-    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/rai/strut_assemblies/z_shape.json")
-    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/rai/strut_assemblies/tower.json")
-    # assembly_path = os.path.join(os.path.dirname(__file__), "../models/rai/strut_assemblies/bridge.json")
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/strut_assemblies/yijiang_strut.json")
+    assembly_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/strut_assemblies/florian_strut.json")
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/strut_assemblies/z_shape.json")
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/strut_assemblies/tower.json")
+    # assembly_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/strut_assemblies/bridge.json")
     # assembly_path = os.path.join(
-    #     os.path.dirname(__file__), "../models/rai/strut_assemblies/roboarch.json"
+    #     os.path.dirname(__file__), "../assets/models/rai/strut_assemblies/roboarch.json"
     # )
 
     objects = []
@@ -5757,7 +5757,7 @@ def make_strut_nccr_env():
     
     C = ry.Config()
     robot_path = os.path.join(
-        os.path.dirname(__file__), "../models/rai/abb_robot/dual_cell.g"
+        os.path.dirname(__file__), "../assets/models/rai/abb_robot/dual_cell.g"
     )
 
     C.addFile(robot_path)
@@ -6110,23 +6110,15 @@ def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="t
         assembly_filename = "extreme_beam_test"
     else:
         raise ValueError("Assembly name not existent.")
-        # path = os.path.join(
-        #     "/home/valentin/Downloads/assembly_roadmap-master/data/problems/spiral_tower_side_welding/problem.json"
-        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/truss_bridge_three_robots_welding/problem.json"
-        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/truss_bridge/problem.json"
-        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/truss_boat_three_robots/problem.json"
-        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/extreme_beam_test/problem.json"
-        #     # "/home/valentin/Downloads/assembly_roadmap-master/data/problems/cube_four_robots/problem.json"
-        # )
     
     path = os.path.join(
-        os.path.dirname(__file__), f"../problems/desc/{assembly_filename}.json"
+        os.path.dirname(__file__), f"../assets/desc/{assembly_filename}.json"
     )
 
     if gripper_type == "vacuum":
-        robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_vacuum.g")
+        robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
     else:
-        robot_path = os.path.join(os.path.dirname(__file__), "../models/rai/ur10/ur10_two_finger.g")
+        robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_two_finger.g")
 
     start_poses = {}
     goal_poses = {}

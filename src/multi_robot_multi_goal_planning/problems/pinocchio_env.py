@@ -666,7 +666,7 @@ class PinocchioEnvironment(BaseProblem):
 
 
 def make_pin_middle_obstacle_two_dim_env():
-    filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/middle_obstacle_two_agents.urdf"
+    filename = "./src/multi_robot_multi_goal_planning/assets/urdfs/middle_obstacle_two_agents.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
     collision_model.addAllCollisionPairs()
@@ -711,7 +711,7 @@ class pinocchio_middle_obs(SequenceMixin, PinocchioEnvironment):
 
 
 def make_pin_other_hallway_two_dim_env():
-    filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/other_hallway.urdf"
+    filename = "./src/multi_robot_multi_goal_planning/assets/urdfs/other_hallway.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
     ids = range(len(collision_model.geometryObjects))
@@ -797,7 +797,7 @@ class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
 
 
 def make_2d_handover():
-    filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/2d_handover.urdf"
+    filename = "./src/multi_robot_multi_goal_planning/assets/urdfs/2d_handover.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
     # collision_model.addAllCollisionPairs()
@@ -884,7 +884,7 @@ class pinocchio_handover_two_dim(SequenceMixin, PinocchioEnvironment):
 
 
 def make_piano():
-    filename = "./src/multi_robot_multi_goal_planning/problems/urdfs/piano.urdf"
+    filename = "./src/multi_robot_multi_goal_planning/assets/urdfs/piano.urdf"
     model, collision_model, visual_model = pin.buildModelsFromUrdf(filename)
 
     # collision_model.addAllCollisionPairs()
@@ -1027,9 +1027,9 @@ def add_namespace_prefix_to_models(model, collision_model, visual_model, namespa
 
 
 def make_dual_ur5_waypoint_env():
-    # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e.urdf"
-    # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained_coll_primitives.urdf"
-    urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur5e/ur5e_constrained.urdf"
+    # urdf_path = "./src/multi_robot_multi_goal_planning/assets/urdfs/ur5e/ur5e.urdf"
+    # urdf_path = "./src/multi_robot_multi_goal_planning/assets/urdfs/ur5e/ur5e_constrained_coll_primitives.urdf"
+    urdf_path = "./src/multi_robot_multi_goal_planning/assets/urdfs/ur5e/ur5e_constrained.urdf"
 
     coll_mesh_dir = (
         Path(urdf_path).resolve().parent / "ur_description/meshes/ur5e/collision/"
@@ -1038,7 +1038,7 @@ def make_dual_ur5_waypoint_env():
         Path(urdf_path).resolve().parent / "ur_description/meshes/ur5e/visual/"
     )
 
-    # mesh_dir = "../src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur_description/meshes/ur10e/visual/"
+    # mesh_dir = "../src/multi_robot_multi_goal_planning/assets/urdfs/ur10e/ur_description/meshes/ur10e/visual/"
 
     robot_1 = pin.buildModelFromUrdf(urdf_path)
     r1_coll = pin.buildGeomFromUrdf(
@@ -1282,10 +1282,10 @@ class pin_random_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
 
 def make_dual_ur5_reorientation_env():
     urdf_path = (
-        "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10_spherized.urdf"
+        "./src/multi_robot_multi_goal_planning/assets/urdfs/ur10e/ur10_spherized.urdf"
     )
-    # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_meshes.urdf"
-    # urdf_path = "./src/multi_robot_multi_goal_planning/problems/urdfs/ur10e/ur10e_primitives.urdf"
+    # urdf_path = "./src/multi_robot_multi_goal_planning/assets/urdfs/ur10e/ur10e_meshes.urdf"
+    # urdf_path = "./src/multi_robot_multi_goal_planning/assets/urdfs/ur10e/ur10e_primitives.urdf"
 
     coll_mesh_dir = (
         Path(urdf_path).resolve().parent / "ur_description/meshes/ur10e/collision/"
@@ -1434,7 +1434,7 @@ def make_dual_ur5_reorientation_env():
     )
 
     with open(
-        "src/multi_robot_multi_goal_planning/problems/desc/box_poses.json", "r"
+        "src/multi_robot_multi_goal_planning/assets/desc/box_poses.json", "r"
     ) as f:
         loaded_box_data = json.load(f)
         # print("Loaded box data:")
@@ -1548,7 +1548,7 @@ class pin_reorientation_dual_ur5_env(SequenceMixin, PinocchioEnvironment):
         )
 
         self.import_tasks(
-            "src/multi_robot_multi_goal_planning/problems/desc/box_reorientation_tasks.txt"
+            "src/multi_robot_multi_goal_planning/assets/desc/box_reorientation_tasks.txt"
         )
         self.sequence = self._make_sequence_from_names(
             [
