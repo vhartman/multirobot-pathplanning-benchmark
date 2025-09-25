@@ -4691,6 +4691,248 @@ def is_z_axis_up(quaternion):
     return np.isclose(np.dot(z_axis, np.array([0, 0, 1])), 1.0, atol=1e-6)
 
 
+import time
+def make_two_arms_on_a_gantry():
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum_upside_down.g")
+
+    C = ry.Config()
+
+    floor = C.addFrame("table").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(floor)
+        # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setPosition(floor.getPosition() + [0.0, 0.0, 2])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    a1_x = C.addFrame("a1_x").setParent(pre_agent_1_frame).setJoint(
+        ry.JT.transX, limits=np.array([-1, 1])
+    ).setJointState([0])
+
+    C.addFrame("linkage").setParent(a1_x).setShape(
+        ry.ST.box,
+        size=[0.2, 2, 0.2, 0.005],
+        # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
+    ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.15])
+
+    a1_y = C.addFrame("a1_y").setParent(a1_x).setJoint(
+        ry.JT.transY, limits=np.array([-1, 1])
+    ).setJointState([-0.5])
+
+    C.addFrame("a1_z").setParent(a1_y).setJoint(
+        ry.JT.transZ, limits=np.array([-0.5, 0])
+    ).setJointState([0])
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        C.getFrame("a1_z")
+    ).setRelativePosition([-0, 0., 0.]).setRelativeQuaternion(
+        [0., 0, 1, 0]
+    ).setJoint(ry.JT.rigid)
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(floor)
+        # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setPosition(floor.getPosition() + [0.0, 0.0, 2])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    a2_x = C.addFrame("a2_x").setParent(pre_agent_1_frame).setJoint(
+        ry.JT.transX, limits=np.array([-1, 1])
+    ).setJointState([0])
+
+    a2_y = C.addFrame("a2_y").setParent(a2_x).setJoint(
+        ry.JT.transY, limits=np.array([-1, 1])
+    ).setJointState([0.5])
+
+    C.addFrame("a2_z").setParent(a2_y).setJoint(
+        ry.JT.transZ, limits=np.array([-0.5, 0])
+    ).setJointState([0])
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        C.getFrame("a2_z")
+    ).setRelativePosition([-0, 0., 0.]).setRelativeQuaternion(
+        [0., 0, 1, 0]
+    ).setJoint(ry.JT.rigid)
+
+    # add a bunch of boxes
+    w = 2
+    d = 3
+    size = np.array([0.2, 0.2, 0.2])
+
+    boxes = []
+    goals = []
+
+    height = 0.12
+
+    def get_pos(j, k):
+        pos = np.array(
+            [
+                j * size[0] * 3 - w / 2 * size[0] + size[0] / 2,
+                (k - 1) * size[1] * 3,
+                height,
+            ]
+        )
+        return pos
+
+    num_boxes = 4
+    cnt = 0
+    for k in range(d):
+        for j in range(w):
+            if k == 1 and j == 1:
+                continue
+
+            axis = np.random.randn(3)
+            axis /= np.linalg.norm(axis)
+
+            pos = get_pos(j, k)
+
+            C.addFrame("obj" + str(cnt)).setParent(floor).setShape(
+                ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
+                np.random.rand(3)
+            ).setContact(1).setJoint(ry.JT.rigid)
+
+            C.addFrame("goal" + str(cnt)).setParent(floor).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition(
+                [get_pos(1, 1)[0], get_pos(1, 1)[1], cnt * size[2] * 1.1 + height]
+            ).setColor([0, 0, 0.1, 0.5]).setContact(0).setJoint(ry.JT.rigid)
+
+            boxes.append("obj" + str(cnt))
+            goals.append("goal" + str(cnt))
+
+            cnt += 1
+
+            if cnt == num_boxes:
+                break
+
+        if cnt == num_boxes:
+            break
+
+    C.view(True)
+
+    def compute_rearrangment(
+        robot_prefix, box, goal
+    ):
+        # set everything but the crrent box to non-contact
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "x"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        for frame_name in boxes:
+            if frame_name != box:
+                c_tmp.getFrame(frame_name).setContact(0)
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e0)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+        komo.addObjective(
+            [1, 2],
+            ry.FS.distance,
+            [robot_prefix + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.02],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 0],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [robot_prefix + "ur_ee_marker", box],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [robot_prefix + "ur_ee_marker", box],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+
+        # for pick and place directly
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        max_attempts = 5
+        for num_attempt in range(max_attempts):
+            # komo.initRandom()
+            if num_attempt > 0:
+                dim = len(c_tmp.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
+                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            # print(retval)
+
+            # if view:
+
+            # print(retval)
+            # komo.view(True, "IK solution")
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+                keyframes = komo.getPath()
+                return keyframes
+
+        return None
+
+    k1 = compute_rearrangment("a1_", "obj0", "goal0")
+    k2 = compute_rearrangment("a1_", "obj1", "goal1")
+    k3 = compute_rearrangment("a2_", "obj2", "goal2")
+    k4 = compute_rearrangment("a2_", "obj3", "goal3")
+
+    return C, [k1, k2, k3, k4]
+
+
 def make_box_pile_env(
     num_boxes=6,
     compute_multiple_keyframes: bool = False,
@@ -6411,46 +6653,3 @@ def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="t
         )
 
     return C, robots, keyframes
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Env shower")
-    parser.add_argument("env", nargs="?", default="default", help="env to show")
-
-    args = parser.parse_args()
-
-    if args.env == "piano":
-        make_piano_mover_env(view=True)
-    elif args.env == "simple_2d":
-        make_2d_rai_env(True)
-    elif args.env == "three_agents":
-        make_2d_rai_env_3_agents(True)
-    elif args.env == "box_sorting":
-        make_box_sorting_env(True)
-    elif args.env == "eggs":
-        make_egg_carton_env(True)
-    elif args.env == "triple_waypoints":
-        make_panda_waypoint_env(view=True)
-    elif args.env == "welding":
-        make_welding_env(num_robots=4, num_pts=8, view=True)
-    elif args.env == "mobile":
-        make_mobile_manip_env(True)
-    elif args.env == "bottle":
-        make_bottle_insertion(view=True)
-    elif args.env == "handover":
-        make_handover_env(view=True)
-    elif args.env == "2d_handover":
-        make_two_dim_handover(view=True)
-    elif args.env == "random_2d":
-        make_random_two_dim(view=True)
-    elif args.env == "optimality_test_2d":
-        make_two_dim_tunnel_env(view=True)
-    elif args.env == "box_rearrangement":
-        make_box_rearrangement_env(view=True)
-    elif args.env == "depalletizing":
-        make_depalletizing_env()
-    elif args.env == "struts":
-        make_strut_assembly_problem()
-    elif args.env == "crl":
-        make_crl_logo_rearrangement_env()
-    else:
-        make_panda_waypoint_env(2, view=True)

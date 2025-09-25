@@ -261,11 +261,98 @@ class rai_linked_2d_puzzle(SequenceMixin, rai_env):
         self.spec.manipulation = ManipulationType.STATIC
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
-
+@register("rai.half_rfl")
 class rai_rfl_two_only(SequenceMixin, rai_env):
     def __init__(self):
-        self.C = rai_config.make_two_arms_on_a_gantry()
+        self.C, [k1, k2, k3, k4] = rai_config.make_two_arms_on_a_gantry()
         
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        self.tasks = [
+            # joint
+            Task(
+                "r1_pick_0",
+                ["a1"],
+                SingleGoal(k1[0]),
+                "pick",
+                frames=["a1_ur_vacuum", "obj0"],
+            ),
+            Task(
+                "r1_place_0",
+                ["a1"],
+                SingleGoal(k1[1]),
+                "place",
+                frames=["table", "obj0"],
+                constraints=[]
+            ),
+            Task(
+                "r1_pick_1",
+                ["a1"],
+                SingleGoal(k2[0]),
+                "pick",
+                frames=["a1_ur_vacuum", "obj1"],
+            ),
+            Task(
+                "r1_place_1",
+                ["a1"],
+                SingleGoal(k2[1]),
+                "place",
+                frames=["table", "obj1"],
+                constraints=[]
+            ),
+            Task(
+                "r2_pick_0",
+                ["a2"],
+                SingleGoal(k3[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj2"],
+            ),
+            Task(
+                "r2_place_0",
+                ["a2"],
+                SingleGoal(k3[1]),
+                "place",
+                frames=["table", "obj2"],
+                constraints=[]
+            ),
+            Task(
+                "r2_pick_1",
+                ["a2"],
+                SingleGoal(k4[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj3"],
+            ),
+            Task(
+                "r2_place_1",
+                ["a2"],
+                SingleGoal(k4[1]),
+                "place",
+                frames=["table", "obj3"],
+                constraints=[]
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+        
+        self.sequence = self._make_sequence_from_names(
+            ["r1_pick_0", "r1_place_0", "r1_pick_1", "r2_pick_0", "r1_place_1", "r2_place_0", "r2_pick_1", "r2_place_1", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
 
 class rai_rfl(SequenceMixin, rai_env):
     def __init__(self):
@@ -332,7 +419,6 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.manipulation = ManipulationType.STATIC
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
