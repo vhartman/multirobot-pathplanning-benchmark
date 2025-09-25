@@ -4820,7 +4820,7 @@ def make_two_arms_on_a_gantry():
         if cnt == num_boxes:
             break
 
-    C.view(True)
+    # C.view(True)
 
     def compute_rearrangment(
         robot_prefix, box, goal
