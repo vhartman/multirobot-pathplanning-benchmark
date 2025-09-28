@@ -41,6 +41,7 @@ from .registry import register
 
 import mujoco
 from mujoco import mjx
+import jax
 
 import mujoco.viewer
 
@@ -151,12 +152,6 @@ class MujocoEnvironment(BaseProblem):
 
         self.model = mujoco.MjModel.from_xml_path(xml_path)
         self.data = mujoco.MjData(self.model)
-
-        # mjx_model = mjx.put_model(self.model)
-
-        # mjx_data = mjx.make_data(mjx_model)
-        # qvel = mjx_data.qvel.at[0].set(0)
-        # mjx.mj_forward(mjx_model, mjx_data)
 
         self.manipulating_env = False
 
@@ -632,33 +627,7 @@ class MujocoEnvironment(BaseProblem):
             # child world position: parent + R_parent * pos_rel
             # mujoco.mju_rotVecQuat(self.rotated_buf, position, parent_xquat)
             rot_vec_quat(self.rotated_buf, position, parent_xquat)
-            # child_xpos = parent_xpos + rotated
-
-            # set freejoint qpos
-            # jadr = self.body_id_q_adr[body_id]
-
-            # self.data.qpos[jadr : jadr + 3] = child_xpos
-            # self.data.qpos[jadr + 3 : jadr + 7] = child_xquat
-            # pose_buf[:3] = parent_xpos + rotated
-            # np.add(parent_xpos, rotated, out=qpos_cpy[jadr + 0: jadr + 3])
-            # np.add(parent_xpos, rotated, out=pose_buf[:3])
-            # pose_buf[3:] = child_xquat
-
-            # qpos_cpy[jadr + 0: jadr + 7] = pose_buf
-            # np.copyto(qpos_cpy[jadr : jadr + 7], pose_buf)
-            # np.copyto(self.data.qpos[jadr : jadr + 7], pose_buf)
-
-            # self.data.qpos[jadr : jadr + 7] = pose_buf
-            # qpos_slice = self.data.qpos[jadr:jadr+7]
-            # qpos_slice[:3] = parent_xpos + self.rotated_buf  # This creates temp but unavoidable
-            # qpos_slice[3:] = self.child_xquat_buf
-
-            # body_qpos = self.qpos_body_views[body_id]  # Just a dict lookup!
-            # body_qpos[:3] = parent_xpos + self.rotated_buf
-            # body_qpos[3:] = self.child_xquat_buf
-
-            # self.qpos_body_views_pos[body_id] = parent_xpos + self.rotated_buf * 1.
-            # self.qpos_body_views_quat[body_id] = self.child_xquat_buf * 1.
+            
             pos_view = self.qpos_body_views_pos[body_id]
             quat_view = self.qpos_body_views_quat[body_id]
             
@@ -666,12 +635,6 @@ class MujocoEnvironment(BaseProblem):
             # pos_view[:] = parent_xpos + self.rotated_buf
             np.add(parent_xpos, self.rotated_buf, out=pos_view)
             quat_view[:] = self.child_xquat_buf
-
-            # print()
-            # print(parent_name)
-            # print(parent_xpos)
-            # print(position)
-            # print(rotation)
 
             self.current_scenegraph[body_id] = sg[body_id]
 
@@ -824,6 +787,131 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 
             for c_idx in range(data.ncon):
                 if data.contact[c_idx].dist < self.collision_tolerance:
+                    return False
+        return True
+
+    def is_edge_collision_free(
+        self,
+        q1: Configuration,
+        q2: Configuration,
+        mode: Mode,
+        resolution: Optional[float] = None,
+        tolerance: Optional[float] = None,
+        include_endpoints: bool = False,
+        N_start: int = 0,
+        N_max: Optional[int] = None,
+        N: Optional[int] = None,
+        force_parallel: bool = False,
+    ) -> bool:
+        if resolution is None:
+            resolution = self.collision_resolution
+
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+
+        if N is None:
+            N = int(config_dist(q1, q2, "max") / resolution) + 1
+            N = max(2, N)
+
+        if N_start > N:
+            return True
+
+        if N_max is None:
+            N_max = N
+
+        N_max = min(N, N_max)
+
+        # Generate indices using your existing binary search method
+        idx = generate_binary_search_indices(N)
+
+        q1_state = q1.state()
+        q2_state = q2.state()
+        dir = (q2_state - q1_state) / (N - 1)
+
+        # Prepare configurations to check
+        qs = []
+        for i in idx[N_start:N_max]:
+            if not include_endpoints and (i == 0 or i == N - 1):
+                continue
+            q = q1_state + dir * i
+            qs.append(q)
+
+        if not qs:
+            return True
+
+        # Decide whether to use parallel or sequential based on problem size
+        # use_parallel = force_parallel or (len(qs) >= 20 and len(self._data_pool) > 1)
+        use_parallel = False
+
+        if use_parallel:
+            return self._batch_is_collision_free_optimized(qs)
+        else:
+            return self._sequential_collision_check(qs)
+
+
+class MjxEnv(MujocoEnvironment):
+    def __init__(self, xml_path):
+        super().__init__(xml_path)
+
+        self.mjx_model = mjx.put_model(self.model)
+
+        self.mjx_data = mjx.make_data(self.mjx_model)
+        
+        # n_batch = 4096
+        self.n_batch = 512
+        self.mjx_batch = jax.tree.map(lambda x: jax.numpy.broadcast_to(x, (self.n_batch,) + x.shape), self.mjx_data)
+        
+        # _ = self.mjx_data.qpos.at[0].set(0)
+        # _ = self.mjx_data.qvel.at[0].set(0)
+        # mjx.forward(self.mjx_model, self.mjx_data)
+
+        # for i in range(self.data.ncon):
+        #     if self.data.contact[i].dist < self.collision_tolerance:
+        #         return False
+
+        self.jit_fwd = mjx.forward
+        self.jit_step = mjx.step
+
+    def _batch_is_collision_free_optimized(self, qs):
+        qs = jax.numpy.stack(qs)  # shape (batch_size, n_dof)
+        n_qs = qs.shape[0]
+
+        # If qs smaller than pre-batched, slice
+        if n_qs <= self.n_batch:
+            batch_data = jax.tree.map(lambda x: x[:n_qs], self.mjx_batch)
+        else:
+            # Otherwise, replicate base data to create a new batch
+            batch_data = jax.tree.map(lambda x: jax.numpy.broadcast_to(x, (n_qs,) + x.shape[1:]), self.mjx_data)
+
+        # Replace qpos
+        batch_data = batch_data.replace(qpos=qs)
+
+        # Forward and collision check
+        batch_forward = jax.vmap(lambda d: mjx.forward(self.mjx_model, d))
+        batch_data = batch_forward(batch_data)
+
+        def is_free(d):
+            return jax.numpy.all(d.contact.dist >= self.collision_tolerance)
+
+        batch_is_free = jax.vmap(is_free)(batch_data)
+        return batch_is_free
+    
+    def _sequential_collision_check(self, qs):
+        for q in qs:
+            print(q)
+            # TODO: deal with set to scenegraph
+            assert not self.manipulating_env
+    
+            self.mjx_data = self.mjx_data.replace(
+                qpos = self.mjx_data.qpos.at[self._all_robot_idx].set(q)
+            )
+            # _ = self.mjx_data.qvel.at[0].set(0)
+            
+            self.jit_step(self.mjx_model, self.mjx_data)
+            # self.jit_fwd(self.mjx_model, self.mjx_data)
+
+            if self.mjx_data.ncon > 0:  # optional, avoid empty contact array
+                if jax.numpy.any(self.mjx_data.contact.dist < self.collision_tolerance):
                     return False
         return True
 
@@ -1155,7 +1243,7 @@ class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
 
 
 @register("mujoco.four_ur10")
-class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
+class four_arm_ur10_mujoco_env(SequenceMixin, MjxEnv):
     def __init__(self, agents_can_rotate=True):
         path = os.path.join(
             os.path.dirname(__file__), "../assets/models/mujoco/mujoco_4_ur10_world_closer.xml"
@@ -1172,7 +1260,7 @@ class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
             [np.array([0, -2, 1.0, -1.0, -1.57, 1.0]) for r in self.robots]
         )
 
-        OptimizedMujocoEnvironment.__init__(self, path)
+        MjxEnv.__init__(self, path)
 
         self.tasks = [
             Task("p1_goal", ["ur10_1"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))),
