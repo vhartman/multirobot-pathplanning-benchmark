@@ -907,8 +907,8 @@ class MjxEnv(MujocoEnvironment):
             )
             # _ = self.mjx_data.qvel.at[0].set(0)
             
-            self.jit_step(self.mjx_model, self.mjx_data)
-            # self.jit_fwd(self.mjx_model, self.mjx_data)
+            # self.jit_step(self.mjx_model, self.mjx_data)
+            self.jit_fwd(self.mjx_model, self.mjx_data)
 
             if self.mjx_data.ncon > 0:  # optional, avoid empty contact array
                 if jax.numpy.any(self.mjx_data.contact.dist < self.collision_tolerance):
@@ -1293,6 +1293,47 @@ class four_arm_ur10_mujoco_env(SequenceMixin, MjxEnv):
             "ur10_4": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
         }
 
+@register("mujoco.single_ur10")
+class single_arm_ur10_mujoco_env(SequenceMixin, MjxEnv):
+    def __init__(self, agents_can_rotate=True):
+        path = os.path.join(
+            os.path.dirname(__file__), "../assets/models/mujoco/mujoco_1_ur10_world_closer.xml"
+        )
+
+        self.robots = [
+            "ur10_1"
+        ]
+
+        self.start_pos = NpConfiguration.from_list(
+            [np.array([0, -2, 1.0, -1.0, -1.57, 1.0]) for r in self.robots]
+        )
+
+        MjxEnv.__init__(self, path)
+
+        self.tasks = [
+            Task("p1_goal", ["ur10_1"], SingleGoal(np.array([-1, -1, 1.3, -1.0, -1.57, 1.0]))),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(self.start_pos.state()),
+            ),
+        ]
+
+        self.sequence = self._make_sequence_from_names(
+            ["p1_goal", "terminal"]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {
+            "ur10_1": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
+        }
 
 
 # @register("mujoco.rfl")

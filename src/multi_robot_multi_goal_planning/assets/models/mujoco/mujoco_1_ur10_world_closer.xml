@@ -26,19 +26,10 @@
     <body name="ur10_1" pos="0.5 -0.5 0.02" euler="0 0 0" mocap="true">
       <attach model="ur10" body="base" prefix="ur101/"/>
     </body>
-    <body name="ur10_2" pos="-0.5 -0.5 0.02" euler="0 0 180" mocap="true">
-      <attach model="ur10" body="base" prefix="ur102/"/>
-    </body>
-    <body name="ur10_3" pos="-0.5 0.5 0.02" euler="0 0 180" mocap="true">
-      <attach model="ur10" body="base" prefix="ur103/"/>
-    </body>
-    <body name="ur10_4" pos="0.5 0.5 0.02" euler="0 0 0" mocap="true">
-      <attach model="ur10" body="base" prefix="ur104/"/>
-    </body>
   </worldbody>
 
   <keyframe>
-    <key name="home" qpos="0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0"
+    <key name="home" qpos="0 -0.7854 0 -2.1817 0 1.3962 0"
       />
   </keyframe>
 </mujoco>
