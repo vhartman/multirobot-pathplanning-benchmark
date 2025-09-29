@@ -872,6 +872,11 @@ class MjxEnv(MujocoEnvironment):
         self.jit_step = jax.jit(mjx.step)
 
         self.jit_fwd(self.mjx_model, self.mjx_data)
+
+        # Pre-jit batch function once
+        self._batched_check = jax.jit(
+            jax.vmap(self._check_single, in_axes=(0,))
+        )
     
     def _check_single(self, qpos):
         """Pure function: single configuration collision check."""
@@ -883,30 +888,15 @@ class MjxEnv(MujocoEnvironment):
         return jax.numpy.logical_not(jax.numpy.any(d.contact.dist < -self.collision_tolerance))
 
     def check(self, qposes):
-        """
-        Check collisions for one or more configurations.
-        
-        Args:
-            qposes: array of shape (nq,) or (B, nq)
-            
-        Returns:
-            array of bools of shape (B,) if batch, or single bool if single qpos
-        """
         qposes = jax.numpy.atleast_2d(qposes)
-        # vmap over batch dimension
-        batch_check = jax.jit(jax.vmap(self._check_single))
-        results = batch_check(qposes)
-        # return scalar if input was single config
-        if results.shape[0] == 1:
-            return results[0]
-        return results
-    
+        results = self._batched_check(qposes)
+        return results if results.shape[0] > 1 else results[0]
+
     def _batch_is_collision_free_optimized(self, qs):
-   
         print("A")
+        print(len(qs))
         coll_free_batch = self.check(jax.numpy.stack(qs))
         print("B")
-
         return jax.numpy.all(coll_free_batch)
 
         # qs = jax.numpy.stack(qs)  # shape (batch_size, n_dof)
