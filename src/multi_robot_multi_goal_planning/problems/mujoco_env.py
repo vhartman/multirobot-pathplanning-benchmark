@@ -406,7 +406,7 @@ class MujocoEnvironment(BaseProblem):
 
         # If any contact distance < 0, collision
         for i in range(self.data.ncon):
-            if self.data.contact[i].dist < self.collision_tolerance:
+            if self.data.contact[i].dist < -self.collision_tolerance:
                 return False
 
         return True
@@ -704,7 +704,7 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
 
                 # Check for collision
                 for c_idx in range(data.ncon):
-                    if data.contact[c_idx].dist < self.collision_tolerance:
+                    if data.contact[c_idx].dist < -self.collision_tolerance:
                         collision_found.set()  # Signal other threads to stop
                         return True  # This batch found collision
 
@@ -854,7 +854,6 @@ class MjxEnv(MujocoEnvironment):
         super().__init__(xml_path)
 
         self.mjx_model = mjx.put_model(self.model)
-
         self.mjx_data = mjx.make_data(self.mjx_model)
         
         # n_batch = 4096
@@ -871,6 +870,8 @@ class MjxEnv(MujocoEnvironment):
 
         self.jit_fwd = jax.jit(mjx.forward)
         self.jit_step = jax.jit(mjx.step)
+
+        self.jit_fwd(self.mjx_model, self.mjx_data)
 
     def _batch_is_collision_free_optimized(self, qs):
         qs = jax.numpy.stack(qs)  # shape (batch_size, n_dof)
@@ -898,7 +899,6 @@ class MjxEnv(MujocoEnvironment):
     
     def _sequential_collision_check(self, qs):
         for q in qs:
-            print(q)
             # TODO: deal with set to scenegraph
             assert not self.manipulating_env
     
@@ -911,8 +911,24 @@ class MjxEnv(MujocoEnvironment):
             self.jit_fwd(self.mjx_model, self.mjx_data)
 
             if self.mjx_data.ncon > 0:  # optional, avoid empty contact array
-                if jax.numpy.any(self.mjx_data.contact.dist < self.collision_tolerance):
+                if jax.numpy.any(self.mjx_data.contact.dist < -self.collision_tolerance):
                     return False
+        return True
+
+    def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
+        assert not self.manipulating_env
+        self.mjx_data = self.mjx_data.replace(
+            qpos = self.mjx_data.qpos.at[self._all_robot_idx].set(q.state())
+        )
+        # _ = self.mjx_data.qvel.at[0].set(0)
+        
+        # self.jit_step(self.mjx_model, self.mjx_data)
+        self.jit_fwd(self.mjx_model, self.mjx_data)
+
+        if self.mjx_data.ncon > 0:  # optional, avoid empty contact array
+            if jax.numpy.any(self.mjx_data.contact.dist < -self.collision_tolerance):
+                return False
+            
         return True
 
     def is_edge_collision_free(
