@@ -869,8 +869,8 @@ class MjxEnv(MujocoEnvironment):
         #     if self.data.contact[i].dist < self.collision_tolerance:
         #         return False
 
-        self.jit_fwd = mjx.forward
-        self.jit_step = mjx.step
+        self.jit_fwd = jax.jit(mjx.forward)
+        self.jit_step = jax.jit(mjx.step)
 
     def _batch_is_collision_free_optimized(self, qs):
         qs = jax.numpy.stack(qs)  # shape (batch_size, n_dof)
