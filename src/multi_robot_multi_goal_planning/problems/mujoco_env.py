@@ -857,8 +857,8 @@ class MjxEnv(MujocoEnvironment):
         self.mjx_data = mjx.make_data(self.mjx_model)
         
         # n_batch = 4096
-        self.n_batch = 512
-        self.mjx_batch = jax.tree.map(lambda x: jax.numpy.broadcast_to(x, (self.n_batch,) + x.shape), self.mjx_data)
+        # self.n_batch = 512
+        # self.mjx_batch = jax.tree.map(lambda x: jax.numpy.broadcast_to(x, (self.n_batch,) + x.shape), self.mjx_data)
         
         # _ = self.mjx_data.qpos.at[0].set(0)
         # _ = self.mjx_data.qvel.at[0].set(0)
@@ -872,30 +872,65 @@ class MjxEnv(MujocoEnvironment):
         self.jit_step = jax.jit(mjx.step)
 
         self.jit_fwd(self.mjx_model, self.mjx_data)
+    
+    def _check_single(self, qpos):
+        """Pure function: single configuration collision check."""
+        d = self.mjx_data.replace(
+            qpos = self.mjx_data.qpos.at[self._all_robot_idx].set(qpos)
+        )
+        # d = mjx.step(self.mjx_model, d)
+        d = self.jit_fwd(self.mjx_model, d)
+        return jax.numpy.logical_not(jax.numpy.any(d.contact.dist < -self.collision_tolerance))
 
+    def check(self, qposes):
+        """
+        Check collisions for one or more configurations.
+        
+        Args:
+            qposes: array of shape (nq,) or (B, nq)
+            
+        Returns:
+            array of bools of shape (B,) if batch, or single bool if single qpos
+        """
+        qposes = jax.numpy.atleast_2d(qposes)
+        # vmap over batch dimension
+        batch_check = jax.jit(jax.vmap(self._check_single))
+        results = batch_check(qposes)
+        # return scalar if input was single config
+        if results.shape[0] == 1:
+            return results[0]
+        return results
+    
     def _batch_is_collision_free_optimized(self, qs):
-        qs = jax.numpy.stack(qs)  # shape (batch_size, n_dof)
-        n_qs = qs.shape[0]
+   
+        print("A")
+        coll_free_batch = self.check(jax.numpy.stack(qs))
+        print("B")
 
-        # If qs smaller than pre-batched, slice
-        if n_qs <= self.n_batch:
-            batch_data = jax.tree.map(lambda x: x[:n_qs], self.mjx_batch)
-        else:
-            # Otherwise, replicate base data to create a new batch
-            batch_data = jax.tree.map(lambda x: jax.numpy.broadcast_to(x, (n_qs,) + x.shape[1:]), self.mjx_data)
+        return jax.numpy.all(coll_free_batch)
 
-        # Replace qpos
-        batch_data = batch_data.replace(qpos=qs)
+        # qs = jax.numpy.stack(qs)  # shape (batch_size, n_dof)
+        # n_qs = qs.shape[0]
 
-        # Forward and collision check
-        batch_forward = jax.vmap(lambda d: mjx.forward(self.mjx_model, d))
-        batch_data = batch_forward(batch_data)
+        # # If qs smaller than pre-batched, slice
+        # if n_qs <= self.n_batch:
+        #     batch_data = jax.tree.map(lambda x: x[:n_qs], self.mjx_batch)
+        # else:
+        #     # Otherwise, replicate base data to create a new batch
+        #     batch_data = jax.tree.map(lambda x: jax.numpy.broadcast_to(x, (n_qs,) + x.shape[1:]), self.mjx_data)
 
-        def is_free(d):
-            return jax.numpy.all(d.contact.dist >= self.collision_tolerance)
+        # # Replace qpos
+        # batch_data = batch_data.replace(qpos=qs)
 
-        batch_is_free = jax.vmap(is_free)(batch_data)
-        return batch_is_free
+        # # Forward and collision check
+        # batch_forward = jax.vmap(lambda d: mjx.forward(self.mjx_model, d))
+        # batch_data = batch_forward(batch_data)
+
+        # def is_free(d):
+        #     return jax.numpy.all(d.contact.dist >= self.collision_tolerance)
+
+        # batch_is_free = jax.vmap(is_free)(batch_data)
+        # return batch_is_free
     
     def _sequential_collision_check(self, qs):
         for q in qs:
@@ -917,16 +952,16 @@ class MjxEnv(MujocoEnvironment):
 
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         assert not self.manipulating_env
-        self.mjx_data = self.mjx_data.replace(
+        data = self.mjx_data.replace(
             qpos = self.mjx_data.qpos.at[self._all_robot_idx].set(q.state())
         )
         # _ = self.mjx_data.qvel.at[0].set(0)
         
         # self.jit_step(self.mjx_model, self.mjx_data)
-        self.jit_fwd(self.mjx_model, self.mjx_data)
+        self.jit_fwd(self.mjx_model, data)
 
         if self.mjx_data.ncon > 0:  # optional, avoid empty contact array
-            if jax.numpy.any(self.mjx_data.contact.dist < -self.collision_tolerance):
+            if jax.numpy.any(data.contact.dist < -self.collision_tolerance):
                 return False
             
         return True
@@ -982,7 +1017,7 @@ class MjxEnv(MujocoEnvironment):
 
         # Decide whether to use parallel or sequential based on problem size
         # use_parallel = force_parallel or (len(qs) >= 20 and len(self._data_pool) > 1)
-        use_parallel = False
+        use_parallel = True
 
         if use_parallel:
             return self._batch_is_collision_free_optimized(qs)
