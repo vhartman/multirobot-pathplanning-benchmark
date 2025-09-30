@@ -115,7 +115,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.constraint_pose)
 
     def is_fulfilled(self, q: Configuration, env) -> bool:
-        return np.isclose(self.mat @ q.state(), self.constraint_pose, self.eps)
+        return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
 
 
 class AffineFrameOrientationConstraint(Constraint):
