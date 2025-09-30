@@ -225,6 +225,8 @@ class rai_linked_2d_puzzle(SequenceMixin, rai_env):
 
         r1_goal = np.array([-0.5, -0.5, 0])
         r2_goal = np.array([-0.5, 0.5, 0])
+        
+        self.constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, -1, 0, 0]]), np.array([0]))]
 
         self.tasks = [
             # joint
@@ -232,20 +234,17 @@ class rai_linked_2d_puzzle(SequenceMixin, rai_env):
                 "r1_goal",
                 ["a1"],
                 SingleGoal(r1_goal),
-                # constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([1, 0, 0, -1, 0, 0]), 0)]
             ),
             Task(
                 "r2_goal",
                 ["a2"],
                 SingleGoal(r2_goal),
-                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, -1, 0, 0]]), np.array([0]))]
             ),            
             # terminal mode
             Task(
                 "terminal",
                 self.robots,
                 SingleGoal(home_pose),
-                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, -1, 0, 0]]), np.array([0]))]
             ),
         ]
 
@@ -272,6 +271,8 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
 
         home_pose = self.C.getJointState()
 
+        self.constraints = [AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0]]), np.array([0]))]
+
         self.tasks = [
             # joint
             Task(
@@ -280,7 +281,6 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
                 SingleGoal(k1[0]),
                 "pick",
                 frames=["a1_ur_vacuum", "obj0"],
-                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0]]), np.array([0]))]
             ),
             Task(
                 "r1_place_0",
@@ -288,7 +288,6 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
                 SingleGoal(k1[1]),
                 "place",
                 frames=["table", "obj0"],
-                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0]]), np.array([0]))]
             ),
             Task(
                 "r1_pick_1",
@@ -296,7 +295,6 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
                 SingleGoal(k2[0]),
                 "pick",
                 frames=["a1_ur_vacuum", "obj1"],
-                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0]]), np.array([0]))]
             ),
             Task(
                 "r1_place_1",
@@ -304,7 +302,6 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
                 SingleGoal(k2[1]),
                 "place",
                 frames=["table", "obj1"],
-                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0]]), np.array([0]))]
             ),
             Task(
                 "r2_pick_0",
@@ -341,7 +338,6 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
                 "terminal",
                 self.robots,
                 SingleGoal(home_pose),
-                constraints=[AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0]]), np.array([0]))]
             ),
         ]
         
@@ -373,6 +369,8 @@ class rai_rfl(SequenceMixin, rai_env):
 
         rhs_constraint = np.zeros((2, 1))
 
+        self.constraints = [AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
+
         self.tasks = [
             # joint
             Task(
@@ -381,7 +379,6 @@ class rai_rfl(SequenceMixin, rai_env):
                 SingleGoal(k1[0]),
                 "pick",
                 frames=["a1_ur_vacuum", "obj0"],
-                constraints=[AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
             ),
             Task(
                 "r1_place_0",
@@ -389,7 +386,6 @@ class rai_rfl(SequenceMixin, rai_env):
                 SingleGoal(k1[1]),
                 "place",
                 frames=["table", "obj0"],
-                constraints=[AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
             ),
             Task(
                 "r1_pick_1",
@@ -440,7 +436,6 @@ class rai_rfl(SequenceMixin, rai_env):
                 "terminal",
                 self.robots,
                 SingleGoal(home_pose),
-                constraints=[AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
             ),
         ]
         

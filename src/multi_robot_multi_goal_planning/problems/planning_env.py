@@ -1546,6 +1546,8 @@ class BaseProblem(ABC):
 
     limits: NDArray
 
+    constraints: List = []
+
     # misc
     collision_tolerance: float
     collision_resolution: float
@@ -1888,12 +1890,17 @@ class BaseProblem(ABC):
 
             # print(i)
             # print(next_mode_ids)
-            constraints = self.get_active_task(mode, next_mode_ids).constraints
-            for c in constraints:
+            task_constraints = self.get_active_task(mode, next_mode_ids).constraints
+            for c in task_constraints:
                 if not c.is_fulfilled(path[i].q, self):
                     print(f"Constraint violated at index {i}")
                     constraint_violation = True
 
+            env_constraints = self.constraints
+            for c in env_constraints:
+                if not c.is_fulfilled(path[i].q, self):
+                    print(f"Persistent constraint violated at index {i}")
+                    constraint_violation = True
 
             # if the next mode is a transition, check where to go
             # if i < len(path) - 1 and self.is_transition(path[i].q, mode):
