@@ -5150,6 +5150,192 @@ def make_four_arms_on_a_gantry():
     return C, [k1, k2, k3, k4]
 
 
+def make_goto_husky_env():
+    C = ry.Config()
+
+    table = C.addFrame("table").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    husky_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/husky/husky.g")
+
+    pre_husky_frame = (
+        C.addFrame("pre_husky_frame")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.0])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1_base_joint").setParent(pre_husky_frame).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-3, 3, -3, 3, -3.14, 3.14])
+    ).setJointState([0., 0, 0])
+
+    C.addFile(husky_path, namePrefix="husky_coll_").setParent(
+        C.getFrame("a1_base_joint")
+    ).setRelativePosition([0, 0.0, 0.16])
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
+
+    relative_pos = C.getFrame("husky_coll_right_arm_bulkhead_joint").getPosition()
+    relative_quat = C.getFrame("husky_coll_right_arm_bulkhead_joint").getQuaternion()
+
+    # relative_pos[2] -= 0.16
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        C.getFrame("a1_base_joint")
+    ).setRelativePosition(relative_pos).setRelativeQuaternion(
+        relative_quat
+    )
+
+    pre_husky_frame = (
+        C.addFrame("pre_husky_frame_2")
+        .setParent(table)
+        # .setPosition(table.getPosition() + [0.0, -0.5, 0.07])
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.0])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a2_base_joint").setParent(pre_husky_frame).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-3, 3, -3, 3, -3.14, 3.14])
+    ).setJointState([0., 0, 0])
+
+    relative_pos = C.getFrame("husky_coll_left_arm_bulkhead_joint").getPosition()
+    relative_quat = C.getFrame("husky_coll_left_arm_bulkhead_joint").getQuaternion()
+
+    # relative_pos[2] -= 0.16
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        C.getFrame("a2_base_joint")
+    ).setRelativePosition(relative_pos).setRelativeQuaternion(
+        relative_quat
+    )
+
+    C.getFrame("a1_ur_coll0").setContact(0)
+    C.getFrame("a2_ur_coll0").setContact(0)
+
+    g1 = (
+        C.addFrame("goal_1")
+        .setParent(table)
+        .setPosition(table.getPosition() + [1, 0.1, 1])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+    )
+
+    g1 = (
+        C.addFrame("goal_2")
+        .setParent(table)
+        .setPosition(table.getPosition() + [-1, 0.1, 1])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+    )
+
+    def compute_reach_poses(prefix, goal):
+        komo = ry.KOMO(
+            C,
+            phases=1,
+            slicesPerPhase=1,
+            kOrder=1,
+            enableCollisions=True,
+        )
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1])
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+        
+        x_constraint = np.zeros((1, 18))
+        x_constraint[0, 0] = 1e1
+        x_constraint[0, 9] = -1e1
+
+        komo.addObjective(
+            [1],
+            ry.FS.qItself,
+            [],
+            ry.OT.eq,
+            x_constraint,
+        )
+
+        y_constraint = np.zeros((1, 18))
+        y_constraint[0, 1] = 1e1
+        y_constraint[0, 10] = -1e1
+
+        komo.addObjective(
+            [1],
+            ry.FS.qItself,
+            [],
+            ry.OT.eq,
+            y_constraint,
+        )
+
+        phi_constraint = np.zeros((1, 18))
+        phi_constraint[0, 2] = 1e1
+        phi_constraint[0, 11] = -1e1
+
+        komo.addObjective(
+            [1],
+            ry.FS.qItself,
+            [],
+            ry.OT.eq,
+            phi_constraint,
+        )
+
+        komo.addObjective(
+            [1],
+            ry.FS.positionDiff,
+            [prefix + "ur_vacuum", goal],
+            ry.OT.eq,
+            [1e1],
+        )
+
+        all_keyframes = []
+        max_attempts = 20
+        for i in range(max_attempts):
+            if i > 0:
+                dim = len(C.getJointState())
+                x_init = np.random.rand(dim) * 8. - 4
+                komo.initWithConstant(x_init)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            print(retval)
+
+            # komo.view(True, "IK solution")
+            # komo.view(True, "IK solution")
+
+            keyframes = komo.getPath()
+
+            # print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+
+                if prefix == "a1_":
+                    all_keyframes.append(keyframes[0, :9])
+                else:
+                    all_keyframes.append(keyframes[0, 9:])
+
+        return all_keyframes
+
+    set_of_keyframes_left = compute_reach_poses("a1_", "goal_1")
+    set_of_keyframes_right = compute_reach_poses("a2_", "goal_2")
+
+    return C, set_of_keyframes_left, set_of_keyframes_right
+
+
 def make_box_pile_env(
     num_boxes=6,
     compute_multiple_keyframes: bool = False,

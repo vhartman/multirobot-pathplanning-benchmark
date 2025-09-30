@@ -202,6 +202,57 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
+@register("rai.husky_reach")
+class rai_husky_reach(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, kl, kr = rai_config.make_goto_husky_env()
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        lhs_constraint = np.zeros((3, 2*9), dtype=int)
+        lhs_constraint[0, [0, 9]] = [1, -1]
+        lhs_constraint[0, [1, 10]] = [1, -1]
+        lhs_constraint[0, [2, 11]] = [1, -1]
+
+        rhs_constraint = np.zeros((3, 1))
+
+        self.constraints = [AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
+
+        self.tasks = [
+            # joint
+            Task(
+                "r1_reach",
+                ["a1"],
+                GoalSet(kl),
+            ),
+            Task(
+                "r2_reach",
+                ["a2"],
+                GoalSet(kr),
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+        
+        self.sequence = self._make_sequence_from_names(
+            ["r1_reach", "r2_reach", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
 class rai_bimanual_husky_stacking(SequenceMixin, rai_env):
     def __init__(self):
         self.C = rai_config.make_bimanual_husky_box_stacking_env()
