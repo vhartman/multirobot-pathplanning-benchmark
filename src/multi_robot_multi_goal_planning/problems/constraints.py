@@ -117,6 +117,21 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
     def is_fulfilled(self, q: Configuration, env) -> bool:
         return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
 
+# constraint of the form 
+# A * q <= b
+# can b eused to e.g. constrain the configurtion space pose to a certain value
+# or to ensure that two values in the pose are the same
+class AffineConfigurationSpaceInequalityConstraint(Constraint):
+    def __init__(self, projection_matrix, pose, eps=1e-3):
+        self.mat = projection_matrix
+        self.constraint_pose = pose
+        self.eps = eps
+
+        assert self.mat.shape[0] == len(self.constraint_pose)
+
+    def is_fulfilled(self, q: Configuration, env) -> bool:
+        return all(self.mat @ q.state()[:, None] < self.constraint_pose)
+
 
 class AffineFrameOrientationConstraint(Constraint):
     def __init__(self, frame_name, desired_orientation_vector, epsilon):
