@@ -122,10 +122,9 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 # can b eused to e.g. constrain the configurtion space pose to a certain value
 # or to ensure that two values in the pose are the same
 class AffineConfigurationSpaceInequalityConstraint(Constraint):
-    def __init__(self, projection_matrix, pose, eps=1e-3):
+    def __init__(self, projection_matrix, pose):
         self.mat = projection_matrix
         self.constraint_pose = pose
-        self.eps = eps
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
