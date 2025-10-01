@@ -70,16 +70,15 @@ def relative_pose(a, b):
     pb, qb = np.array(b[:3]), np.array(b[3:])
 
     # rotation matrices
-    Ra = R.from_quat([qa[1], qa[2], qa[3], qa[0]])  # scipy expects (x,y,z,w)
-    Rb = R.from_quat([qb[1], qb[2], qb[3], qb[0]])
+    Ra = R.from_quat(qa, scalar_first=True)
+    Rb = R.from_quat(qb, scalar_first=True)
 
     # relative position
     prel = Ra.inv().apply(pb - pa)
 
     # relative orientation
     qrel = Ra.inv() * Rb
-    qrel = qrel.as_quat()  # (x,y,z,w)
-    qrel = np.array([qrel[3], qrel[0], qrel[1], qrel[2]])  # back to (w,x,y,z)
+    qrel = qrel.as_quat(scalar_first=True)  # (x,y,z,w)
 
     return np.concatenate([prel, qrel])
 
@@ -97,12 +96,18 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         assert self.mat.shape[1] == 7
 
     def is_fulfilled(self, q, env):
-        frame_1_pose = env.get_frame_pose(self.frames[0])
-        frame_2_pose = env.get_frame_pose(self.frames[1])
+        # frame_1_pose = env.get_frame_pose(q, self.frames[0])
+        # frame_2_pose = env.get_frame_pose(q, self.frames[1])
+
+        env.C.setJointState(q.state())
+        frame_1_pose = env.C.getFrame(self.frames[0]).getPose()
+
+        env.C.setJointState(q.state())
+        frame_2_pose = env.C.getFrame(self.frames[1]).getPose()
 
         rel_pose = relative_pose(frame_1_pose, frame_2_pose)
 
-        return np.isclose(self.mat @ rel_pose, self.desired_relative_pose, self.eps)
+        return all(np.isclose(self.mat @ rel_pose[:, None], self.desired_relative_pose, self.eps))
 
 # constraint of the form 
 # A * q = b
@@ -134,6 +139,7 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
         return all(self.mat @ q.state()[:, None] < self.constraint_pose)
 
 
+# This might currently still be a bit overcomplicated?
 class AffineFrameOrientationConstraint(Constraint):
     def __init__(self, frame_name, vector, desired_orientation_vector, epsilon):
         self.frame_name = frame_name
