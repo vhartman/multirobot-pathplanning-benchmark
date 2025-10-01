@@ -8,6 +8,8 @@ from numpy.typing import NDArray
 
 from .configuration import Configuration
 
+# from .rai_base_env import rai_env
+
 class Constraint(ABC):
     @abstractmethod
     def is_fulfilled(self, q: Configuration, env) -> bool:
@@ -31,7 +33,7 @@ def get_axes_from_quaternion(quat):
     Returns the x, y, z unit vectors of the frame defined by the quaternion.
     Each axis is a 3D vector in world coordinates.
     """
-    rot = R.from_quat(quat)
+    rot = R.from_quat(quat, scalar_first=True)
     rot_matrix = rot.as_matrix()  # 3x3 rotation matrix
     x_axis = rot_matrix[:, 0]
     y_axis = rot_matrix[:, 1]
@@ -133,18 +135,32 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
 
 
 class AffineFrameOrientationConstraint(Constraint):
-    def __init__(self, frame_name, desired_orientation_vector, epsilon):
+    def __init__(self, frame_name, vector, desired_orientation_vector, epsilon):
         self.frame_name = frame_name
         self.desired_orientation_vector = desired_orientation_vector
         self.epsilon = epsilon
+        self.vector = vector
+
+        assert self.vector in ["x", "y", "z"]
 
     def is_fulfilled(self, q, env):
-        frame_pose = env.get_frame_pose(self.frame_name)
+        # TODO: make applicable to all envs
+        env.C.setJointState(q.state())
+        frame_pose = env.C.getFrame(self.frame_name).getPose()
 
         # get vector from quaternion
         x_axis, y_axis, z_axis = get_axes_from_quaternion(frame_pose[3:])
 
-        return np.isclose(z_axis, self.desired_orientation_vector, self.epsilon)
+        if self.vector == "x":
+            axis_to_check = x_axis
+        elif self.vector == "y":
+            axis_to_check = y_axis
+        elif self.vector == "z":
+            axis_to_check = z_axis
+        else:
+            raise ValueError
+        
+        return all(np.isclose(axis_to_check, self.desired_orientation_vector, self.epsilon))
 
 
 # projects the pose of a frame to a path 
