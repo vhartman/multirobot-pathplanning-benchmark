@@ -56,9 +56,11 @@ class AffineTaskSpaceEqualityConstraint(Constraint):
         assert self.mat.shape[1] == 7
 
     def is_fulfilled(self, q: Configuration, env) -> bool:
-        frame_pose = env.get_frame_pose(self.frame_name)
+        # frame_pose = env.get_frame_pose(self.frame_name)
+        env.C.setJointState(q.state())
+        frame_pose = env.C.getFrame(self.frame_name).getPose()
 
-        return np.isclose(self.mat @ frame_pose, self.constraint_pose, self.eps)
+        return np.isclose(self.mat @ frame_pose[:, None], self.constraint_pose, self.eps)
 
 
 def relative_pose(a, b):
