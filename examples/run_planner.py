@@ -1,4 +1,6 @@
 import argparse
+from simple_parsing import ArgumentParser
+
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -43,7 +45,9 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 def main():
-    parser = argparse.ArgumentParser(description="Planner runner")
+    # parser = argparse.ArgumentParser(description="Planner runner")
+    parser = ArgumentParser(description="Planner runner")
+
     parser.add_argument("env", nargs="?", default="default", help="env to show")
     parser.add_argument(
         "--optimize",
@@ -110,6 +114,13 @@ def main():
         help="Show some analytics plots. (default: False)",
     )
 
+    # Add planner-specific configs - this is the ONLY change needed!
+    parser.add_arguments(CompositePRMConfig, dest="composite_prm_config", prefix="prm.")
+    parser.add_arguments(BaseRRTConfig, dest="rrt_config", prefix="rrt.")
+    parser.add_arguments(BaseITConfig, dest="it_config", prefix="it.")
+    parser.add_arguments(PrioritizedPlannerConfig, dest="prioritized_config", prefix="prio.")
+    parser.add_arguments(RecedingHorizonConfig, dest="horizon_config", prefix="horizon.")
+
     args = parser.parse_args()
 
     if args.num_iters is not None and args.max_time is not None:
@@ -134,48 +145,38 @@ def main():
 
     # env_copy = copy.deepcopy(env)
 
+    # Now just use the config objects directly!
     if args.planner == "composite_prm":
-        config = CompositePRMConfig()
-
-        config.distance_metric = args.distance_metric
-
+        config = args.composite_prm_config
+        config.distance_metric = args.distance_metric  # Override if needed
         planner = CompositePRM(env, config)
 
     elif args.planner == "rrt_star":
-        config = BaseRRTConfig()
-
+        config = args.rrt_config
         config.distance_metric = args.distance_metric
-
         planner = RRTstar(env, config=config)
 
     elif args.planner == "birrt_star":
-        config = BaseRRTConfig()
-
+        config = args.rrt_config
         config.distance_metric = args.distance_metric
-
         planner = BidirectionalRRTstar(env, config=config)
+
     elif args.planner == "aitstar":
-        config = BaseITConfig()
-
+        config = args.it_config
         config.distance_metric = args.distance_metric
-
         planner = AITstar(env, config=config)
 
     elif args.planner == "eitstar":
-        config = BaseITConfig()
-
+        config = args.it_config
         config.distance_metric = args.distance_metric
-
         planner = EITstar(env, config=config)
 
     elif args.planner == "prioritized":
-        config = PrioritizedPlannerConfig()
-
+        config = args.prioritized_config
         planner = PrioritizedPlanner(env, config)
 
     elif args.planner == "short_horizon":
-        config = RecedingHorizonConfig()
-
+        config = args.horizon_config
         planner = RecedingHorizonPlanner(env, config)
 
     np.random.seed(args.seed)

@@ -15,7 +15,8 @@ dependencies = [
     "numba",
     "sortedcontainers",
     "numpy",
-    "matplotlib>=3.4.0"
+    "matplotlib>=3.4.0",
+    "simple-parsing"
 ]
 
 [project.optional-dependencies]
