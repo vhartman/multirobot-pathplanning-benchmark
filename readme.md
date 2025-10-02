@@ -74,7 +74,8 @@ which runs the default planner on the environment with the default configuration
 python3 examples/run_planner.py 2d_handover --optimize --max_time=50 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max
 ```
 
-Not all options can be set throught the CLI interface.
+All options that can be set with a configuration file can also be set in the command line via `[planner_prefix].[option]`, e.g. `--rrt.shortcutting = False`.
+
 An experiment (i.e., multiple runs of multiple planners or of the same planner with multiple options) can be run with 
 
 ```
