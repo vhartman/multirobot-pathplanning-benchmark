@@ -9,7 +9,9 @@ from multi_robot_multi_goal_planning.problems.constraints import (
     AffineConfigurationSpaceInequalityConstraint,
     AffineFrameOrientationConstraint,
     RelativeAffineTaskSpaceEqualityConstraint,
+    RelativeAffineTaskSpaceInequalityConstraint,
     AffineTaskSpaceEqualityConstraint,
+    AffineTaskSpaceInequalityConstraint,
     relative_pose,
 )
 
@@ -67,6 +69,28 @@ def test_task_space_eq_constraint():
     assert not constraint.is_fulfilled(q, env)
 
 
+def test_task_space_ineq_constraint():
+    env = get_env_by_name("rai.piano")
+
+    A = np.zeros((2, 7))
+    A[0] = 1  # constraining x
+    A[1] = 1  # constraining y
+
+    b = np.zeros((2, 1))
+
+    constraint = AffineTaskSpaceInequalityConstraint("a1", A, b)
+
+    q = env.get_start_pos()
+    q[0][0] = -1
+    q[0][1] = 0
+    assert not constraint.is_fulfilled(q, env)
+
+    q = env.get_start_pos()
+    q[0][0] = 1
+    q[0][1] = -1
+    assert not constraint.is_fulfilled(q, env)
+
+
 def test_task_space_relative_eq_constraint():
     env = get_env_by_name("rai.piano")
 
@@ -88,6 +112,36 @@ def test_task_space_relative_eq_constraint():
 
     q2 = env.get_start_pos()
     q2[0][1] -= 1
+    q2[1][1] -= 1
+    assert constraint.is_fulfilled(q2, env)
+
+    q3 = env.get_start_pos()
+    q3[0][1] -= 1
+    q3[1][1] += 1
+    assert not constraint.is_fulfilled(q2, env)
+
+
+def test_task_space_relative_ineq_constraint():
+    env = get_env_by_name("rai.piano")
+
+    p1 = env.C.getFrame("a1").getPose()
+    p2 = env.C.getFrame("a2").getPose()
+
+    A = np.eye(7)
+    b = relative_pose(p1, p2)[:, None]
+
+    constraint = RelativeAffineTaskSpaceInequalityConstraint(["a1", "a2"], A, b)
+
+    q = env.get_start_pos()
+    assert constraint.is_fulfilled(q, env)
+
+    q1 = env.get_start_pos()
+    q1[0][0] += 1
+    q1[1][0] += 0
+    assert constraint.is_fulfilled(q1, env)
+
+    q2 = env.get_start_pos()
+    q2[0][1] -= 0
     q2[1][1] -= 1
     assert constraint.is_fulfilled(q2, env)
 

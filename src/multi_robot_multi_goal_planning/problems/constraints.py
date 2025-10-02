@@ -60,7 +60,28 @@ class AffineTaskSpaceEqualityConstraint(Constraint):
         env.C.setJointState(q.state())
         frame_pose = env.C.getFrame(self.frame_name).getPose()
 
-        return np.isclose(self.mat @ frame_pose[:, None], self.constraint_pose, self.eps)
+        return all(np.isclose(self.mat @ frame_pose[:, None], self.constraint_pose, self.eps))
+
+
+# constraint of the form 
+# A * frame_pose <= b
+# can be used to e.g. constrain the end effector to a certain pose
+class AffineTaskSpaceInequalityConstraint(Constraint):
+    def __init__(self, frame_name, projection_matrix, pose):
+        self.frame_name = frame_name
+
+        self.mat = projection_matrix
+        self.constraint_pose = pose
+
+        assert self.mat.shape[0] == len(self.constraint_pose)
+        assert self.mat.shape[1] == 7
+
+    def is_fulfilled(self, q: Configuration, env) -> bool:
+        # frame_pose = env.get_frame_pose(self.frame_name)
+        env.C.setJointState(q.state())
+        frame_pose = env.C.getFrame(self.frame_name).getPose()
+
+        return all(self.mat @ frame_pose[:, None] <  self.constraint_pose)
 
 
 def relative_pose(a, b):
@@ -87,6 +108,7 @@ def relative_pose(a, b):
 
 # constraint of the form
 # A * (frame_pose_1 - frame_pose_2) = b
+# TODO: possibly change to A * frame_pose_1 - A_2 * frame_pose_2 = b
 class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
     def __init__(self, frame_names: List[str], mat, rel_pose, eps: float = 1e-3):
         self.frames = frame_names
@@ -110,6 +132,37 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         rel_pose = relative_pose(frame_1_pose, frame_2_pose)
 
         return all(np.isclose(self.mat @ rel_pose[:, None], self.desired_relative_pose, self.eps))
+
+
+# constraint of the form
+# A * (frame_pose_1 - frame_pose_2) = b
+# TODO: possibly change to A * frame_pose_1 - A_2 * frame_pose_2 = b
+class RelativeAffineTaskSpaceInequalityConstraint(Constraint):
+    def __init__(self, frame_names: List[str], mat, rel_pose):
+        self.frames = frame_names
+        self.mat = mat
+        self.desired_relative_pose = rel_pose
+
+        # could possibly change in the future.
+        assert len(frame_names) == 2
+
+        assert self.mat.shape[0] == len(self.desired_relative_pose)
+        assert self.mat.shape[1] == 7
+
+    def is_fulfilled(self, q, env):
+        # frame_1_pose = env.get_frame_pose(q, self.frames[0])
+        # frame_2_pose = env.get_frame_pose(q, self.frames[1])
+
+        env.C.setJointState(q.state())
+        frame_1_pose = env.C.getFrame(self.frames[0]).getPose()
+
+        env.C.setJointState(q.state())
+        frame_2_pose = env.C.getFrame(self.frames[1]).getPose()
+
+        rel_pose = relative_pose(frame_1_pose, frame_2_pose)
+
+        return all(self.mat @ rel_pose[:, None] <= self.desired_relative_pose)
+
 
 # constraint of the form 
 # A * q = b
