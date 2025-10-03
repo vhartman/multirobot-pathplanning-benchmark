@@ -796,7 +796,10 @@ class rai_env(BaseProblem):
             viewer = self.C.get_viewer()
             self.C_cache[m].set_viewer(viewer)
             # self.C_cache[m].computeCollisions()
-            self.C_cache[m].view_recopyMeshes()
+            try:
+                self.C_cache[m].view_recopyMeshes()
+            except:
+                pass
             self.C = self.C_cache[m]
 
         else:
