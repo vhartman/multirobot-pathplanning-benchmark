@@ -23,6 +23,15 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist,
 )
+
+from multi_robot_multi_goal_planning.problems.constraints import (
+    AffineConfigurationSpaceEqualityConstraint,
+)
+
+from multi_robot_multi_goal_planning.problems.util import (
+    project_affine_only,
+    project_to_manifold,
+)
 from .sampling_informed import InformedSampling
 from .mode_validation import ModeValidation
 from .baseplanner import BasePlanner
@@ -1507,6 +1516,129 @@ class BaseRRTstar(BasePlanner):
 
         # uniform sampling
         return self._sample_uniform(mode)
+    
+################# GIOVANNI #################
+
+#1) PROJECTION OPERATOR
+    project_to_manifold = staticmethod(project_to_manifold)
+    project_affine_only = staticmethod(project_affine_only)
+
+#2)SAMPLER
+    def sample_uniform_aff_cspace_eq(
+        self,
+        mode: Mode,
+        max_tries: int = 1000,
+        eps: float = 1e-6,
+    ) -> Optional[Configuration]:
+        """
+        Uniform constrained sampling on the affine constraint manifold.
+        Combines ambient uniform sampling with exact projection onto 
+        environment + task affine constraints.
+        """
+        # collect environment + task affine constraints
+        affine_constraints = [
+            c for c in self.env.constraints
+            if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+        ]
+
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if next_ids or self.env.is_terminal_mode(mode):
+            active_task = self.env.get_active_task(mode, next_ids)
+            affine_constraints += [
+                c for c in active_task.constraints
+                if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+            ]
+
+        if not affine_constraints:
+            # fallback to plain uniform sampling
+            return self._sample_uniform(mode)
+
+        for _ in range(max_tries):
+            # ambient sample
+            q0 = self.env.sample_config_uniform_in_limits()
+
+            # project to affine constraints
+            q_proj = self.project_affine_only(q0, affine_constraints)
+
+            # validate
+            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                return q_proj
+
+        print("Failed affine uniform sampling after", max_tries, "tries.")
+        return None
+    
+    def sample_goal_configuration_aff_cspace_eq(
+        self,
+        mode: Mode,
+        max_tries: int = 1000,
+        eps: float = 1e-6,
+    ) -> Optional[Configuration]:
+        """
+        Goal sampling restricted to the affine constraint manifold:
+        env constraints + task constraints + goal constraints.
+        """
+            
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if not next_ids and not self.env.is_terminal_mode(mode):
+            return None
+
+        active_task = self.env.get_active_task(mode, next_ids)
+        active_robots = active_task.robots
+        goal_sample = active_task.goal.sample(mode)
+
+        # collect affine constraints
+        affine_constraints = [
+            c for c in self.env.constraints
+            if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+        ] + [
+            c for c in active_task.constraints
+            if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+        ]
+
+        # add goal constraints as affine equalities
+        cursor = 0
+        goal_cursor = 0
+        for r in self.env.robots:
+            dim = self.env.robot_dims[r]
+            if r in active_robots:
+                A_goal = np.zeros((dim, sum(self.env.robot_dims.values())))
+                for d in range(dim):
+                    A_goal[d, cursor + d] = 1.0
+                b_goal = goal_sample[goal_cursor : goal_cursor + dim]
+                affine_constraints.append(
+                    AffineConfigurationSpaceEqualityConstraint(A_goal, b_goal)
+                )
+                goal_cursor += dim
+            cursor += dim
+
+        for _ in range(max_tries):
+            q0 = self.env.sample_config_uniform_in_limits()
+            q_proj = self.project_affine_only(q0, affine_constraints)
+
+            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                print(goal_sample)
+                print(q_proj.state)
+                return q_proj
+            
+        
+
+        print("Failed affine goal sampling after", max_tries, "tries.")
+        return None
+    
+    def sample_configuration_aff_cspace_eq(self, mode: Mode) -> Configuration | None:
+        """
+        Samples a node configuration restricted to the affine constraint manifold.
+        Uses either affine goal sampling or affine uniform sampling depending on p_goal.
+        """
+
+        if np.random.uniform(0, 1) < self.config.p_goal:
+            # affine goal sampling
+            return self.sample_goal_configuration_aff_cspace_eq(mode)
+
+        # affine uniform sampling
+        return self.sample_uniform_aff_cspace_eq(mode)   
+    
+############################################
 
     def find_lb_transition_node(self, shortcutting_bool: bool = True) -> None:
         """
