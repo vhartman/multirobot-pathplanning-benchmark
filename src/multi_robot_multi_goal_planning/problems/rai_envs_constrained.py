@@ -215,8 +215,8 @@ class rai_husky_reach(SequenceMixin, rai_env):
 
         lhs_constraint = np.zeros((3, 2*9), dtype=int)
         lhs_constraint[0, [0, 9]] = [1, -1]
-        lhs_constraint[0, [1, 10]] = [1, -1]
-        lhs_constraint[0, [2, 11]] = [1, -1]
+        lhs_constraint[1, [1, 10]] = [1, -1]
+        lhs_constraint[2, [2, 11]] = [1, -1]
 
         rhs_constraint = np.zeros((3, 1))
 
@@ -252,6 +252,16 @@ class rai_husky_reach(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        # for _ in range(100):
+        #     q = self.sample_config_uniform_in_limits()
+        #     q[1][0] = q[0][0]
+        #     q[1][1] = q[0][1]
+        #     q[1][2] = q[0][2]
+        #     print(q.state())
+        #     print(len(q.state()))
+        #     self.show_config(q)
+
 
 class rai_bimanual_husky_stacking(SequenceMixin, rai_env):
     def __init__(self):
