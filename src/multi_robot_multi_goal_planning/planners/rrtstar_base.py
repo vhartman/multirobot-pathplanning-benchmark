@@ -1616,11 +1616,7 @@ class BaseRRTstar(BasePlanner):
             q_proj = self.project_affine_only(q0, affine_constraints)
 
             if q_proj is not None and self.env.is_collision_free(q_proj, mode):
-                print(goal_sample)
-                print(q_proj.state)
                 return q_proj
-            
-        
 
         print("Failed affine goal sampling after", max_tries, "tries.")
         return None
