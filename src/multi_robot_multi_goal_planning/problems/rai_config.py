@@ -4698,7 +4698,7 @@ def make_two_arms_on_a_gantry():
 
     floor = C.addFrame("table").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
-    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    ).setColor([0.9, 0.9, 0.9]).setContact(1)
 
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
@@ -4953,7 +4953,7 @@ def make_four_arms_on_a_gantry():
 
     floor = C.addFrame("table").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
-    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    ).setColor([0.9, 0.9, 0.9]).setContact(1)
 
     def add_agent(prefix, add_linkage=False, start_pose = [0.0, 0.0, 2], start_y_config=-0.5):
         pre_agent_frame = (
@@ -5184,7 +5184,7 @@ def make_goto_husky_env():
 
     table = C.addFrame("table").setPosition([0, 0, 0.0]).setShape(
         ry.ST.box, size=[20, 20, 0.02, 0.005]
-    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+    ).setColor([0.9, 0.9, 0.9]).setContact(1)
 
     husky_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/husky/husky.g")
 
