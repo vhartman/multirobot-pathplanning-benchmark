@@ -28,7 +28,7 @@ from multi_robot_multi_goal_planning.problems.constraints import (
     AffineConfigurationSpaceEqualityConstraint,
 )
 
-from multi_robot_multi_goal_planning.problems.constraints_projection import (
+from multi_robot_multi_goal_planning.problems.constraints_handling import (
     project_affine_only,
     project_to_manifold,
 )
@@ -1519,6 +1519,103 @@ class BaseRRTstar(BasePlanner):
     
 ################# GIOVANNI #################
 
+#0) UTILS
+    def collect_env_and_task_constraints(self, mode: Mode) -> List: 
+        """
+        Collects all relevant constraints from the environment and task.
+
+        Args:
+            env: The planning environment, providing .get_constraints()
+            task: The planning task, providing .get_constraints()
+        Returns:
+            A list of constraint objects.
+        """
+        affine_constraints = []
+
+        affine_constraints += [
+            c for c in self.env.constraints
+            if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+        ]
+
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if next_ids or self.env.is_terminal_mode(mode):
+            active_task = self.env.get_active_task(mode, next_ids)
+            affine_constraints += [
+                c for c in active_task.constraints
+                if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+            ]
+
+        return affine_constraints
+
+    def make_transition_config_constraint(self, mode: Mode, q: Configuration, forward=True) -> AffineConfigurationSpaceEqualityConstraint:
+        """
+        Transforms a transition configuration into an affine constraint.
+        """
+        n_total = sum(self.env.robot_dims.values())
+
+        # get active robots in current mode
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if not next_ids and not self.env.is_terminal_mode(mode):
+            return None
+        active_task = self.env.get_active_task(mode, next_ids)
+        active_robots = active_task.robots
+
+        if forward:
+            pin_robots = active_robots
+        else:
+            # previous active robots
+            prev_active_robots = []
+            if mode.prev_mode is not None:
+                prev_next_ids = self.mode_validation.get_valid_next_ids(mode.prev_mode)
+                prev_task = self.env.get_active_task(mode.prev_mode, prev_next_ids)
+                prev_active_robots = prev_task.robots
+
+            # only constrain robots active in both
+            pin_robots = [r for r in active_robots if r in prev_active_robots]
+
+        cursor = 0
+        trans_cursor = 0
+        A_trans = np.zeros((n_total, n_total))
+        b_trans = np.zeros(n_total)
+        q_vec = q.state() if hasattr(q, "state") else np.asarray(q)
+
+        for r in self.env.robots:
+            dim = self.env.robot_dims[r]
+            if r in pin_robots:
+                A_trans[trans_cursor:trans_cursor + dim, cursor:cursor + dim] = np.eye(dim)
+                b_trans[trans_cursor:trans_cursor + dim] = q_vec[cursor:cursor + dim]
+                trans_cursor += dim
+            cursor += dim
+
+        # crop to used rows (otherwise you'll have trailing zero rows)
+        A_trans = A_trans[:trans_cursor, :]
+        b_trans = b_trans[:trans_cursor]
+
+        return AffineConfigurationSpaceEqualityConstraint(A_trans, b_trans)
+    
+    def expand_partial_anchor_to_full(self, mode: Mode, q_anchor_vec: np.ndarray, robots_subset: list[int]) -> np.ndarray:
+        n_total = sum(self.env.robot_dims.values())
+        full = np.zeros(n_total)
+        # fill inactive with start_pos (or current tree’s nearest, up to you)
+        base = np.asarray(self.env.start_pos.state(), dtype=float)
+        full[:] = base
+
+        # offsets
+        robot_offset = {}
+        cursor = 0
+        for r in self.env.robots:
+            robot_offset[r] = cursor
+            cursor += self.env.robot_dims[r]
+
+        # write subset in order
+        goal_cursor = 0
+        for r in robots_subset:
+            dim = self.env.robot_dims[r]
+            full[robot_offset[r]:robot_offset[r]+dim] = q_anchor_vec[goal_cursor:goal_cursor+dim]
+            goal_cursor += dim
+        return full
+
+
 #1) PROJECTION OPERATOR
     project_to_manifold = staticmethod(project_to_manifold)
     project_affine_only = staticmethod(project_affine_only)
@@ -1536,18 +1633,7 @@ class BaseRRTstar(BasePlanner):
         environment + task affine constraints.
         """
         # collect environment + task affine constraints
-        affine_constraints = [
-            c for c in self.env.constraints
-            if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
-        ]
-
-        next_ids = self.mode_validation.get_valid_next_ids(mode)
-        if next_ids or self.env.is_terminal_mode(mode):
-            active_task = self.env.get_active_task(mode, next_ids)
-            affine_constraints += [
-                c for c in active_task.constraints
-                if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
-            ]
+        affine_constraints = self.collect_env_and_task_constraints(mode)
 
         if not affine_constraints:
             # fallback to plain uniform sampling
@@ -1567,119 +1653,73 @@ class BaseRRTstar(BasePlanner):
         print("Failed affine uniform sampling after", max_tries, "tries.")
         return None
     
-    def sample_goal_configuration_aff_cspace_eq(
+    def sample_goal_aff_cspace_eq(
         self,
         mode: Mode,
         transition_node_ids: Dict[Mode, List[int]],
         tree_order: int = 1,
-        max_tries: int = 1000,
-        eps: float = 1e-6,
-    ) -> Optional[Configuration]:
+    ) -> Configuration | None:
         """
-        Goal sampling restricted to the affine constraint manifold:
-        env constraints + task constraints + goal (or start, if reverse) constraints.
+        Constraint-aware goal sampling.
+        Builds the manifold = env + task + (transition config constraint),
+        then samples a random configuration projected onto it.
         """
-        affine_constraints = []
+        max_tries = 1000
+        eps = 1e-6
+        n_total = sum(self.env.robot_dims.values())
 
-        next_ids = self.mode_validation.get_valid_next_ids(mode)
-        if not next_ids and not self.env.is_terminal_mode(mode):
-            return None
-
-        active_task = self.env.get_active_task(mode, next_ids)
-        active_robots = active_task.robots
-        goal_sample = active_task.goal.sample(mode)
-
-        # collect environment + task affine constraints
-        affine_constraints = [
-            c for c in self.env.constraints
-            if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
-        ] + [
-            c for c in active_task.constraints
-            if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
-        ]
-        
-        # reverse tree expansion
-        if tree_order == -1:
+        # select anchor transition configuration
+        if tree_order == -1:  # backward expansion
             if mode.prev_mode is None or mode == self.env.start_mode:
-                q = self.env.start_pos
+                q_anchor = self.env.start_pos
             else:
-                transition_nodes_id = transition_node_ids[mode.prev_mode]
+                transition_nodes_id = transition_node_ids.get(mode.prev_mode, [])
                 if transition_nodes_id == []:
-                    q = self.sample_transition_configuration(mode.prev_mode)
+                    q_anchor = self.sample_transition_configuration(mode.prev_mode)
                 else:
                     node_id = np.random.choice(transition_nodes_id)
                     node = self.trees[mode.prev_mode].subtree.get(node_id)
                     if node is None:
                         node = self.trees[mode.prev_mode].subtree_b.get(node_id)
-                    q = node.state.q
-            
-            # task constraints of previous mode (if any)
-            if mode.prev_mode is not None:
-                prev_task = self.env.get_active_task(
-                    mode.prev_mode, self.mode_validation.get_valid_next_ids(mode.prev_mode)
-                )
-                affine_constraints += [
-                    c for c in prev_task.constraints
-                    if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
-                ]
+                    q_anchor = node.state.q
+            forward = False
 
-            # get previous active robots
-            prev_active_robots = []
-            if mode.prev_mode is not None:
-                prev_task = self.env.get_active_task(
-                    mode.prev_mode, self.mode_validation.get_valid_next_ids(mode.prev_mode)
-                )
-                prev_active_robots = prev_task.robots
+        else:  # forward expansion
+            q_anchor = self.sample_transition_configuration_aff_cspace_eq(mode)
+            # next_ids = self.mode_validation.get_valid_next_ids(mode) 
+            # if not next_ids and not self.env.is_terminal_mode(mode): 
+            #     return None 
+            # active_task = self.env.get_active_task(mode, next_ids)
+            # q_anchor = active_task.goal.sample(mode)
+            # q_anchor = np.asarray(q_anchor)
 
-            # add START equalities only for robots active in both modes
-            cursor = 0
-            start_vec = q.state()
-            for r in self.env.robots:
-                dim = self.env.robot_dims[r]
-                if r in active_robots and r in prev_active_robots:
-                    A_start = np.zeros((dim, sum(self.env.robot_dims.values())))
-                    for d in range(dim):
-                        A_start[d, cursor + d] = 1.0
-                    b_start = start_vec[cursor:cursor + dim]
-                    affine_constraints.append(
-                        AffineConfigurationSpaceEqualityConstraint(A_start, b_start)
-                    )
-                cursor += dim
+            # qv = np.asarray(q_anchor, dtype=float)
+            # if qv.size < n_total:
+            #     q_anchor = self.expand_partial_anchor_to_full(mode, qv, active_task.robots)
 
-            for _ in range(max_tries):
-                q0 = self.env.sample_config_uniform_in_limits()
-                q_proj = self.project_affine_only(q0, affine_constraints)
-                if q_proj is not None and self.env.is_collision_free(q_proj, mode):
-                    return q_proj
+            if q_anchor is None:
+                return None
+            return q_anchor
 
-            print("Failed affine goal sampling after", max_tries, "tries.")
+        if q_anchor is None:
             return None
-        
-        # forward tree expansion
-        else:
-            cursor = 0
-            goal_cursor = 0
-            for r in self.env.robots:
-                dim = self.env.robot_dims[r]
-                if r in active_robots:
-                    A_goal = np.zeros((dim, sum(self.env.robot_dims.values())))
-                    for d in range(dim):
-                        A_goal[d, cursor + d] = 1.0
-                    b_goal = goal_sample[goal_cursor:goal_cursor + dim]
-                    affine_constraints.append(
-                        AffineConfigurationSpaceEqualityConstraint(A_goal, b_goal)
-                    )
-                    goal_cursor += dim
-                cursor += dim
 
-            for _ in range(max_tries):
-                q0 = self.env.sample_config_uniform_in_limits()
-                q_proj = self.project_affine_only(q0, affine_constraints)
-                if q_proj is not None and self.env.is_collision_free(q_proj, mode):
-                    return q_proj
+        # create set of constraints
+        affine_constraints = self.collect_env_and_task_constraints(mode)
+        trans_constraint = self.make_transition_config_constraint(mode, q_anchor, forward=forward)
+        if trans_constraint is not None:
+            affine_constraints.append(trans_constraint)
 
-            print("Failed affine goal sampling after", max_tries, "tries.")
-            return None
+        # projection
+        for _ in range(max_tries):
+            q0 = self.env.sample_config_uniform_in_limits()
+            q_proj = self.project_affine_only(q0, affine_constraints)
+
+            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                return q_proj
+
+        print(f"Failed constraint-aware goal sampling after {max_tries} tries in mode {mode}.")
+        return None
     
     def sample_configuration_aff_cspace_eq(self, mode: Mode) -> Configuration | None:
         """
@@ -1689,10 +1729,40 @@ class BaseRRTstar(BasePlanner):
 
         if np.random.uniform(0, 1) < self.config.p_goal:
             # affine goal sampling
-            return self.sample_goal_configuration_aff_cspace_eq(mode, self.transition_node_ids, self.trees[mode].order)
+            return self.sample_goal_aff_cspace_eq(mode, self.transition_node_ids, self.trees[mode].order)
 
         # affine uniform sampling
-        return self.sample_uniform_aff_cspace_eq(mode)   
+        return self.sample_uniform_aff_cspace_eq(mode)
+    
+
+    def sample_transition_configuration_aff_cspace_eq(self, mode: Mode) -> Configuration | None:
+        """
+        Samples a transition configuration restricted to the affine constraint manifold.
+        """
+        max_tries = 1000
+
+        if self.env.is_terminal_mode(mode):
+            active_task = self.env.get_active_task(mode, []) # in terminal mode no next_ids
+            tc = active_task.goal.sample(mode)
+
+        else:
+            tc = self.sample_transition_configuration(mode)
+            if tc is None:
+                return None
+        
+        affine_constraints = self.collect_env_and_task_constraints(mode)
+        trans_constraint = self.make_transition_config_constraint(mode, tc)
+        if trans_constraint is not None:
+            affine_constraints.append(trans_constraint)
+
+        # projection
+        for _ in range(max_tries):
+            q0 = self.env.sample_config_uniform_in_limits()
+            q_proj = self.project_affine_only(q0, affine_constraints)
+
+            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                return q_proj
+
     
 ############################################
 

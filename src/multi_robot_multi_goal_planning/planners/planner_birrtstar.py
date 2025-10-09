@@ -85,7 +85,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             # Initialize transition nodes
             node = None
             for i in range(self.config.transition_nodes):
-                q = self.sample_transition_configuration(new_mode)
+                q = self.sample_transition_configuration_aff_cspace_eq(new_mode)
                 if q is None:
                     if new_mode in self.modes:
                         self.modes.remove(new_mode)
@@ -398,13 +398,14 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not q_rand:
                 continue
 
-            # check if the nodes respect constraints         
-            c = self.env.constraints
-            if c:
-                for constraint in c:
-                    print("AAAAAAAAAAAAAAA")
-                    if not constraint.is_fulfilled(q_rand, self.env):
-                        print("Constraint not fulfilled by sampled configuration")
+            # self.env.show_config(q_rand, blocking = False)
+
+            # # check if the nodes respect constraints         
+            # c = self.env.constraints
+            # if c:
+            #     for constraint in c:
+            #         if not constraint.is_fulfilled(q_rand, self.env):
+            #             print("Constraint not fulfilled by sampled configuration")
             
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
