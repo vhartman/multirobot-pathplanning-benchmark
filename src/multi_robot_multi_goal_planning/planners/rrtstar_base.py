@@ -1740,16 +1740,9 @@ class BaseRRTstar(BasePlanner):
         Samples a transition configuration restricted to the affine constraint manifold.
         """
         max_tries = 1000
-
-        if self.env.is_terminal_mode(mode):
-            active_task = self.env.get_active_task(mode, []) # in terminal mode no next_ids
-            tc = active_task.goal.sample(mode)
-
-        else:
-            tc = self.sample_transition_configuration(mode)
-            if tc is None:
-                return None
-        
+        tc = self.sample_transition_configuration(mode)
+        if tc is None:
+            return None
         affine_constraints = self.collect_env_and_task_constraints(mode)
         trans_constraint = self.make_transition_config_constraint(mode, tc)
         if trans_constraint is not None:
