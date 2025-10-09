@@ -193,7 +193,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 
 # constraint of the form 
 # A * q <= b
-# can b eused to e.g. constrain the configurtion space pose to a certain value
+# can be used to e.g. constrain the configuration space pose to a certain value
 # or to ensure that two values in the pose are the same
 class AffineConfigurationSpaceInequalityConstraint(Constraint):
     def __init__(self, projection_matrix, pose):
@@ -203,7 +203,7 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.constraint_pose)
 
     def is_fulfilled(self, q: Configuration, env) -> bool:
-        return all(self.mat @ q.state()[:, None] < self.constraint_pose)
+        return np.all(self.mat @ q.state()[:, None] < self.constraint_pose)
 
 
 # This might currently still be a bit overcomplicated?

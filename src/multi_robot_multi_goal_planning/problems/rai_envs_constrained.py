@@ -34,6 +34,7 @@ from .goals import (
 )
 from .rai_base_env import rai_env
 from .constraints import (
+    AffineConfigurationSpaceInequalityConstraint,
     RelativeAffineTaskSpaceEqualityConstraint,
     AffineTaskSpaceEqualityConstraint,
     AffineConfigurationSpaceEqualityConstraint,
@@ -334,6 +335,13 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
 
         self.constraints = [AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0]]), np.array([0]))]
 
+        # we dont want the arms to cross each other
+        ineq_A= np.zeros((2, 2*9), dtype=int)
+        ineq_A[0, [1]] = [1] # y1 < 0
+        ineq_A[1, [10]] = [-1] # y2 < 0
+        ineq_B = np.zeros((2, 1))
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A, ineq_B)]
+
         self.tasks = [
             # joint
             Task(
@@ -431,6 +439,13 @@ class rai_rfl(SequenceMixin, rai_env):
         rhs_constraint = np.zeros((2, 1))
 
         self.constraints = [AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
+
+        # we dont want the arms to cross each other
+        ineq_A= np.zeros((2, 4*9), dtype=int)
+        ineq_A[0, [1, 10]] = [1, -1] # y1 - y2 < 0
+        ineq_A[1, [19, 28]] = [1, -1] # y3 - y4 < 0
+        ineq_B = np.zeros((2, 1))
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A, ineq_B)]
 
         self.tasks = [
             # joint

@@ -26,9 +26,10 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 
 from multi_robot_multi_goal_planning.problems.constraints import (
     AffineConfigurationSpaceEqualityConstraint,
+    AffineConfigurationSpaceInequalityConstraint,
 )
 
-from multi_robot_multi_goal_planning.problems.constraints_handling import (
+from multi_robot_multi_goal_planning.problems.constraints_projection import (
     project_affine_only,
     project_to_manifold,
 )
@@ -1520,7 +1521,7 @@ class BaseRRTstar(BasePlanner):
 ################# GIOVANNI #################
 
 #0) UTILS
-    def collect_env_and_task_constraints(self, mode: Mode) -> List: 
+    def collect_env_and_task_aff_eq_constraints(self, mode: Mode) -> List: 
         """
         Collects all relevant constraints from the environment and task.
 
@@ -1543,6 +1544,33 @@ class BaseRRTstar(BasePlanner):
             affine_constraints += [
                 c for c in active_task.constraints
                 if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+            ]
+
+        return affine_constraints
+    
+    def collect_env_and_task_aff_ineq_constraints(self, mode: Mode) -> List:
+        """
+        Collects all relevant inequality constraints from the environment and task.
+
+        Args:
+            env: The planning environment, providing .get_constraints()
+            task: The planning task, providing .get_constraints()
+        Returns:
+            A list of constraint objects.
+        """
+        affine_constraints = []
+
+        affine_constraints += [
+            c for c in self.env.constraints
+            if isinstance(c, AffineConfigurationSpaceInequalityConstraint)
+        ]
+
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if next_ids or self.env.is_terminal_mode(mode):
+            active_task = self.env.get_active_task(mode, next_ids)
+            affine_constraints += [
+                c for c in active_task.constraints
+                if isinstance(c, AffineConfigurationSpaceInequalityConstraint)
             ]
 
         return affine_constraints
@@ -1592,29 +1620,13 @@ class BaseRRTstar(BasePlanner):
         b_trans = b_trans[:trans_cursor]
 
         return AffineConfigurationSpaceEqualityConstraint(A_trans, b_trans)
-    
-    def expand_partial_anchor_to_full(self, mode: Mode, q_anchor_vec: np.ndarray, robots_subset: list[int]) -> np.ndarray:
-        n_total = sum(self.env.robot_dims.values())
-        full = np.zeros(n_total)
-        # fill inactive with start_pos (or current tree’s nearest, up to you)
-        base = np.asarray(self.env.start_pos.state(), dtype=float)
-        full[:] = base
 
-        # offsets
-        robot_offset = {}
-        cursor = 0
-        for r in self.env.robots:
-            robot_offset[r] = cursor
-            cursor += self.env.robot_dims[r]
-
-        # write subset in order
-        goal_cursor = 0
-        for r in robots_subset:
-            dim = self.env.robot_dims[r]
-            full[robot_offset[r]:robot_offset[r]+dim] = q_anchor_vec[goal_cursor:goal_cursor+dim]
-            goal_cursor += dim
-        return full
-
+    def satisfies_aff_ineq_constraints(self, constraints: List, q: Configuration) -> bool:
+        for c in constraints:
+            if isinstance(c, AffineConfigurationSpaceInequalityConstraint):
+                if not c.is_fulfilled(q, self.env):
+                    return False
+        return True
 
 #1) PROJECTION OPERATOR
     project_to_manifold = staticmethod(project_to_manifold)
@@ -1633,11 +1645,21 @@ class BaseRRTstar(BasePlanner):
         environment + task affine constraints.
         """
         # collect environment + task affine constraints
-        affine_constraints = self.collect_env_and_task_constraints(mode)
+        affine_constraints = self.collect_env_and_task_aff_eq_constraints(mode)
+        aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
 
-        if not affine_constraints:
+        if not affine_constraints and not aff_ineq_constraints:
             # fallback to plain uniform sampling
             return self._sample_uniform(mode)
+        
+        if not affine_constraints:
+            # only affine inequalities -> sample ambient and check
+            for _ in range(max_tries):
+                q0 = self.env.sample_config_uniform_in_limits()
+                if self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q0) and self.env.is_collision_free(q0, mode):
+                    return q0
+            print("Failed affine uniform sampling with only inequalities after", max_tries, "tries.")
+            return None
 
         for _ in range(max_tries):
             # ambient sample
@@ -1647,7 +1669,7 @@ class BaseRRTstar(BasePlanner):
             q_proj = self.project_affine_only(q0, affine_constraints)
 
             # validate
-            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+            if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                 return q_proj
 
         print("Failed affine uniform sampling after", max_tries, "tries.")
@@ -1686,16 +1708,6 @@ class BaseRRTstar(BasePlanner):
 
         else:  # forward expansion
             q_anchor = self.sample_transition_configuration_aff_cspace_eq(mode)
-            # next_ids = self.mode_validation.get_valid_next_ids(mode) 
-            # if not next_ids and not self.env.is_terminal_mode(mode): 
-            #     return None 
-            # active_task = self.env.get_active_task(mode, next_ids)
-            # q_anchor = active_task.goal.sample(mode)
-            # q_anchor = np.asarray(q_anchor)
-
-            # qv = np.asarray(q_anchor, dtype=float)
-            # if qv.size < n_total:
-            #     q_anchor = self.expand_partial_anchor_to_full(mode, qv, active_task.robots)
 
             if q_anchor is None:
                 return None
@@ -1705,17 +1717,19 @@ class BaseRRTstar(BasePlanner):
             return None
 
         # create set of constraints
-        affine_constraints = self.collect_env_and_task_constraints(mode)
+        affine_constraints = self.collect_env_and_task_aff_eq_constraints(mode)
         trans_constraint = self.make_transition_config_constraint(mode, q_anchor, forward=forward)
         if trans_constraint is not None:
             affine_constraints.append(trans_constraint)
+
+        aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
 
         # projection
         for _ in range(max_tries):
             q0 = self.env.sample_config_uniform_in_limits()
             q_proj = self.project_affine_only(q0, affine_constraints)
 
-            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+            if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                 return q_proj
 
         print(f"Failed constraint-aware goal sampling after {max_tries} tries in mode {mode}.")
@@ -1743,17 +1757,19 @@ class BaseRRTstar(BasePlanner):
         tc = self.sample_transition_configuration(mode)
         if tc is None:
             return None
-        affine_constraints = self.collect_env_and_task_constraints(mode)
+        affine_constraints = self.collect_env_and_task_aff_eq_constraints(mode)
         trans_constraint = self.make_transition_config_constraint(mode, tc)
         if trans_constraint is not None:
             affine_constraints.append(trans_constraint)
+
+        aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
 
         # projection
         for _ in range(max_tries):
             q0 = self.env.sample_config_uniform_in_limits()
             q_proj = self.project_affine_only(q0, affine_constraints)
 
-            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+            if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                 return q_proj
 
     
