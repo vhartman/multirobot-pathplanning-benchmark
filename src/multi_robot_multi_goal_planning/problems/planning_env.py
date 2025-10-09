@@ -470,7 +470,6 @@ class UnorderedButAssignedMixin(BaseModeLogic):
             mode_exists = False
             for nm in mode.next_modes:
                 if hash(nm) == hash(next_mode):
-                    # print("AAAAAAAAAA")
                     next_modes.append(nm)
                     mode_exists = True
 
@@ -479,10 +478,6 @@ class UnorderedButAssignedMixin(BaseModeLogic):
             if not mode_exists:
                 mode.next_modes.append(next_mode)
                 next_modes.append(next_mode)
-
-        # print(mode)
-        # print(mode.next_modes)
-        # print()
 
         return next_modes
 
@@ -519,9 +514,6 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                     if self.is_collision_free(q, m):
                         valid_next_task_combination = rnd_next_task_combination
                         q_transition = q
-
-                        # print(m.task_ids)
-                        # self.show()
 
                         break
 

@@ -393,9 +393,18 @@ class BidirectionalRRTstar(BaseRRTstar):
             # Mode selection
             active_mode = self.random_mode()
             # Bi RRT* core
-            q_rand = self.sample_configuration(active_mode)
+            # q_rand = self.sample_configuration(active_mode)
+            q_rand = self.sample_configuration_aff_cspace_eq(active_mode)
             if not q_rand:
                 continue
+
+            # check if the nodes respect constraints         
+            c = self.env.constraints
+            if c:
+                for constraint in c:
+                    print("AAAAAAAAAAAAAAA")
+                    if not constraint.is_fulfilled(q_rand, self.env):
+                        print("Constraint not fulfilled by sampled configuration")
             
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
