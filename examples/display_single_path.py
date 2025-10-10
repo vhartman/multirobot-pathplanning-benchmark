@@ -156,8 +156,8 @@ def main():
         help="Shortcut the path. (default: False)",
     )
     parser.add_argument(
-        "--insert_transition_nodes",
-        action="store_true",
+        "--dont_insert_transition_nodes",
+        action="store_false",
         help="Shortcut the path. (default: False)",
     )
     parser.add_argument(
@@ -246,7 +246,7 @@ def main():
         # make_mode_plot(path, env)
         plt.show()
 
-    if args.insert_transition_nodes:
+    if args.dont_insert_transition_nodes:
         path_w_doubled_modes = []
         for i in range(len(path)):
             path_w_doubled_modes.append(path[i])
