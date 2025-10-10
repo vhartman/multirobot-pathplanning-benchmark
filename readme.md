@@ -97,11 +97,19 @@ An environment and its modes can be inspected with
 python3 examples/show_problems.py [environment name] --mode modes
 ```
 
-and finally, a path can be visualized  and possibly exported with 
+and finally, a path can be visualized  and possibly exported (using `--export`) with the command below assuming that the path was saved before (with `--save` for `run_planner.py` for example.)
 
 ```
 python3 examples/display_single_path.py [filename] [environment_name]
 ```
+
+The images are saved to the folder `z.vid`, and can be concatenated to a video with 
+
+```
+ffmpeg -framerate 30 -i %04d.png -c:v libx264 -pix_fmt yuv420p out.mp4
+```
+
+(ran in the folder above).
 
 ## Planners
 Currently, for the optimal planners, we have implementations of RRT, Bidirectional RRT, PRM, AIT and EIT.

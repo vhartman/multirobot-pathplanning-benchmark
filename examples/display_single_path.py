@@ -158,7 +158,7 @@ def main():
     parser.add_argument(
         "--dont_insert_transition_nodes",
         action="store_false",
-        help="Shortcut the path. (default: False)",
+        help="Insert transition nodes at the modes. (default: False)",
     )
     parser.add_argument(
         "--plot",
@@ -168,17 +168,17 @@ def main():
     parser.add_argument(
         "--cost_plot",
         action="store_true",
-        help="Plot the path. (default: False)",
+        help="Plot the cost. (default: False)",
     )
     parser.add_argument(
         "--export",
         action="store_true",
-        help="Plot the path. (default: False)",
+        help="Export the images of the path. (default: False)",
     )
     parser.add_argument(
         "--pause",
         action="store_true",
-        help="Plot the path. (default: False)",
+        help="Stop at mode switches. (used for debugging. default: False)",
     )
     parser.add_argument(
         "--show_coll_config",
