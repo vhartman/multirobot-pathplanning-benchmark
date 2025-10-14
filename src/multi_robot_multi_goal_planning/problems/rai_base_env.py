@@ -846,6 +846,7 @@ class rai_env(BaseProblem):
                     v = 5
                     diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean")
                     dt = diff / v
+                    dt = max(dt, 0.01)
 
             time.sleep(dt)
 
