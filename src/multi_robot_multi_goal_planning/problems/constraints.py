@@ -166,44 +166,57 @@ class RelativeAffineTaskSpaceInequalityConstraint(Constraint):
 
 # constraint of the form 
 # A * q = b
-# can b eused to e.g. constrain the configurtion space pose to a certain value
+# can be used to e.g. constrain the configuration space pose to a certain value
 # or to ensure that two values in the pose are the same
 class AffineConfigurationSpaceEqualityConstraint(Constraint):
     def __init__(self, projection_matrix, pose, eps=1e-3):
-        self.mat = projection_matrix
-        self.constraint_pose = pose
+        self.mat = np.asarray(projection_matrix, dtype=float)
+        self.constraint_pose = np.asarray(pose, dtype=float)
+        self.rhs = self.constraint_pose  # alias
         self.eps = eps
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
-    def F(self, q_vec: np.ndarray, env) -> np.ndarray:
-        """
-        Residual vector: equals zero when the constraint is satisfied.
-        """
+    def F(self, q_vec: np.ndarray) -> np.ndarray:
+        """Residual F(q) = A q - b (zero when satisfied)."""
         return self.mat @ q_vec - self.constraint_pose
 
-    def J(self, q_vec: np.ndarray, env) -> np.ndarray:
-        """
-        Jacobian matrix: constant for affine constraints.
-        """
-        return self.mat       
+    def J(self, q_vec: np.ndarray) -> np.ndarray:
+        """Jacobian: constant A for affine constraints."""
+        return self.mat
 
-    def is_fulfilled(self, q: Configuration, env) -> bool:
-        return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
+    def is_fulfilled(self, q: Configuration, env: Optional[Any] = None) -> bool:
+        """Check if constraint is (approximately) satisfied."""
+        return np.allclose(self.mat @ q.state(), self.constraint_pose, atol=self.eps)
+
 
 # constraint of the form 
 # A * q <= b
 # can be used to e.g. constrain the configuration space pose to a certain value
 # or to ensure that two values in the pose are the same
 class AffineConfigurationSpaceInequalityConstraint(Constraint):
-    def __init__(self, projection_matrix, pose):
-        self.mat = projection_matrix
-        self.constraint_pose = pose
+    def __init__(self, projection_matrix, pose, eps=1e-9):
+        self.mat = np.asarray(projection_matrix, dtype=float)
+        self.constraint_pose = np.asarray(pose, dtype=float)
+        self.rhs = self.constraint_pose  # <-- alias for compatibility
+        self.eps = eps
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
-    def is_fulfilled(self, q: Configuration, env) -> bool:
-        return np.all(self.mat @ q.state()[:, None] < self.constraint_pose)
+    def G(self, q_vec: np.ndarray) -> np.ndarray:
+        """
+        Inequality residual: G(q) = A q - b <= 0  (feasible when negative or zero)
+        """
+        return self.mat @ q_vec - self.constraint_pose
+
+    def dG(self, q_vec: np.ndarray) -> np.ndarray:
+        """Jacobian of G(q): constant A."""
+        return self.mat
+
+    def is_fulfilled(self, q: Configuration, env: Optional[Any] = None) -> bool:
+        """Feasible if A q <= b."""
+        return np.all(self.mat @ q.state() <= self.constraint_pose + self.eps)
+
 
 
 # This might currently still be a bit overcomplicated?

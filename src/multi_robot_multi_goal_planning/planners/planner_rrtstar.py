@@ -141,7 +141,7 @@ class RRTstar(BaseRRTstar):
             # Mode selection
             active_mode = self.random_mode()
 
-            # print(active_mode) # to check progress of the planner
+            print(active_mode) # to check progress of the planner
 
             # RRT* core
             # q_rand = self.sample_configuration(active_mode)
@@ -149,7 +149,7 @@ class RRTstar(BaseRRTstar):
             if not q_rand:
                 continue
 
-            # self.env.show_config(q_rand, blocking = False)
+            self.env.show_config(q_rand, blocking = False)
 
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand

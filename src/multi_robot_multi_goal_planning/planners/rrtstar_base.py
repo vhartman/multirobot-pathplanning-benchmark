@@ -31,6 +31,7 @@ from multi_robot_multi_goal_planning.problems.constraints import (
 
 from multi_robot_multi_goal_planning.problems.constraints_projection import (
     project_affine_only,
+    project_affine_cspace,
     project_to_manifold,
 )
 from .sampling_informed import InformedSampling
@@ -1531,9 +1532,9 @@ class BaseRRTstar(BasePlanner):
         Returns:
             A list of constraint objects.
         """
-        affine_constraints = []
+        aff_eq_constr = []
 
-        affine_constraints += [
+        aff_eq_constr += [
             c for c in self.env.constraints
             if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
         ]
@@ -1541,12 +1542,12 @@ class BaseRRTstar(BasePlanner):
         next_ids = self.mode_validation.get_valid_next_ids(mode)
         if next_ids or self.env.is_terminal_mode(mode):
             active_task = self.env.get_active_task(mode, next_ids)
-            affine_constraints += [
+            aff_eq_constr += [
                 c for c in active_task.constraints
                 if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
             ]
 
-        return affine_constraints
+        return aff_eq_constr
     
     def collect_env_and_task_aff_ineq_constraints(self, mode: Mode) -> List:
         """
@@ -1558,9 +1559,9 @@ class BaseRRTstar(BasePlanner):
         Returns:
             A list of constraint objects.
         """
-        affine_constraints = []
+        aff_ineq_constr = []
 
-        affine_constraints += [
+        aff_ineq_constr += [
             c for c in self.env.constraints
             if isinstance(c, AffineConfigurationSpaceInequalityConstraint)
         ]
@@ -1568,12 +1569,12 @@ class BaseRRTstar(BasePlanner):
         next_ids = self.mode_validation.get_valid_next_ids(mode)
         if next_ids or self.env.is_terminal_mode(mode):
             active_task = self.env.get_active_task(mode, next_ids)
-            affine_constraints += [
+            aff_ineq_constr += [
                 c for c in active_task.constraints
                 if isinstance(c, AffineConfigurationSpaceInequalityConstraint)
             ]
 
-        return affine_constraints
+        return aff_ineq_constr
 
     def make_transition_config_constraint(self, mode: Mode, q: Configuration, forward=True) -> AffineConfigurationSpaceEqualityConstraint:
         """
@@ -1620,16 +1621,16 @@ class BaseRRTstar(BasePlanner):
         b_trans = b_trans[:trans_cursor]
 
         return AffineConfigurationSpaceEqualityConstraint(A_trans, b_trans)
-
+    
     def satisfies_aff_ineq_constraints(self, constraints: List, q: Configuration) -> bool:
         for c in constraints:
             if isinstance(c, AffineConfigurationSpaceInequalityConstraint):
-                if not c.is_fulfilled(q, self.env):
+                if not c.is_fulfilled(q):
                     return False
         return True
 
 #1) PROJECTION OPERATOR
-    project_to_manifold = staticmethod(project_to_manifold)
+    project_affine_cspace = staticmethod(project_affine_cspace)
     project_affine_only = staticmethod(project_affine_only)
 
 #2)SAMPLER
@@ -1645,31 +1646,21 @@ class BaseRRTstar(BasePlanner):
         environment + task affine constraints.
         """
         # collect environment + task affine constraints
-        affine_constraints = self.collect_env_and_task_aff_eq_constraints(mode)
+        aff_eq_constr = self.collect_env_and_task_aff_eq_constraints(mode)
         aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
 
-        if not affine_constraints and not aff_ineq_constraints:
+        if not aff_eq_constr and not aff_ineq_constraints:
             # fallback to plain uniform sampling
             return self._sample_uniform(mode)
-        
-        if not affine_constraints:
-            # only affine inequalities -> sample ambient and check
-            for _ in range(max_tries):
-                q0 = self.env.sample_config_uniform_in_limits()
-                if self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q0) and self.env.is_collision_free(q0, mode):
-                    return q0
-            print("Failed affine uniform sampling with only inequalities after", max_tries, "tries.")
-            return None
 
         for _ in range(max_tries):
             # ambient sample
             q0 = self.env.sample_config_uniform_in_limits()
 
             # project to affine constraints
-            q_proj = self.project_affine_only(q0, affine_constraints)
+            q_proj = self.project_affine_cspace(q0, aff_eq_constr, aff_ineq_constraints)
 
-            # validate
-            if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
                 return q_proj
 
         print("Failed affine uniform sampling after", max_tries, "tries.")
@@ -1717,17 +1708,17 @@ class BaseRRTstar(BasePlanner):
             return None
 
         # create set of constraints
-        affine_constraints = self.collect_env_and_task_aff_eq_constraints(mode)
+        aff_eq_constr = self.collect_env_and_task_aff_eq_constraints(mode)
         trans_constraint = self.make_transition_config_constraint(mode, q_anchor, forward=forward)
         if trans_constraint is not None:
-            affine_constraints.append(trans_constraint)
+            aff_eq_constr.append(trans_constraint)
 
         aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
 
         # projection
         for _ in range(max_tries):
             q0 = self.env.sample_config_uniform_in_limits()
-            q_proj = self.project_affine_only(q0, affine_constraints)
+            q_proj = self.project_affine_only(q0, aff_eq_constr)
 
             if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                 return q_proj
@@ -1757,17 +1748,17 @@ class BaseRRTstar(BasePlanner):
         tc = self.sample_transition_configuration(mode)
         if tc is None:
             return None
-        affine_constraints = self.collect_env_and_task_aff_eq_constraints(mode)
+        aff_eq_constr = self.collect_env_and_task_aff_eq_constraints(mode)
         trans_constraint = self.make_transition_config_constraint(mode, tc)
         if trans_constraint is not None:
-            affine_constraints.append(trans_constraint)
+            aff_eq_constr.append(trans_constraint)
 
         aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
 
         # projection
         for _ in range(max_tries):
             q0 = self.env.sample_config_uniform_in_limits()
-            q_proj = self.project_affine_only(q0, affine_constraints)
+            q_proj = self.project_affine_only(q0, aff_eq_constr)
 
             if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                 return q_proj

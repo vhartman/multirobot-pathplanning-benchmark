@@ -5,101 +5,277 @@ from scipy.stats import wasserstein_distance
 from time import perf_counter
 import os, time
 
-# IMPORT existing + new projectors
+# ============================================================
+# IMPORT your projectors + constraints
+# ============================================================
+
 from .constraints_projection import (
-    project_affine_only,   # Analytic affine
-    project_to_manifold,   # Gauss–Newton
-    project_nlp_sqp        # SQP/NLP projection (SLSQP)
+    project_affine_only,
+    project_affine_cspace,
+    project_affine_cspace_interior,
+    project_affine_cspace_explore,
+    project_to_manifold,
+    project_nlp_sqp,
 )
 
-# Toy constraints
-#   Equality-manifolds: expose F/J with F(x)=0 desired
-#   Regions (inequalities): expose G/dG with G(x)<=0 feasible
+from .constraints import (
+    AffineConfigurationSpaceEqualityConstraint,
+    AffineConfigurationSpaceInequalityConstraint,
+)
 
-# ----- Equality examples (2D/3D) -----
-class CircleConstraint:
-    # x^2 + y^2 - 1 = 0
-    def F(self, x): return np.array([x[0] ** 2 + x[1] ** 2 - 1.0])
-    def J(self, x): return np.array([[2.0 * x[0], 2.0 * x[1]]])
+# ============================================================
+# AFFINE GEOMETRIC TEST CASES (EXTENDED)
+# ============================================================
 
-class TorusConstraint:
-    """3D torus to 2D section: (sqrt(x^2+y^2)-R)^2 + z^2 = r^2"""
-    def __init__(self, R=1.0, r=0.3):
-        self.R, self.r = R, r
-    def F(self, x):
-        r_xy = np.sqrt(x[0] ** 2 + x[1] ** 2)
-        return np.array([(r_xy - self.R) ** 2 + x[2] ** 2 - self.r ** 2])
-    def J(self, x):
-        r_xy = np.sqrt(x[0] ** 2 + x[1] ** 2) + 1e-12
-        return np.array([[(x[0]/r_xy)*(2*(r_xy - self.R)),
-                          (x[1]/r_xy)*(2*(r_xy - self.R)),
-                          2.0 * x[2]]])
-    
-class SphereConstraint:
-    """2D sphere surface in 3D: x^2 + y^2 + z^2 = 1"""
-    def F(self, x):
-        return np.array([x[0]**2 + x[1]**2 + x[2]**2 - 1.0])
-    def J(self, x):
-        return np.array([[2*x[0], 2*x[1], 2*x[2]]])
+# ============================================================
+# I. PURE EQUALITY CONSTRAINTS  (Flat manifolds)
+# ============================================================
 
-
-class AffineConstraint:
-    # 1*x0 + 2*x1 = 1  (a 1D line manifold inside R^2)
-    def __init__(self):
-        self.mat = np.array([[1.0, 2.0]])
-        self.constraint_pose = np.array([1.0])
-    def F(self, x):
-        return self.mat @ x - self.constraint_pose
-    def J(self, x):
-        return self.mat
-
-# ----- Region examples (2D) -----
-class BoxRegion:
+def make_affine_line_diag():
     """
-    Axis-aligned box: |x_i| <= 1, i.e. max(|x| - 1, 0) <= 0.
+    1D line in R²:  x - y = 0  (main diagonal)
     """
-    def G(self, x):
-        # For feasibility G(x) <= 0; we define a single scalar that becomes >0 outside.
-        # Use max over coordinates: g(x) = max(|x_i| - 1)
-        g = max(abs(x[0]) - 1.0, abs(x[1]) - 1.0)
-        return np.array([g])
-    def dG(self, x):
-        # Subgradient of max: pick active coord; tie-break arbitrarily
-        a0 = abs(x[0]) - 1.0
-        a1 = abs(x[1]) - 1.0
-        if a0 >= a1:
-            s0 = 0.0 if abs(x[0]) < 1e-12 else np.sign(x[0])
-            return np.array([[s0, 0.0]])
-        else:
-            s1 = 0.0 if abs(x[1]) < 1e-12 else np.sign(x[1])
-            return np.array([[0.0, s1]])
+    A = np.array([[1.0, -1.0]])
+    b = np.array([0.0])
+    eq = AffineConfigurationSpaceEqualityConstraint(A, b)
+    return [eq], [], 2, "eq"
 
-class EllipseRegion:
+
+def make_affine_plane_xy():
     """
-    Elliptic disk: (x/a)^2 + (y/b)^2 - 1 <= 0  (convex smooth region)
+    3D horizontal plane:  z = 0
     """
-    def __init__(self, a=1.5, b=0.9):
-        self.a, self.b = a, b
-    def G(self, x):
-        gx = (x[0] / self.a) ** 2 + (x[1] / self.b) ** 2 - 1.0
-        return np.array([gx])
-    def dG(self, x):
-        return np.array([[2.0 * x[0] / (self.a ** 2), 2.0 * x[1] / (self.b ** 2)]])
+    A = np.array([[0.0, 0.0, 1.0]])
+    b = np.array([0.0])
+    eq = AffineConfigurationSpaceEqualityConstraint(A, b)
+    return [eq], [], 3, "eq"
 
-# class L1DiamondRegion:
-#     """
-#     L1-ball (diamond): |x|/a + |y|/b - 1 <= 0 (convex, non-smooth corners)
-#     """
-#     def __init__(self, a=1.2, b=0.8, eps=1e-9):
-#         self.a, self.b, self.eps = a, b, eps
-#     def G(self, x):
-#         gx = np.abs(x[0]) / self.a + np.abs(x[1]) / self.b - 1.0
-#         return np.array([gx])
-#     def dG(self, x):
-#         sx = 0.0 if abs(x[0]) < self.eps else np.sign(x[0])
-#         sy = 0.0 if abs(x[1]) < self.eps else np.sign(x[1])
-#         return np.array([[sx / self.a, sy / self.b]])
 
+def make_affine_plane_tilted():
+    """
+    3D tilted plane:  2x + y - z = 0.5
+    """
+    A = np.array([[2.0, 1.0, -1.0]])
+    b = np.array([0.5])
+    eq = AffineConfigurationSpaceEqualityConstraint(A, b)
+    return [eq], [], 3, "eq"
+
+
+def make_affine_point_origin():
+    """
+    2D point at origin:  x = 0, y = 0
+    (intersection of two lines)
+    """
+    A = np.array([[1.0, 0.0],
+                  [0.0, 1.0]])
+    b = np.array([0.0, 0.0])
+    eq = AffineConfigurationSpaceEqualityConstraint(A, b)
+    return [eq], [], 2, "eq"
+
+
+def make_affine_line3D():
+    """
+    Line in 3D: intersection of two planes
+        x + y + z = 0
+        y - z = 0
+    """
+    A = np.array([
+        [1.0, 1.0, 1.0],
+        [0.0, 1.0, -1.0],
+    ])
+    b = np.array([0.0, 0.0])
+    eq = AffineConfigurationSpaceEqualityConstraint(A, b)
+    return [eq], [], 3, "eq"
+
+
+def make_affine_plane4D():
+    """
+    3D hyperplane in R⁴:  x₀ + 2x₁ - x₂ + 0.5x₃ = 0
+    """
+    A = np.array([[1.0, 2.0, -1.0, 0.5]])
+    b = np.array([0.0])
+    eq = AffineConfigurationSpaceEqualityConstraint(A, b)
+    return [eq], [], 4, "eq"
+
+
+# ============================================================
+# II. PURE INEQUALITY CONSTRAINTS  (Convex regions)
+# ============================================================
+
+def make_affine_halfspace():
+    """
+    Single half-space in R²:  x + y <= 0.5
+    """
+    A = np.array([[1.0, 1.0]])
+    b = np.array([0.5])
+    ineq = AffineConfigurationSpaceInequalityConstraint(A, b)
+    return [], [ineq], 2, "ineq"
+
+
+def make_affine_triangle():
+    """
+    2D triangle:  x >= 0, y >= 0, x + y <= 1
+    """
+    A = np.array([
+        [-1.0,  0.0],   # x >= 0  →  -x <= 0
+        [ 0.0, -1.0],   # y >= 0  →  -y <= 0
+        [ 1.0,  1.0],   # x + y <= 1
+    ])
+    b = np.array([0.0, 0.0, 1.0])
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(A[i:i+1], b[i:i+1]) for i in range(3)]
+    return [], ineqs, 2, "ineq"
+
+
+def make_affine_box():
+    """
+    Square region in R²: |x| <= 1, |y| <= 1
+    """
+    A = np.array([
+        [ 1.0,  0.0],
+        [-1.0,  0.0],
+        [ 0.0,  1.0],
+        [ 0.0, -1.0],
+    ])
+    b = np.array([1.0, 1.0, 1.0, 1.0])
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(A[i:i+1], b[i:i+1]) for i in range(4)]
+    return [], ineqs, 2, "ineq"
+
+
+def make_affine_strip():
+    """
+    2D strip: -0.8 <= x + y <= 0.8
+    """
+    A = np.array([[ 1.0,  1.0],
+                  [-1.0, -1.0]])
+    b = np.array([0.8, 0.8])
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(A[i:i+1], b[i:i+1]) for i in range(2)]
+    return [], ineqs, 2, "ineq"
+
+
+def make_affine_box3D():
+    """
+    Cube in R³: |x|, |y|, |z| <= 1
+    """
+    A = np.array([
+        [ 1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0],
+        [ 0.0, 1.0, 0.0],
+        [ 0.0, -1.0, 0.0],
+        [ 0.0, 0.0, 1.0],
+        [ 0.0, 0.0, -1.0],
+    ])
+    b = np.ones(6)
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(A[i:i+1], b[i:i+1]) for i in range(6)]
+    return [], ineqs, 3, "ineq"
+
+
+def make_affine_prism4D():
+    """
+    4D “box”: |x₀| <= 1, |x₁| <= 1, |x₂| <= 1, |x₃| <= 1
+    (Hyper-rectangle in R⁴)
+    """
+    A = np.vstack([
+        np.eye(4),
+        -np.eye(4)
+    ])
+    b = np.ones(8)
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(A[i:i+1], b[i:i+1]) for i in range(8)]
+    return [], ineqs, 4, "ineq"
+
+
+# ============================================================
+# III. MIXED EQUALITY + INEQUALITY CONSTRAINTS  (Bounded manifolds)
+# ============================================================
+
+def make_affine_segment():
+    """
+    1D segment on x + y = 0  with  |x| <= 1.
+    """
+    Aeq = np.array([[1.0, 1.0]])
+    beq = np.array([0.0])
+    eqs = [AffineConfigurationSpaceEqualityConstraint(Aeq, beq)]
+
+    Aineq = np.array([
+        [ 1.0, 0.0],
+        [-1.0, 0.0],
+    ])
+    bineq = np.array([1.0, 1.0])
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(Aineq[i:i+1], bineq[i:i+1]) for i in range(2)]
+
+    return eqs, ineqs, 2, "mix"
+
+
+def make_affine_plane_bounded():
+    """
+    3D bounded plane patch:
+        z = 0 (equality)
+        -1 <= x <= 1, -1 <= y <= 1  (inequalities)
+    """
+    Aeq = np.array([[0.0, 0.0, 1.0]])
+    beq = np.array([0.0])
+    eqs = [AffineConfigurationSpaceEqualityConstraint(Aeq, beq)]
+
+    Aineq = np.array([
+        [ 1.0,  0.0, 0.0],
+        [-1.0,  0.0, 0.0],
+        [ 0.0,  1.0, 0.0],
+        [ 0.0, -1.0, 0.0],
+    ])
+    bineq = np.array([1.0, 1.0, 1.0, 1.0])
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(Aineq[i:i+1], bineq[i:i+1]) for i in range(4)]
+
+    return eqs, ineqs, 3, "mix"
+
+
+def make_affine_line_bounded3D():
+    """
+    Line segment in 3D:
+        Equalities:
+            x + y = 0
+            z = 0
+        Inequalities:
+            |x| <= 1
+    Result: 1D line segment in 3D.
+    """
+    Aeq = np.array([
+        [1.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+    beq = np.array([0.0, 0.0])
+    eqs = [AffineConfigurationSpaceEqualityConstraint(Aeq, beq)]
+
+    Aineq = np.array([
+        [ 1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0],
+    ])
+    bineq = np.array([1.0, 1.0])
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(Aineq[i:i+1], bineq[i:i+1]) for i in range(2)]
+
+    return eqs, ineqs, 3, "mix"
+
+
+def make_affine_cube_face4D():
+    """
+    3D plane bounded inside 4D cube:
+        Equality: x₃ = 0
+        Inequalities: |x₀|,|x₁|,|x₂| <= 1
+    """
+    Aeq = np.array([[0.0, 0.0, 0.0, 1.0]])
+    beq = np.array([0.0])
+    eqs = [AffineConfigurationSpaceEqualityConstraint(Aeq, beq)]
+
+    Aineq = np.vstack([
+        np.hstack([np.eye(3), np.zeros((3,1))]),
+        np.hstack([-np.eye(3), np.zeros((3,1))]),
+    ])
+    bineq = np.ones(6)
+    ineqs = [AffineConfigurationSpaceInequalityConstraint(Aineq[i:i+1], bineq[i:i+1]) for i in range(6)]
+
+    return eqs, ineqs, 4, "mix"
+
+# ============================================================
+# Helpers
+# ============================================================
 
 def random_samples(n, dim, scale=2.0, seed=0):
     rng = np.random.default_rng(seed)
@@ -111,53 +287,66 @@ class DummyConfig:
     def state(self): return self._x
     def from_flat(self, arr): return DummyConfig(arr)
 
-def project_samples(X, constraint, method="gauss-newton", ctype="eq"):
-    """
-    Apply the chosen projection method to all points.
 
-    This version tries ALL methods on ALL constraint types (even nonsensical ones).
-    If projection fails, it falls back to returning the original point
-    to preserve coverage density.
-    """
+def project_samples(X, eq_constraints, ineq_constraints, method="affine-cspace"):
+    """Project each sample with the chosen method."""
     projected = []
     n_eval = 0
 
     for x in X:
         q = DummyConfig(x)
         q_proj = None
-
         try:
             if method == "affine-analytic":
-                if hasattr(constraint, "mat"):
-                    q_proj = project_affine_only(q, [constraint])
+                if eq_constraints:
+                    q_proj = project_affine_only(q, eq_constraints)
                 else:
-                    # fake a projection (return original)
                     q_proj = q
+
+            elif method == "affine-cspace":
+                q_proj = project_affine_cspace(
+                    q,
+                    eq_constraints=eq_constraints if eq_constraints else None,
+                    ineq_constraints=ineq_constraints if ineq_constraints else None,
+                )
+                if q_proj is None: q_proj = q
+
+            elif method == "affine-cspace-interior":
+                q_proj = project_affine_cspace_interior(
+                    q,
+                    eq_constraints=eq_constraints if eq_constraints else None,
+                    ineq_constraints=ineq_constraints if ineq_constraints else None,
+                )
+                if q_proj is None: q_proj = q
+
+            elif method == "affine-cspace-explore":
+                q_proj = project_affine_cspace_explore(
+                    q,
+                    eq_constraints=eq_constraints if eq_constraints else None,
+                    ineq_constraints=ineq_constraints if ineq_constraints else None,
+                )
+                if q_proj is None: q_proj = q
 
             elif method == "gauss-newton":
-                q_proj = project_to_manifold(q, [constraint], eps=1e-6, max_iters=50)
-                if q_proj is None:
-                    q_proj = q  # fallback to original
+                if eq_constraints:
+                    q_proj = project_to_manifold(q, eq_constraints, eps=1e-6, max_iters=50)
+                if q_proj is None: q_proj = q
 
             elif method == "sqp":
-                # Attempt both equality and inequality forms
-                eqs = [constraint] if hasattr(constraint, "F") and hasattr(constraint, "J") else None
-                ineqs = [constraint] if hasattr(constraint, "G") and hasattr(constraint, "dG") else None
-                q_proj = project_nlp_sqp(q, eq_constraints=eqs, ineq_constraints=ineqs)
-                if q_proj is None:
-                    q_proj = q
+                q_proj = project_nlp_sqp(q, eq_constraints=eq_constraints, ineq_constraints=ineq_constraints)
+                if q_proj is None: q_proj = q
 
             else:
-                q_proj = q  # unknown method fallback
+                q_proj = q
 
         except Exception:
-            # any numerical/shape error fallback
             q_proj = q
 
         projected.append(q_proj.state())
         n_eval += 1
 
     return np.vstack(projected), n_eval
+
 
 # ============================================================
 # Metrics
@@ -172,29 +361,32 @@ def emd_to_uniform(X, ref_lim=1.0, n_ref=5000):
     d = wasserstein_distance(X[:, 0], ref[:, 0]) + wasserstein_distance(X[:, 1], ref[:, 1])
     return d / 2.0
 
+
 # ============================================================
 # Visualization
 # ============================================================
 
 def plot_by_geometry(results, limits=(-2, 2)):
-    """
-    Arrange plots by geometry (rows) and projection method (columns).
-
-    Row order:
-        AffineLine, Circle, TorusSection, BoxRegion, EllipseRegion, L1Diamond
-    Column order:
-        affine-analytic, gauss-newton, newton, sqp
-    """
+    # Make sure geom_order matches exactly the keys you used in `manifolds`
     geom_order = [
-        "AffineLine",
-        "Circle",
-        "TorusSection",
-        "Sphere",
-        "BoxRegion",
-        "EllipseRegion",
-#        "L1Diamond",
+        "LineDiag",
+        "PlaneXY",
+        "PlaneTilted",
+        "PointOrigin",
+        "Line3D",
+        "Plane4D",
+        "Halfspace",
+        "Triangle",
+        "Box",
+        "Strip",
+        "Box3D",
+        "Prism4D",
+        "Segment",
+        "PlaneBounded",
+        "LineBounded3D",
+        "CubeFace4D",
     ]
-    method_order = ["affine-analytic", "gauss-newton", "sqp"]
+    method_order = ["affine-cspace", "affine-cspace-interior", "affine-cspace-explore", "sqp"]
 
     nrows = len(geom_order)
     ncols = len(method_order)
@@ -207,18 +399,14 @@ def plot_by_geometry(results, limits=(-2, 2)):
     for i, geom in enumerate(geom_order):
         for j, method in enumerate(method_order):
             ax = axes[i, j]
-
-            # Find matching result
-            res = next(
-                (r for r in results if r["name"].startswith(geom + "-") and r["name"].endswith(method)),
-                None,
-            )
-
+            res = next((r for r in results if r["name"].startswith(geom + "-") and r["name"].endswith(method)), None)
             if res is None or res["samples"].size == 0:
                 ax.axis("off")
                 continue
 
             X = res["samples"]
+            if X.shape[1] > 2:
+                X = X[:, :2]
             ax.scatter(X[:, 0], X[:, 1], s=6, alpha=0.6)
             ax.set_xlim(limits)
             ax.set_ylim(limits)
@@ -230,7 +418,6 @@ def plot_by_geometry(results, limits=(-2, 2)):
             if j == 0:
                 ax.set_ylabel(geom, fontsize=10, rotation=90, labelpad=6)
 
-            # Add performance stats as small text
             subtitle = f"E/S={res['E_per_S']:.2f} | EMD={res['EMD']:.2f} | t={res['time_ms']:.1f}ms"
             ax.text(0.5, -0.08, subtitle, transform=ax.transAxes,
                     fontsize=7, ha="center", va="top")
@@ -238,46 +425,55 @@ def plot_by_geometry(results, limits=(-2, 2)):
     fig.tight_layout(h_pad=1.0, w_pad=0.6)
     return fig, axes
 
+
 # ============================================================
 # Main experiment
 # ============================================================
 
 def main():
-    print("[*] benchmarking_proj starting ...")
+    print("[*] benchmarking_proj_affine starting ...")
 
-    # (name) : (constraint, dim, ctype)
     manifolds = {
-        "Circle":        (CircleConstraint(), 2, "eq"),
-        "TorusSection":  (TorusConstraint(), 3, "eq"),
-        "Sphere":       (SphereConstraint(), 3, "eq"),
-        "AffineLine":    (AffineConstraint(), 2, "eq"),
-        "BoxRegion":     (BoxRegion(),        2, "reg"),
-        "EllipseRegion": (EllipseRegion(1.5, 0.9), 2, "reg"),
-#        "L1Diamond":     (L1DiamondRegion(1.2, 0.8), 2, "reg"),
+        "LineDiag": make_affine_line_diag(),
+        "PlaneXY": make_affine_plane_xy(),
+        "PlaneTilted": make_affine_plane_tilted(),
+        "PointOrigin": make_affine_point_origin(),
+        "Line3D": make_affine_line3D(),
+        "Plane4D": make_affine_plane4D(),
+        "Halfspace": make_affine_halfspace(),
+        "Triangle": make_affine_triangle(),
+        "Box": make_affine_box(),
+        "Strip": make_affine_strip(),
+        "Box3D": make_affine_box3D(),
+        "Prism4D": make_affine_prism4D(),
+        "Segment": make_affine_segment(),
+        "PlaneBounded": make_affine_plane_bounded(),
+        "LineBounded3D": make_affine_line_bounded3D(),
+        "CubeFace4D": make_affine_cube_face4D(),
     }
 
-    methods = [
-        "affine-analytic",   # analytic (only if affine .mat present)
-        "gauss-newton",      # existing GN
-        "sqp",               # SLSQP Euclidean projection
-    ]
+    # methods = ["affine-analytic", "affine-cspace", "gauss-newton", "sqp"]
+    methods = ["affine-cspace", "affine-cspace-interior", "affine-cspace-explore", "sqp"]
+
 
     results = []
-    for name, (constraint, dim, ctype) in manifolds.items():
+    for name, (eqs, ineqs, dim, ctype) in manifolds.items():
         X0 = random_samples(1000, dim, scale=2.0, seed=42)
         for m in methods:
-            if m == "affine-analytic" and not hasattr(constraint, "mat"):
-                print(f"[!] Skipping affine projection for {name} (no .mat attribute)")
+            # skip analytic for pure inequalities
+            if m == "affine-analytic" and not eqs:
+                print(f"[!] Skipping affine-analytic for {name} (no equalities)")
                 continue
+
             t0 = perf_counter()
-            Xp, n_eval = project_samples(X0, constraint, m, ctype)
+            Xp, n_eval = project_samples(X0, eqs, ineqs, m)
             t1 = perf_counter()
 
             if Xp.size == 0:
                 print(f"[!] {name}-{m}: no successful projections")
                 continue
 
-            Xv = Xp[:, :2]          # visualize first 2 dims if 3D
+            Xv = Xp[:, :2]
             E_per_S = n_eval / len(X0)
             emd = emd_to_uniform(Xv)
             results.append({
@@ -289,15 +485,11 @@ def main():
                 "time_ms": (t1 - t0) * 1e3,
             })
 
-    # Output folder
     os.makedirs("multi_robot_multi_goal_planning/figures", exist_ok=True)
-
-    # Plot + save
     fig, axes = plot_by_geometry(results, limits=(-2.0, 2.0))
     timestamp = int(time.time())
-    png_path = f"multi_robot_multi_goal_planning/figures/coverage_grid_{timestamp}.png"
+    png_path = f"multi_robot_multi_goal_planning/figures/coverage_affine_{timestamp}.png"
     fig.savefig(png_path, dpi=200, bbox_inches="tight")
-
     print(f"[+] Saved PNG: {os.path.abspath(png_path)}")
 
 if __name__ == "__main__":
