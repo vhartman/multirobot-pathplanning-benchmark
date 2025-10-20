@@ -413,7 +413,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
             )
-            state_new = self.steer(active_mode, n_nearest, q_rand, dist)
+            state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
             # q_rand == n_nearest
             if not state_new:
                 continue

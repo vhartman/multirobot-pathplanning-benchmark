@@ -6,6 +6,7 @@ import random
 from typing import List
 
 from multi_robot_multi_goal_planning.problems.constraints import AffineConfigurationSpaceEqualityConstraint, AffineConfigurationSpaceInequalityConstraint
+from multi_robot_multi_goal_planning.problems.constraints_projection import project_affine_cspace_interior
 from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
@@ -120,6 +121,13 @@ def robot_mode_shortcut(
 
     rr_robot = 0
 
+    def collect_affine_constraints_for_env():
+        eq = [c for c in env.constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
+        ineq = [c for c in env.constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
+        return eq, ineq
+    
+    env_eq_constraints, env_ineq_constraints = collect_affine_constraints_for_env()
+
     while True:
         iter += 1
         if cnt >= max_iter or iter >= max_attempts:
@@ -197,6 +205,35 @@ def robot_mode_shortcut(
                 State(q0.from_flat(q), new_path[i + k].mode)
             )
 
+        # path_element = []
+        # for k in range(j - i + 1):
+        #     q_flat = new_path[i + k].q.state().astype(float, copy=True)
+
+        #     r_cnt = 0
+        #     for r in range(len(env.robots)):
+        #         dim = env.robot_dims[env.robots[r]]
+        #         if r in robots_to_shortcut:
+        #             q_interp = q0_tmp[r] + diff_tmp[r] * k
+        #             q_flat[r_cnt : r_cnt + dim] = q_interp
+        #         r_cnt += dim
+
+        #     q_config = q0.from_flat(q_flat)
+
+        #     if 0 < k < (j - i):
+        #         q_proj_config = project_affine_cspace_interior(
+        #             q_config,
+        #             eq_constraints=env_eq_constraints,
+        #             ineq_constraints=env_ineq_constraints,
+        #         )
+        #         if q_proj_config is None:
+        #             feasible = False
+        #             break
+        #         q_use_config = q_proj_config
+        #     else:
+        #         q_use_config = q_config
+        #     path_element.append(State(q_use_config, new_path[i + k].mode))
+
+
         # check if the shortcut improves cost
         if path_cost(path_element, env.batch_config_cost) >= path_cost(
             new_path[i : j + 1], env.batch_config_cost
@@ -212,21 +249,12 @@ def robot_mode_shortcut(
         constraints_ok = True
         for state in path_element:
             # Check all active equality and inequality constraints
-            eq_constraints = [
-                c for c in env.constraints
-                if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
-            ]
-
-            ineq_constraints = [
-                c for c in env.constraints
-                if isinstance(c, AffineConfigurationSpaceInequalityConstraint)
-]
-            for c in eq_constraints:
+            for c in env_eq_constraints:
                 if not c.is_fulfilled(state.q, env):
                     constraints_ok = False
                     break
 
-            for c in ineq_constraints:
+            for c in env_ineq_constraints:
                 if not c.is_fulfilled(state.q, env):
                     constraints_ok = False
                     break

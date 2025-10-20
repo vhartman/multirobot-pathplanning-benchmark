@@ -33,7 +33,7 @@ from multi_robot_multi_goal_planning.problems.constraints_projection import (
     project_affine_only,
     project_affine_cspace,
     project_affine_cspace_interior,
-    project_to_manifold,
+    project_affine_cspace_explore,
 )
 
 from .sampling_informed import InformedSampling
@@ -1640,6 +1640,7 @@ class BaseRRTstar(BasePlanner):
 
 #1) PROJECTION OPERATOR
     project_affine_cspace_interior = staticmethod(project_affine_cspace_interior)
+    project_affine_cspace_explore = staticmethod(project_affine_cspace_explore)
     project_affine_cspace = staticmethod(project_affine_cspace)
     project_affine_only = staticmethod(project_affine_only)
 
@@ -1727,6 +1728,12 @@ class BaseRRTstar(BasePlanner):
                 if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                     return q_proj
 
+            # for _ in range(max_tries):
+            #     q0 = self.env.sample_config_uniform_in_limits()
+            #     q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
+            #     if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+            #         return q_proj
+
         else:  # forward expansion
             q_anchor = self.sample_transition_configuration_aff_cspace(mode)
             if q_anchor is None:
@@ -1735,6 +1742,36 @@ class BaseRRTstar(BasePlanner):
 
         print(f"Failed constraint-aware goal sampling after {max_tries} tries in mode {mode}.")
         return None
+    
+    
+    def sample_transition_configuration_aff_cspace(self, mode: Mode) -> Configuration | None:
+        """
+        Samples a transition configuration restricted to the affine constraint manifold.
+        """
+        max_tries = 1000
+        tc = self.sample_transition_configuration(mode)
+        if tc is None:
+            return None
+        aff_eq_constr = self.collect_env_and_task_aff_eq_constraints(mode)
+        trans_constraint = self.make_transition_config_constraint(mode, tc)
+        if trans_constraint is not None:
+            aff_eq_constr.append(trans_constraint)
+
+        aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
+
+        # projection
+        for _ in range(max_tries):
+            q0 = self.env.sample_config_uniform_in_limits()
+            q_proj = self.project_affine_only(q0, aff_eq_constr)
+
+            if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                return q_proj
+
+        # for _ in range(max_tries):
+        #     q0 = self.env.sample_config_uniform_in_limits()
+        #     q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
+        #     if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+        #         return q_proj
     
     
     def sample_informed_aff_cspace(self, mode: Mode) -> Configuration | None:
@@ -1773,30 +1810,6 @@ class BaseRRTstar(BasePlanner):
             if self.env.is_collision_free(q_proj, mode):
                 return q_proj
     
-
-    def sample_transition_configuration_aff_cspace(self, mode: Mode) -> Configuration | None:
-        """
-        Samples a transition configuration restricted to the affine constraint manifold.
-        """
-        max_tries = 1000
-        tc = self.sample_transition_configuration(mode)
-        if tc is None:
-            return None
-        aff_eq_constr = self.collect_env_and_task_aff_eq_constraints(mode)
-        trans_constraint = self.make_transition_config_constraint(mode, tc)
-        if trans_constraint is not None:
-            aff_eq_constr.append(trans_constraint)
-
-        aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
-
-        # projection
-        for _ in range(max_tries):
-            q0 = self.env.sample_config_uniform_in_limits()
-            q_proj = self.project_affine_only(q0, aff_eq_constr)
-
-            if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
-                return q_proj
-            
 
     def sample_configuration_aff_cspace(self, mode: Mode) -> Configuration | None:
         """
@@ -1866,7 +1879,7 @@ class BaseRRTstar(BasePlanner):
                 return None
 
             # 5) Validate constraints numerically
-            eq_ok = self.satisfies_aff_eq_constraints(aff_eq, q_proj, eps)
+            eq_ok = self.satisfies_aff_eq_constraints(aff_eq, q_proj)
             ineq_ok = self.satisfies_aff_ineq_constraints(aff_ineq, q_proj)
             if not (eq_ok and ineq_ok):
                 return None  # force planner to resample q_rand
