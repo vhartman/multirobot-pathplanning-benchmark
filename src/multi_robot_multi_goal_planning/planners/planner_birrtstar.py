@@ -85,7 +85,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             # Initialize transition nodes
             node = None
             for i in range(self.config.transition_nodes):
-                q = self.sample_transition_configuration_aff_cspace_eq(new_mode)
+                q = self.sample_transition_configuration_aff_cspace(new_mode)
                 if q is None:
                     if new_mode in self.modes:
                         self.modes.remove(new_mode)
@@ -397,7 +397,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             
             # Bi RRT* core
             # q_rand = self.sample_configuration(active_mode)
-            q_rand = self.sample_configuration_aff_cspace_eq(active_mode)
+            q_rand = self.sample_configuration_aff_cspace(active_mode)
             if not q_rand:
                 continue
 

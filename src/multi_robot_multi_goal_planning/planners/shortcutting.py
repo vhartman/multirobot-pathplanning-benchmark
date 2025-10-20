@@ -5,6 +5,7 @@ import random
 
 from typing import List
 
+from multi_robot_multi_goal_planning.problems.constraints import AffineConfigurationSpaceEqualityConstraint, AffineConfigurationSpaceInequalityConstraint
 from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
@@ -207,6 +208,34 @@ def robot_mode_shortcut(
         assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
 
         cnt += 1
+
+        constraints_ok = True
+        for state in path_element:
+            # Check all active equality and inequality constraints
+            eq_constraints = [
+                c for c in env.constraints
+                if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+            ]
+
+            ineq_constraints = [
+                c for c in env.constraints
+                if isinstance(c, AffineConfigurationSpaceInequalityConstraint)
+]
+            for c in eq_constraints:
+                if not c.is_fulfilled(state.q, env):
+                    constraints_ok = False
+                    break
+
+            for c in ineq_constraints:
+                if not c.is_fulfilled(state.q, env):
+                    constraints_ok = False
+                    break
+
+            if not constraints_ok:
+                break
+
+        if not constraints_ok:
+            continue  # reject this shortcut and try another
 
         if env.is_path_collision_free(
             path_element, resolution=resolution, tolerance=tolerance, check_start_and_end=False

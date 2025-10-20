@@ -141,20 +141,20 @@ class RRTstar(BaseRRTstar):
             # Mode selection
             active_mode = self.random_mode()
 
-            print(active_mode) # to check progress of the planner
+            # print(active_mode) # to check progress of the planner
 
             # RRT* core
             # q_rand = self.sample_configuration(active_mode)
-            q_rand = self.sample_configuration_aff_cspace_eq(active_mode)
+            q_rand = self.sample_configuration_aff_cspace(active_mode)
             if not q_rand:
                 continue
 
-            self.env.show_config(q_rand, blocking = False)
+            # self.env.show_config(q_rand, blocking = False) # visualize sampled configuration
 
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
             )
-            state_new = self.steer(active_mode, n_nearest, q_rand, dist)
+            state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
             
@@ -190,6 +190,11 @@ class RRTstar(BaseRRTstar):
             
                 self.manage_transition(active_mode, n_new)
 
+            if not hasattr(self, "_printed_initial_cost") and self.operation.init_sol:
+                print(f"[INFO] First feasible path found at iteration {i}")
+                print(f"[INFO] Path cost BEFORE informed sampling: {self.operation.cost:.4f}")
+                self._printed_initial_cost = True
+
             if not optimize and self.operation.init_sol:
                 self.save_tree_data()
                 break
@@ -197,6 +202,8 @@ class RRTstar(BaseRRTstar):
             if ptc.should_terminate(i, time.time() - self.start_time):
                 print("Number of iterations: ", i)
                 break
+
+        print(f"[INFO] Final path cost AFTER informed sampling: {self.operation.cost:.4f}")
 
         self.update_results_tracking(self.operation.cost, self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}

@@ -148,7 +148,7 @@ def project_affine_cspace(
     
     else:
         Aineq = np.vstack([c.mat for c in ineq_constraints])
-        bineq = np.concatenate([c.rhs for c in ineq_constraints])
+        bineq = np.concatenate([c.rhs.ravel() for c in ineq_constraints])
 
         if not eq_constraints:
             # case 3: only inequalities
@@ -163,7 +163,7 @@ def project_affine_cspace(
                     # Project onto active set
                     KKT = np.block([[np.eye(n), Aact.T],
                                     [Aact, np.zeros((len(active), len(active)))]])
-                    rhs = np.concatenate([x, bact])
+                    rhs = np.concatenate([x.ravel(), bact.ravel()])
                     sol = np.linalg.solve(KKT, rhs)
                     x_proj = sol[:n]
                 except LinAlgError:
@@ -223,7 +223,7 @@ def project_affine_cspace_interior(
     ineq_constraints=None,
     eps: float = 1e-8,
     max_iters: int = 50,
-    alpha_range=(-0.01, -0.1),
+    alpha_range=(0.01, 0.5),
 ):
     """
     Stochastic interior projection: same as project_affine_cspace,
@@ -256,28 +256,28 @@ def project_affine_cspace_interior(
 
     # Stack inequalities
     Aineq = np.vstack([c.mat for c in ineq_constraints])
-    bineq = np.concatenate([c.rhs for c in ineq_constraints])
+    bineq = np.concatenate([c.rhs.ravel() for c in ineq_constraints])
 
     # === 2) Standard projection (same as project_affine_cspace) ===
     if not eq_constraints:
         # Only inequalities
-        active = np.where(Aineq @ x - bineq > eps)[0].tolist()
+        active = np.where(Aineq @ x - bineq > eps)[0].tolist() # detects active (violated) constraints
         for _ in range(max_iters):
             if not active:
                 x_proj = x
                 break
             Aact = Aineq[active]
             bact = bineq[active]
-            try:
+            try: # we find the projection onto the active set
                 KKT = np.block([[np.eye(n), Aact.T],
                                 [Aact, np.zeros((len(active), len(active)))]])
-                rhs = np.concatenate([x, bact])
+                rhs = np.concatenate([x.ravel(), bact.ravel()])
                 sol = np.linalg.solve(KKT, rhs)
                 x_proj = sol[:n]
             except LinAlgError:
                 return None
 
-            viol = np.where(Aineq @ x_proj - bineq > eps)[0].tolist()
+            viol = np.where(Aineq @ x_proj - bineq > eps)[0].tolist() # check if we are still violating sth
             if not viol:
                 break
             active = sorted(list(set(active + viol)))
@@ -285,7 +285,7 @@ def project_affine_cspace_interior(
     else:
         # Both equalities and inequalities
         Aeq = np.vstack([c.mat for c in eq_constraints])
-        beq = np.concatenate([c.rhs for c in eq_constraints])
+        beq = np.concatenate([c.rhs.ravel() for c in eq_constraints])
         m_eq = Aeq.shape[0]
         active = np.where(Aineq @ x - bineq > eps)[0].tolist()
 
@@ -326,16 +326,14 @@ def project_affine_cspace_interior(
 
     # Build an inward direction (combination of active constraint normals)
     if len(active) > 0:
-        n_inward = np.sum(Aineq[active], axis=0)
+        n_inward = -np.sum(Aineq[active], axis=0)
         if norm(n_inward) > 0:
             n_inward /= norm(n_inward)
         else:
             n_inward = np.random.randn(n)
             n_inward /= norm(n_inward)
     else:
-        # no actives (rare): random inward direction
-        n_inward = np.random.randn(n)
-        n_inward /= norm(n_inward)
+        return q.from_flat(x_proj)
 
     # Random step magnitude proportional to minimum slack of inactive constraints
     min_slack = np.min(slack[inactive]) if len(inactive) > 0 else eps
@@ -343,21 +341,31 @@ def project_affine_cspace_interior(
 
     x_interior = x_proj + alpha * n_inward
 
-    # Optional re-projection to satisfy equalities (but not inequalities)
-    if eq_constraints:
-        try:
-            Aeq = np.vstack([c.mat for c in eq_constraints])
-            beq = np.concatenate([c.rhs for c in eq_constraints])
-            # project back onto equality subspace only
-            KKT = np.block([[np.eye(n), Aeq.T],
-                            [Aeq, np.zeros((Aeq.shape[0], Aeq.shape[0]))]])
-            rhs = np.concatenate([x_interior, beq])
-            sol = np.linalg.solve(KKT, rhs)
-            x_interior = sol[:n]
-        except LinAlgError:
-            pass
+    # === 4) Checking if all constraints are satisfied after inward displacement , and reprojection if needed ===
+    viol_ineq = np.where(Aineq @ x_interior - bineq > eps)[0]
+    viol_eq = np.where(np.abs(Aeq @ x_interior - beq) > eps)[0] if eq_constraints else []
 
-    # === 4) Return new configuration ===
+    if len(viol_ineq) > 0 or len(viol_eq) > 0:
+        # treat violated constraints as temporary equalities and reproject
+        Aact = []
+        bact = []
+        if len(viol_eq) > 0:
+            Aact.append(Aeq[viol_eq])
+            bact.append(beq[viol_eq])
+        if len(viol_ineq) > 0:
+            Aact.append(Aineq[viol_ineq])
+            bact.append(bineq[viol_ineq])
+        Aact = np.vstack(Aact)
+        bact = np.concatenate(bact)
+
+        # orthogonal projection onto the violated constraints
+        KKT = np.block([[np.eye(n), Aact.T],
+                        [Aact, np.zeros((Aact.shape[0], Aact.shape[0]))]])
+        rhs = np.concatenate([x_interior, bact])
+        sol = np.linalg.lstsq(KKT, rhs, rcond=None)[0]
+        x_interior = sol[:n]
+
+    # === 5) Return new configuration ===
     return q.from_flat(x_interior)
 
 
@@ -366,9 +374,9 @@ def project_affine_cspace_explore(
     eq_constraints=None,
     ineq_constraints=None,
     eps: float = 1e-8,
-    max_iters: int = 50,
-    n_explore: int = 10,
-    explore_sigma: float = 0.05,
+    max_iters: int = 100,
+    n_explore: int = 20,
+    explore_sigma: float = 0.3,
 ):
     """
     Projection + local stochastic exploration inside the feasible region.
@@ -405,7 +413,7 @@ def project_affine_cspace_explore(
             return project_affine_only(q, eq_constraints)
 
     Aineq = np.vstack([c.mat for c in ineq_constraints])
-    bineq = np.concatenate([c.rhs for c in ineq_constraints])
+    bineq = np.concatenate([c.rhs.ravel() for c in ineq_constraints])
 
     # === 2) Perform standard projection first (same as project_affine_cspace) ===
     if not eq_constraints:
@@ -420,7 +428,7 @@ def project_affine_cspace_explore(
             try:
                 KKT = np.block([[np.eye(n), Aact.T],
                                 [Aact, np.zeros((len(active), len(active)))]])
-                rhs = np.concatenate([x, bact])
+                rhs = np.concatenate([x.ravel(), bact.ravel()])
                 sol = np.linalg.solve(KKT, rhs)
                 x_proj = sol[:n]
             except LinAlgError:
@@ -434,7 +442,7 @@ def project_affine_cspace_explore(
     else:
         # equalities + inequalities
         Aeq = np.vstack([c.mat for c in eq_constraints])
-        beq = np.concatenate([c.rhs for c in eq_constraints])
+        beq = np.concatenate([c.rhs.ravel() for c in eq_constraints])
         m_eq = Aeq.shape[0]
         active = np.where(Aineq @ x - bineq > eps)[0].tolist()
 
@@ -479,10 +487,10 @@ def project_affine_cspace_explore(
             if eq_constraints:
                 try:
                     Aeq = np.vstack([c.mat for c in eq_constraints])
-                    beq = np.concatenate([c.rhs for c in eq_constraints])
+                    beq = np.concatenate([c.rhs.ravel() for c in eq_constraints])
                     KKT = np.block([[np.eye(n), Aeq.T],
                                     [Aeq, np.zeros((Aeq.shape[0], Aeq.shape[0]))]])
-                    rhs = np.concatenate([x_try, beq])
+                    rhs = np.concatenate([x_try.ravel(), beq.ravel()])
                     sol = np.linalg.solve(KKT, rhs)
                     x_try = sol[:n]
                 except LinAlgError:

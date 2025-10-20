@@ -32,8 +32,10 @@ from multi_robot_multi_goal_planning.problems.constraints import (
 from multi_robot_multi_goal_planning.problems.constraints_projection import (
     project_affine_only,
     project_affine_cspace,
+    project_affine_cspace_interior,
     project_to_manifold,
 )
+
 from .sampling_informed import InformedSampling
 from .mode_validation import ModeValidation
 from .baseplanner import BasePlanner
@@ -1628,13 +1630,21 @@ class BaseRRTstar(BasePlanner):
                 if not c.is_fulfilled(q):
                     return False
         return True
+    
+    def satisfies_aff_eq_constraints(self, constraints: List, q: Configuration) -> bool:
+        for c in constraints:
+            if isinstance(c, AffineConfigurationSpaceEqualityConstraint):
+                if not c.is_fulfilled(q):
+                    return False
+        return True
 
 #1) PROJECTION OPERATOR
+    project_affine_cspace_interior = staticmethod(project_affine_cspace_interior)
     project_affine_cspace = staticmethod(project_affine_cspace)
     project_affine_only = staticmethod(project_affine_only)
 
 #2)SAMPLER
-    def sample_uniform_aff_cspace_eq(
+    def sample_uniform_aff_cspace(
         self,
         mode: Mode,
         max_tries: int = 1000,
@@ -1658,7 +1668,7 @@ class BaseRRTstar(BasePlanner):
             q0 = self.env.sample_config_uniform_in_limits()
 
             # project to affine constraints
-            q_proj = self.project_affine_cspace(q0, aff_eq_constr, aff_ineq_constraints)
+            q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
 
             if q_proj is not None and self.env.is_collision_free(q_proj, mode):
                 return q_proj
@@ -1666,7 +1676,7 @@ class BaseRRTstar(BasePlanner):
         print("Failed affine uniform sampling after", max_tries, "tries.")
         return None
     
-    def sample_goal_aff_cspace_eq(
+    def sample_goal_aff_cspace(
         self,
         mode: Mode,
         transition_node_ids: Dict[Mode, List[int]],
@@ -1697,50 +1707,74 @@ class BaseRRTstar(BasePlanner):
                     q_anchor = node.state.q
             forward = False
 
-        else:  # forward expansion
-            q_anchor = self.sample_transition_configuration_aff_cspace_eq(mode)
+            if q_anchor is None:
+                return None
+            
+            # q_anchor satisfies constraints for previous mode but not yet for current mode
+            # create set of constraints
+            aff_eq_constr = self.collect_env_and_task_aff_eq_constraints(mode)
+            trans_constraint = self.make_transition_config_constraint(mode, q_anchor, forward=forward)
+            if trans_constraint is not None:
+                aff_eq_constr.append(trans_constraint)
 
+            aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
+
+            # projection
+            for _ in range(max_tries):
+                q0 = self.env.sample_config_uniform_in_limits()
+                q_proj = self.project_affine_only(q0, aff_eq_constr)
+
+                if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                    return q_proj
+
+        else:  # forward expansion
+            q_anchor = self.sample_transition_configuration_aff_cspace(mode)
             if q_anchor is None:
                 return None
             return q_anchor
 
-        if q_anchor is None:
-            return None
-
-        # create set of constraints
-        aff_eq_constr = self.collect_env_and_task_aff_eq_constraints(mode)
-        trans_constraint = self.make_transition_config_constraint(mode, q_anchor, forward=forward)
-        if trans_constraint is not None:
-            aff_eq_constr.append(trans_constraint)
-
-        aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
-
-        # projection
-        for _ in range(max_tries):
-            q0 = self.env.sample_config_uniform_in_limits()
-            q_proj = self.project_affine_only(q0, aff_eq_constr)
-
-            if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
-                return q_proj
-
         print(f"Failed constraint-aware goal sampling after {max_tries} tries in mode {mode}.")
         return None
     
-    def sample_configuration_aff_cspace_eq(self, mode: Mode) -> Configuration | None:
+    
+    def sample_informed_aff_cspace(self, mode: Mode) -> Configuration | None:
         """
-        Samples a node configuration restricted to the affine constraint manifold.
-        Uses either affine goal sampling or affine uniform sampling depending on p_goal.
+        Informed sampling with affine constraint projection.
         """
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if not next_ids and not self.env.is_terminal_mode(mode):
+            return
 
-        if np.random.uniform(0, 1) < self.config.p_goal:
-            # affine goal sampling
-            return self.sample_goal_aff_cspace_eq(mode, self.transition_node_ids, self.trees[mode].order)
+        # Collect affine constraints for this mode
+        aff_eq = self.collect_env_and_task_aff_eq_constraints(mode)
+        aff_ineq = self.collect_env_and_task_aff_ineq_constraints(mode)
 
-        # affine uniform sampling
-        return self.sample_uniform_aff_cspace_eq(mode)
+        while True:
+            q = self.informed.generate_samples(
+                self.modes,
+                self.config.informed_batch_size,
+                self.operation.path_shortcutting_interpolated,
+                active_mode=mode,
+            )
+            if q == []:
+                return None
+
+            # Project sample onto constraint manifold
+            q_proj = self.project_affine_cspace_interior(q, aff_eq, aff_ineq)
+            if q_proj is None:
+                continue
+
+            # Verify constraints numerically
+            if not (self.satisfies_aff_eq_constraints(aff_eq, q_proj) and
+                    self.satisfies_aff_ineq_constraints(aff_ineq, q_proj)):
+                continue
+
+            # Check collision
+            if self.env.is_collision_free(q_proj, mode):
+                return q_proj
     
 
-    def sample_transition_configuration_aff_cspace_eq(self, mode: Mode) -> Configuration | None:
+    def sample_transition_configuration_aff_cspace(self, mode: Mode) -> Configuration | None:
         """
         Samples a transition configuration restricted to the affine constraint manifold.
         """
@@ -1762,8 +1796,84 @@ class BaseRRTstar(BasePlanner):
 
             if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                 return q_proj
+            
 
+    def sample_configuration_aff_cspace(self, mode: Mode) -> Configuration | None:
+        """
+        Samples a node configuration restricted to the affine constraint manifold.
+        Uses either affine goal sampling or affine uniform sampling depending on p_goal.
+        """
+
+        if np.random.uniform(0, 1) < self.config.p_goal:
+            # affine goal sampling
+            return self.sample_goal_aff_cspace(mode, self.transition_node_ids, self.trees[mode].order)
+        
+        if self.config.informed_sampling and self.operation.init_sol:
+            # informed sampling
+            return self.sample_informed_aff_cspace(mode)
+
+        # affine uniform sampling
+        return self.sample_uniform_aff_cspace(mode)
     
+            
+# 3) STEERING
+    def steer_affine(
+        self,
+        mode: Mode,
+        n_nearest: Node,
+        q_rand: Configuration,
+        dist: NDArray,
+        eq_constraints=None,
+        ineq_constraints=None,
+        i: int = 1,
+        eps: float = 1e-6,
+    ) -> Optional[State]:
+        """
+        Steers from n_nearest toward q_rand while respecting affine constraints.
+        If after projection constraints are not satisfied, rejects the step.
+        """
+        # 1) Trivial case
+        if np.equal(n_nearest.state.q.state(), q_rand.state()).all():
+            return None
+
+        q_nearest = n_nearest.state.q.state()
+        direction = q_rand.q - q_nearest
+
+        # 2) Compute step size normalization
+        if self.config.distance_metric != "max_euclidean":
+            dist = batch_config_dist(n_nearest.state.q, [q_rand], metric="max_euclidean")
+        N = float(dist / self.eta)
+
+        # 3) Step in ambient space
+        if N <= 1 or int(N) == i - 1:
+            q_new = q_rand.q
+        else:
+            q_new = q_nearest + (direction * (i / N))
+
+        # 4) Project onto manifold
+        aff_eq = eq_constraints or self.collect_env_and_task_aff_eq_constraints(mode)
+        aff_ineq = ineq_constraints or self.collect_env_and_task_aff_ineq_constraints(mode)
+
+        if self.satisfies_aff_ineq_constraints(aff_ineq, self.env.get_start_pos().from_flat(q_new)) and self.satisfies_aff_eq_constraints(aff_eq, self.env.get_start_pos().from_flat(q_new)):
+            q_proj = self.env.get_start_pos().from_flat(q_new)          
+        else:
+            q_proj = self.project_affine_cspace_interior(
+                self.env.get_start_pos().from_flat(q_new),
+                aff_eq,
+                aff_ineq,
+            )
+            if q_proj is None:
+                return None
+
+            # 5) Validate constraints numerically
+            eq_ok = self.satisfies_aff_eq_constraints(aff_eq, q_proj, eps)
+            ineq_ok = self.satisfies_aff_ineq_constraints(aff_ineq, q_proj)
+            if not (eq_ok and ineq_ok):
+                return None  # force planner to resample q_rand
+
+        # 6) Return new feasible state
+        return State(q_proj, mode)
+
 ############################################
 
     def find_lb_transition_node(self, shortcutting_bool: bool = True) -> None:
