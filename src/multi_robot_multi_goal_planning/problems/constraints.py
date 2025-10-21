@@ -176,6 +176,18 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
+    def F(self, q_vec: np.ndarray, env) -> np.ndarray:
+        """
+        Residual vector: equals zero when the constraint is satisfied.
+        """
+        return self.mat @ q_vec - self.constraint_pose
+
+    def J(self, q_vec: np.ndarray, env) -> np.ndarray:
+        """
+        Jacobian matrix: constant for affine constraints.
+        """
+        return self.mat       
+
     def is_fulfilled(self, q: Configuration, env) -> bool:
         return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
 
