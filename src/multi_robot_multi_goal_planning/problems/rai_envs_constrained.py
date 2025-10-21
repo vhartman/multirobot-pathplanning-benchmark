@@ -511,6 +511,12 @@ class rai_rfl(SequenceMixin, rai_env):
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
+        # for _ in range(1000):
+        #     q = self.sample_config_uniform_in_limits()
+
+        #     if self.is_collision_free(q):
+        #         self.show_config(q)
+
 @register("rai.arm_ee_pose")
 class rai_hold_glass_upright(SequenceMixin, rai_env):
     def __init__(self):

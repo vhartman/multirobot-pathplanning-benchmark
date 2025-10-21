@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 from .configuration import Configuration
 
 # from .rai_base_env import rai_env
+import robotic
 
 class Constraint(ABC):
     @abstractmethod
@@ -62,6 +63,18 @@ class AffineTaskSpaceEqualityConstraint(Constraint):
 
         return all(np.isclose(self.mat @ frame_pose[:, None], self.constraint_pose, self.eps))
 
+
+    def F(self, q_vec, env):
+        env.C.setJointState(q_vec)
+        [y, J] = env.C.eval(robotic.FS.pose, [self.frame_name], self.mat, self.constraint_pose)
+        return y
+    
+
+    def J(self, q_vec, env):
+        env.C.setJointState(q_vec)
+        [y, J] = env.C.eval(robotic.FS.pose, [self.frame_name], self.mat, self.constraint_pose)
+
+        return J
 
 # constraint of the form 
 # A * frame_pose <= b
@@ -223,6 +236,33 @@ class AffineFrameOrientationConstraint(Constraint):
         
         return all(np.isclose(axis_to_check, self.desired_orientation_vector, self.epsilon))
 
+
+    def J(self, q, env):
+        env.C.setJointState(q)
+        
+        fs = robotic.FS.vectorX
+        if self.vector == "y":
+            fs = robotic.FS.vectorY
+        elif self.vector == "z":
+            fs = robotic.FS.vectorZ
+        else:
+            raise ValueError
+        
+        [y, J] = env.C.eval(fs, [self.frame_name], 1, self.desired_orientation_vector)
+        return J
+
+    def F(self, q, env):
+        fs = robotic.FS.vectorX
+        if self.vector == "y":
+            fs = robotic.FS.vectorY
+        elif self.vector == "z":
+            fs = robotic.FS.vectorZ
+        else:
+            raise ValueError
+        
+        env.C.setJointState(q)
+        [y, J] = env.C.eval(fs, [self.frame_name], 1, self.desired_orientation_vector)
+        return y
 
 # projects the pose of a frame to a path 
 class TaskSpacePathConstraint(Constraint):

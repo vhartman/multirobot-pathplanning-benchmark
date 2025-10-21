@@ -54,7 +54,7 @@ def test_task_space_eq_constraint():
     env = get_env_by_name("rai.piano")
 
     A = np.zeros((1, 7))
-    A[0] = 1  # constraining x
+    A[0, 0] = 1  # constraining x
 
     b = np.zeros((1, 1))
 
@@ -62,19 +62,54 @@ def test_task_space_eq_constraint():
 
     q = env.get_start_pos()
     q[0][0] = 0
-    assert not constraint.is_fulfilled(q, env)
+    assert constraint.is_fulfilled(q, env)
 
     q = env.get_start_pos()
     q[0][0] = 1
     assert not constraint.is_fulfilled(q, env)
+
+    residual = constraint.F(q.state(), env)
+
+    assert residual[0] == 1
+
+    jac = constraint.J(q.state(), env)
+
+    jac_analytical = np.zeros((1, 6))
+    jac_analytical[0, 0] = 1
+
+    assert np.isclose(jac, jac_analytical).all()
+
+    # nonzero version
+    b = np.ones((1, 1))
+
+    non_zero_constraint = AffineTaskSpaceEqualityConstraint("a1", A, b, 1e-3)
+
+    q = env.get_start_pos()
+    q[0][0] = 0
+    assert not non_zero_constraint.is_fulfilled(q, env)
+
+    q = env.get_start_pos()
+    q[0][0] = 1
+    assert non_zero_constraint.is_fulfilled(q, env)
+
+    residual = non_zero_constraint.F(q.state(), env)
+
+    assert residual[0] == 0
+
+    jac = non_zero_constraint.J(q.state(), env)
+
+    jac_analytical = np.zeros((1, 6))
+    jac_analytical[0, 0] = 1
+
+    assert np.isclose(jac, jac_analytical).all()
 
 
 def test_task_space_ineq_constraint():
     env = get_env_by_name("rai.piano")
 
     A = np.zeros((2, 7))
-    A[0] = 1  # constraining x
-    A[1] = 1  # constraining y
+    A[0, 0] = 1  # constraining x
+    A[0, 1] = 1  # constraining y
 
     b = np.zeros((2, 1))
 
@@ -151,13 +186,18 @@ def test_task_space_relative_ineq_constraint():
     assert not constraint.is_fulfilled(q2, env)
 
 
-def test_affine_frame_orientation_constraint():
+def test_affine_frame_orientation_constraint_simple():
     env = get_env_by_name("rai.piano")
 
     constraint = AffineFrameOrientationConstraint("a1", "z", np.array([0, 0, 1]), 1e-3)
 
     q = env.get_start_pos()
     assert constraint.is_fulfilled(q, env)
+
+
+
+def test_affine_frame_orientation_constraint_arm():
+    raise NotImplementedError
 
 
 # def test_task_space_path_constraint():
