@@ -555,12 +555,15 @@ class BaseRRTstar(BasePlanner):
         self.check = set()
         self.blacklist_mode = set()
 
+        self.affine_projection = "interior" # "interior", "explore", "boundary"
+        self.rejection_projection_goal_trans = True # True: we use rejection sampling for goal sampling and transition config sampling, False: we use the other method
+
     def add_tree(
         self,
         mode: Mode,
         tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None,
     ) -> None:
-        """
+        """S
         Initializes new tree instance for the given mode.
 
         Args:
@@ -1523,7 +1526,7 @@ class BaseRRTstar(BasePlanner):
     
 ################# GIOVANNI #################
 
-#0) UTILS
+#0) UTILS    
     def collect_env_and_task_aff_eq_constraints(self, mode: Mode) -> List: 
         """
         Collects all relevant constraints from the environment and task.
@@ -1669,7 +1672,12 @@ class BaseRRTstar(BasePlanner):
             q0 = self.env.sample_config_uniform_in_limits()
 
             # project to affine constraints
-            q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
+            if self.affine_projection=="interior":
+                q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
+            elif self.affine_projection=="explore":
+                q_proj = self.project_affine_cspace_explore(q0, aff_eq_constr, aff_ineq_constraints)
+            elif self.affine_projection=="boundary":
+                q_proj = self.project_affine_cspace(q0, aff_eq_constr, aff_ineq_constraints)
 
             if q_proj is not None and self.env.is_collision_free(q_proj, mode):
                 return q_proj
@@ -1721,18 +1729,25 @@ class BaseRRTstar(BasePlanner):
             aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
 
             # projection
-            for _ in range(max_tries):
-                q0 = self.env.sample_config_uniform_in_limits()
-                q_proj = self.project_affine_only(q0, aff_eq_constr)
+            if self.rejection_projection_goal_trans:
+                for _ in range(max_tries):
+                    q0 = self.env.sample_config_uniform_in_limits()
+                    q_proj = self.project_affine_only(q0, aff_eq_constr) # HERE I AM DOING DIRECT PROJECTION ON EQUALITY ONLY, THEN CHECK INEQUALITY
 
-                if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
-                    return q_proj
-
-            # for _ in range(max_tries):
-            #     q0 = self.env.sample_config_uniform_in_limits()
-            #     q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
-            #     if q_proj is not None and self.env.is_collision_free(q_proj, mode):
-            #         return q_proj
+                    if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                        return q_proj
+            else:
+                for _ in range(max_tries):
+                    q0 = self.env.sample_config_uniform_in_limits()
+                    if self.affine_projection=="interior":
+                        q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
+                    elif self.affine_projection=="explore":
+                        q_proj = self.project_affine_cspace_explore(q0, aff_eq_constr, aff_ineq_constraints)
+                    elif self.affine_projection=="boundary":
+                        q_proj = self.project_affine_cspace_boundary(q0, aff_eq_constr, aff_ineq_constraints)
+                    
+                    if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                        return q_proj
 
         else:  # forward expansion
             q_anchor = self.sample_transition_configuration_aff_cspace(mode)
@@ -1742,8 +1757,8 @@ class BaseRRTstar(BasePlanner):
 
         print(f"Failed constraint-aware goal sampling after {max_tries} tries in mode {mode}.")
         return None
-    
-    
+
+
     def sample_transition_configuration_aff_cspace(self, mode: Mode) -> Configuration | None:
         """
         Samples a transition configuration restricted to the affine constraint manifold.
@@ -1760,20 +1775,27 @@ class BaseRRTstar(BasePlanner):
         aff_ineq_constraints = self.collect_env_and_task_aff_ineq_constraints(mode)
 
         # projection
-        for _ in range(max_tries):
-            q0 = self.env.sample_config_uniform_in_limits()
-            q_proj = self.project_affine_only(q0, aff_eq_constr)
+        if self.rejection_projection_goal_trans:
+            for _ in range(max_tries):
+                q0 = self.env.sample_config_uniform_in_limits()
+                q_proj = self.project_affine_only(q0, aff_eq_constr) # HERE I AM DOING DIRECT PROJECTION ON EQUALITY ONLY, THEN CHECK INEQUALITY
 
-            if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
-                return q_proj
+                if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                    return q_proj
+        else:
+            for _ in range(max_tries):
+                q0 = self.env.sample_config_uniform_in_limits()
+                if self.affine_projection=="interior":
+                    q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
+                elif self.affine_projection=="explore":
+                    q_proj = self.project_affine_cspace_explore(q0, aff_eq_constr, aff_ineq_constraints)
+                elif self.affine_projection=="boundary":
+                    q_proj = self.project_affine_cspace_boundary(q0, aff_eq_constr, aff_ineq_constraints)
+                
+                if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                    return q_proj
 
-        # for _ in range(max_tries):
-        #     q0 = self.env.sample_config_uniform_in_limits()
-        #     q_proj = self.project_affine_cspace_interior(q0, aff_eq_constr, aff_ineq_constraints)
-        #     if q_proj is not None and self.env.is_collision_free(q_proj, mode):
-        #         return q_proj
-    
-    
+
     def sample_informed_aff_cspace(self, mode: Mode) -> Configuration | None:
         """
         Informed sampling with affine constraint projection.
@@ -1797,7 +1819,13 @@ class BaseRRTstar(BasePlanner):
                 return None
 
             # Project sample onto constraint manifold
-            q_proj = self.project_affine_cspace_interior(q, aff_eq, aff_ineq)
+            if self.affine_projection=="interior":
+                q_proj = self.project_affine_cspace_interior(q, aff_eq, aff_ineq)
+            elif self.affine_projection=="explore":
+                q_proj = self.project_affine_cspace_explore(q, aff_eq, aff_ineq)
+            elif self.affine_projection=="boundary":
+                q_proj = self.project_affine_cspace_boundary(q, aff_eq, aff_ineq)
+
             if q_proj is None:
                 continue
 
@@ -1870,11 +1898,25 @@ class BaseRRTstar(BasePlanner):
         if self.satisfies_aff_ineq_constraints(aff_ineq, self.env.get_start_pos().from_flat(q_new)) and self.satisfies_aff_eq_constraints(aff_eq, self.env.get_start_pos().from_flat(q_new)):
             q_proj = self.env.get_start_pos().from_flat(q_new)          
         else:
-            q_proj = self.project_affine_cspace_interior(
-                self.env.get_start_pos().from_flat(q_new),
-                aff_eq,
-                aff_ineq,
-            )
+            if self.affine_projection=="interior":
+                q_proj = self.project_affine_cspace_interior(
+                    self.env.get_start_pos().from_flat(q_new),
+                    aff_eq,
+                    aff_ineq,
+                )
+            elif self.affine_projection=="explore":
+                q_proj = self.project_affine_cspace_explore(
+                    self.env.get_start_pos().from_flat(q_new),
+                    aff_eq,
+                    aff_ineq,
+                )
+            elif self.affine_projection=="boundary":
+                q_proj = self.project_affine_cspace_boundary(
+                    self.env.get_start_pos().from_flat(q_new),
+                    aff_eq,
+                    aff_ineq,
+                )
+            
             if q_proj is None:
                 return None
 
