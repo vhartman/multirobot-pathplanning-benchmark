@@ -158,7 +158,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         self.C.setJointState(pick_pose)
         a1_pose = self.C.getFrame("a1_ur_ee_marker").getPose()
         a2_pose = self.C.getFrame("a2_ur_ee_marker").getPose()
-        rel_pose = relative_pose(a1_pose, a2_pose)
+        rel_pose = relative_pose(a1_pose, a2_pose)[:, None]
 
         self.C.setJointState(home_pose)
 
@@ -179,7 +179,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 SingleGoal(place_pose),
                 type="place", 
                 frames=["table", "obj1"],
-                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7),  rel_pose)]
+                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7),  rel_pose, 1e-2)]
             ),            
             # terminal mode
             Task(

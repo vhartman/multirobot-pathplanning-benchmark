@@ -189,7 +189,6 @@ def test_nonlinear_task_space_relative_eq_constraint():
     residual = constraint.F(q2.state(), None, env)
     assert np.linalg.norm(residual[:3]) < 1e-6
 
-
     q3 = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
     q3[0][1] += 1
     q3[1][1] += 1
@@ -198,6 +197,30 @@ def test_nonlinear_task_space_relative_eq_constraint():
     # jac = constraint.J(q1.state(), None, env)
     residual = constraint.F(q3.state(), None, env)
     assert np.linalg.norm(residual[:3]) < 1e-6
+
+def test_nonlinear_robot_task_space_relative_eq_constraint():
+    env = get_env_by_name("rai.grasping")
+
+    constraint = env.tasks[1].constraints[0]
+
+    # check if the constraint is somehow fulfilled in the beginning; it should not be
+    q = env.get_start_pos()
+    assert not constraint.is_fulfilled(q, None, env)
+
+    pick_pose = env.start_pos.from_flat(env.tasks[0].goal.sample(None))
+    place_pose = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
+    assert constraint.is_fulfilled(pick_pose, None, env)
+    
+    # jac = constraint.J(q1.state(), None, env)
+    residual = constraint.F(pick_pose.state(), None, env)
+
+    assert np.linalg.norm(residual[:3]) < 1e-3
+    
+    assert constraint.is_fulfilled(place_pose, None, env)
+    # jac = constraint.J(q1.state(), None, env)
+    residual = constraint.F(place_pose.state(), None, env)
+    assert np.linalg.norm(residual[:3]) < 1e-3
+
 
 def test_task_space_relative_ineq_constraint():
     env = get_env_by_name("rai.piano")
