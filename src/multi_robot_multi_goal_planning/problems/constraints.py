@@ -151,15 +151,33 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         if mode is not None:
             env.set_to_mode(mode)
         env.C.setJointState(q.state())
-        frame_1_pose = env.C.getFrame(self.frames[0]).getPose()
 
-        env.C.setJointState(q.state())
+        frame_1_pose = env.C.getFrame(self.frames[0]).getPose()
         frame_2_pose = env.C.getFrame(self.frames[1]).getPose()
 
         rel_pose = relative_pose(frame_1_pose, frame_2_pose)
 
         return all(np.isclose(self.mat @ rel_pose[:, None], self.desired_relative_pose, self.eps))
+    
+    def J(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        
+        env.C.setJointState(q)
 
+        [y, J] = env.C.eval(robotic.FS.poseRel, [self.frames[1], self.frames[0]], 1, self.desired_relative_pose)
+
+        return J
+
+    def F(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        
+        env.C.setJointState(q)
+
+        [y, J] = env.C.eval(robotic.FS.poseRel, [self.frames[1], self.frames[0]], 1, self.desired_relative_pose)
+        
+        return y
 
 # constraint of the form
 # A * (frame_pose_1 - frame_pose_2) = b
@@ -252,8 +270,6 @@ class AffineFrameOrientationConstraint(Constraint):
             axis_to_check = z_axis
         else:
             raise ValueError
-        
-        print(axis_to_check)
         
         return all(np.isclose(axis_to_check, self.desired_orientation_vector, atol=self.epsilon))
 

@@ -141,21 +141,63 @@ def test_task_space_relative_eq_constraint():
     q = env.get_start_pos()
     assert constraint.is_fulfilled(q, None, env)
 
-    q1 = env.get_start_pos()
+    q1 = copy.deepcopy(env.get_start_pos())
     q1[0][0] += 1
     q1[1][0] += 1
     assert constraint.is_fulfilled(q1, None, env)
 
-    q2 = env.get_start_pos()
+    q2 = copy.deepcopy(env.get_start_pos())
     q2[0][1] -= 1
     q2[1][1] -= 1
     assert constraint.is_fulfilled(q2, None, env)
 
-    q3 = env.get_start_pos()
+    q3 = copy.deepcopy(env.get_start_pos())
     q3[0][1] -= 1
     q3[1][1] += 1
-    assert not constraint.is_fulfilled(q2, None, env)
+    assert not constraint.is_fulfilled(q3, None, env)
 
+
+def test_nonlinear_task_space_relative_eq_constraint():
+    env = get_env_by_name("rai.constrained_relative_pose")
+
+    constraint = env.tasks[1].constraints[0]
+
+    # check if the constraint is somehow fulfilled in the beginning; it should not be
+    q = env.get_start_pos()
+    assert not constraint.is_fulfilled(q, None, env)
+
+    q0 = env.start_pos.from_flat(env.tasks[0].goal.sample(None))
+    q1 = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
+    assert constraint.is_fulfilled(q0, None, env)
+    
+    # jac = constraint.J(q1.state(), None, env)
+    residual = constraint.F(q0.state(), None, env)
+
+    assert np.linalg.norm(residual[:3]) < 1e-6
+    
+    assert constraint.is_fulfilled(q1, None, env)
+    # jac = constraint.J(q1.state(), None, env)
+    residual = constraint.F(q1.state(), None, env)
+    assert np.linalg.norm(residual[:3]) < 1e-6
+
+    q2 = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
+    q2[0][0] += 1
+    q2[1][0] += 1
+    
+    assert constraint.is_fulfilled(q2, None, env)
+    # jac = constraint.J(q1.state(), None, env)
+    residual = constraint.F(q2.state(), None, env)
+    assert np.linalg.norm(residual[:3]) < 1e-6
+
+
+    q3 = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
+    q3[0][1] += 1
+    q3[1][1] += 1
+    
+    assert constraint.is_fulfilled(q3, None, env)
+    # jac = constraint.J(q1.state(), None, env)
+    residual = constraint.F(q3.state(), None, env)
+    assert np.linalg.norm(residual[:3]) < 1e-6
 
 def test_task_space_relative_ineq_constraint():
     env = get_env_by_name("rai.piano")
@@ -171,20 +213,20 @@ def test_task_space_relative_ineq_constraint():
     q = env.get_start_pos()
     assert constraint.is_fulfilled(q, None, env)
 
-    q1 = env.get_start_pos()
+    q1 = copy.deepcopy(env.get_start_pos())
     q1[0][0] += 1
     q1[1][0] += 0
     assert constraint.is_fulfilled(q1, None, env)
 
-    q2 = env.get_start_pos()
+    q2 = copy.deepcopy(env.get_start_pos())
     q2[0][1] -= 0
     q2[1][1] -= 1
     assert constraint.is_fulfilled(q2, None, env)
 
-    q3 = env.get_start_pos()
+    q3 = copy.deepcopy(env.get_start_pos())
     q3[0][1] -= 1
     q3[1][1] += 1
-    assert not constraint.is_fulfilled(q2, None, env)
+    assert not constraint.is_fulfilled(q3, None, env)
 
 
 def test_affine_frame_orientation_constraint_simple():
