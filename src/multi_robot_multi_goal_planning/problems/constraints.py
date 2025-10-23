@@ -13,7 +13,7 @@ import robotic
 
 class Constraint(ABC):
     @abstractmethod
-    def is_fulfilled(self, q: Configuration, env) -> bool:
+    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         """
         Method to check if a constraint is fulfilled.
         Returns boolean only.
@@ -56,22 +56,32 @@ class AffineTaskSpaceEqualityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.constraint_pose)
         assert self.mat.shape[1] == 7
 
-    def is_fulfilled(self, q: Configuration, env) -> bool:
+    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         # frame_pose = env.get_frame_pose(self.frame_name)
+        if mode is not None:
+            env.set_to_mode(mode)
+        
         env.C.setJointState(q.state())
         frame_pose = env.C.getFrame(self.frame_name).getPose()
 
         return all(np.isclose(self.mat @ frame_pose[:, None], self.constraint_pose, self.eps))
 
 
-    def F(self, q_vec, env):
+    def F(self, q_vec, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        
         env.C.setJointState(q_vec)
+
         [y, J] = env.C.eval(robotic.FS.pose, [self.frame_name], self.mat, self.constraint_pose)
         return y
     
 
-    def J(self, q_vec, env):
+    def J(self, q_vec, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
         env.C.setJointState(q_vec)
+        
         [y, J] = env.C.eval(robotic.FS.pose, [self.frame_name], self.mat, self.constraint_pose)
 
         return J
@@ -89,8 +99,10 @@ class AffineTaskSpaceInequalityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.constraint_pose)
         assert self.mat.shape[1] == 7
 
-    def is_fulfilled(self, q: Configuration, env) -> bool:
+    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         # frame_pose = env.get_frame_pose(self.frame_name)
+        if mode is not None:
+            env.set_to_mode(mode)
         env.C.setJointState(q.state())
         frame_pose = env.C.getFrame(self.frame_name).getPose()
 
@@ -132,10 +144,12 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.desired_relative_pose)
         assert self.mat.shape[1] == 7
 
-    def is_fulfilled(self, q, env):
+    def is_fulfilled(self, q, mode, env):
         # frame_1_pose = env.get_frame_pose(q, self.frames[0])
         # frame_2_pose = env.get_frame_pose(q, self.frames[1])
 
+        if mode is not None:
+            env.set_to_mode(mode)
         env.C.setJointState(q.state())
         frame_1_pose = env.C.getFrame(self.frames[0]).getPose()
 
@@ -162,10 +176,13 @@ class RelativeAffineTaskSpaceInequalityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.desired_relative_pose)
         assert self.mat.shape[1] == 7
 
-    def is_fulfilled(self, q, env):
+    def is_fulfilled(self, q, mode, env):
         # frame_1_pose = env.get_frame_pose(q, self.frames[0])
         # frame_2_pose = env.get_frame_pose(q, self.frames[1])
 
+        if mode is not None:
+            env.set_to_mode(mode)
+        
         env.C.setJointState(q.state())
         frame_1_pose = env.C.getFrame(self.frames[0]).getPose()
 
@@ -189,7 +206,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
-    def is_fulfilled(self, q: Configuration, env) -> bool:
+    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
 
 # constraint of the form 
@@ -203,7 +220,7 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
-    def is_fulfilled(self, q: Configuration, env) -> bool:
+    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         return all(self.mat @ q.state()[:, None] < self.constraint_pose)
 
 
@@ -217,8 +234,10 @@ class AffineFrameOrientationConstraint(Constraint):
 
         assert self.vector in ["x", "y", "z"]
 
-    def is_fulfilled(self, q, env):
+    def is_fulfilled(self, q, mode, env):
         # TODO: make applicable to all envs
+        if mode is not None:
+            env.set_to_mode(mode)
         env.C.setJointState(q.state())
         frame_pose = env.C.getFrame(self.frame_name).getPose()
 
@@ -237,10 +256,14 @@ class AffineFrameOrientationConstraint(Constraint):
         return all(np.isclose(axis_to_check, self.desired_orientation_vector, self.epsilon))
 
 
-    def J(self, q, env):
+    def J(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        
         env.C.setJointState(q)
         
         fs = robotic.FS.vectorX
+
         if self.vector == "y":
             fs = robotic.FS.vectorY
         elif self.vector == "z":
@@ -251,7 +274,12 @@ class AffineFrameOrientationConstraint(Constraint):
         [y, J] = env.C.eval(fs, [self.frame_name], 1, self.desired_orientation_vector)
         return J
 
-    def F(self, q, env):
+    def F(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        
+        env.C.setJointState(q)
+
         fs = robotic.FS.vectorX
         if self.vector == "y":
             fs = robotic.FS.vectorY
@@ -260,7 +288,6 @@ class AffineFrameOrientationConstraint(Constraint):
         else:
             raise ValueError
         
-        env.C.setJointState(q)
         [y, J] = env.C.eval(fs, [self.frame_name], 1, self.desired_orientation_vector)
         return y
 
@@ -279,7 +306,7 @@ class TaskSpacePathConstraint(Constraint):
         self.mat = mat
         self.epsilon = epsilon
 
-    def is_fulfilled(self, q, env):
+    def is_fulfilled(self, q, mode, env):
         frame_pose = env.get_frame_pose(self.frame_name)
         
         # find closest element on path
@@ -304,7 +331,7 @@ class ConfigurationSpacePathConstraint(Constraint):
         self.mat = mat
         self.epsilon = epsilon
 
-    def is_fulfilled(self, q, env):
+    def is_fulfilled(self, q, mode, env):
         # find closest element on path
         for p in self.path:
             dist = np.linalg.norm(self.mat @ q - p)

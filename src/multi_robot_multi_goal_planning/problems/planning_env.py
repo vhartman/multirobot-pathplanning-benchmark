@@ -1892,13 +1892,13 @@ class BaseProblem(ABC):
             # print(next_mode_ids)
             task_constraints = self.get_active_task(mode, next_mode_ids).constraints
             for c in task_constraints:
-                if not c.is_fulfilled(path[i].q, self):
+                if not c.is_fulfilled(path[i].q, mode, self):
                     print(f"Constraint violated at index {i}")
                     constraint_violation = True
 
             env_constraints = self.constraints
             for c in env_constraints:
-                if not c.is_fulfilled(path[i].q, self):
+                if not c.is_fulfilled(path[i].q, mode, self):
                     print(f"Persistent constraint violated at index {i}")
                     constraint_violation = True
 
