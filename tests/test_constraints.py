@@ -1,6 +1,7 @@
 import pytest
 
 import numpy as np
+import copy
 
 from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration
 
@@ -204,7 +205,7 @@ def test_affine_frame_orientation_constraint_simple():
     assert np.isclose(jac, jac_analytical).all()
 
 
-def test_affine_frame_orientation_constraint_free_joint():
+def test_affine_frame_orientation_constraint_bottle():
     env = get_env_by_name("rai.arm_ee_pose")
 
     r1_constraint = env.tasks[1].constraints[0]
@@ -215,65 +216,99 @@ def test_affine_frame_orientation_constraint_free_joint():
     r2_pick_pose = env.tasks[2].goal.sample(None)
     r2_place_pose = env.tasks[3].goal.sample(None)
 
-    # robot 1 start
+    ##############
+    # robot 1 pick
+    ##############
     q = env.get_start_pos()
-    assert not r1_constraint.is_fulfilled(q, None, env)
-
-    residual = r1_constraint.F(q.state(), None, env)
-    assert residual[2] != 0
-    
-    q = env.get_start_pos()
-    q[0] = r1_pick_pose
     assert r1_constraint.is_fulfilled(q, None, env)
 
     residual = r1_constraint.F(q.state(), None, env)
     assert residual[2] == 0
-
-    # TODO: ADD MODE
-    jac = r1_constraint.J(q.state(), None, env)
-    print(jac)
-
-    q = env.get_start_pos()
-    q[0] = r1_place_pose
-    assert r1_constraint.is_fulfilled(q, None, env)
-
-    residual = r1_constraint.F(q.state(), None, env)
-    assert residual[2] == 0
-
-    # TODO: ADD MODE, set to mode
-    jac = r1_constraint.J(q.state(), None, env)
-    print(jac)
-
-
-    # robot 2 start
-    q = env.get_start_pos()
-    assert not r2_constraint.is_fulfilled(q, env)
-
-    residual = r2_constraint.F(q.state(), None, env)
-    assert residual[2] != 0
     
-    q = env.get_start_pos()
-    q[0] = r2_pick_pose
-    assert r2_constraint.is_fulfilled(q, None, env)
+    r1_complete_pick_pose = copy.deepcopy(env.get_start_pos())
+    r1_complete_pick_pose[0] = r1_pick_pose
 
-    residual = r2_constraint.F(q.state(), None, env)
+    r1_pick_mode = env.get_next_modes(r1_complete_pick_pose, env.get_start_mode())[0]
+
+    assert r1_constraint.is_fulfilled(r1_complete_pick_pose, r1_pick_mode, env)
+
+    residual = r1_constraint.F(r1_complete_pick_pose.state(), r1_pick_mode, env)
     assert residual[2] == 0
 
-    # TODO: ADD MODE
-    jac = r2_constraint.J(q.state(), None, env)
-    print(jac)
+    # ensure that this constraint is not fulfilled at the start pose afte rhaving picked
+    assert not r1_constraint.is_fulfilled(env.get_start_pos(), r1_pick_mode, env)
 
-    q = env.get_start_pos()
-    q[0] = r2_place_pose
-    assert r2_constraint.is_fulfilled(q, None, env)
+    jac = r1_constraint.J(env.get_start_pos().state(), r1_pick_mode, env)
+    residual = r1_constraint.F(env.get_start_pos().state(), r1_pick_mode, env)
 
-    residual = r2_constraint.F(q.state(), None, env)
+    # ensure that the jacobian for robot 1 is nonzero, and it is zero for robot 2
+    assert np.linalg.norm(jac[:, :6]) > 0
+    assert np.linalg.norm(jac[:, 6:]) == 0
+
+    assert np.linalg.norm(residual) > 0
+
+    ##############
+    # robot 2 pick
+    ##############
+    r2_complete_pick_pose = copy.deepcopy(env.get_start_pos())
+    r2_complete_pick_pose[1] = r2_pick_pose
+
+    r2_pick_mode = env.get_next_modes(r2_complete_pick_pose, r1_pick_mode)[0]
+
+    r2_constraint.is_fulfilled(r2_complete_pick_pose, r2_pick_mode, env)
+
+    assert r2_constraint.is_fulfilled(r2_complete_pick_pose, r2_pick_mode, env)
+
+    residual = r2_constraint.F(r2_complete_pick_pose.state(), r2_pick_mode, env)
     assert residual[2] == 0
 
-    # TODO: ADD MODE, set to mode
-    jac = r2_constraint.J(q.state(), None, env)
-    print(jac)
+    assert not r1_constraint.is_fulfilled(env.get_start_pos(), r2_pick_mode, env)
 
+    jac = r2_constraint.J(env.get_start_pos().state(), r2_pick_mode, env)
+    residual = r2_constraint.F(env.get_start_pos().state(), r2_pick_mode, env)
+
+    # ensure that the jacobian for robot 1 is nonzero, and it is zero for robot 2
+    assert np.linalg.norm(jac[:, :6]) == 0
+    assert np.linalg.norm(jac[:, 6:]) > 0
+
+    assert np.linalg.norm(residual) > 0
+
+    ##############
+    # R1 place
+    ##############
+    r1_complete_place_pose = copy.deepcopy(env.get_start_pos())
+    r1_complete_place_pose[0] = r1_place_pose
+
+    r1_place_mode = env.get_next_modes(r1_complete_place_pose, r2_pick_mode)[0]
+    r1_constraint.is_fulfilled(r1_complete_place_pose, r1_place_mode, env)
+
+    # test that constraint is fulfilled
+    assert r1_constraint.is_fulfilled(r1_complete_place_pose, r1_place_mode, env)
+
+    residual = r1_constraint.F(r1_complete_place_pose.state(), r1_place_mode, env)
+    assert abs(residual[2]) < 1e-6
+
+    # test that jac should be zero after relinking
+    jac = r1_constraint.J(r1_complete_place_pose.state(), r1_place_mode, env)
+    assert np.linalg.norm(jac) == 0
+
+    ##############
+    # R2 place
+    ##############
+    r2_complete_place_pose = copy.deepcopy(env.get_start_pos())
+    r2_complete_place_pose[1] = r2_place_pose
+    r2_place_mode = env.get_next_modes(r2_complete_place_pose, r1_place_mode)[0]
+
+    r2_constraint.is_fulfilled(r2_complete_place_pose, r2_place_mode, env)
+
+    assert r2_constraint.is_fulfilled(r2_complete_place_pose, r2_place_mode, env)
+
+    residual = r2_constraint.F(r2_complete_place_pose.state(), r2_place_mode, env)
+    assert abs(residual[2]) < 1e-6
+
+    jac = r2_constraint.J(r2_complete_place_pose.state(), r2_place_mode, env)
+
+    assert np.linalg.norm(jac) == 0
 
 
 # def test_task_space_path_constraint():

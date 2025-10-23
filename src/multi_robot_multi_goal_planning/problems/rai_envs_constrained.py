@@ -544,7 +544,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 SingleGoal(r1_keyframes[1]),
                 "place",
                 frames=["table", "obj_1"],
-                constraints=[AffineFrameOrientationConstraint("obj_1", "z", np.array([0, 0, 1]), np.array([0]))]
+                constraints=[AffineFrameOrientationConstraint("obj_1", "z", np.array([0, 0, 1]), np.array([1e-3]))]
             ),
             Task(
                 "r2_pick",
@@ -559,7 +559,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 SingleGoal(r2_keyframes[1]),
                 "place",
                 frames=["table", "obj_2"],
-                constraints=[AffineFrameOrientationConstraint("obj_2", "z", np.array([0, 0, 1]), np.array([0]))]
+                constraints=[AffineFrameOrientationConstraint("obj_2", "z", np.array([0, 0, 1]), np.array([1e-3]))]
             ),
             # terminal mode
             Task(

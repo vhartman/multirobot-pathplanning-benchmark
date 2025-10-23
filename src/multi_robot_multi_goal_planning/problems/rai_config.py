@@ -1928,7 +1928,7 @@ def make_ur10_arm_orientation_env(num_robots=2):
         # )
 
         komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
-        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [5e1])
 
         komo.addObjective(
             times=[3, -1],
@@ -1939,7 +1939,7 @@ def make_ur10_arm_orientation_env(num_robots=2):
             target=q_home,
         )
 
-        max_attempts = 5
+        max_attempts = 20
         for num_attempt in range(max_attempts):
             # komo.initRandom()
             if num_attempt > 0:

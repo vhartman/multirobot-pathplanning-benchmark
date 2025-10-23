@@ -253,7 +253,9 @@ class AffineFrameOrientationConstraint(Constraint):
         else:
             raise ValueError
         
-        return all(np.isclose(axis_to_check, self.desired_orientation_vector, self.epsilon))
+        print(axis_to_check)
+        
+        return all(np.isclose(axis_to_check, self.desired_orientation_vector, atol=self.epsilon))
 
 
     def J(self, q, mode, env):
