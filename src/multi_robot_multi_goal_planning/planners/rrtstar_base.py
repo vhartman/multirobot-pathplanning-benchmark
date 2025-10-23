@@ -1744,7 +1744,7 @@ class BaseRRTstar(BasePlanner):
                     elif self.affine_projection=="explore":
                         q_proj = self.project_affine_cspace_explore(q0, aff_eq_constr, aff_ineq_constraints)
                     elif self.affine_projection=="boundary":
-                        q_proj = self.project_affine_cspace_boundary(q0, aff_eq_constr, aff_ineq_constraints)
+                        q_proj = self.project_affine_cspace(q0, aff_eq_constr, aff_ineq_constraints)
                     
                     if q_proj is not None and self.env.is_collision_free(q_proj, mode):
                         return q_proj
@@ -1790,7 +1790,7 @@ class BaseRRTstar(BasePlanner):
                 elif self.affine_projection=="explore":
                     q_proj = self.project_affine_cspace_explore(q0, aff_eq_constr, aff_ineq_constraints)
                 elif self.affine_projection=="boundary":
-                    q_proj = self.project_affine_cspace_boundary(q0, aff_eq_constr, aff_ineq_constraints)
+                    q_proj = self.project_affine_cspace(q0, aff_eq_constr, aff_ineq_constraints)
                 
                 if q_proj is not None and self.env.is_collision_free(q_proj, mode):
                     return q_proj
@@ -1824,7 +1824,7 @@ class BaseRRTstar(BasePlanner):
             elif self.affine_projection=="explore":
                 q_proj = self.project_affine_cspace_explore(q, aff_eq, aff_ineq)
             elif self.affine_projection=="boundary":
-                q_proj = self.project_affine_cspace_boundary(q, aff_eq, aff_ineq)
+                q_proj = self.project_affine_cspace(q, aff_eq, aff_ineq)
 
             if q_proj is None:
                 continue
@@ -1911,7 +1911,7 @@ class BaseRRTstar(BasePlanner):
                     aff_ineq,
                 )
             elif self.affine_projection=="boundary":
-                q_proj = self.project_affine_cspace_boundary(
+                q_proj = self.project_affine_cspace(
                     self.env.get_start_pos().from_flat(q_new),
                     aff_eq,
                     aff_ineq,
