@@ -225,7 +225,6 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
-<<<<<<< HEAD
     def F(self, q_vec: np.ndarray) -> np.ndarray:
         """Residual F(q) = A q - b (zero when satisfied)."""
         return self.mat @ q_vec - self.constraint_pose
@@ -234,14 +233,8 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
         """Jacobian: constant A for affine constraints."""
         return self.mat
 
-    def is_fulfilled(self, q: Configuration, env: Optional[Any] = None) -> bool:
-        """Check if constraint is (approximately) satisfied."""
-        return np.allclose(self.mat @ q.state(), self.constraint_pose, atol=self.eps)
-
-=======
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
->>>>>>> origin/dev/main
 
 # constraint of the form 
 # A * q <= b
@@ -256,7 +249,6 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
-<<<<<<< HEAD
     def G(self, q_vec: np.ndarray) -> np.ndarray:
         """
         Inequality residual: G(q) = A q - b <= 0  (feasible when negative or zero)
@@ -267,14 +259,8 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
         """Jacobian of G(q): constant A."""
         return self.mat
 
-    def is_fulfilled(self, q: Configuration, env: Optional[Any] = None) -> bool:
-        """Feasible if A q <= b."""
-        return np.all(self.mat @ q.state() <= self.constraint_pose + self.eps)
-
-=======
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         return all(self.mat @ q.state()[:, None] < self.constraint_pose)
->>>>>>> origin/dev/main
 
 
 # This might currently still be a bit overcomplicated?
