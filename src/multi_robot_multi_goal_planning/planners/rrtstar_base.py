@@ -555,7 +555,7 @@ class BaseRRTstar(BasePlanner):
         self.check = set()
         self.blacklist_mode = set()
 
-        self.affine_projection = "interior" # "interior", "explore", "boundary"
+        self.affine_projection = "explore" # "interior", "explore", "boundary"
         self.rejection_projection_goal_trans = True # True: we use rejection sampling for goal sampling and transition config sampling, False: we use the other method
 
     def add_tree(
@@ -1627,17 +1627,17 @@ class BaseRRTstar(BasePlanner):
 
         return AffineConfigurationSpaceEqualityConstraint(A_trans, b_trans)
     
-    def satisfies_aff_ineq_constraints(self, constraints: List, q: Configuration) -> bool:
+    def satisfies_aff_ineq_constraints(self, mode: Mode, constraints: List, q: Configuration) -> bool:
         for c in constraints:
             if isinstance(c, AffineConfigurationSpaceInequalityConstraint):
-                if not c.is_fulfilled(q):
+                if not c.is_fulfilled(q, mode, self.env):
                     return False
         return True
     
-    def satisfies_aff_eq_constraints(self, constraints: List, q: Configuration) -> bool:
+    def satisfies_aff_eq_constraints(self, mode: Mode, constraints: List, q: Configuration) -> bool:
         for c in constraints:
             if isinstance(c, AffineConfigurationSpaceEqualityConstraint):
-                if not c.is_fulfilled(q):
+                if not c.is_fulfilled(q, mode, self.env):
                     return False
         return True
 
@@ -1734,7 +1734,7 @@ class BaseRRTstar(BasePlanner):
                     q0 = self.env.sample_config_uniform_in_limits()
                     q_proj = self.project_affine_only(q0, aff_eq_constr) # HERE I AM DOING DIRECT PROJECTION ON EQUALITY ONLY, THEN CHECK INEQUALITY
 
-                    if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                    if q_proj is not None and self.satisfies_aff_ineq_constraints(mode, aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                         return q_proj
             else:
                 for _ in range(max_tries):
@@ -1780,7 +1780,7 @@ class BaseRRTstar(BasePlanner):
                 q0 = self.env.sample_config_uniform_in_limits()
                 q_proj = self.project_affine_only(q0, aff_eq_constr) # HERE I AM DOING DIRECT PROJECTION ON EQUALITY ONLY, THEN CHECK INEQUALITY
 
-                if q_proj is not None and self.satisfies_aff_ineq_constraints(aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                if q_proj is not None and self.satisfies_aff_ineq_constraints(mode, aff_ineq_constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
                     return q_proj
         else:
             for _ in range(max_tries):
@@ -1830,8 +1830,8 @@ class BaseRRTstar(BasePlanner):
                 continue
 
             # Verify constraints numerically
-            if not (self.satisfies_aff_eq_constraints(aff_eq, q_proj) and
-                    self.satisfies_aff_ineq_constraints(aff_ineq, q_proj)):
+            if not (self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
+                    self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
                 continue
 
             # Check collision
@@ -1895,7 +1895,7 @@ class BaseRRTstar(BasePlanner):
         aff_eq = eq_constraints or self.collect_env_and_task_aff_eq_constraints(mode)
         aff_ineq = ineq_constraints or self.collect_env_and_task_aff_ineq_constraints(mode)
 
-        if self.satisfies_aff_ineq_constraints(aff_ineq, self.env.get_start_pos().from_flat(q_new)) and self.satisfies_aff_eq_constraints(aff_eq, self.env.get_start_pos().from_flat(q_new)):
+        if self.satisfies_aff_ineq_constraints(mode, aff_ineq, self.env.get_start_pos().from_flat(q_new)) and self.satisfies_aff_eq_constraints(mode, aff_eq, self.env.get_start_pos().from_flat(q_new)):
             q_proj = self.env.get_start_pos().from_flat(q_new)          
         else:
             if self.affine_projection=="interior":
@@ -1921,8 +1921,8 @@ class BaseRRTstar(BasePlanner):
                 return None
 
             # 5) Validate constraints numerically
-            eq_ok = self.satisfies_aff_eq_constraints(aff_eq, q_proj)
-            ineq_ok = self.satisfies_aff_ineq_constraints(aff_ineq, q_proj)
+            eq_ok = self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj)
+            ineq_ok = self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)
             if not (eq_ok and ineq_ok):
                 return None  # force planner to resample q_rand
 

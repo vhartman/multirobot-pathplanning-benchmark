@@ -246,24 +246,24 @@ def robot_mode_shortcut(
 
         cnt += 1
 
-        constraints_ok = True
-        for state in path_element:
-            # Check all active equality and inequality constraints
-            for c in env_eq_constraints:
-                if not c.is_fulfilled(state.q, env):
-                    constraints_ok = False
-                    break
+        # constraints_ok = True
+        # for state in path_element:
+        #     # Check all active equality and inequality constraints
+        #     for c in env_eq_constraints:
+        #         if not c.is_fulfilled(state.q, mode, env):
+        #             constraints_ok = False
+        #             break
 
-            for c in env_ineq_constraints:
-                if not c.is_fulfilled(state.q, env):
-                    constraints_ok = False
-                    break
+        #     for c in env_ineq_constraints:
+        #         if not c.is_fulfilled(state.q, mode, env):
+        #             constraints_ok = False
+        #             break
 
-            if not constraints_ok:
-                break
+        #     if not constraints_ok:
+        #         break
 
-        if not constraints_ok:
-            continue  # reject this shortcut and try another
+        # if not constraints_ok:
+        #     continue  # reject this shortcut and try another
 
         if env.is_path_collision_free(
             path_element, resolution=resolution, tolerance=tolerance, check_start_and_end=False
