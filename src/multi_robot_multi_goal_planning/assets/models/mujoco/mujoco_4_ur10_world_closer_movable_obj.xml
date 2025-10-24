@@ -1,0 +1,59 @@
+<mujoco>
+  <visual>
+    <global offwidth="1920" offheight="1080" fovy="60" />
+    <scale framelength="0.5" framewidth="0.05" />
+  </visual>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="1 1 1" rgb2=".6 .8 1" width="256" height="256"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+
+    <model name="ur10" file="mujoco_ur10/ur10e.xml"/>
+  </asset>
+
+  <worldbody>
+    <light pos="1.5 1.5 5.0" diffuse="2 1.9 1.9"/>
+    <light pos="-1.5 -1.5 5.0" diffuse="2 1.9 1.9"/>
+
+    <geom name="floor" pos="0 0 -0.05" size="0 0 0.05" type="plane" material="groundplane"/>
+    
+    <body name="obj1" pos="0.5 0 0.025">
+      <freejoint/>
+      <geom size="0.1 0.1 0.05" type="box"/>
+    </body>
+    
+    <body name="obj2" pos="0 0.5 0.025">
+      <freejoint/>
+      <geom size="0.1 0.1 0.05" type="box"/>
+    </body>
+    
+    <body name="obj3" pos="0.5 0.5 0.025">
+      <freejoint/>
+      <geom size="0.1 0.1 0.05" type="box"/>
+    </body>
+    
+    <body name="obj4" pos="0 0 0.025">
+      <freejoint/>
+      <geom size="0.1 0.1 0.05" type="box"/>
+    </body>
+
+    <body name="ur10_1" pos="0.5 -0.5 0.02" euler="0 0 0" mocap="true">
+      <attach model="ur10" body="base" prefix="ur101/"/>
+    </body>
+    <body name="ur10_2" pos="-0.5 -0.5 0.02" euler="0 0 180" mocap="true">
+      <attach model="ur10" body="base" prefix="ur102/"/>
+    </body>
+    <body name="ur10_3" pos="-0.5 0.5 0.02" euler="0 0 180" mocap="true">
+      <attach model="ur10" body="base" prefix="ur103/"/>
+    </body>
+    <body name="ur10_4" pos="0.5 0.5 0.02" euler="0 0 0" mocap="true">
+      <attach model="ur10" body="base" prefix="ur104/"/>
+    </body>
+  </worldbody>
+
+  <keyframe>
+    <key name="home" qpos="0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0"
+      />
+  </keyframe>
+</mujoco>

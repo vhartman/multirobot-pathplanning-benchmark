@@ -91,22 +91,22 @@ class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
 @register("rai.constrained_relative_pose")
 class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
     def __init__(self):
-        self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=False)
+        self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=True)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
 
         rai_env.__init__(self)
 
-        joint_goal = np.array([-0.5, -0.25, -0.5, 0.25])
-        rel_movement_end = np.array([0.5, 0.25, 0.5, -0.25])
+        joint_goal = np.array([-0.5, -0.25, 0, -0.5, 0.25, 0])
+        rel_movement_end = np.array([0.5, 0.25, np.pi, 0.5, -0.25, np.pi])
 
         home_pose = self.C.getJointState()
 
         self.C.setJointState(joint_goal)
         a1_pose = self.C.getFrame("a1").getPose()
         a2_pose = self.C.getFrame("a2").getPose()
-        rel_pose = relative_pose(a1_pose, a2_pose)
+        rel_pose = relative_pose(a1_pose, a2_pose)[:, None]
 
         self.C.setJointState(home_pose)
 
@@ -159,7 +159,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         self.C.setJointState(pick_pose)
         a1_pose = self.C.getFrame("a1_ur_ee_marker").getPose()
         a2_pose = self.C.getFrame("a2_ur_ee_marker").getPose()
-        rel_pose = relative_pose(a1_pose, a2_pose)
+        rel_pose = relative_pose(a1_pose, a2_pose)[:, None]
 
         self.C.setJointState(home_pose)
 
@@ -180,7 +180,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 SingleGoal(place_pose),
                 type="place", 
                 frames=["table", "obj1"],
-                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7),  rel_pose)]
+                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7),  rel_pose, 1e-2)]
             ),            
             # terminal mode
             Task(
@@ -526,6 +526,12 @@ class rai_rfl(SequenceMixin, rai_env):
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
+        # for _ in range(1000):
+        #     q = self.sample_config_uniform_in_limits()
+
+        #     if self.is_collision_free(q):
+        #         self.show_config(q)
+
 @register("rai.arm_ee_pose")
 class rai_hold_glass_upright(SequenceMixin, rai_env):
     def __init__(self):
@@ -553,7 +559,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 SingleGoal(r1_keyframes[1]),
                 "place",
                 frames=["table", "obj_1"],
-                constraints=[AffineFrameOrientationConstraint("obj_1", "z", np.array([[0, 0, 1]]), np.array([0]))]
+                constraints=[AffineFrameOrientationConstraint("obj_1", "z", np.array([0, 0, 1]), np.array([1e-3]))]
             ),
             Task(
                 "r2_pick",
@@ -568,7 +574,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 SingleGoal(r2_keyframes[1]),
                 "place",
                 frames=["table", "obj_2"],
-                constraints=[AffineFrameOrientationConstraint("obj_2", "z", np.array([[0, 0, 1]]), np.array([0]))]
+                constraints=[AffineFrameOrientationConstraint("obj_2", "z", np.array([0, 0, 1]), np.array([1e-3]))]
             ),
             # terminal mode
             Task(

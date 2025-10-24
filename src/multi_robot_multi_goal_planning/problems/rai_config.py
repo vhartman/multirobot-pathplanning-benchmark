@@ -1928,7 +1928,7 @@ def make_ur10_arm_orientation_env(num_robots=2):
         # )
 
         komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
-        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [5e1])
 
         komo.addObjective(
             times=[3, -1],
@@ -1939,7 +1939,7 @@ def make_ur10_arm_orientation_env(num_robots=2):
             target=q_home,
         )
 
-        max_attempts = 5
+        max_attempts = 20
         for num_attempt in range(max_attempts):
             # komo.initRandom()
             if num_attempt > 0:
@@ -3843,7 +3843,7 @@ def make_bimanual_grasping_env(view: bool = False):
     #         .setParent(C.getFrame('table')) \
     #         .setRelativePosition([-0.3, 0.5, 0]) \
     #         .setRelativeQuaternion([0.7071, 0, 0, -0.7071]) \
-    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/ur10/ur10_vacuum.g")
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
 
     print(robot_path)
 
@@ -4015,11 +4015,11 @@ def make_bimanual_grasping_env(view: bool = False):
         retval = solver.solve()
         retval = retval.dict()
 
-        print(retval)
+        # print(retval)
 
         keyframes = komo.getPath()
 
-        print(keyframes)
+        # print(keyframes)
 
         if view:
             komo.view(True, "IK solution")
@@ -4028,7 +4028,7 @@ def make_bimanual_grasping_env(view: bool = False):
         # print(retval)
 
         if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-            komo.view(True, "IK solution")
+            # komo.view(True, "IK solution")
 
             keyframes = keyframes[:-1, :]
             break
