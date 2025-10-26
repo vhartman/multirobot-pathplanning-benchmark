@@ -248,6 +248,7 @@ def robot_mode_shortcut(
 
         # constraints_ok = True
         # for state in path_element:
+        #     mode = state.mode
         #     # Check all active equality and inequality constraints
         #     for c in env_eq_constraints:
         #         if not c.is_fulfilled(state.q, mode, env):

@@ -34,6 +34,8 @@ from multi_robot_multi_goal_planning.problems.constraints_projection import (
     project_affine_cspace,
     project_affine_cspace_interior,
     project_affine_cspace_explore,
+    project_cspace_cnkz,
+    project_nlp_sqp,
 )
 
 from .sampling_informed import InformedSampling
@@ -555,8 +557,8 @@ class BaseRRTstar(BasePlanner):
         self.check = set()
         self.blacklist_mode = set()
 
-        self.affine_projection = "explore" # "interior", "explore", "boundary"
-        self.rejection_projection_goal_trans = True # True: we use rejection sampling for goal sampling and transition config sampling, False: we use the other method
+        self.affine_projection = "explore" # "interior", "explore", "boundary", "nlp"
+        self.rejection_projection_goal_trans = False # True: we use rejection sampling for goal sampling and transition config sampling, False: we use the other method
 
     def add_tree(
         self,
@@ -1526,6 +1528,8 @@ class BaseRRTstar(BasePlanner):
     
 ################# GIOVANNI #################
 
+#AFFINE CONSTRAINTS HANDLING
+
 #0) UTILS    
     def collect_env_and_task_aff_eq_constraints(self, mode: Mode) -> List: 
         """
@@ -1646,6 +1650,8 @@ class BaseRRTstar(BasePlanner):
     project_affine_cspace_explore = staticmethod(project_affine_cspace_explore)
     project_affine_cspace = staticmethod(project_affine_cspace)
     project_affine_only = staticmethod(project_affine_only)
+    project_nlp = staticmethod(project_nlp_sqp)
+    project_cspace_cnkz = staticmethod(project_cspace_cnkz)
 
 #2)SAMPLER
     def sample_uniform_aff_cspace(
@@ -1678,6 +1684,8 @@ class BaseRRTstar(BasePlanner):
                 q_proj = self.project_affine_cspace_explore(q0, aff_eq_constr, aff_ineq_constraints)
             elif self.affine_projection=="boundary":
                 q_proj = self.project_affine_cspace(q0, aff_eq_constr, aff_ineq_constraints)
+            elif self.affine_projection=="nlp":
+                q_proj = self.project_nlp(q0, aff_eq_constr, aff_ineq_constraints)
 
             if q_proj is not None and self.env.is_collision_free(q_proj, mode):
                 return q_proj
@@ -1745,6 +1753,8 @@ class BaseRRTstar(BasePlanner):
                         q_proj = self.project_affine_cspace_explore(q0, aff_eq_constr, aff_ineq_constraints)
                     elif self.affine_projection=="boundary":
                         q_proj = self.project_affine_cspace(q0, aff_eq_constr, aff_ineq_constraints)
+                    elif self.affine_projection=="nlp":
+                        q_proj = self.project_nlp(q0, aff_eq_constr, aff_ineq_constraints)
                     
                     if q_proj is not None and self.env.is_collision_free(q_proj, mode):
                         return q_proj
@@ -1791,6 +1801,8 @@ class BaseRRTstar(BasePlanner):
                     q_proj = self.project_affine_cspace_explore(q0, aff_eq_constr, aff_ineq_constraints)
                 elif self.affine_projection=="boundary":
                     q_proj = self.project_affine_cspace(q0, aff_eq_constr, aff_ineq_constraints)
+                elif self.affine_projection=="nlp":
+                    q_proj = self.project_nlp(q0, aff_eq_constr, aff_ineq_constraints)
                 
                 if q_proj is not None and self.env.is_collision_free(q_proj, mode):
                     return q_proj
@@ -1825,6 +1837,8 @@ class BaseRRTstar(BasePlanner):
                 q_proj = self.project_affine_cspace_explore(q, aff_eq, aff_ineq)
             elif self.affine_projection=="boundary":
                 q_proj = self.project_affine_cspace(q, aff_eq, aff_ineq)
+            elif self.affine_projection=="nlp":
+                q_proj = self.project_nlp(q, aff_eq, aff_ineq)
 
             if q_proj is None:
                 continue
@@ -1916,6 +1930,12 @@ class BaseRRTstar(BasePlanner):
                     aff_eq,
                     aff_ineq,
                 )
+            elif self.affine_projection=="nlp":
+                q_proj = self.project_nlp(
+                    self.env.get_start_pos().from_flat(q_new),
+                    aff_eq,
+                    aff_ineq,
+                )
             
             if q_proj is None:
                 return None
@@ -1928,6 +1948,300 @@ class BaseRRTstar(BasePlanner):
 
         # 6) Return new feasible state
         return State(q_proj, mode)
+    
+
+# ============================
+# NONLINEAR CONSTRAINTS SAMPLERS (AFFINE + NONLINEAR, EQ + INEQ)
+# ============================
+
+# ---- helpers ----
+
+    def _is_fulfilled_any(self, constraint, q, mode):
+        """
+        Tries common signatures to check constraint feasibility without exploding.
+        Standardize to constraint.is_fulfilled(q, mode, env) if you care about speed.
+        """
+        env = self.env
+        try:
+            return constraint.is_fulfilled(q, mode, env)
+        except TypeError:
+            # try (q, env) — your affine classes sometimes use this
+            try:
+                return constraint.is_fulfilled(q, env)
+            except TypeError:
+                # try (q,) — last resort
+                return constraint.is_fulfilled(q)
+
+    def satisfies_all_constraints(self, mode, constraints, q) -> bool:
+        """
+        Numerical validation for mixed affine + nonlinear constraints.
+        """
+        for c in constraints:
+            if not self._is_fulfilled_any(self, c, q, mode):
+                return False
+        return True
+
+
+    # ---- projection dispatcher for mixed constraints ----
+
+    def project_nonlinear(self, q, constraints, mode, env):
+        """
+        Projection onto the intersection of all affine + nonlinear (eq & ineq) constraints.
+        Strategy:
+        1) (Optional) Pre-project on affine constraints (faster basin of attraction)
+        2) Nonlinear projection via one of:
+            - 'cnkz'      : project_cspace_cnkz
+            - 'sqp'       : project_nlp_sqp
+            - 'auto' (def): try cnkz, fallback to SQP if it fails
+        Configurable flags on self:
+        - self.affine_preproject_for_nonlinear: bool (default True)
+        - self.nonlinear_projection in {'auto','cnkz','sqp'}  (default 'auto')
+        """
+        # Partition constraints
+        aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
+        aff_ineq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
+        nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
+                                                                AffineConfigurationSpaceInequalityConstraint))]
+
+        q0 = q
+
+        # (1) optional affine pre-projection (strongly recommended)
+        if getattr(self, "affine_preproject_for_nonlinear", True) and (aff_eq or aff_ineq):
+            if aff_eq and not aff_ineq:
+                q0 = self.project_affine_only(q0, aff_eq)
+            else:
+                # choose the same backend you already configured for affine samplers
+                ap = getattr(self, "affine_projection", "interior")
+                if ap == "interior":
+                    q0 = self.project_affine_cspace_interior(q0, aff_eq, aff_ineq)
+                elif ap == "explore":
+                    q0 = self.project_affine_cspace_explore(q0, aff_eq, aff_ineq)
+                elif ap == "boundary":
+                    q0 = self.project_affine_cspace(q0, aff_eq, aff_ineq)
+                elif ap == "nlp":
+                    q0 = self.project_nlp(q0, aff_eq, aff_ineq)
+                else:
+                    # be strict
+                    raise ValueError(f"Unknown affine_projection='{ap}'")
+            if q0 is None:
+                return None
+
+        # If there are no nonlinear constraints, we are done
+        if not nonlinear:
+            return q0
+
+        # (2) nonlinear projection proper
+        mode_sel = getattr(self, "nonlinear_projection", "auto")
+        if mode_sel == "cnkz":
+            q1 = self.project_cspace_cnkz(q0, nonlinear + aff_ineq, mode, env)
+            return q1
+        elif mode_sel == "sqp":
+            q1 = self.project_nlp(q0, aff_eq + nonlinear, aff_ineq)  # reuse SQP that handles both types
+            return q1
+        elif mode_sel == "auto":
+            # fast try: cnkz
+            q1 = self.project_cspace_cnkz(q0, nonlinear + aff_ineq, mode, env)
+            if q1 is not None and self.satisfies_all_constraints(mode, constraints, q1):
+                return q1
+            # robust fallback: SQP/NLP
+            q2 = self.project_nlp(q0, aff_eq + nonlinear, aff_ineq)
+            return q2
+        else:
+            raise ValueError(f"Unknown nonlinear_projection='{mode_sel}'")
+
+
+    # ---- collectors ----
+
+    def collect_constraints(self, mode: Mode):
+        """
+        Mixed constraints collector (env + active task).
+        You already had this skeleton; keeping the shape and making it safer.
+        """
+        env_c = self.env.constraints
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        task_c = []
+        if next_ids or self.env.is_terminal_mode(mode):
+            active_task = self.env.get_active_task(mode, next_ids)
+            task_c = active_task.constraints
+        return env_c + task_c
+
+
+    # ============================
+    # 1) UNIFORM SAMPLER (mixed constraints)
+    # ============================
+
+    def sample_uniform_nonlinear(
+        self,
+        mode: Mode,
+        max_tries: int = 1000,
+    ) -> Optional[Configuration]:
+        """
+        Uniform ambient sample -> projection onto mixed (affine + nonlinear) constraints -> collision check.
+        """
+        constraints = self.collect_constraints(mode)
+
+        # no constraints? fallback to existing uniform
+        if not constraints:
+            return self._sample_uniform(mode)
+
+        for _ in range(max_tries):
+            q0 = self.env.sample_config_uniform_in_limits()
+            q_proj = self.project_nonlinear(q0, constraints, mode, self.env)
+            if q_proj is None:
+                continue
+            if self.satisfies_all_constraints(mode, constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                return q_proj
+
+        print(f"Failed nonlinear uniform sampling after {max_tries} tries.")
+        return None
+
+
+    # ============================
+    # 2) GOAL SAMPLER (mixed constraints + transition pinning)
+    # ============================
+
+    def sample_goal_nonlinear(
+        self,
+        mode: Mode,
+        transition_node_ids: Dict[Mode, List[int]],
+        tree_order: int = 1,
+    ) -> Optional[Configuration]:
+        """
+        Constraint-aware goal sampling for mixed constraints.
+        Mirrors your affine version:
+        - forward: sample transition config projected to full manifold
+        - backward: pin shared robots to anchor (as equality), then project
+        Respects self.rejection_projection_goal_trans: if True, do rejection sampling
+        after direct equality-anchoring; if False, run full projection.
+        """
+        max_tries = 1000
+
+        if tree_order == -1:
+            # ---- backward expansion ----
+            # Anchor selection (same logic as affine)
+            if mode.prev_mode is None or mode == self.env.start_mode:
+                q_anchor = self.env.start_pos
+            else:
+                ids = transition_node_ids.get(mode.prev_mode, [])
+                if not ids:
+                    q_anchor = self.sample_transition_configuration(mode.prev_mode)
+                else:
+                    node_id = np.random.choice(ids)
+                    node = self.trees[mode.prev_mode].subtree.get(node_id) or self.trees[mode.prev_mode].subtree_b.get(node_id)
+                    q_anchor = node.state.q if node is not None else None
+
+            if q_anchor is None:
+                return None
+
+            # Build constraints: env + task + transition pinning
+            constraints = self.collect_constraints(mode)
+            trans_c = self.make_transition_config_constraint(mode, q_anchor, forward=False)
+            if trans_c is not None:
+                constraints = constraints + [trans_c]
+
+            # Two modes: rejection or projection
+            if getattr(self, "rejection_projection_goal_trans", False):
+                for _ in range(max_tries):
+                    q0 = self.env.sample_config_uniform_in_limits()
+                    # Hard-apply the transition equality first (cheap), then check the rest
+                    q_eq = self.project_affine_only(q0, [trans_c] if trans_c is not None else [])
+                    if q_eq is None:
+                        continue
+                    if self.satisfies_all_constraints(mode, constraints, q_eq) and self.env.is_collision_free(q_eq, mode):
+                        return q_eq
+            else:
+                for _ in range(max_tries):
+                    q0 = self.env.sample_config_uniform_in_limits()
+                    q_proj = self.project_nonlinear(q0, constraints, mode, self.env)
+                    if q_proj is None:
+                        continue
+                    if self.satisfies_all_constraints(mode, constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                        return q_proj
+
+            print(f"Failed nonlinear goal sampling (backward) after {max_tries} tries in mode {mode}.")
+            return None
+
+        else:
+            # ---- forward expansion ----
+            tc = self.sample_transition_configuration(mode)
+            if tc is None:
+                return None
+
+            constraints = self.collect_constraints(mode)
+            trans_c = self.make_transition_config_constraint(mode, tc, forward=True)
+            if trans_c is not None:
+                constraints = constraints + [trans_c]
+
+            if getattr(self, "rejection_projection_goal_trans", False):
+                for _ in range(max_tries):
+                    q0 = self.env.sample_config_uniform_in_limits()
+                    q_eq = self.project_affine_only(q0, [trans_c] if trans_c is not None else [])
+                    if q_eq is None:
+                        continue
+                    if self.satisfies_all_constraints(mode, constraints, q_eq) and self.env.is_collision_free(q_eq, mode):
+                        return q_eq
+            else:
+                for _ in range(max_tries):
+                    q0 = self.env.sample_config_uniform_in_limits()
+                    q_proj = self.project_nonlinear(q0, constraints, mode, self.env)
+                    if q_proj is None:
+                        continue
+                    if self.satisfies_all_constraints(mode, constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+                        return q_proj
+
+            print(f"Failed nonlinear goal sampling (forward) after {max_tries} tries in mode {mode}.")
+            return None
+
+
+    # ============================
+    # 3) INFORMED SAMPLER (mixed constraints)
+    # ============================
+
+    def sample_informed_nonlinear(self, mode: Mode) -> Optional[Configuration]:
+        """
+        Informed sampling -> projection onto full mixed manifold -> validation.
+        """
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if not next_ids and not self.env.is_terminal_mode(mode):
+            return None
+
+        constraints = self.collect_constraints(mode)
+
+        while True:
+            q = self.informed.generate_samples(
+                self.modes,
+                self.config.informed_batch_size,
+                self.operation.path_shortcutting_interpolated,
+                active_mode=mode,
+            )
+            if q == []:
+                return None
+
+            q_proj = self.project_nonlinear(q, constraints, mode, self.env)
+            if q_proj is None:
+                continue
+            if not self.satisfies_all_constraints(mode, constraints, q_proj):
+                continue
+            if self.env.is_collision_free(q_proj, mode):
+                return q_proj
+
+
+    # ============================
+    # 4) UNIFIED ENTRY POINT (mixed constraints)
+    # ============================
+
+    def sample_configuration_nonlinear(self, mode: Mode) -> Optional[Configuration]:
+        """
+        Chooses among goal / informed / uniform samplers under mixed constraints,
+        mirroring your affine entry point.
+        """
+        if np.random.uniform(0, 1) < self.config.p_goal:
+            return self.sample_goal_nonlinear(mode, self.transition_node_ids, self.trees[mode].order)
+
+        if self.config.informed_sampling and self.operation.init_sol:
+            return self.sample_informed_nonlinear(mode)
+
+        return self.sample_uniform_nonlinear(mode)
 
 ############################################
 

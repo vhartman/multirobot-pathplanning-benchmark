@@ -1,6 +1,8 @@
 import argparse
 from simple_parsing import ArgumentParser
 
+import matplotlib
+matplotlib.use("TkAgg")
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -15,7 +17,6 @@ from multi_robot_multi_goal_planning.problems import get_env_by_name
 from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
 
-# planners
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     IterationTerminationCondition,
     RuntimeTerminationCondition,
