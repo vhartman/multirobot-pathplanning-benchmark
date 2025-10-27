@@ -145,17 +145,19 @@ class RRTstar(BaseRRTstar):
 
             # RRT* core
             # q_rand = self.sample_configuration(active_mode)
-            q_rand = self.sample_configuration_aff_cspace(active_mode)
+            # q_rand = self.sample_configuration_aff_cspace(active_mode)
+            q_rand = self.sample_configuration_nl(active_mode)
             if not q_rand:
                 continue
 
-            # self.env.show_config(q_rand, blocking = False) # visualize sampled configuration
+            # self.env.show_config(q_rand, blocking = True) # visualize sampled configuration
 
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
             )
             # state_new = self.steer(active_mode, n_nearest, q_rand, dist)
-            state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
+            # state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
+            state_new = self.steer_nonlinear(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
             
@@ -164,6 +166,7 @@ class RRTstar(BaseRRTstar):
             ) and self.env.is_edge_collision_free(
                 n_nearest.state.q, state_new.q, active_mode
             ):
+                # self.env.show_config(state_new.q, blocking = True)
                 n_new = Node(state_new, self.operation)
                 if np.equal(n_new.state.q.state(), q_rand.state()).all():
                     N_near_batch, n_near_costs, node_indices = self.near(

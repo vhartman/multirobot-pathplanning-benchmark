@@ -375,8 +375,10 @@ def project_to_manifold(
 
 def project_nlp_sqp(
     q: Any,
-    eq_constraints: List[EqualityConstraint] | None = None,
-    ineq_constraints: List[RegionConstraint] | None = None,
+    eq_constraints: List[Any] | None = None,
+    ineq_constraints: List[Any] | None = None,
+    mode=None,
+    env=None,
     tol: float = 1e-8,
     max_iters: int = 200,
     verbose: bool = False,
@@ -384,9 +386,24 @@ def project_nlp_sqp(
     """
     Euclidean projection by solving:
         minimize 0.5 * ||x - x0||^2
-        s.t. F_i(x) = 0  (equalities)
-             G_j(x) <= 0 (inequalities)
-    Uses SciPy SLSQP. Works for regions and/or manifolds. If SciPy is missing, returns None.
+        s.t. F_i(x[, mode, env]) = 0       (equalities)
+             G_j(x[, mode, env]) <= 0      (inequalities)
+
+    Uses SciPy's SLSQP solver. Supports both configuration-space and
+    environment-dependent (task-space) constraints.
+
+    Args:
+        q: configuration object supporting .state() and .from_flat()
+        eq_constraints: list of equality constraints
+        ineq_constraints: list of inequality (region) constraints
+        mode: mode to pass to env if required
+        env: environment, needed for task-space constraints
+        tol: convergence tolerance for SLSQP
+        max_iters: maximum number of SLSQP iterations
+        verbose: if True, print diagnostics
+
+    Returns:
+        Projected configuration (same type as q) or None if optimization fails.
     """
 
     x0 = q.state().astype(float).copy()
@@ -400,32 +417,52 @@ def project_nlp_sqp(
 
     cons = []
 
+    def _call_with_env(fun, x, c):
+        """Helper: call F/J/G/dG with or without env/mode."""
+        varnames = fun.__code__.co_varnames
+        if "mode" in varnames or "env" in varnames:
+            return fun(x, mode, env)
+        else:
+            return fun(x)
+
+    # equality constraints
     if eq_constraints:
         for c in eq_constraints:
             cons.append({
                 "type": "eq",
-                "fun": (lambda x, c=c: c.F(x).reshape(-1)),
-                "jac": (lambda x, c=c: c.J(x))
+                "fun": lambda x, c=c: np.asarray(
+                    _call_with_env(c.F, x, c), dtype=float
+                ).reshape(-1),
+                "jac": lambda x, c=c: np.asarray(
+                    _call_with_env(c.J, x, c), dtype=float
+                ).reshape(-1, x.size)
             })
 
+    # inequality constraints
     if ineq_constraints:
         for c in ineq_constraints:
-            # SLSQP expects c(x) >= 0; we provide -G(x) so that G(x) <= 0 ⇒ -G(x) >= 0
             cons.append({
                 "type": "ineq",
-                "fun": (lambda x, c=c: -c.G(x).reshape(-1)),
-                "jac": (lambda x, c=c: -c.dG(x))
+                "fun": lambda x, c=c: -np.asarray(
+                    _call_with_env(c.G, x, c), dtype=float
+                ).reshape(-1),
+                "jac": lambda x, c=c: -np.asarray(
+                    _call_with_env(c.dG, x, c), dtype=float
+                ).reshape(-1, x.size)
             })
 
     res = minimize(
-        obj, x0, jac=grad, method="SLSQP",
+        obj,
+        x0,
+        jac=grad,
+        method="SLSQP",
         constraints=cons,
-        options={"maxiter": max_iters, "ftol": tol, "disp": verbose}
+        options={"maxiter": max_iters, "ftol": tol, "disp": verbose},
     )
 
     if not res.success:
         if verbose:
-            print(f"[sqp] failed: {res.message}")
+            print(f"[project_nlp_sqp] failed: {res.message}")
         return None
 
     return q.from_flat(res.x)
@@ -437,27 +474,21 @@ def project_cspace_cnkz(
     mode=None,
     env=None,
     max_iter: int = 100,
-    tol: float = 1e-5,
+    tol: float = 1e-8,
     step_size: float = 0.6,
     verbose: bool = False,
 ):
     """
     Fast Constrained Nonlinear Kaczmarz projection (cNKZ) using vectorized updates.
 
-    Steps:
-      1. Robust orthogonal projection onto affine equalities (Aq = b)
-      2. Compute equality nullspace Z
-      3. Iterative stacked Gauss–Newton / Kaczmarz updates in equality tangent
-      4. Final inequality feasibility correction (if any)
-
-    This version is vectorized: all nonlinear constraints are updated together
-    to minimize Python overhead. Suitable for small-to-medium constraint sets.
+    Ensures all state vectors remain flat (n,).
     """
 
     from copy import deepcopy
 
-    q_vec = q.state().astype(float).copy()
-    n = len(q_vec)
+    # --- ensure 1D float copy ---
+    q_vec = np.asarray(q.state(), dtype=float).ravel()
+    n = q_vec.size
 
     # --- classify constraints ---
     aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
@@ -470,7 +501,7 @@ def project_cspace_cnkz(
     if aff_eq:
         Aeq = np.vstack([c.mat for c in aff_eq])
         beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
-        q_vec = _orth_proj_eq_general(q_vec, [Aeq], [beq])
+        q_vec = np.asarray(_orth_proj_eq_general(q_vec, [Aeq], [beq])).ravel()
         Z = _nullspace(Aeq)
     else:
         Z = np.eye(n)
@@ -481,8 +512,8 @@ def project_cspace_cnkz(
             break
 
         # stack all residuals and Jacobians
-        F_all = np.concatenate([c.F(q_vec, mode, env) for c in nonlinear])
-        J_all = np.vstack([c.J(q_vec, mode, env) for c in nonlinear])
+        F_all = np.concatenate([np.asarray(c.F(q_vec, mode, env)).ravel() for c in nonlinear])
+        J_all = np.vstack([np.asarray(c.J(q_vec, mode, env)) for c in nonlinear])
 
         # restrict to equality tangent
         Jt = J_all @ Z
@@ -490,16 +521,14 @@ def project_cspace_cnkz(
         if res_norm < tol:
             break
 
-        # vectorized Gauss–Newton / Kaczmarz step
         denom = np.sum(Jt ** 2)
         if denom < 1e-12:
             break
 
-        dq_tangent = Jt.T @ F_all / denom
+        dq_tangent = (Jt.T @ F_all) / denom
         dq = step_size * (Z @ dq_tangent)
-        q_vec -= dq
+        q_vec = (q_vec - dq).ravel()  # ensure stays flat
 
-        # adaptive early stopping
         if np.linalg.norm(dq) < 1e-8:
             break
 
@@ -509,14 +538,14 @@ def project_cspace_cnkz(
         bin = np.concatenate([c.constraint_pose.ravel() for c in aff_ineq])
         q_try = _nullspace_min_norm_ineq(Ain, bin, q_vec, Z, tol=tol)
         if q_try is not None:
-            q_vec = q_try
+            q_vec = np.asarray(q_try).ravel()
 
     # --- 4. return projected configuration ---
     q_new = deepcopy(q)
     if hasattr(q_new, "set_state"):
-        q_new.set_state(q_vec)
+        q_new.set_state(q_vec.ravel())
     else:
-        q_new = q.from_flat(q_vec)
+        q_new = q.from_flat(np.asarray(q_vec).ravel())
 
     if verbose:
         print(f"[cNKZ] done after {it} iters, residual={res_norm:.2e}, step={np.linalg.norm(dq):.2e}")

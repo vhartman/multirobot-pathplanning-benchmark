@@ -234,7 +234,9 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
         return self.mat
 
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
-        return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
+        lhs = np.ravel(self.mat @ q.state())     # flatten to (m,)
+        rhs = np.ravel(self.constraint_pose)     # flatten to (m,)
+        return all(np.isclose(lhs, rhs, self.eps))
 
 # constraint of the form 
 # A * q <= b

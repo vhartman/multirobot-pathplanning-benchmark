@@ -27,6 +27,8 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 from multi_robot_multi_goal_planning.problems.constraints import (
     AffineConfigurationSpaceEqualityConstraint,
     AffineConfigurationSpaceInequalityConstraint,
+    AffineFrameOrientationConstraint,
+    RelativeAffineTaskSpaceEqualityConstraint,
 )
 
 from multi_robot_multi_goal_planning.problems.constraints_projection import (
@@ -1542,11 +1544,15 @@ class BaseRRTstar(BasePlanner):
 
         next_ids = self.mode_validation.get_valid_next_ids(mode)
         if next_ids or self.env.is_terminal_mode(mode):
-            task = self.env.get_active_task(mode, next_ids)
-            aff_eq += [
-                c for c in task.constraints
-                if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
-            ]
+            task_ids = mode.task_ids
+            if task_ids:
+                tasks = [self.env.tasks[i] for i in task_ids]
+                for task in tasks:
+                    task = self.env.get_active_task(mode, next_ids)
+                    aff_eq += [
+                        c for c in task.constraints
+                        if isinstance(c, AffineConfigurationSpaceEqualityConstraint)
+                    ]
         return aff_eq
 
     def collect_env_and_task_aff_ineq_constraints(self, mode: Mode) -> List:
@@ -1628,7 +1634,6 @@ class BaseRRTstar(BasePlanner):
     project_affine_cspace = staticmethod(project_affine_cspace)
     project_affine_only = staticmethod(project_affine_only)
     project_nlp = staticmethod(project_nlp_sqp)
-    project_cspace_cnkz = staticmethod(project_cspace_cnkz)
 
     def project_affine_dispatch(self, q: Configuration, aff_eq: List, aff_ineq: List) -> Optional[Configuration]:
         """Unified projection call with fallback order matching the old behavior."""
@@ -1815,175 +1820,141 @@ class BaseRRTstar(BasePlanner):
         return State(q_proj, mode)
     
 
-# ============================
-# NONLINEAR CONSTRAINTS SAMPLERS (AFFINE + NONLINEAR, EQ + INEQ)
-# ============================
+# ============================================================
+# NONLINEAR CONSTRAINTS HANDLING
+# ============================================================
 
-# ---- helpers ----
+# 0) UTILS
+    def collect_constraints(self, mode: Mode) -> Tuple[List, List]:
+        """
+        Collect all nonlinear equality and inequality constraints from environment and active task.
+        Equality constraints must expose F(x, mode, env), J(x, mode, env).
+        Inequality constraints must expose G(x, mode, env), dG(x, mode, env).
+        """
 
-    def _is_fulfilled_any(self, constraint, q, mode):
-        """
-        Tries common signatures to check constraint feasibility without exploding.
-        Standardize to constraint.is_fulfilled(q, mode, env) if you care about speed.
-        """
-        env = self.env
-        try:
-            return constraint.is_fulfilled(q, mode, env)
-        except TypeError:
-            # try (q, env) — your affine classes sometimes use this
-            try:
-                return constraint.is_fulfilled(q, env)
-            except TypeError:
-                # try (q,) — last resort
-                return constraint.is_fulfilled(q)
+        constraints = []
+        eq_aff, ineq_aff, eq_nl, ineq_nl = [], [], [], []
 
-    def satisfies_all_constraints(self, mode, constraints, q) -> bool:
-        """
-        Numerical validation for mixed affine + nonlinear constraints.
-        """
+        # env-level
+        for c in self.env.constraints:
+            constraints.append(c)
+
+        # task-level (if available)
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if next_ids or self.env.is_terminal_mode(mode):
+            task_ids = mode.task_ids
+            if task_ids:
+                tasks = [self.env.tasks[i] for i in task_ids]
+                for task in tasks:
+                    for c in task.constraints:
+                        constraints.append(c)
+
         for c in constraints:
-            if not self._is_fulfilled_any(self, c, q, mode):
-                return False
+            if isinstance(c, AffineConfigurationSpaceEqualityConstraint):
+                eq_aff.append(c)
+            elif isinstance(c, AffineConfigurationSpaceInequalityConstraint):
+                ineq_aff.append(c)
+            elif isinstance(c, (AffineFrameOrientationConstraint, RelativeAffineTaskSpaceEqualityConstraint)):
+                eq_nl.append(c)
+
+        return eq_aff, ineq_aff, eq_nl, ineq_nl
+
+    def satisfies_nl_constraints(
+        self,
+        mode: Mode,
+        q: Configuration,
+        eq_constraints: List,
+        ineq_constraints: List,
+    ) -> bool:
+        """
+        Check satisfaction of all nonlinear constraints for given configuration.
+        """
+        if eq_constraints:
+            for c in eq_constraints:
+                if c.is_fulfilled(q, mode, self.env) is False:
+                    return False
+
+        if ineq_constraints:
+            for c in ineq_constraints:
+                if c.is_fulfilled(q, mode, self.env) is False:
+                    return False
+
         return True
 
 
-    # ---- projection for mixed constraints ----
+# 1) PROJECTORS
+    project_nlp = staticmethod(project_nlp_sqp)          # robust fallback
+    project_cnkz = staticmethod(project_cspace_cnkz)     # fast primary
 
-    def project_nonlinear(self, q, constraints, mode, env):
-        """
-        Projection onto the intersection of all affine + nonlinear (eq & ineq) constraints.
-        Strategy:
-        1) (Optional) Pre-project on affine constraints (faster basin of attraction)
-        2) Nonlinear projection via one of:
-            - 'cnkz'      : project_cspace_cnkz
-            - 'sqp'       : project_nlp_sqp
-            - 'auto' (def): try cnkz, fallback to SQP if it fails
-        Configurable flags on self:
-        - self.affine_preproject_for_nonlinear: bool (default True)
-        - self.nonlinear_projection in {'auto','cnkz','sqp'}  (default 'auto')
-        """
-        # Partition constraints
-        aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
-        aff_ineq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
-        nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
-                                                                AffineConfigurationSpaceInequalityConstraint))]
-
-        q0 = q
-
-        # (1) optional affine pre-projection (strongly recommended)
-        if getattr(self, "affine_preproject_for_nonlinear", True) and (aff_eq or aff_ineq):
-            if aff_eq and not aff_ineq:
-                q0 = self.project_affine_only(q0, aff_eq)
-            else:
-                # choose the same backend you already configured for affine samplers
-                ap = getattr(self, "affine_projection", "interior")
-                if ap == "interior":
-                    q0 = self.project_affine_cspace_interior(q0, aff_eq, aff_ineq)
-                elif ap == "explore":
-                    q0 = self.project_affine_cspace_explore(q0, aff_eq, aff_ineq)
-                elif ap == "boundary":
-                    q0 = self.project_affine_cspace(q0, aff_eq, aff_ineq)
-                elif ap == "nlp":
-                    q0 = self.project_nlp(q0, aff_eq, aff_ineq)
-                else:
-                    # be strict
-                    raise ValueError(f"Unknown affine_projection='{ap}'")
-            if q0 is None:
-                return None
-
-        # If there are no nonlinear constraints, we are done
-        if not nonlinear:
-            return q0
-
-        # (2) nonlinear projection proper
-        mode_sel = getattr(self, "nonlinear_projection", "auto")
-        if mode_sel == "cnkz":
-            q1 = self.project_cspace_cnkz(q0, nonlinear + aff_ineq, mode, env)
-            return q1
-        elif mode_sel == "sqp":
-            q1 = self.project_nlp(q0, aff_eq + nonlinear, aff_ineq)  # reuse SQP that handles both types
-            return q1
-        elif mode_sel == "auto":
-            # fast try: cnkz
-            q1 = self.project_cspace_cnkz(q0, nonlinear + aff_ineq, mode, env)
-            if q1 is not None and self.satisfies_all_constraints(mode, constraints, q1):
-                return q1
-            # robust fallback: SQP/NLP
-            q2 = self.project_nlp(q0, aff_eq + nonlinear, aff_ineq)
-            return q2
-        else:
-            raise ValueError(f"Unknown nonlinear_projection='{mode_sel}'")
-
-
-    # ---- collectors ----
-
-    def collect_constraints(self, mode: Mode):
-        """
-        Mixed constraints collector (env + active task).
-        You already had this skeleton; keeping the shape and making it safer.
-        """
-        env_c = self.env.constraints
-        next_ids = self.mode_validation.get_valid_next_ids(mode)
-        task_c = []
-        if next_ids or self.env.is_terminal_mode(mode):
-            active_task = self.env.get_active_task(mode, next_ids)
-            task_c = active_task.constraints
-        return env_c + task_c
-
-
-    # ============================
-    # 1) UNIFORM SAMPLER (mixed constraints)
-    # ============================
-
-    def sample_uniform_nonlinear(
+    def project_nonlinear_dispatch(
         self,
-        mode: Mode,
-        max_tries: int = 1000,
+        q: Configuration,
+        eq_constraints: List,
+        ineq_constraints: List,
+        mode: Optional[Mode] = None,
     ) -> Optional[Configuration]:
         """
-        Uniform ambient sample -> projection onto mixed (affine + nonlinear) constraints -> collision check.
-        """
-        constraints = self.collect_constraints(mode)
+        Unified projection call for nonlinear constraints, mirroring affine logic.
 
-        # no constraints? fallback to existing uniform
-        if not constraints:
+        Priority:
+          1) cNKZ with ALL constraints (affine + nonlinear)
+          2) SLSQP with ONLY nonlinear constraints (robust fallback)
+
+        extra_aff_eq / extra_aff_ineq are used to inject the transition pin constraints,
+        exactly like in the affine block.
+        """
+
+        # combined set for cNKZ
+        constraints_all = list(eq_constraints) + list(ineq_constraints)
+
+        # primary
+        q_proj = self.project_cnkz(q, constraints_all, mode=mode, env=self.env)
+        if q_proj is not None:
+            return q_proj
+
+        # fallback: SLSQP uses only nonlinear constraints (affine handled upstream or by cNKZ)
+        return self.project_nlp(q, eq_constraints, ineq_constraints, mode=mode, env=self.env)
+
+
+# 2) SAMPLERS
+    def sample_uniform_nl(self, mode: Mode, max_tries: int = 1000) -> Optional[Configuration]:
+        """
+        Uniform constrained sampling on the nonlinear (+ affine) constraint manifold.
+        Same structure as affine version; projector differs.
+        """
+        aff_eq, aff_ineq, eq_nl, ineq_nl = self.collect_constraints(mode)
+
+        if not (eq_nl or ineq_nl or aff_eq or aff_ineq):
             return self._sample_uniform(mode)
+        
+        eq = eq_nl + aff_eq
+        ineq = ineq_nl + aff_ineq
 
         for _ in range(max_tries):
             q0 = self.env.sample_config_uniform_in_limits()
-            q_proj = self.project_nonlinear(q0, constraints, mode, self.env)
-            if q_proj is None:
-                continue
-            if self.satisfies_all_constraints(mode, constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
-                return q_proj
+            q_proj = self.project_nonlinear_dispatch(q0, eq, ineq, mode)
+            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                if (self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and
+                    self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
+                    self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):    
+                    return q_proj
 
-        print(f"Failed nonlinear uniform sampling after {max_tries} tries.")
+        print("Failed nonlinear uniform sampling after", max_tries, "tries.")
         return None
 
-
-    # ============================
-    # 2) GOAL SAMPLER (mixed constraints + transition pinning)
-    # ============================
-
-    def sample_goal_nonlinear(
+    def sample_goal_nl(
         self,
         mode: Mode,
         transition_node_ids: Dict[Mode, List[int]],
         tree_order: int = 1,
     ) -> Optional[Configuration]:
         """
-        Constraint-aware goal sampling for mixed constraints.
-        Mirrors your affine version:
-        - forward: sample transition config projected to full manifold
-        - backward: pin shared robots to anchor (as equality), then project
-        Respects self.rejection_projection_goal_trans: if True, do rejection sampling
-        after direct equality-anchoring; if False, run full projection.
+        Goal sampling constrained by nonlinear (+ affine) manifold.
+        Identical control flow to affine version, with the same transition pin strategy.
         """
         max_tries = 1000
 
-        if tree_order == -1:
-            # ---- backward expansion ----
-            # Anchor selection (same logic as affine)
+        if tree_order == -1:  # backward expansion
             if mode.prev_mode is None or mode == self.env.start_mode:
                 q_anchor = self.env.start_pos
             else:
@@ -1992,87 +1963,82 @@ class BaseRRTstar(BasePlanner):
                     q_anchor = self.sample_transition_configuration(mode.prev_mode)
                 else:
                     node_id = np.random.choice(ids)
-                    node = self.trees[mode.prev_mode].subtree.get(node_id) or self.trees[mode.prev_mode].subtree_b.get(node_id)
-                    q_anchor = node.state.q if node is not None else None
+                    node = (self.trees[mode.prev_mode].subtree.get(node_id)
+                            or self.trees[mode.prev_mode].subtree_b.get(node_id))
+                    q_anchor = node.state.q if node else None
 
             if q_anchor is None:
                 return None
 
-            # Build constraints: env + task + transition pinning
-            constraints = self.collect_constraints(mode)
+            # collect constraints and add the backward pin (intersection with prev_active)
+            aff_eq, aff_ineq, eq_nl, ineq_nl = self.collect_constraints(mode)
+
             trans_c = self.make_transition_config_constraint(mode, q_anchor, forward=False)
             if trans_c is not None:
-                constraints = constraints + [trans_c]
+                aff_eq = aff_eq + [trans_c]
 
-            # Two modes: rejection or projection
-            if getattr(self, "rejection_projection_goal_trans", False):
-                for _ in range(max_tries):
-                    q0 = self.env.sample_config_uniform_in_limits()
-                    # Hard-apply the transition equality first (cheap), then check the rest
-                    q_eq = self.project_affine_only(q0, [trans_c] if trans_c is not None else [])
-                    if q_eq is None:
-                        continue
-                    if self.satisfies_all_constraints(mode, constraints, q_eq) and self.env.is_collision_free(q_eq, mode):
-                        return q_eq
-            else:
-                for _ in range(max_tries):
-                    q0 = self.env.sample_config_uniform_in_limits()
-                    q_proj = self.project_nonlinear(q0, constraints, mode, self.env)
-                    if q_proj is None:
-                        continue
-                    if self.satisfies_all_constraints(mode, constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
+            eq = eq_nl + aff_eq
+            ineq = ineq_nl + aff_ineq
+
+            for _ in range(max_tries):
+                q0 = self.env.sample_config_uniform_in_limits()
+                q_proj = self.project_nonlinear_dispatch(q0, eq, ineq, mode)
+                if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                    if (self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and
+                        self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
+                        self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
                         return q_proj
 
-            print(f"Failed nonlinear goal sampling (backward) after {max_tries} tries in mode {mode}.")
+            print(f"Failed nonlinear goal sampling after {max_tries} tries in mode {mode}.")
             return None
 
-        else:
-            # ---- forward expansion ----
-            tc = self.sample_transition_configuration(mode)
-            if tc is None:
-                return None
+        # forward expansion
+        return self.sample_transition_configuration_nl(mode)
 
-            constraints = self.collect_constraints(mode)
-            trans_c = self.make_transition_config_constraint(mode, tc, forward=True)
-            if trans_c is not None:
-                constraints = constraints + [trans_c]
-
-            if getattr(self, "rejection_projection_goal_trans", False):
-                for _ in range(max_tries):
-                    q0 = self.env.sample_config_uniform_in_limits()
-                    q_eq = self.project_affine_only(q0, [trans_c] if trans_c is not None else [])
-                    if q_eq is None:
-                        continue
-                    if self.satisfies_all_constraints(mode, constraints, q_eq) and self.env.is_collision_free(q_eq, mode):
-                        return q_eq
-            else:
-                for _ in range(max_tries):
-                    q0 = self.env.sample_config_uniform_in_limits()
-                    q_proj = self.project_nonlinear(q0, constraints, mode, self.env)
-                    if q_proj is None:
-                        continue
-                    if self.satisfies_all_constraints(mode, constraints, q_proj) and self.env.is_collision_free(q_proj, mode):
-                        return q_proj
-
-            print(f"Failed nonlinear goal sampling (forward) after {max_tries} tries in mode {mode}.")
-            return None
-
-
-    # ============================
-    # 3) INFORMED SAMPLER (mixed constraints)
-    # ============================
-
-    def sample_informed_nonlinear(self, mode: Mode) -> Optional[Configuration]:
+    def sample_transition_configuration_nl(self, mode: Mode) -> Optional[Configuration]:
         """
-        Informed sampling -> projection onto full mixed manifold -> validation.
+        Sample transition configuration restricted to the full constraint set.
+        Identical pinning logic as affine: pin active robots (forward=True).
+        """
+        max_tries = 1000
+        tc = self.sample_transition_configuration(mode)
+        if tc is None:
+            return None
+
+        aff_eq, aff_ineq, eq_nl, ineq_nl = self.collect_constraints(mode)
+
+        trans_c = self.make_transition_config_constraint(mode, tc, forward=True)
+        if trans_c is not None:
+            aff_eq = aff_eq + [trans_c]
+
+        eq = eq_nl + aff_eq
+        ineq = ineq_nl + aff_ineq
+
+        for _ in range(max_tries):
+            q0 = self.env.sample_config_uniform_in_limits()
+            q_proj = self.project_nonlinear_dispatch(q0, eq, ineq, mode)
+            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
+                if (self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and
+                    self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
+                    self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
+                    return q_proj
+        return None
+
+    def sample_informed_nl(self, mode: Mode) -> Optional[Configuration]:
+        """
+        Informed sampling projected onto the nonlinear (+ affine) constraint manifold.
+        Same structure as affine informed, projector differs.
         """
         next_ids = self.mode_validation.get_valid_next_ids(mode)
         if not next_ids and not self.env.is_terminal_mode(mode):
             return None
 
-        constraints = self.collect_constraints(mode)
+        aff_eq, aff_ineq, eq_nl, ineq_nl = self.collect_constraints(mode)
 
-        while True:
+        eq = eq_nl + aff_eq
+        ineq = ineq_nl + aff_ineq
+
+        for _ in range(500):
             q = self.informed.generate_samples(
                 self.modes,
                 self.config.informed_batch_size,
@@ -2082,31 +2048,85 @@ class BaseRRTstar(BasePlanner):
             if q == []:
                 return None
 
-            q_proj = self.project_nonlinear(q, constraints, mode, self.env)
+            q_proj = self.project_nonlinear_dispatch(q, eq, ineq, mode)
             if q_proj is None:
                 continue
-            if not self.satisfies_all_constraints(mode, constraints, q_proj):
-                continue
-            if self.env.is_collision_free(q_proj, mode):
+
+            if (self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and
+                self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
+                self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj) and
+                self.env.is_collision_free(q_proj, mode)):
                 return q_proj
+        return None
 
-
-    # ============================
-    # 4) UNIFIED ENTRY POINT (mixed constraints)
-    # ============================
-
-    def sample_configuration_nonlinear(self, mode: Mode) -> Optional[Configuration]:
+    def sample_configuration_nl(self, mode: Mode) -> Optional[Configuration]:
         """
-        Chooses among goal / informed / uniform samplers under mixed constraints,
-        mirroring your affine entry point.
+        Unified nonlinear configuration sampler: goal / informed / uniform.
+        Exactly the same selection logic as the affine sampler.
         """
         if np.random.uniform(0, 1) < self.config.p_goal:
-            return self.sample_goal_nonlinear(mode, self.transition_node_ids, self.trees[mode].order)
-
+            return self.sample_goal_nl(mode, self.transition_node_ids, self.trees[mode].order)
         if self.config.informed_sampling and self.operation.init_sol:
-            return self.sample_informed_nonlinear(mode)
+            return self.sample_informed_nl(mode)
+        return self.sample_uniform_nl(mode)
 
-        return self.sample_uniform_nonlinear(mode)
+
+# 3) STEERING
+    def steer_nonlinear(
+        self,
+        mode: Mode,
+        n_nearest: Node,
+        q_rand: Configuration,
+        dist: NDArray,
+        i: int = 1,
+    ) -> Optional[State]:
+        """
+        Steer between nodes while respecting the full constraint set (nonlinear + affine),
+        mirroring steer_affine structure while using the nonlinear projector.
+        """
+        if np.equal(n_nearest.state.q.state(), q_rand.state()).all():
+            return None
+
+        q_nearest = n_nearest.state.q.state()
+        direction = q_rand.q - q_nearest
+
+        if self.config.distance_metric != "max_euclidean":
+            dist = batch_config_dist(n_nearest.state.q, [q_rand], metric="max_euclidean")
+
+        N = float(dist / self.eta)
+        if N <= 1 or int(N) == i - 1:
+            q_new = q_rand.q
+        else:
+            q_new = q_nearest + (direction * (i / N))
+        q_candidate = self.env.get_start_pos().from_flat(q_new)
+
+        # gather constraints (nonlinear + affine)
+        aff_eq, aff_ineq, eq_nl, ineq_nl = self.collect_constraints(mode)
+        eq = eq_nl + aff_eq
+        ineq = ineq_nl + aff_ineq
+
+        # quick feasibility check
+        if (self.satisfies_nl_constraints(mode, q_candidate, eq_nl, ineq_nl) and
+            self.satisfies_aff_eq_constraints(mode, aff_eq, q_candidate) and
+            self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_candidate) and
+            self.env.is_collision_free(q_candidate, mode)):
+            return State(q_candidate, mode)
+
+        # project candidate
+        q_proj = self.project_nonlinear_dispatch(q_candidate, eq, ineq, mode)
+        if q_proj is None:
+            return None
+
+        if not (self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and
+                self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
+                self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
+            return None
+
+        if not self.env.is_collision_free(q_proj, mode):
+            return None
+        
+        return State(q_proj, mode)
+
 
 ############################################
 
