@@ -128,6 +128,17 @@ def robot_mode_shortcut(
     
     env_eq_constraints, env_ineq_constraints = collect_affine_constraints_for_env()
 
+    # --- build a boolean mask of free DOFs (True = free)
+    total_dofs = len(new_path[0].q.state())
+    constrained = np.zeros(total_dofs, dtype=bool)
+    for c in env_eq_constraints:
+        A = c.mat
+        constrained |= np.any(np.abs(A) > 1e-12, axis=0)
+    for c in env_ineq_constraints:
+        A = c.mat
+        constrained |= np.any(np.abs(A) > 1e-12, axis=0)
+    free_mask = ~constrained
+    
     while True:
         iter += 1
         if cnt >= max_iter or iter >= max_attempts:
@@ -180,59 +191,31 @@ def robot_mode_shortcut(
             q1_tmp[r] = q1[r] * 1
             diff_tmp[r] = (q1_tmp[r] - q0_tmp[r]) / (j - i)
 
-        # constuct pth element for the shortcut
+        # construct candidate shortcut segment, modifying ONLY free DOFs
         path_element = []
         for k in range(j - i + 1):
             q = new_path[i + k].q.state() * 1.0
 
             r_cnt = 0
             for r in range(len(env.robots)):
-                # print(r, i, j, k)
                 dim = env.robot_dims[env.robots[r]]
+                sl = slice(r_cnt, r_cnt + dim)
+
                 if r in robots_to_shortcut:
-                    q_interp = q0_tmp[r] + diff_tmp[r] * k
-                    q[r_cnt : r_cnt + dim] = q_interp
-                # else:
-                #     q[r_cnt : r_cnt + dim] = new_path[i + k].q[r]
+                    # indices within this robot that are free (not constrained)
+                    free_sl = free_mask[sl]
+                    if np.any(free_sl):
+                        # interpolate only on free coordinates
+                        q_interp = q0_tmp[r] + diff_tmp[r] * k
+                        q_slice = q[sl].copy()
+                        q_slice[free_sl] = q_interp[free_sl]
+                        q[sl] = q_slice
+                    # if none are free, leave this robot as-is (no-op)
+                # else leave untouched
 
                 r_cnt += dim
 
-            # print(tmp)
-            # print(q)
-
-            # print(q)
-            path_element.append(
-                State(q0.from_flat(q), new_path[i + k].mode)
-            )
-
-        # path_element = []
-        # for k in range(j - i + 1):
-        #     q_flat = new_path[i + k].q.state().astype(float, copy=True)
-
-        #     r_cnt = 0
-        #     for r in range(len(env.robots)):
-        #         dim = env.robot_dims[env.robots[r]]
-        #         if r in robots_to_shortcut:
-        #             q_interp = q0_tmp[r] + diff_tmp[r] * k
-        #             q_flat[r_cnt : r_cnt + dim] = q_interp
-        #         r_cnt += dim
-
-        #     q_config = q0.from_flat(q_flat)
-
-        #     if 0 < k < (j - i):
-        #         q_proj_config = project_affine_cspace_interior(
-        #             q_config,
-        #             eq_constraints=env_eq_constraints,
-        #             ineq_constraints=env_ineq_constraints,
-        #         )
-        #         if q_proj_config is None:
-        #             feasible = False
-        #             break
-        #         q_use_config = q_proj_config
-        #     else:
-        #         q_use_config = q_config
-        #     path_element.append(State(q_use_config, new_path[i + k].mode))
-
+            path_element.append(State(q0.from_flat(q), new_path[i + k].mode))
 
         # check if the shortcut improves cost
         if path_cost(path_element, env.batch_config_cost) >= path_cost(
@@ -272,8 +255,6 @@ def robot_mode_shortcut(
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
 
-                # if not np.array_equal(new_path[i+k].mode, path_element[k].mode):
-                # print('fucked up')
         # else:
         #     print("in colllision")
         # env.show(True)
