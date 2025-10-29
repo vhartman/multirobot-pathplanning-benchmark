@@ -401,7 +401,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not q_rand:
                 continue
 
-            self.env.show_config(q_rand, blocking = False)
+            # self.env.show_config(q_rand, blocking = False)
 
             # # check if the nodes respect constraints         
             # c = self.env.constraints

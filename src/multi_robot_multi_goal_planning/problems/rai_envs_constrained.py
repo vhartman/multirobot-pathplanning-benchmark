@@ -441,11 +441,18 @@ class rai_rfl(SequenceMixin, rai_env):
         self.constraints = [AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
 
         # we dont want the arms to cross each other
-        ineq_A= np.zeros((2, 4*9), dtype=int)
-        ineq_A[0, [1, 10]] = [1, -1] # y1 - y2 < 0
-        ineq_A[1, [19, 28]] = [1, -1] # y3 - y4 < 0
-        ineq_B = np.zeros((2, 1))
-        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A, ineq_B)]
+        ineq_A1 = np.zeros((2, 4*9), dtype=int)
+        ineq_A1[0, [1, 10]] = [1, -1] # y1 - y2 < 0
+        ineq_A1[1, [19, 28]] = [1, -1] # y3 - y4 < 0
+        ineq_B1 = np.zeros((2, 1))
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A1, ineq_B1)]
+
+        # we dont want the gantries to cross each other
+        ineq_A2 = np.zeros((1, 4*9), dtype=int)
+        ineq_A2[0, [0, 18]] = [1, -1] # x1 - x3 < 0
+        # ineq_A2[1, [9, 27]] = [1, -1] # x2 - x4 < 0
+        ineq_B2 = np.zeros((1, 1))
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A2, ineq_B2)]
 
         self.tasks = [
             # joint
