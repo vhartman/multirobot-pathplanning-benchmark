@@ -4719,7 +4719,7 @@ def make_two_arms_on_a_gantry():
         ry.ST.box,
         size=[0.2, 2, 0.2, 0.005],
         # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
-    ).setColor([0.1, 0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.15]).setContact(1)
+    ).setColor([0.1, 0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.15]).setContact(0)
 
     a1_y = C.addFrame("a1_y").setParent(a1_x).setJoint(
         ry.JT.transY, limits=np.array([-1, 1])
@@ -4731,7 +4731,7 @@ def make_two_arms_on_a_gantry():
 
     C.addFrame("z_a1_linkage").setParent(a1_z).setShape(
         ry.ST.cylinder, size=[0.9, 0.075]
-    ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.5]).setContact(-3)
+    ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.5]).setContact(-1)
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("a1_z")
@@ -4768,7 +4768,7 @@ def make_two_arms_on_a_gantry():
 
     C.addFrame("z_a2_linkage").setParent(a2_z).setShape(
         ry.ST.cylinder, size=[0.9, 0.075]
-    ).setColor([0.1, 0.1, 0.1, 1]).setRelativePosition([0, 0, 0.5]).setContact(0)
+    ).setColor([0.1, 0.1, 0.1, 1]).setRelativePosition([0, 0, 0.5]).setContact(1)
 
     C.addFile(robot_path, namePrefix="a2_").setParent(
         C.getFrame("a2_z")
@@ -4776,7 +4776,7 @@ def make_two_arms_on_a_gantry():
         [0., 0, 1, 0]
     ).setJoint(ry.JT.rigid)
 
-    C.view(True)
+    # C.view(True)
 
     # add a bunch of boxes
     w = 2
@@ -4976,7 +4976,13 @@ def make_four_arms_on_a_gantry():
                 ry.ST.box,
                 size=[0.2, 2, 0.2, 0.005],
                 # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
-            ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.15]).setContact(1)
+            ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.15]).setContact(0)
+
+            C.addFrame(f"{prefix[1:]}linkage_coll").setParent(a_x).setShape(
+                ry.ST.box,
+                size=[0.2, 0.2, 0.2, 0.005],
+                # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
+            ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 1.5, 0.15]).setContact(1)
 
         a_y = C.addFrame(f"{prefix}y").setParent(a_x).setJoint(
             ry.JT.transY, limits=np.array([-1, 1])
@@ -4986,20 +4992,9 @@ def make_four_arms_on_a_gantry():
             ry.JT.transZ, limits=np.array([-0.5, 0])
         ).setJointState([0])
 
-        # if we are adding the linkage, we can just disable the collision with it
-        if add_linkage:
-            C.addFrame(f"z_{prefix}_linkage").setParent(a_z).setShape(
-                ry.ST.cylinder, size=[0.9, 0.075]
-            ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.5]).setContact(-3)
-        # if we are not, we need to add a weird construct to avoid it
-        else:
-            C.addFrame(f"z_{prefix}_coll").setParent(a_z).setShape(
-                ry.ST.cylinder, size=[0.1, 0.075]
-            ).setColor([1, 0.1, 0.1, 0.3]).setRelativePosition([0, 0, 0.9]).setContact(1)
-
-            C.addFrame(f"z_{prefix}_linkage").setParent(a_z).setShape(
-                ry.ST.cylinder, size=[0.9, 0.075]
-            ).setColor([0.1, 0.1, 0.1, 1]).setRelativePosition([0, 0, 0.5]).setContact(0)
+        C.addFrame(f"z_{prefix}_linkage").setParent(a_z).setShape(
+            ry.ST.cylinder, size=[0.9, 0.075]
+        ).setColor([0.1, 0.1, 0.1]).setRelativePosition([0, 0, 0.5]).setContact(-1)
 
         C.addFile(robot_path, namePrefix=prefix).setParent(a_z).setRelativePosition([-0, 0., 0.]).setRelativeQuaternion(
             [0., 0, 1, 0]
@@ -5010,6 +5005,8 @@ def make_four_arms_on_a_gantry():
 
     add_agent("a3_", True, [1., 0., 2], -0.5)
     add_agent("a4_", False, [1., 0., 2], 0.5)
+
+    # C.view(True)
 
     # add a bunch of boxes
     w = 2
