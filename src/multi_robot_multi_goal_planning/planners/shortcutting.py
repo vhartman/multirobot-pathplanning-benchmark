@@ -156,16 +156,16 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
 #         if abs(j - i) < 2:
 #             continue
 
-#         # robots_to_shortcut = [r for r in range(len(env.robots))]
-#         # random.shuffle(robots_to_shortcut)
-#         # # num_robots = np.random.randint(0, len(robots_to_shortcut))
-#         # num_robots = 1
-#         # robots_to_shortcut = robots_to_shortcut[:num_robots]
-#         if robot_choice == "round_robin":
-#             robots_to_shortcut = [rr_robot % len(env.robots)]
-#             rr_robot += 1
-#         else:
-#             robots_to_shortcut = [np.random.randint(0, len(env.robots))]
+        # # robots_to_shortcut = [r for r in range(len(env.robots))]
+        # # random.shuffle(robots_to_shortcut)
+        # # # num_robots = np.random.randint(0, len(robots_to_shortcut))
+        # # num_robots = 1
+        # # robots_to_shortcut = robots_to_shortcut[:num_robots]
+        # if robot_choice == "round_robin":
+        #     robots_to_shortcut = [rr_robot % len(env.robots)]
+        #     rr_robot += 1
+        # else:
+        #     robots_to_shortcut = [np.random.randint(0, len(env.robots))]
 
 #         can_shortcut_this = True
 #         for r in robots_to_shortcut:
@@ -321,6 +321,13 @@ def robot_mode_shortcut(
     env_eq_constraints, env_ineq_constraints = collect_affine_constraints_for_env()
     constraints = env_eq_constraints + env_ineq_constraints
     n_constr = len(constraints)
+    # Break down constraints in rows
+    c_row = []
+    for c in constraints:
+        A = np.asarray(c.mat)
+        for row_idx in range(A.shape[0]):
+            c_row.append(A[row_idx, :])
+    n_of_rows = len(c_row)
 
     # Build a boolean mask of free DOFs (True = free)
     total_dofs = len(new_path[0].q.state())
@@ -345,7 +352,7 @@ def robot_mode_shortcut(
             continue
 
         if robot_choice == "round_robin":
-            dofs_to_shortcut = [rr % (len(env.robots) + n_constr)]
+            dofs_to_shortcut = [rr % (len(env.robots) + n_of_rows)]
             if dofs_to_shortcut[0] < len(env.robots):
                 # shortcutting on free DOFs of a robot
                 shortcutting_robot = True
@@ -355,7 +362,7 @@ def robot_mode_shortcut(
                 # shortcutting on constrained DOFs
                 shortcutting_robot = False
                 shortcutting_constr = True
-                constraint_to_shortcut = [dofs_to_shortcut[0] - len(env.robots)]
+                row_to_shortcut = [dofs_to_shortcut[0] - len(env.robots)]
             rr += 1
         else:
             robots_to_shortcut = [np.random.randint(0, len(env.robots))]
@@ -401,7 +408,7 @@ def robot_mode_shortcut(
                     r_cnt += dim
                 path_element.append(State(q0.from_flat(q), new_path[i + k].mode))
 
-        elif shortcutting_constr:        
+        elif shortcutting_constr:
             robot_slices = []
             offset = 0
             for r in env.robots:
@@ -414,46 +421,63 @@ def robot_mode_shortcut(
             q0_vec = np.asarray(q0.state(), dtype=float)
             q1_vec = np.asarray(q1.state(), dtype=float)
             steps = j - i
+            if steps <= 0:
+                continue
+
             diff = (q1_vec - q0_vec) / float(steps)
 
-            constr = constraints[constraint_to_shortcut[0]]
-            A = np.asarray(constr.mat)
+            constr_row = c_row[row_to_shortcut[0]]
+            
+            # identify active DOFs in this row
+            active_dofs = np.where(np.abs(constr_row) > 1e-12)[0]
+            if len(active_dofs) == 0:
+                continue
 
+            # identify robots affected by these DOFs
+            active_robots = []
+            active_sl = []
+            for r, sl in enumerate(robot_slices):
+                if np.any((active_dofs >= sl.start) & (active_dofs < sl.stop)):
+                    active_robots.append(r)
+                    active_sl.append(robot_slices[r])
+            active_idxs = np.concatenate([np.arange(sli.start, sli.stop) for sli in active_sl])
+
+            # ensure same task for all those robots
+            can_shortcut_this = True
+            for r in active_robots:
+                if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
+                    can_shortcut_this = False
+                    break
+            if not can_shortcut_this:
+                continue
+
+            # construct the candidate shortcut
             path_element = []
+            for k in range(j - i + 1):
+                q = new_path[i + k].q.state().astype(float).copy()
 
-            # go row-by-row
-            for row_idx in range(A.shape[0]):
-                active_dofs = np.where(np.abs(A[row_idx]) > 1e-12)[0]
-                if len(active_dofs) == 0:
-                    continue
+                # interpolate only the active DOFs of this row
+                q_interp = q0_vec.copy()
+                q_interp[active_idxs] = q0_vec[active_idxs] + diff[active_idxs] * k
 
-                # find robots whose slices overlap those dofs
-                active_robots = []
-                for r, sl in enumerate(robot_slices):
-                    if np.any((active_dofs >= sl.start) & (active_dofs < sl.stop)):
-                        active_robots.append(r)
+                # apply interpolated values to q
+                q[active_idxs] = q_interp[active_idxs]
 
-                for r in active_robots:
-                    if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
-                        can_shortcut_this = False
-                        break
-                if not can_shortcut_this:
-                    continue
+                path_element.append(State(q0.from_flat(q), new_path[i + k].mode))
 
-                # perform the joint interpolation for this row
-                for k in range(steps + 1):
-                    q_interp = q0_vec.copy()
-                    for r in active_robots:
-                        sl = robot_slices[r]
-                        q_interp[sl] = q0_vec[sl] + diff[sl] * k
-                    if k == steps:
-                        q_interp = q1_vec.copy()
-                    path_element.append(State(q0.from_flat(q_interp), new_path[i + k].mode))
+            # safety: must match segment length and endpoints
+            if len(path_element) != (j - i + 1):
+                print("ERROR: length mismatch")
+                continue
+            if not np.allclose(path_element[0].q.state(), new_path[i].q.state(), atol=1e-8):
+                print("ERROR: start state mismatch")
+                continue
+            if not np.allclose(path_element[-1].q.state(), new_path[j].q.state(), atol=1e-8):
+                print("ERROR: end state mismatch")
+                continue
 
-        if path_element is None:
-            continue
 
-        if not can_shortcut_this:
+        if path_element is None or not can_shortcut_this:
             continue
 
         old_cost = path_cost(new_path[i:j + 1], env.batch_config_cost)

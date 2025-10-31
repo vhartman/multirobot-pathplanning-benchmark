@@ -14,7 +14,6 @@ from .constraints_projection import (
     project_affine_cspace,
     project_affine_cspace_interior,
     project_affine_cspace_explore,
-    project_to_manifold,
     project_nlp_sqp,
 )
 
@@ -325,11 +324,6 @@ def project_samples(X, eq_constraints, ineq_constraints, method="affine-cspace")
                     eq_constraints=eq_constraints if eq_constraints else None,
                     ineq_constraints=ineq_constraints if ineq_constraints else None,
                 )
-                if q_proj is None: q_proj = q
-
-            elif method == "gauss-newton":
-                if eq_constraints:
-                    q_proj = project_to_manifold(q, eq_constraints, eps=1e-6, max_iters=50)
                 if q_proj is None: q_proj = q
 
             elif method == "sqp":

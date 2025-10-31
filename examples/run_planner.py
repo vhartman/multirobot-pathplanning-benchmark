@@ -331,6 +331,15 @@ def main():
     if hasattr(env, "close"):
         env.close()
 
-
 if __name__ == "__main__":
     main()
+
+# if __name__ == "__main__":
+#     import cProfile
+#     import pstats
+
+#     # Profile the full run
+#     with cProfile.Profile() as pr:
+#         main()  # or whatever function kicks off the planner
+
+#     pr.dump_stats("res.prof")

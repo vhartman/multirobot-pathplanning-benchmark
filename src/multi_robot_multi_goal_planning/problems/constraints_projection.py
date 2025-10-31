@@ -343,66 +343,6 @@ def project_affine_cspace_explore(
 # NONLINEAR PROJECTORS
 # ============================================================
 
-def project_to_manifold(
-    q: Any,
-    constraints: List[Any],
-    eps: float = 1e-6,
-    max_iters: int = 50,
-    damping: float = 1e-6,
-    verbose: bool = False
-) -> Optional[Any]:
-    """
-    Projects a configuration onto the nonlinear constraint manifold defined by F_i(q)=0.
-    Damped Gauss–Newton with backtracking. Identical logic, leaner allocations.
-    """
-    x = q.state().astype(float, copy=True)
-    n = x.size
-
-    for it in range(max_iters):
-        # Stack residuals/Jacobians
-        # (no extra ravel; assume constraints return compatible shapes)
-        Fs = [c.F(x) for c in constraints]
-        if not Fs:
-            return q  # no constraints
-        Js = [c.J(x) for c in constraints]
-        F_all = np.concatenate(Fs)
-        J_all = np.vstack(Js)
-
-        res_norm = norm(F_all)
-        if res_norm <= eps:
-            if verbose:
-                print(f"[proj] converged at iter {it}, ‖F‖={res_norm:.2e}")
-            return q.from_flat(x)
-
-        # Solve (JᵀJ + λI) dq = Jᵀ F (Levenberg)
-        JT = J_all.T
-        JTJ = JT @ J_all
-        rhs = JT @ F_all
-        try:
-            dq = np.linalg.solve(JTJ + damping * np.eye(n, dtype=float), rhs)
-        except LinAlgError:
-            return None
-
-        # Backtracking
-        alpha = 1.0
-        while alpha > 1e-6:
-            x_trial = x - alpha * dq
-            F_trial = np.concatenate([c.F(x_trial) for c in constraints])
-            if norm(F_trial) < res_norm:
-                x = x_trial
-                break
-            alpha *= 0.5
-
-        if alpha <= 1e-6:
-            if verbose:
-                print(f"[proj] stalled at iter {it}, ‖F‖={res_norm:.2e}")
-            return None
-
-    if verbose:
-        print(f"[proj] failed after {max_iters} iters, ‖F‖={res_norm:.2e}")
-    return None
-
-
 def project_nlp_sqp(
     q: Any,
     eq_constraints: List[Any] | None = None,
