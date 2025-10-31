@@ -363,9 +363,9 @@ def robot_mode_shortcut(
             shortcutting_constr = False
 
         path_element = None
+        can_shortcut_this = True
 
         if shortcutting_robot:
-            can_shortcut_this = True
             for r in robots_to_shortcut:
                 if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
                     can_shortcut_this = False
@@ -401,18 +401,13 @@ def robot_mode_shortcut(
                     r_cnt += dim
                 path_element.append(State(q0.from_flat(q), new_path[i + k].mode))
 
-        elif shortcutting_constr:
-        # build robot slice map (no need for env.robot_slices)
+        elif shortcutting_constr:        
             robot_slices = []
             offset = 0
             for r in env.robots:
                 dim = env.robot_dims[r]
                 robot_slices.append(slice(offset, offset + dim))
                 offset += dim
-
-            # inside shortcutting_constr block
-            if new_path[i].mode != new_path[j].mode:
-                continue
 
             q0 = new_path[i].q
             q1 = new_path[j].q
@@ -438,8 +433,11 @@ def robot_mode_shortcut(
                     if np.any((active_dofs >= sl.start) & (active_dofs < sl.stop)):
                         active_robots.append(r)
 
-                # skip single-robot constraints
-                if len(active_robots) < 2:
+                for r in active_robots:
+                    if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
+                        can_shortcut_this = False
+                        break
+                if not can_shortcut_this:
                     continue
 
                 # perform the joint interpolation for this row
@@ -453,6 +451,9 @@ def robot_mode_shortcut(
                     path_element.append(State(q0.from_flat(q_interp), new_path[i + k].mode))
 
         if path_element is None:
+            continue
+
+        if not can_shortcut_this:
             continue
 
         old_cost = path_cost(new_path[i:j + 1], env.batch_config_cost)
