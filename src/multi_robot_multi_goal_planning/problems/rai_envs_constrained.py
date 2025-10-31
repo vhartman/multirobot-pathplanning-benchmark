@@ -449,9 +449,9 @@ class rai_rfl(SequenceMixin, rai_env):
 
         # we dont want the gantries to cross each other
         ineq_A2 = np.zeros((1, 4*9), dtype=int)
-        ineq_A2[0, [0, 18]] = [1, -1] # x1 - x3 < 0
-        # ineq_A2[1, [9, 27]] = [1, -1] # x2 - x4 < 0
+        ineq_A2[0, [0, 18]] = [1, -1] # x1 - x3 < -2
         ineq_B2 = np.zeros((1, 1))
+        ineq_B2[0] = 2.0 # coordinates of gantries are in different reference frames, that have a distance of 2.0 m
         self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A2, ineq_B2)]
 
         self.tasks = [

@@ -393,7 +393,10 @@ class BidirectionalRRTstar(BaseRRTstar):
             # Mode selection
             active_mode = self.random_mode()
 
-            print(active_mode) # to check progress of the planner
+            # print(active_mode) # to check progress of the planner
+            # print(active_mode.entry_configuration.q)
+
+            # self.env.show_config(active_mode.entry_configuration, blocking = True)
             
             # Bi RRT* core
             # q_rand = self.sample_configuration(active_mode)
@@ -401,7 +404,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not q_rand:
                 continue
 
-            # self.env.show_config(q_rand, blocking = False)
+            # self.env.show_config(q_rand, blocking = True)
 
             # # check if the nodes respect constraints         
             # c = self.env.constraints
