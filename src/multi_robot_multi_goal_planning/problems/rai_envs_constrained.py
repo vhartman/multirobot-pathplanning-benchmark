@@ -581,6 +581,119 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
+@register("rai.single_stick")
+class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, keyframes = rai_config.make_single_arm_stick_env()
+        
+        self.robots = ["a1"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        h = 0.26
+
+        self.tasks = [
+            # joint
+            Task(
+                "r1_1",
+                ["a1"],
+                SingleGoal(keyframes[0]),
+            ),
+            Task(
+                "r1_2",
+                ["a1"],
+                SingleGoal(keyframes[1]),
+                constraints=[AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3])), 
+                             AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+        
+        self.sequence = self._make_sequence_from_names(
+            ["r1_1", "r1_2", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+@register("rai.dual_stick")
+class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, r1_keyframes, r2_keyframes = rai_config.make_dual_arm_stick_env()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        h = 0.26
+
+        self.tasks = [
+            # joint
+            Task(
+                "r1_1",
+                ["a1"],
+                SingleGoal(r1_keyframes[0]),
+            ),
+            Task(
+                "r1_2",
+                ["a1"],
+                SingleGoal(r1_keyframes[1]),
+                constraints=[AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3])), 
+                             AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+            ),
+            Task(
+                "r2_1",
+                ["a2"],
+                SingleGoal(r2_keyframes[0]),
+            ),
+            Task(
+                "r2_2",
+                ["a2"],
+                SingleGoal(r2_keyframes[1]),
+                constraints=[AffineFrameOrientationConstraint("a2_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3])), 
+                             AffineTaskSpaceEqualityConstraint("a2_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+        
+        self.sequence = self._make_sequence_from_names(
+            ["r1_1", "r2_1", "r1_2", "r2_2", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+# assembly with predetermined assembly 'insertion directions'
+# effectively an orientation constraint
+class rai_assembly_with_insertions():
+    pass
+
+# environment with end effector path following for 'printing'
+class rai_bimanual_printing(SequenceMixin, rai_env):
+    pass
+
+
 class rai_stacking_with_holding(SequenceMixin, rai_env):
     def __init__(self):
         self.C = rai_config.make_stacking_with_holding_env()

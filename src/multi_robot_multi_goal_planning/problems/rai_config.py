@@ -1976,6 +1976,284 @@ def make_ur10_arm_orientation_env(num_robots=2):
     return C, [k1, k2]
 
 
+def make_single_arm_stick_env():
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("a1_stick").setParent(C.getFrame("a1_ur_vacuum")).setShape(
+        ry.ST.cylinder, size=[0.3, 0.02]
+    ).setColor([0.1, 0.1, 0.1]).setRelativeQuaternion([0.707, 0, 0.707, 0]).setRelativePosition([0.2, 0, 0.]).setContact(-1)
+
+    C.addFrame("a1_stick_ee").setParent(C.getFrame("a1_stick")).setShape(
+        ry.ST.sphere, size=[0.02]
+    ).setColor([1, 0, 0, 0.5]).setRelativePosition([0, 0, 0.15]).setContact(-1)
+
+    C.addFrame("obs").setParent(
+        C.getFrame("table")
+    ).setPosition(
+        C.getFrame("table").getPosition() + [0, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]).setContact(
+        -2
+    ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
+
+    # C.view(True)
+
+    def compute_pose_from_pos(robot_prefix, pos):
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=2, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addObjective(
+            [1],
+            ry.FS.position,
+            [robot_prefix + "stick_ee"],
+            ry.OT.eq,
+            [1, 1, 0],
+            [pos[0], pos[1], 0],
+        )
+        komo.addObjective(
+            [1],
+            ry.FS.vectorZ,
+            [robot_prefix + "stick_ee"],
+            ry.OT.eq,
+            [1],
+            [0, 0, -1],
+        )
+        komo.addObjective(
+            [1],
+            ry.FS.position,
+            [robot_prefix + "stick_ee"],
+            ry.OT.eq,
+            [0, 0, 1],
+            [0, 0, 0.26],
+        )
+
+        komo.addObjective(
+            times=[2, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        max_attempts = 5
+        for num_attempt in range(max_attempts):
+            # komo.initRandom()
+            if num_attempt > 0:
+                dim = len(c_tmp.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
+                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            # print(retval)
+
+            # if view:
+            # komo.view(True, "IK solution")
+
+            print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+                keyframes = komo.getPath()
+                return keyframes[0, :]
+
+        return None
+
+    xy_start_pos = [0.2, 0.2]
+    xy_goal_pos = [-0.2, -0.2]
+
+    start_pose = compute_pose_from_pos("a1_", xy_start_pos)
+    goal_pose = compute_pose_from_pos("a1_", xy_goal_pos)
+
+    return C, [start_pose, goal_pose]
+
+def make_dual_arm_stick_env():
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
+
+    def add_robot(prefix, base_pos):
+        C.addFile(robot_path, namePrefix=prefix).setParent(
+            C.getFrame("table")
+        ).setRelativePosition([base_pos[0], base_pos[1], 0]).setRelativeQuaternion(
+            [0.7071, 0, 0, -0.7071]
+        ).setJoint(ry.JT.rigid)
+
+        C.addFrame(f"{prefix}stick").setParent(C.getFrame(f"{prefix}ur_vacuum")).setShape(
+            ry.ST.cylinder, size=[0.3, 0.02]
+        ).setColor([0.1, 0.1, 0.1]).setRelativeQuaternion([0.707, 0, 0.707, 0]).setRelativePosition([0.2, 0, 0.]).setContact(-1)
+
+        C.addFrame(f"{prefix}stick_ee").setParent(C.getFrame(f"{prefix}stick")).setShape(
+            ry.ST.sphere, size=[0.02]
+        ).setColor([1, 0, 0, 0.5]).setRelativePosition([0, 0, 0.15]).setContact(-1)
+
+    add_robot("a1_", [-0.5, 0.5])
+    add_robot("a2_", [0.5, 0.5])
+
+    C.addFrame("obs").setParent(
+        C.getFrame("table")
+    ).setPosition(
+        C.getFrame("table").getPosition() + [0, 0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]).setContact(
+        -2
+    ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
+
+    # C.view(True)
+
+    def compute_pose_from_pos(robot_prefix, pos):
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=2, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addObjective(
+            [1],
+            ry.FS.position,
+            [robot_prefix + "stick_ee"],
+            ry.OT.eq,
+            [1, 1, 0],
+            [pos[0], pos[1], 0],
+        )
+        komo.addObjective(
+            [1],
+            ry.FS.vectorZ,
+            [robot_prefix + "stick_ee"],
+            ry.OT.eq,
+            [1],
+            [0, 0, -1],
+        )
+        komo.addObjective(
+            [1],
+            ry.FS.position,
+            [robot_prefix + "stick_ee"],
+            ry.OT.eq,
+            [0, 0, 1],
+            [0, 0, 0.26],
+        )
+
+        komo.addObjective(
+            times=[2, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        max_attempts = 5
+        for num_attempt in range(max_attempts):
+            # komo.initRandom()
+            if num_attempt > 0:
+                dim = len(c_tmp.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
+                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            # print(retval)
+
+            # if view:
+            # komo.view(True, "IK solution")
+
+            print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+                keyframes = komo.getPath()
+                return keyframes[0]
+
+        return None
+
+    r1_xy_start_pos = [0.2, 0.2]
+    r1_xy_goal_pos = [-0.2, -0.2]
+    
+    r2_xy_start_pos = [-0.2, 0.2]
+    r2_xy_goal_pos = [0.2, -0.2]
+
+    r1_start_pose = compute_pose_from_pos("a1_", r1_xy_start_pos)
+    r1_goal_pose = compute_pose_from_pos("a1_", r1_xy_goal_pos)
+    
+    r2_start_pose = compute_pose_from_pos("a2_", r2_xy_start_pos)
+    r2_goal_pose = compute_pose_from_pos("a2_", r2_xy_goal_pos)
+
+    return C, [r1_start_pose, r1_goal_pose], [r2_start_pose, r2_goal_pose]
+
 def make_egg_carton_env(num_boxes=9, view: bool = False):
     C = ry.Config()
 
