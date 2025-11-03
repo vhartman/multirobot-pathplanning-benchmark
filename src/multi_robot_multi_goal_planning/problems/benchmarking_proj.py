@@ -15,6 +15,7 @@ from .constraints_projection import (
     project_affine_cspace_interior,
     project_affine_cspace_explore,
     project_nlp_sqp,
+    project_affine
 )
 
 from .constraints import (
@@ -330,6 +331,10 @@ def project_samples(X, eq_constraints, ineq_constraints, method="affine-cspace")
                 q_proj = project_nlp_sqp(q, eq_constraints=eq_constraints, ineq_constraints=ineq_constraints)
                 if q_proj is None: q_proj = q
 
+            elif method == "affine":
+                q_proj = project_affine(q, eq_constraints + ineq_constraints)
+                if q_proj is None: q_proj = q
+
             else:
                 q_proj = q
 
@@ -380,7 +385,7 @@ def plot_by_geometry(results, limits=(-2, 2)):
         "LineBounded3D",
         "CubeFace4D",
     ]
-    method_order = ["affine-cspace", "affine-cspace-interior", "affine-cspace-explore", "sqp"]
+    method_order = ["affine-cspace", "affine-cspace-interior", "affine-cspace-explore", "sqp", "affine"]
 
     nrows = len(geom_order)
     ncols = len(method_order)
@@ -447,7 +452,7 @@ def main():
     }
 
     # methods = ["affine-analytic", "affine-cspace", "gauss-newton", "sqp"]
-    methods = ["affine-cspace", "affine-cspace-interior", "affine-cspace-explore", "sqp"]
+    methods = ["affine-cspace", "affine-cspace-interior", "affine-cspace-explore", "sqp", "affine"]
 
 
     results = []

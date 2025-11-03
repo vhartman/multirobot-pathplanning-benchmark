@@ -134,10 +134,9 @@ def _nullspace_min_norm_ineq(
     x_try = x_eq + Z @ z
     return x_try if _ineq_feasible(Ain, bin, x_try, tol) else None
 
-
-# ============================================================
-# 1. project_affine_only
-# ============================================================
+# ------------------------------------------------------------
+# --- projection ---
+# ------------------------------------------------------------
 
 def project_affine_only(q: Any, constraints: List[Any]) -> Any:
     """
@@ -152,64 +151,47 @@ def project_affine_only(q: Any, constraints: List[Any]) -> Any:
     return q.from_flat(x_proj)
 
 
-# ============================================================
-# 2. project_affine_cspace
-# ============================================================
-
 def project_affine_cspace(
     q: Any,
-    eq_constraints: Optional[List[Any]] = None,
-    ineq_constraints: Optional[List[Any]] = None,
-    eps: float = 1e-8,
+    constraints: List[Any],
+    mode=None,
+    env=None,
+    max_iter: int = 100,
+    tol: float = 1e-5,
+    step_size: float = 0.6,
+    verbose: bool = False,
 ) -> Optional[Any]:
-    """
-    Euclidean projection of configuration q onto the feasible affine set:
-        A_eq x = b_eq
-        A_in x <= b_in
 
-    Rank-robust:
-      (1) Exact projection to equalities
-      (2) Nullspace computation
-      (3) Min-norm inequality correction in the nullspace
-    """
     x = q.state().astype(float, copy=True)
     n = x.size
 
-    # Stack equalities (if any)
-    if eq_constraints:
-        Aeq = np.vstack([c.mat for c in eq_constraints])
-        beq = np.concatenate([c.rhs.ravel() for c in eq_constraints])
-        Aeq_list = [Aeq]
-        beq_list = [beq]
+    # split constraints
+    aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
+    aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
+
+    # 0) no constraints
+    if not (aff_eq or aff_in):
+        return q
+
+    # 1) exact equality projection + nullspace
+    if aff_eq:
+        Aeq = np.vstack([c.mat for c in aff_eq])
+        beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
+        x = _orth_proj_eq_general(x, [Aeq], [beq])
+        Z = _nullspace(Aeq)
     else:
-        Aeq = np.zeros((0, n), dtype=float)
-        Aeq_list = []
-        beq_list = []
+        Z = np.eye(n)
 
-    # Stack inequalities (if any)
-    if ineq_constraints:
-        Ain = np.vstack([c.mat for c in ineq_constraints])
-        bin = np.concatenate([c.rhs.ravel() for c in ineq_constraints])
-    else:
-        Ain = np.zeros((0, n), dtype=float)
-        bin = np.zeros(0, dtype=float)
+    # 2) inequality correction in tangent
+    if aff_in:
+        Ain = np.vstack([c.mat for c in aff_in])
+        bin = np.concatenate([c.constraint_pose.ravel() for c in aff_in])
+        x_try = _nullspace_min_norm_ineq(Ain, bin, x, Z, tol=tol)
+        if x_try is not None:
+            x = x_try
 
-    # (1) exact equality projection
-    x_eq = _orth_proj_eq_general(x, Aeq_list, beq_list)
-    if Aeq.size and norm(Aeq @ x_eq - beq) > 1e-6:
-        return None  # inconsistent equalities
+    return q.from_flat(x)
 
-    # (2)-(3) inequality correction in equality tangent
-    Z = _nullspace(Aeq)
-    x_proj = _nullspace_min_norm_ineq(Ain, bin, x_eq, Z, tol=eps)
-    if x_proj is None:
-        return None
-    return q.from_flat(x_proj)
-
-
-# ============================================================
-# 2. project_affine_cspace
-# ============================================================
 
 def project_affine_cspace_interior(
     q: Any,
@@ -222,7 +204,7 @@ def project_affine_cspace_interior(
     Projects q onto the affine feasible set and then nudges strictly inside
     inequalities (stochastic inward step). Logic preserved.
     """
-    q_proj = project_affine_cspace(q, eq_constraints, ineq_constraints, eps)
+    q_proj = project_affine_cspace(q, eq_constraints + ineq_constraints, eps)
     if q_proj is None:
         return None
 
@@ -262,17 +244,13 @@ def project_affine_cspace_interior(
 
     # Verify and (if needed) reproject
     if np.any(Aineq @ x_interior - bineq > eps):
-        reproj = project_affine_cspace(q.from_flat(x_interior), eq_constraints, ineq_constraints, eps)
+        reproj = project_affine_cspace(q.from_flat(x_interior), eq_constraints + ineq_constraints, eps)
         if reproj is None:
             return q_proj
         x_interior = reproj.state().astype(float, copy=False)
 
     return q.from_flat(x_interior)
 
-
-# ============================================================
-# 4. project_affine_cspace_explore
-# ============================================================
 
 def project_affine_cspace_explore(
     q: Any,
@@ -339,14 +317,122 @@ def project_affine_cspace_explore(
 
     return q.from_flat(x_proj)
 
+
 # ============================================================
 # NONLINEAR PROJECTORS
 # ============================================================
 
+def project_gauss_newton(
+    q: Any,
+    constraints: List[Any],
+    mode=None,
+    env=None,
+    tol: float = 1e-8,
+    max_iters: int = 100,
+    step_size: float = 1.0,
+    damping: float = 1e-6,
+    verbose: bool = False,
+) -> Optional[Any]:
+    """
+    Local Gauss-Newton projection, strict about affine equalities:
+        1) exact affine projection (Aeq x = beq)
+        2) iterate in nullspace for nonlinear equalities and active inequalities
+        3) final affine inequality correction
+    """
+
+    x = q.state().astype(float, copy=True)
+    n = x.size
+
+    # split constraints
+    aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
+    aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
+    nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
+                                                              AffineConfigurationSpaceInequalityConstraint))]
+    
+    nl_eq = [c for c in nonlinear if hasattr(c, "F")]
+    nl_in = [c for c in nonlinear if hasattr(c, "G")]
+
+    if aff_eq:
+        Aeq = np.vstack([c.mat for c in aff_eq])
+        beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
+        x = _orth_proj_eq_general(x, [Aeq], [beq])
+        Z = _nullspace(Aeq)
+    else:
+        Z = np.eye(n)
+
+    for it in range(max_iters):
+        residuals = []
+        jacobians = []
+
+        # nonlinear equalities
+        for c in nl_eq:
+            F = np.asarray(c.F(x, mode, env), dtype=float).reshape(-1)
+            J = np.asarray(c.J(x, mode, env), dtype=float).reshape(-1, n)
+            residuals.append(F)
+            jacobians.append(J)
+
+        # nonlinear inequalities (active only)
+        for c in nl_in:
+            g = np.asarray(c.G(x, mode, env), dtype=float).reshape(-1)
+            dG = np.asarray(c.dG(x, mode, env), dtype=float).reshape(-1, n)
+            active = g > 0.0
+            if np.any(active):
+                residuals.append(g[active])
+                jacobians.append(dG[active])
+
+        # affine inequalities (active only)
+        for c in aff_in:
+            g = (c.mat @ x - c.constraint_pose).ravel()
+            active = g > 0.0
+            if np.any(active):
+                residuals.append(g[active])
+                jacobians.append(c.mat[active])
+
+        # stop if nothing to fix
+        if not residuals:
+            if verbose:
+                print(f"[project_nlp_gauss_newton] converged: no residuals at iter {it}")
+            break
+
+        r = np.concatenate(residuals)
+        J = np.vstack(jacobians)
+        Jt = J if Z.shape[1] == n else J @ Z
+
+        # damped normal equations
+        H = Jt.T @ Jt + damping * np.eye(Jt.shape[1])
+        g = Jt.T @ r
+
+        try:
+            dq_t = np.linalg.solve(H, g)
+        except np.linalg.LinAlgError:
+            dq_t, *_ = np.linalg.lstsq(H, g, rcond=None)
+
+        dq = Z @ dq_t if Z.shape[1] != n else dq_t
+        x -= step_size * dq
+
+        # reproject to affine equalities
+        if aff_eq:
+            x = _orth_proj_eq_general(x, [Aeq], [beq])
+            Z = _nullspace(Aeq)
+
+        if norm(r) < tol or norm(dq) < 1e-10:
+            if verbose:
+                print(f"[project_nlp_gauss_newton] converged at iter {it}")
+            break
+
+    if aff_in:
+        Ain = np.vstack([c.mat for c in aff_in])
+        bin_ = np.concatenate([c.constraint_pose.ravel() for c in aff_in])
+        x_try = _nullspace_min_norm_ineq(Ain, bin_, x, Z, tol=tol)
+        if x_try is not None:
+            x = x_try
+
+    return q.from_flat(x)
+
+
 def project_nlp_sqp(
     q: Any,
-    eq_constraints: List[Any] | None = None,
-    ineq_constraints: List[Any] | None = None,
+    constraints: List[Any],
     mode=None,
     env=None,
     tol: float = 1e-8,
@@ -354,71 +440,66 @@ def project_nlp_sqp(
     verbose: bool = False,
 ) -> Optional[Any]:
     """
-    Euclidean projection via SLSQP:
-        minimize 0.5 * ||x - x0||^2
-        s.t. F_i(x[, mode, env]) = 0
-             G_j(x[, mode, env]) <= 0
-
-    Same logic, but fewer allocations and zero per-call introspection in hot path.
+    Euclidean projection via SLSQP, strict about affine equalities:
+        1) exact affine projection (Aeq x = beq)
+        2) nonlinear equality and inequality constraints via SLSQP
+        3) optional affine inequality correction
     """
-    x0 = q.state().astype(float, copy=True)
 
-    # Objective and gradient are trivial; keep as simple callables
-    def obj(x):
-        d = x - x0
+    x = q.state().astype(float, copy=True)
+    n = x.size
+
+    # split constraints
+    aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
+    aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
+    nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
+                                                              AffineConfigurationSpaceInequalityConstraint))]
+    
+    nl_eq = [c for c in nonlinear if hasattr(c, "F")]
+    nl_in = [c for c in nonlinear if hasattr(c, "G")]
+
+    if aff_eq:
+        Aeq = np.vstack([c.mat for c in aff_eq])
+        beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
+        x = _orth_proj_eq_general(x, [Aeq], [beq])
+
+    def obj(xv):
+        d = xv - x
         return 0.5 * float(d @ d)
 
-    def grad(x):
-        return x - x0  # returns a view-compatible array; SLSQP copies if needed
+    def grad(xv):
+        return xv - x
 
     cons = []
 
-    # Prepare fast wrappers that *do not* inspect signatures on every evaluation.
-    # We resolve the "does it need env/mode?" once per constraint.
-    def _wrap_eq(c):
-        F = getattr(c, "F")
-        J = getattr(c, "J")
-        needs_env_F = ("mode" in F.__code__.co_varnames) or ("env" in F.__code__.co_varnames)
-        needs_env_J = ("mode" in J.__code__.co_varnames) or ("env" in J.__code__.co_varnames)
+    # affine inequalities -> simple numeric
+    for c in aff_in:
+        A, b = c.mat, c.constraint_pose
+        cons.append({
+            "type": "ineq",
+            "fun": lambda xv, A=A, b=b: (b - A @ xv).ravel(),
+            "jac": lambda xv, A=A: -A,
+        })
 
-        if needs_env_F:
-            fun = lambda x, _c=c: np.asarray(_c.F(x, mode, env), dtype=float).reshape(-1)
-        else:
-            fun = lambda x, _c=c: np.asarray(_c.F(x), dtype=float).reshape(-1)
+    # nonlinear equalities
+    for c in nl_eq:
+        cons.append({
+            "type": "eq",
+            "fun": lambda xv, c=c: np.asarray(c.F(xv, mode, env), dtype=float).ravel(),
+            "jac": lambda xv, c=c: np.asarray(c.J(xv, mode, env), dtype=float),
+        })
 
-        if needs_env_J:
-            jac = lambda x, _c=c: np.asarray(_c.J(x, mode, env), dtype=float).reshape(-1, x.size)
-        else:
-            jac = lambda x, _c=c: np.asarray(_c.J(x), dtype=float).reshape(-1, x.size)
-
-        return {"type": "eq", "fun": fun, "jac": jac}
-
-    def _wrap_in(c):
-        G = getattr(c, "G")
-        dG = getattr(c, "dG")
-        needs_env_G = ("mode" in G.__code__.co_varnames) or ("env" in G.__code__.co_varnames)
-        needs_env_dG = ("mode" in dG.__code__.co_varnames) or ("env" in dG.__code__.co_varnames)
-
-        if needs_env_G:
-            fun = lambda x, _c=c: -np.asarray(_c.G(x, mode, env), dtype=float).reshape(-1)
-        else:
-            fun = lambda x, _c=c: -np.asarray(_c.G(x), dtype=float).reshape(-1)
-
-        if needs_env_dG:
-            jac = lambda x, _c=c: -np.asarray(_c.dG(x, mode, env), dtype=float).reshape(-1, x.size)
-        else:
-            jac = lambda x, _c=c: -np.asarray(_c.dG(x), dtype=float).reshape(-1, x.size)
-
-        return {"type": "ineq", "fun": fun, "jac": jac}
-
-    if eq_constraints:
-        cons.extend(_wrap_eq(c) for c in eq_constraints)
-    if ineq_constraints:
-        cons.extend(_wrap_in(c) for c in ineq_constraints)
+    # nonlinear inequalities
+    for c in nl_in:
+        cons.append({
+            "type": "ineq",
+            "fun": lambda xv, c=c: -np.asarray(c.G(xv, mode, env), dtype=float).ravel(),
+            "jac": lambda xv, c=c: -np.asarray(c.dG(xv, mode, env), dtype=float),
+        })
 
     res = minimize(
         obj,
-        x0,
+        x,
         jac=grad,
         method="SLSQP",
         constraints=cons,
@@ -428,9 +509,18 @@ def project_nlp_sqp(
     if not res.success:
         if verbose:
             print(f"[project_nlp_sqp] failed: {res.message}")
-        return None
+        x_proj = x
+    else:
+        x_proj = res.x
 
-    return q.from_flat(res.x)
+    if aff_in:
+        Ain = np.vstack([c.mat for c in aff_in])
+        bin_ = np.concatenate([c.constraint_pose.ravel() for c in aff_in])
+        x_try = _nullspace_min_norm_ineq(Ain, bin_, x_proj, np.eye(n), tol=tol)
+        if x_try is not None:
+            x_proj = x_try
+
+    return q.from_flat(x_proj)
 
 
 def project_cspace_cnkz(
@@ -449,11 +539,6 @@ def project_cspace_cnkz(
       2) nullspace (tangent) computation
       3) stacked update  dq = Z (JZ)^T F / ||JZ||_F^2
       4) reduced-space inequality correction
-
-    Optimizations:
-      - reuse fast equality projector + QR nullspace
-      - single stacked residual/Jacobian per iteration
-      - early stop on residual and step size
     """
     x = q.state().astype(float, copy=True)
     n = x.size
@@ -463,6 +548,10 @@ def project_cspace_cnkz(
     aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
     nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
                                                               AffineConfigurationSpaceInequalityConstraint))]
+
+    # 0) no constraints
+    if not (aff_eq or aff_in or nonlinear):
+        return q
 
     # 1) exact equality projection + nullspace
     if aff_eq:
@@ -505,6 +594,130 @@ def project_cspace_cnkz(
 
     return q.from_flat(x)
 
+
+# def project_cspace_cnkz(
+#     q: Any,
+#     constraints: List[Any],
+#     mode=None,
+#     env=None,
+#     max_iter: int = 100,
+#     tol: float = 1e-5,
+#     step_size: float = 0.6,
+#     verbose: bool = False,
+# ) -> Optional[Any]:
+#     """
+#     Fast Constrained Nonlinear Kaczmarz (block / vectorized):
+#       1) exact affine-equality projection
+#       2) nullspace (tangent) computation
+#       3) stacked update in tangent  dq = Z (JZ)^T r / ||JZ||_F^2
+#          - r stacks:
+#              * nonlinear equalities F(x)
+#              * active nonlinear inequalities G(x) where G(x) > 0
+#       4) reduced-space affine-inequality correction
+#     """
+#     x = q.state().astype(float, copy=True)
+#     n = x.size
+
+#     # split constraints
+#     aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
+#     aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
+#     nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
+#                                                               AffineConfigurationSpaceInequalityConstraint))]
+    
+#     nl_eq = [c for c in nonlinear if hasattr(c, "F")]
+#     nl_in = [c for c in nonlinear if hasattr(c, "G")]
+ 
+#     # 0) no constraints
+#     if not (aff_eq or aff_in or nl_eq or nl_in):
+#         return q
+
+#     # 1) exact equality projection + nullspace
+#     if aff_eq:
+#         Aeq = np.vstack([c.mat for c in aff_eq])
+#         beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
+#         x = _orth_proj_eq_general(x, [Aeq], [beq])
+#         Z = _nullspace(Aeq)
+#     else:
+#         Z = np.eye(n)
+
+#     # 2) stacked nonlinear iterations (equalities + active nonlinear inequalities)
+#     if nl_eq or nl_in:
+#         for it in range(max_iter):
+#             r_blocks = []
+#             J_blocks = []
+
+#             # nonlinear equalities
+#             if nl_eq:
+#                 F_all = [np.asarray(c.F(x, mode, env), dtype=float).reshape(-1) for c in nl_eq]
+#                 J_all = [np.asarray(c.J(x, mode, env), dtype=float).reshape(-1, n) for c in nl_eq]
+#                 if F_all:
+#                     r_blocks.append(np.concatenate(F_all, axis=0))
+#                     J_blocks.append(np.vstack(J_all))
+
+#             # nonlinear inequalities: include only violated rows (G(x) > 0)
+#             if nl_in:
+#                 r_in_list = []
+#                 J_in_list = []
+#                 for c in nl_in:
+#                     g  = np.asarray(c.G(x, mode, env), dtype=float).reshape(-1)
+#                     dG = np.asarray(c.dG(x, mode, env), dtype=float).reshape(-1, n)
+#                     active = g > 0.0
+#                     if np.any(active):
+#                         r_in_list.append(g[active])
+#                         J_in_list.append(dG[active])
+#                 if r_in_list:
+#                     r_blocks.append(np.concatenate(r_in_list, axis=0))
+#                     J_blocks.append(np.vstack(J_in_list))
+
+#             # nothing to fix -> done
+#             if not r_blocks:
+#                 if verbose:
+#                     print(f"[CNKZ] converged: no residuals at iter {it}")
+#                 break
+
+#             r = np.concatenate(r_blocks, axis=0)
+#             J = np.vstack(J_blocks)
+
+#             # reduced Jacobian in tangent
+#             Jt = J if Z.shape[1] == n else (J @ Z)
+
+#             res_norm = norm(r)
+#             if res_norm < tol:
+#                 if verbose:
+#                     print(f"[CNKZ] residual below tol at iter {it}: {res_norm:.3e}")
+#                 break
+
+#             denom = float(np.sum(Jt * Jt))
+#             if denom < 1e-12:
+#                 if verbose:
+#                     print("[CNKZ] tiny denom, stopping")
+#                 break
+
+#             dq_t = (Jt.T @ r) / denom
+#             dq   = (Z @ dq_t) if Z.shape[1] != n else dq_t
+#             step = step_size * dq
+#             x -= step
+
+#             if norm(step) < 1e-8:
+#                 if verbose:
+#                     print(f"[CNKZ] tiny step at iter {it}")
+#                 break
+
+#     # 3) affine inequality correction in tangent (analytic reduced-space pass)
+#     if aff_in:
+#         Ain = np.vstack([c.mat for c in aff_in])
+#         bin_ = np.concatenate([c.constraint_pose.ravel() for c in aff_in])
+#         x_try = _nullspace_min_norm_ineq(Ain, bin_, x, Z, tol=tol)
+#         if x_try is not None:
+#             x = x_try
+
+#     return q.from_flat(x)
+
+
+# ------------------------------------------------------------
+# --- visualize ---
+# ------------------------------------------------------------
+
 def project_and_visualize(
         q: Any,
         constraints: List[Any],
@@ -520,6 +733,8 @@ def project_and_visualize(
         q_proj = project_cspace_cnkz(q, constraints, mode, env)
     elif projector == "sqp":
         q_proj = project_nlp_sqp(q, constraints, mode, env)
+    elif projector == "gn":
+        q_proj = project_gauss_newton(q, constraints, mode, env)
     else:
         raise ValueError(f"Unknown projector: {projector}")
     

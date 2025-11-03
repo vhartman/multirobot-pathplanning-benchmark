@@ -145,8 +145,8 @@ class RRTstar(BaseRRTstar):
 
             # RRT* core
             # q_rand = self.sample_configuration(active_mode)
-            # q_rand = self.sample_configuration_aff_cspace(active_mode)
-            q_rand = self.sample_configuration_nl(active_mode)
+            q_rand = self.sample_configuration_aff_cspace(active_mode)
+            # q_rand = self.sample_configuration_nl(active_mode)
             if not q_rand:
                 continue
 
@@ -156,8 +156,8 @@ class RRTstar(BaseRRTstar):
                 active_mode, q_rand
             )
             # state_new = self.steer(active_mode, n_nearest, q_rand, dist)
-            # state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
-            state_new = self.steer_nonlinear(active_mode, n_nearest, q_rand, dist)
+            state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
+            # state_new = self.steer_nonlinear(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
             
@@ -194,11 +194,6 @@ class RRTstar(BaseRRTstar):
             
                 self.manage_transition(active_mode, n_new)
 
-            if not hasattr(self, "_printed_initial_cost") and self.operation.init_sol:
-                print(f"[INFO] First feasible path found at iteration {i}")
-                print(f"[INFO] Path cost BEFORE informed sampling: {self.operation.cost:.4f}")
-                self._printed_initial_cost = True
-
             if not optimize and self.operation.init_sol:
                 self.save_tree_data()
                 break
@@ -206,8 +201,6 @@ class RRTstar(BaseRRTstar):
             if ptc.should_terminate(i, time.time() - self.start_time):
                 print("Number of iterations: ", i)
                 break
-
-        print(f"[INFO] Final path cost AFTER informed sampling: {self.operation.cost:.4f}")
 
         self.update_results_tracking(self.operation.cost, self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
