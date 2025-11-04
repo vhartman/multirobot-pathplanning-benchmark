@@ -316,82 +316,78 @@ def project_affine_cspace_explore(
 # NONLINEAR PROJECTORS
 # ============================================================
 
-import numpy as np
-from numpy.linalg import norm
-from typing import Any, List, Optional
+# def project_gauss_newton(
+#     q: Any,
+#     constraints: List[Any],
+#     mode=None,
+#     env=None,
+#     tol: float = 1e-8,
+#     max_iters: int = 100,
+#     step_size: float = 1.0,
+#     damping: float = 1e-6,
+#     verbose: bool = False,
+# ) -> Optional[Any]:
+#     """
+#     Trivial Gauss-Newton projection.
+#     No exact projection, no nullspace handling.
+#     Just pure least-squares correction of current violations.
+#     """
+
+#     x = q.state().astype(float, copy=True)
+#     n = x.size
+
+#     for it in range(max_iters):
+#         residuals = []
+#         jacobians = []
+
+#         for c in constraints:
+#             # --- equality-type constraint ---
+#             if hasattr(c, "F") and hasattr(c, "J"):
+#                 F = np.asarray(c.F(x), dtype=float).reshape(-1)
+#                 if F.size:
+#                     J = np.asarray(c.J(x), dtype=float).reshape(-1, n)
+#                     residuals.append(F)
+#                     jacobians.append(J)
+
+#             # --- inequality-type constraint ---
+#             if hasattr(c, "G") and hasattr(c, "dG"):
+#                 G = np.asarray(c.G(x), dtype=float).reshape(-1)
+#                 if G.size:
+#                     dG = np.asarray(c.dG(x), dtype=float).reshape(-1, n)
+#                     active = G > 0.0  # only violated constraints
+#                     if np.any(active):
+#                         residuals.append(G[active])
+#                         jacobians.append(dG[active])
+
+#         # nothing to fix
+#         if not residuals:
+#             if verbose:
+#                 print(f"[gn_trivial] converged: no residuals at iter {it}")
+#             break
+
+#         r = np.concatenate(residuals)
+#         J = np.vstack(jacobians)
+
+#         # damped normal equations (Gauss–Newton step)
+#         H = J.T @ J + damping * np.eye(n)
+#         g = J.T @ r
+
+#         try:
+#             dq = np.linalg.solve(H, g)
+#         except np.linalg.LinAlgError:
+#             dq, *_ = np.linalg.lstsq(H, g, rcond=None)
+
+#         x -= step_size * dq
+
+#         if norm(r) < tol or norm(dq) < 1e-10:
+#             if verbose:
+#                 print(f"[gn_trivial] converged at iter {it}")
+#             break
+
+#     return q.from_flat(x)
+
 
 def project_gauss_newton(
-    q: Any,
-    constraints: List[Any],
-    mode=None,
-    env=None,
-    tol: float = 1e-8,
-    max_iters: int = 100,
-    step_size: float = 1.0,
-    damping: float = 1e-6,
-    verbose: bool = False,
-) -> Optional[Any]:
-    """
-    Trivial Gauss-Newton projection.
-    No exact projection, no nullspace handling.
-    Just pure least-squares correction of current violations.
-    """
-
-    x = q.state().astype(float, copy=True)
-    n = x.size
-
-    for it in range(max_iters):
-        residuals = []
-        jacobians = []
-
-        for c in constraints:
-            # --- equality-type constraint ---
-            if hasattr(c, "F") and hasattr(c, "J"):
-                F = np.asarray(c.F(x), dtype=float).reshape(-1)
-                if F.size:
-                    J = np.asarray(c.J(x), dtype=float).reshape(-1, n)
-                    residuals.append(F)
-                    jacobians.append(J)
-
-            # --- inequality-type constraint ---
-            if hasattr(c, "G") and hasattr(c, "dG"):
-                G = np.asarray(c.G(x), dtype=float).reshape(-1)
-                if G.size:
-                    dG = np.asarray(c.dG(x), dtype=float).reshape(-1, n)
-                    active = G > 0.0  # only violated constraints
-                    if np.any(active):
-                        residuals.append(G[active])
-                        jacobians.append(dG[active])
-
-        # nothing to fix
-        if not residuals:
-            if verbose:
-                print(f"[gn_trivial] converged: no residuals at iter {it}")
-            break
-
-        r = np.concatenate(residuals)
-        J = np.vstack(jacobians)
-
-        # damped normal equations (Gauss–Newton step)
-        H = J.T @ J + damping * np.eye(n)
-        g = J.T @ r
-
-        try:
-            dq = np.linalg.solve(H, g)
-        except np.linalg.LinAlgError:
-            dq, *_ = np.linalg.lstsq(H, g, rcond=None)
-
-        x -= step_size * dq
-
-        if norm(r) < tol or norm(dq) < 1e-10:
-            if verbose:
-                print(f"[gn_trivial] converged at iter {it}")
-            break
-
-    return q.from_flat(x)
-
-
-def project_gn_adv(
     q: Any,
     constraints: List[Any],
     mode=None,
