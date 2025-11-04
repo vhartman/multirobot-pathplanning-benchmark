@@ -581,9 +581,14 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
-@register("rai.single_stick")
+@register([
+    ("rai.single_stick_upright", {}),
+    ("rai.single_stick", {"stick_upright": False}),
+    ("rai.single_stick_ineq", {"stick_upright": False, 
+                               "ineq_orientation_constraint": True}),
+])
 class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, stick_upright=True, ineq_orientation_constraint=False):
         self.C, keyframes = rai_config.make_single_arm_stick_env()
         
         self.robots = ["a1"]
@@ -592,6 +597,15 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
         home_pose = self.C.getJointState()
 
         h = 0.26
+
+        constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+        if stick_upright:
+            constraints.append(
+                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))
+            )
+        
+        if ineq_orientation_constraint:
+            assert False
 
         self.tasks = [
             # joint
@@ -604,8 +618,7 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
                 "r1_2",
                 ["a1"],
                 SingleGoal(keyframes[1]),
-                constraints=[AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3])), 
-                             AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+                constraints=constraints
             ),
             # terminal mode
             Task(
@@ -626,9 +639,14 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
-@register("rai.dual_stick")
+@register([
+    ("rai.dual_stick_upright", {}),
+    ("rai.dual_stick", {"stick_upright": False}),
+    ("rai.dual_stick_ineq", {"stick_upright": False, 
+                             "ineq_orientation_constraint": True}),
+])
 class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, stick_upright=True, ineq_orientation_constraint=False):
         self.C, r1_keyframes, r2_keyframes = rai_config.make_dual_arm_stick_env()
         # self.C.view(True)
 
@@ -638,6 +656,21 @@ class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
         home_pose = self.C.getJointState()
 
         h = 0.26
+
+        r1_constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+        r2_constraints = [AffineTaskSpaceEqualityConstraint("a2_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+
+        if stick_upright:
+            r1_constraints.append(
+                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))
+            )
+
+            r2_constraints.append(
+                AffineFrameOrientationConstraint("a2_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))            
+            )
+
+        if ineq_orientation_constraint:
+            assert False
 
         self.tasks = [
             # joint
@@ -650,8 +683,7 @@ class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
                 "r1_2",
                 ["a1"],
                 SingleGoal(r1_keyframes[1]),
-                constraints=[AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3])), 
-                             AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+                constraints=r1_constraints
             ),
             Task(
                 "r2_1",
@@ -662,8 +694,7 @@ class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
                 "r2_2",
                 ["a2"],
                 SingleGoal(r2_keyframes[1]),
-                constraints=[AffineFrameOrientationConstraint("a2_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3])), 
-                             AffineTaskSpaceEqualityConstraint("a2_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+                constraints=r2_constraints
             ),
             # terminal mode
             Task(
