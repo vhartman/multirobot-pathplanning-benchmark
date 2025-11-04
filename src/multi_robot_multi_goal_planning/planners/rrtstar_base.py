@@ -562,7 +562,7 @@ class BaseRRTstar(BasePlanner):
         self.blacklist_mode = set()
 
         self.affine_projection = "boundary" # "interior", "explore", "boundary", "nlp"
-        self.nl_projection = "cnkz" # "cnkz", "nlp", "gn"
+        self.nl_projection = "gn" # "cnkz", "nlp", "gn"
 
     def add_tree(
         self,

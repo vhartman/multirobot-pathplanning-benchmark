@@ -14,6 +14,7 @@ from .constraints_projection import (
     project_affine_cspace_interior,
     project_affine_cspace_explore,
     project_gauss_newton,
+    project_gn_adv,
     project_nlp_sqp,
     project_cspace_cnkz,
 )
@@ -181,13 +182,6 @@ def make_saddle_band():
     jg = lambda q: np.array([[2*q[0],2*q[1],0]])
     return [NonlinearConstraint(f,j)], [NonlinearInequality(g,jg)], 3, "nl_mixed"
 
-# --- Fully Mixed ---
-def make_full_mix1(): return *make_aff_mixed_slab()[:2], 3, "full_mixed"
-def make_full_mix2(): return *make_aff_mixed_hyperplane()[:2], 4, "full_mixed"
-def make_full_mix3(): return *make_sphere_cap()[:2], 3, "full_mixed"
-def make_full_mix4(): return *make_sine_parabola()[:2], 2, "full_mixed"
-def make_full_mix5(): return *make_saddle_band()[:2], 3, "full_mixed"
-
 # ============================================================
 # PROJECT + PLOT
 # ============================================================
@@ -209,6 +203,8 @@ def project_samples(X, eqs, ineqs, method):
                 q_proj = project_cspace_cnkz(q, eqs + ineqs, None, None)
             elif method == "gn":
                 q_proj = project_gauss_newton(q, eqs + ineqs)
+            elif method == "gn_adv":
+                q_proj = project_gn_adv(q, eqs + ineqs)
             else:
                 q_proj = q
         except Exception:
@@ -263,7 +259,6 @@ def main():
         ("AffIneqBox2D", make_aff_ineq_box()),
         ("AffIneqPrism3D", make_aff_ineq_prism()),
         # affine mixed
-        ("AffMixedSlab3D", make_aff_mixed_slab()),
         ("AffMixedHyper4D", make_aff_mixed_hyperplane()),
         # nl eq
         ("Circle2D", make_circle_2d()),
@@ -273,31 +268,23 @@ def main():
         ("Torus3D", make_torus_3d()),
         # nl ineq
         ("QuadBowl2D", make_quadratic_bowl()),
-        ("Cone3D", make_cone_3d()),
-        ("ParabCap3D", make_parabolic_cap()),
         ("HalfSine2D", make_half_sine()),
-        ("Ring2D", make_ring_ineq()),
         # nl mixed
-        ("SineParabola", make_sine_parabola()),
-        ("SphereCap", make_sphere_cap()),
+        # ("SineParabola", make_sine_parabola()),
+        # ("SphereCap", make_sphere_cap()),
         ("HelixBand", make_helix_band()),
         ("Banana", make_banana()),
-        ("SaddleBand", make_saddle_band()),
-        # full mixed
-        ("FullMix1", make_full_mix1()),
-        ("FullMix2", make_full_mix2()),
-        ("FullMix3", make_full_mix3()),
-        ("FullMix4", make_full_mix4()),
-        ("FullMix5", make_full_mix5()),
+        # ("SaddleBand", make_saddle_band()),
+
     ]
 
     results=[]
     for name,(eqs,ineqs,dim,ctype) in manifolds_ordered:
         X0=random_samples(500,dim,scale=2.0,seed=42)
         if "aff" in ctype:
-            methods=["affine-cspace","affine-cspace-interior","affine-cspace-explore","gn","sqp","cnkz"]
+            methods=["affine-cspace","affine-cspace-interior","affine-cspace-explore","gn","sqp","cnkz","gn_adv"]
         else:
-            methods=["gn","sqp","cnkz"]
+            methods=["gn","sqp","cnkz","gn_adv"]
 
         for m in methods:
             t0=perf_counter()
