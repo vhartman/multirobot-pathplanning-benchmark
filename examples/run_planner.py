@@ -56,6 +56,7 @@ def main():
         help="Enable optimization (default: True)",
     )
     parser.add_argument("--seed", type=int, default=1, help="Seed")
+    parser.add_argument("--run_id", type=int, default=0, help="Run id. Used for debugging only.")
     parser.add_argument(
         "--num_iters", type=int, help="Maximum number of iterations for termination."
     )
@@ -180,8 +181,8 @@ def main():
         config = args.horizon_config
         planner = RecedingHorizonPlanner(env, config)
 
-    np.random.seed(args.seed)
-    random.seed(args.seed)
+    np.random.seed(args.seed + args.run_id)
+    random.seed(args.seed + args.run_id)
 
     path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
 

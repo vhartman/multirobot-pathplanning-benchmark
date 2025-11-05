@@ -603,7 +603,237 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
+@register([
+    ("rai.single_stick_upright", {}),
+    ("rai.single_stick", {"stick_upright": False}),
+    ("rai.single_stick_ineq", {"stick_upright": False, 
+                               "ineq_orientation_constraint": True}),
+])
+class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
+    def __init__(self, stick_upright=True, ineq_orientation_constraint=False):
+        self.C, keyframes = rai_config.make_single_arm_stick_env()
+        
+        self.robots = ["a1"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        h = 0.26
+
+        constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+        if stick_upright:
+            constraints.append(
+                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))
+            )
+        
+        if ineq_orientation_constraint:
+            assert False
+
+        self.tasks = [
+            # joint
+            Task(
+                "r1_1",
+                ["a1"],
+                SingleGoal(keyframes[0]),
+            ),
+            Task(
+                "r1_2",
+                ["a1"],
+                SingleGoal(keyframes[1]),
+                constraints=constraints
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+        
+        self.sequence = self._make_sequence_from_names(
+            ["r1_1", "r1_2", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+@register([
+    ("rai.dual_stick_upright", {}),
+    ("rai.dual_stick", {"stick_upright": False}),
+    ("rai.dual_stick_ineq", {"stick_upright": False, 
+                             "ineq_orientation_constraint": True}),
+])
+class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
+    def __init__(self, stick_upright=True, ineq_orientation_constraint=False):
+        self.C, r1_keyframes, r2_keyframes = rai_config.make_dual_arm_stick_env()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        h = 0.26
+
+        r1_constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+        r2_constraints = [AffineTaskSpaceEqualityConstraint("a2_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+
+        if stick_upright:
+            r1_constraints.append(
+                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))
+            )
+
+            r2_constraints.append(
+                AffineFrameOrientationConstraint("a2_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))            
+            )
+
+        if ineq_orientation_constraint:
+            assert False
+
+        self.tasks = [
+            # joint
+            Task(
+                "r1_1",
+                ["a1"],
+                SingleGoal(r1_keyframes[0]),
+            ),
+            Task(
+                "r1_2",
+                ["a1"],
+                SingleGoal(r1_keyframes[1]),
+                constraints=r1_constraints
+            ),
+            Task(
+                "r2_1",
+                ["a2"],
+                SingleGoal(r2_keyframes[0]),
+            ),
+            Task(
+                "r2_2",
+                ["a2"],
+                SingleGoal(r2_keyframes[1]),
+                constraints=r2_constraints
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+        
+        self.sequence = self._make_sequence_from_names(
+            ["r1_1", "r2_1", "r1_2", "r2_2", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+# assembly with predetermined assembly 'insertion directions'
+# effectively an orientation constraint
+class rai_assembly_with_insertions():
+    pass
+
+# environment with end effector path following for 'printing'
+class rai_bimanual_printing(SequenceMixin, rai_env):
+    pass
+
+# TODO: also add orientation constraints
+@register("rai.stacking_with_holding")
 class rai_stacking_with_holding(SequenceMixin, rai_env):
     def __init__(self):
-        self.C = rai_config.make_stacking_with_holding_env()
-        # self.C.view(True)
+        self.C, [r1_keyframes, r2_keyframes] = rai_config.make_stacking_with_holding_env()
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        r1_mat = np.zeros((6, 12))
+        r1_mat[:, :6] = np.eye(6)
+        
+        r2_mat = np.zeros((6, 12))
+        r2_mat[:, 6:] = np.eye(6)
+        
+        self.tasks = [
+            # joint
+            Task(
+                "r1_pick",
+                ["a1"],
+                SingleGoal(r1_keyframes[0]),
+                "pick",
+                frames=["a1_ur_vacuum", "obj_1"],
+            ),
+            Task(
+                "r1_place",
+                ["a1"],
+                SingleGoal(r1_keyframes[1]),
+                "place",
+                frames=["table", "obj_1"],
+                constraints=[]
+            ),
+            Task(
+                "r1_hold",
+                ["a1"],
+                SingleGoal(r1_keyframes[1]),
+                constraints=[AffineConfigurationSpaceEqualityConstraint(r1_mat, r1_keyframes[1][:, None])]
+            ),
+            Task(
+                "r2_pick",
+                ["a2"],
+                SingleGoal(r2_keyframes[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj_2"],
+            ),
+            Task(
+                "r2_place",
+                ["a2"],
+                SingleGoal(r2_keyframes[1]),
+                "place",
+                frames=["table", "obj_2"],
+            ),
+            Task(
+                "r2_hold",
+                ["a2"],
+                SingleGoal(r2_keyframes[1]),
+                constraints=[AffineConfigurationSpaceEqualityConstraint(r2_mat, r2_keyframes[1][:, None])]
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+        
+        self.sequence = self._make_sequence_from_names(
+            ["r1_pick", "r2_pick", "r1_place", "r2_place", "r1_hold", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+
+# @register("rai.assembly_with_insertion")
+class rai_assembly_with_insertion(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, [r1_keyframes, r2_keyframes] = rai_config.make_assembly_with_insertion()
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()

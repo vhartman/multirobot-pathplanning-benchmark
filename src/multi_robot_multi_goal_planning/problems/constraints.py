@@ -238,6 +238,8 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
         rhs = np.ravel(self.constraint_pose)     # flatten to (m,)
         return all(np.isclose(lhs, rhs, self.eps))
 
+    
+
 # constraint of the form 
 # A * q <= b
 # can be used to e.g. constrain the configuration space pose to a certain value
@@ -331,6 +333,8 @@ class AffineFrameOrientationConstraint(Constraint):
         
         [y, J] = env.C.eval(fs, [self.frame_name], 1, self.desired_orientation_vector)
         return y
+    
+
 
 # projects the pose of a frame to a path 
 class TaskSpacePathConstraint(Constraint):
@@ -367,15 +371,53 @@ class ConfigurationSpacePathConstraint(Constraint):
     Ideally this would have timing/phase information as well, but this is currently not supported by the rest of the framework.
     """
 
-    def __init__(self, frame_name, path, mat, epsilon):
+    def __init__(self, path, mat, epsilon):
         self.path = path
         self.mat = mat
         self.epsilon = epsilon
 
+    def _get_closest_point(self, q):
+        q = self.mat @ q
+        min_dist = float('inf')
+        closest_point = None
+
+        for i in range(len(self.path) - 1):
+            p1 = self.path[i]
+            p2 = self.path[i + 1]
+            v = p2 - p1
+            if np.allclose(v, 0):
+                continue
+
+            # Project q onto the segment [p1, p2]
+            t = np.dot(q - p1, v) / np.dot(v, v)
+            t = np.clip(t, 0.0, 1.0)
+            proj = p1 + t * v
+
+            dist = np.linalg.norm(q - proj)
+            if dist < min_dist:
+                min_dist = dist
+                closest_point = proj
+
+        return closest_point, min_dist
+
+
     def is_fulfilled(self, q, mode, env):
         # find closest element on path
-        for p in self.path:
-            dist = np.linalg.norm(self.mat @ q - p)
+        _, dist = self._get_closest_point(q)
+        
+        if dist < self.epsilon:
+            return True
+        
+        return False
+    
+    def J(self, q, mode, env):
+        point, _ = self._get_closest_point(q)
+        
+        [y, J] = env.C.eval(robotic.FS.qItself, [], self.mat, point)
+        return J
 
-            if dist < self.epsilon:
-                return True
+    def F(self, q, mode, env):
+        point, _ = self._get_closest_point(q)
+        
+        [y, J] = env.C.eval(robotic.FS.qItself, [], self.mat, point)
+        return y
