@@ -227,7 +227,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
 
-    
+
 
 # constraint of the form 
 # A * q <= b
@@ -328,16 +328,69 @@ class TaskSpacePathConstraint(Constraint):
         self.mat = mat
         self.epsilon = epsilon
 
-    def is_fulfilled(self, q, mode, env):
-        frame_pose = env.get_frame_pose(self.frame_name)
-        
-        # find closest element on path
-        for p in self.path:
-            dist = np.linalg.norm(self.mat @ frame_pose - p)
+    def _get_closest_point(self, frame_pose):
+        pose_proj = self.mat @ frame_pose
+        min_dist = float('inf')
+        closest_point = None
 
-            if dist < self.epsilon:
-                return True
+        for i in range(len(self.path) - 1):
+            p1 = self.path[i]
+            p2 = self.path[i + 1]
+            v = p2 - p1
+            if np.allclose(v, 0):
+                continue
+
+            # TODO: this might be an issue, we likely do not want to project
+            # the quaternion
             
+            # Project q onto the segment [p1, p2]
+            t = np.dot(pose_proj - p1, v) / np.dot(v, v)
+            t = np.clip(t, 0.0, 1.0)
+            proj = p1 + t * v
+
+            dist = np.linalg.norm(pose_proj - proj)
+            if dist < min_dist:
+                min_dist = dist
+                closest_point = proj
+
+        return closest_point, min_dist
+
+
+    def is_fulfilled(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q.state())
+        frame_pose = env.C.getFrame(self.frame_name).getPose()
+
+        _, dist = self._get_closest_point(frame_pose)
+        
+        if dist < self.epsilon:
+            return True
+        
+        return False
+            
+    # TODO
+    def J(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q.state())
+        frame_pose = env.C.getFrame(self.frame_name).getPose()
+
+        point, _ = self._get_closest_point(frame_pose)
+        
+        [y, J] = env.C.eval(robotic.FS.pose, [self.frame_name], self.mat, point)
+        return J
+
+    def F(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q.state())
+        frame_pose = env.C.getFrame(self.frame_name).getPose()
+
+        point, _ = self._get_closest_point(frame_pose)
+        
+        [y, J] = env.C.eval(robotic.FS.pose, [self.frame_name], self.mat, point)
+        return y
 
 # projects the pose of a frame to a path 
 class ConfigurationSpacePathConstraint(Constraint):
@@ -354,7 +407,7 @@ class ConfigurationSpacePathConstraint(Constraint):
         self.epsilon = epsilon
 
     def _get_closest_point(self, q):
-        q = self.mat @ q
+        q_proj = self.mat @ q
         min_dist = float('inf')
         closest_point = None
 
@@ -366,11 +419,11 @@ class ConfigurationSpacePathConstraint(Constraint):
                 continue
 
             # Project q onto the segment [p1, p2]
-            t = np.dot(q - p1, v) / np.dot(v, v)
+            t = np.dot(q_proj - p1, v) / np.dot(v, v)
             t = np.clip(t, 0.0, 1.0)
             proj = p1 + t * v
 
-            dist = np.linalg.norm(q - proj)
+            dist = np.linalg.norm(q_proj - proj)
             if dist < min_dist:
                 min_dist = dist
                 closest_point = proj
