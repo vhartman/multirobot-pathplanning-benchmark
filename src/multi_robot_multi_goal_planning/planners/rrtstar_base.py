@@ -1905,6 +1905,7 @@ class BaseRRTstar(BasePlanner):
         Priority:
           1) cNKZ
           2) SLSQP
+          3) GN
         """
         # combined
         constraints_all = list(eq_constraints) + list(ineq_constraints)
