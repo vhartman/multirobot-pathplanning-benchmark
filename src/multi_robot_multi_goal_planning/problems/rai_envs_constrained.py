@@ -763,7 +763,7 @@ class rai_stacking_with_holding(SequenceMixin, rai_env):
                 "r1_hold",
                 ["a1"],
                 SingleGoal(r1_keyframes[1]),
-                constraints=[AffineConfigurationSpaceEqualityConstraint(r1_mat, r1_keyframes[1])]
+                constraints=[AffineConfigurationSpaceEqualityConstraint(r1_mat, r1_keyframes[1][:, None])]
             ),
             Task(
                 "r2_pick",
@@ -783,7 +783,7 @@ class rai_stacking_with_holding(SequenceMixin, rai_env):
                 "r2_hold",
                 ["a2"],
                 SingleGoal(r2_keyframes[1]),
-                constraints=[AffineConfigurationSpaceEqualityConstraint(r2_mat, r2_keyframes[1])]
+                constraints=[AffineConfigurationSpaceEqualityConstraint(r2_mat, r2_keyframes[1][:, None])]
             ),
             # terminal mode
             Task(

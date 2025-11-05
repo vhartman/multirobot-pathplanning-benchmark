@@ -227,6 +227,8 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         return all(np.isclose(self.mat @ q.state()[:, None], self.constraint_pose, self.eps))
 
+    
+
 # constraint of the form 
 # A * q <= b
 # can b eused to e.g. constrain the configurtion space pose to a certain value

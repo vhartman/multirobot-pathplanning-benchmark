@@ -2025,11 +2025,11 @@ def make_stacking_with_holding_env(num_robots=2):
         ry.ST.cylinder, size=[0.2, 0.05]
     ).setColor([1, 0.3, 0.3, 0.1]).setContact(0).setQuaternion([1, 0, 0, 0]).setJoint(ry.JT.rigid)
 
-    C.addFrame("goal_2").setParent(C.getFrame("table")).setRelativePosition(np.array([0.0, 0, 0.3])).setShape(
+    C.addFrame("goal_2").setParent(C.getFrame("table")).setRelativePosition(np.array([0.0, 0, 0.351])).setShape(
         ry.ST.cylinder, size=[0.2, 0.05]
     ).setColor([0.3, 1, 0.3, 0.1]).setContact(0).setQuaternion([1, 0, 0, 0]).setJoint(ry.JT.rigid)
 
-    C.view(True)
+    # C.view(True)
 
     def compute_keyframes_for_obj(robot_prefix, box, goal="goal1"):
         c_tmp = ry.Config()
