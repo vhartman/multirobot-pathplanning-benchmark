@@ -145,8 +145,8 @@ class RRTstar(BaseRRTstar):
 
             # RRT* core
             # q_rand = self.sample_configuration(active_mode)
-            # q_rand = self.sample_configuration_aff_cspace(active_mode)
-            q_rand = self.sample_configuration_nl(active_mode)
+            q_rand = self.sample_configuration_aff_cspace(active_mode)
+            # q_rand = self.sample_configuration_nl(active_mode)
             if not q_rand:
                 continue
 
@@ -156,8 +156,8 @@ class RRTstar(BaseRRTstar):
                 active_mode, q_rand
             )
             # state_new = self.steer(active_mode, n_nearest, q_rand, dist)
-            # state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
-            state_new = self.steer_nonlinear(active_mode, n_nearest, q_rand, dist)
+            state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
+            # state_new = self.steer_nonlinear(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
             

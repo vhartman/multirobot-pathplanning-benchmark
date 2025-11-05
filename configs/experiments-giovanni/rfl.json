@@ -3,8 +3,8 @@
   "environment": "rai.rfl",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 100,
-  "num_runs": 5,
+  "max_planning_time": 450,
+  "num_runs": 30,
   "seed":0,
   "optimize": true,
   "planners": [
