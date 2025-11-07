@@ -157,7 +157,12 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
 
         rel_pose = relative_pose(frame_1_pose, frame_2_pose)
 
-        return all(np.isclose(self.mat @ rel_pose[:, None], self.desired_relative_pose, atol=self.eps))
+        x = q.state().astype(float, copy=True)
+        res = self.F(x, mode, env)
+        sat = all(np.isclose(res, 0, atol=self.eps))
+
+        return sat
+        # return all(np.isclose(self.mat @ rel_pose[:, None], self.desired_relative_pose, atol=self.eps))
     
     def J(self, q, mode, env):
         if mode is not None:

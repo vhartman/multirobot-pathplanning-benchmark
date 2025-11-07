@@ -392,11 +392,11 @@ def project_gauss_newton(
     constraints: List[Any],
     mode=None,
     env=None,
-    tol: float = 1e-8,
+    tol: float = 1e-6,
     max_iters: int = 100,
     step_size: float = 1.0,
     damping: float = 1e-6,
-    verbose: bool = False,
+    verbose: bool = True,
 ) -> Optional[Any]:
     """
     Local Gauss-Newton projection, strict about affine equalities:
@@ -458,12 +458,12 @@ def project_gauss_newton(
         # stop if nothing to fix
         if not residuals:
             if verbose:
-                print(f"[project_nlp_gauss_newton] converged: no residuals at iter {it}")
+                print(f"no constraints")
             break
 
         r = np.concatenate(residuals)
         J = np.vstack(jacobians)
-        Jt = J if Z.shape[1] == n else J @ Z
+        Jt = J if Z.shape[1] == n else J @ Z # reduced Jacobian in nullspace
 
         # damped normal equations
         H = Jt.T @ Jt + damping * np.eye(Jt.shape[1])
@@ -477,14 +477,18 @@ def project_gauss_newton(
         dq = Z @ dq_t if Z.shape[1] != n else dq_t
         x -= step_size * dq
 
-        # reproject to affine equalities
-        if aff_eq:
-            x = _orth_proj_eq_general(x, [Aeq], [beq])
-            Z = _nullspace(Aeq)
+        # # reproject to affine equalities
+        # if aff_eq:
+        #     x = _orth_proj_eq_general(x, [Aeq], [beq])
+        #     Z = _nullspace(Aeq)
 
-        if norm(r) < tol or norm(dq) < 1e-10:
+        if norm(r) < tol: # or norm(dq) < 1e-10
             if verbose:
-                print(f"[project_nlp_gauss_newton] converged at iter {it}")
+                print(f"[project_gauss_newton] converged at iter {it}")
+                satisfied = all(c.is_fulfilled(q.from_flat(x), mode, env) for c in nl_eq)
+                print(f"all nonlinear constraints satisfied = {satisfied}")
+                print(f"residual norm = {norm(r)}")
+                
             break
 
     if aff_in:
@@ -493,13 +497,7 @@ def project_gauss_newton(
         x_try = _nullspace_min_norm_ineq(Ain, bin_, x, Z, tol=tol)
         if x_try is not None:
             x = x_try
-
-    if verbose:
-        for c in nl_eq:
-            x_check = q.from_flat(x)
-            sat = c.is_fulfilled(x_check, mode, env)
-            print(f"  constraint satisfied = {sat}")
-
+    
     return q.from_flat(x)
 
 
