@@ -1,9 +1,9 @@
 {
-  "experiment_name": "rfl_giovanni_2",
-  "environment": "rai.rfl",
+  "experiment_name": "half_rfl_giovanni",
+  "environment": "rai.half_rfl",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
-  "max_planning_time": 1000,
+  "max_planning_time": 500,
   "num_runs": 50,
   "seed":0,
   "optimize": true,
