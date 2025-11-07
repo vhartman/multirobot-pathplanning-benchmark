@@ -180,7 +180,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 SingleGoal(place_pose),
                 type="place", 
                 frames=["table", "obj1"],
-                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7),  rel_pose, 1e-2)]
+                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7), rel_pose, 1e-2)]
             ),            
             # terminal mode
             Task(
@@ -566,7 +566,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 SingleGoal(r1_keyframes[1]),
                 "place",
                 frames=["table", "obj_1"],
-                constraints=[AffineFrameOrientationConstraint("obj_1", "z", np.array([0, 0, 1]), np.array([1e-3]))]
+                constraints=[AffineFrameOrientationConstraint("obj_1", "z", np.array([0, 0, 1]), np.array([1e-2]))]
             ),
             Task(
                 "r2_pick",
@@ -581,7 +581,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 SingleGoal(r2_keyframes[1]),
                 "place",
                 frames=["table", "obj_2"],
-                constraints=[AffineFrameOrientationConstraint("obj_2", "z", np.array([0, 0, 1]), np.array([1e-3]))]
+                constraints=[AffineFrameOrientationConstraint("obj_2", "z", np.array([0, 0, 1]), np.array([1e-2]))]
             ),
             # terminal mode
             Task(

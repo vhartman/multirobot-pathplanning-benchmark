@@ -4,7 +4,7 @@ from copy import deepcopy
 from numpy.linalg import norm, LinAlgError
 from typing import List, Optional, Protocol, Any
 from scipy.optimize import minimize
-from .constraints import AffineConfigurationSpaceInequalityConstraint, AffineConfigurationSpaceEqualityConstraint
+from .constraints import AffineConfigurationSpaceInequalityConstraint, AffineConfigurationSpaceEqualityConstraint, AffineTaskSpaceEqualityConstraint, RelativeAffineTaskSpaceEqualityConstraint, AffineFrameOrientationConstraint
 
 class EqualityConstraint(Protocol):
     def F(self, x: np.ndarray) -> np.ndarray: ...
@@ -408,14 +408,16 @@ def project_gauss_newton(
     x = q.state().astype(float, copy=True)
     n = x.size
 
+    # remove constraints that are here twice
+    constraints = list(set(constraints))
+
     # split constraints
     aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
     aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
-    nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
-                                                              AffineConfigurationSpaceInequalityConstraint))]
+    nl_eq = [c for c in constraints if isinstance(c, AffineTaskSpaceEqualityConstraint) or
+             isinstance(c, RelativeAffineTaskSpaceEqualityConstraint) or
+             isinstance(c, AffineFrameOrientationConstraint)]
     
-    nl_eq = [c for c in nonlinear if hasattr(c, "F")]
-    nl_in = [c for c in nonlinear if hasattr(c, "G")]
 
     if aff_eq:
         Aeq = np.vstack([c.mat for c in aff_eq])
@@ -436,22 +438,22 @@ def project_gauss_newton(
             residuals.append(F)
             jacobians.append(J)
 
-        # nonlinear inequalities (active only)
-        for c in nl_in:
-            g = np.asarray(c.G(x, mode, env), dtype=float).reshape(-1)
-            dG = np.asarray(c.dG(x, mode, env), dtype=float).reshape(-1, n)
-            active = g > 0.0
-            if np.any(active):
-                residuals.append(g[active])
-                jacobians.append(dG[active])
+        # # nonlinear inequalities (active only)
+        # for c in nl_in:
+        #     g = np.asarray(c.G(x, mode, env), dtype=float).reshape(-1)
+        #     dG = np.asarray(c.dG(x, mode, env), dtype=float).reshape(-1, n)
+        #     active = g > 0.0
+        #     if np.any(active):
+        #         residuals.append(g[active])
+        #         jacobians.append(dG[active])
 
-        # affine inequalities (active only)
-        for c in aff_in:
-            g = (c.mat @ x - c.constraint_pose).ravel()
-            active = g > 0.0
-            if np.any(active):
-                residuals.append(g[active])
-                jacobians.append(c.mat[active])
+        # # affine inequalities (active only)
+        # for c in aff_in:
+        #     g = c.G(x).ravel()
+        #     active = g > 0.0
+        #     if np.any(active):
+        #         residuals.append(g[active])
+        #         jacobians.append(c.dG(x).reshape(-1, n)[active])
 
         # stop if nothing to fix
         if not residuals:
@@ -491,6 +493,12 @@ def project_gauss_newton(
         x_try = _nullspace_min_norm_ineq(Ain, bin_, x, Z, tol=tol)
         if x_try is not None:
             x = x_try
+
+    if verbose:
+        for c in nl_eq:
+            x_check = q.from_flat(x)
+            sat = c.is_fulfilled(x_check, mode, env)
+            print(f"  constraint satisfied = {sat}")
 
     return q.from_flat(x)
 

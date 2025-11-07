@@ -30,6 +30,7 @@ from multi_robot_multi_goal_planning.problems.constraints import (
     AffineConfigurationSpaceInequalityConstraint,
     AffineFrameOrientationConstraint,
     RelativeAffineTaskSpaceEqualityConstraint,
+    AffineTaskSpaceEqualityConstraint,
 )
 
 from multi_robot_multi_goal_planning.problems.constraints_projection import (
@@ -1859,7 +1860,7 @@ class BaseRRTstar(BasePlanner):
                 eq_aff.append(c)
             elif isinstance(c, AffineConfigurationSpaceInequalityConstraint):
                 ineq_aff.append(c)
-            elif isinstance(c, (AffineFrameOrientationConstraint, RelativeAffineTaskSpaceEqualityConstraint)):
+            elif isinstance(c, (AffineFrameOrientationConstraint, RelativeAffineTaskSpaceEqualityConstraint, AffineTaskSpaceEqualityConstraint)):
                 eq_nl.append(c)
 
         return eq_aff, ineq_aff, eq_nl, ineq_nl
