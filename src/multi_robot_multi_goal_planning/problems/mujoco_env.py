@@ -88,10 +88,6 @@ def rot_vec_quat(out, vec, quat):
 
 
 class MujocoEnvironment(BaseProblem):
-    """
-    Simple environment, only supporting rectangle and sphere obstacles, and spherical agents.
-    """
-
     def get_body_ids(self, root_name):
         # Build parent->children mapping
         parent2children = {}
