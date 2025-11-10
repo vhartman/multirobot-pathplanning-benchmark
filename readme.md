@@ -71,7 +71,7 @@ python3 examples/run_planner.py [env] [options]
 which runs the default planner on the environment with the default configuration. A concrete example would be
 
 ```
-python3 examples/run_planner.py 2d_handover --optimize --max_time=50 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max
+python3 examples/run_planner.py rai.2d_handover --optimize --max_time=50 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max
 ```
 
 All options that can be set with a configuration file can also be set in the command line via `[planner_prefix].[option]`, e.g. `--rrt.shortcutting = False`.
@@ -81,15 +81,7 @@ An experiment (i.e., multiple runs of multiple planners or of the same planner w
 ```
 python3 ./examples/run_experiment.py [path to config]
 ```
-
 as a demo how such a config file can look, we suggest the files in confg/demo.
-
-Once an experiment finished (or even before), you can produce the success/cost evolution plots with 
-
-```
-python3 examples/make_plots.py [path_to_experiment_folder]
-```
-There are a couple of flags to save the plot if desired, and to possibly change the style (`--png --use_paper_style --save`).
 
 An environment and its modes can be inspected with
 
@@ -97,7 +89,16 @@ An environment and its modes can be inspected with
 python3 examples/show_problems.py [environment name] --mode modes
 ```
 
-and finally, a path can be visualized  and possibly exported (using `--export`) with the command below assuming that the path was saved before (with `--save` for `run_planner.py` for example.)
+#### Exporting plots
+Once an experiment finished (or even before), you can produce the success/cost evolution plots with 
+
+```
+python3 examples/make_plots.py [path_to_experiment_folder]
+```
+There are a couple of flags to save the plot if desired, and to possibly change the style (`--png --use_paper_style --save`).
+
+#### Exporting/Making videos
+A path can be visualized  and possibly exported (using `--export`) with the command below assuming that the path was saved before (with `--save` for `run_planner.py` for example.)
 
 ```
 python3 examples/display_single_path.py [filename] [environment_name]
@@ -168,6 +169,22 @@ The information that is needed for plots, is a list of all paths that were found
 # Tests
 There are initial tests in the `tests/` folder.
 This could and should be expanded.
+
+# Benchmarking
+
+You can run the commands above for running a planner, and generate a profile while running it with
+
+```
+python3 -m cProfile -o res.prof  examples/run_planner.py [env] [options]
+```
+
+The resulting profile can be visualized with `snakeviz res.prof`.
+
+Alternatively, `kernprof` provides line-by-line profiling, by simply adding `@profile` as decorator to the function of interest, and running planner via
+
+```
+kernprof -l  examples/run_planner.py [env] [options]
+```
 
 # Extension & Future work
 
