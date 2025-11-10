@@ -212,12 +212,7 @@ Some of these could be PRs:
 
 # Citation
 If you use this codebase in your research, please cite
-
-```
-Currently anonymized for review.
-```
-
-<!-- 
+ 
 ```
 @article{hartmann2025benchmark,
   title={A Benchmark for Optimal Multi-Modal Multi-Robot Multi-Goal Path Planning with Given Robot Assignment},
@@ -225,7 +220,7 @@ Currently anonymized for review.
   journal={arXiv preprint arXiv:2503.03509},
   year={2025}
 }
-``` -->
+```
 
 # Acknowledgements
 The benchmark contains some problems (and data) from previous work, mostly from 
