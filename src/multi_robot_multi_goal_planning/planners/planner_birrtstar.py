@@ -85,8 +85,8 @@ class BidirectionalRRTstar(BaseRRTstar):
             # Initialize transition nodes
             node = None
             for i in range(self.config.transition_nodes):
-                # q = self.sample_transition_configuration_nl(new_mode)
-                q = self.sample_transition_configuration_aff_cspace(new_mode)
+                q = self.sample_transition_configuration_nl(new_mode)
+                # q = self.sample_transition_configuration_aff_cspace(new_mode)
                 if q is None:
                     if new_mode in self.modes:
                         self.modes.remove(new_mode)
@@ -401,8 +401,8 @@ class BidirectionalRRTstar(BaseRRTstar):
             
             # Bi RRT* core
             # q_rand = self.sample_configuration(active_mode)
-            q_rand = self.sample_configuration_aff_cspace(active_mode)
-            # q_rand = self.sample_configuration_nl(active_mode)
+            # q_rand = self.sample_configuration_aff_cspace(active_mode)
+            q_rand = self.sample_configuration_nl(active_mode)
             if not q_rand:
                 continue
 
@@ -412,8 +412,8 @@ class BidirectionalRRTstar(BaseRRTstar):
                 active_mode, q_rand
             )
             # state_new = self.steer(active_mode, n_nearest, q_rand, dist)
-            state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
-            # state_new = self.steer_nonlinear(active_mode, n_nearest, q_rand, dist)
+            # state_new = self.steer_affine(active_mode, n_nearest, q_rand, dist)
+            state_new = self.steer_nonlinear(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
 

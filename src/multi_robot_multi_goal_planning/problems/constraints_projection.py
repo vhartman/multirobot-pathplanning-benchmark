@@ -396,7 +396,7 @@ def project_gauss_newton(
     max_iters: int = 100,
     step_size: float = 1.0,
     damping: float = 1e-6,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> Optional[Any]:
     """
     Local Gauss-Newton projection, strict about affine equalities:
@@ -426,6 +426,11 @@ def project_gauss_newton(
         Z = _nullspace(Aeq)
     else:
         Z = np.eye(n)
+
+    if Z.shape[1] == 0:
+        if verbose:
+            print(f"[project_gauss_newton] no nullspace to explore")
+        return q.from_flat(x)
 
     for it in range(max_iters):
         residuals = []

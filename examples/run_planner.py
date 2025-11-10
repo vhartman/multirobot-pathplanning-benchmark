@@ -226,7 +226,7 @@ def main():
         env, path, 1000
     )
 
-    interpolated_path = interpolate_path(path, 0.05)
+    interpolated_path = planner.interpolate_path_nonlinear(path, 0.05)
     # interpolated_path = planner.interpolate_path_nonlinear(path, 0.05)
     shortcut_discretized_path = interpolate_path(shortcut_path)
 
