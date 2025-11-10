@@ -185,10 +185,6 @@ kernprof -l  examples/run_planner.py [env] [options]
 
 # Extension & Future work
 
-#### Path constraints
-This framework technically supports both path and goal constraints, but at the moment, only goal constraints are implemented and used.
-However, in some applications, this is necessary to e.g. formulate a constraint of 'hold the glass upright'
-
 #### Kinodynamic motion planning
 Similarly as above, the formulation we propose here allows for kinodynamic motion planning, but we do not have a scene at the moment that tests this.
 
