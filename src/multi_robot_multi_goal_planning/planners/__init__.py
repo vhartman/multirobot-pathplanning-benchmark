@@ -7,7 +7,7 @@ from .planner_aitstar import AITstar
 from .planner_eitstar import EITstar
 from .receding_horizon_wrapper import RecedingHorizonConfig, RecedingHorizonPlanner
 from .prioritized_planner import PrioritizedPlanner, PrioritizedPlannerConfig
-from .shortcutting import single_mode_shortcut, robot_mode_shortcut
+from .shortcutting import single_mode_shortcut, robot_mode_shortcut, robot_mode_shortcut_nl
 
 __all__ = [
     "CompositePRM",
@@ -24,4 +24,5 @@ __all__ = [
     "PrioritizedPlannerConfig",
     "single_mode_shortcut",
     "robot_mode_shortcut",
+    "robot_mode_shortcut_nl",
 ]

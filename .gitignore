@@ -84,3 +84,7 @@ cache/
 /CMakeFiles/
 /Makefile
 cmake_install.cmake
+
+# Ignore video outputs
+z.vid/
+videos_1111/

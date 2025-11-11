@@ -3,7 +3,7 @@ import time as time
 import math as math
 import random
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
-from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut, remove_interpolated_nodes
+from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut, robot_mode_shortcut_nl, remove_interpolated_nodes
 import os
 import pickle
 from abc import ABC, abstractmethod
@@ -541,7 +541,7 @@ class BaseRRTstar(BasePlanner):
         self.eta = self.config.stepsize
         if self.eta == 0:
             self.eta = np.sqrt(self.dim)
-            self.eta = self.eta/2
+            self.eta = self.eta/4 # to densify tree
             
         self.operation = Operation()
         self.modes = []
@@ -571,7 +571,7 @@ class BaseRRTstar(BasePlanner):
         mode: Mode,
         tree_instance: Optional[Union["SingleTree", "BidirectionalTree"]] = None,
     ) -> None:
-        """S
+        """
         Initializes new tree instance for the given mode.
 
         Args:
@@ -1355,12 +1355,13 @@ class BaseRRTstar(BasePlanner):
             and shortcutting_bool
         ):
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path_, result = robot_mode_shortcut(
+            shortcut_path_, result = robot_mode_shortcut_nl(
                 self.env,
                 self.operation.path_shortcutting,
                 100,
                 resolution=self.env.collision_resolution,
                 tolerance=self.env.collision_tolerance,
+                planner = self,
             )
             if self.config.remove_redundant_nodes:
                 # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
@@ -2035,11 +2036,17 @@ class BaseRRTstar(BasePlanner):
         for _ in range(max_tries):
             q0 = self.env.sample_config_uniform_in_limits()
             q_proj = self.project_nonlinear_dispatch(q0, eq, ineq, mode)
-            if q_proj is not None and self.env.is_collision_free(q_proj, mode):
-                if (self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and
-                    self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
-                    self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
-                    return q_proj
+            if q_proj is not None:
+                print("Projected transition config")
+                if self.env.is_collision_free(q_proj, mode):
+                    print("Collision free")
+                    if self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl):
+                        print("NL constraints satisfied")
+                        
+                        # and
+                        # self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
+                        # self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
+                        return q_proj
         return None
 
     def sample_informed_nl(self, mode: Mode) -> Optional[Configuration]:
@@ -2083,6 +2090,7 @@ class BaseRRTstar(BasePlanner):
         Exactly the same selection logic as the affine sampler.
         """
         if np.random.uniform(0, 1) < self.config.p_goal:
+            print("Goal sampling NL")
             return self.sample_goal_nl(mode, self.transition_node_ids, self.trees[mode].order)
         if self.config.informed_sampling and self.operation.init_sol:
             return self.sample_informed_nl(mode)

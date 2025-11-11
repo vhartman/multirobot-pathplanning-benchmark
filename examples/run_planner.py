@@ -29,6 +29,7 @@ from multi_robot_multi_goal_planning.planners import (
     CompositePRMConfig,
     single_mode_shortcut,
     robot_mode_shortcut,
+    robot_mode_shortcut_nl,
     BaseRRTConfig,
     RRTstar,
     BidirectionalRRTstar,
@@ -213,31 +214,39 @@ def main():
         path = path_w_doubled_modes
 
     print("robot-mode-shortcut")
-    shortcut_path, info_shortcut = robot_mode_shortcut(
+    shortcut_path, info_shortcut = robot_mode_shortcut_nl(
         env,
         path,
         1000,
         tolerance=env.collision_tolerance,
         resolution=env.collision_resolution,
+        planner=planner,
     )
 
     print("task-shortcut")
     single_mode_shortcut_path, info_single_mode_shortcut = single_mode_shortcut(
-        env, path, 1000
+        env, path, 1000,
     )
 
-    interpolated_path = planner.interpolate_path_nonlinear(path, 0.05)
-    # interpolated_path = planner.interpolate_path_nonlinear(path, 0.05)
-    shortcut_discretized_path = interpolate_path(shortcut_path)
+    interpolated_path = interpolate_path(path, 0.05)
+    interpolated_path_nl = planner.interpolate_path_nonlinear(path, 0.05)
+    # shortcut_discretized_path = interpolate_path(shortcut_path)
+    shortcut_discretized_path = planner.interpolate_path_nonlinear(shortcut_path)
 
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))
+
+    print("Checking nonlinear interpolated path for validity")
+    print(env.is_valid_plan(interpolated_path_nl))
 
     print("Checking mode-shortcutted path for validity")
     print(env.is_valid_plan(single_mode_shortcut_path))
 
     print("Checking task shortcutted path for validity")
     print(env.is_valid_plan(shortcut_path))
+
+    print("Checking nonlinear interpolated path for validity")
+    print(env.is_valid_plan(shortcut_discretized_path))
 
     print("cost", info["costs"])
     print("comp_time", info["times"])
@@ -315,6 +324,15 @@ def main():
     env.show(blocking=True)
     env.display_path(
         interpolated_path,
+        stop=False,
+        stop_at_end=True,
+        adapt_to_max_distance=True,
+        stop_at_mode=args.stop_at_mode,
+    )
+
+    print("displaying path from nonlinear interpolation")
+    env.display_path(
+        interpolated_path_nl,
         stop=False,
         stop_at_end=True,
         adapt_to_max_distance=True,
