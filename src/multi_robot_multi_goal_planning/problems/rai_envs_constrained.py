@@ -171,6 +171,11 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
 
         self.C.setJointState(home_pose)
 
+        pose_projection_matrix = np.zeros((1, 7))
+        pose_projection_matrix[0, 0] = 1
+        pose_projection_matrix[0, 1] = 1
+        pose_projection_matrix[0, 2] = 1
+
         self.manipulating_env = True
 
         self.tasks = [
@@ -188,7 +193,11 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 SingleGoal(place_pose),
                 type="place", 
                 frames=["table", "obj1"],
-                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7),  rel_pose, 1e-2)]
+                constraints=[
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], pose_projection_matrix,  rel_pose, 1e-2),
+                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([1, -1, 0]), 5e-2),
+                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([-1, -1, 0]), 5e-2)
+                ]
             ),            
             # terminal mode
             Task(
