@@ -38,6 +38,7 @@ from .constraints import (
     AffineTaskSpaceEqualityConstraint,
     AffineConfigurationSpaceEqualityConstraint,
     AffineFrameOrientationConstraint,
+    AffineRelativeFrameOrientationConstraint,
     relative_pose
 )
 
@@ -109,6 +110,11 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
 
         self.C.setJointState(home_pose)
 
+        pose_projection_matrix = np.zeros((1, 7))
+        pose_projection_matrix[0, 0] = 1
+        pose_projection_matrix[0, 1] = 1
+        pose_projection_matrix[0, 2] = 1
+
         self.tasks = [
             # joint
             Task(
@@ -119,7 +125,10 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
             Task(
                 "joint_place",
                 ["a1", "a2"],
-                SingleGoal(rel_movement_end), constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], np.eye(7), rel_pose)]
+                SingleGoal(rel_movement_end), constraints=[
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], pose_projection_matrix, rel_pose),
+                    AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 0, 0]), 1e-3)
+                ]
             ),            
             # terminal mode
             Task(
