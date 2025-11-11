@@ -838,6 +838,7 @@ class rai_env(BaseProblem):
             self.C.view(stop)
 
             if export:
+                os.makedirs("./z.vid", exist_ok=True)
                 self.C.view_savePng("./z.vid/")
 
             dt = pause_time
