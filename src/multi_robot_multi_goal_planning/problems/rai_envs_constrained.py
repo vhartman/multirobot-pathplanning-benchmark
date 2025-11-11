@@ -583,13 +583,14 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
 
 @register([
     ("rai.single_stick_upright", {}),
+    ("rai.single_stick_upright_clutter", {"clutter": True}),
     ("rai.single_stick", {"stick_upright": False}),
     ("rai.single_stick_ineq", {"stick_upright": False, 
                                "ineq_orientation_constraint": True}),
 ])
 class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
-    def __init__(self, stick_upright=True, ineq_orientation_constraint=False):
-        self.C, keyframes = rai_config.make_single_arm_stick_env()
+    def __init__(self, stick_upright=True, ineq_orientation_constraint=False, clutter=False):
+        self.C, keyframes = rai_config.make_single_arm_stick_env(clutter=clutter)
         
         self.robots = ["a1"]
         rai_env.__init__(self)
@@ -642,12 +643,13 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
 @register([
     ("rai.dual_stick_upright", {}),
     ("rai.dual_stick", {"stick_upright": False}),
+    ("rai.dual_stick_clutter", {"clutter": True}),
     ("rai.dual_stick_ineq", {"stick_upright": False, 
                              "ineq_orientation_constraint": True}),
 ])
 class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
-    def __init__(self, stick_upright=True, ineq_orientation_constraint=False):
-        self.C, r1_keyframes, r2_keyframes = rai_config.make_dual_arm_stick_env()
+    def __init__(self, stick_upright=True, ineq_orientation_constraint=False, clutter=False):
+        self.C, r1_keyframes, r2_keyframes = rai_config.make_dual_arm_stick_env(clutter=clutter)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
