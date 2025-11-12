@@ -39,6 +39,7 @@ from .constraints import (
     AffineTaskSpaceEqualityConstraint,
     AffineConfigurationSpaceEqualityConstraint,
     AffineFrameOrientationConstraint,
+    AffineRelativeFrameOrientationConstraint,
     relative_pose
 )
 
@@ -110,6 +111,11 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
 
         self.C.setJointState(home_pose)
 
+        pose_projection_matrix = np.zeros((1, 7))
+        pose_projection_matrix[0, 0] = 1
+        pose_projection_matrix[0, 1] = 1
+        pose_projection_matrix[0, 2] = 1
+
         self.tasks = [
             # joint
             Task(
@@ -120,7 +126,10 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
             Task(
                 "joint_place",
                 ["a1", "a2"],
-                SingleGoal(rel_movement_end), constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], np.eye(7), rel_pose)]
+                SingleGoal(rel_movement_end), constraints=[
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], pose_projection_matrix, rel_pose),
+                    AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 0, 0]), 1e-3)
+                ]
             ),            
             # terminal mode
             Task(
@@ -163,6 +172,11 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
 
         self.C.setJointState(home_pose)
 
+        pose_projection_matrix = np.zeros((1, 7))
+        pose_projection_matrix[0, 0] = 1
+        pose_projection_matrix[0, 1] = 1
+        pose_projection_matrix[0, 2] = 1
+
         self.manipulating_env = True
 
         self.tasks = [
@@ -180,7 +194,11 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 SingleGoal(place_pose),
                 type="place", 
                 frames=["table", "obj1"],
-                constraints=[RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], np.eye(7), rel_pose, 1e-2)]
+                constraints=[
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], pose_projection_matrix,  rel_pose, 1e-2),
+                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([1, -1, 0]), 5e-2),
+                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([-1, -1, 0]), 5e-2)
+                ]
             ),            
             # terminal mode
             Task(
@@ -605,13 +623,14 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
 
 @register([
     ("rai.single_stick_upright", {}),
+    ("rai.single_stick_upright_clutter", {"clutter": True}),
     ("rai.single_stick", {"stick_upright": False}),
     ("rai.single_stick_ineq", {"stick_upright": False, 
                                "ineq_orientation_constraint": True}),
 ])
 class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
-    def __init__(self, stick_upright=True, ineq_orientation_constraint=False):
-        self.C, keyframes = rai_config.make_single_arm_stick_env()
+    def __init__(self, stick_upright=True, ineq_orientation_constraint=False, clutter=False):
+        self.C, keyframes = rai_config.make_single_arm_stick_env(clutter=clutter)
         
         self.robots = ["a1"]
         rai_env.__init__(self)
@@ -664,12 +683,13 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
 @register([
     ("rai.dual_stick_upright", {}),
     ("rai.dual_stick", {"stick_upright": False}),
+    ("rai.dual_stick_clutter", {"clutter": True}),
     ("rai.dual_stick_ineq", {"stick_upright": False, 
                              "ineq_orientation_constraint": True}),
 ])
 class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
-    def __init__(self, stick_upright=True, ineq_orientation_constraint=False):
-        self.C, r1_keyframes, r2_keyframes = rai_config.make_dual_arm_stick_env()
+    def __init__(self, stick_upright=True, ineq_orientation_constraint=False, clutter=False):
+        self.C, r1_keyframes, r2_keyframes = rai_config.make_dual_arm_stick_env(clutter=clutter)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]

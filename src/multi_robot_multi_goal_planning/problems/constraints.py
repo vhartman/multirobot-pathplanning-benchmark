@@ -141,28 +141,16 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         self.desired_relative_pose = rel_pose
         self.eps = eps
 
-        assert self.mat.shape[0] == len(self.desired_relative_pose)
+        # assert self.mat.shape[0] == len(self.desired_relative_pose)
         assert self.mat.shape[1] == 7
 
     def is_fulfilled(self, q, mode, env):
         # frame_1_pose = env.get_frame_pose(q, self.frames[0])
         # frame_2_pose = env.get_frame_pose(q, self.frames[1])
 
-        if mode is not None:
-            env.set_to_mode(mode)
-        env.C.setJointState(q.state())
+        residual = self.F(q.state(), mode, env)
 
-        frame_1_pose = env.C.getFrame(self.frames[0]).getPose()
-        frame_2_pose = env.C.getFrame(self.frames[1]).getPose()
-
-        rel_pose = relative_pose(frame_1_pose, frame_2_pose)
-
-        x = q.state().astype(float, copy=True)
-        res = self.F(x, mode, env)
-        sat = all(np.isclose(res, 0, atol=self.eps))
-
-        return sat
-        # return all(np.isclose(self.mat @ rel_pose[:, None], self.desired_relative_pose, atol=self.eps))
+        return all(abs(residual) < self.eps)
     
     def J(self, q, mode, env):
         if mode is not None:
@@ -170,7 +158,7 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         
         env.C.setJointState(q)
 
-        [y, J] = env.C.eval(robotic.FS.poseRel, [self.frames[1], self.frames[0]], 1, self.desired_relative_pose)
+        [y, J] = env.C.eval(robotic.FS.poseRel, [self.frames[1], self.frames[0]], self.mat, self.desired_relative_pose)
 
         return J
 
@@ -180,7 +168,7 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         
         env.C.setJointState(q)
 
-        [y, J] = env.C.eval(robotic.FS.poseRel, [self.frames[1], self.frames[0]], 1, self.desired_relative_pose)
+        [y, J] = env.C.eval(robotic.FS.poseRel, [self.frames[1], self.frames[0]], self.mat, self.desired_relative_pose)
         
         return y
 
@@ -271,6 +259,56 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         return all(self.mat @ q.state()[:, None] < self.constraint_pose)
 
+# This might currently still be a bit overcomplicated?
+class AffineRelativeFrameOrientationConstraint(Constraint):
+    def __init__(self, frame_names, vector, desired_orientation_vector, epsilon):
+        self.frame_names = frame_names
+        self.desired_orientation_vector = desired_orientation_vector
+        self.epsilon = epsilon
+        self.vector = vector
+
+        assert self.vector in ["x", "y", "z"]
+
+    def is_fulfilled(self, q, mode, env):
+        residual = self.F(q.state(), mode, env)
+        return all(np.abs(residual) < self.epsilon)
+
+
+    def J(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        
+        env.C.setJointState(q)
+        
+        fs = robotic.FS.vectorXDiff
+
+        if self.vector == "y":
+            fs = robotic.FS.vectorYDiff
+        elif self.vector == "z":
+            fs = robotic.FS.vectorZDiff
+        else:
+            raise ValueError
+        
+        [y, J] = env.C.eval(fs, [self.frame_names[0], self.frame_names[1]], 1, self.desired_orientation_vector)
+        return J
+
+    def F(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        
+        env.C.setJointState(q)
+
+        fs = robotic.FS.vectorXDiff
+
+        if self.vector == "y":
+            fs = robotic.FS.vectorYDiff
+        elif self.vector == "z":
+            fs = robotic.FS.vectorZDiff
+        else:
+            raise ValueError
+        
+        [y, J] = env.C.eval(fs, [self.frame_names[0], self.frame_names[1]], 1, self.desired_orientation_vector)
+        return y
 
 # This might currently still be a bit overcomplicated?
 class AffineFrameOrientationConstraint(Constraint):

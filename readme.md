@@ -40,25 +40,27 @@ At the moment, all of this is implemented using python, with collision checks an
 The structure of the benchmark should however make it easy to swap out this backend with any other backend which would e.g., allow for parallelization, and usage of your favorite framework.
 
 ## Examples
-Currently, there are 21 base scenarios, of which most can be adjusted in difficulty by changing the number of robots and objects that we need to deal with.
+Currently, there are a number of base scenarios, of which most can be adjusted in difficulty by changing the number of robots and objects that the planners need to deal with.
 
 Videos illustrate the types of problems we are interested in best:
 
 <img src="assets/box_rearrangement.gif" height="150"/><img src="assets/box_stacking_four.gif" height="150"/><img src="assets/mobile_four_dep.gif" height="150"/>
 
-More examples can be seen with
+where you can clearly see **multiple robots** do **multiple tasks** (i.e., grasping different objects), where the tasks imply traversing **multiple modes** (i.e., a mode where a box is grasped, and one where it is not). 
+
+A list of all problems can be generated with
 
 ```
 python3 examples/show_problems.py --mode list_all
 ```
 
-and 
+and the problems/scenarios can be displayed with
 
 ```
 python3 examples/show_problems.py [env_name] --mode modes
 ```
 
-to see a specific environment and all its subgoals.
+which shows a specific environment and all its subgoals.
 
 ## Getting started
 
@@ -74,23 +76,18 @@ which runs the default planner on the environment with the default configuration
 python3 examples/run_planner.py rai.2d_handover --optimize --max_time=50 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max
 ```
 
+Planners can be configured with a configuration file. For examples, see `configs/defaults`.
 All options that can be set with a configuration file can also be set in the command line via `[planner_prefix].[option]`, e.g. `--rrt.shortcutting = False`.
 
 An experiment (i.e., multiple runs of multiple planners or of the same planner with multiple options) can be run with 
 
 ```
-python3 ./examples/run_experiment.py [path to config]
+python3 ./examples/run_experiment.py [path to experiment config]
 ```
-as a demo how such a config file can look, we suggest the files in confg/demo.
-
-An environment and its modes can be inspected with
-
-```
-python3 examples/show_problems.py [environment name] --mode modes
-```
+as a demo how such an experiment config file looks, we suggest the files in `confg/demo`.
 
 #### Exporting plots
-Once an experiment finished (or even before), you can produce the success/cost evolution plots with 
+Once an experiment finished (or even before - useful for looking at progress of the experiment/preliminary results), you can produce the success/cost evolution plots with 
 
 ```
 python3 examples/make_plots.py [path_to_experiment_folder]
@@ -113,8 +110,8 @@ ffmpeg -framerate 30 -i %04d.png -c:v libx264 -pix_fmt yuv420p out.mp4
 (ran in the folder above).
 
 ## Planners
-Currently, for the optimal planners, we have implementations of RRT, Bidirectional RRT, PRM, AIT and EIT.
-As baselines for suboptimal planners, we implemented prioritized planners, and receding horizon planning versions of the optimal planners.
+Currently, as optimal planners, we have implementations of **RRT**, **Bidirectional RRT**, **PRM**, **AIT** and **EIT**.
+As baselines for suboptimal planners, we implemented **prioritized planners**, and **receding horizon planning versions** of the optimal planners.
 
 ## Problem description
 
@@ -128,7 +125,7 @@ As baselines for suboptimal planners, we implemented prioritized planners, and r
 #### Problem & Formulation
 
 The basic formulation is the following: We assume that we have $n$ robots that have to fulfill some tasks.
-We assume that the tasks are assigned to a robot, and in the current state, a task essentially means to reach a goal pose (compared to e.g., fulfilling a constraint along a path).
+We assume that the tasks are assigned to a robot, and in the current state, a task essentially means to reach a goal pose.
 
 We then propose two scenarios of how task ordering can be specified:
 - using a sequence, i.e., a total ordering of all tasks, i.e., task $A$ has to be done before task $B$
@@ -144,7 +141,7 @@ There are two main requirements:
   - we need a scene that we are planning in, and
   - we need a description of the task sequence, respectively the dependence between tasks
 
-- `rai_envs.py` implements some concrete environments, and some utilities to have a look at them.
+As example, we suggest checking out `rai_envs.py`, which implements some concrete environments, and some utilities for debugging.
 
 #### Using your own robot environment
 
@@ -187,10 +184,6 @@ kernprof -l  examples/run_planner.py [env] [options]
 ```
 
 # Extension & Future work
-
-#### Path constraints
-This framework technically supports both path and goal constraints, but at the moment, only goal constraints are implemented and used.
-However, in some applications, this is necessary to e.g. formulate a constraint of 'hold the glass upright'
 
 #### Kinodynamic motion planning
 Similarly as above, the formulation we propose here allows for kinodynamic motion planning, but we do not have a scene at the moment that tests this.

@@ -2130,7 +2130,7 @@ def make_stacking_with_holding_env(num_robots=2):
     return C, [k1, k2]
 
 
-def make_single_arm_stick_env():
+def make_single_arm_stick_env(clutter = False):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -2167,7 +2167,43 @@ def make_single_arm_stick_env():
         C.getFrame("table").getPosition() + [0, 0, 0.07]
     ).setShape(ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]).setContact(
         -2
-    ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
+    ).setColor([0, 0, 0])
+
+    xy_start_pos = [0.3, 0.3]
+    xy_goal_pos = [-0.3, -0.3]
+
+    if clutter:
+        for i in range(5):
+            pos = np.random.uniform(-0.5, 1, 2)
+            pos[1] -= 0.7
+            size = np.random.uniform(0.1, 0.3, 2)
+
+            # avoid occluding start/goal: resample pos until neither start nor goal lies inside the obstacle footprint
+            margin = 0.1
+            # the obs shape uses size[1] for both x and y extents (see below), so use that
+            hx = size[0] / 2.0
+            hy = size[1] / 2.0
+
+            def _point_in_rect(pt, center, hx, hy, margin):
+                return (abs(pt[0] - center[0]) <= hx + margin) and (abs(pt[1] - center[1]) <= hy + margin)
+
+            # resample until both start and goal are outside the obstacle rectangle (with margin)
+            max_tries = 100
+            tries = 0
+            while (_point_in_rect(xy_start_pos, pos, hx, hy, margin) or _point_in_rect(xy_goal_pos, pos, hx, hy, margin)) and tries < max_tries:
+                pos = np.random.uniform(-0.5, 1, 2)
+                pos[1] -= 0.7
+                tries += 1
+            
+            print(tries)
+
+            C.addFrame(f"obs_{i}").setParent(
+                C.getFrame("table")
+            ).setPosition(
+                C.getFrame("table").getPosition() + [pos[0], pos[1], 0.07]
+            ).setShape(ry.ST.box, size=[size[1], size[1], 0.06, 0.005]).setContact(
+                -3
+            ).setColor([0, 0, 0])
 
     # C.view(True)
 
@@ -2242,12 +2278,12 @@ def make_single_arm_stick_env():
             retval = solver.solve()
             retval = retval.dict()
 
-            # print(retval)
+            print(retval)
 
             # if view:
             # komo.view(True, "IK solution")
 
-            print(retval)
+            # print(retval)
 
             if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
                 # komo.view(True, "IK solution")
@@ -2256,15 +2292,12 @@ def make_single_arm_stick_env():
 
         return None
 
-    xy_start_pos = [0.2, 0.2]
-    xy_goal_pos = [-0.2, -0.2]
-
     start_pose = compute_pose_from_pos("a1_", xy_start_pos)
     goal_pose = compute_pose_from_pos("a1_", xy_goal_pos)
 
     return C, [start_pose, goal_pose]
 
-def make_dual_arm_stick_env():
+def make_dual_arm_stick_env(clutter=False):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -2305,7 +2338,51 @@ def make_dual_arm_stick_env():
         C.getFrame("table").getPosition() + [0, 0, 0.07]
     ).setShape(ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]).setContact(
         -2
-    ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
+    ).setColor([0, 0, 0])
+
+    r1_xy_start_pos = [0.3, 0.3]
+    r1_xy_goal_pos = [-0.3, -0.3]
+    
+    r2_xy_start_pos = [-0.3, 0.3]
+    r2_xy_goal_pos = [0.3, -0.3]
+
+    if clutter:
+        for i in range(10):
+            pos = np.random.uniform(-0.5, 1, 2)
+            pos[1] -= 0.7
+            size = np.random.uniform(0.1, 0.3, 2)
+
+            # avoid occluding start/goal: resample pos until neither start nor goal lies inside the obstacle footprint
+            margin = 0.1
+            # the obs shape uses size[1] for both x and y extents (see below), so use that
+            hx = size[0] / 2.0
+            hy = size[1] / 2.0
+
+            def _point_in_rect(pt, center, hx, hy, margin):
+                return (abs(pt[0] - center[0]) <= hx + margin) and (abs(pt[1] - center[1]) <= hy + margin)
+
+            # resample until both start and goal are outside the obstacle rectangle (with margin)
+            max_tries = 100
+            tries = 0
+            while (
+                _point_in_rect(r1_xy_start_pos, pos, hx, hy, margin)
+                or _point_in_rect(r1_xy_goal_pos, pos, hx, hy, margin)
+                or _point_in_rect(r2_xy_start_pos, pos, hx, hy, margin)
+                or _point_in_rect(r2_xy_goal_pos, pos, hx, hy, margin)
+            ) and tries < max_tries:
+                pos = np.random.uniform(-0.5, 1, 2)
+                pos[1] -= 0.7
+                tries += 1
+            
+            print(tries)
+
+            C.addFrame(f"obs_{i}").setParent(
+                C.getFrame("table")
+            ).setPosition(
+                C.getFrame("table").getPosition() + [pos[0], pos[1], 0.07]
+            ).setShape(ry.ST.box, size=[size[1], size[1], 0.06, 0.005]).setContact(
+                -3
+            ).setColor([0, 0, 0])
 
     # C.view(True)
 
