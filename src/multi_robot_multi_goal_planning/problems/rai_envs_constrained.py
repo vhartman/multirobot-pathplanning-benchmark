@@ -110,10 +110,10 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
 
         self.C.setJointState(home_pose)
 
-        pose_projection_matrix = np.zeros((1, 7))
+        pose_projection_matrix = np.zeros((3, 7))
         pose_projection_matrix[0, 0] = 1
-        pose_projection_matrix[0, 1] = 1
-        pose_projection_matrix[0, 2] = 1
+        pose_projection_matrix[1, 1] = 1
+        pose_projection_matrix[2, 2] = 1
 
         self.tasks = [
             # joint
@@ -171,10 +171,10 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
 
         self.C.setJointState(home_pose)
 
-        pose_projection_matrix = np.zeros((1, 7))
+        pose_projection_matrix = np.zeros((3, 7))
         pose_projection_matrix[0, 0] = 1
-        pose_projection_matrix[0, 1] = 1
-        pose_projection_matrix[0, 2] = 1
+        pose_projection_matrix[1, 1] = 1
+        pose_projection_matrix[2, 2] = 1
 
         self.manipulating_env = True
 
@@ -218,6 +218,14 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+
+        # for _ in range(1000):
+        #     q = self.sample_config_uniform_in_limits()
+
+        #     for constraint in self.tasks[1].constraints:
+        #         if constraint.is_fulfilled(q, )
+        #         self.show_config(q)
 
 
 @register("rai.husky_reach")
