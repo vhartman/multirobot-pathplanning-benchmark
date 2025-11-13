@@ -2036,17 +2036,10 @@ class BaseRRTstar(BasePlanner):
         for _ in range(max_tries):
             q0 = self.env.sample_config_uniform_in_limits()
             q_proj = self.project_nonlinear_dispatch(q0, eq, ineq, mode)
-            if q_proj is not None:
-                print("Projected transition config")
-                if self.env.is_collision_free(q_proj, mode):
-                    print("Collision free")
-                    if self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl):
-                        print("NL constraints satisfied")
-                        
-                        # and
-                        # self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
-                        # self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
-                        return q_proj
+            if (q_proj is not None and self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and 
+                self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and 
+                self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
+                return q_proj
         return None
 
     def sample_informed_nl(self, mode: Mode) -> Optional[Configuration]:
@@ -2090,7 +2083,6 @@ class BaseRRTstar(BasePlanner):
         Exactly the same selection logic as the affine sampler.
         """
         if np.random.uniform(0, 1) < self.config.p_goal:
-            print("Goal sampling NL")
             return self.sample_goal_nl(mode, self.transition_node_ids, self.trees[mode].order)
         if self.config.informed_sampling and self.operation.init_sol:
             return self.sample_informed_nl(mode)
