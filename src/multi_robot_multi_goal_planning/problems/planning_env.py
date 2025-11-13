@@ -1894,7 +1894,11 @@ class BaseProblem(ABC):
             for c in task_constraints:
                 if not c.is_fulfilled(path[i].q, mode, self):
                     print(f"Constraint violated at index {i}")
-                    print("Residual:", c.F(path[i].q.state(), mode, self))
+
+                    if hasattr(c, "F"):
+                        print("Residual:", c.F(path[i].q.state(), mode, self))
+                    elif hasattr(c, "G"):
+                        print("Residual:", c.G(path[i].q.state(), mode, self))
 
                     constraint_violation = True
 
@@ -1902,7 +1906,12 @@ class BaseProblem(ABC):
             for c in env_constraints:
                 if not c.is_fulfilled(path[i].q, mode, self):
                     print(f"Persistent constraint violated at index {i}")
-                    print("Residual:", c.F(path[i].q.state(), mode, self))
+
+                    if hasattr(c, "F"):
+                        print("Residual:", c.F(path[i].q.state(), mode, self))
+                    elif hasattr(c, "G"):
+                        print("Residual:", c.G(path[i].q.state(), mode, self))
+                        
                     constraint_violation = True
 
             # if the next mode is a transition, check where to go
