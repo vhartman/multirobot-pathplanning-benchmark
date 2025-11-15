@@ -378,7 +378,7 @@ class BidirectionalTree(BaseTree):
         if tree == "B":
             return self.subtree_b.get(id)
 
-    def swap(self) -> None:
+    def swap(self, balanced=False) -> None:
         """
         Swaps the forward (primary) and reversed growing subtree representations if not already connected.
 
@@ -386,18 +386,26 @@ class BidirectionalTree(BaseTree):
         None
 
         Returns:
-        None: This method does not return any value."""
-        if not self.connected:
-            self.subtree, self.subtree_b = self.subtree_b, self.subtree
-            self.batch_subtree, self.batch_subtree_b = (
-                self.batch_subtree_b,
-                self.batch_subtree,
-            )
-            self.node_ids_subtree, self.node_ids_subtree_b = (
-                self.node_ids_subtree_b,
-                self.node_ids_subtree,
-            )
-            self.order *= -1
+        None: This method does not return any value.
+        """
+        # if we want a balanced bidirectional tree, we do not swap s long as the
+        # primary tree is smaller
+        if balanced and len(self.subtree) < len(self.subtree_b):
+            return
+
+        if self.connected:
+            return 
+            
+        self.subtree, self.subtree_b = self.subtree_b, self.subtree
+        self.batch_subtree, self.batch_subtree_b = (
+            self.batch_subtree_b,
+            self.batch_subtree,
+        )
+        self.node_ids_subtree, self.node_ids_subtree_b = (
+            self.node_ids_subtree_b,
+            self.node_ids_subtree,
+        )
+        self.order *= -1
 
     def get_number_of_nodes_in_tree(self) -> int:
         return len(self.subtree) + len(self.subtree_b)
@@ -498,10 +506,13 @@ class BaseRRTConfig:
     with_mode_validation: bool = False
     with_noise: bool = False
     with_tree_visualization: bool = False
+    
     # BidirectionalRRTstar
     transition_nodes: int = 50
     birrtstar_version: int = 2
     stepsize: float = 0
+
+    balanced_trees: bool = False
 
 
 class BaseRRTstar(BasePlanner):
