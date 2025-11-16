@@ -139,7 +139,7 @@ def project_affine_only(q: Any, constraints: List[Any]) -> Any:
     """
     x = q.state().astype(float, copy=True)
     # single-pass stack (avoid attribute checks in a loop afterward)
-    A = np.vstack([c.mat for c in constraints])
+    A = np.vstack([c.J(x) for c in constraints])
     b = np.concatenate([(c.rhs if hasattr(c, "rhs") else c.constraint_pose).ravel() for c in constraints])
     x_proj = _orth_proj_eq_general(x, [A], [b])
     return q.from_flat(x_proj)
@@ -169,7 +169,7 @@ def project_affine_cspace(
 
     # 1) exact equality projection + nullspace
     if aff_eq:
-        Aeq = np.vstack([c.mat for c in aff_eq])
+        Aeq = np.vstack([c.J(x) for c in aff_eq])
         beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
         x = _orth_proj_eq_general(x, [Aeq], [beq])
         Z = _nullspace(Aeq)
@@ -178,7 +178,7 @@ def project_affine_cspace(
 
     # 2) inequality correction in tangent
     if aff_in:
-        Ain = np.vstack([c.mat for c in aff_in])
+        Ain = np.vstack([c.dG(x) for c in aff_in])
         bin = np.concatenate([c.constraint_pose.ravel() for c in aff_in])
         x_try = _nullspace_min_norm_ineq(Ain, bin, x, Z, tol=tol)
         if x_try is not None:
@@ -207,7 +207,7 @@ def project_affine_cspace_interior(
         return q_proj
 
     # Stack inequalities once
-    Aineq = np.vstack([c.mat for c in ineq_constraints])
+    Aineq = np.vstack([c.dG(x_proj) for c in ineq_constraints])
     bineq = np.concatenate([c.rhs.ravel() for c in ineq_constraints])
     slack = bineq - Aineq @ x_proj
 
@@ -267,7 +267,7 @@ def project_affine_cspace_explore(
 
     # Equalities
     if eq_constraints:
-        Aeq = np.vstack([c.mat for c in eq_constraints])
+        Aeq = np.vstack([c.J(x0) for c in eq_constraints])
         beq = np.concatenate([c.rhs.ravel() for c in eq_constraints])
         Aeq_list = [Aeq]
         beq_list = [beq]
@@ -278,7 +278,7 @@ def project_affine_cspace_explore(
 
     # Inequalities
     if ineq_constraints:
-        Ain = np.vstack([c.mat for c in ineq_constraints])
+        Ain = np.vstack([c.dG(x0) for c in ineq_constraints])
         bin = np.concatenate([c.rhs.ravel() for c in ineq_constraints])
     else:
         Ain = np.zeros((0, n), dtype=float)
@@ -420,7 +420,7 @@ def project_gauss_newton(
     
 
     if aff_eq:
-        Aeq = np.vstack([c.mat for c in aff_eq])
+        Aeq = np.vstack([c.J(x) for c in aff_eq])
         beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
         x = _orth_proj_eq_general(x, [Aeq], [beq])
         Z = _nullspace(Aeq)
@@ -497,7 +497,7 @@ def project_gauss_newton(
             break
 
     if aff_in:
-        Ain = np.vstack([c.mat for c in aff_in])
+        Ain = np.vstack([c.dG(x) for c in aff_in])
         bin_ = np.concatenate([c.constraint_pose.ravel() for c in aff_in])
         x_try = _nullspace_min_norm_ineq(Ain, bin_, x, Z, tol=tol)
         if x_try is not None:
@@ -535,7 +535,7 @@ def project_nlp_sqp(
     nl_in = [c for c in nonlinear if hasattr(c, "G")]
 
     if aff_eq:
-        Aeq = np.vstack([c.mat for c in aff_eq])
+        Aeq = np.vstack([c.J(x) for c in aff_eq])
         beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
         x = _orth_proj_eq_general(x, [Aeq], [beq])
 
@@ -550,7 +550,7 @@ def project_nlp_sqp(
 
     # affine inequalities -> simple numeric
     for c in aff_in:
-        A, b = c.mat, c.constraint_pose
+        A, b = c.dG(x), c.constraint_pose
         cons.append({
             "type": "ineq",
             "fun": lambda xv, A=A, b=b: (b - A @ xv).ravel(),
@@ -590,7 +590,7 @@ def project_nlp_sqp(
         x_proj = res.x
 
     if aff_in:
-        Ain = np.vstack([c.mat for c in aff_in])
+        Ain = np.vstack([c.dG(x_proj) for c in aff_in])
         bin_ = np.concatenate([c.constraint_pose.ravel() for c in aff_in])
         x_try = _nullspace_min_norm_ineq(Ain, bin_, x_proj, np.eye(n), tol=tol)
         if x_try is not None:
@@ -631,7 +631,7 @@ def project_cspace_cnkz(
 
     # 1) exact equality projection + nullspace
     if aff_eq:
-        Aeq = np.vstack([c.mat for c in aff_eq])
+        Aeq = np.vstack([c.J(x) for c in aff_eq])
         beq = np.concatenate([c.constraint_pose.ravel() for c in aff_eq])
         x = _orth_proj_eq_general(x, [Aeq], [beq])
         Z = _nullspace(Aeq)
@@ -662,7 +662,7 @@ def project_cspace_cnkz(
 
     # 3) inequality correction in tangent
     if aff_in:
-        Ain = np.vstack([c.mat for c in aff_in])
+        Ain = np.vstack([c.dG(x) for c in aff_in])
         bin = np.concatenate([c.constraint_pose.ravel() for c in aff_in])
         x_try = _nullspace_min_norm_ineq(Ain, bin, x, Z, tol=tol)
         if x_try is not None:

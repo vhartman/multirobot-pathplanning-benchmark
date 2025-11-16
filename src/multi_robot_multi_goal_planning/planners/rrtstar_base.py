@@ -552,7 +552,7 @@ class BaseRRTstar(BasePlanner):
         self.eta = self.config.stepsize
         if self.eta == 0:
             self.eta = np.sqrt(self.dim)
-            self.eta = self.eta/4 # to densify tree
+            # self.eta = self.eta/4 # to densify tree
             
         self.operation = Operation()
         self.modes = []
@@ -1366,13 +1366,12 @@ class BaseRRTstar(BasePlanner):
             and shortcutting_bool
         ):
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path_, result = robot_mode_shortcut_nl(
+            shortcut_path_, result = robot_mode_shortcut(
                 self.env,
                 self.operation.path_shortcutting,
                 100,
                 resolution=self.env.collision_resolution,
                 tolerance=self.env.collision_tolerance,
-                planner = self,
             )
             if self.config.remove_redundant_nodes:
                 # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))

@@ -220,7 +220,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 
     def F(self, q_vec: np.ndarray) -> np.ndarray:
         """Residual F(q) = A q - b (zero when satisfied)."""
-        return self.mat @ q_vec - self.constraint_pose
+        return self.mat @ q_vec[:, None] - self.constraint_pose
 
     def J(self, q_vec: np.ndarray) -> np.ndarray:
         """Jacobian: constant A for affine constraints."""
@@ -250,7 +250,7 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
         """
         Inequality residual: G(q) = A q - b <= 0  (feasible when negative or zero)
         """
-        return self.mat @ q_vec - self.constraint_pose
+        return self.mat @ q_vec[:, None] - self.constraint_pose
 
     def dG(self, q_vec: np.ndarray) -> np.ndarray:
         """Jacobian of G(q): constant A."""
@@ -258,6 +258,7 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
 
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
         return all(self.mat @ q.state()[:, None] < self.constraint_pose)
+    
 
 # This might currently still be a bit overcomplicated?
 class AffineRelativeFrameOrientationConstraint(Constraint):
