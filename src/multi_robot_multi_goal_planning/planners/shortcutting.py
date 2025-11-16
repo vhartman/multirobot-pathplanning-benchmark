@@ -102,7 +102,7 @@ def robot_mode_shortcut(
     """
     non_redundant_path = remove_interpolated_nodes(path)
     new_path = interpolate_path(non_redundant_path, interpolation_resolution)
-
+    
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
 
@@ -181,7 +181,11 @@ def robot_mode_shortcut(
                 # print(r, i, j, k)
                 dim = env.robot_dims[env.robots[r]]
                 if r in robots_to_shortcut:
-                    q_interp = q0_tmp[r] + diff_tmp[r] * k
+                    # we assume that we double the mode switch configurations
+                    if k != 0 and i+k != j and new_path[i+k].mode != new_path[i+k-1].mode:
+                        q_interp = q0_tmp[r] + diff_tmp[r] * (k-1)
+                    else:
+                        q_interp = q0_tmp[r] + diff_tmp[r] * k
                     q[r_cnt : r_cnt + dim] = q_interp
                 # else:
                 #     q[r_cnt : r_cnt + dim] = new_path[i + k].q[r]
