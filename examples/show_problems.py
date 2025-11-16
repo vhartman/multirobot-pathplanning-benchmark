@@ -58,7 +58,18 @@ def visualize_modes(env: rai_env, export_images: bool = False):
             else:
                 q.append(q_home.robot_state(j))
 
+        print("Goal state (all robots)")
         print(q)
+
+        # for _ in range(1000):
+        #     q_rnd = env.sample_config_uniform_in_limits()
+
+        #     for i, constraint in enumerate(env.tasks[1].constraints):
+        #         print(constraint.F(q_rnd.state(), m, env))
+        #         if constraint.is_fulfilled(q_rnd, m, env):
+        #             print(i)
+        #             # env.show_config(q_rnd)
+        #             env.C.view(True)
 
         print(
             "Is collision free: ",
@@ -69,7 +80,7 @@ def visualize_modes(env: rai_env, export_images: bool = False):
             if not constraint.is_fulfilled(type(env.get_start_pos()).from_list(q), m, env):
                 task_constraints_fulfilled = False
             print("Residual:", constraint.F(q, m, env))
-            
+
         print(
             "Fulfills task constraints: ", task_constraints_fulfilled
         )

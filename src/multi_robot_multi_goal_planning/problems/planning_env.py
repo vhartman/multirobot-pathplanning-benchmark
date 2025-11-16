@@ -1869,8 +1869,8 @@ class BaseProblem(ABC):
             # check if the state is collision free
             if not self.is_collision_free(path[i].q, mode):
                 print(f"There is a collision at index {i}")
-                # col = self.C.getCollisionsTotalPenetration()
-                # print(col)
+                col = self.C.getCollisionsTotalPenetration()
+                print("Penetration:", col)
                 # self.show()
                 collision = True
 
@@ -1886,12 +1886,24 @@ class BaseProblem(ABC):
             for c in task_constraints:
                 if not c.is_fulfilled(path[i].q, mode, self):
                     print(f"Constraint violated at index {i}")
+
+                    if hasattr(c, "F"):
+                        print("Residual:", c.F(path[i].q.state(), mode, self))
+                    elif hasattr(c, "G"):
+                        print("Residual:", c.G(path[i].q.state(), mode, self))
+
                     constraint_violation = True
 
             env_constraints = self.constraints
             for c in env_constraints:
                 if not c.is_fulfilled(path[i].q, mode, self):
                     print(f"Persistent constraint violated at index {i}")
+
+                    if hasattr(c, "F"):
+                        print("Residual:", c.F(path[i].q.state(), mode, self))
+                    elif hasattr(c, "G"):
+                        print("Residual:", c.G(path[i].q.state(), mode, self))
+                        
                     constraint_violation = True
 
             # if the next mode is a transition, check where to go

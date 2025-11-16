@@ -217,7 +217,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         cost = self.env.batch_config_cost([n_new.state], [n_nearest_b.state])
         if self.trees[mode].order == -1:
             # switch such that subtree is beginning from start and subtree_b from goal
-            self.trees[mode].swap()
+            self.trees[mode].swap(self.config.balanced_trees)
             self.swap = False
             if not self.env.is_edge_collision_free(
                 n_nearest_b.state.q, n_new.state.q, mode
@@ -450,7 +450,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.manage_transition(active_mode, n_new)
             
             if self.swap:
-                self.trees[active_mode].swap()
+                self.trees[active_mode].swap(self.config.balanced_trees)
 
             if not optimize and self.operation.init_sol:
                 self.save_tree_data()

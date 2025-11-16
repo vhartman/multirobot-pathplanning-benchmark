@@ -17,6 +17,7 @@
     "with_noise": false,
     "with_mode_validation": true,
     "with_tree_visualization": false,
-    "stepsize": 0
+    "stepsize": 0,
+    "balanced_trees": true
   }
 }
