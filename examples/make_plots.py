@@ -440,7 +440,11 @@ def make_cost_plots(
 
     plt.grid(which="both", axis="both", ls="--")
 
-    plt.ylabel(f"Cost ({config['cost_reduction']})")
+    if 'cost_reduction' in config:
+        plt.ylabel(f"Cost ({config['cost_reduction']})")
+    else:
+        plt.ylabel("Cost")
+
     plt.xlabel("Computation Time [s]")
 
     if logscale:
