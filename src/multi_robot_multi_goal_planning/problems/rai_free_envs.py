@@ -81,6 +81,18 @@ class rai_two_dim_env(FreeMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        if agents_can_rotate:
+            self.safe_pose = {
+                "a1": np.array([0.7, 0.7, 0]),
+                "a2": np.array([-0.7, -0.7, 0]),
+            }
+        else:
+            self.safe_pose = {
+                "a1": np.array([0.7, 0.7]),
+                "a2": np.array([-0.7, -0.7]),
+            }
 
 def make_piano_mover_env(view: bool = False):
     C = rai_config.make_table_with_walls(2, 2)
@@ -298,6 +310,13 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
         self.collision_tolerance = 0.01
 
         BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {
+            "a1": np.array(keyframes[0][self.robot_idx["a1"]]),
+            "a2": np.array(keyframes[1][self.robot_idx["a2"]])
+        }
 
 
 @register("rai.unassigned_cleanup")
