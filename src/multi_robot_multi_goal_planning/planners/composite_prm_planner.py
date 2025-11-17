@@ -441,7 +441,12 @@ class MultimodalGraph:
     """
 
     root: Node
-    nodes: Dict
+    nodes: Dict[Mode, List[Node]]
+
+    node_array_cache: Dict[Mode, NDArray]
+
+    transition_node_array_cache: Dict[Mode, NDArray]
+    reverse_transition_node_array_cache: Dict[Mode, NDArray]
 
     # batch_dist_fun
 
@@ -457,7 +462,7 @@ class MultimodalGraph:
         self.nodes = {}
         self.nodes[self.root.state.mode] = [self.root]
 
-        self.transition_nodes = {}  # contains the transitions at the end of the mode
+        self.transition_nodes: Dict[Mode, List[Node]] = {}  # contains the transitions at the end of the mode
         self.reverse_transition_nodes = {}
         self.reverse_transition_nodes[self.root.state.mode] = [self.root]
 
@@ -535,7 +540,7 @@ class MultimodalGraph:
             # for n in self.reverse_transition_nodes[node.state.mode]:
             #     for q in n.neighbors:
             #         neighbors.append(q)
-            neighbors = [
+            neighbors: List[Node] = [
                 q
                 for n in self.reverse_transition_nodes[node.state.mode]
                 for q in n.neighbors
@@ -741,7 +746,7 @@ class MultimodalGraph:
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_neighbors(
         self, node: Node, space_extent: Optional[float] = None
-    ) -> Tuple[List[Node], NDArray]:
+    ) -> Tuple[List[Node], NDArray | None]:
         """
         Computes all neighbours to the current mode, either k_nearest, or according to a radius.
         """
@@ -787,6 +792,9 @@ class MultimodalGraph:
         if self.use_k_nearest:
             best_nodes = []
             if key in self.nodes:
+                assert node_list is not None
+                assert dists is not None
+
                 k_star = int(np.e * (1 + 1 / dim) * np.log(len(node_list))) + 1
                 # # print(k_star)
                 # k = k_star
