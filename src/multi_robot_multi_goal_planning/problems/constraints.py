@@ -275,12 +275,15 @@ class AffineRelativeFrameOrientationConstraint(Constraint):
         
         env.C.setJointState(q)
         
-        fs = robotic.FS.vectorXDiff
+        # fs = robotic.FS.vectorXDiff
+        fs = robotic.FS.vectorXRel
 
         if self.vector == "y":
-            fs = robotic.FS.vectorYDiff
+            # fs = robotic.FS.vectorYDiff
+            fs = robotic.FS.vectorYRel
         elif self.vector == "z":
-            fs = robotic.FS.vectorZDiff
+            # fs = robotic.FS.vectorZDiff
+            fs = robotic.FS.vectorZRel
         else:
             raise ValueError
         
@@ -293,12 +296,15 @@ class AffineRelativeFrameOrientationConstraint(Constraint):
         
         env.C.setJointState(q)
 
-        fs = robotic.FS.vectorXDiff
+        # fs = robotic.FS.vectorXDiff
+        fs = robotic.FS.vectorXRel
 
         if self.vector == "y":
-            fs = robotic.FS.vectorYDiff
+            # fs = robotic.FS.vectorYDiff
+            fs = robotic.FS.vectorYRel
         elif self.vector == "z":
-            fs = robotic.FS.vectorZDiff
+            # fs = robotic.FS.vectorZDiff
+            fs = robotic.FS.vectorZRel
         else:
             raise ValueError
         
