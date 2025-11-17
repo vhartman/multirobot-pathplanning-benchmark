@@ -130,9 +130,9 @@ class rai_two_dim_env(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 2
         if agents_can_rotate:
-            dim = 2
-        else:
             dim = 3
+        else:
+            dim = 2
         for i, r in enumerate(self.robots):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
@@ -186,9 +186,9 @@ class rai_two_dim_env_no_obs_base(rai_env):
         self.safe_pose = {}
         dim = 2
         if agents_can_rotate:
-            dim = 2
-        else:
             dim = 3
+        else:
+            dim = 2
         for i, r in enumerate(self.robots):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
