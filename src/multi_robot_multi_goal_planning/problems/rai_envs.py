@@ -124,7 +124,7 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_NO_SAFE_HOME_POSE
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.spec.manipulation = ManipulationType.STATIC
 
         self.safe_pose = {}
