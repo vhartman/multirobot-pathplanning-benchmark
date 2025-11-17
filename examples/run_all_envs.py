@@ -42,11 +42,11 @@ def make_planners(env, runtime):
 def main():
     # all_envs = get_all_environments()
     representative_envs = [
-        # "rai.simple",
-        # "rai.one_agent_many_goals",
-        # "rai.two_agents_many_goals_dep",
-        # "rai.three_agent_many_goals",
-        # "rai.single_agent_mover",
+        "rai.simple",
+        "rai.one_agent_many_goals",
+        "rai.two_agents_many_goals_dep",
+        "rai.three_agent_many_goals",
+        "rai.single_agent_mover",
         "rai.piano_dep",
         "rai.handover",
         "rai.random_2d",
@@ -55,10 +55,33 @@ def main():
         "rai.triple_waypoints",
         "rai.welding",
         "rai.eggs",
+        "rai.box_sorting",
+        "rai.bottles",
+        "rai.box_rearrangement",
+        "rai.box_reorientation",
+        "rai.box_reorientation_dep",
+        "rai.pyramid",
+        "rai.box_stacking",
+        "rai.box_stacking_dep",
+        "rai.mobile_wall_four",
+        "rai.mobile_wall_four_dep",
+        "rai.mobile_strut",
+        "rai.strut_assembly",
+        "rai.three_robot_truss",
+        "rai.spiral_tower",
+        "rai.spiral_tower_two",
+        "rai.cube_four",
+        "rai.unordered_box_reorientation",
+        "rai.unassigned_two_dim",
+        "rai.unassigned_piano",
+        "rai.unassigned_cleanup",
+        "rai.unassigned_stacking",
+        "rai.unordered_bottles",
     ]
 
+    num_parallel = 10
     num_runs = 5
-    max_runtime = 100
+    max_runtime = 500
 
     for env_name in representative_envs:
         try:
@@ -86,7 +109,7 @@ def main():
             planners = make_planners(env, max_runtime)
 
             all_experiment_data = run_experiment_in_parallel(
-                env, planners, config, experiment_folder, max_parallel=6
+                env, planners, config, experiment_folder, max_parallel=num_parallel
             )
         except Exception as e:
             print(traceback.format_exc())
