@@ -268,7 +268,8 @@ def make_cost_plots(
     baseline_cost=None,
     add_info: bool = False,
     final_max_time: Optional[float] = None,
-    logscale: bool = False
+    logscale: bool = False,
+    yticks:List[int]=[]
 ):
     plt.figure("Cost plot")
 
@@ -437,8 +438,6 @@ def make_cost_plots(
 
         min_non_inf_cost = min(min_non_inf_cost, baseline_cost)
 
-    plt.ylim([0.8 * min_non_inf_cost, 1.1 * max_non_inf_cost])
-
     plt.grid(which="both", axis="both", ls="--")
 
     plt.ylabel(f"Cost ({config['cost_reduction']})")
@@ -446,6 +445,16 @@ def make_cost_plots(
 
     if logscale:
         plt.yscale("log")
+
+    if len(yticks) > 0:
+        ticks = np.array(yticks, dtype=float)
+        if logscale:
+            ticks = ticks[ticks > 0]
+            
+        if ticks.size > 0:
+            plt.yticks(ticks, [int(t) for t in ticks])
+
+    plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
     if add_legend:
         if add_info:
@@ -622,6 +631,12 @@ def main():
         help="Scale the y axis logarithmically. (default: False)",
     )
     parser.add_argument(
+        "--yticks",
+        default="",
+        type=str,
+        help="Y ticks. (default: "" and lets matplotlib do it automatically.)",
+    )
+    parser.add_argument(
         "--baseline_cost", type=float, default=None, help="Baseline"
     )
     parser.add_argument(
@@ -631,6 +646,10 @@ def main():
 
     if args.use_paper_style:
         plt.style.use("./examples/paper_2.mplstyle")
+
+    yticks = []
+    if len(args.yticks) > 0:
+        yticks = list(map(int, args.yticks.split(",")))
 
     foldername = args.foldername
     if foldername[-1] != "/":
@@ -649,7 +668,8 @@ def main():
         baseline_cost=args.baseline_cost,
         add_info = args.info,
         final_max_time=args.limited_max_time,
-        logscale=args.logscale
+        logscale=args.logscale,
+        yticks=yticks
     )
     make_success_plot(
         all_experiment_data, 
