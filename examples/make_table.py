@@ -119,21 +119,20 @@ def print_table(aggregated_data):
 def print_latex_table(aggregated_data):
     line_layout = ["t_init_median", "c_init_median", "c_final_median"]
     key_to_name = {
-        "t_init_median": "$t_\\text{{init}}$", 
-        "c_init_median": "$c_\\text{{init}}$", 
-        "c_final_median": "$c_\\text{{final}}$"
+        "t_init_median": "\\multicolumn{2}{c}{$t_\\text{{init}}$}", 
+        "c_init_median": "\multicolumn{2}{c}{$c_\\text{{init}}$}", 
+        "c_final_median": "\multicolumn{2}{c}{$c_\\text{{final}}$}"
     }
+
     planner_names = list(next(iter(aggregated_data.values())).keys())
     
     num_cols = 1 + len(planner_names)*len(line_layout)
 
-    colspec = num_cols * "c"
+    colspec = "l " + len(line_layout) * ("|" + len(planner_names) * "c")
 
     header1 = " "
     for key in line_layout:
         header1 += f"& {key_to_name[key]} "
-        for _ in range(len(planner_names)-1):
-            header1 += " & "
 
     header2 = " "
     for key in line_layout:
@@ -153,9 +152,9 @@ def print_latex_table(aggregated_data):
             ]
             for i, v in enumerate(all_values):
                 if v == min(all_values):
-                    body += f"& \\textbf{{ {v:.2f} }} "
+                    body += f"& $\\mathbf{{ {v:.2f} }}$"
                 else:
-                    body += f"& {v:.2f} "
+                    body += f"& ${v:.2f}$ "
 
         body += "\\\\ \n"
 
