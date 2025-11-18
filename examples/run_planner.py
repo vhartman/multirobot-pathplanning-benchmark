@@ -30,6 +30,7 @@ from multi_robot_multi_goal_planning.planners import (
     single_mode_shortcut,
     robot_mode_shortcut,
     robot_mode_shortcut_nl,
+    robot_mode_shortcut_nl_opt,
     BaseRRTConfig,
     RRTstar,
     BidirectionalRRTstar,
@@ -213,15 +214,26 @@ def main():
 
         path = path_w_doubled_modes
 
-    print("robot-mode-shortcut")
-    shortcut_path, info_shortcut = robot_mode_shortcut(   #robot_mode_shortcut_nl
-        env,
-        path,
-        1000,
-        tolerance=env.collision_tolerance,
-        resolution=env.collision_resolution,
-        # planner=planner,
-    )
+    if False:
+        print("robot-mode-shortcut")
+        shortcut_path, info_shortcut = robot_mode_shortcut(
+            env,
+            path,
+            1000,
+            tolerance=env.collision_tolerance,
+            resolution=env.collision_resolution,
+            # planner=planner,
+        )
+    else:
+        print("robot-mode-nl-shortcut")
+        shortcut_path, info_shortcut = robot_mode_shortcut_nl_opt(
+            env,
+            path,
+            1000,
+            tolerance=env.collision_tolerance,
+            resolution=env.collision_resolution,
+            planner=planner,
+        )
 
     print("task-shortcut")
     single_mode_shortcut_path, info_single_mode_shortcut = single_mode_shortcut(

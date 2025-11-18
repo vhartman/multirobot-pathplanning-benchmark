@@ -338,6 +338,45 @@ def robot_mode_shortcut(
     return new_path, [costs, times]
 
 
+def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]:
+    """
+    Removes interpolated points from a given path, retaining only key nodes where direction changes or new mode begins.
+
+    Args:
+        path (List[Object]): Sequence of states representing original path.
+        tolerance (float, optional): Threshold for detecting collinearity between segments.
+
+    Returns:
+        List[Object]: Sequence of states representing a path without redundant nodes.
+    """
+
+    if len(path) < 3:
+        return path
+
+    simplified_path = [path[0]]
+
+    for i in range(1, len(path) - 1):
+        A = simplified_path[-1]
+        B = path[i]
+        C = path[i + 1]
+
+        AB = B.q.state() - A.q.state()
+        AC = C.q.state() - A.q.state()
+
+        # If A and C are almost the same, skip B.
+        if np.linalg.norm(AC) < tolerance:
+            continue
+        lam = np.dot(AB, AC) / np.dot(AC, AC)
+
+        # Check if AB is collinear to AC (AB = lambda * AC)
+        if np.linalg.norm(AB - lam * AC) > tolerance or A.mode != C.mode:
+            simplified_path.append(B)
+
+    simplified_path.append(path[-1])
+
+    return simplified_path
+
+
 def robot_mode_shortcut_nl(
     env: BaseProblem,
     path: List[State],
@@ -491,40 +530,271 @@ def robot_mode_shortcut_nl(
     return new_path, [costs, times]
 
 
-def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]:
+def _opt_shortcut_segment_nl(
+    new_path: List[State],
+    i: int,
+    j: int,
+    robots_to_shortcut: List[int],
+    env: BaseProblem,
+    planner: BasePlanner,
+    max_inner_iters: int = 30,
+    step_size: float = 0.2,
+    tol: float = 1e-6,
+) -> Optional[List[State]]:
     """
-    Removes interpolated points from a given path, retaining only key nodes where direction changes or new mode begins.
+    Nonlinear constrained optimization based shortcut between new_path[i] and new_path[j].
 
-    Args:
-        path (List[Object]): Sequence of states representing original path.
-        tolerance (float, optional): Threshold for detecting collinearity between segments.
+    - Keeps exactly the same number of nodes (j - i + 1).
+    - Endpoints are fixed.
+    - Inner nodes are optimized to reduce squared path length.
+    - After each gradient step, inner nodes are projected onto the constraint manifold
+      via planner.project_nonlinear_dispatch.
 
     Returns:
-        List[Object]: Sequence of states representing a path without redundant nodes.
+        A list of State with length (j - i + 1) if optimization succeeded,
+        or None on numerical failure.
+    """
+    assert planner is not None, "Nonlinear optimization based shortcutting requires a planner with projection."
+
+    segment_len = j - i + 1
+    if segment_len < 3:
+        # Nothing to optimize, need at least one inner node
+        return None
+
+    # Flatten robot DOFs structure
+    total_dofs = len(new_path[i].q.state())
+    robot_slices = []
+    offset = 0
+    for r_name in env.robots:
+        dim = env.robot_dims[r_name]
+        robot_slices.append(slice(offset, offset + dim))
+        offset += dim
+    assert offset == total_dofs
+
+    # Active DOFs: all DOFs of the selected robots
+    active_slices = [robot_slices[r] for r in robots_to_shortcut]
+    active_idx = np.concatenate([np.arange(sli.start, sli.stop) for sli in active_slices])
+
+    # Extract the segment states into an array Q of shape (segment_len, total_dofs)
+    Q = np.zeros((segment_len, total_dofs), dtype=float)
+    modes = []
+    for k in range(segment_len):
+        state = new_path[i + k]
+        Q[k, :] = np.asarray(state.q.state(), dtype=float).copy()
+        modes.append(state.mode)
+
+    # Template configuration object to rebuild configs from flat vectors
+    q_template = new_path[i].q
+
+    # Make sure endpoints are exactly as original (they should be already)
+    Q[0, :] = new_path[i].q.state()
+    Q[-1, :] = new_path[j].q.state()
+
+    # Simple elastic-band style smoothing with projection onto constraints
+    for it in range(max_inner_iters):
+        # Discrete Laplacian gradient for path length: sum ||q_{k+1} - q_k||^2
+        grad = np.zeros_like(Q)
+
+        for k in range(1, segment_len - 1):
+            # Gradient only on active DOFs
+            grad[k, active_idx] = 2.0 * (
+                2.0 * Q[k, active_idx]
+                - Q[k - 1, active_idx]
+                - Q[k + 1, active_idx]
+            )
+
+        # Compute max step for convergence check
+        max_step = np.max(np.abs(step_size * grad[1:-1, :][:, active_idx]))
+        if max_step < tol:
+            break
+
+        # Gradient descent step on inner nodes (endpoints fixed)
+        Q[1:-1, active_idx] -= step_size * grad[1:-1, active_idx]
+
+        # Project inner nodes back onto the manifold
+        for k in range(1, segment_len - 1):
+            mode_k = modes[k]
+            q_flat = Q[k, :]
+
+            # Collect constraints for this mode
+            eq_aff, ineq_aff, eq_nl, ineq_nl = planner.collect_constraints(mode_k)
+            eq = eq_aff + eq_nl
+            ineq = ineq_aff + ineq_nl
+
+            # Projection; q_proj is a configuration object
+            q_proj = planner.project_nonlinear_dispatch(
+                q_template.from_flat(q_flat),
+                eq,
+                ineq,
+                mode_k,
+            )
+
+            if q_proj is None:
+                # Projection failed; bail out on this shortcut
+                return None
+
+            Q[k, :] = np.asarray(q_proj.state(), dtype=float)
+
+    # Rebuild the path segment as State objects
+    path_element: List[State] = []
+    for k in range(segment_len):
+        q_cfg = q_template.from_flat(Q[k, :])
+        path_element.append(State(q_cfg, modes[k]))
+
+    # Sanity: endpoints must match original segment to numerical tolerance
+    if not np.allclose(path_element[0].q.state(), new_path[i].q.state(), atol=1e-6):
+        # If this happens, you screwed up boundary handling
+        return None
+    if not np.allclose(path_element[-1].q.state(), new_path[j].q.state(), atol=1e-6):
+        return None
+
+    return path_element
+
+
+def robot_mode_shortcut_nl_opt(
+    env: BaseProblem,
+    path: List[State],
+    max_iter: int = 1000,
+    resolution: float = 0.001,
+    tolerance: float = 0.01,
+    robot_choice: str = "round_robin",
+    interpolation_resolution: float = 0.1,
+    planner: Optional[BasePlanner] = None,
+    inner_opt_iters: int = 30,
+    inner_step_size: float = 0.2,
+):
+    """
+    Nonlinear constraint-aware shortcutting using a local optimizator.
+
+    - For each candidate pair (i, j), we:
+        1. Check that the selected robots have the same task_ids at i and j.
+        2. Run a small trajectory optimization over the segment new_path[i:j+1],
+           keeping the same number of nodes (no re-discretization).
+        3. Optimization minimizes squared path length over the DOFs of the
+           selected robots, while projecting inner nodes back to the nonlinear
+           constraint manifold via planner.project_nonlinear_dispatch.
+        4. If the optimized segment has lower cost and is collision free,
+           we accept it and overwrite new_path[i:j+1].
+
+    - The number of nodes in each segment is preserved (j - i + 1).
     """
 
-    if len(path) < 3:
-        return path
+    assert planner is not None, "robot_mode_shortcut_nl_opt requires a planner with nonlinear projection."
 
-    simplified_path = [path[0]]
+    # Initial path densification
+    if planner is None:
+        non_redundant_path = remove_interpolated_nodes(path)
+        new_path = interpolate_path(non_redundant_path, interpolation_resolution)
+    else:
+        new_path = planner.interpolate_path_nonlinear(path, interpolation_resolution)
 
-    for i in range(1, len(path) - 1):
-        A = simplified_path[-1]
-        B = path[i]
-        C = path[i + 1]
+    costs = [path_cost(new_path, env.batch_config_cost)]
+    times = [0.0]
+    start_time = time.time()
 
-        AB = B.q.state() - A.q.state()
-        AC = C.q.state() - A.q.state()
+    cnt = 0
+    max_attempts = 250 * 10
+    iter_attempts = 0
 
-        # If A and C are almost the same, skip B.
-        if np.linalg.norm(AC) < tolerance:
+    rr_robot = 0
+
+    while True:
+        iter_attempts += 1
+        if cnt >= max_iter or iter_attempts >= max_attempts:
+            break
+
+        # Randomly sample a pair of indices
+        i = np.random.randint(0, len(new_path))
+        j = np.random.randint(0, len(new_path))
+
+        if i > j:
+            i, j = j, i
+
+        if abs(j - i) < 2:
+            # Need at least one inner node to optimize
             continue
-        lam = np.dot(AB, AC) / np.dot(AC, AC)
 
-        # Check if AB is collinear to AC (AB = lambda * AC)
-        if np.linalg.norm(AB - lam * AC) > tolerance or A.mode != C.mode:
-            simplified_path.append(B)
+        # Choose which robot(s) we try to shortcut
+        if robot_choice == "round_robin":
+            robots_to_shortcut = [rr_robot % len(env.robots)]
+            rr_robot += 1
+        else:
+            robots_to_shortcut = [np.random.randint(0, len(env.robots))]
 
-    simplified_path.append(path[-1])
+        # Check tasks compatibility for selected robots
+        can_shortcut_this = True
+        for r in robots_to_shortcut:
+            if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
+                can_shortcut_this = False
+                break
 
-    return simplified_path
+        if not can_shortcut_this:
+            continue
+
+        # Original segment and its cost
+        old_segment = new_path[i : j + 1]
+        old_cost = path_cost(old_segment, env.batch_config_cost)
+
+        # Run constrained geodesic shortcut on this segment
+        path_element = _opt_shortcut_segment_nl(
+            new_path=new_path,
+            i=i,
+            j=j,
+            robots_to_shortcut=robots_to_shortcut,
+            env=env,
+            planner=planner,
+            max_inner_iters=inner_opt_iters,
+            step_size=inner_step_size,
+        )
+
+        if path_element is None:
+            # Optimization or projection failed; skip this attempt
+            continue
+
+        # Check cost improvement for this segment
+        new_seg_cost = path_cost(path_element, env.batch_config_cost)
+        if new_seg_cost >= old_cost:
+            continue
+
+        # Sanity on endpoints
+        q0 = new_path[i].q
+        q1 = new_path[j].q
+        assert np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6
+        assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
+
+        # Full path cost after hypothetical replacement (cheap, but global)
+        # You can skip this and trust local cost if you want speed.
+        new_full_path = new_path[:i] + path_element + new_path[j + 1 :]
+        new_full_cost = path_cost(new_full_path, env.batch_config_cost)
+
+        if new_full_cost >= costs[-1]:
+            # Does not improve global cost; skip
+            continue
+
+        # Collision check on the candidate segment only
+        if env.is_path_collision_free(
+            path_element,
+            resolution=resolution,
+            tolerance=tolerance,
+            check_start_and_end=False,
+        ):
+            # Accept the shortcut: overwrite the configurations
+            for k in range(j - i + 1):
+                new_path[i + k].q = path_element[k].q
+
+            cnt += 1
+            # Update time/cost logs
+            current_time = time.time()
+            times.append(current_time - start_time)
+            costs.append(path_cost(new_path, env.batch_config_cost))
+
+    # Final consistency checks
+    assert new_path[-1].mode == path[-1].mode
+    assert np.linalg.norm(new_path[-1].q.state() - path[-1].q.state()) < 1e-6
+    assert np.linalg.norm(new_path[0].q.state() - path[0].q.state()) < 1e-6
+
+    print("original cost:", path_cost(path, env.batch_config_cost))
+    print("Accepted shortcuts:", cnt)
+    print("final cost:", path_cost(new_path, env.batch_config_cost))
+
+    return new_path, [costs, times]

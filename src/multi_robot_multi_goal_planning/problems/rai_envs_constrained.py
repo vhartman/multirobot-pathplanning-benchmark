@@ -127,8 +127,8 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
                 "joint_place",
                 ["a1", "a2"],
                 SingleGoal(rel_movement_end), constraints=[
-                    RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], pose_projection_matrix, rel_pose),
-                    AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 0, 0]), 1e-3)
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], pose_projection_matrix, rel_pose, 1e-2),
+                    AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 0, 0]), 1e-2)
                 ]
             ),            
             # terminal mode
@@ -186,7 +186,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 self.robots,
                 SingleGoal(pick_pose),
                 type="pick", 
-                frames=["a1_ur_ee_marker", "obj1"]
+                frames=["a1_ur_ee_marker", "obj1"],
             ),
             Task(
                 "joint_place",
@@ -650,7 +650,7 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
         constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
         if stick_upright:
             constraints.append(
-                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))
+                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-2]))
             )
         
         if ineq_orientation_constraint:
@@ -712,11 +712,11 @@ class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
 
         if stick_upright:
             r1_constraints.append(
-                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))
+                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-2]))
             )
 
             r2_constraints.append(
-                AffineFrameOrientationConstraint("a2_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))            
+                AffineFrameOrientationConstraint("a2_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-2]))            
             )
 
         if ineq_orientation_constraint:

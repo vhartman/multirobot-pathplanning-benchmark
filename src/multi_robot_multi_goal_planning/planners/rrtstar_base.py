@@ -3,7 +3,7 @@ import time as time
 import math as math
 import random
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
-from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut, robot_mode_shortcut_nl, remove_interpolated_nodes
+from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut, robot_mode_shortcut_nl, robot_mode_shortcut_nl_opt, remove_interpolated_nodes
 import os
 import pickle
 from abc import ABC, abstractmethod
@@ -29,6 +29,7 @@ from multi_robot_multi_goal_planning.problems.constraints import (
     AffineConfigurationSpaceEqualityConstraint,
     AffineConfigurationSpaceInequalityConstraint,
     AffineFrameOrientationConstraint,
+    AffineRelativeFrameOrientationConstraint,
     RelativeAffineTaskSpaceEqualityConstraint,
     AffineTaskSpaceEqualityConstraint,
 )
@@ -552,6 +553,7 @@ class BaseRRTstar(BasePlanner):
         self.eta = self.config.stepsize
         if self.eta == 0:
             self.eta = np.sqrt(self.dim)
+            self.eta = self.eta/4
             # self.eta = self.eta/4 # to densify tree
             
         self.operation = Operation()
@@ -1366,13 +1368,24 @@ class BaseRRTstar(BasePlanner):
             and shortcutting_bool
         ):
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            shortcut_path_, result = robot_mode_shortcut(
-                self.env,
-                self.operation.path_shortcutting,
-                100,
-                resolution=self.env.collision_resolution,
-                tolerance=self.env.collision_tolerance,
-            )
+            if False:
+                shortcut_path_, result = robot_mode_shortcut_nl_opt(  # robot_mode_shortcut_nl
+                    self.env,
+                    self.operation.path_shortcutting,
+                    100,
+                    resolution=self.env.collision_resolution,
+                    tolerance=self.env.collision_tolerance,
+                    planner=self,
+                )
+            else:
+                shortcut_path_, result = robot_mode_shortcut_nl( 
+                    self.env,
+                    self.operation.path_shortcutting,
+                    100,
+                    resolution=self.env.collision_resolution,
+                    tolerance=self.env.collision_tolerance,
+                    planner=self,
+                )
             if self.config.remove_redundant_nodes:
                 # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
                 shortcut_path = remove_interpolated_nodes(
@@ -1872,7 +1885,10 @@ class BaseRRTstar(BasePlanner):
                 eq_aff.append(c)
             elif isinstance(c, AffineConfigurationSpaceInequalityConstraint):
                 ineq_aff.append(c)
-            elif isinstance(c, (AffineFrameOrientationConstraint, RelativeAffineTaskSpaceEqualityConstraint, AffineTaskSpaceEqualityConstraint)):
+            elif isinstance(c, (AffineFrameOrientationConstraint, 
+                                RelativeAffineTaskSpaceEqualityConstraint, 
+                                AffineTaskSpaceEqualityConstraint, 
+                                AffineRelativeFrameOrientationConstraint)):
                 eq_nl.append(c)
 
         return eq_aff, ineq_aff, eq_nl, ineq_nl
@@ -2084,6 +2100,11 @@ class BaseRRTstar(BasePlanner):
                 self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
                 self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj) and
                 self.env.is_collision_free(q_proj, mode)):
+                # residuals = []
+                # for c in eq_nl:
+                #     print("Constraint:", c.__class__)
+                #     residuals.append(c.F(q_proj.state(), mode, self.env))
+                # print(residuals)
                 return q_proj
         return None
 
