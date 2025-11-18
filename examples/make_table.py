@@ -1,6 +1,8 @@
 import numpy as np
 
 from make_plots import load_data_from_folder
+import os
+from string import Template
 
 
 def get_initial_solution_time(results):
@@ -58,7 +60,7 @@ def aggregate_data(folders):
     for experiment in folders:
         # TODO change behavior to add none
         all_experiment_data = load_data_from_folder(experiment)
-        env_name = experiment.split('.')[-1][:-1]
+        env_name = experiment.split(".")[-1][:-1]
 
         env_results[env_name] = {}
 
@@ -81,43 +83,122 @@ def aggregate_data(folders):
 
     return env_results
 
+
 def print_table(aggregated_data):
     line_layout = ["t_init_median", "c_init_median", "c_final_median"]
     # print header
-    print('env', end=' ')
+    print("env", end=" ")
 
     planner_names = list(next(iter(aggregated_data.values())).keys())
     for key in line_layout:
-        print(key, end=' ')
+        print(key, end=" ")
     print()
 
     for key in line_layout:
         for planner_name in planner_names:
-          print(planner_name, end=' ')
+            print(planner_name, end=" ")
     print()
 
     # print stuff per line
     for env_name, all_planner_data in aggregated_data.items():
-        print(env_name, end=' ')
+        print(env_name, end=" ")
         for key in line_layout:
-            all_values = [data[key] if data[key] is not None else float('inf') for planner_name, data in all_planner_data.items()]
+            all_values = [
+                data[key] if data[key] is not None else float("inf")
+                for planner_name, data in all_planner_data.items()
+            ]
             for v in all_values:
                 if v == min(all_values):
-                    print(v, end=' ')
+                    print(v, end=" ")
                 else:
-                    print(v, end=' ')
+                    print(v, end=" ")
 
         print()
 
 
+def print_latex_table(aggregated_data):
+    line_layout = ["t_init_median", "c_init_median", "c_final_median"]
+    key_to_name = {
+        "t_init_median": "$t_\\text{{init}}$", 
+        "c_init_median": "$c_\\text{{init}}$", 
+        "c_final_median": "$c_\\text{{final}}$"
+    }
+    planner_names = list(next(iter(aggregated_data.values())).keys())
+    
+    num_cols = 1 + len(planner_names)*len(line_layout)
+
+    colspec = num_cols * "c"
+
+    header1 = " "
+    for key in line_layout:
+        header1 += f"& {key_to_name[key]} "
+        for _ in range(len(planner_names)-1):
+            header1 += " & "
+
+    header2 = " "
+    for key in line_layout:
+        for planner_name in planner_names:
+            header2 += f"& {planner_name} "
+
+    body = ""
+
+    # print stuff per line
+    for env_name, all_planner_data in aggregated_data.items():
+        escaped_env_name = env_name.replace('_', '\\_')
+        body += f"{escaped_env_name} "
+        for key in line_layout:
+            all_values = [
+                data[key] if data[key] is not None else float("inf")
+                for planner_name, data in all_planner_data.items()
+            ]
+            for i, v in enumerate(all_values):
+                if v == min(all_values):
+                    body += f"& \\textbf{{ {v:.2f} }} "
+                else:
+                    body += f"& {v:.2f} "
+
+        body += "\\\\ \n"
+
+    body = body.replace("inf", "-")
+
+    TEX_TEMPLATE = Template(r"""
+\begin{tabular}{$colspec}
+\toprule
+$header1 \\
+$header2 \\
+\midrule
+$body
+\bottomrule
+\end{tabular}
+""")
+    print(TEX_TEMPLATE.substitute(
+        colspec=colspec, header1=header1, header2=header2, body=body
+    ))
+
+
+def get_subfolders_from_main_folder(folder):
+    if not os.path.isdir(folder):
+        return []
+    try:
+        with os.scandir(folder) as it:
+            subdirs = [
+                os.path.join(folder, entry.name) + "/" for entry in it if entry.is_dir()
+            ]
+    except (FileNotFoundError, PermissionError):
+        return []
+    subdirs.sort()
+    return subdirs
+
+
 def main():
-    folders = [
-        
-    ]
+    main_dir = "./out/tmp/"
+    folders = get_subfolders_from_main_folder(main_dir)
 
     aggregated_data = aggregate_data(folders)
 
     print_table(aggregated_data)
+
+    print_latex_table(aggregated_data)
 
 
 if __name__ == "__main__":
