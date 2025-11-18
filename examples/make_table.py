@@ -193,6 +193,25 @@ def main():
     main_dir = "./out/tmp/"
     folders = get_subfolders_from_main_folder(main_dir)
 
+    group_envs_by = [
+        "dep", "unassigned", "unordered"
+    ]
+
+    grouped_folders = {key: [] for key in group_envs_by}
+    grouped_folders["other"] = []
+
+    for folder in folders:
+      found = False
+      for key in group_envs_by:
+        if key in folder:
+          grouped_folders[key].append(folder)
+          found = True
+          break
+      if not found:
+        grouped_folders["other"].append(folder)
+
+    folders = [folder for group in ["other", "dep", "unordered", "unassigned"] for folder in group]
+
     aggregated_data = aggregate_data(folders)
 
     print_table(aggregated_data)
