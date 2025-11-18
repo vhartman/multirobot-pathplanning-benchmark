@@ -235,6 +235,8 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
         self.C, all_keyframes = make_piano_mover_env()
         # self.C.view(True)
 
+        home_pose = self.C.getJointState()
+
         self.robots = ["a1", "a2"]
 
         rai_env.__init__(self)
@@ -313,9 +315,15 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
+        print(all_keyframes)
+
+        dim = 3
+        if not agents_can_rotate:
+            dim = 2
+
         self.safe_pose = {
-            "a1": np.array(keyframes[0][self.robot_idx["a1"]]),
-            "a2": np.array(keyframes[1][self.robot_idx["a2"]])
+            "a1": np.array(home_pose[:dim]),
+            "a2": np.array(home_pose[dim:])
         }
 
 
