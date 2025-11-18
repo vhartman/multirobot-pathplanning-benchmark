@@ -41,15 +41,10 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
                         timestamps_this_run.append(float(num))
 
                     timestamps.append(timestamps_this_run)
-                # for line in file:
-                #     line = line.strip()
-                #     if not line:
-                #         continue
-                #     # Use map for type conversion
-                #     timestamps_this_run = list(map(float, line.rstrip(',').split(",")))
-                #     timestamps.append(timestamps_this_run)
 
         except FileNotFoundError:
+            print(f"Did not find timestamps.txt at {subfolder_path}")
+            all_experiment_data[planner_name] = []
             continue
 
         costs = []
@@ -119,6 +114,7 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
                 run_data["costs"] = costs[i]
                 run_data["times"] = timestamps[i]
             except Exception:
+                print("Exception saving data")
                 continue
 
             planner_data.append(run_data)
