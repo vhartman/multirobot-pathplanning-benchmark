@@ -2,6 +2,9 @@ import traceback
 import datetime
 import os
 
+import random
+import numpy as np
+
 from run_experiment import run_experiment_in_parallel, export_config
 
 from multi_robot_multi_goal_planning.problems import (
@@ -83,6 +86,8 @@ def main():
     num_runs = 5
     max_runtime = 500
 
+    seed = 0
+
     for env_name in representative_envs:
         try:
             print(f"Running env {env_name}")
@@ -96,7 +101,7 @@ def main():
                 os.makedirs(experiment_folder)
 
             config = {}
-            config["seed"] = 0
+            config["seed"] = seed
             config["num_runs"] = num_runs
             config["environment"] = env_name
             config["max_planning_time"] = max_runtime
@@ -104,11 +109,14 @@ def main():
 
             export_config(experiment_folder, config)
 
+            np.random.seed(seed)
+            random.seed(seed)
+
             env = get_env_by_name(env_name)
 
             planners = make_planners(env, max_runtime)
 
-            all_experiment_data = run_experiment_in_parallel(
+            _ = run_experiment_in_parallel(
                 env, planners, config, experiment_folder, max_parallel=num_parallel
             )
         except Exception as e:
