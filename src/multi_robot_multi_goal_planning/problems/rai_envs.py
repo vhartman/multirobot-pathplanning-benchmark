@@ -306,11 +306,18 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
-        self.safe_pose = {
-            "a1": np.array([0.2, 0]),
-            "a2": np.array([0, 0.2]),
-            "a3": np.array([-0.2, 0]),
-        }
+        if agents_can_rotate:
+            self.safe_pose = {
+                "a1": np.array([0.2, 0, 0]),
+                "a2": np.array([0, 0.2, 0]),
+                "a3": np.array([-0.2, 0, 0]),
+            }
+        else:
+            self.safe_pose = {
+                "a1": np.array([0.2, 0]),
+                "a2": np.array([0, 0.2]),
+                "a3": np.array([-0.2, 0]),
+            }
 
 
 @register("rai.single_agent_mover")
@@ -909,7 +916,7 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {}
-        dim = 6
+        dim = 7
         for i, r in enumerate(self.robots):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
