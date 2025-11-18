@@ -218,18 +218,16 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
-    def F(self, q_vec: np.ndarray) -> np.ndarray:
+    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
+        return all(self.F(q.state(), mode, env) < self.eps)
+    
+    def F(self, q_vec: np.ndarray, mode, env) -> np.ndarray:
         """Residual F(q) = A q - b (zero when satisfied)."""
         return self.mat @ q_vec[:, None] - self.constraint_pose
 
-    def J(self, q_vec: np.ndarray) -> np.ndarray:
+    def J(self, q_vec: np.ndarray, mode, env) -> np.ndarray:
         """Jacobian: constant A for affine constraints."""
         return self.mat
-
-    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
-        lhs = np.ravel(self.mat @ q.state())     # flatten to (m,)
-        rhs = np.ravel(self.constraint_pose)     # flatten to (m,)
-        return all(np.isclose(lhs, rhs, self.eps))
 
 
 
@@ -246,19 +244,18 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
-    def G(self, q_vec: np.ndarray) -> np.ndarray:
+    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
+        return all(self.mat @ q.state()[:, None] < self.constraint_pose)
+    
+    def G(self, q_vec: NDArray, mode, env) -> np.ndarray:
         """
         Inequality residual: G(q) = A q - b <= 0  (feasible when negative or zero)
         """
         return self.mat @ q_vec[:, None] - self.constraint_pose
 
-    def dG(self, q_vec: np.ndarray) -> np.ndarray:
+    def dG(self, q_vec: NDArray, mode, env) -> np.ndarray:
         """Jacobian of G(q): constant A."""
         return self.mat
-
-    def is_fulfilled(self, q: Configuration, mode, env) -> bool:
-        return all(self.mat @ q.state()[:, None] < self.constraint_pose)
-    
 
 # This might currently still be a bit overcomplicated?
 class AffineRelativeFrameOrientationConstraint(Constraint):
@@ -281,12 +278,15 @@ class AffineRelativeFrameOrientationConstraint(Constraint):
         
         env.C.setJointState(q)
         
-        fs = robotic.FS.vectorXDiff
+        # fs = robotic.FS.vectorXDiff
+        fs = robotic.FS.vectorXRel
 
         if self.vector == "y":
-            fs = robotic.FS.vectorYDiff
+            # fs = robotic.FS.vectorYDiff
+            fs = robotic.FS.vectorYRel
         elif self.vector == "z":
-            fs = robotic.FS.vectorZDiff
+            # fs = robotic.FS.vectorZDiff
+            fs = robotic.FS.vectorZRel
         else:
             raise ValueError
         
@@ -299,12 +299,15 @@ class AffineRelativeFrameOrientationConstraint(Constraint):
         
         env.C.setJointState(q)
 
-        fs = robotic.FS.vectorXDiff
+        # fs = robotic.FS.vectorXDiff
+        fs = robotic.FS.vectorXRel
 
         if self.vector == "y":
-            fs = robotic.FS.vectorYDiff
+            # fs = robotic.FS.vectorYDiff
+            fs = robotic.FS.vectorYRel
         elif self.vector == "z":
-            fs = robotic.FS.vectorZDiff
+            # fs = robotic.FS.vectorZDiff
+            fs = robotic.FS.vectorZRel
         else:
             raise ValueError
         

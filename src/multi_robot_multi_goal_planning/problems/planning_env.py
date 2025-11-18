@@ -1874,25 +1874,31 @@ class BaseProblem(ABC):
                 # self.show()
                 collision = True
 
-            next_mode_ids = None
-            for j in range(i, len(path)):
-                if path[j].mode != mode:
-                    next_mode_ids = path[j].mode.task_ids
-                    break
+            # ensure that the mode switches are in the plan double
+            # if i + 1 < len(path):
+            #     if path[i+1].mode != mode:
+            #         assert config_dist(path[i].q, path[i+1].q) < 1e-6, f"Dist is {config_dist(path[i].q, path[i+1].q)}, should be close to 0."
+
+            # next_mode_ids = None
+            # for j in range(i, len(path)):
+            #     if path[j].mode != mode:
+            #         next_mode_ids = path[j].mode.task_ids
+            #         break
 
             # print(i)
             # print(next_mode_ids)
-            task_constraints = self.get_active_task(mode, next_mode_ids).constraints
-            for c in task_constraints:
-                if not c.is_fulfilled(path[i].q, mode, self):
-                    print(f"Constraint violated at index {i}")
+            for task_id in mode.task_ids:
+                task_constraints = self.tasks[task_id].constraints
+                for c in task_constraints:
+                    if not c.is_fulfilled(path[i].q, mode, self):
+                        print(f"Constraint violated at index {i}")
 
-                    if hasattr(c, "F"):
-                        print("Residual:", c.F(path[i].q.state(), mode, self))
-                    elif hasattr(c, "G"):
-                        print("Residual:", c.G(path[i].q.state(), mode, self))
+                        if hasattr(c, "F"):
+                            print("Residual:", c.F(path[i].q.state(), mode, self))
+                        elif hasattr(c, "G"):
+                            print("Residual:", c.G(path[i].q.state(), mode, self))
 
-                    constraint_violation = True
+                        constraint_violation = True
 
             env_constraints = self.constraints
             for c in env_constraints:
@@ -1903,7 +1909,7 @@ class BaseProblem(ABC):
                         print("Residual:", c.F(path[i].q.state(), mode, self))
                     elif hasattr(c, "G"):
                         print("Residual:", c.G(path[i].q.state(), mode, self))
-                        
+
                     constraint_violation = True
 
             # if the next mode is a transition, check where to go

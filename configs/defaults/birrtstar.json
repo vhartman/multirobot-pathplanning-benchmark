@@ -18,6 +18,6 @@
     "with_mode_validation": true,
     "with_tree_visualization": false,
     "stepsize": 0,
-    "balanced_trees": true
+    "balanced_trees": false
   }
 }

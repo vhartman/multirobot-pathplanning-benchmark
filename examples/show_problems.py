@@ -79,7 +79,7 @@ def visualize_modes(env: rai_env, export_images: bool = False):
         for constraint in task.constraints:
             if not constraint.is_fulfilled(type(env.get_start_pos()).from_list(q), m, env):
                 task_constraints_fulfilled = False
-            print("Residual:", constraint.F(q, m, env))
+            print("Residual:", constraint.F(type(env.get_start_pos()).from_list(q).state(), m, env))
 
         print(
             "Fulfills task constraints: ", task_constraints_fulfilled
@@ -89,10 +89,10 @@ def visualize_modes(env: rai_env, export_images: bool = False):
         for constraint in env.constraints:
             if not constraint.is_fulfilled(type(env.get_start_pos()).from_list(q), m, env):
                 env_constraints_fulfilled = False
-            print("Residual:", constraint.F(q, m, env))
+            print("Residual:", constraint.F(type(env.get_start_pos()).from_list(q).state(), m, env))
             
         print(
-            "Fulfills task constraints: ", env_constraints_fulfilled
+            "Fulfills env constraints: ", env_constraints_fulfilled
         )
 
         # colls = env.C.getCollisions()

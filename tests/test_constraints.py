@@ -30,10 +30,12 @@ def test_conf_space_eq_constraint():
     q[0] = 5
     q[5] = 5
     assert constraint.is_fulfilled(NpConfiguration.from_list([q]), None, None)
+    assert len(constraint.F(NpConfiguration.from_list([q]).state(), None, None)) == 1
 
     q2 = np.zeros((10))
     q2[0] = 5
     assert not constraint.is_fulfilled(NpConfiguration.from_list([q2]), None, None)
+    assert len(constraint.F(NpConfiguration.from_list([q2]).state(), None, None)) == 1
 
 
 def test_conf_space_ineq_constraint():
@@ -45,10 +47,12 @@ def test_conf_space_ineq_constraint():
     q = np.zeros((10))
     q[0] = 5
     assert not constraint.is_fulfilled(NpConfiguration.from_list([q]), None, None)
+    assert len(constraint.G(NpConfiguration.from_list([q]).state(), None, None)) == 1
 
     q = np.zeros((10))
     q[0] = -1
     assert constraint.is_fulfilled(NpConfiguration.from_list([q]), None, None)
+    assert len(constraint.G(NpConfiguration.from_list([q]).state(), None, None)) == 1
 
 
 def test_task_space_eq_constraint():
@@ -71,6 +75,7 @@ def test_task_space_eq_constraint():
 
     residual = constraint.F(q.state(), None, env)
 
+    assert len(residual) == 1
     assert residual[0] == 1
 
     jac = constraint.J(q.state(), None, env)
@@ -169,12 +174,12 @@ def test_nonlinear_task_space_relative_eq_constraint():
     q0 = env.start_pos.from_flat(env.tasks[0].goal.sample(None))
     q1 = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
     assert constraint.is_fulfilled(q0, None, env)
-    
+
     # jac = constraint.J(q1.state(), None, env)
     residual = constraint.F(q0.state(), None, env)
 
     assert np.linalg.norm(residual[:3]) < 1e-6
-    
+
     assert constraint.is_fulfilled(q1, None, env)
     # jac = constraint.J(q1.state(), None, env)
     residual = constraint.F(q1.state(), None, env)
@@ -183,7 +188,7 @@ def test_nonlinear_task_space_relative_eq_constraint():
     q2 = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
     q2[0][0] += 1
     q2[1][0] += 1
-    
+
     assert constraint.is_fulfilled(q2, None, env)
     # jac = constraint.J(q1.state(), None, env)
     residual = constraint.F(q2.state(), None, env)
@@ -192,11 +197,12 @@ def test_nonlinear_task_space_relative_eq_constraint():
     q3 = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
     q3[0][1] += 1
     q3[1][1] += 1
-    
+
     assert constraint.is_fulfilled(q3, None, env)
     # jac = constraint.J(q1.state(), None, env)
     residual = constraint.F(q3.state(), None, env)
     assert np.linalg.norm(residual[:3]) < 1e-6
+
 
 def test_nonlinear_robot_task_space_relative_eq_constraint():
     env = get_env_by_name("rai.grasping")
@@ -210,12 +216,12 @@ def test_nonlinear_robot_task_space_relative_eq_constraint():
     pick_pose = env.start_pos.from_flat(env.tasks[0].goal.sample(None))
     place_pose = env.start_pos.from_flat(env.tasks[1].goal.sample(None))
     assert constraint.is_fulfilled(pick_pose, None, env)
-    
+
     # jac = constraint.J(q1.state(), None, env)
     residual = constraint.F(pick_pose.state(), None, env)
 
     assert np.linalg.norm(residual[:3]) < 1e-3
-    
+
     assert constraint.is_fulfilled(place_pose, None, env)
     # jac = constraint.J(q1.state(), None, env)
     residual = constraint.F(place_pose.state(), None, env)
@@ -262,9 +268,9 @@ def test_affine_frame_orientation_constraint_simple():
 
     residual = constraint.F(q.state(), None, env)
 
-    assert residual[0] == 0.
+    assert residual[0] == 0.0
 
-    jac_analytical = np.zeros((1, 6))    
+    jac_analytical = np.zeros((1, 6))
     jac = constraint.J(q.state(), None, env)
 
     assert np.isclose(jac, jac_analytical).all()
@@ -289,7 +295,7 @@ def test_affine_frame_orientation_constraint_bottle():
 
     residual = r1_constraint.F(q.state(), None, env)
     assert residual[2] == 0
-    
+
     r1_complete_pick_pose = copy.deepcopy(env.get_start_pos())
     r1_complete_pick_pose[0] = r1_pick_pose
 

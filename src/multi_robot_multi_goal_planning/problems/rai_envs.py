@@ -124,8 +124,17 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_NO_SAFE_HOME_POSE
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.spec.manipulation = ManipulationType.STATIC
+
+        self.safe_pose = {}
+        dim = 2
+        if agents_can_rotate:
+            dim = 3
+        else:
+            dim = 2
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
 # very simple task:
@@ -173,6 +182,16 @@ class rai_two_dim_env_no_obs_base(rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 2
+        if agents_can_rotate:
+            dim = 3
+        else:
+            dim = 2
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
 
 # Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
 @register([
@@ -285,6 +304,21 @@ class rai_two_dim_env_no_obs_three_agents(SequenceMixin, rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
 
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        if agents_can_rotate:
+            self.safe_pose = {
+                "a1": np.array([0.2, 0, 0]),
+                "a2": np.array([0, 0.2, 0]),
+                "a3": np.array([-0.2, 0, 0]),
+            }
+        else:
+            self.safe_pose = {
+                "a1": np.array([0.2, 0]),
+                "a2": np.array([0, 0.2]),
+                "a3": np.array([-0.2, 0]),
+            }
+
 
 @register("rai.single_agent_mover")
 class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
@@ -335,8 +369,13 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
-
         self.spec.manipulation = ManipulationType.STATIC
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {
+            "a1": self.C.getJointState()
+        }
 
 
 class rai_two_dim_simple_manip_base(rai_env):
@@ -521,6 +560,14 @@ class rai_two_dim_handover_base(rai_env):
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 3
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
 
 # best cost found for max-cost is 17.64
 # best cost found for sum-cost is 25.28
@@ -724,6 +771,14 @@ class rai_two_dim_three_agent_env_base(rai_env):
         self.spec.dependency = DependencyType.UNORDERED
         self.spec.manipulation = ManipulationType.STATIC
 
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 3
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+
 # best sum-cost: 12.9
 # best max-cost: 6.56
 @register("rai.three_agents")
@@ -858,6 +913,12 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
 
         self.spec.manipulation = ManipulationType.STATIC
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 7
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
 # goals are poses
@@ -906,6 +967,13 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
 
         self.spec.manipulation = ManipulationType.STATIC
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 @register([
     ("rai.eggs", {}),
@@ -973,10 +1041,12 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
-        # q = self.C_base.getJointState()
-        # print(self.is_collision_free(q, [0, 0]))
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
-        # self.C_base.view(True)
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 @register("rai.box_sorting")
 class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
@@ -1038,6 +1108,13 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
 
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
 # moving objects from a rolling cage to a 'conveyor'

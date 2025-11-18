@@ -81,6 +81,18 @@ class rai_two_dim_env(FreeMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        if agents_can_rotate:
+            self.safe_pose = {
+                "a1": np.array([0.7, 0.7, 0]),
+                "a2": np.array([-0.7, -0.7, 0]),
+            }
+        else:
+            self.safe_pose = {
+                "a1": np.array([0.7, 0.7]),
+                "a2": np.array([-0.7, -0.7]),
+            }
 
 def make_piano_mover_env(view: bool = False):
     C = rai_config.make_table_with_walls(2, 2)
@@ -223,6 +235,8 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
         self.C, all_keyframes = make_piano_mover_env()
         # self.C.view(True)
 
+        home_pose = self.C.getJointState()
+
         self.robots = ["a1", "a2"]
 
         rai_env.__init__(self)
@@ -298,6 +312,19 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
         self.collision_tolerance = 0.01
 
         BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        print(all_keyframes)
+
+        dim = 3
+        if not agents_can_rotate:
+            dim = 2
+
+        self.safe_pose = {
+            "a1": np.array(home_pose[:dim]),
+            "a2": np.array(home_pose[dim:])
+        }
 
 
 @register("rai.unassigned_cleanup")
@@ -401,7 +428,7 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
 
 @register("rai.unassigned_stacking")
 class rai_unassigned_stacking(FreeMixin, rai_env):
-    def __init__(self, num_robots=4, num_boxes: int = 8):
+    def __init__(self, num_robots=4, num_boxes: int = 4):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
             num_robots, num_boxes, make_and_return_all_keyframes=True
         )

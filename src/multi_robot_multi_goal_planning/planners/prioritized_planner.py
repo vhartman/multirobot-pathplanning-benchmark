@@ -937,6 +937,9 @@ def plan_in_time_space(
         if ptc.should_terminate(0, time.time() - computation_start_time):
             break
 
+        if iter > max_iter:
+            break
+
         # increase upper bound that we are sampling
         if iter % 50:
             curr_t_ub += 1
@@ -1256,9 +1259,6 @@ def plan_in_time_space(
 
             return TimedPath(time=times[::-1], path=configurations[::-1])
 
-        if iter > max_iter:
-            break
-
     if configurations is None:
         return None
 
@@ -1577,6 +1577,9 @@ def plan_in_time_space_bidirectional(
 
         if len(sampled_goals) > 0 and iter > 50:
             break
+
+        if iter > 1000:
+            return None
 
     if not collision_free_with_moving_obs(
         env,

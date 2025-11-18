@@ -252,6 +252,7 @@ def setup_planner(
                 with_noise=options["with_noise"],
                 with_tree_visualization=options["with_tree_visualization"],
                 stepsize=options["stepsize"],
+                balanced_trees=options["balanced_trees"]
             )
             return BidirectionalRRTstar(env, config=birrtstar_config).plan(
                 ptc=RuntimeTerminationCondition(runtime),

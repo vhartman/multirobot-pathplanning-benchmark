@@ -82,7 +82,7 @@ def main():
     parser.add_argument(
         "--distance_metric",
         choices=["euclidean", "sum_euclidean", "max", "max_euclidean"],
-        default="euclidean",
+        default="max_euclidean",
         help="Distance metric to use (default: max)",
     )
     parser.add_argument(
