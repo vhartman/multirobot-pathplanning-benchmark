@@ -420,7 +420,7 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
 
 @register("rai.unassigned_stacking")
 class rai_unassigned_stacking(FreeMixin, rai_env):
-    def __init__(self, num_robots=4, num_boxes: int = 8):
+    def __init__(self, num_robots=4, num_boxes: int = 4):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
             num_robots, num_boxes, make_and_return_all_keyframes=True
         )
