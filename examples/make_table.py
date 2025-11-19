@@ -195,7 +195,7 @@ def main():
     main_dir = "./out/tmp/"
     folders = get_subfolders_from_main_folder(main_dir)
 
-    group_envs_by = ["dep", "unassigned", "unordered"]
+    group_envs_by = ["dep", "unordered", "unassigned"]
 
     grouped_folders = {}
     grouped_folders["other"] = []
