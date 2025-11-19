@@ -5,6 +5,9 @@ import os
 import random
 import numpy as np
 
+import importlib
+import robotic
+
 from run_experiment import run_experiment_in_parallel, export_config
 
 from multi_robot_multi_goal_planning.problems import (
@@ -51,12 +54,13 @@ def main():
         "rai.three_agent_many_goals",
         "rai.single_agent_mover",
         "rai.piano_dep",
-        "rai.handover",
+        "rai.2d_handover",
         "rai.random_2d",
         "rai.other_hallway",
         "rai.three_agents",
         "rai.triple_waypoints",
         "rai.welding",
+        "rai.handover",
         "rai.eggs",
         "rai.bottles",
         "rai.box_rearrangement",
@@ -87,6 +91,8 @@ def main():
 
     for env_name in representative_envs:
         try:
+            importlib.reload(robotic)
+            
             print(f"Running env {env_name}")
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             experiment_name = "convergence"

@@ -571,7 +571,7 @@ class rai_two_dim_handover_base(rai_env):
 
 # best cost found for max-cost is 17.64
 # best cost found for sum-cost is 25.28
-@register("rai.handover")
+@register("rai.2d_handover")
 class rai_two_dim_handover(SequenceMixin, rai_two_dim_handover_base):
     def __init__(self):
         rai_two_dim_handover_base.__init__(self)
