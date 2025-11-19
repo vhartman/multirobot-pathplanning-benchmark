@@ -4234,76 +4234,68 @@ def make_handover_env(view: bool = False):
     box = "obj1"
 
     komo = ry.KOMO(C, phases=4, slicesPerPhase=1, kOrder=1, enableCollisions=True)
-    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.01])
+    # komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0])
+    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0])
 
     komo.addControlObjective([], 0, 1e-1)
-    komo.addControlObjective([], 1, 1e-1)
+    # komo.addControlObjective([], 1, 1e-1)
     # komo.addControlObjective([], 2, 1e-1)
 
     komo.addModeSwitch([1, 2], ry.SY.stable, ["a1_" + "ur_vacuum", box])
     komo.addObjective(
-        [1, 2], ry.FS.distance, ["a1_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.0]
+        [1, 2], ry.FS.distance, ["a1_" + "ur_vacuum", box], ry.OT.sos, [1e1], [0.01]
+    )
+    komo.addObjective(
+        [1, 2],
+        ry.FS.distance,
+        ["a1_" + "ur_vacuum", box],
+        ry.OT.ineq,
+        [-1e0],
+        [0.00],
     )
     komo.addObjective(
         [1, 2],
         ry.FS.positionDiff,
         ["a1_" + "ur_vacuum", box],
         ry.OT.sos,
-        [1e1, 1e1, 1e1],
-    )
-    # komo.addObjective(
-    #     [1, 2],
-    #     ry.FS.positionDiff,
-    #     ["a1_" + "ur_ee_marker", box],
-    #     ry.OT.sos,
-    #     [1e0],
-    # )
-    komo.addObjective(
-        [1, 2],
-        ry.FS.scalarProductYZ,
-        ["a1_" + "ur_ee_marker", box],
-        ry.OT.sos,
-        [1e0],
+        [1e1, 1e1, 0],
     )
     komo.addObjective(
         [1, 2],
-        ry.FS.scalarProductZZ,
-        ["a1_" + "ur_ee_marker", box],
+        ry.FS.scalarProductXZ,
+        ["a1_" + "ur_ee_marker", "table"],
         ry.OT.sos,
-        [1e0],
+        [2e1],
+        [-1],
     )
 
     komo.addModeSwitch([2, 3], ry.SY.stable, ["a2_" + "ur_vacuum", box])
     komo.addObjective(
         [2, 3], ry.FS.distance, ["a2_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.0]
     )
+
     komo.addObjective(
-        [2, 3],
+        [2,3],
+        ry.FS.distance,
+        ["a2_" + "ur_vacuum", box],
+        ry.OT.ineq,
+        [-1e0],
+        [0.00],
+    )
+    komo.addObjective(
+        [2,3],
         ry.FS.positionDiff,
         ["a2_" + "ur_vacuum", box],
         ry.OT.sos,
-        [1e1, 1e1, 1e1],
-    )
-    # komo.addObjective(
-    #     [2, 3],
-    #     ry.FS.positionDiff,
-    #     ["a2_" + "ur_ee_marker", box],
-    #     ry.OT.sos,
-    #     [1e0],
-    # )
-    komo.addObjective(
-        [2, 3],
-        ry.FS.scalarProductYZ,
-        ["a2_" + "ur_ee_marker", box],
-        ry.OT.sos,
-        [1e0],
+        [1e1, 1e1, 0],
     )
     komo.addObjective(
-        [2, 3],
-        ry.FS.scalarProductZZ,
-        ["a2_" + "ur_ee_marker", box],
+        [2,3],
+        ry.FS.scalarProductXZ,
+        ["a2_" + "ur_ee_marker", "table"],
         ry.OT.sos,
-        [1e0],
+        [2e1],
+        [-1],
     )
 
     komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
@@ -4318,17 +4310,49 @@ def make_handover_env(view: bool = False):
         target=qHome,
     )
 
-    komo.initRandom()
+    komo.addObjective(
+        times=[0, 4],
+        feature=ry.FS.jointState,
+        frames=[],
+        type=ry.OT.sos,
+        scale=[1e0],
+        target=qHome,
+    )
 
-    solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-    solver.setOptions(damping=0.1, wolfe=0.001)
-    retval = solver.solve()
+    max_attempts = 100
+    for i in range(max_attempts):
+        if i > 0:
+            # komo.initRandom()
+            dim = len(C.getJointState())
+            x_init = np.random.rand(dim) * 3 - 1.5
+            komo.initWithConstant(x_init)
+            # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
+            # x_init = q_home + np.random.randn(len(q_home)) * 0.1
+            # komo.initWithConstant(x_init)
 
-    if view:
-        print(retval.dict())
-        komo.view(True, "IK solution")
+        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+        # options.nonStrictSteps = 50;
 
-    keyframes = komo.getPath()
+        # solver.setOptions(damping=0.01, wolfe=0.001)
+        # solver.setOptions(damping=1)
+        retval = solver.solve()
+        retval = retval.dict()
+
+        print(retval)
+
+        # print(keyframes)
+
+        if view:
+            komo.view(True, "IK solution")
+        # komo.view(True, "IK solution")
+
+        # print(retval)
+
+        if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+            # komo.view(True, "IK solution")
+
+            keyframes = komo.getPath()
+            break
 
     return C, keyframes
 
@@ -4511,7 +4535,10 @@ def make_bimanual_grasping_env(view: bool = False):
     max_attempts = 30
     for i in range(max_attempts):
         if i > 0:
-            komo.initRandom()
+            # komo.initRandom()
+            dim = len(C.getJointState())
+            x_init = np.random.rand(dim) * 3 - 1.5
+            komo.initWithConstant(x_init)
             # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
             # x_init = q_home + np.random.randn(len(q_home)) * 0.1
             # komo.initWithConstant(x_init)
@@ -4974,18 +5001,54 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
             target=qHome,
         )
 
-        # print(komo.nlp().getBounds())
-        komo.initRandom()
+        # # print(komo.nlp().getBounds())
+        # # komo.initRandom()
+        # dim = len(C.getJointState())
+        # x_init = np.random.rand(dim) * 3 - 1.5
+        # komo.initWithConstant(x_init)
 
-        ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
-        # print(ret.dict())
-        q = komo.getPath()
-        # print(q)
+        # ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
+        # # print(ret.dict())
+        # q = komo.getPath()
+        # # print(q)
 
-        if view:
-            komo.view(True, "IK solution")
+        # if view:
+        #     komo.view(True, "IK solution")
 
-        return q
+        # return q
+        max_attempts = 30
+        for i in range(max_attempts):
+            if i > 0:
+                # komo.initRandom()
+                dim = len(C.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
+                # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
+                # x_init = q_home + np.random.randn(len(q_home)) * 0.1
+                # komo.initWithConstant(x_init)
+
+            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+            # options.nonStrictSteps = 50;
+
+            # solver.setOptions(damping=0.01, wolfe=0.001)
+            # solver.setOptions(damping=0.001)
+            retval = solver.solve()
+            retval = retval.dict()
+
+            # print(retval)
+            # print(keyframes)
+
+            if view:
+                komo.view(True, "IK solution")
+            # komo.view(True, "IK solution")
+
+            # print(retval)
+
+            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+                # komo.view(True, "IK solution")
+
+                return komo.getPath()
+            # return keyframes[:-1, :]
 
     robots = ["a1", "a2", "a3", "a4"]
 
@@ -5026,7 +5089,7 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
     def compute_insertion_poses(ee, bottle):
         komo = ry.KOMO(C, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True)
         komo.addObjective(
-            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.01]
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.00]
         )
         komo.addControlObjective([], 0, 1e-1)
         # komo.addControlObjective([], 1, 1e0)
@@ -5075,8 +5138,12 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
         #     [3, -1], ry.FS.poseDiff, ["a2", "pre_agent_2_frame"], ry.OT.eq, [1e1]
         # )
 
-        for _ in range(10):
-            komo.initRandom()
+        for i in range(50):
+            if i > 0:
+                # komo.initRandom()
+                dim = len(C.getJointState())
+                x_init = np.random.rand(dim) * 3 - 1.5
+                komo.initWithConstant(x_init)
 
             solver = ry.NLP_Solver(komo.nlp(), verbose=4)
             # options.nonStrictSteps = 50;
@@ -6126,7 +6193,11 @@ def make_box_pile_env(
             max_attempts = 20
             for i in range(max_attempts):
                 if i > 0 or relative_pose_at_handover is not None:
-                    komo.initRandom()
+                    # komo.initRandom()
+                    dim = len(C.getJointState())
+                    x_init = np.random.rand(dim) * 4 - 2
+                    komo.initWithConstant(x_init)
+                    
                     # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
                     # x_init = q_home + np.random.randn(len(q_home)) * 0.1
                     # komo.initWithConstant(x_init)
