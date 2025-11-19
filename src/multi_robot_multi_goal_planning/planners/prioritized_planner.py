@@ -2149,8 +2149,8 @@ class PrioritizedPlannerConfig:
     # gamma: float = 0.7
     # distance_metric: str = "euclidean"
     use_bidirectional_planner: bool = True
-    shortcut_iters: int = 500
-    multirobot_shortcut_iters: int = 0
+    shortcut_iters: int = 100
+    multirobot_shortcut_iters: int = 100
 
 
 class PrioritizedPlanner(BasePlanner):
