@@ -27,11 +27,6 @@ from multi_robot_multi_goal_planning.problems.configuration import (
 
 from multi_robot_multi_goal_planning.problems.constraints import (
     AffineConfigurationSpaceEqualityConstraint,
-    AffineConfigurationSpaceInequalityConstraint,
-    AffineFrameOrientationConstraint,
-    AffineRelativeFrameOrientationConstraint,
-    RelativeAffineTaskSpaceEqualityConstraint,
-    AffineTaskSpaceEqualityConstraint,
 )
 
 from multi_robot_multi_goal_planning.problems.constraints_projection import (
@@ -1570,13 +1565,19 @@ class BaseRRTstar(BasePlanner):
         """
 
         constraints = []
+        seen = set()
         eq_aff, ineq_aff = [], []
+
+        def add_unique(c):
+            if c not in seen:
+                constraints.append(c)
+                seen.add(c)
 
         # env-level
         for c in self.env.constraints:
-            constraints.append(c)
+            add_unique(c)
 
-        # task-level (if available)
+        # task-level
         next_ids = self.mode_validation.get_valid_next_ids(mode)
         if next_ids or self.env.is_terminal_mode(mode):
             task_ids = mode.task_ids
@@ -1584,12 +1585,12 @@ class BaseRRTstar(BasePlanner):
                 tasks = [self.env.tasks[i] for i in task_ids]
                 for task in tasks:
                     for c in task.constraints:
-                        constraints.append(c)
+                        add_unique(c)
 
         for c in constraints:
-            if isinstance(c, AffineConfigurationSpaceEqualityConstraint):
+            if c.type == "affine_equality":
                 eq_aff.append(c)
-            elif isinstance(c, AffineConfigurationSpaceInequalityConstraint):
+            elif c.type == "affine_inequality":
                 ineq_aff.append(c)
 
         return eq_aff, ineq_aff
@@ -1639,14 +1640,14 @@ class BaseRRTstar(BasePlanner):
 
     def satisfies_aff_eq_constraints(self, mode: Mode, constraints: List, q: Configuration) -> bool:
         for c in constraints:
-            if isinstance(c, AffineConfigurationSpaceEqualityConstraint):
+            if c.type == "affine_equality":
                 if not c.is_fulfilled(q, mode, self.env):
                     return False
         return True
 
     def satisfies_aff_ineq_constraints(self, mode: Mode, constraints: List, q: Configuration) -> bool:
         for c in constraints:
-            if isinstance(c, AffineConfigurationSpaceInequalityConstraint):
+            if c.type == "affine_inequality":
                 if not c.is_fulfilled(q, mode, self.env):
                     return False
         return True
@@ -1851,25 +1852,30 @@ class BaseRRTstar(BasePlanner):
     
 
 # ============================================================
-# NONLINEAR CONSTRAINTS HANDLING
+# NONLINEAR (GENERALIZED) CONSTRAINTS HANDLING
 # ============================================================
 
 # 0) UTILS
-    def collect_constraints(self, mode: Mode) -> Tuple[List, List]:
+    def collect_constraints(self, mode: Mode) -> List:
         """
-        Collect all nonlinear equality and inequality constraints from environment and active task.
-        Equality constraints must expose F(x, mode, env), J(x, mode, env).
-        Inequality constraints must expose G(x, mode, env), dG(x, mode, env).
+        Collect all constraints without duplicates.
+        Deduplication is done by object identity (id-based).
         """
-
         constraints = []
+        seen = set()
+
         eq_aff, ineq_aff, eq_nl, ineq_nl = [], [], [], []
+
+        def add_unique(c):
+            if c not in seen:
+                constraints.append(c)
+                seen.add(c)
 
         # env-level
         for c in self.env.constraints:
-            constraints.append(c)
+            add_unique(c)
 
-        # task-level (if available)
+        # task-level
         next_ids = self.mode_validation.get_valid_next_ids(mode)
         if next_ids or self.env.is_terminal_mode(mode):
             task_ids = mode.task_ids
@@ -1877,18 +1883,17 @@ class BaseRRTstar(BasePlanner):
                 tasks = [self.env.tasks[i] for i in task_ids]
                 for task in tasks:
                     for c in task.constraints:
-                        constraints.append(c)
+                        add_unique(c)
 
         for c in constraints:
-            if isinstance(c, AffineConfigurationSpaceEqualityConstraint):
+            if c.type == "affine_equality":
                 eq_aff.append(c)
-            elif isinstance(c, AffineConfigurationSpaceInequalityConstraint):
+            elif c.type == "affine_inequality":
                 ineq_aff.append(c)
-            elif isinstance(c, (AffineFrameOrientationConstraint, 
-                                RelativeAffineTaskSpaceEqualityConstraint, 
-                                AffineTaskSpaceEqualityConstraint, 
-                                AffineRelativeFrameOrientationConstraint)):
+            elif c.type == "nonlinear_equality":
                 eq_nl.append(c)
+            elif c.type == "nonlinear_inequality":
+                ineq_nl.append(c)
 
         return eq_aff, ineq_aff, eq_nl, ineq_nl
 
@@ -2065,6 +2070,7 @@ class BaseRRTstar(BasePlanner):
                 self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and 
                 self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
                 return q_proj
+        print(f"Failed nonlinear transition sampling after {max_tries} tries in mode {mode}.")
         return None
 
     def sample_informed_nl(self, mode: Mode) -> Optional[Configuration]:

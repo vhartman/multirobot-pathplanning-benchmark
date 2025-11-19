@@ -4,7 +4,6 @@ from copy import deepcopy
 from numpy.linalg import norm, LinAlgError
 from typing import List, Optional, Protocol, Any
 from scipy.optimize import minimize
-from .constraints import AffineConfigurationSpaceInequalityConstraint, AffineConfigurationSpaceEqualityConstraint, AffineTaskSpaceEqualityConstraint, RelativeAffineTaskSpaceEqualityConstraint, AffineFrameOrientationConstraint
 
 class EqualityConstraint(Protocol):
     def F(self, x: np.ndarray) -> np.ndarray: ...
@@ -160,8 +159,8 @@ def project_affine_cspace(
     n = x.size
 
     # split constraints
-    aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
-    aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
+    aff_eq = [c for c in constraints if c.type == "affine_equality"]
+    aff_in = [c for c in constraints if c.type == "affine_inequality"]
 
     # 0) no constraints
     if not (aff_eq or aff_in):
@@ -396,9 +395,9 @@ def project_gauss_newton(
     constraints: List[Any],
     mode=None,
     env=None,
-    tol: float = 1e-6,
-    max_iters: int = 100,
-    step_size: float = 1.0,
+    tol: float = 1e-2,
+    max_iters: int = 500,
+    step_size: float = 0.5,
     damping: float = 1e-6,
     verbose: bool = False,
 ) -> Optional[Any]:
@@ -416,11 +415,10 @@ def project_gauss_newton(
     constraints = list(set(constraints))
 
     # split constraints
-    aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
-    aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
-    nl_eq = [c for c in constraints if isinstance(c, AffineTaskSpaceEqualityConstraint) or
-             isinstance(c, RelativeAffineTaskSpaceEqualityConstraint) or
-             isinstance(c, AffineFrameOrientationConstraint)]
+    aff_eq = [c for c in constraints if c.type == "affine_equality"]
+    aff_in = [c for c in constraints if c.type == "affine_inequality"]
+    nl_eq = [c for c in constraints if c.type == "nonlinear_equality"]
+    nl_in = [c for c in constraints if c.type == "nonlinear_inequality"]
     
 
     if aff_eq:
@@ -447,23 +445,22 @@ def project_gauss_newton(
             residuals.append(F)
             jacobians.append(J)
 
-        # # nonlinear inequalities (active only)
-        # for c in nl_in:
-        #     g = np.asarray(c.G(x, mode, env), dtype=float).reshape(-1)
-        #     dG = np.asarray(c.dG(x, mode, env), dtype=float).reshape(-1, n)
-        #     active = g > 0.0
-        #     if np.any(active):
-        #         residuals.append(g[active])
-        #         jacobians.append(dG[active])
+        # nonlinear inequalities (active only)
+        for c in nl_in:
+            g = np.asarray(c.G(x, mode, env), dtype=float).reshape(-1)
+            dG = np.asarray(c.dG(x, mode, env), dtype=float).reshape(-1, n)
+            active = g > 0.0
+            if np.any(active):
+                residuals.append(g[active])
+                jacobians.append(dG[active])
 
-        # # affine inequalities (active only)
-        # for c in aff_in:
-        #     g = c.G(x).ravel()
-        #     active = g > 0.0
-        #     if np.any(active):
-        #         residuals.append(g[active])
-        #         jacobians.append(c.dG(x).reshape(-1, n)[active])
-
+        # affine inequalities (active only)
+        for c in aff_in:
+            g = c.G(x, mode, env).ravel()
+            active = g > 0.0
+            if np.any(active):
+                residuals.append(g[active])
+                jacobians.append(c.dG(x, mode, env).reshape(-1, n)[active])
         # stop if nothing to fix
         if not residuals:
             if verbose:
@@ -497,6 +494,10 @@ def project_gauss_newton(
                 satisfied = all(c.is_fulfilled(q.from_flat(x), mode, env) for c in nl_eq)
                 print(f"all nonlinear constraints satisfied = {satisfied}")
                 print(f"residual norm = {norm(r)}")
+
+                for c in nl_eq:
+                    res_c = c.F(q.from_flat(x).state(), mode, env)
+                    print(f"  CONSTR {c}: RES = {res_c}")
                 
             break
 
@@ -530,13 +531,10 @@ def project_nlp_sqp(
     n = x.size
 
     # split constraints
-    aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
-    aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
-    nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
-                                                              AffineConfigurationSpaceInequalityConstraint))]
-    
-    nl_eq = [c for c in nonlinear if hasattr(c, "F")]
-    nl_in = [c for c in nonlinear if hasattr(c, "G")]
+    aff_eq = [c for c in constraints if c.type == "affine_equality"]
+    aff_in = [c for c in constraints if c.type == "affine_inequality"]
+    nl_eq = [c for c in constraints if c.type == "nonlinear_equality"]
+    nl_in = [c for c in constraints if c.type == "nonlinear_inequality"]
 
     if aff_eq:
         Aeq = np.vstack([c.J(x, mode, env) for c in aff_eq])
@@ -624,10 +622,11 @@ def project_cspace_cnkz(
     n = x.size
 
     # split constraints
-    aff_eq = [c for c in constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
-    aff_in = [c for c in constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
-    nonlinear = [c for c in constraints if not isinstance(c, (AffineConfigurationSpaceEqualityConstraint,
-                                                              AffineConfigurationSpaceInequalityConstraint))]
+    aff_eq = [c for c in constraints if c.type == "affine_equality"]
+    aff_in = [c for c in constraints if c.type == "affine_inequality"]
+    nl_eq = [c for c in constraints if c.type == "nonlinear_equality"]
+    nl_in = [c for c in constraints if c.type == "nonlinear_inequality"]
+    nonlinear = nl_eq + nl_in
 
     # 0) no constraints
     if not (aff_eq or aff_in or nonlinear):
@@ -673,36 +672,3 @@ def project_cspace_cnkz(
             x = x_try
 
     return q.from_flat(x)
-
-
-# ------------------------------------------------------------
-# --- visualize ---
-# ------------------------------------------------------------
-
-def project_and_visualize(
-        q: Any,
-        constraints: List[Any],
-        mode: None,
-        env: None,
-        projector: str = "cnkz",
-):
-    if not constraints:
-        print("No constraints provided.")
-        return
-    
-    if projector == "cnkz":
-        q_proj = project_cspace_cnkz(q, constraints, mode, env)
-    elif projector == "sqp":
-        q_proj = project_nlp_sqp(q, constraints, mode, env)
-    elif projector == "gn":
-        q_proj = project_gauss_newton(q, constraints, mode, env)
-    else:
-        raise ValueError(f"Unknown projector: {projector}")
-    
-    if q_proj is None:
-        print(f"Projection failed for {projector}.")
-    else:
-        print(f"Original Q:")
-        env.show_config(q, blocking=True)
-        print(f"Projected Q ({projector}):")
-        env.show_config(q_proj, blocking=True)

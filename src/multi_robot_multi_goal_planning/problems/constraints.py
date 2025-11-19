@@ -52,6 +52,7 @@ class AffineTaskSpaceEqualityConstraint(Constraint):
         self.mat = projection_matrix
         self.constraint_pose = pose
         self.eps = eps
+        self.type = "nonlinear_equality"
 
         assert self.mat.shape[0] == len(self.constraint_pose)
         assert self.mat.shape[1] == 7
@@ -95,6 +96,7 @@ class AffineTaskSpaceInequalityConstraint(Constraint):
 
         self.mat = projection_matrix
         self.constraint_pose = pose
+        self.type = "nonlinear_inequality"
 
         assert self.mat.shape[0] == len(self.constraint_pose)
         assert self.mat.shape[1] == 7
@@ -140,6 +142,7 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         self.mat = mat
         self.desired_relative_pose = rel_pose
         self.eps = eps
+        self.type ="nonlinear_equality"
 
         # assert self.mat.shape[0] == len(self.desired_relative_pose)
         assert self.mat.shape[1] == 7
@@ -180,6 +183,7 @@ class RelativeAffineTaskSpaceInequalityConstraint(Constraint):
         self.frames = frame_names
         self.mat = mat
         self.desired_relative_pose = rel_pose
+        self.type ="nonlinear_inequality"
 
         # could possibly change in the future.
         assert len(frame_names) == 2
@@ -215,6 +219,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
         self.constraint_pose = np.asarray(pose, dtype=float)
         self.rhs = self.constraint_pose  # alias
         self.eps = eps
+        self.type = "affine_equality"
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
@@ -242,6 +247,7 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
         self.constraint_pose = np.asarray(pose, dtype=float)
         self.rhs = self.constraint_pose  # <-- alias for compatibility
         self.eps = eps
+        self.type = "affine_inequality"
 
         assert self.mat.shape[0] == len(self.constraint_pose)
 
@@ -265,6 +271,7 @@ class AffineRelativeFrameOrientationConstraint(Constraint):
         self.desired_orientation_vector = desired_orientation_vector
         self.epsilon = epsilon
         self.vector = vector
+        self.type = "nonlinear_equality"
 
         assert self.vector in ["x", "y", "z"]
 
@@ -322,6 +329,7 @@ class AffineFrameOrientationConstraint(Constraint):
         self.desired_orientation_vector = desired_orientation_vector
         self.epsilon = epsilon
         self.vector = vector
+        self.type = "nonlinear_equality"
 
         assert self.vector in ["x", "y", "z"]
 
@@ -398,6 +406,7 @@ class TaskSpacePathConstraint(Constraint):
         self.path = path
         self.mat = mat
         self.epsilon = epsilon
+        self.type = "nonlinear_inequality" # TODO: check
 
     def _get_closest_point(self, frame_pose):
         pose_proj = self.mat @ frame_pose
@@ -476,6 +485,7 @@ class ConfigurationSpacePathConstraint(Constraint):
         self.path = path
         self.mat = mat
         self.epsilon = epsilon
+        self.type = "affine_equality" # TODO: check
 
     def _get_closest_point(self, q):
         q_proj = self.mat @ q

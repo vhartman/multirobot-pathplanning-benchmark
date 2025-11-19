@@ -6,8 +6,6 @@ import random
 from typing import List, Optional
 
 from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
-from multi_robot_multi_goal_planning.problems.constraints import AffineConfigurationSpaceEqualityConstraint, AffineConfigurationSpaceInequalityConstraint
-from multi_robot_multi_goal_planning.problems.constraints_projection import project_affine_cspace_interior, project_gauss_newton
 from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
@@ -278,8 +276,8 @@ def robot_mode_shortcut(
 
     # Collect affine constraints
     def collect_affine_constraints_for_env():
-        eq = [c for c in env.constraints if isinstance(c, AffineConfigurationSpaceEqualityConstraint)]
-        ineq = [c for c in env.constraints if isinstance(c, AffineConfigurationSpaceInequalityConstraint)]
+        eq = [c for c in env.constraints if c.type == "affine_equality"]
+        ineq = [c for c in env.constraints if c.type == "affine_inequality"]
         return eq, ineq
 
     env_eq_constraints, env_ineq_constraints = collect_affine_constraints_for_env()
