@@ -553,7 +553,6 @@ class BaseRRTstar(BasePlanner):
         self.eta = self.config.stepsize
         if self.eta == 0:
             self.eta = np.sqrt(self.dim)
-            self.eta = self.eta/4
             # self.eta = self.eta/4 # to densify tree
             
         self.operation = Operation()
@@ -1378,7 +1377,7 @@ class BaseRRTstar(BasePlanner):
                     planner=self,
                 )
             else:
-                shortcut_path_, result = robot_mode_shortcut_nl( 
+                shortcut_path_, result = robot_mode_shortcut( 
                     self.env,
                     self.operation.path_shortcutting,
                     100,
@@ -1636,7 +1635,7 @@ class BaseRRTstar(BasePlanner):
         if trans_cursor == 0:
             return None
 
-        return AffineConfigurationSpaceEqualityConstraint(A[:trans_cursor, :], b[:trans_cursor])
+        return AffineConfigurationSpaceEqualityConstraint(A[:trans_cursor, :], b[:trans_cursor, None])
 
     def satisfies_aff_eq_constraints(self, mode: Mode, constraints: List, q: Configuration) -> bool:
         for c in constraints:

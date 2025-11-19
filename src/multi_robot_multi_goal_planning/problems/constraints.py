@@ -219,6 +219,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.constraint_pose)
 
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
+        print(self.F(q.state(), mode, env))
         return all(self.F(q.state(), mode, env) < self.eps)
     
     def F(self, q_vec: np.ndarray, mode, env) -> np.ndarray:

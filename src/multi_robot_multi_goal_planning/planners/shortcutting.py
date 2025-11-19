@@ -251,6 +251,7 @@ def robot_mode_shortcut(
     resolution=0.001,
     tolerance=0.01,
     robot_choice="round_robin",
+    planner=None,
     interpolation_resolution: float = 0.1,
 ):
     """
@@ -770,7 +771,7 @@ def _opt_shortcut_segment_nl(
             break
 
         # Gradient descent step on inner nodes (endpoints fixed)
-        Q[1:-1, active_idx] -= step_size * grad[1:-1, active_idx]
+        Q[1:-1, active_idx] -= step_size * grad[1:-1, :][:, active_idx]
 
         # Project inner nodes back onto the manifold
         for k in range(1, segment_len - 1):
@@ -922,15 +923,6 @@ def robot_mode_shortcut_nl_opt(
         q1 = new_path[j].q
         assert np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6
         assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
-
-        # Full path cost after hypothetical replacement (cheap, but global)
-        # You can skip this and trust local cost if you want speed.
-        new_full_path = new_path[:i] + path_element + new_path[j + 1 :]
-        new_full_cost = path_cost(new_full_path, env.batch_config_cost)
-
-        if new_full_cost >= costs[-1]:
-            # Does not improve global cost; skip
-            continue
 
         # Collision check on the candidate segment only
         if env.is_path_collision_free(

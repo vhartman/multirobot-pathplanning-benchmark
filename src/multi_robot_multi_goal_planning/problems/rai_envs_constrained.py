@@ -127,7 +127,7 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
                 "joint_place",
                 ["a1", "a2"],
                 SingleGoal(rel_movement_end), constraints=[
-                    RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], pose_projection_matrix, rel_pose),
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], pose_projection_matrix, rel_pose, 1e-1),
                     AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 1, 0]), 1e-3)
                     # AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 0, 0]), 1e-3)
                 ]
@@ -197,8 +197,8 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 frames=["table", "obj1"],
                 constraints=[
                     RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], pose_projection_matrix,  rel_pose, 1e-2),
-                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([0, 0, 1]), 5e-2),
-                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([0, -1, 0]), 5e-1)
+                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([0, 0, 1]), 1e-1),
+                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([0, -1, 0]), 1e-1)
                     # AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([1, -1, 0]), 5e-2),
                     # AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([-1, -1, 0]), 5e-2)
                 ]

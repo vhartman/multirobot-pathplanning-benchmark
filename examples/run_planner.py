@@ -214,7 +214,7 @@ def main():
 
         path = path_w_doubled_modes
 
-    if False:
+    if True:
         print("robot-mode-shortcut")
         shortcut_path, info_shortcut = robot_mode_shortcut(
             env,
@@ -222,11 +222,11 @@ def main():
             1000,
             tolerance=env.collision_tolerance,
             resolution=env.collision_resolution,
-            # planner=planner,
+            planner=planner,
         )
     else:
         print("robot-mode-nl-shortcut")
-        shortcut_path, info_shortcut = robot_mode_shortcut_nl_opt(
+        shortcut_path, info_shortcut = robot_mode_shortcut_nl(   # robot_mode_shortcut_nl_opt
             env,
             path,
             1000,
