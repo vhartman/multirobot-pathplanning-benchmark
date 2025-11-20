@@ -2077,7 +2077,7 @@ def plan_robots_in_dyn_env(
         )
 
     if path is None:
-        print("Didi not find a path in dyn env.")
+        print("Did not find a path in dyn env.")
         return None, None
 
     # if len(robots) == 1:
