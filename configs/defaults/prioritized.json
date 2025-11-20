@@ -1,8 +1,0 @@
-{
-  "type": "prioritized",
-  "options": {
-    "use_bidirectional_planner": true,
-    "shortcut_iters": 100,
-    "multirobot_shortcut_iters": 100
-  }
-}
