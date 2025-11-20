@@ -4054,7 +4054,7 @@ def make_handover_env(view: bool = False):
     return C, keyframes
 
 
-def make_bimanual_grasping_env(view: bool = False):
+def make_bimanual_grasping_env(obstacle, view: bool = False):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -4092,6 +4092,13 @@ def make_bimanual_grasping_env(view: bool = False):
     ).setColor([1, 0.5, 0, 1]).setContact(1).setRelativePosition(
         [0, -0.75, 0.15]
     ).setJoint(ry.JT.rigid)
+
+    if obstacle:
+        C.addFrame("obs1").setParent(table).setShape(
+            ry.ST.box, size=[0.4, 0.1, 0.4, 0.005]
+        ).setContact(1).setRelativePosition(
+            [0, -0.4, 0.25]
+        )
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.4, 0.2, 0.005]
