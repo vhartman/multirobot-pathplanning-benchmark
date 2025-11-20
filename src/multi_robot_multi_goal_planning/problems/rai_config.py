@@ -25,6 +25,41 @@ def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
 
     return links
 
+def solve_komo_problem(komo, max_attempts, C, view, mult=3, offset=-1.5, damping=None, wolfe=None):
+    for num_attempt in range(max_attempts):
+        # komo.initRandom()
+        if num_attempt > 0:
+            dim = len(C.getJointState())
+            x_init = np.random.rand(dim) * mult + offset
+            komo.initWithConstant(x_init)
+            # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+
+        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
+        # options.nonStrictSteps = 50;
+
+        # solver.setOptions(damping=0.01, wolfe=0.001)
+        if damping is not None:
+            solver.setOptions(damping=damping)
+        if wolfe is not None:
+            solver.setOptions(wolfe=wolfe)
+
+        retval = solver.solve()
+        retval = retval.dict()
+
+        # print(retval)
+
+        if view:
+            komo.view(True, "IK solution")
+
+        print(retval)
+
+        if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+            # komo.view(True, "IK solution")
+            keyframes = komo.getPath()
+            return keyframes
+
+    return None
+
 
 def make_table_with_walls(width=2, length=2):
     C = ry.Config()
@@ -334,17 +369,7 @@ def make_2d_rai_env(view: bool = False, agents_can_rotate=True):
         [0, 0.5, 0],
     )
 
-    solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-    # options.nonStrictSteps = 50;
-
-    solver.setOptions(damping=0.01, wolfe=0.001)
-    solver.solve()
-
-    if view:
-        komo.view(True, "IK solution")
-
-    keyframes = komo.getPath()
-    # print(keyframes)
+    keyframes = solve_komo_problem(komo, 5, C, view)
 
     return C, keyframes
 
@@ -881,29 +906,8 @@ def make_two_dim_handover(view: bool = False):
             target=q_home,
         )
 
-        for _ in range(100):
-            # komo.initRandom()
-            komo.initWithConstant(np.random.rand(6) * 2)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            print(retval)
-
-            if view:
-                komo.view(True, "IK solution")
-
-            keyframes = komo.getPath()
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                return keyframes
+        keyframes = solve_komo_problem(komo, 100, C, view, 2, 0)
+        return keyframes
 
     def compute_place():
         box = "obj2"
@@ -954,29 +958,8 @@ def make_two_dim_handover(view: bool = False):
             target=q_home,
         )
 
-        for _ in range(2000):
-            # komo.initRandom()
-            komo.initWithConstant(np.random.rand(6) * 2)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            print(retval)
-
-            if view:
-                komo.view(True, "IK solution")
-
-            keyframes = komo.getPath()
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                return keyframes
+        keyframes = solve_komo_problem(komo, 2000, C, view, 2, 0)
+        return keyframes
 
     handover_keyframes = compute_handover()
     place_keyframes = compute_place()
@@ -1062,28 +1045,8 @@ def make_single_agent_mover_env(num_goals=30, view: bool = False):
     # we try to produce a couple different solutions
     sols = []
     for _ in range(num_goals):
-        dim = len(C.getJointState())
-        x_init = np.random.rand(dim) * 2 - 1.0
-        komo.initWithConstant(x_init)
-
-        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-        # options.nonStrictSteps = 50;
-
-        # solver.setOptions(damping=0.01, wolfe=0.001)
-        # solver.setOptions(damping=0.001)
-        retval = solver.solve()
-        retval = retval.dict()
-
-        # print(bottle, retval)
-
-        if view:
-            komo.view(True, "IK solution")
-
-        keyframes = komo.getPath()
-
-        # print(retval)
-
-        if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
+        keyframes = solve_komo_problem(komo, 100, C, view, 2, -1)
+        if keyframes is not None:
             sols.append(keyframes)
 
     # # print(keyframes)
@@ -1208,7 +1171,9 @@ def make_piano_mover_env(view: bool = False):
         komo.view(True, "IK solution")
 
     keyframes = komo.getPath()
-    # # print(keyframes)
+    # print(keyframes)
+
+    # keyframes = solve_komo_problem(komo, 100, C, view, 3, -1.5, 0.01, 0.001)
 
     return C, keyframes
 
@@ -1939,36 +1904,9 @@ def make_ur10_arm_orientation_env(num_robots=2):
             target=q_home,
         )
 
-        max_attempts = 20
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+        keyframes = solve_komo_problem(komo, 20, c_tmp, False, 3, -1.5)
+        return keyframes
 
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            print(retval)
-            # if view:
-            # komo.view(True, "IK solution")
-
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
 
     k1 = compute_keyframes_for_obj("a1_", "obj_1", "goal_1")
     k2 = compute_keyframes_for_obj("a2_", "obj_2", "goal_2")
@@ -2093,36 +2031,8 @@ def make_stacking_with_holding_env(num_robots=2):
             target=q_home,
         )
 
-        max_attempts = 20
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            print(retval)
-            # if view:
-            # komo.view(True, "IK solution")
-
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
+        keyframes = solve_komo_problem(komo, 20, c_tmp, False, 3, -1.5)
+        return keyframes
 
     k1 = compute_keyframes_for_obj("a1_", "obj_1", "goal_1")
     k2 = compute_keyframes_for_obj("a2_", "obj_2", "goal_2")
@@ -2261,36 +2171,8 @@ def make_single_arm_stick_env(clutter = False):
             target=q_home,
         )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            print(retval)
-
-            # if view:
-            # komo.view(True, "IK solution")
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes[0, :]
-
-        return None
+        keyframes = solve_komo_problem(komo, 20, c_tmp, False, 3, -1.5)
+        return keyframes[0, :]
 
     start_pose = compute_pose_from_pos("a1_", xy_start_pos)
     goal_pose = compute_pose_from_pos("a1_", xy_goal_pos)
@@ -2440,36 +2322,8 @@ def make_dual_arm_stick_env(clutter=False):
             target=q_home,
         )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-            # komo.view(True, "IK solution")
-
-            print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes[0]
-
-        return None
+        keyframes = solve_komo_problem(komo, 20, c_tmp, False, 3, -1.5)
+        return keyframes[0]
 
     r1_xy_start_pos = [0.2, 0.2]
     r1_xy_goal_pos = [-0.2, -0.2]
@@ -2961,49 +2815,9 @@ def make_crl_logo_rearrangement_env(num_robots=4, view: bool = False):
                 target=q_home,
             )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
+        keyframes = solve_komo_problem(komo, 5, c_tmp, False, 3, -1.5)
+        return keyframes
 
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-            # komo.view(True, "IK solution")
-
-            print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
-
-        # solver = ry.NLP_Solver(komo.nlp(), verbose=10)
-        # solver.setOptions(damping=0.1, wolfe=0.001)
-        # retval = solver.solve()
-
-        # print(retval.dict())
-
-        # if view:
-        #     komo.view(True, "IK solution")
-
-        # keyframes = komo.getPath()
-
-        # return keyframes
 
     # all_robots = ["a1_", "a2_"]
     all_robots = ["a1_", "a2_", "a3_", "a4_"]
@@ -3356,36 +3170,8 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
                 target=q_home,
             )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-            # komo.view(True, "IK solution")
-
-            print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
+        keyframes = solve_komo_problem(komo, 5, c_tmp, view, 3, -1.5)
+        return keyframes
 
     # all_robots = ["a1_", "a2_"]
     all_robots = ["a1_", "a2_", "a3_", "a4_"]
@@ -3741,36 +3527,8 @@ def make_box_stacking_env(
             target=q_home,
         )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-            # komo.view(True, "IK solution")
-
-            print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
+        keyframes = solve_komo_problem(komo, 5, c_tmp, view, 3, -1.5)
+        return keyframes
 
     # all_robots = ["a1_", "a2_", "a3_", "a4_"]
     # all_robots = all_robots[:num_robots]
@@ -4089,36 +3847,8 @@ def make_pyramid_env(
             target=q_home,
         )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-            # komo.view(True, "IK solution")
-
-            print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
+        keyframes = solve_komo_problem(komo, 5, c_tmp, view, 3, -1.5)
+        return keyframes
 
     # all_robots = ["a1_", "a2_", "a3_", "a4_"]
     # all_robots = all_robots[:num_robots]
@@ -4319,40 +4049,7 @@ def make_handover_env(view: bool = False):
         target=qHome,
     )
 
-    max_attempts = 100
-    for i in range(max_attempts):
-        if i > 0:
-            # komo.initRandom()
-            dim = len(C.getJointState())
-            x_init = np.random.rand(dim) * 3 - 1.5
-            komo.initWithConstant(x_init)
-            # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
-            # x_init = q_home + np.random.randn(len(q_home)) * 0.1
-            # komo.initWithConstant(x_init)
-
-        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-        # options.nonStrictSteps = 50;
-
-        # solver.setOptions(damping=0.01, wolfe=0.001)
-        # solver.setOptions(damping=1)
-        retval = solver.solve()
-        retval = retval.dict()
-
-        print(retval)
-
-        # print(keyframes)
-
-        if view:
-            komo.view(True, "IK solution")
-        # komo.view(True, "IK solution")
-
-        # print(retval)
-
-        if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-            # komo.view(True, "IK solution")
-
-            keyframes = komo.getPath()
-            break
+    keyframes = solve_komo_problem(komo, 100, C, view, 3, -1.5)
 
     return C, keyframes
 
@@ -4532,43 +4229,8 @@ def make_bimanual_grasping_env(view: bool = False):
         target=qHome,
     )
 
-    max_attempts = 30
-    for i in range(max_attempts):
-        if i > 0:
-            # komo.initRandom()
-            dim = len(C.getJointState())
-            x_init = np.random.rand(dim) * 3 - 1.5
-            komo.initWithConstant(x_init)
-            # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
-            # x_init = q_home + np.random.randn(len(q_home)) * 0.1
-            # komo.initWithConstant(x_init)
-
-        solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-        # options.nonStrictSteps = 50;
-
-        # solver.setOptions(damping=0.01, wolfe=0.001)
-        # solver.setOptions(damping=0.001)
-        retval = solver.solve()
-        retval = retval.dict()
-
-        # print(retval)
-
-        keyframes = komo.getPath()
-
-        # print(keyframes)
-
-        if view:
-            komo.view(True, "IK solution")
-        # komo.view(True, "IK solution")
-
-        # print(retval)
-
-        if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-            # komo.view(True, "IK solution")
-
-            keyframes = keyframes[:-1, :]
-            break
-            # return keyframes[:-1, :]
+    keyframes = solve_komo_problem(komo, 100, C, view, 3, -1.5)
+    keyframes = keyframes[:-1, :]
 
     return C, robots, keyframes
 
@@ -5001,54 +4663,8 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
             target=qHome,
         )
 
-        # # print(komo.nlp().getBounds())
-        # # komo.initRandom()
-        # dim = len(C.getJointState())
-        # x_init = np.random.rand(dim) * 3 - 1.5
-        # komo.initWithConstant(x_init)
-
-        # ret = ry.NLP_Solver(komo.nlp(), verbose=0).solve()
-        # # print(ret.dict())
-        # q = komo.getPath()
-        # # print(q)
-
-        # if view:
-        #     komo.view(True, "IK solution")
-
-        # return q
-        max_attempts = 30
-        for i in range(max_attempts):
-            if i > 0:
-                # komo.initRandom()
-                dim = len(C.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithConstant(np.random.rand(len(q_home)) * 4)
-                # x_init = q_home + np.random.randn(len(q_home)) * 0.1
-                # komo.initWithConstant(x_init)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-            # print(keyframes)
-
-            if view:
-                komo.view(True, "IK solution")
-            # komo.view(True, "IK solution")
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-
-                return komo.getPath()
-            # return keyframes[:-1, :]
+        keyframes = solve_komo_problem(komo, 100, C, view, 3, -1.5)
+        return keyframes
 
     robots = ["a1", "a2", "a3", "a4"]
 
@@ -5138,37 +4754,8 @@ def make_bottle_insertion(remove_non_moved_bottles: bool = False, view: bool = F
         #     [3, -1], ry.FS.poseDiff, ["a2", "pre_agent_2_frame"], ry.OT.eq, [1e1]
         # )
 
-        for i in range(50):
-            if i > 0:
-                # komo.initRandom()
-                dim = len(C.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(bottle, retval)
-
-            if view:
-                komo.view(True, "IK solution")
-
-            keyframes = komo.getPath()
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                return keyframes
-
-            # else:
-            #     print(retval)
-
-        return 0
+        keyframes = solve_komo_problem(komo, 50, C, view, 3, -1.5)
+        return keyframes
 
     a0_b1_keyframes = compute_insertion_poses("a0_ur_vacuum", "bottle_1")
     a0_b2_keyframes = compute_insertion_poses("a0_ur_vacuum", "bottle_12")
@@ -5483,36 +5070,8 @@ def make_two_arms_on_a_gantry():
             target=q_home,
         )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-
-            # print(retval)
-            # komo.view(True, "IK solution")
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
 
     k1 = compute_rearrangment("a1_", "obj0", "goal0")
     k2 = compute_rearrangment("a1_", "obj1", "goal1")
@@ -5713,36 +5272,8 @@ def make_four_arms_on_a_gantry():
             target=q_home,
         )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-
-            # print(retval)
-            # komo.view(True, "IK solution")
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
 
     k1 = compute_rearrangment("a1_", "obj0", "goal0")
     k2 = compute_rearrangment("a2_", "obj1", "goal1")
@@ -5900,31 +5431,8 @@ def make_goto_husky_env():
         all_keyframes = []
         max_attempts = 20
         for i in range(max_attempts):
-            if i > 0:
-                dim = len(C.getJointState())
-                x_init = np.random.rand(dim) * 8. - 4
-                komo.initWithConstant(x_init)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            print(retval)
-
-            # komo.view(True, "IK solution")
-            # komo.view(True, "IK solution")
-
-            keyframes = komo.getPath()
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-
+            keyframes = solve_komo_problem(komo, 50, C, False, 8, -4)
+            if keyframes is not None:
                 if prefix == "a1_":
                     all_keyframes.append(keyframes[0, :9])
                 else:
@@ -6902,36 +6410,8 @@ def make_strut_assembly_problem():
             target=q_home,
         )
 
-        max_attempts = 100
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 5. - 2.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-            print(retval)
-
-            # komo.view(True, "IK solution")
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
+        keyframes = solve_komo_problem(komo, 100, c_tmp, False, 5, -2.5)
+        return keyframes
 
     keyframes = []
     assigned_robots = []
@@ -7262,38 +6742,8 @@ def make_strut_nccr_env():
             target=q_home,
         )
 
-        max_attempts = 200
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-            print(retval)
-
-            # komo.view(True, "IK solution")
-
-            # print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
+        keyframes = solve_komo_problem(komo, 200, c_tmp, False, 3, -1.5)
+        return keyframes
 
     keyframes = []
 
@@ -7568,36 +7018,8 @@ def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="t
             target=q_home,
         )
 
-        max_attempts = 5
-        for num_attempt in range(max_attempts):
-            # komo.initRandom()
-            if num_attempt > 0:
-                dim = len(c_tmp.getJointState())
-                x_init = np.random.rand(dim) * 3 - 1.5
-                komo.initWithConstant(x_init)
-                # komo.initWithPath(np.random.rand(3, 12) * 5 - 2.5)
-
-            solver = ry.NLP_Solver(komo.nlp(), verbose=4)
-            # options.nonStrictSteps = 50;
-
-            # solver.setOptions(damping=0.01, wolfe=0.001)
-            # solver.setOptions(damping=0.001)
-            retval = solver.solve()
-            retval = retval.dict()
-
-            # print(retval)
-
-            # if view:
-            # komo.view(True, "IK solution")
-
-            print(retval)
-
-            if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
-                # komo.view(True, "IK solution")
-                keyframes = komo.getPath()
-                return keyframes
-
-        return None
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
 
     # C.view(True)
     

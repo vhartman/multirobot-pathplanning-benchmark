@@ -1,130 +1,88 @@
-import traceback
+import json
+import subprocess
+import tempfile
 import datetime
 import os
 
-import random
-import numpy as np
+representative_envs = [
+    ("rai.simple", 2),
+    ("rai.one_agent_many_goals", 2),
+    ("rai.two_agents_many_goals_dep", 2),
+    ("rai.three_agent_many_goals", 2),
+    ("rai.single_agent_mover", 2),
+    ("rai.piano_dep", 2),
+    ("rai.2d_handover", 2),
+    ("rai.random_2d", 2),
+    ("rai.other_hallway", 2),
+    ("rai.three_agents", 2),
+    ("rai.triple_waypoints", 2),
+    ("rai.welding", 2),
+    ("rai.handover", 2),
+    ("rai.eggs", 2),
+    ("rai.bottles", 2),
+    ("rai.box_rearrangement", 2),
+    ("rai.box_reorientation", 2),
+    ("rai.box_reorientation_dep", 2),
+    ("rai.pyramid", 2),
+    ("rai.box_stacking", 2),
+    ("rai.box_stacking_dep", 2),
+    ("rai.mobile_wall_four", 2),
+    ("rai.mobile_wall_four_dep", 2),
+    ("rai.mobile_strut", 7),
+    ("rai.three_robot_truss", 7),
+    ("rai.spiral_tower", 0),
+    ("rai.spiral_tower_two", 0),
+    ("rai.cube_four", 2),
+    ("rai.unordered_box_reorientation", 0),
+    ("rai.unassigned_two_dim", 0),
+    ("rai.unassigned_cleanup", 0),
+    ("rai.unassigned_stacking", 0),
+    ("rai.unordered_bottles", 0),
+]
 
-import importlib
-import robotic
+num_parallel = 2
+num_runs = 1
+max_runtime = 500
+optimize = False
 
-from run_experiment import run_experiment_in_parallel, export_config
+planners = [
+    {"name": "prio", "type": "prioritized", "options": {}},
+    {"name": "birrt", "type": "birrtstar", "options": {}},
+]
 
-from multi_robot_multi_goal_planning.problems import (
-    get_all_environments,
-    get_env_by_name,
-)
+for env_name, seed in representative_envs:
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    print(f"Running {env_name} with seed {seed}")
 
-from multi_robot_multi_goal_planning.planners import (
-    BaseRRTConfig,
-    BidirectionalRRTstar,
-    PrioritizedPlannerConfig,
-    PrioritizedPlanner,
-)
+    # create temporary JSON config
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmpfile:
+        config = {
+            "experiment_name": "convergence",
+            "environment": env_name,
+            "per_agent_cost": "euclidean",
+            "cost_reduction": "max",
+            "max_planning_time": max_runtime,
+            "num_runs": num_runs,
+            "seed": seed,
+            "optimize": optimize,
+            "planners": planners,
+        }
+        json.dump(config, tmpfile)
+        tmpfile_path = tmpfile.name
 
-from multi_robot_multi_goal_planning.planners.termination_conditions import (
-    RuntimeTerminationCondition,
-)
-
-
-def make_planners(env, runtime):
-    def birrt_planner(env):
-        config = BaseRRTConfig()
-        config.distance_metric = "max_euclidean"
-        return BidirectionalRRTstar(env, config=config).plan(
-            RuntimeTerminationCondition(runtime), optimize=True
+    try:
+        # spawn a fresh Python process for strict isolation
+        subprocess.run(
+            [
+                "python",
+                "./examples/run_experiment.py",
+                tmpfile_path,
+                "--num_processes",
+                str(num_parallel),
+                "--parallel_execution",
+            ],
+            check=True,
         )
-
-    def prio_planner(env):
-        config = PrioritizedPlannerConfig()
-        return PrioritizedPlanner(env, config).plan(
-            RuntimeTerminationCondition(runtime), optimize=True
-        )
-
-    planners = [("birrt", birrt_planner), ("prio", prio_planner)]
-    return planners
-
-
-def main():
-    # all_envs = get_all_environments()
-    representative_envs = [
-        "rai.simple",
-        "rai.one_agent_many_goals",
-        "rai.two_agents_many_goals_dep",
-        "rai.three_agent_many_goals",
-        "rai.single_agent_mover",
-        "rai.piano_dep",
-        "rai.2d_handover",
-        "rai.random_2d",
-        "rai.other_hallway",
-        "rai.three_agents",
-        "rai.triple_waypoints",
-        "rai.welding",
-        "rai.handover",
-        "rai.eggs",
-        "rai.bottles",
-        "rai.box_rearrangement",
-        "rai.box_reorientation",
-        "rai.box_reorientation_dep",
-        "rai.pyramid",
-        "rai.box_stacking",
-        "rai.box_stacking_dep",
-        "rai.mobile_wall_four",
-        "rai.mobile_wall_four_dep",
-        "rai.mobile_strut",
-        "rai.three_robot_truss",
-        "rai.spiral_tower",
-        "rai.spiral_tower_two",
-        "rai.cube_four",
-        "rai.unordered_box_reorientation",
-        "rai.unassigned_two_dim",
-        "rai.unassigned_cleanup",
-        "rai.unassigned_stacking",
-        "rai.unordered_bottles",
-    ]
-
-    num_parallel = 10
-    num_runs = 5
-    max_runtime = 500
-
-    seed = 0
-
-    for env_name in representative_envs:
-        try:
-            importlib.reload(robotic)
-            
-            print(f"Running env {env_name}")
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            experiment_name = "convergence"
-
-            # convention: alsways use "/" as trailing character
-            experiment_folder = f"./out/{timestamp}_{experiment_name}_{env_name}/"
-
-            if not os.path.isdir(experiment_folder):
-                os.makedirs(experiment_folder)
-
-            config = {}
-            config["seed"] = seed
-            config["num_runs"] = num_runs
-            config["environment"] = env_name
-            config["max_planning_time"] = max_runtime
-            config["planners"] = []
-
-            export_config(experiment_folder, config)
-
-            np.random.seed(seed)
-            random.seed(seed)
-
-            env = get_env_by_name(env_name)
-
-            planners = make_planners(env, max_runtime)
-
-            _ = run_experiment_in_parallel(
-                env, planners, config, experiment_folder, max_parallel=num_parallel
-            )
-        except Exception as e:
-            print(traceback.format_exc())
-
-
-if __name__ == "__main__":
-    main()
+    finally:
+        # clean up temporary file
+        os.remove(tmpfile_path)
