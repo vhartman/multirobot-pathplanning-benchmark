@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import datetime
 import json
 import os
+from dataclasses import asdict
 
 import numpy as np
 import random
@@ -113,89 +114,82 @@ def export_config(path: str, config: Dict):
 
 def setup_planner(
     planner_config, runtime: int, optimize: bool = True
-) -> Callable[[BaseProblem], Tuple[Any, Dict]]:
+) -> Tuple[str, Callable[[BaseProblem], Tuple[Any, Dict]], Any]:
     name = planner_config["name"]
 
     if planner_config["type"] == "prm":
+        options = planner_config["options"]
+        config = CompositePRMConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            prm_config = CompositePRMConfig()
-            for k, v in options.items():
-                setattr(prm_config, k, v)
-
-            return CompositePRM(env, config=prm_config).plan(
+            return CompositePRM(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "rrtstar":
+        options = planner_config["options"]
+        config = BaseRRTConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            rrtstar_config = BaseRRTConfig()
-            for k, v in options.items():
-                setattr(rrtstar_config, k, v)
-
-            return RRTstar(env, config=rrtstar_config).plan(
+            return RRTstar(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "birrtstar":
+        options = planner_config["options"]
+        config = BaseRRTConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            birrtstar_config = BaseRRTConfig()
-            for k, v in options.items():
-                setattr(birrtstar_config, k, v)
-
-            return BidirectionalRRTstar(env, config=birrtstar_config).plan(
+            return BidirectionalRRTstar(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "aitstar":
+        options = planner_config["options"]
+        config = BaseITConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            aitstar_config = BaseITConfig()
-            for k, v in options.items():
-                setattr(aitstar_config, k, v)
-
-            return AITstar(env, config=aitstar_config).plan(
+            return AITstar(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "eitstar":
+        options = planner_config["options"]
+        config = BaseITConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            eitstar_config = BaseITConfig()
-            for k, v in options.items():
-                setattr(eitstar_config, k, v)
-
-            return EITstar(env, config=eitstar_config).plan(
+            return EITstar(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "prioritized":
+        options = planner_config["options"]
+        config = PrioritizedPlannerConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            prio_config = PrioritizedPlannerConfig()
-            for k, v in options.items():
-                setattr(prio_config, k, v)
-
-            return PrioritizedPlanner(env, prio_config).plan(
+            return PrioritizedPlanner(env, config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "short_horizon":
+        options = planner_config["options"]
+        config = RecedingHorizonConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            config = RecedingHorizonConfig()
-            for k, v in options.items():
-                setattr(config, k, v)
-
             return RecedingHorizonPlanner(env, config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
@@ -204,7 +198,7 @@ def setup_planner(
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
 
-    return name, planner
+    return name, planner, config
 
 
 def setup_env(env_config):
@@ -464,11 +458,14 @@ def main():
 
     planners = []
     for planner_config in config["planners"]:
-        planners.append(
-            setup_planner(
-                planner_config, config["max_planning_time"], config["optimize"]
-            )
+        name, planner_fn, resolved_config = setup_planner(
+            planner_config, config["max_planning_time"], config["optimize"]
         )
+        planners.append(
+            (name, planner_fn)
+        )
+        planner_config["options"] = asdict(resolved_config)
+
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
