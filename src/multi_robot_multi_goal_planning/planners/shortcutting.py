@@ -249,7 +249,6 @@ def robot_mode_shortcut(
     resolution=0.001,
     tolerance=0.01,
     robot_choice="round_robin",
-    planner=None,
     interpolation_resolution: float = 0.1,
 ):
     """

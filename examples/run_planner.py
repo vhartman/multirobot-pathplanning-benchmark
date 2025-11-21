@@ -222,7 +222,6 @@ def main():
             1000,
             tolerance=env.collision_tolerance,
             resolution=env.collision_resolution,
-            planner=planner,
         )
     else:
         print("robot-mode-nl-shortcut")

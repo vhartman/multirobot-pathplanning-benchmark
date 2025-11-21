@@ -1362,17 +1362,16 @@ class BaseRRTstar(BasePlanner):
             and shortcutting_bool
         ):
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            if False:
-                shortcut_path_, result = robot_mode_shortcut_nl_opt(  # robot_mode_shortcut_nl
+            if True:
+                shortcut_path_, result = robot_mode_shortcut( 
                     self.env,
                     self.operation.path_shortcutting,
                     100,
                     resolution=self.env.collision_resolution,
                     tolerance=self.env.collision_tolerance,
-                    planner=self,
                 )
             else:
-                shortcut_path_, result = robot_mode_shortcut( 
+                shortcut_path_, result = robot_mode_shortcut_nl_opt(  # robot_mode_shortcut_nl
                     self.env,
                     self.operation.path_shortcutting,
                     100,
