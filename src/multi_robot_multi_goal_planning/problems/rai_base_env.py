@@ -541,7 +541,7 @@ class rai_env(BaseProblem):
                     collision_with_other_robot = any(other_r in c[0] or other_r in c[1] for other_r in other_robots)
                     if c[2] < 0 and (robot in c[0] or robot in c[1]) and not collision_with_other_robot:
                         involves_relevant_robot = True
-                    elif c[2] < 0 and (c[0] in task.frames or c[1] in task.frames) and not collision_with_other_robot:
+                    elif task.frames is not None and (c[2] < 0 and (c[0] in task.frames or c[1] in task.frames) and not collision_with_other_robot):
                         involves_relevant_object = True
 
                 # if involves_relevant_object:
