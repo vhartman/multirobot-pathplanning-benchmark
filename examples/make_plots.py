@@ -13,7 +13,9 @@ from typing import List, Dict, Optional, Any
 from compute_confidence_intervals import computeConfidenceInterval
 
 
-def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, List[Any]]:
+def load_data_from_folder(
+    folder: str, load_paths: bool = False
+) -> Dict[str, List[Any]]:
     all_subfolders = [
         name for name in os.listdir(folder) if os.path.isdir(os.path.join(folder, name))
     ]
@@ -78,12 +80,12 @@ def load_data_from_folder(folder: str, load_paths: bool = False) -> Dict[str, Li
         runs.sort()
 
         planner_data = []
-    # config["planners"] = {}
-    # config["planners"]["name"] = []
-    # config["planners"]["type"] = []
-    # config["planners"]["options"] = {}
+        # config["planners"] = {}
+        # config["planners"]["name"] = []
+        # config["planners"]["type"] = []
+        # config["planners"]["options"] = {}
 
-    # config["environment_name"] = []
+        # config["environment_name"] = []
 
         # print("Loading paths")
         for i, run in enumerate(runs):
@@ -137,35 +139,35 @@ def load_config_from_folder(filepath: str) -> Dict:
 
 
 report_colors = {
-    "rrt":            "#A01CBB",
-    "rrt_ablation":   "#EE99CC",
-    "birrt":          "black",
+    "rrt": "#A01CBB",
+    "rrt_ablation": "#EE99CC",
+    "birrt": "black",
     "birrt_ablation": (158 / 255.0, 154 / 255.0, 161 / 255.0),
-    "eit":            "#009E1A",
-    "eit_ablation":   "#90E93D",
-    "rheit":          (0.537, 0.0, 0.267), 
-    "ait":            "#00C3FF",
-    "ait_ablation":   "#306DDF",
-    "rhait":          (132 / 255.0, 0 / 255.0, 255 / 255.0),
-    "prm":            "#E21616",
-    "prm_ablation":   "#FF6600",
+    "eit": "#009E1A",
+    "eit_ablation": "#90E93D",
+    "rheit": (0.537, 0.0, 0.267),
+    "ait": "#00C3FF",
+    "ait_ablation": "#306DDF",
+    "rhait": (132 / 255.0, 0 / 255.0, 255 / 255.0),
+    "prm": "#E21616",
+    "prm_ablation": "#FF6600",
 }
 
 # TODO: move this to config?
 planner_name_to_color = {
     "prioritized": "#FFD61F",
+    "prio": "#FFD61F",
     "rrtstar": report_colors["rrt"],
     "rrtstar_global_sampling": report_colors["rrt_ablation"],
     "rrtstar_no_shortcutting": report_colors["rrt_ablation"],
     "rrtstar uniform": report_colors["rrt_ablation"],
     "rrtstar without": report_colors["rrt_ablation"],
-
     "birrtstar": report_colors["birrt"],
+    "birrt": report_colors["birrt"],
     "birrtstar_global_sampling": report_colors["birrt_ablation"],
     "birrtstar_no_shortcutting": report_colors["birrt_ablation"],
     "birrtstar uniform": report_colors["birrt_ablation"],
-    "birrtstar without": report_colors["birrt_ablation"], 
-
+    "birrtstar without": report_colors["birrt_ablation"],
     "eitstar": report_colors["eit"],
     "eitstar same": report_colors["eit_ablation"],
     "long_horizon eitstar": report_colors["rheit"],
@@ -173,7 +175,6 @@ planner_name_to_color = {
     "eitstar_no_shortcutting": report_colors["eit_ablation"],
     "eitstar without": report_colors["eit_ablation"],
     "eitstar_global_sampling": report_colors["eit_ablation"],
-
     "aitstar": report_colors["ait"],
     "aitstar same": report_colors["ait_ablation"],
     "long_horizon aitstar": report_colors["rhait"],
@@ -181,13 +182,12 @@ planner_name_to_color = {
     "aitstar_no_shortcutting": report_colors["ait_ablation"],
     "aitstar_global_sampling": report_colors["ait_ablation"],
     "aitstar without": report_colors["ait_ablation"],
-
     "prm": report_colors["prm"],
-    "informed_prm_k_nearest":  report_colors["prm_ablation"],
+    "informed_prm_k_nearest": report_colors["prm_ablation"],
     "prm_no_shortcutting": report_colors["prm_ablation"],
     "prm same": report_colors["prm_ablation"],
     "prm uniform": report_colors["prm_ablation"],
-    "prm without": report_colors["prm_ablation"],    
+    "prm without": report_colors["prm_ablation"],
     "globally_informed_prm": report_colors["prm_ablation"],
 }
 
@@ -196,24 +196,20 @@ planner_name_to_style = {
     "rrtstar_global_sampling": ":",
     "rrtstar_no_shortcutting": "--",
     "rrtstar uniform": "--",
-
     "birrtstar_global_sampling": "--",
     "birrtstar_no_shortcutting": "--",
-    "birrtstar uniform":"--",
-    "birrtstar without":"--",
-
+    "birrtstar uniform": "--",
+    "birrtstar without": "--",
     "globally_informed_prm": "--",
     "prm_no_shortcutting": "--",
-    "prm same":"--",
-    "prm uniform":"--",
-    "prm without":"--",
-
+    "prm same": "--",
+    "prm uniform": "--",
+    "prm without": "--",
     "aitstar same": "--",
     "aitstar_no_shortcutting": ":",
     "aitstar uniform": "--",
     "aitstar without": "--",
     "aitstar_global_sampling": ":",
-
     "eitstar_no_shortcutting": "--",
     "eitstar same": "--",
     "eitstar uniform": "--",
@@ -265,7 +261,7 @@ def make_cost_plots(
     add_info: bool = False,
     final_max_time: Optional[float] = None,
     logscale: bool = False,
-    yticks:List[int]=[]
+    yticks: List[int] = [],
 ):
     plt.figure("Cost plot")
 
@@ -309,7 +305,9 @@ def make_cost_plots(
         if planner_name in planner_name_to_color:
             color = planner_name_to_color[planner_name]
         else:
-            color = np.random.rand(3,)
+            color = np.random.rand(
+                3,
+            )
         colors[planner_name] = color
 
         plt.errorbar(
@@ -349,7 +347,7 @@ def make_cost_plots(
         if len(results) == 0:
             print(f"Skipping {planner_name} since no solutions are available")
             continue
-        
+
         all_solution_costs = []
 
         max_planner_solution_time = 0
@@ -385,10 +383,7 @@ def make_cost_plots(
         except:
             min_solution_cost = np.min(all_solution_costs, axis=0)
         if len(max_solution_cost[np.isfinite(max_solution_cost)]) > 0:
-            max_non_inf_cost = max(
-                max_non_inf_cost,
-                max_solution_cost
-            )
+            max_non_inf_cost = max(max_non_inf_cost, max_solution_cost)
 
         if len(min_solution_cost[np.isfinite(min_solution_cost)]) > 0:
             min_non_inf_cost = min(
@@ -403,7 +398,7 @@ def make_cost_plots(
         ls = "-"
         if planner_name in planner_name_to_style:
             ls = planner_name_to_style[planner_name]
-        
+
         if is_initial_solution_only:
             continue
 
@@ -416,7 +411,7 @@ def make_cost_plots(
             ],
             # label=planner_name,
             color=color,
-            ls = ls
+            ls=ls,
         )
         plt.fill_between(
             interpolated_solution_times[
@@ -436,7 +431,7 @@ def make_cost_plots(
 
     plt.grid(which="both", axis="both", ls="--")
 
-    if 'cost_reduction' in config:
+    if "cost_reduction" in config:
         plt.ylabel(f"Cost ({config['cost_reduction']})")
     else:
         plt.ylabel("Cost")
@@ -450,7 +445,7 @@ def make_cost_plots(
         ticks = np.array(yticks, dtype=float)
         if logscale:
             ticks = ticks[ticks > 0]
-            
+
         if ticks.size > 0:
             plt.yticks(ticks, [int(t) for t in ticks])
 
@@ -460,7 +455,13 @@ def make_cost_plots(
         if add_info:
             legend_title = f"Environment: {config['environment']}\nNumber of runs: {config['num_runs']}"
             existing_handles, _ = plt.gca().get_legend_handles_labels()
-            plt.legend(handles=existing_handles, title=legend_title, title_fontsize='medium', loc='best', alignment='left')
+            plt.legend(
+                handles=existing_handles,
+                title=legend_title,
+                title_fontsize="medium",
+                loc="best",
+                alignment="left",
+            )
         else:
             plt.legend()
 
@@ -485,24 +486,22 @@ def make_cost_plots(
 
 
 def make_success_plot(
-        all_experiment_data: Dict[str, Any], 
-        config: Dict,
-        save: bool = False,
-        foldername: Optional[str] = None,
-        save_as_png: bool = False,
-        add_legend: bool = True,
-        add_info: bool = False,
-        final_max_time: Optional[float] = None,
-        ):
+    all_experiment_data: Dict[str, Any],
+    config: Dict,
+    save: bool = False,
+    foldername: Optional[str] = None,
+    save_as_png: bool = False,
+    add_legend: bool = True,
+    add_info: bool = False,
+    final_max_time: Optional[float] = None,
+):
     time_discretization = 1e-2
     if final_max_time is None:
         interpolated_solution_times = np.arange(
             0, config["max_planning_time"], time_discretization
         )
     else:
-        interpolated_solution_times = np.arange(
-            0, final_max_time, time_discretization
-        )
+        interpolated_solution_times = np.arange(0, final_max_time, time_discretization)
 
     plt.figure("Success plot")
 
@@ -513,7 +512,7 @@ def make_success_plot(
         if len(results) == 0:
             print(f"Skipping {planner_name} since no solutions are available")
             continue
-        
+
         all_solution_costs = []
 
         for single_run_result in results:
@@ -537,9 +536,11 @@ def make_success_plot(
         if planner_name in planner_name_to_color:
             color = planner_name_to_color[planner_name]
         else:
-            color = np.random.rand(3,)
+            color = np.random.rand(
+                3,
+            )
 
-        ls = '-'
+        ls = "-"
         if planner_name in planner_name_to_style:
             ls = planner_name_to_style[planner_name]
         plt.semilogx(
@@ -548,7 +549,7 @@ def make_success_plot(
             color=color,
             label=planner_name,
             drawstyle="steps-post",
-            ls = ls
+            ls=ls,
         )
 
     plt.xlim(
@@ -563,11 +564,16 @@ def make_success_plot(
         if add_info:
             legend_title = f"Environment: {config['environment']}\nNumber of runs: {config['num_runs']}"
             existing_handles, _ = plt.gca().get_legend_handles_labels()
-            plt.legend(handles=existing_handles, title=legend_title, title_fontsize='medium', loc='best', alignment='left')
+            plt.legend(
+                handles=existing_handles,
+                title=legend_title,
+                title_fontsize="medium",
+                loc="best",
+                alignment="left",
+            )
         else:
-
             plt.legend()
-    plt.grid(which="both", axis="both", ls="--")  
+    plt.grid(which="both", axis="both", ls="--")
     plt.ylabel("Success [%]")
     plt.xlabel("Computation Time [s]")
 
@@ -594,6 +600,11 @@ def make_success_plot(
 def main():
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("foldername", nargs="?", default="default", help="filepath")
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Process all subfolders containing a config.json",
+    )
     parser.add_argument(
         "--save",
         action="store_true",
@@ -634,11 +645,9 @@ def main():
         "--yticks",
         default="",
         type=str,
-        help="Y ticks. (default: "" and lets matplotlib do it automatically.)",
+        help="Y ticks. (default:  and lets matplotlib do it automatically.)",
     )
-    parser.add_argument(
-        "--baseline_cost", type=float, default=None, help="Baseline"
-    )
+    parser.add_argument("--baseline_cost", type=float, default=None, help="Baseline")
     parser.add_argument(
         "--limited_max_time", type=float, default=None, help="Max time for the plot"
     )
@@ -655,35 +664,87 @@ def main():
     if foldername[-1] != "/":
         foldername += "/"
 
-    all_experiment_data = load_data_from_folder(foldername)
-    config = load_config_from_folder(foldername)
+    if args.recursive:
+        root = foldername
 
-    make_cost_plots(
-        all_experiment_data,
-        config,
-        args.save,
-        foldername,
-        save_as_png=args.png,
-        add_legend=args.legend,
-        baseline_cost=args.baseline_cost,
-        add_info = args.info,
-        final_max_time=args.limited_max_time,
-        logscale=args.logscale,
-        yticks=yticks
-    )
-    make_success_plot(
-        all_experiment_data, 
-        config, 
-        args.save,
-        foldername,
-        save_as_png=args.png,
-        add_legend=args.legend,
-        add_info = args.info,
-        final_max_time=args.limited_max_time,
+        # Find all subdirectories that contain a config.json
+        subdirs = [
+            os.path.join(root, d, "")
+            for d in os.listdir(root)
+            if os.path.isdir(os.path.join(root, d))
+            and os.path.exists(os.path.join(root, d, "config.json"))
+        ]
+
+        if len(subdirs) == 0:
+            print("No valid experiment subfolders found.")
+            return
+
+        for subfolder in subdirs:
+            try:
+                print(f"\n=== Processing {subfolder} ===")
+                all_experiment_data = load_data_from_folder(subfolder)
+                config = load_config_from_folder(subfolder)
+
+                make_cost_plots(
+                    all_experiment_data,
+                    config,
+                    args.save,
+                    subfolder,
+                    save_as_png=args.png,
+                    add_legend=args.legend,
+                    baseline_cost=args.baseline_cost,
+                    add_info=args.info,
+                    final_max_time=args.limited_max_time,
+                    logscale=args.logscale,
+                    yticks=yticks,
+                )
+                plt.close()
+
+                make_success_plot(
+                    all_experiment_data,
+                    config,
+                    args.save,
+                    subfolder,
+                    save_as_png=args.png,
+                    add_legend=args.legend,
+                    add_info=args.info,
+                    final_max_time=args.limited_max_time,
+                )
+                plt.close()
+
+            except:
+                print("failed plotting.")
+
+    else:
+        all_experiment_data = load_data_from_folder(foldername)
+        config = load_config_from_folder(foldername)
+
+        make_cost_plots(
+            all_experiment_data,
+            config,
+            args.save,
+            foldername,
+            save_as_png=args.png,
+            add_legend=args.legend,
+            baseline_cost=args.baseline_cost,
+            add_info=args.info,
+            final_max_time=args.limited_max_time,
+            logscale=args.logscale,
+            yticks=yticks,
+        )
+        make_success_plot(
+            all_experiment_data,
+            config,
+            args.save,
+            foldername,
+            save_as_png=args.png,
+            add_legend=args.legend,
+            add_info=args.info,
+            final_max_time=args.limited_max_time,
         )
 
-    if not args.no_display:
-        plt.show()
+        if not args.no_display:
+            plt.show()
 
 
 if __name__ == "__main__":

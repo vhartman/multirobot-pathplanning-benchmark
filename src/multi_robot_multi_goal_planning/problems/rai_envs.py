@@ -571,7 +571,7 @@ class rai_two_dim_handover_base(rai_env):
 
 # best cost found for max-cost is 17.64
 # best cost found for sum-cost is 25.28
-@register("rai.handover")
+@register("rai.2d_handover")
 class rai_two_dim_handover(SequenceMixin, rai_two_dim_handover_base):
     def __init__(self):
         rai_two_dim_handover_base.__init__(self)
@@ -916,9 +916,11 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {}
-        dim = 7
+        offset = 0
         for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+            dim = len(self.robot_idx[r])
+            self.safe_pose[r] = np.array(self.C.getJointState()[offset:offset + dim])
+            offset += dim
 
 
 # goals are poses
@@ -1809,6 +1811,13 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
         # self.collision_resolution = 0.1
 
         self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
 @register("rai.pyramid")

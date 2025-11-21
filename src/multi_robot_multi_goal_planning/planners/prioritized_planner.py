@@ -938,6 +938,7 @@ def plan_in_time_space(
             break
 
         if iter > max_iter:
+            print("Max iter reached, stopping")
             break
 
         # increase upper bound that we are sampling
@@ -1578,7 +1579,8 @@ def plan_in_time_space_bidirectional(
         if len(sampled_goals) > 0 and iter > 50:
             break
 
-        if iter > 1000:
+        if iter > 10000:
+            print("Max iters in goal sampling.")
             return None
 
     if not collision_free_with_moving_obs(
@@ -1595,7 +1597,7 @@ def plan_in_time_space_bidirectional(
         # env.C.view(True)
         return None
 
-    max_iters = 10000
+    max_iters = 50000
     for iter in range(max_iters):
         tmp = t_a
         t_a = t_b
@@ -1797,6 +1799,7 @@ def plan_in_time_space_bidirectional(
                 # return path
                 return TimedPath(time=times, path=path)
 
+    print("Did not find a path in max_iters.")
     return None
 
 
@@ -2074,6 +2077,7 @@ def plan_robots_in_dyn_env(
         )
 
     if path is None:
+        print("Did not find a path in dyn env.")
         return None, None
 
     # if len(robots) == 1:
@@ -2145,8 +2149,8 @@ class PrioritizedPlannerConfig:
     # gamma: float = 0.7
     # distance_metric: str = "euclidean"
     use_bidirectional_planner: bool = True
-    shortcut_iters: int = 500
-    multirobot_shortcut_iters: int = 0
+    shortcut_iters: int = 100
+    multirobot_shortcut_iters: int = 100
 
 
 class PrioritizedPlanner(BasePlanner):
@@ -2244,6 +2248,7 @@ class PrioritizedPlanner(BasePlanner):
 
             while True:
                 if ptc.should_terminate(0, time.time() - computation_start_time):
+                    print("Terminating due to max time")
                     break
 
                 # get next active task
@@ -2302,7 +2307,7 @@ class PrioritizedPlanner(BasePlanner):
                 logger.debug(f"final_pose {final_pose}")
 
                 if path is None:
-                    logger.warn("Failed planning")
+                    logger.warn("Failed planning.")
                     break
 
                 # add plan to overall path

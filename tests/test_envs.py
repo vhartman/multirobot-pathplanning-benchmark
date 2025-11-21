@@ -9,13 +9,22 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
 
+import numpy as np
+import random
+
 @pytest.mark.parametrize("env_name,env_fun_call", get_all_environments().items())
 def test_env_can_be_constructed(env_name, env_fun_call):
+    np.random.seed(0)
+    random.seed(0)
+    
     env = env_fun_call()
     assert env is not None
 
 @pytest.mark.parametrize("env_name,env_fun_call", get_all_environments().items())
 def test_planner_ingests_env(env_name, env_fun_call):
+    np.random.seed(0)
+    random.seed(0)
+
     env = env_fun_call()
     assert env is not None
 

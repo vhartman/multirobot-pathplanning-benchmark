@@ -181,7 +181,7 @@ class ModeValidation:
             self.invalid_next_ids[mode.prev_mode] = set()
         self.invalid_next_ids[mode.prev_mode].add(tuple(mode.task_ids))
 
-        assert False
+        # assert False
 
     # TODO: split in adding to blacklist, and removing from the list
     def track_invalid_modes(
@@ -208,7 +208,7 @@ class ModeValidation:
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(
                 mode
             )
-            print(invalid_next_ids, possible_next_task_combinations)
+            # print(invalid_next_ids, possible_next_task_combinations)
             # if there are more possible task combinations than invalid task combinations, that means that there is a 
             # feasible combination.
             if len(invalid_next_ids) < len(possible_next_task_combinations):

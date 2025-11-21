@@ -89,11 +89,23 @@ class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
-@register("rai.constrained_relative_pose")
+@register([
+    ("rai.constrained_relative_pose", {}),
+    ("rai.constrained_relative_pose_with_obstacle", {'obstacle': True}),
+])
 class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, obstacle):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=True)
         # self.C.view(True)
+
+        if obstacle:
+            self.C.addFrame("obs").setParent(self.C.getFrame("table")).setPosition(
+                self.C.getFrame("table").getPosition() + [0, 0, 0.07]
+            ).setShape(ry.ST.box, size=[0.2, 0.5 - 0.001, 0.06]).setContact(
+                1
+            ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
+
+        self.C.view(True)
 
         self.robots = ["a1", "a2"]
 
@@ -153,10 +165,13 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
-@register("rai.grasping")
+@register([
+    ("rai.grasping", {}),
+    ("rai.grasping_with_obstacle", {'obstacle': True}),
+])
 class rai_two_arm_grasping(SequenceMixin, rai_env):
-    def __init__(self):
-        self.C, self.robots, keyframes = rai_config.make_bimanual_grasping_env()
+    def __init__(self, obstacle=False):
+        self.C, self.robots, keyframes = rai_config.make_bimanual_grasping_env(obstacle)
         # self.C.view(True)
 
         rai_env.__init__(self)

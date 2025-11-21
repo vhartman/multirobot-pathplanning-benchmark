@@ -119,14 +119,14 @@ def print_table(aggregated_data):
 def print_latex_table(aggregated_data):
     line_layout = ["t_init_median", "c_init_median", "c_final_median"]
     key_to_name = {
-        "t_init_median": "\\multicolumn{2}{c}{$t_\\text{{init}}$}", 
-        "c_init_median": "\multicolumn{2}{c}{$c_\\text{{init}}$}", 
-        "c_final_median": "\multicolumn{2}{c}{$c_\\text{{final}}$}"
+        "t_init_median": "\\multicolumn{2}{c}{$t_\\text{{init}}$}",
+        "c_init_median": "\multicolumn{2}{c}{$c_\\text{{init}}$}",
+        "c_final_median": "\multicolumn{2}{c}{$c_\\text{{final}}$}",
     }
 
     planner_names = list(next(iter(aggregated_data.values())).keys())
-    
-    num_cols = 1 + len(planner_names)*len(line_layout)
+
+    num_cols = 1 + len(planner_names) * len(line_layout)
 
     colspec = "l " + len(line_layout) * ("|" + len(planner_names) * "c")
 
@@ -143,7 +143,7 @@ def print_latex_table(aggregated_data):
 
     # print stuff per line
     for env_name, all_planner_data in aggregated_data.items():
-        escaped_env_name = env_name.replace('_', '\\_')
+        escaped_env_name = env_name.replace("_", "\\_")
         body += f"{escaped_env_name} "
         for key in line_layout:
             all_values = [
@@ -170,9 +170,11 @@ $body
 \bottomrule
 \end{tabular}
 """)
-    print(TEX_TEMPLATE.substitute(
-        colspec=colspec, header1=header1, header2=header2, body=body
-    ))
+    print(
+        TEX_TEMPLATE.substitute(
+            colspec=colspec, header1=header1, header2=header2, body=body
+        )
+    )
 
 
 def get_subfolders_from_main_folder(folder):
@@ -193,9 +195,28 @@ def main():
     main_dir = "./out/tmp/"
     folders = get_subfolders_from_main_folder(main_dir)
 
+    group_envs_by = ["dep", "unordered", "unassigned"]
+
+    grouped_folders = {}
+    grouped_folders["other"] = []
+    for k in group_envs_by:
+        grouped_folders[k] = []
+
+    for folder in folders:
+        found = False
+        for key in group_envs_by:
+            if key in folder:
+                grouped_folders[key].append(folder)
+                found = True
+                break
+        if not found:
+            grouped_folders["other"].append(folder)
+
+    folders = [folder for group in grouped_folders.values() for folder in group]
+
     aggregated_data = aggregate_data(folders)
 
-    print_table(aggregated_data)
+    # print_table(aggregated_data)
 
     print_latex_table(aggregated_data)
 
