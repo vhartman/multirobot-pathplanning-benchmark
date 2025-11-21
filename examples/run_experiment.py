@@ -45,24 +45,6 @@ from multi_robot_multi_goal_planning.planners import (
     RecedingHorizonPlanner,
 )
 
-
-def merge_config(
-    user_config: Dict[str, Any], default_config: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Merge user_config with default_config while preserving the order of user_config keys."""
-    if not isinstance(user_config, dict):
-        return user_config  # Base case for non-dict values
-
-    for key, default_value in default_config.items():
-        if key in user_config:
-            if isinstance(user_config[key], dict) and isinstance(default_value, dict):
-                merge_config(user_config[key], default_value)  # Recursive merge
-        else:
-            user_config[key] = default_value  # Add missing default keys at the end
-
-    return user_config
-
-
 def validate_config(config: Dict[str, Any]) -> None:
     pass
 
@@ -70,30 +52,6 @@ def validate_config(config: Dict[str, Any]) -> None:
 def load_experiment_config(filepath: str) -> Dict[str, Any]:
     with open(filepath) as f:
         config = json.load(f)
-
-    planner_default_configs, planner_default_config_paths = {}, {}
-    planner_default_config_paths["prm"] = "configs/defaults/composite_prm.json"
-    planner_default_config_paths["rrtstar"] = "configs/defaults/rrtstar.json"
-    planner_default_config_paths["birrtstar"] = "configs/defaults/birrtstar.json"
-    planner_default_config_paths["aitstar"] = "configs/defaults/aitstar.json"
-    planner_default_config_paths["eitstar"] = "configs/defaults/eitstar.json"
-    planner_default_config_paths["prioritized"] = "configs/defaults/prioritized.json"
-    planner_default_config_paths["short_horizon"] = (
-        "configs/defaults/short_horizon.json"
-    )
-
-    for planner_type, default_config_path in planner_default_config_paths.items():
-        with open(default_config_path) as f:
-            planner_default_configs[planner_type] = json.load(f)
-
-    for i, planner in enumerate(config["planners"]):
-        planner_type = planner["type"]
-
-        if planner_type in planner_default_configs:
-            merged_planner = merge_config(
-                planner, planner_default_configs[planner_type]
-            )
-            config["planners"][i] = merged_planner
 
     # TODO: sanity checks
     validate_config(config)
@@ -166,7 +124,12 @@ def setup_planner(
             setattr(config, k, v)
 
         def planner(env):
-            return CompositePRM(env, config=config).plan(
+            options = planner_config["options"]
+            prm_config = CompositePRMConfig()
+            for k, v in options.items():
+                setattr(prm_config, k, v)
+
+            return CompositePRM(env, config=prm_config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
