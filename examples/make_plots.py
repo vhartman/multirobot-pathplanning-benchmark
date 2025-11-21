@@ -156,12 +156,14 @@ report_colors = {
 # TODO: move this to config?
 planner_name_to_color = {
     "prioritized": "#FFD61F",
+    "prio": "#FFD61F",
     "rrtstar": report_colors["rrt"],
     "rrtstar_global_sampling": report_colors["rrt_ablation"],
     "rrtstar_no_shortcutting": report_colors["rrt_ablation"],
     "rrtstar uniform": report_colors["rrt_ablation"],
     "rrtstar without": report_colors["rrt_ablation"],
     "birrtstar": report_colors["birrt"],
+    "birrt": report_colors["birrt"],
     "birrtstar_global_sampling": report_colors["birrt_ablation"],
     "birrtstar_no_shortcutting": report_colors["birrt_ablation"],
     "birrtstar uniform": report_colors["birrt_ablation"],
