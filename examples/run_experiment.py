@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import datetime
 import json
 import os
+from dataclasses import asdict
 
 import numpy as np
 import random
@@ -155,210 +156,82 @@ def export_config(path: str, config: Dict):
 
 def setup_planner(
     planner_config, runtime: int, optimize: bool = True
-) -> Callable[[BaseProblem], Tuple[Any, Dict]]:
+) -> Tuple[str, Callable[[BaseProblem], Tuple[Any, Dict]], Any]:
     name = planner_config["name"]
 
     if planner_config["type"] == "prm":
+        options = planner_config["options"]
+        config = CompositePRMConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            prm_config = CompositePRMConfig(
-                # Map dictionary keys to dataclass attributes
-                distance_metric=options["distance_metric"],
-                use_k_nearest=options["connection_strategy"] == "k_nearest",
-                try_informed_sampling=options["informed_sampling"],
-                try_informed_transitions=options["informed_transition_sampling"],
-                uniform_batch_size=options["batch_size"],
-                uniform_transition_batch_size=options["transition_batch_size"],
-                informed_batch_size=options["informed_batch_size"],
-                informed_transition_batch_size=options[
-                    "informed_transition_batch_size"
-                ],
-                locally_informed_sampling=options["locally_informed_sampling"],
-                try_shortcutting=options["shortcutting"],
-                try_direct_informed_sampling=options["direct_informed_sampling"],
-                # Corrected spelling here as well:
-                inlcude_lb_in_informed_sampling=options[
-                    "inlcude_lb_in_informed_sampling"
-                ],
-                init_mode_sampling_type=options["init_mode_sampling_type"],
-                frontier_mode_sampling_probability=options[
-                    "frontier_mode_sampling_probability"
-                ],
-                init_uniform_batch_size=options["init_uniform_batch_size"],
-                init_transition_batch_size=options["init_transition_batch_size"],
-                with_mode_validation=options["with_mode_validation"],
-                with_noise=options["with_noise"],
-                shortcutting_mode=options["shortcutting_mode"],
-                shortcutting_interpolation_resolution=options[
-                    "shortcutting_interpolation_resolution"
-                ],
-                shortcutting_iters=options["shortcutting_iters"],
-            )
-
-            return CompositePRM(env, config=prm_config).plan(
+            return CompositePRM(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "rrtstar":
+        options = planner_config["options"]
+        config = BaseRRTConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            rrtstar_config = BaseRRTConfig(
-                informed_sampling=options["informed_sampling"],
-                distance_metric=options["distance_metric"],
-                p_goal=options["p_goal"],
-                shortcutting=options["shortcutting"],
-                init_mode_sampling_type=options["init_mode_sampling_type"],
-                frontier_mode_sampling_probability=options[
-                    "frontier_mode_sampling_probability"
-                ],
-                locally_informed_sampling=options["locally_informed_sampling"],
-                informed_batch_size=options["informed_batch_size"],
-                remove_redundant_nodes=options["remove_redundant_nodes"],
-                apply_long_horizon=options["apply_long_horizon"],
-                horizon_length=options["horizon_length"],
-                with_mode_validation=options["with_mode_validation"],
-                with_noise=options["with_noise"],
-                with_tree_visualization=options["with_tree_visualization"],
-                stepsize=options["stepsize"],
-            )
-
-            return RRTstar(env, config=rrtstar_config).plan(
+            return RRTstar(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "birrtstar":
+        options = planner_config["options"]
+        config = BaseRRTConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            birrtstar_config = BaseRRTConfig(
-                informed_sampling=options["informed_sampling"],
-                distance_metric=options["distance_metric"],
-                p_goal=options["p_goal"],
-                shortcutting=options["shortcutting"],
-                init_mode_sampling_type=options["init_mode_sampling_type"],
-                frontier_mode_sampling_probability=options[
-                    "frontier_mode_sampling_probability"
-                ],
-                locally_informed_sampling=options["locally_informed_sampling"],
-                transition_nodes=options["transition_nodes"],
-                birrtstar_version=options["birrtstar_version"],
-                informed_batch_size=options["informed_batch_size"],
-                remove_redundant_nodes=options["remove_redundant_nodes"],
-                apply_long_horizon=options["apply_long_horizon"],
-                horizon_length=options["horizon_length"],
-                with_mode_validation=options["with_mode_validation"],
-                with_noise=options["with_noise"],
-                with_tree_visualization=options["with_tree_visualization"],
-                stepsize=options["stepsize"],
-                balanced_trees=options["balanced_trees"]
-            )
-            return BidirectionalRRTstar(env, config=birrtstar_config).plan(
+            return BidirectionalRRTstar(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "aitstar":
+        options = planner_config["options"]
+        config = BaseITConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            aitstar_config = BaseITConfig(
-                init_mode_sampling_type=options["init_mode_sampling_type"],
-                distance_metric=options["distance_metric"],
-                try_informed_sampling=options["informed_sampling"],
-                try_informed_transitions=options["informed_transition_sampling"],
-                init_uniform_batch_size=options["init_uniform_batch_size"],
-                init_transition_batch_size=options["init_transition_batch_size"],
-                uniform_batch_size=options["batch_size"],
-                uniform_transition_batch_size=options["transition_batch_size"],
-                informed_batch_size=options["informed_batch_size"],
-                informed_transition_batch_size=options[
-                    "informed_transition_batch_size"
-                ],
-                locally_informed_sampling=options["locally_informed_sampling"],
-                try_shortcutting=options["shortcutting"],
-                try_direct_informed_sampling=options["direct_informed_sampling"],
-                inlcude_lb_in_informed_sampling=options[
-                    "inlcude_lb_in_informed_sampling"
-                ],
-                remove_based_on_modes=options["remove_based_on_modes"],
-                with_tree_visualization=options["with_tree_visualization"],
-                apply_long_horizon=options["apply_long_horizon"],
-                frontier_mode_sampling_probability=options[
-                    "frontier_mode_sampling_probability"
-                ],
-                horizon_length=options["horizon_length"],
-                with_rewiring=options["with_rewiring"],
-                with_mode_validation=options["with_mode_validation"],
-                with_noise=options["with_noise"],
-            )
-            return AITstar(env, config=aitstar_config).plan(
+            return AITstar(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "eitstar":
+        options = planner_config["options"]
+        config = BaseITConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            eitstar_config = BaseITConfig(
-                init_mode_sampling_type=options["init_mode_sampling_type"],
-                distance_metric=options["distance_metric"],
-                try_informed_sampling=options["informed_sampling"],
-                try_informed_transitions=options["informed_transition_sampling"],
-                init_uniform_batch_size=options["init_uniform_batch_size"],
-                init_transition_batch_size=options["init_transition_batch_size"],
-                uniform_batch_size=options["batch_size"],
-                uniform_transition_batch_size=options["transition_batch_size"],
-                informed_batch_size=options["informed_batch_size"],
-                informed_transition_batch_size=options[
-                    "informed_transition_batch_size"
-                ],
-                locally_informed_sampling=options["locally_informed_sampling"],
-                try_shortcutting=options["shortcutting"],
-                try_direct_informed_sampling=options["direct_informed_sampling"],
-                inlcude_lb_in_informed_sampling=options[
-                    "inlcude_lb_in_informed_sampling"
-                ],
-                remove_based_on_modes=options["remove_based_on_modes"],
-                with_tree_visualization=options["with_tree_visualization"],
-                apply_long_horizon=options["apply_long_horizon"],
-                frontier_mode_sampling_probability=options[
-                    "frontier_mode_sampling_probability"
-                ],
-                horizon_length=options["horizon_length"],
-                with_rewiring=options["with_rewiring"],
-                with_mode_validation=options["with_mode_validation"],
-                with_noise=options["with_noise"],
-            )
-            return EITstar(env, config=eitstar_config).plan(
+            return EITstar(env, config=config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "prioritized":
+        options = planner_config["options"]
+        config = PrioritizedPlannerConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            prio_config = PrioritizedPlannerConfig(
-                use_bidirectional_planner=options["use_bidirectional_planner"],
-                shortcut_iters=options["shortcut_iters"],
-                multirobot_shortcut_iters=options["multirobot_shortcut_iters"],
-            )
-            return PrioritizedPlanner(env, prio_config).plan(
+            return PrioritizedPlanner(env, config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
     elif planner_config["type"] == "short_horizon":
+        options = planner_config["options"]
+        config = RecedingHorizonConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
         def planner(env):
-            options = planner_config["options"]
-            config = RecedingHorizonConfig(
-                low_level_solver=options["low_level_solver"],
-                horizon_length=options["horizon_length"],
-                execution_length=options["execution_length"],
-                low_level_max_time=options["low_level_max_time"],
-                constrain_free_robots_to_home=options["constrain_free_robots_to_home"],
-                optimize_low_level=options["optimize_low_level"],
-            )
             return RecedingHorizonPlanner(env, config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
@@ -367,7 +240,7 @@ def setup_planner(
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
 
-    return name, planner
+    return name, planner, config
 
 
 def setup_env(env_config):
@@ -627,11 +500,14 @@ def main():
 
     planners = []
     for planner_config in config["planners"]:
-        planners.append(
-            setup_planner(
-                planner_config, config["max_planning_time"], config["optimize"]
-            )
+        name, planner_fn, resolved_config = setup_planner(
+            planner_config, config["max_planning_time"], config["optimize"]
         )
+        planners.append(
+            (name, planner_fn)
+        )
+        planner_config["options"] = asdict(resolved_config)
+
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
