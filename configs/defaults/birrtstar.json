@@ -1,0 +1,23 @@
+{
+  "type": "birrtstar",
+  "options": {
+    "informed_sampling": true,
+    "distance_metric": "max_euclidean",
+    "p_goal": 0.4,
+    "shortcutting": true,
+    "init_mode_sampling_type": "frontier",
+    "frontier_mode_sampling_probability": 0.98,
+    "locally_informed_sampling": true,
+    "informed_batch_size": 300,
+    "remove_redundant_nodes": true,
+    "transition_nodes": 50,
+    "birrtstar_version": 2,
+    "apply_long_horizon": false,
+    "horizon_length": 1,
+    "with_noise": false,
+    "with_mode_validation": true,
+    "with_tree_visualization": false,
+    "stepsize": 0,
+    "balanced_trees": false
+  }
+}
