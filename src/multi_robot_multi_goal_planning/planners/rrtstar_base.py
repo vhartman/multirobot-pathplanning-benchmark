@@ -548,7 +548,8 @@ class BaseRRTstar(BasePlanner):
         self.eta = self.config.stepsize
         if self.eta == 0:
             self.eta = np.sqrt(self.dim)
-            # self.eta = self.eta/4 # to densify tree
+            if self.dim < 13:
+                self.eta = self.eta / 4
             
         self.operation = Operation()
         self.modes = []
@@ -2118,6 +2119,7 @@ class BaseRRTstar(BasePlanner):
         Exactly the same selection logic as the affine sampler.
         """
         if np.random.uniform(0, 1) < self.config.p_goal:
+            print("Goal sampling NL")
             return self.sample_goal_nl(mode, self.transition_node_ids, self.trees[mode].order)
         if self.config.informed_sampling and self.operation.init_sol:
             return self.sample_informed_nl(mode)
@@ -2173,58 +2175,14 @@ class BaseRRTstar(BasePlanner):
         if not (self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and
                 self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
                 self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
+            print("Steered configuration does not satisfy constraints.")
             return None
 
         if not self.env.is_collision_free(q_proj, mode):
+            print("Steered configuration is in collision.")
             return None
         
         return State(q_proj, mode)
-    
-# 4) INTERPOLATION
-    def interpolate_path_nonlinear(
-        self,
-        path: List[State],
-        resolution: float = 0.1,
-    ) -> List[State]:
-        """
-        Interpolates the path at the given resolution and PROJECTS every
-        intermediate configuration onto the active constraints of the segment's mode.
-        Assumes each segment [i, i+1] is traversed in path[i].mode.
-        """
-        new_path: List[State] = []
-        if len(path) < 2:
-            return path.copy()
-
-        for i in range(len(path) - 1):
-            q0 = path[i].q
-            q1 = path[i + 1].q
-            mode = path[i].mode  # segment mode = left endpoint's mode
-
-            # linear interpolation count
-            dist = config_dist(q0, q1, "euclidean")
-            N = max(1, int(dist / max(resolution, 1e-12)))
-
-            q0_state = q0.state().astype(float)
-            q1_state = q1.state().astype(float)
-            direction = (q1_state - q0_state) / N
-
-            # collect constraints once per segment
-            eq_env, ineq_env, eq_task, ineq_task = self.collect_constraints(mode)
-            c_eq = eq_env + eq_task
-            c_ineq = ineq_env + ineq_task
-
-            for j in range(N):
-                q_lin = q0_state + direction * j
-                # project
-                q_proj = self.project_nonlinear_dispatch(
-                    q0.from_flat(q_lin), c_eq, c_ineq, mode
-                )
-                q_proj_flat = np.asarray(q_proj.state(), dtype=float)
-                new_path.append(State(q0.from_flat(q_proj_flat), mode))
-
-        new_path.append(State(path[-1].q, path[-1].mode))
-
-        return new_path
 
 
 ############################################

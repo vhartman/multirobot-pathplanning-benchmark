@@ -419,7 +419,10 @@ def project_gauss_newton(
     aff_in = [c for c in constraints if c.type == "affine_inequality"]
     nl_eq = [c for c in constraints if c.type == "nonlinear_equality"]
     nl_in = [c for c in constraints if c.type == "nonlinear_inequality"]
-    
+
+    # if aff_eq and aff_in and nl_eq == [] and nl_in == []:
+    #     # only affine constraints: direct projection
+    #     return project_affine_cspace(q, aff_eq + aff_in, mode, env)
 
     if aff_eq:
         Aeq = np.vstack([c.J(x, mode, env) for c in aff_eq])
@@ -433,7 +436,7 @@ def project_gauss_newton(
         if verbose:
             print(f"[project_gauss_newton] no nullspace to explore")
         return q.from_flat(x)
-
+    
     for it in range(max_iters):
         residuals = []
         jacobians = []

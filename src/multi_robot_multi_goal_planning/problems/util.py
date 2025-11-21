@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from .planning_env import State
 from .configuration import config_dist, Configuration
@@ -57,3 +57,49 @@ def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
     new_path.append(State(path[-1].q, path[-1].mode))
 
     return new_path
+
+
+# def interpolate_path_nonlinear(
+#     self,
+#     path: List[State],
+#     resolution: float = 0.1,
+# ) -> List[State]:
+#     """
+#     Interpolates the path at the given resolution and PROJECTS every
+#     intermediate configuration onto the active constraints of the segment's mode.
+#     Assumes each segment [i, i+1] is traversed in path[i].mode.
+#     """
+#     new_path: List[State] = []
+#     if len(path) < 2:
+#         return path.copy()
+
+#     for i in range(len(path) - 1):
+#         q0 = path[i].q
+#         q1 = path[i + 1].q
+#         mode = path[i].mode  # segment mode = left endpoint's mode
+
+#         # linear interpolation count
+#         dist = config_dist(q0, q1, "euclidean")
+#         N = max(1, int(dist / max(resolution, 1e-12)))
+
+#         q0_state = q0.state().astype(float)
+#         q1_state = q1.state().astype(float)
+#         direction = (q1_state - q0_state) / N
+
+#         # collect constraints once per segment
+#         eq_env, ineq_env, eq_task, ineq_task = self.collect_constraints(mode)
+#         c_eq = eq_env + eq_task
+#         c_ineq = ineq_env + ineq_task
+
+#         for j in range(N):
+#             q_lin = q0_state + direction * j
+#             # project
+#             q_proj = self.project_nonlinear_dispatch(
+#                 q0.from_flat(q_lin), c_eq, c_ineq, mode
+#             )
+#             q_proj_flat = np.asarray(q_proj.state(), dtype=float)
+#             new_path.append(State(q0.from_flat(q_proj_flat), mode))
+
+#     new_path.append(State(path[-1].q, path[-1].mode))
+
+#     return new_path

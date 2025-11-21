@@ -273,7 +273,7 @@ def robot_mode_shortcut(
     totsc = 0
     skipsc = 0
 
-    # Collect affine constraints
+    # Collect affine constraints # TODO: add task constraints
     def collect_affine_constraints_for_env():
         eq = [c for c in env.constraints if c.type == "affine_equality"]
         ineq = [c for c in env.constraints if c.type == "affine_inequality"]
@@ -550,12 +550,10 @@ def robot_mode_shortcut_nl(
     collision free.
     """
 
-    if planner is None:
-        non_redundant_path = remove_interpolated_nodes(path)
-        new_path = interpolate_path(non_redundant_path, interpolation_resolution)
-    else:
-        new_path = planner.interpolate_path_nonlinear(path, interpolation_resolution)
-
+    # # Preprocess path to densify it
+    # non_redundant_path = remove_interpolated_nodes(path)
+    # new_path = interpolate_path(non_redundant_path, interpolation_resolution)
+    new_path = path.copy()
 
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
@@ -840,12 +838,10 @@ def robot_mode_shortcut_nl_opt(
 
     assert planner is not None, "robot_mode_shortcut_nl_opt requires a planner with nonlinear projection."
 
-    # Initial path densification
-    if planner is None:
-        non_redundant_path = remove_interpolated_nodes(path)
-        new_path = interpolate_path(non_redundant_path, interpolation_resolution)
-    else:
-        new_path = planner.interpolate_path_nonlinear(path, interpolation_resolution)
+    # Preprocess path to densify it
+    # non_redundant_path = remove_interpolated_nodes(path)
+    # new_path = interpolate_path(non_redundant_path, interpolation_resolution)
+    new_path = path.copy()
 
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]

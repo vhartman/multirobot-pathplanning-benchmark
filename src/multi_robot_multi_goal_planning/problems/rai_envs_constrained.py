@@ -211,7 +211,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 type="place", 
                 frames=["table", "obj1"],
                 constraints=[
-                    RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], pose_projection_matrix,  rel_pose, 1e-2),
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], pose_projection_matrix,  rel_pose, 2e-2),
                     AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([0, 0, 1]), 5e-2),
                     AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([0, -1, 0]), 5e-2)
                     # AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([1, -1, 0]), 5e-2),
@@ -665,7 +665,7 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
 
         h = 0.26
 
-        constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+        constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]), 1e-2)]
         if stick_upright:
             constraints.append(
                 AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-2]))
@@ -725,8 +725,8 @@ class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
 
         h = 0.26
 
-        r1_constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
-        r2_constraints = [AffineTaskSpaceEqualityConstraint("a2_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+        r1_constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]), 1e-2)]
+        r2_constraints = [AffineTaskSpaceEqualityConstraint("a2_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]), 1e-2)]
 
         if stick_upright:
             r1_constraints.append(
