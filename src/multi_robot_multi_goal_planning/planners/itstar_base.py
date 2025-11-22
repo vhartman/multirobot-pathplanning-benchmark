@@ -2316,8 +2316,8 @@ class BaseLongHorizon:
 
 @dataclass
 class BaseITConfig:
-    init_mode_sampling_type: str = "greedy"
-    distance_metric: str = "euclidean"
+    init_mode_sampling_type: str = "frontier"
+    distance_metric: str = "max_euclidean"
     try_informed_sampling: bool = True
     init_uniform_batch_size: int = 150
     init_transition_batch_size: int = 50
@@ -2333,7 +2333,7 @@ class BaseITConfig:
     remove_based_on_modes: bool = True
     with_tree_visualization: bool = False
     apply_long_horizon: bool = False
-    frontier_mode_sampling_probability: float = 1.0
+    frontier_mode_sampling_probability: float = 0.98
     horizon_length: int = 4
     with_rewiring: bool = True
     with_mode_validation: bool = True
