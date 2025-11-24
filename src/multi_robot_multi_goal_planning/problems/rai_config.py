@@ -4099,7 +4099,7 @@ def make_bimanual_grasping_env(obstacle, view: bool = False):
             ry.ST.box, size=[0.4, 0.1, 0.4, 0.005]
         ).setContact(1).setRelativePosition(
             [0, -0.4, 0.25]
-        )
+        ).setJoint(ry.JT.rigid)
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.4, 0.2, 0.005]
@@ -5608,7 +5608,7 @@ def make_husky_bimanual_box_stacking_env():
 
      # add a bunch of boxes
     w = 2
-    d = 3
+    d = 2
     size = np.array([0.2, 0.2, 0.2])
 
     boxes = []
@@ -5626,14 +5626,14 @@ def make_husky_bimanual_box_stacking_env():
         )
         return pos
 
-    goal_pos = np.array([0, 1, 0])
+    goal_pos = np.array([1, 1, 0])
 
     num_boxes = 4
     cnt = 0
     for k in range(d):
         for j in range(w):
-            if k == 1 and j == 1:
-                continue
+            # if k == 1 and j == 1:
+            #     continue
 
             axis = np.random.randn(3)
             axis /= np.linalg.norm(axis)
@@ -5678,8 +5678,11 @@ def make_husky_bimanual_box_stacking_env():
         q_home = c_tmp.getJointState()
 
         for frame_name in boxes:
-            if frame_name != box:
-                c_tmp.getFrame(frame_name).setContact(0)
+            if frame_name == box:
+                break
+
+            pos = c_tmp.getFrame("goal" + frame_name[3:]).getPosition()
+            c_tmp.getFrame(frame_name).setPosition(pos)
 
         komo = ry.KOMO(
             c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
@@ -5689,7 +5692,7 @@ def make_husky_bimanual_box_stacking_env():
         )
 
         komo.addControlObjective([], 0, 1e-1)
-        komo.addControlObjective([], 1, 1e0)
+        komo.addControlObjective([], 1, 1e-1)
         # komo.addControlObjective([], 2, 1e-1)
 
         komo.addModeSwitch([1, 2], ry.SY.stable, [r0 + "ur_vacuum", box])
@@ -5699,7 +5702,14 @@ def make_husky_bimanual_box_stacking_env():
         mat[1, [1, 10]] = [w, -w]
         mat[2, [2, 11]] = [w, -w]
         komo.addObjective(
-            [1, 2],
+            [1],
+            ry.FS.qItself,
+            [],
+            ry.OT.eq,
+            mat,
+        )
+        komo.addObjective(
+            [2],
             ry.FS.qItself,
             [],
             ry.OT.eq,
@@ -5780,7 +5790,7 @@ def make_husky_bimanual_box_stacking_env():
             feature=ry.FS.jointState,
             frames=[],
             type=ry.OT.sos,
-            scale=[1e0],
+            scale=[1e-1],
             target=q_home,
         )
 
@@ -5793,7 +5803,10 @@ def make_husky_bimanual_box_stacking_env():
             target=q_home,
         )
 
-        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5, 0.001, 0.001)
+
+        keyframes = solve_komo_problem(komo, 100, c_tmp, False, 3, -1.5)
+        print(box)
+
         return keyframes
 
     k1 = compute_rearrangment("obj0", "goal0")
