@@ -306,10 +306,104 @@ class rai_husky_reach(SequenceMixin, rai_env):
         #     print(len(q.state()))
         #     self.show_config(q)
 
-
+@register("rai.husky_stacking")
 class rai_bimanual_husky_stacking(SequenceMixin, rai_env):
     def __init__(self):
-        self.C = rai_config.make_bimanual_husky_box_stacking_env()
+        self.C, [k1, k2, k3, k4] = rai_config.make_bimanual_husky_box_stacking_env()
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        lhs_constraint = np.zeros((3, 2*9), dtype=int)
+        lhs_constraint[0, [0, 9]] = [1, -1]
+        lhs_constraint[1, [1, 10]] = [1, -1]
+        lhs_constraint[2, [2, 11]] = [1, -1]
+
+        rhs_constraint = np.zeros((3, 1))
+
+        self.constraints = [AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
+
+        self.tasks = [
+            # joint
+            Task(
+                "r1_pick_0",
+                ["a1"],
+                SingleGoal(k1[0]),
+                "pick",
+                frames=["a1_ur_vacuum", "obj0"],
+            ),
+            Task(
+                "r1_place_0",
+                ["a1"],
+                SingleGoal(k1[1]),
+                "place",
+                frames=["table", "obj0"],
+            ),
+            Task(
+                "r2_pick_0",
+                ["a2"],
+                SingleGoal(k2[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj1"],
+            ),
+            Task(
+                "r2_place_0",
+                ["a2"],
+                SingleGoal(k2[1]),
+                "place",
+                frames=["table", "obj1"],
+            ),
+            Task(
+                "r1_pick_1",
+                ["a1"],
+                SingleGoal(k3[0]),
+                "pick",
+                frames=["a1_ur_vacuum", "obj2"],
+            ),
+            Task(
+                "r1_place_1",
+                ["a1"],
+                SingleGoal(k3[1]),
+                "place",
+                frames=["table", "obj2"],
+                constraints=[]
+            ),
+            Task(
+                "r2_pick_1",
+                ["a2"],
+                SingleGoal(k4[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj3"],
+            ),
+            Task(
+                "r2_place_1",
+                ["a2"],
+                SingleGoal(k4[1]),
+                "place",
+                frames=["table", "obj3"],
+                constraints=[]
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+        
+        self.sequence = self._make_sequence_from_names(
+            ["r1_pick_0", "r1_place_0", "r2_pick_0", "r1_pick_1", "r2_place_0", "r1_place_1", "r2_pick_1", "r2_place_1", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
 class rai_bimanual_husky_strut(SequenceMixin, rai_env):
