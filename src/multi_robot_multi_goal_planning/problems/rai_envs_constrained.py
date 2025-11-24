@@ -306,10 +306,10 @@ class rai_husky_reach(SequenceMixin, rai_env):
         #     print(len(q.state()))
         #     self.show_config(q)
 
-@register("rai.husky_stacking")
-class rai_bimanual_husky_stacking(SequenceMixin, rai_env):
+@register("rai.husky_single_arm_stacking")
+class rai_single_arm_husky_stacking(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, [k1, k2, k3, k4] = rai_config.make_bimanual_husky_box_stacking_env()
+        self.C, [k1, k2, k3, k4] = rai_config.make_husky_single_arm_box_stacking_env()
 
         self.robots = ["a1", "a2"]
         rai_env.__init__(self)
@@ -406,9 +406,128 @@ class rai_bimanual_husky_stacking(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
-class rai_bimanual_husky_strut(SequenceMixin, rai_env):
+@register("rai.husky_bimanual_stacking")
+class rai_bimanual_husky_stacking(SequenceMixin, rai_env):
     def __init__(self):
-        self.C = rai_config.make_bimanual_husky_strut_env()
+        self.C, [k1, k2, k3, k4] = rai_config.make_husky_bimanual_box_stacking_env()
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        lhs_constraint = np.zeros((3, 2*9), dtype=int)
+        lhs_constraint[0, [0, 9]] = [1, -1]
+        lhs_constraint[1, [1, 10]] = [1, -1]
+        lhs_constraint[2, [2, 11]] = [1, -1]
+
+        rhs_constraint = np.zeros((3, 1))
+
+        self.constraints = [AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
+
+        def get_picking_constraints(keyframe):
+            self.C.setJointState(keyframe)
+            a1_pose = self.C.getFrame("a1_ur_ee_marker").getPose()
+            a2_pose = self.C.getFrame("a2_ur_ee_marker").getPose()
+            rel_pose = relative_pose(a1_pose, a2_pose)[:, None]
+            # rel_pos = self.C.getFrame("a2_ur_ee_marker").getPose() - self.C.getFrame("a1_ur_ee_marker").getPose()
+
+            pose_projection_matrix = np.zeros((3, 7))
+            pose_projection_matrix[0, 0] = 1
+            pose_projection_matrix[1, 1] = 1
+            pose_projection_matrix[2, 2] = 1
+            position_constraint = RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], pose_projection_matrix,  rel_pose, 1e-2)
+
+            orientation_constraint_1 = AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "x", np.array([-1, 0, 0]), 1e-1)
+            # orientation_constraint_2 = AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([0, -1, 0]), 5e-1)
+
+            constraints = [position_constraint, orientation_constraint_1]
+
+            return constraints
+
+        self.tasks = [
+            # joint
+            Task(
+                "pick_0",
+                self.robots,
+                SingleGoal(k1[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj0"],
+            ),
+            Task(
+                "place_0",
+                self.robots,
+                SingleGoal(k1[1]),
+                "place",
+                frames=["table", "obj0"],
+                constraints = get_picking_constraints(k1[1])
+            ),
+            Task(
+                "pick_1",
+                self.robots,
+                SingleGoal(k2[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj1"],
+            ),
+            Task(
+                "place_1",
+                self.robots,
+                SingleGoal(k2[1]),
+                "place",
+                frames=["table", "obj1"],
+                constraints = get_picking_constraints(k2[1])
+            ),
+            Task(
+                "pick_2",
+                self.robots,
+                SingleGoal(k3[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj2"],
+            ),
+            Task(
+                "place_2",
+                self.robots,
+                SingleGoal(k3[1]),
+                "place",
+                frames=["table", "obj2"],
+                constraints = get_picking_constraints(k3[1])
+            ),
+            Task(
+                "pick_3",
+                self.robots,
+                SingleGoal(k4[0]),
+                "pick",
+                frames=["a2_ur_vacuum", "obj3"],
+            ),
+            Task(
+                "place_3",
+                self.robots,
+                SingleGoal(k4[1]),
+                "place",
+                frames=["table", "obj3"],
+                constraints = get_picking_constraints(k4[1])
+            ),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        ]
+
+        self.C.setJointState(home_pose)
+        
+        self.sequence = self._make_sequence_from_names(
+            ["pick_0", "place_0", "pick_1", "place_1", "pick_2", "place_2", "pick_3", "place_3", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
 @register("rai.constrained_2d_puzzle")
