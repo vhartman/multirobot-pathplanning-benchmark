@@ -670,9 +670,12 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
-@register("rai.rfl")
+@register([
+    ("rai.rfl", {}),
+    ("rai.rfl_upright", {"orientation_constraint": True}),
+])
 class rai_rfl(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, orientation_constraint = False):
         self.C, [k1, k2, k3, k4] = rai_config.make_four_arms_on_a_gantry()
 
         self.robots = ["a1", "a2", "a3", "a4"]
@@ -689,6 +692,12 @@ class rai_rfl(SequenceMixin, rai_env):
 
         self.constraints = [AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
 
+        def get_additional_constraints(obj_name):
+            if orientation_constraint:
+                return [AffineFrameOrientationConstraint(obj_name, "z", np.array([0, 0, 1]), np.array([1e-3]))]
+            else:
+                return []
+
         self.tasks = [
             # joint
             Task(
@@ -704,6 +713,7 @@ class rai_rfl(SequenceMixin, rai_env):
                 SingleGoal(k1[1]),
                 "place",
                 frames=["table", "obj0"],
+                constraints = get_additional_constraints("obj0")
             ),
             Task(
                 "r1_pick_1",
@@ -718,6 +728,7 @@ class rai_rfl(SequenceMixin, rai_env):
                 SingleGoal(k2[1]),
                 "place",
                 frames=["table", "obj1"],
+                constraints = get_additional_constraints("obj1")
             ),
             Task(
                 "r2_pick_0",
@@ -732,7 +743,7 @@ class rai_rfl(SequenceMixin, rai_env):
                 SingleGoal(k3[1]),
                 "place",
                 frames=["table", "obj2"],
-                constraints=[]
+                constraints = get_additional_constraints("obj2")
             ),
             Task(
                 "r2_pick_1",
@@ -747,7 +758,7 @@ class rai_rfl(SequenceMixin, rai_env):
                 SingleGoal(k4[1]),
                 "place",
                 frames=["table", "obj3"],
-                constraints=[]
+                constraints = get_additional_constraints("obj3")
             ),
             # terminal mode
             Task(
