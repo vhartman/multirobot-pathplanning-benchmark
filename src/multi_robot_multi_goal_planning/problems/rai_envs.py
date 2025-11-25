@@ -480,7 +480,7 @@ class rai_two_dim_simple_manip_dependency_graph(DependencyGraphMixin, rai_two_di
 
 
 class rai_two_dim_handover_base(rai_env):
-    def __init__(self):
+    def __init__(self, make_goal_set=False):
         self.C, keyframes = rai_config.make_two_dim_handover()
         # self.C.view(True)
 
@@ -491,25 +491,29 @@ class rai_two_dim_handover_base(rai_env):
         self.manipulating_env = True
 
         translated_handover_poses = []
-        for _ in range(100):
-            new_pose = keyframes[1] * 1.0
-            translation = np.random.rand(2) * 1 - 0.5
-            new_pose[0:2] += translation
-            new_pose[3:5] += translation
 
-            translated_handover_poses.append(new_pose)
+        if make_goal_set:
+            for _ in range(100):
+                new_pose = keyframes[1] * 1.0
+                translation = np.random.rand(2) * 1 - 0.5
+                new_pose[0:2] += translation
+                new_pose[3:5] += translation
+
+                translated_handover_poses.append(new_pose)
 
         translated_handover_poses.append(keyframes[1])
 
         # generate set of random translations of the original keyframe
         rotated_terminal_poses = []
-        for _ in range(100):
-            new_pose = keyframes[3] * 1.0
-            rot = np.random.rand(2) * 6 - 3
-            new_pose[2] = rot[0]
-            new_pose[5] = rot[1]
 
-            rotated_terminal_poses.append(new_pose)
+        if make_goal_set:
+            for _ in range(100):
+                new_pose = keyframes[3] * 1.0
+                rot = np.random.rand(2) * 6 - 3
+                new_pose[2] = rot[0]
+                new_pose[5] = rot[1]
+
+                rotated_terminal_poses.append(new_pose)
 
         rotated_terminal_poses.append(keyframes[3])
 
