@@ -2083,6 +2083,20 @@ def make_single_arm_stick_env(clutter = False):
     xy_start_pos = [0.3, 0.3]
     xy_goal_pos = [-0.3, -0.3]
 
+    C.addFrame("start_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [xy_start_pos[0], xy_start_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([0, 1, 0, 0.2])
+
+    C.addFrame("goal_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [xy_goal_pos[0], xy_goal_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([1, 0, 0, 0.2])
+
     if clutter:
         for i in range(5):
             pos = np.random.uniform(-0.5, 1, 2)
@@ -2229,6 +2243,35 @@ def make_dual_arm_stick_env(clutter=False):
     r2_xy_start_pos = [-0.3, 0.3]
     r2_xy_goal_pos = [0.3, -0.3]
 
+    C.addFrame("start_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [r1_xy_start_pos[0], r1_xy_start_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([0, 1, 0, 0.2])
+
+    C.addFrame("goal_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [r1_xy_goal_pos[0], r1_xy_goal_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([1, 0, 0, 0.2])
+
+
+    C.addFrame("r2_start_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [r2_xy_start_pos[0], r2_xy_start_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([0, 1, 0, 0.2])
+
+    C.addFrame("r2_goal_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [r2_xy_goal_pos[0], r2_xy_goal_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([1, 0, 0, 0.2])
+
     if clutter:
         for i in range(10):
             pos = np.random.uniform(-0.5, 1, 2)
@@ -2325,12 +2368,6 @@ def make_dual_arm_stick_env(clutter=False):
 
         keyframes = solve_komo_problem(komo, 20, c_tmp, False, 3, -1.5)
         return keyframes[0]
-
-    r1_xy_start_pos = [0.2, 0.2]
-    r1_xy_goal_pos = [-0.2, -0.2]
-    
-    r2_xy_start_pos = [-0.2, 0.2]
-    r2_xy_goal_pos = [0.2, -0.2]
 
     r1_start_pose = compute_pose_from_pos("a1_", r1_xy_start_pos)
     r1_goal_pose = compute_pose_from_pos("a1_", r1_xy_goal_pos)
@@ -5360,6 +5397,110 @@ def make_husky_base_config():
     C.getFrame("a2_ur_coll0").setContact(0)
 
     return C
+
+def make_four_arm_stacking():
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-5)
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFile(robot_path, namePrefix="a3_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([+0.5, -0.6, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, 0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFile(robot_path, namePrefix="a4_").setParent(
+        C.getFrame("table")
+    ).setRelativePosition([-0.5, -0.6, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, 0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_1").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.3, 0, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_2").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.3, 0, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_3").setParent(table).setShape(
+        ry.ST.box, [0.6, 0.1, 0.1]
+    ).setPosition([0, 0, 0.41]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+
+    C.addFrame("goal_obj_4").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.2, 0, 0.52]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_5").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.2, 0, 0.52]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_6").setParent(table).setShape(
+        ry.ST.box, [0.4, 0.1, 0.1]
+    ).setPosition([0, 0, 0.63]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+
+    C.addFrame("goal_obj_7").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.0, 0, 0.74]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.view(True)
+
+    robots = ["a1", "a2", "a3", "a4"]
+
+    single_arm_objects = ["obj_1", "obj_2", "obj_4", "obj_5", "obj_7"]
+    dual_arm_objects = ["obj_3", "obj_6"]
+
+    def compute_robot_single_grasping():
+        pass
+    
+    def compute_robot_joint_grasping():
+        pass
+
+    keyframes = []
+
+    return C, robots, keyframes
 
 def make_goto_husky_env():
     C = make_husky_base_config()

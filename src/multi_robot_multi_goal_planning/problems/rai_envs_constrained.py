@@ -246,6 +246,15 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         #         self.show_config(q)
 
 
+@register("rai.four_arm_stacking")
+class rai_four_arm_stacking(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, self.robots, keyframes = rai_config.make_four_arm_stacking()
+        # self.C.view(True)
+
+        rai_env.__init__(self)
+
+
 @register("rai.husky_reach")
 class rai_husky_reach(SequenceMixin, rai_env):
     def __init__(self):
