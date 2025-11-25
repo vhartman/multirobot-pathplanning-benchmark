@@ -1363,7 +1363,7 @@ class BaseRRTstar(BasePlanner):
             and shortcutting_bool
         ):
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
-            if True:
+            if False:
                 shortcut_path_, result = robot_mode_shortcut( 
                     self.env,
                     self.operation.path_shortcutting,
@@ -1371,8 +1371,8 @@ class BaseRRTstar(BasePlanner):
                     resolution=self.env.collision_resolution,
                     tolerance=self.env.collision_tolerance,
                 )
-            else:
-                shortcut_path_, result = robot_mode_shortcut_nl_opt(  # robot_mode_shortcut_nl
+            elif False:
+                shortcut_path_, result = robot_mode_shortcut_nl(
                     self.env,
                     self.operation.path_shortcutting,
                     100,
@@ -1380,6 +1380,16 @@ class BaseRRTstar(BasePlanner):
                     tolerance=self.env.collision_tolerance,
                     planner=self,
                 )
+            elif True:
+                shortcut_path_, result = robot_mode_shortcut_nl_opt(
+                    self.env,
+                    self.operation.path_shortcutting,
+                    100,
+                    resolution=self.env.collision_resolution,
+                    tolerance=self.env.collision_tolerance,
+                    planner=self,
+                )
+
             if self.config.remove_redundant_nodes:
                 # print(np.sum(self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])))
                 shortcut_path = remove_interpolated_nodes(
