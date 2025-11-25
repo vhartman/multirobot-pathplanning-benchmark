@@ -898,6 +898,9 @@ class AITstar(BaseITstar):
         num_iter = 0
         n1 = None
         while True:
+            if ptc.should_terminate(self.cnt, time.time() - self.start_time):
+                break
+            
             num_iter += 1
             # self.reverse_search()
             if num_iter % 100000 == 0:
@@ -1027,8 +1030,6 @@ class AITstar(BaseITstar):
                     continue
                 break
 
-            if ptc.should_terminate(self.cnt, time.time() - self.start_time):
-                break
         if self.costs != []:
             self.update_results_tracking(self.costs[-1], self.current_best_path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}

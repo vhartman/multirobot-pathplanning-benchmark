@@ -49,9 +49,10 @@ def solve_komo_problem(komo, max_attempts, C, view, mult=3, offset=-1.5, damping
         # print(retval)
 
         if view:
+            print(retval)
             komo.view(True, "IK solution")
 
-        print(retval)
+        # komo.view(True, "IK solution")
 
         if retval["ineq"] < 1 and retval["eq"] < 1 and retval["feasible"]:
             # komo.view(True, "IK solution")
@@ -4098,7 +4099,7 @@ def make_bimanual_grasping_env(obstacle, view: bool = False):
             ry.ST.box, size=[0.4, 0.1, 0.4, 0.005]
         ).setContact(1).setRelativePosition(
             [0, -0.4, 0.25]
-        )
+        ).setJoint(ry.JT.rigid)
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.box, size=[0.2, 0.4, 0.2, 0.005]
@@ -5289,8 +5290,7 @@ def make_four_arms_on_a_gantry():
 
     return C, [k1, k2, k3, k4]
 
-
-def make_goto_husky_env():
+def make_husky_base_config():
     C = ry.Config()
 
     table = C.addFrame("table").setPosition([0, 0, 0.0]).setShape(
@@ -5358,6 +5358,12 @@ def make_goto_husky_env():
 
     C.getFrame("a1_ur_coll0").setContact(0)
     C.getFrame("a2_ur_coll0").setContact(0)
+
+    return C
+
+def make_goto_husky_env():
+    C = make_husky_base_config()
+    table = C.getFrame("table")
 
     g1 = (
         C.addFrame("goal_1")
@@ -5452,6 +5458,363 @@ def make_goto_husky_env():
 
     return C, set_of_keyframes_left, set_of_keyframes_right
 
+
+def make_husky_single_arm_box_stacking_env():
+    C = make_husky_base_config()
+    floor = C.getFrame("table")
+
+     # add a bunch of boxes
+    w = 2
+    d = 3
+    size = np.array([0.2, 0.2, 0.2])
+
+    boxes = []
+    goals = []
+
+    height = 0.12
+
+    def get_pos(j, k):
+        pos = np.array(
+            [
+                1 + j * size[0] * 3 - w / 2 * size[0] + size[0] / 2,
+                (k - 1) * size[1] * 3,
+                height,
+            ]
+        )
+        return pos
+
+    num_boxes = 4
+    cnt = 0
+    for k in range(d):
+        for j in range(w):
+            if k == 1 and j == 1:
+                continue
+
+            axis = np.random.randn(3)
+            axis /= np.linalg.norm(axis)
+
+            pos = get_pos(j, k)
+
+            C.addFrame("obj" + str(cnt)).setParent(floor).setShape(
+                ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
+                np.random.rand(3)
+            ).setContact(1).setJoint(ry.JT.rigid)
+
+            C.addFrame("goal" + str(cnt)).setParent(floor).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition(
+                [get_pos(1, 1)[0], get_pos(1, 1)[1], cnt * size[2] * 1.1 + height]
+            ).setColor([0, 0, 0.1, 0.5]).setContact(0).setJoint(ry.JT.rigid)
+
+            boxes.append("obj" + str(cnt))
+            goals.append("goal" + str(cnt))
+
+            cnt += 1
+
+            if cnt == num_boxes:
+                break
+
+        if cnt == num_boxes:
+            break
+
+    # C.view(True)
+
+    def compute_rearrangment(
+        robot_prefix, box, goal
+    ):
+        # set everything but the crrent box to non-contact
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "base_joint"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        for frame_name in boxes:
+            if frame_name != box:
+                c_tmp.getFrame(frame_name).setContact(0)
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e0)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+        komo.addObjective(
+            [1, 2],
+            ry.FS.distance,
+            [robot_prefix + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.02],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 0],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [robot_prefix + "ur_ee_marker", box],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [robot_prefix + "ur_ee_marker", box],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+
+        # for pick and place directly
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
+
+    k1 = compute_rearrangment("a1_", "obj0", "goal0")
+    k2 = compute_rearrangment("a2_", "obj1", "goal1")
+    k3 = compute_rearrangment("a1_", "obj2", "goal2")
+    k4 = compute_rearrangment("a2_", "obj3", "goal3")
+
+    return C, [k1, k2, k3, k4]
+
+def make_husky_bimanual_box_stacking_env():
+    C = make_husky_base_config()
+    floor = C.getFrame("table")
+
+     # add a bunch of boxes
+    w = 2
+    d = 2
+    size = np.array([0.2, 0.2, 0.2])
+
+    boxes = []
+    goals = []
+
+    height = 0.12
+
+    def get_pos(j, k):
+        pos = np.array(
+            [
+                1 + j * size[0] * 3 - w / 2 * size[0] + size[0] / 2,
+                (k - 1) * size[1] * 3,
+                height,
+            ]
+        )
+        return pos
+
+    goal_pos = np.array([1, 1, 0])
+
+    num_boxes = 4
+    cnt = 0
+    for k in range(d):
+        for j in range(w):
+            # if k == 1 and j == 1:
+            #     continue
+
+            axis = np.random.randn(3)
+            axis /= np.linalg.norm(axis)
+
+            pos = get_pos(j, k)
+
+            C.addFrame("obj" + str(cnt)).setParent(floor).setShape(
+                ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
+                np.random.rand(3)
+            ).setContact(1).setJoint(ry.JT.rigid)
+
+            C.addFrame("goal" + str(cnt)).setParent(floor).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition(
+                [goal_pos[0], goal_pos[1], cnt * size[2] * 1.1 + height]
+            ).setColor([0, 0, 0.1, 0.5]).setContact(0).setJoint(ry.JT.rigid)
+
+            boxes.append("obj" + str(cnt))
+            goals.append("goal" + str(cnt))
+
+            cnt += 1
+
+            if cnt == num_boxes:
+                break
+
+        if cnt == num_boxes:
+            break
+
+    # C.view(True)
+
+    def compute_rearrangment(
+        box, goal
+    ):
+        r1 = "a1_"
+        r0 = "a2_"
+
+        # set everything but the crrent box to non-contact
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        q_home = c_tmp.getJointState()
+
+        for frame_name in boxes:
+            if frame_name == box:
+                break
+
+            pos = c_tmp.getFrame("goal" + frame_name[3:]).getPosition()
+            c_tmp.getFrame(frame_name).setPosition(pos)
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [r0 + "ur_vacuum", box])
+        mat = np.zeros((3, 2*9), dtype=int)
+        w = 10
+        mat[0, [0, 9]] = [w, -w]
+        mat[1, [1, 10]] = [w, -w]
+        mat[2, [2, 11]] = [w, -w]
+        komo.addObjective(
+            [1],
+            ry.FS.qItself,
+            [],
+            ry.OT.eq,
+            mat,
+        )
+        komo.addObjective(
+            [2],
+            ry.FS.qItself,
+            [],
+            ry.OT.eq,
+            mat,
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.distance,
+            [r0 + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.02],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [r0 + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 0, 1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXY,
+            [r0 + "ur_ee_marker", box],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductXY,
+        #     [r0 + "ur_ee_marker", box],
+        #     ry.OT.eq,
+        #     [1e1],
+        #     [-1]
+        # )
+
+        komo.addObjective(
+            [1, 2],
+            ry.FS.distance,
+            [r1 + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.02],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [r1 + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 0, 1e1],
+        )
+
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXY,
+            [r1 + "ur_ee_marker", box],
+            ry.OT.eq,
+            [1e1],
+            [1]
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.scalarProductXY,
+        #     [r1 + "ur_ee_marker", box],
+        #     ry.OT.eq,
+        #     [1e1],
+        #     [1]
+        # )
+
+        # for pick and place directly
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+        # komo.addObjective([2, -1], ry.FS.positionDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e-1],
+            target=q_home,
+        )
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+
+        keyframes = solve_komo_problem(komo, 100, c_tmp, False, 3, -1.5)
+        print(box)
+
+        return keyframes
+
+    k1 = compute_rearrangment("obj0", "goal0")
+    k2 = compute_rearrangment("obj1", "goal1")
+    k3 = compute_rearrangment("obj2", "goal2")
+    k4 = compute_rearrangment("obj3", "goal3")
+
+    return C, [k1, k2, k3, k4]
 
 def make_box_pile_env(
     num_boxes=6,
