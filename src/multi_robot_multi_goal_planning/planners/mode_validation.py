@@ -172,6 +172,7 @@ class ModeValidation:
 
         # if the mode that we ar trying to add is the start mode, we dont
         if mode == self.env.start_mode:
+            # self.env.C.view(True)
             assert False, "Tried to add initial mode to the invalid modes."
             return
 
