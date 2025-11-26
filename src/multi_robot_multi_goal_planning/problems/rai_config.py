@@ -2083,6 +2083,20 @@ def make_single_arm_stick_env(clutter = False):
     xy_start_pos = [0.3, 0.3]
     xy_goal_pos = [-0.3, -0.3]
 
+    C.addFrame("start_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [xy_start_pos[0], xy_start_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([0, 1, 0, 0.2])
+
+    C.addFrame("goal_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [xy_goal_pos[0], xy_goal_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([1, 0, 0, 0.2])
+
     if clutter:
         for i in range(5):
             pos = np.random.uniform(-0.5, 1, 2)
@@ -2229,6 +2243,35 @@ def make_dual_arm_stick_env(clutter=False):
     r2_xy_start_pos = [-0.3, 0.3]
     r2_xy_goal_pos = [0.3, -0.3]
 
+    C.addFrame("start_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [r1_xy_start_pos[0], r1_xy_start_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([0, 1, 0, 0.2])
+
+    C.addFrame("goal_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [r1_xy_goal_pos[0], r1_xy_goal_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([1, 0, 0, 0.2])
+
+
+    C.addFrame("r2_start_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [r2_xy_start_pos[0], r2_xy_start_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([0, 1, 0, 0.2])
+
+    C.addFrame("r2_goal_pt").setParent(table
+    ).setPosition(
+        table.getPosition() + [r2_xy_goal_pos[0], r2_xy_goal_pos[1], 0.07]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.06, 0.005]).setContact(
+        0
+    ).setColor([1, 0, 0, 0.2])
+
     if clutter:
         for i in range(10):
             pos = np.random.uniform(-0.5, 1, 2)
@@ -2325,12 +2368,6 @@ def make_dual_arm_stick_env(clutter=False):
 
         keyframes = solve_komo_problem(komo, 20, c_tmp, False, 3, -1.5)
         return keyframes[0]
-
-    r1_xy_start_pos = [0.2, 0.2]
-    r1_xy_goal_pos = [-0.2, -0.2]
-    
-    r2_xy_start_pos = [-0.2, 0.2]
-    r2_xy_goal_pos = [0.2, -0.2]
 
     r1_start_pose = compute_pose_from_pos("a1_", r1_xy_start_pos)
     r1_goal_pose = compute_pose_from_pos("a1_", r1_xy_goal_pos)
@@ -5361,6 +5398,362 @@ def make_husky_base_config():
 
     return C
 
+def make_four_arm_stacking():
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/ur10/ur10_vacuum.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        table
+    ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-5)
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        table
+    ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFile(robot_path, namePrefix="a3_").setParent(
+        table
+    ).setRelativePosition([+0.5, -0.6, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, 0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFile(robot_path, namePrefix="a4_").setParent(
+        table
+    ).setRelativePosition([-0.5, -0.6, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, 0.7071]
+    ).setJoint(ry.JT.rigid)
+
+
+    C.addFrame("obj_1").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.1, -0.3, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_2").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.1, 0.2, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_3").setParent(table).setShape(
+        ry.ST.box, [0.6, 0.1, 0.1]
+    ).setPosition([0.8, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+
+    C.addFrame("obj_4").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.4, -0.2, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_5").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.4, 0.2, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_6").setParent(table).setShape(
+        ry.ST.box, [0.4, 0.1, 0.1]
+    ).setPosition([-0.6, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+
+    C.addFrame("obj_7").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.0, 0.4, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_1").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.3, 0, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_2").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.3, 0, 0.3]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_3").setParent(table).setShape(
+        ry.ST.box, [0.6, 0.1, 0.1]
+    ).setPosition([0, 0, 0.41]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+
+    C.addFrame("goal_obj_4").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.2, 0, 0.52]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_5").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.2, 0, 0.52]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_obj_6").setParent(table).setShape(
+        ry.ST.box, [0.4, 0.1, 0.1]
+    ).setPosition([0, 0, 0.63]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+
+    C.addFrame("goal_obj_7").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.0, 0, 0.74]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    # C.view(True)
+
+    robots = ["a1_", "a2_", "a3_", "a4_"]
+
+    single_arm_objects = ["obj_1", "obj_2", "obj_4", "obj_5", "obj_7"]
+    dual_arm_objects = ["obj_3", "obj_6"]
+
+    def compute_robot_single_grasping(robot_prefix, obj):
+        goal = "goal_" + obj
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e0)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", obj])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_vacuum", obj],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "ur_vacuum", obj],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [0, 0, 0.05]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [robot_prefix + "ur_ee_marker", obj],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [robot_prefix + "ur_ee_marker", obj],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+
+        # for pick and place directly
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", obj])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, obj], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
+    
+    def compute_robot_joint_grasping(robots, obj):
+        goal = "goal_" + obj
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        r1_prefix = robots[0]
+        r2_prefix = robots[1]
+
+        joints = get_robot_joints(c_tmp, r1_prefix)
+        joints.extend(get_robot_joints(c_tmp, r2_prefix))
+
+        c_tmp.selectJoints(joints)
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e0)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [r1_prefix + "ur_vacuum", obj])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [r1_prefix + "ur_vacuum", obj],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionRel,
+            [r1_prefix + "ur_vacuum", obj],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [0.15, 0, 0.05],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [r1_prefix + "ur_ee_marker", obj],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [r1_prefix + "ur_ee_marker", obj],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+
+        # r2 stuff
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [r2_prefix + "ur_vacuum", obj],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
+
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionRel,
+            [r2_prefix + "ur_vacuum", obj],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [-0.15, 0.0, 0.05]
+        )
+
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [r2_prefix + "ur_ee_marker", obj],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [r2_prefix + "ur_ee_marker", obj],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+
+        # for pick and place directly
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", obj])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, obj], ry.OT.eq, [1e1])
+        
+        komo.addObjective([2], ry.FS.poseRel, [r2_prefix + "ur_ee_marker", obj], ry.OT.eq, [1e1], target=0, order=1)
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
+
+    keyframes = {}
+
+    r_idx = 0 
+    for obj in single_arm_objects:
+        while True:
+            robot = robots[r_idx % len(robots)]
+            poses = compute_robot_single_grasping(robot, obj)
+
+            r_idx += 1
+
+            if poses is not None:
+                keyframes[obj] = (
+                    ([robot], poses)
+                )
+                break
+
+    robot_assignments = {
+        "obj_3": ["a2_", "a3_"],
+        "obj_6": ["a1_", "a4_"],
+    }
+    for obj in dual_arm_objects:
+        while True:
+            chosen_robots = robot_assignments[obj]
+            poses = compute_robot_joint_grasping(chosen_robots, obj)
+
+            if poses is not None:
+                keyframes[obj] = (
+                    (chosen_robots, poses)
+                )
+                break
+
+    sequence = [f"obj_{i+1}" for i in range(7)]
+
+    return C, robots, sequence, keyframes
+
 def make_goto_husky_env():
     C = make_husky_base_config()
     table = C.getFrame("table")
@@ -5715,20 +6108,21 @@ def make_husky_bimanual_box_stacking_env():
             ry.OT.eq,
             mat,
         )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [r0 + "ur_vacuum", box],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
         komo.addObjective(
             [1, 2],
-            ry.FS.distance,
-            [r0 + "ur_vacuum", box],
-            ry.OT.ineq,
-            [-1e0],
-            [0.02],
-        )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.positionDiff,
+            ry.FS.positionRel,
             [r0 + "ur_vacuum", box],
             ry.OT.sos,
-            [1e1, 0, 1e1],
+            [1e1, 1e1, 1e1],
+            [0, 0.1, 0]
         )
         komo.addObjective(
             [1, 2],
@@ -5747,20 +6141,21 @@ def make_husky_bimanual_box_stacking_env():
         #     [-1]
         # )
 
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [r1 + "ur_vacuum", box],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
         komo.addObjective(
             [1, 2],
-            ry.FS.distance,
+            ry.FS.positionRel,
             [r1 + "ur_vacuum", box],
-            ry.OT.ineq,
-            [-1e0],
-            [0.02],
-        )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.positionDiff,
-            [r1 + "ur_vacuum", box],
-            ry.OT.sos,
-            [1e1, 0, 1e1],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [0, -0.1, 0.]
         )
 
         komo.addObjective(

@@ -247,6 +247,106 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         #         self.show_config(q)
 
 
+@register("rai.four_arm_stacking")
+class rai_four_arm_stacking(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, self.robots, sequence, keyframes = rai_config.make_four_arm_stacking()
+        # self.C.view(True)
+
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+        self.manipulating_env = True
+
+        self.tasks = []
+        named_sequence = []
+
+        for obj in sequence:
+            r = keyframes[obj][0]
+            poses = keyframes[obj][1]
+            
+            if len(r) == 1:
+                pick_task = Task(
+                    f"single_pick_{obj}",
+                    r,
+                    SingleGoal(poses[0]),
+                    type="pick",
+                    frames=[f"{r[0]}ur_ee_marker", obj]
+                )
+                place_task = Task(
+                    f"single_place_{obj}",
+                    r,
+                    SingleGoal(poses[1]),
+                    type="place",
+                    frames=["table", obj]
+                )
+                self.tasks.append(pick_task)
+                self.tasks.append(place_task)
+
+                named_sequence.append(f"single_pick_{obj}")
+                named_sequence.append(f"single_place_{obj}")
+            else:
+                pose_projection_matrix = np.zeros((3, 7))
+                pose_projection_matrix[0, 0] = 1
+                pose_projection_matrix[1, 1] = 1
+                pose_projection_matrix[2, 2] = 1
+
+                self.C.setJointState(poses[0][:6], self.robot_joints[r[0]])
+                self.C.setJointState(poses[0][6:], self.robot_joints[r[1]])
+                # self.C.view(True)
+                a1_pose = self.C.getFrame(f"{r[0]}ur_ee_marker").getPose()
+                a2_pose = self.C.getFrame(f"{r[1]}ur_ee_marker").getPose()
+                rel_pose = relative_pose(a1_pose, a2_pose)[:, None]
+                self.C.setJointState(home_pose)
+
+                pick_task = Task(
+                    f"joint_pick_{obj}",
+                    r,
+                    SingleGoal(poses[0]),
+                    type="pick",
+                    frames=[f"{r[0]}ur_ee_marker", obj]
+                )
+                place_task = Task(
+                    f"joint_place_{obj}",
+                    r,
+                    SingleGoal(poses[1]),
+                    type="place",
+                    frames=["table", obj],
+                    constraints=[
+                        RelativeAffineTaskSpaceEqualityConstraint([f"{r[0]}ur_ee_marker", f"{r[1]}ur_ee_marker"], pose_projection_matrix,  rel_pose, 1e-2),
+                        AffineRelativeFrameOrientationConstraint([f"{r[0]}ur_ee_marker", f"{r[1]}ur_ee_marker"], "x", np.array([1, 0, 0]), 5e-2),
+                        # AffineRelativeFrameOrientationConstraint([f"{r[0]}ur_ee_marker", f"{r[1]}ur_ee_marker"], "z", np.array([0, -1, 0]), 5e-1)
+                        # AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([1, -1, 0]), 5e-2),
+                        # AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([-1, -1, 0]), 5e-2)
+                    ]
+                )
+                self.tasks.append(pick_task)
+                self.tasks.append(place_task)
+                
+                named_sequence.append(f"joint_pick_{obj}")
+                named_sequence.append(f"joint_place_{obj}")
+            
+        self.tasks.append(
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            )
+        )
+        named_sequence.append("terminal")
+
+        self.sequence = self._make_sequence_from_names(
+            named_sequence
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.manipulation = ManipulationType.STATIC
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
 @register("rai.husky_reach")
 class rai_husky_reach(SequenceMixin, rai_env):
     def __init__(self):
@@ -821,6 +921,7 @@ class rai_rfl(SequenceMixin, rai_env):
 
         #     if self.is_collision_free(q):
         #         self.show_config(q)
+
 
 @register("rai.arm_ee_pose")
 class rai_hold_glass_upright(SequenceMixin, rai_env):
