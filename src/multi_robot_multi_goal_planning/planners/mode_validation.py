@@ -76,23 +76,23 @@ class ModeValidation:
                     continue
 
                 goal = active_task.goal.sample(mode)
-                end_idx = 0
 
                 for robot in self.env.robots:
                     if robot in constrained_robots:
                         q = start_pos * 1
-                        robot_indices = self.env.robot_idx[robot]
-                        dim = self.env.robot_dims[robot]
-                        indices = list(range(end_idx, end_idx + dim))
-                        if self.with_noise:
-                            q[robot_indices] = goal[indices] + np.random.normal(
-                                loc=0.0, scale=0.03, size=goal[indices].shape
-                            )
-                        else:
-                            q[robot_indices] = goal[indices]
+                        end_idx = 0
+                        for r in constrained_robots:
+                            robot_indices = self.env.robot_idx[r]
+                            dim = self.env.robot_dims[r]
+                            indices = list(range(end_idx, end_idx + dim))
+                            if self.with_noise:
+                                q[robot_indices] = goal[indices] + np.random.normal(
+                                    loc=0.0, scale=0.03, size=goal[indices].shape
+                                )
+                            else:
+                                q[robot_indices] = goal[indices]
 
-                        #
-                        end_idx += dim
+                            end_idx += dim
                         # checks if the mode has a possible goal configuration
                         # if not self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance, set_mode):
                         # assert(self.env.is_collision_free_np(q, mode, self.env.collision_tolerance, set_mode) == self.env.is_collision_free_for_robot(robot, q, mode, self.env.collision_tolerance, set_mode)),(
