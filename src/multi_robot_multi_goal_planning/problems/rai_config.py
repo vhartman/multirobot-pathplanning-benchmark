@@ -6108,20 +6108,21 @@ def make_husky_bimanual_box_stacking_env():
             ry.OT.eq,
             mat,
         )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [r0 + "ur_vacuum", box],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
         komo.addObjective(
             [1, 2],
-            ry.FS.distance,
-            [r0 + "ur_vacuum", box],
-            ry.OT.ineq,
-            [-1e0],
-            [0.02],
-        )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.positionDiff,
+            ry.FS.positionRel,
             [r0 + "ur_vacuum", box],
             ry.OT.sos,
-            [1e1, 0, 1e1],
+            [1e1, 1e1, 1e1],
+            [0, 0.1, 0]
         )
         komo.addObjective(
             [1, 2],
@@ -6140,20 +6141,21 @@ def make_husky_bimanual_box_stacking_env():
         #     [-1]
         # )
 
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [r1 + "ur_vacuum", box],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
         komo.addObjective(
             [1, 2],
-            ry.FS.distance,
+            ry.FS.positionRel,
             [r1 + "ur_vacuum", box],
-            ry.OT.ineq,
-            [-1e0],
-            [0.02],
-        )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.positionDiff,
-            [r1 + "ur_vacuum", box],
-            ry.OT.sos,
-            [1e1, 0, 1e1],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [0, -0.1, 0.]
         )
 
         komo.addObjective(
