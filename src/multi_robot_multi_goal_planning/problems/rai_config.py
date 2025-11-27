@@ -5926,8 +5926,11 @@ def make_husky_single_arm_box_stacking_env():
         q_home = c_tmp.getJointState()
 
         for frame_name in boxes:
-            if frame_name != box:
-                c_tmp.getFrame(frame_name).setContact(0)
+            if frame_name == box:
+                break
+
+            pos = c_tmp.getFrame("goal" + frame_name[3:]).getPosition()
+            c_tmp.getFrame(frame_name).setPosition(pos)
 
         komo = ry.KOMO(
             c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
@@ -5941,20 +5944,21 @@ def make_husky_single_arm_box_stacking_env():
         # komo.addControlObjective([], 2, 1e-1)
 
         komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
-        komo.addObjective(
-            [1, 2],
-            ry.FS.distance,
-            [robot_prefix + "ur_vacuum", box],
-            ry.OT.ineq,
-            [-1e0],
-            [0.02],
-        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_vacuum", box],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
         komo.addObjective(
             [1, 2],
             ry.FS.positionDiff,
             [robot_prefix + "ur_vacuum", box],
-            ry.OT.sos,
-            [1e1, 1e1, 0],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [0., 0, 0.1]
         )
         komo.addObjective(
             [1, 2],
