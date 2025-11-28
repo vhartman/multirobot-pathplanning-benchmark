@@ -250,24 +250,16 @@ def main():
     )
 
     interpolated_path = interpolate_path(path, 0.05)
-    # interpolated_path_nl = planner.interpolate_path_nonlinear(path, 0.05)
     shortcut_discretized_path = interpolate_path(shortcut_path)
-    # shortcut_discretized_path = planner.interpolate_path_nonlinear(shortcut_path)
 
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))
-
-    # print("Checking nonlinear interpolated path for validity")
-    # print(env.is_valid_plan(interpolated_path_nl))
 
     print("Checking mode-shortcutted path for validity")
     print(env.is_valid_plan(single_mode_shortcut_path))
 
     print("Checking task shortcutted path for validity")
     print(env.is_valid_plan(shortcut_path))
-
-    # print("Checking nonlinear interpolated path for validity")
-    # print(env.is_valid_plan(shortcut_discretized_path))
 
     print("cost", info["costs"])
     print("comp_time", info["times"])

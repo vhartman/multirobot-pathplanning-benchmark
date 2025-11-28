@@ -1431,6 +1431,18 @@ class BaseRRTstar(BasePlanner):
             # batch_cost = self.env.batch_config_cost(shortcut_path[:-1], shortcut_path[1:])
             # shortcut_path_costs = cumulative_sum(batch_cost)
             # shortcut_path_costs = np.insert(shortcut_path_costs, 0, 0.0)
+
+            # print("Len of path before shortcutting:", len(self.operation.path_shortcutting))
+            # for i, state in enumerate(self.operation.path_shortcutting):
+            #     print(f"Step {i}")
+            #     print("shape of the state q:", state.q.state().shape)
+            #     # print("Mode:", state.mode.task_ids, "State:", state.q.state())
+            # print("Len of path after shortcutting:", len(shortcut_path))
+            # for i, state in enumerate(shortcut_path):
+            #     print(f"Step {i}")
+            #     print("shape of the state q:", state.q.state().shape)
+            #     # print("Mode:", state.mode.task_ids, "State:", state.q.state())
+
             if result[0][-1] < self.operation.cost:
                 self.update_results_tracking(result[0][-1], shortcut_path)
                 self.tree_extension(shortcut_path)
@@ -2129,7 +2141,6 @@ class BaseRRTstar(BasePlanner):
         Exactly the same selection logic as the affine sampler.
         """
         if np.random.uniform(0, 1) < self.config.p_goal:
-            print("Goal sampling NL")
             return self.sample_goal_nl(mode, self.transition_node_ids, self.trees[mode].order)
         if self.config.informed_sampling and self.operation.init_sol:
             return self.sample_informed_nl(mode)

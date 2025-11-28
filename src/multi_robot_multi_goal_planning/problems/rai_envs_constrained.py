@@ -831,7 +831,7 @@ class rai_rfl(SequenceMixin, rai_env):
 
         def get_additional_constraints(obj_name):
             if orientation_constraint:
-                return [AffineFrameOrientationConstraint(obj_name, "z", np.array([0, 0, 1]), np.array([1e-3]))]
+                return [AffineFrameOrientationConstraint(obj_name, "z", np.array([0, 0, 1]), np.array([1e-2]))]
             else:
                 return []
 
