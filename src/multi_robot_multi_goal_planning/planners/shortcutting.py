@@ -11,6 +11,8 @@ from multi_robot_multi_goal_planning.problems.planning_env import State, BasePro
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
+from multi_robot_multi_goal_planning.problems.constraints import AffineConfigurationSpaceEqualityConstraint
+
 
 def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 1000):
     """
@@ -687,6 +689,23 @@ def robot_mode_shortcut_nl(
     return new_path, [costs, times]
 
 
+def make_freeze_dofs_constraint(env, inactive_idx, q_full):
+    """
+    Create an affine equality constraint A q = b
+    that fixes DOFs in inactive_idx to the values in q_full.
+    """
+
+    total = len(q_full)
+    A = np.zeros((len(inactive_idx), total))
+    b = np.zeros(len(inactive_idx))
+
+    for row, dof in enumerate(inactive_idx):
+        A[row, dof] = 1.0
+        b[row] = q_full[dof]
+
+    return AffineConfigurationSpaceEqualityConstraint(A, b[:, None])
+
+
 def _opt_shortcut_segment_nl(
     new_path: List[State],
     i: int,
@@ -715,6 +734,7 @@ def _opt_shortcut_segment_nl(
     # Active DOFs
     active_slices = [robot_slices[r] for r in robots_to_shortcut]
     active_idx = np.concatenate([np.arange(s.start, s.stop) for s in active_slices])
+    inactive_idx = np.array([k for k in range(total_dofs) if k not in active_idx])
 
     # Flatten path
     Q = np.zeros((segment_len, total_dofs))
@@ -750,6 +770,10 @@ def _opt_shortcut_segment_nl(
             eq_aff, ineq_aff, eq_nl, ineq_nl = planner.collect_constraints(mode_k)
             eq  = eq_aff + eq_nl
             ineq = ineq_aff + ineq_nl
+
+            freeze_dofs_constr = make_freeze_dofs_constraint(env, inactive_idx, Q[k][:])
+
+            eq.append(freeze_dofs_constr)
 
             q_proj = planner.project_nonlinear_dispatch(
                 q_template.from_flat(Q[k]),
