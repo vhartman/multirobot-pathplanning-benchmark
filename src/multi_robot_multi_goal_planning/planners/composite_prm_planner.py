@@ -456,7 +456,7 @@ class CompositePRM(BasePlanner):
         print(f"Removed {num_pts_for_removal} nodes")
 
     def _refine_approximation(
-        self, g, informed, reached_modes, current_best_path, current_best_cost
+        self, g, informed_sampler, reached_modes, current_best_path, current_best_cost
     ):
         # add new batch of nodes
         effective_uniform_batch_size = (
@@ -479,6 +479,7 @@ class CompositePRM(BasePlanner):
             cost=current_best_cost,
             reached_modes=reached_modes,
         )
+
         # g.add_transition_nodes(new_transitions)
         # print(f"Adding {len(new_transitions)} transitions")
 
@@ -531,7 +532,7 @@ class CompositePRM(BasePlanner):
 
             if self.config.try_informed_sampling:
                 print("Generating informed samples")
-                new_informed_states = informed.generate_samples(
+                new_informed_states = informed_sampler.generate_samples(
                     list(reached_modes),
                     self.config.informed_batch_size,
                     interpolated_path,
@@ -544,7 +545,7 @@ class CompositePRM(BasePlanner):
 
             if self.config.try_informed_transitions:
                 print("Generating informed transitions")
-                new_informed_transitions = informed.generate_transitions(
+                new_informed_transitions = informed_sampler.generate_transitions(
                     list(reached_modes),
                     self.config.informed_transition_batch_size,
                     interpolated_path,
@@ -575,7 +576,7 @@ class CompositePRM(BasePlanner):
         reached_modes = set([m0])
         self.sorted_reached_modes = list(sorted(reached_modes, key=lambda m: m.id))
 
-        informed = InformedSampling(
+        informed_sampler = InformedSampling(
             self.env,
             "graph_based",
             self.config.locally_informed_sampling,
@@ -621,7 +622,7 @@ class CompositePRM(BasePlanner):
 
             if add_new_batch:
                 approximate_space_extent = self._refine_approximation(
-                    graph, informed, reached_modes, current_best_path, current_best_cost
+                    graph, informed_sampler, reached_modes, current_best_path, current_best_cost
                 )
 
                 # update the lower bound to goal cost estimation of nodes.
