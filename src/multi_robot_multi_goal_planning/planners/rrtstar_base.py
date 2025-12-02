@@ -2259,16 +2259,16 @@ class BaseRRTstar(BasePlanner):
         mode = discretized_path[0].mode
         parent = self.operation.path_nodes[0]
 
-        for i in range(1, len(discretized_path)):
-            print("discretized path:", i, "config:", discretized_path[i].q.state(), "mode:", discretized_path[i].mode)
+        # for i in range(1, len(discretized_path)):
+        #     print("discretized path:", i, "config:", discretized_path[i].q.state(), "mode:", discretized_path[i].mode)
 
-        new_path = discretized_path.copy()
-        for k in range(1, len(new_path)):
-            print("Mode check", k, new_path[k].mode, new_path[k-1].mode)
-            if new_path[k].mode != new_path[k-1].mode:
-                print("  Mode switch at index", k)
-                print("  States identical check:", np.allclose(new_path[k].q.state(), new_path[k-1].q.state()))
-                assert np.allclose(new_path[k].q.state(), new_path[k-1].q.state()), "Mode switch duplication violated!"
+        # new_path = discretized_path.copy()
+        # for k in range(1, len(new_path)):
+        #     print("Mode check", k, new_path[k].mode, new_path[k-1].mode)
+        #     if new_path[k].mode != new_path[k-1].mode:
+        #         print("  Mode switch at index", k)
+        #         print("  States identical check:", np.allclose(new_path[k].q.state(), new_path[k-1].q.state()))
+        #         assert np.allclose(new_path[k].q.state(), new_path[k-1].q.state()), "Mode switch duplication violated!"
 
         for i in range(1, len(discretized_path)):
             state = discretized_path[i]
@@ -2286,11 +2286,11 @@ class BaseRRTstar(BasePlanner):
                     self.trees[node.state.mode].get_node_ids_subtree() == parent.id
                 )
 
-                # debugging
-                print("CALLING NEAR FROM TREE EXTENSION 1") 
-                print("node_ids_subtree:", self.trees[node.state.mode].get_node_ids_subtree())
-                print("parent id:", parent.id)
-                print("index:", index)
+                # # debugging
+                # print("CALLING NEAR FROM TREE EXTENSION 1") 
+                # print("node_ids_subtree:", self.trees[node.state.mode].get_node_ids_subtree())
+                # print("parent id:", parent.id)
+                # print("index:", index)
                 
                 N_near_batch, n_near_costs, node_indices = self.near(
                     node.state.mode, node, index
@@ -2320,12 +2320,12 @@ class BaseRRTstar(BasePlanner):
                 index = np.where(
                     self.trees[node.state.mode].get_node_ids_subtree() == parent.id
                 )
-                # debugging
-                print("CALLING NEAR FROM TREE EXTENSION 2") 
-                print("node_ids_previous_subtree:", self.trees[mode].get_node_ids_subtree())
-                print("node_ids_subtree:", self.trees[node.state.mode].get_node_ids_subtree())
-                print("parent id:", parent.id)
-                print("index:", index)
+                # # debugging
+                # print("CALLING NEAR FROM TREE EXTENSION 2") 
+                # print("node_ids_previous_subtree:", self.trees[mode].get_node_ids_subtree())
+                # print("node_ids_subtree:", self.trees[node.state.mode].get_node_ids_subtree())
+                # print("parent id:", parent.id)
+                # print("index:", index)
 
                 N_near_batch, n_near_costs, node_indices = self.near(
                     node.state.mode, node, index

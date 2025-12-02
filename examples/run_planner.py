@@ -214,7 +214,7 @@ def main():
 
         path = path_w_doubled_modes
 
-    if False:
+    if True:
         print("robot-mode-shortcut")
         shortcut_path, info_shortcut = robot_mode_shortcut(
             env,
