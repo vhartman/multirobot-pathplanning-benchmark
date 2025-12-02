@@ -698,27 +698,12 @@ def _opt_shortcut_segment_nl(
     step_size: float = 0.2,
     tol: float = 1e-6,
 ) -> Optional[List[State]]:
-    """
-    Nonlinear constrained optimization based shortcut between new_path[i] and new_path[j].
-
-    - Keeps exactly the same number of nodes (j - i + 1).
-    - Endpoints are fixed.
-    - Inner nodes are optimized to reduce squared path length.
-    - After each gradient step, inner nodes are projected onto the constraint manifold
-      via planner.project_nonlinear_dispatch.
-
-    Returns:
-        A list of State with length (j - i + 1) if optimization succeeded,
-        or None on numerical failure.
-    """
-    assert planner is not None, "Nonlinear optimization based shortcutting requires a planner with projection."
 
     segment_len = j - i + 1
     if segment_len < 3:
-        # Nothing to optimize, need at least one inner node
         return None
 
-    # Flatten robot DOFs structure
+    # DOF slicing
     total_dofs = len(new_path[i].q.state())
     robot_slices = []
     offset = 0
@@ -726,86 +711,103 @@ def _opt_shortcut_segment_nl(
         dim = env.robot_dims[r_name]
         robot_slices.append(slice(offset, offset + dim))
         offset += dim
-    assert offset == total_dofs
 
-    # Active DOFs: all DOFs of the selected robots
+    # Active DOFs
     active_slices = [robot_slices[r] for r in robots_to_shortcut]
-    active_idx = np.concatenate([np.arange(sli.start, sli.stop) for sli in active_slices])
+    active_idx = np.concatenate([np.arange(s.start, s.stop) for s in active_slices])
 
-    # Extract the segment states into an array Q of shape (segment_len, total_dofs)
-    Q = np.zeros((segment_len, total_dofs), dtype=float)
+    # Flatten path
+    Q = np.zeros((segment_len, total_dofs))
     modes = []
     for k in range(segment_len):
-        state = new_path[i + k]
-        Q[k, :] = np.asarray(state.q.state(), dtype=float).copy()
-        modes.append(state.mode)
+        Q[k] = new_path[i+k].q.state().copy()
+        modes.append(new_path[i+k].mode)
 
-    # Template configuration object to rebuild configs from flat vectors
     q_template = new_path[i].q
 
-    # Make sure endpoints are exactly as original (they should be already)
-    Q[0, :] = new_path[i].q.state()
-    Q[-1, :] = new_path[j].q.state()
+    # Fix endpoints
+    Q[0]  = new_path[i].q.state()
+    Q[-1] = new_path[j].q.state()
 
-    # Simple elastic-band style smoothing with projection onto constraints
+    # Main optimization
     for it in range(max_inner_iters):
-        # Discrete Laplacian gradient for path length: sum ||q_{k+1} - q_k||^2
+
         grad = np.zeros_like(Q)
 
+        # Laplacian gradient only on active_idx
         for k in range(1, segment_len - 1):
-            # Gradient only on active DOFs
-            grad[k, active_idx] = 2.0 * (
-                2.0 * Q[k, active_idx]
-                - Q[k - 1, active_idx]
-                - Q[k + 1, active_idx]
-            )
+            grad[k, active_idx] = 2 * (2*Q[k,active_idx] - Q[k-1,active_idx] - Q[k+1,active_idx])
 
-        # Compute max step for convergence check
-        max_step = np.max(np.abs(step_size * grad[1:-1, :][:, active_idx]))
-        if max_step < tol:
+        if np.max(np.abs(step_size * grad[1:-1,:,])) < tol:
             break
 
-        # Gradient descent step on inner nodes (endpoints fixed)
-        Q[1:-1, active_idx] -= step_size * grad[1:-1, :][:, active_idx]
+        # Gradient descent
+        Q[1:-1, active_idx] -= step_size * grad[1:-1][:, active_idx]
 
-        # Project inner nodes back onto the manifold
+        # FULL PROJECTION
         for k in range(1, segment_len - 1):
             mode_k = modes[k]
-            q_flat = Q[k, :]
-
-            # Collect constraints for this mode
             eq_aff, ineq_aff, eq_nl, ineq_nl = planner.collect_constraints(mode_k)
-            eq = eq_aff + eq_nl
+            eq  = eq_aff + eq_nl
             ineq = ineq_aff + ineq_nl
 
-            # Projection; q_proj is a configuration object
             q_proj = planner.project_nonlinear_dispatch(
-                q_template.from_flat(q_flat),
-                eq,
-                ineq,
-                mode_k,
+                q_template.from_flat(Q[k]),
+                eq, ineq, mode_k
             )
-
             if q_proj is None:
-                # Projection failed; bail out on this shortcut
                 return None
 
-            Q[k, :] = np.asarray(q_proj.state(), dtype=float)
+            Q[k] = q_proj.state().copy()
 
-    # Rebuild the path segment as State objects
-    path_element: List[State] = []
+    # Build final segment
+    segment = []
     for k in range(segment_len):
-        q_cfg = q_template.from_flat(Q[k, :])
-        path_element.append(State(q_cfg, modes[k]))
+        q_cfg = q_template.from_flat(Q[k])
+        segment.append(State(q_cfg, modes[k]))
 
-    # Sanity: endpoints must match original segment to numerical tolerance
-    if not np.allclose(path_element[0].q.state(), new_path[i].q.state(), atol=1e-6):
-        # If this happens, you screwed up boundary handling
-        return None
-    if not np.allclose(path_element[-1].q.state(), new_path[j].q.state(), atol=1e-6):
-        return None
+    return segment
 
-    return path_element
+
+def ensure_mode_switch_duplication(path: List[State]) -> List[State]:
+    """
+    Ensures that for every mode switch in the path, the transition node is duplicated:
+    - One with old mode
+    - One with new mode
+    And the configuration is IDENTICAL.
+
+    Example:
+        If path[k].mode != path[k+1].mode, we insert:
+            State(path[k].q, path[k+1].mode)
+    """
+    if len(path) < 2:
+        return path
+
+    fixed = [path[0]]
+
+    for k in range(len(path) - 1):
+        cur = path[k]
+        nxt = path[k + 1]
+
+        # normal append of next node
+        fixed.append(nxt)
+
+        # if mode changes, ensure duplication
+        if cur.mode != nxt.mode:
+            # Check if duplication already exists
+            # i.e. if immediately after cur we already have identical q but new mode
+            need_duplicate = True
+            if len(fixed) >= 2:
+                prev = fixed[-2]
+                if np.allclose(prev.q.state(), cur.q.state()) and prev.mode == nxt.mode:
+                    need_duplicate = False
+
+            if need_duplicate:
+                dup = State(cur.q, nxt.mode)
+                fixed.insert(len(fixed) - 1, dup)
+
+    return fixed
+
 
 
 def robot_mode_shortcut_nl_opt(
@@ -942,5 +944,15 @@ def robot_mode_shortcut_nl_opt(
     print("original cost:", path_cost(path, env.batch_config_cost))
     print("Accepted shortcuts:", cnt)
     print("final cost:", path_cost(new_path, env.batch_config_cost))
+
+    new_path = ensure_mode_switch_duplication(new_path)
+
+    print("Final path length after ensuring mode switch duplication:", len(new_path))
+    for k in range(1, len(new_path)):
+        print("Mode check", k, new_path[k].mode, new_path[k-1].mode)
+        if new_path[k].mode != new_path[k-1].mode:
+            print("  Mode switch at index", k)
+            print("  States identical check:", np.allclose(new_path[k].q.state(), new_path[k-1].q.state()))
+            assert np.allclose(new_path[k].q.state(), new_path[k-1].q.state()), "Mode switch duplication violated!"
 
     return new_path, [costs, times]

@@ -678,9 +678,11 @@ class BaseRRTstar(BasePlanner):
         if mode not in self.modes:
             return
         next_modes = self.env.get_next_modes(n.state.q, mode)
+        print("Next modes before validation:", next_modes)
         next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
         if next_modes == []:
-            self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
+            self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)   
+        print("Next modes after validation:", next_modes)
 
         for next_mode in next_modes:
             if next_mode not in self.modes:
@@ -688,6 +690,8 @@ class BaseRRTstar(BasePlanner):
                 if tree_type == BidirectionalTree:
                     self.trees[mode].connected = True
                 self.add_new_mode(n.state.q, mode, tree_type)
+            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            print("Adding transition node", n.id, "as start node in mode", next_mode)
             self.trees[next_mode].add_transition_node_as_start_node(n)
             if self.trees[next_mode].order == 1:
                 index = len(self.trees[next_mode].subtree) - 1
@@ -870,7 +874,6 @@ class BaseRRTstar(BasePlanner):
         """Returns task goal of agent in current mode"""
         """
         Retrieves task goal configuration of given mode for the specified robot.
-
         Args:
             mode (Mode): Current operational mode.
             r (str): The identifier of the robot whose task goal is to be retrieved.
@@ -2255,6 +2258,18 @@ class BaseRRTstar(BasePlanner):
 
         mode = discretized_path[0].mode
         parent = self.operation.path_nodes[0]
+
+        for i in range(1, len(discretized_path)):
+            print("discretized path:", i, "config:", discretized_path[i].q.state(), "mode:", discretized_path[i].mode)
+
+        new_path = discretized_path.copy()
+        for k in range(1, len(new_path)):
+            print("Mode check", k, new_path[k].mode, new_path[k-1].mode)
+            if new_path[k].mode != new_path[k-1].mode:
+                print("  Mode switch at index", k)
+                print("  States identical check:", np.allclose(new_path[k].q.state(), new_path[k-1].q.state()))
+                assert np.allclose(new_path[k].q.state(), new_path[k-1].q.state()), "Mode switch duplication violated!"
+
         for i in range(1, len(discretized_path)):
             state = discretized_path[i]
             node = Node(state, self.operation)
@@ -2264,10 +2279,19 @@ class BaseRRTstar(BasePlanner):
             # node.cost_to_parent = node.cost - node.parent.cost
             # parent.children.append(node)
 
+            print("Adding node:", node.id, "config:", node.state.q.state(), "mode:", node.state.mode)
+
             if mode == node.state.mode:
                 index = np.where(
                     self.trees[node.state.mode].get_node_ids_subtree() == parent.id
                 )
+
+                # debugging
+                print("CALLING NEAR FROM TREE EXTENSION 1") 
+                print("node_ids_subtree:", self.trees[node.state.mode].get_node_ids_subtree())
+                print("parent id:", parent.id)
+                print("index:", index)
+                
                 N_near_batch, n_near_costs, node_indices = self.near(
                     node.state.mode, node, index
                 )
@@ -2281,6 +2305,7 @@ class BaseRRTstar(BasePlanner):
                     n_near_costs,
                 )
             else:
+                print("finding new parents for mode switch, node:", node.id, "config:", node.state.q.state(), "mode of the node:", node.state.mode, "previous mode:", mode)
                 node.parent = parent
                 self.operation.costs = self.trees[
                     discretized_path[i].mode
@@ -2291,9 +2316,17 @@ class BaseRRTstar(BasePlanner):
                 self.convert_node_to_transition_node(
                     node.parent.state.mode, node.parent
                 )
+
                 index = np.where(
                     self.trees[node.state.mode].get_node_ids_subtree() == parent.id
                 )
+                # debugging
+                print("CALLING NEAR FROM TREE EXTENSION 2") 
+                print("node_ids_previous_subtree:", self.trees[mode].get_node_ids_subtree())
+                print("node_ids_subtree:", self.trees[node.state.mode].get_node_ids_subtree())
+                print("parent id:", parent.id)
+                print("index:", index)
+
                 N_near_batch, n_near_costs, node_indices = self.near(
                     node.state.mode, node, index
                 )
