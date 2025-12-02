@@ -160,7 +160,8 @@ class RRTstar(BaseRRTstar):
             state_new = self.steer_nonlinear(active_mode, n_nearest, q_rand, dist)
             if not state_new:
                 continue
-            
+
+            # for state_new in states_new:             
             if self.env.is_collision_free(
                 state_new.q, active_mode
             ) and self.env.is_edge_collision_free(
