@@ -2151,6 +2151,80 @@ class BaseRRTstar(BasePlanner):
 
 
 # 3) STEERING
+    # def steer_nonlinear(
+    #     self,
+    #     mode: Mode,
+    #     n_nearest: Node,
+    #     q_rand: Configuration,
+    #     dist: NDArray,
+    #     i: int = 1,
+    #     resolution: float = 1.0,
+    # ) -> Optional[List[State]]:
+    #     """
+    #     Nonlinear-constrained steering:
+    #     returns a LIST of projected, constraint-satisfying, collision-free states
+    #     from n_nearest toward q_rand, spaced at <= resolution.
+
+    #     Returns None if ANY intermediate projection fails or violates constraints.
+    #     """
+    #     q_nearest = n_nearest.state.q.state()
+
+    #     if np.equal(q_nearest, q_rand.state()).all():
+    #         return None
+
+    #     if self.config.distance_metric != "max_euclidean":
+    #         dist = batch_config_dist(n_nearest.state.q, [q_rand], metric="max_euclidean")
+
+    #     # Number of interpolation points
+    #     steps = max(1, int(dist / resolution))
+
+    #     direction = q_rand.q - q_nearest
+
+    #     # Gather constraints
+    #     aff_eq, aff_ineq, eq_nl, ineq_nl = self.collect_constraints(mode)
+    #     eq = eq_nl + aff_eq
+    #     ineq = ineq_nl + aff_ineq
+
+    #     path_states: List[State] = []
+    #     last_valid = n_nearest.state.q.state()
+
+    #     for k in range(1, steps + 1):
+    #         alpha = k / steps
+    #         q_intermediate = q_nearest + alpha * direction
+    #         q_candidate = self.env.get_start_pos().from_flat(q_intermediate)
+
+    #         # # quick feasibility check BEFORE projection
+    #         # if not self.env.is_collision_free(q_candidate, mode):
+    #         #     return None
+
+    #         # attempt projection onto nonlinear/affine manifold
+    #         q_proj = self.project_nonlinear_dispatch(q_candidate, eq, ineq, mode)
+    #         if q_proj is None:
+    #             return None
+
+    #         # post-projection constraint checks
+    #         if (not self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) or
+    #             not self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) or
+    #             not self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
+    #             return None
+
+    #         # collision after projection
+    #         if not self.env.is_collision_free(q_proj, mode):
+    #             return None
+
+    #         # ensure projection did NOT warp the path too much
+    #         projected_dist = np.linalg.norm(q_proj.state() - last_valid)
+    #         if projected_dist > 2.0 * resolution:  
+    #             # Reasonable bound; you can tune or parametrize this
+    #             return None
+
+    #         # Store
+    #         path_states.append(State(q_proj, mode))
+    #         last_valid = q_proj.state()
+
+    #     # Ensure final state is exactly equal to normal steer result
+    #     return path_states
+
     def steer_nonlinear(
         self,
         mode: Mode,
@@ -2207,6 +2281,42 @@ class BaseRRTstar(BasePlanner):
             return None
         
         return State(q_proj, mode)
+   
+    
+    def compute_residuals(
+        self,
+        mode: Mode,
+        q: Configuration,
+    ) -> Dict[str, float]:
+        """
+        Compute and return the residuals of all constraints at configuration q in mode.
+
+        Args:
+            mode (Mode): Current operational mode.
+            q (Configuration): Configuration to evaluate.
+        Returns:
+            Dict[str, float]: dictionary mapping constraint types to their absolute float residual values.
+        """
+        aff_eq, aff_ineq, eq_nl, ineq_nl = self.collect_constraints(mode)
+        residuals = {}
+
+        for c in eq_nl:
+            res = float(np.linalg.norm(c.F(q.state(), mode, self.env)))
+            residuals[f"nl_eq_{c.__class__.__name__}"] = res
+
+        for c in ineq_nl:
+            res = float(max(0.0, np.linalg.norm(c.G(q.state(), mode, self.env))))
+            residuals[f"nl_ineq_{c.__class__.__name__}"] = res
+
+        for c in aff_eq:
+            res = float(np.linalg.norm(c.F(q.state(), mode, self.env)))
+            residuals[f"aff_eq_{c.__class__.__name__}"] = res
+
+        for c in aff_ineq:
+            res = float(max(0.0, np.linalg.norm(c.G(q.state(), mode, self.env))))
+            residuals[f"aff_ineq_{c.__class__.__name__}"] = res
+
+        return residuals
 
 
 ############################################

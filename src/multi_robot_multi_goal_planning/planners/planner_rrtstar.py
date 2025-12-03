@@ -7,6 +7,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
 )
+from multi_robot_multi_goal_planning.problems.util import interpolate_path
 from .rrtstar_base import (
     BaseRRTConfig,
     BaseRRTstar,
@@ -150,7 +151,7 @@ class RRTstar(BaseRRTstar):
             if not q_rand:
                 continue
 
-            self.env.show_config(q_rand, blocking = False) # visualize sampled configuration
+            # self.env.show_config(q_rand, blocking = False) # visualize sampled configuration
 
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
@@ -161,7 +162,8 @@ class RRTstar(BaseRRTstar):
             if not state_new:
                 continue
 
-            # for state_new in states_new:             
+            # for state_new in states_new:
+            # self.env.show_config(state_new.q, blocking = False) # visualize sampled configuration             
             if self.env.is_collision_free(
                 state_new.q, active_mode
             ) and self.env.is_edge_collision_free(
@@ -204,7 +206,17 @@ class RRTstar(BaseRRTstar):
                 break
 
         self.update_results_tracking(self.operation.cost, self.operation.path)
-        info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
+
+        residuals_last_path = []
+        densified_path = interpolate_path(self.operation.path, 0.05)
+        for i in range(len(densified_path)):
+            mode = densified_path[i].mode
+            config = densified_path[i].q
+
+            res = self.compute_residuals(mode, config)
+            residuals_last_path.append(res)
+
+        info = {"costs": self.costs, "residuals": residuals_last_path, "times": self.times, "paths": self.all_paths}
         # print('Path is collision free:', self.env.is_path_collision_free(self.operation.path))
 
         # ensure that the mode-switch nodes are there once in every mode.

@@ -263,10 +263,29 @@ def main():
 
     print("cost", info["costs"])
     print("comp_time", info["times"])
+    print("residuals", info["residuals"])
 
     if args.show_plots:
         plt.figure()
         plt.plot(info["times"], info["costs"], "-o", drawstyle="steps-post")
+
+        # plotting residuals
+        all_keys = set()
+        for d in info["residuals"]:
+            all_keys.update(d.keys())
+        curves = {k: [] for k in all_keys}
+        for d in info["residuals"]:
+            for k in all_keys:
+                curves[k].append(d.get(k, 0.0))
+        plt.figure()
+        for name, values in curves.items():
+            plt.plot(values, "-o", label=name)
+        plt.legend()
+        plt.xlabel("Timestep")
+        plt.ylabel("Residual value")
+        plt.title("Constraint Residuals Over Path")
+        plt.tight_layout()
+                
 
         plt.figure()
         for name, info in zip(

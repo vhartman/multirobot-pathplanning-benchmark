@@ -486,11 +486,11 @@ def robot_mode_shortcut(
     assert np.linalg.norm(new_path[-1].q.state() - path[-1].q.state()) < 1e-6
     assert np.linalg.norm(new_path[0].q.state() - path[0].q.state()) < 1e-6
 
-    print("original cost:", path_cost(path, env.batch_config_cost))
-    print("Attempted shortcuts:", cnt)
-    print("new cost:", path_cost(new_path, env.batch_config_cost))
-    print("Total shortcuts tried:", totsc)
-    print("Shortcuts skipped due to constraints:", skipsc)
+    # print("original cost:", path_cost(path, env.batch_config_cost))
+    # print("Attempted shortcuts:", cnt)
+    # print("new cost:", path_cost(new_path, env.batch_config_cost))
+    # print("Total shortcuts tried:", totsc)
+    # print("Shortcuts skipped due to constraints:", skipsc)
 
     return new_path, [costs, times]
 
@@ -893,6 +893,7 @@ def robot_mode_shortcut_nl_opt(
 
         if abs(j - i) < 2:
             # Need at least one inner node to optimize
+            costs.append(path_cost(new_path, env.batch_config_cost))
             continue
 
         # Choose which robot(s) we try to shortcut
@@ -910,6 +911,7 @@ def robot_mode_shortcut_nl_opt(
                 break
 
         if not can_shortcut_this:
+            costs.append(path_cost(new_path, env.batch_config_cost))
             continue
 
         # Original segment and its cost
@@ -929,12 +931,13 @@ def robot_mode_shortcut_nl_opt(
         )
 
         if path_element is None:
-            # Optimization or projection failed; skip this attempt
+            costs.append(path_cost(new_path, env.batch_config_cost))
             continue
 
         # Check cost improvement for this segment
         new_seg_cost = path_cost(path_element, env.batch_config_cost)
         if new_seg_cost >= old_cost:
+            costs.append(path_cost(new_path, env.batch_config_cost))
             continue
 
         # Sanity on endpoints
@@ -971,12 +974,12 @@ def robot_mode_shortcut_nl_opt(
 
     new_path = ensure_mode_switch_duplication(new_path)
 
-    print("Final path length after ensuring mode switch duplication:", len(new_path))
-    for k in range(1, len(new_path)):
-        print("Mode check", k, new_path[k].mode, new_path[k-1].mode)
-        if new_path[k].mode != new_path[k-1].mode:
-            print("  Mode switch at index", k)
-            print("  States identical check:", np.allclose(new_path[k].q.state(), new_path[k-1].q.state()))
-            assert np.allclose(new_path[k].q.state(), new_path[k-1].q.state()), "Mode switch duplication violated!"
+    # print("Final path length after ensuring mode switch duplication:", len(new_path))
+    # for k in range(1, len(new_path)):
+    #     print("Mode check", k, new_path[k].mode, new_path[k-1].mode)
+    #     if new_path[k].mode != new_path[k-1].mode:
+    #         print("Mode switch at index", k)
+    #         print("States identical check:", np.allclose(new_path[k].q.state(), new_path[k-1].q.state()))
+    #         assert np.allclose(new_path[k].q.state(), new_path[k-1].q.state()), "Mode switch duplication violated!"
 
     return new_path, [costs, times]
