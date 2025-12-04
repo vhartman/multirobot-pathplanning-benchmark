@@ -15,7 +15,7 @@ import copy
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
 from multi_robot_multi_goal_planning.problems.planning_env import State
-from multi_robot_multi_goal_planning.problems.util import interpolate_path
+from multi_robot_multi_goal_planning.problems.util import interpolate_path, resample_on_manifold
 
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     IterationTerminationCondition,
@@ -249,8 +249,11 @@ def main():
         env, path, 1000,
     )
 
-    interpolated_path = interpolate_path(path, 0.05)
-    shortcut_discretized_path = interpolate_path(shortcut_path)
+    # interpolated_path = interpolate_path(path, 0.05)
+    # shortcut_discretized_path = interpolate_path(shortcut_path)
+
+    interpolated_path = resample_on_manifold(path, 0.05, planner, env)
+    shortcut_discretized_path = resample_on_manifold(shortcut_path, 0.05, planner, env)
 
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))

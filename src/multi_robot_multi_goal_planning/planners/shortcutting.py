@@ -9,7 +9,7 @@ from multi_robot_multi_goal_planning.planners.baseplanner import BasePlanner
 from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
-from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
+from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost, resample_on_manifold
 
 from multi_robot_multi_goal_planning.problems.constraints import AffineConfigurationSpaceEqualityConstraint
 
@@ -837,7 +837,7 @@ def ensure_mode_switch_duplication(path: List[State]) -> List[State]:
 def robot_mode_shortcut_nl_opt(
     env: BaseProblem,
     path: List[State],
-    max_iter: int = 1000,
+    max_iter: int = 100,
     resolution: float = 0.001,
     tolerance: float = 0.01,
     robot_choice: str = "round_robin",
@@ -867,6 +867,7 @@ def robot_mode_shortcut_nl_opt(
     # Preprocess path to densify it
     # non_redundant_path = remove_interpolated_nodes(path)
     # new_path = interpolate_path(non_redundant_path, interpolation_resolution)
+    # new_path = resample_on_manifold(path, 0.5, planner, env)
     new_path = path.copy()
 
     costs = [path_cost(new_path, env.batch_config_cost)]
@@ -874,12 +875,13 @@ def robot_mode_shortcut_nl_opt(
     start_time = time.time()
 
     cnt = 0
-    max_attempts = 250 * 10
+    max_attempts = 1000
     iter_attempts = 0
 
     rr_robot = 0
 
     while True:
+        print("Shortcutting attempts:", iter_attempts, "Accepted:", cnt)
         iter_attempts += 1
         if cnt >= max_iter or iter_attempts >= max_attempts:
             break
@@ -947,8 +949,9 @@ def robot_mode_shortcut_nl_opt(
         assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
 
         # Collision check on the candidate segment only
+        densified_segment = resample_on_manifold(path_element, 0.2, planner, env)
         if env.is_path_collision_free(
-            path_element,
+            densified_segment,
             resolution=resolution,
             tolerance=tolerance,
             check_start_and_end=False,
@@ -971,6 +974,8 @@ def robot_mode_shortcut_nl_opt(
     print("original cost:", path_cost(path, env.batch_config_cost))
     print("Accepted shortcuts:", cnt)
     print("final cost:", path_cost(new_path, env.batch_config_cost))
+
+    print("SINGLE SHORTCUTTING LOOP COSTS:", costs)
 
     new_path = ensure_mode_switch_duplication(new_path)
 

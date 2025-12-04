@@ -678,20 +678,19 @@ class BaseRRTstar(BasePlanner):
         if mode not in self.modes:
             return
         next_modes = self.env.get_next_modes(n.state.q, mode)
-        print("Next modes before validation:", next_modes)
+        # print("Next modes before validation:", next_modes)
         next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
         if next_modes == []:
             self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)   
-        print("Next modes after validation:", next_modes)
-
+        # print("Next modes after validation:", next_modes)
         for next_mode in next_modes:
             if next_mode not in self.modes:
                 tree_type = type(self.trees[mode])
                 if tree_type == BidirectionalTree:
                     self.trees[mode].connected = True
                 self.add_new_mode(n.state.q, mode, tree_type)
-            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-            print("Adding transition node", n.id, "as start node in mode", next_mode)
+            # print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            # print("Adding transition node", n.id, "as start node in mode", next_mode)
             self.trees[next_mode].add_transition_node_as_start_node(n)
             if self.trees[next_mode].order == 1:
                 index = len(self.trees[next_mode].subtree) - 1
@@ -2158,7 +2157,7 @@ class BaseRRTstar(BasePlanner):
     #     q_rand: Configuration,
     #     dist: NDArray,
     #     i: int = 1,
-    #     resolution: float = 1.0,
+    #     resolution: float = 15.0,
     # ) -> Optional[List[State]]:
     #     """
     #     Nonlinear-constrained steering:
@@ -2273,11 +2272,11 @@ class BaseRRTstar(BasePlanner):
         if not (self.satisfies_nl_constraints(mode, q_proj, eq_nl, ineq_nl) and
                 self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and
                 self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
-            print("Steered configuration does not satisfy constraints.")
+            # print("Steered configuration does not satisfy constraints.")
             return None
 
         if not self.env.is_collision_free(q_proj, mode):
-            print("Steered configuration is in collision.")
+            # print("Steered configuration is in collision.")
             return None
         
         return State(q_proj, mode)
@@ -2389,7 +2388,7 @@ class BaseRRTstar(BasePlanner):
             # node.cost_to_parent = node.cost - node.parent.cost
             # parent.children.append(node)
 
-            print("Adding node:", node.id, "config:", node.state.q.state(), "mode:", node.state.mode)
+            # print("Adding node:", node.id, "config:", node.state.q.state(), "mode:", node.state.mode)
 
             if mode == node.state.mode:
                 index = np.where(
@@ -2415,7 +2414,7 @@ class BaseRRTstar(BasePlanner):
                     n_near_costs,
                 )
             else:
-                print("finding new parents for mode switch, node:", node.id, "config:", node.state.q.state(), "mode of the node:", node.state.mode, "previous mode:", mode)
+                # print("finding new parents for mode switch, node:", node.id, "config:", node.state.q.state(), "mode of the node:", node.state.mode, "previous mode:", mode)
                 node.parent = parent
                 self.operation.costs = self.trees[
                     discretized_path[i].mode

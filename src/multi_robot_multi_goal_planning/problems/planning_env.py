@@ -1893,10 +1893,10 @@ class BaseProblem(ABC):
                     if not c.is_fulfilled(path[i].q, mode, self):
                         print(f"Constraint violated at index {i}")
 
-                        if hasattr(c, "F"):
-                            print("Residual:", c.F(path[i].q.state(), mode, self))
-                        elif hasattr(c, "G"):
-                            print("Residual:", c.G(path[i].q.state(), mode, self))
+                        # if hasattr(c, "F"):
+                            # print("Residual:", c.F(path[i].q.state(), mode, self))
+                        # elif hasattr(c, "G"):
+                            # print("Residual:", c.G(path[i].q.state(), mode, self))
 
                         constraint_violation = True
 
@@ -1905,10 +1905,10 @@ class BaseProblem(ABC):
                 if not c.is_fulfilled(path[i].q, mode, self):
                     print(f"Persistent constraint violated at index {i}")
 
-                    if hasattr(c, "F"):
-                        print("Residual:", c.F(path[i].q.state(), mode, self))
-                    elif hasattr(c, "G"):
-                        print("Residual:", c.G(path[i].q.state(), mode, self))
+                    # if hasattr(c, "F"):
+                        # print("Residual:", c.F(path[i].q.state(), mode, self))
+                    # elif hasattr(c, "G"):
+                        # print("Residual:", c.G(path[i].q.state(), mode, self))
 
                     constraint_violation = True
 

@@ -2,9 +2,9 @@
   "experiment_name": "glasses_giovanni",
   "environment": "rai.arm_ee_pose",
   "per_agent_cost": "euclidean",
-  "cost_reduction": "max",
+  "cost_reduction": "sum",
   "max_planning_time": 1000,
-  "num_runs": 100,
+  "num_runs": 75,
   "seed":0,
   "optimize": true,
   "planners": [

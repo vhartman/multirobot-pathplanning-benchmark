@@ -103,3 +103,79 @@ def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
 #     new_path.append(State(path[-1].q, path[-1].mode))
 
 #     return new_path
+
+def resample_on_manifold(path, step_size, planner, env):
+    """
+    Densify a path by interpolating ON the constraint manifold.
+    This is NOT linear interpolation. It uses tangent-direction
+    stepping and projects each new point back onto the manifold.
+
+    Inputs:
+        path       - List[State], sparse path after planning/shortcutting
+        step_size  - maximum distance between resampled points
+        planner    - must provide collect_constraints() and project_nonlinear_dispatch()
+        env        - for collision checking
+
+    Output:
+        dense_path - List[State], path with small steps, valid and constraint-satisfying
+    """
+
+    if len(path) < 2:
+        return path
+
+    dense_path = [path[0]]
+    q_template = path[0].q  # used to reconstruct configs from flat arrays
+
+    for k in range(len(path) - 1):
+        q0 = path[k].q
+        q1 = path[k + 1].q
+        mode = path[k].mode
+
+        # Compute direction toward the next node
+        v = q1.state() - q0.state()
+        dist = np.linalg.norm(v)
+        if dist < 1e-9:
+            continue
+
+        v /= dist  # normalize
+
+        # Number of tangent steps
+        n_steps = int(np.ceil(dist / step_size))
+
+        q_current = q0
+
+        # Tangent-step loop
+        for s in range(1, n_steps):
+            # Take a small step in the direction of q1
+            q_guess = q_current.state() + v * step_size
+
+            # === PROJECT to constraint manifold ===
+            eq_aff, ineq_aff, eq_nl, ineq_nl = planner.collect_constraints(mode)
+            eq = eq_aff + eq_nl
+            ineq = ineq_aff + ineq_nl
+
+            q_proj = planner.project_nonlinear_dispatch(
+                q_template.from_flat(q_guess),
+                eq, ineq, mode
+            )
+
+            if q_proj is None:
+                # Cannot project = high curvature / bad step → stop interpolation
+                break
+
+            # Continuous collision check for this tiny step
+            if not env.is_edge_collision_free(
+                q_current, q_proj, mode,
+                resolution=env.collision_resolution,
+                tolerance=env.collision_tolerance
+            ):
+                break
+
+            # Accept projected point
+            dense_path.append(State(q_proj, mode))
+            q_current = q_proj
+
+        # Finally add the next original node
+        dense_path.append(path[k + 1])
+
+    return dense_path
