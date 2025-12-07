@@ -10,6 +10,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
 )
 from multi_robot_multi_goal_planning.problems.configuration import Configuration
+from multi_robot_multi_goal_planning.problems.util import interpolate_path
 
 from .rrtstar_base import (
     BaseRRTConfig,
@@ -460,8 +461,17 @@ class BidirectionalRRTstar(BaseRRTstar):
                 print("Number of iterations: ", i)
                 break
 
+        residuals_last_path = []
+        densified_path = interpolate_path(self.operation.path, 0.05)
+        for i in range(len(densified_path)):
+            mode = densified_path[i].mode
+            config = densified_path[i].q
+
+            res = self.compute_residuals(mode, config)
+            residuals_last_path.append(res)
+
         self.update_results_tracking(self.operation.cost, self.operation.path)
-        info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
+        info = {"costs": self.costs, "residuals": residuals_last_path, "times": self.times, "paths": self.all_paths}
         # print(self.mode_validation.counter)
 
         # ensure that the mode-switch nodes are there once in every mode.

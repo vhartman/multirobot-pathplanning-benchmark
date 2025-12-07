@@ -867,15 +867,15 @@ def robot_mode_shortcut_nl_opt(
     # Preprocess path to densify it
     # non_redundant_path = remove_interpolated_nodes(path)
     # new_path = interpolate_path(non_redundant_path, interpolation_resolution)
-    # new_path = resample_on_manifold(path, 0.5, planner, env)
-    new_path = path.copy()
+    new_path = resample_on_manifold(path, 0.5, planner, env)
+    # new_path = path.copy()
 
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
     start_time = time.time()
 
     cnt = 0
-    max_attempts = 1000
+    max_attempts = 250
     iter_attempts = 0
 
     rr_robot = 0
@@ -949,9 +949,9 @@ def robot_mode_shortcut_nl_opt(
         assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
 
         # Collision check on the candidate segment only
-        densified_segment = resample_on_manifold(path_element, 0.2, planner, env)
+        # densified_segment = resample_on_manifold(path_element, 0.2, planner, env)
         if env.is_path_collision_free(
-            densified_segment,
+            path_element,
             resolution=resolution,
             tolerance=tolerance,
             check_start_and_end=False,
