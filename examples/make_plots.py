@@ -262,6 +262,7 @@ def make_cost_plots(
     final_max_time: Optional[float] = None,
     logscale: bool = False,
     yticks: List[int] = [],
+    add_title=False
 ):
     plt.figure("Cost plot")
 
@@ -450,6 +451,10 @@ def make_cost_plots(
             plt.yticks(ticks, [int(t) for t in ticks])
 
     plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
+
+    if add_title:
+        scenario_name = config["environment"]
+        plt.title(scenario_name)
 
     if add_legend:
         if add_info:
@@ -647,6 +652,11 @@ def main():
         type=str,
         help="Y ticks. (default:  and lets matplotlib do it automatically.)",
     )
+    parser.add_argument(
+        "--dont_add_title",
+        action="store_true",
+        help="Add the exp name as title to the plot. (default: True)",
+    )
     parser.add_argument("--baseline_cost", type=float, default=None, help="Baseline")
     parser.add_argument(
         "--limited_max_time", type=float, default=None, help="Max time for the plot"
@@ -697,6 +707,7 @@ def main():
                     final_max_time=args.limited_max_time,
                     logscale=args.logscale,
                     yticks=yticks,
+                    add_title=not args.dont_add_title
                 )
                 plt.close()
 
@@ -731,6 +742,7 @@ def main():
             final_max_time=args.limited_max_time,
             logscale=args.logscale,
             yticks=yticks,
+            add_title=not args.dont_add_title
         )
         make_success_plot(
             all_experiment_data,
