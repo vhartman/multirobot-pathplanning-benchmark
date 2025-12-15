@@ -1,10 +1,10 @@
 {
   "experiment_name": "glasses_giovanni",
-  "environment": "rai.arm_ee_pose",
+  "environment": "rai.dual_stick_upright",
   "per_agent_cost": "max_euclidean",
   "cost_reduction": "sum",
   "max_planning_time": 600,
-  "num_runs": 25,
+  "num_runs": 50,
   "seed":0,
   "optimize": true,
   "planners": [

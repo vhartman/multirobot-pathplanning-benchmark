@@ -2303,17 +2303,17 @@ class BaseRRTstar(BasePlanner):
             res = float(np.linalg.norm(c.F(q.state(), mode, self.env)))
             residuals[f"nl_eq_{c.__class__.__name__}"] = res
 
-        for c in ineq_nl:
-            res = float(max(0.0, np.linalg.norm(c.G(q.state(), mode, self.env))))
-            residuals[f"nl_ineq_{c.__class__.__name__}"] = res
+        # for c in ineq_nl:
+        #     res = float(max(0.0, np.linalg.norm(c.G(q.state(), mode, self.env))))
+        #     residuals[f"nl_ineq_{c.__class__.__name__}"] = res
 
         for c in aff_eq:
             res = float(np.linalg.norm(c.F(q.state(), mode, self.env)))
             residuals[f"aff_eq_{c.__class__.__name__}"] = res
 
-        for c in aff_ineq:
-            res = float(max(0.0, np.linalg.norm(c.G(q.state(), mode, self.env))))
-            residuals[f"aff_ineq_{c.__class__.__name__}"] = res
+        # for c in aff_ineq:
+        #     res = float(max(0.0, np.linalg.norm(c.G(q.state(), mode, self.env))))
+        #     residuals[f"aff_ineq_{c.__class__.__name__}"] = res
 
         return residuals
 

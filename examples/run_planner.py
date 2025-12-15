@@ -374,13 +374,13 @@ def main():
     #     stop_at_mode=args.stop_at_mode,
     # )
 
-    print("displaying path from shortcut path")
-    env.display_path(
-        shortcut_discretized_path,
-        stop=False,
-        adapt_to_max_distance=True,
-        stop_at_mode=args.stop_at_mode,
-    )
+    # print("displaying path from shortcut path")
+    # env.display_path(
+    #     shortcut_discretized_path,
+    #     stop=False,
+    #     adapt_to_max_distance=True,
+    #     stop_at_mode=args.stop_at_mode,
+    # )
 
     if hasattr(env, "close"):
         env.close()

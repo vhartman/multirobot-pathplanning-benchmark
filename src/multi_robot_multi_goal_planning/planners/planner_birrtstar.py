@@ -43,8 +43,10 @@ class BidirectionalRRTstar(BaseRRTstar):
                         self.trees[mode].remove_node(current_node, "B")
 
             children = current_node.children
+            print(current_node.id, len(children))
             if children:
                 for _, child in enumerate(children):
+                    print("updating child id:", child.id)
                     child.cost = current_node.cost + child.cost_to_parent
                 stack.extend(children)
 
@@ -471,7 +473,9 @@ class BidirectionalRRTstar(BaseRRTstar):
             residuals_last_path.append(res)
 
         self.update_results_tracking(self.operation.cost, self.operation.path)
-        info = {"costs": self.costs, "residuals": residuals_last_path, "times": self.times, "paths": self.all_paths}
+        # info = {"costs": self.costs, "residuals": residuals_last_path, "times": self.times, "paths": self.all_paths}
+        info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
+
         # print(self.mode_validation.counter)
 
         # ensure that the mode-switch nodes are there once in every mode.

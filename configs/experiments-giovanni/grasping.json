@@ -1,10 +1,10 @@
 {
-  "experiment_name": "glasses_giovanni",
-  "environment": "rai.arm_ee_pose",
+  "experiment_name": "grasping_giovanni",
+  "environment": "rai.grasping_with_obstacle",
   "per_agent_cost": "max_euclidean",
   "cost_reduction": "sum",
-  "max_planning_time": 600,
-  "num_runs": 25,
+  "max_planning_time": 2400,
+  "num_runs": 75,
   "seed":0,
   "optimize": true,
   "planners": [
@@ -25,23 +25,6 @@
         "locally_informed_sampling": true,
         "informed_batch_size": 300
       }
-    },
-    {
-      "name": "rrtstar",
-      "type": "rrtstar",
-      "options": {
-        "informed_sampling": true,
-        "informed_sampling_version": 6,  
-        "distance_metric": "max_euclidean",
-        "p_goal": 0.4,
-        "p_stay": 0.0,
-        "p_uniform": 0.2,
-        "shortcutting": true,
-        "init_mode_sampling_type": "greedy", 
-        "locally_informed_sampling": true,
-        "informed_batch_size": 300
-
-      }
     }
-  ]
+    ]
 }
