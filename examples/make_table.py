@@ -54,6 +54,25 @@ def get_final_solution_cost(results):
 
     return median_final_solution_cost, 0, 0
 
+def get_success_rate(results, num_experiments):
+    all_succ_rates = []
+
+    if len(results) == 0:
+        return 0, 0, 0
+
+    return  len(results) / num_experiments, 0, 0
+
+def get_dimensionality(env_name):
+    pass
+
+def get_num_robots(env_name):
+    pass
+
+def get_num_tasks(env_name):
+    pass
+
+def get_runtime(env_name):
+    pass
 
 def aggregate_data(folders):
     env_results = {}
@@ -69,7 +88,10 @@ def aggregate_data(folders):
             c_init_median, c_init_lb, c_init_ub = get_initial_solution_cost(results)
             c_final_median, c_final_lb, c_final_ub = get_final_solution_cost(results)
 
+            success_rate, _, _ = get_success_rate(results, 25)
+
             env_results[env_name][planner_name] = {
+                "success_rate": success_rate,
                 "t_init_median": t_init_median,
                 "t_init_lb": t_init_lb,
                 "t_init_ub": t_init_ub,
@@ -117,18 +139,32 @@ def print_table(aggregated_data):
 
 
 def print_latex_table(aggregated_data):
-    line_layout = ["t_init_median", "c_init_median", "c_final_median"]
-    key_to_name = {
-        "t_init_median": "\\multicolumn{2}{c}{$t_\\text{{init}}$}",
-        "c_init_median": "\multicolumn{2}{c}{$c_\\text{{init}}$}",
-        "c_final_median": "\multicolumn{2}{c}{$c_\\text{{final}}$}",
+    planner_names = list(next(iter(aggregated_data.values())).keys())
+    planner_key_to_name = {
+        "prio": "Prio",
+        "birrt": "BiRRT*",
+        "ait": "AIT*"
     }
 
-    planner_names = list(next(iter(aggregated_data.values())).keys())
+    num_planners = len(planner_names)
+    
+    line_layout = [
+        "success_rate",
+        "t_init_median",
+        "c_init_median", 
+        "c_final_median"
+    ]
+    key_to_name = {
+        "success_rate": "\\multicolumn{3}{c}{succ}",
+        "t_init_median": "\\multicolumn{3}{c}{$t_\\text{{init}}$}",
+        "c_init_median": "\\multicolumn{3}{c}{$c_\\text{{init}}$}",
+        "c_final_median": "\\multicolumn{3}{c}{$c_\\text{{final}}$}",
+    }
+
 
     num_cols = 1 + len(planner_names) * len(line_layout)
 
-    colspec = "l " + len(line_layout) * ("|" + len(planner_names) * "c")
+    colspec = "l " + len(line_layout) * ("|" + len(planner_names) * "r")
 
     header1 = " "
     for key in line_layout:
@@ -137,7 +173,7 @@ def print_latex_table(aggregated_data):
     header2 = " "
     for key in line_layout:
         for planner_name in planner_names:
-            header2 += f"& {planner_name} "
+            header2 += f"& \multicolumn{{1}}{{c}}{{{planner_key_to_name[planner_name]}}}"
 
     body = ""
 
@@ -151,7 +187,12 @@ def print_latex_table(aggregated_data):
                 for planner_name, data in all_planner_data.items()
             ]
             for i, v in enumerate(all_values):
-                if v == min(all_values):
+                if key == "success_rate":
+                    best_value = max(all_values)
+                else:
+                    best_value = min(all_values)
+
+                if v == best_value:
                     body += f"& $\\mathbf{{ {v:.2f} }}$"
                 else:
                     body += f"& ${v:.2f}$ "
@@ -192,7 +233,7 @@ def get_subfolders_from_main_folder(folder):
 
 
 def main():
-    main_dir = "./out/tmp/"
+    main_dir = "./out/exp_many_envs_11/"
     folders = get_subfolders_from_main_folder(main_dir)
 
     group_envs_by = ["dep", "unordered", "unassigned"]
