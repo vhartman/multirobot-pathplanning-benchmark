@@ -1,9 +1,11 @@
 import numpy as np
+import random
 
-from make_plots import load_data_from_folder
+from make_plots import load_data_from_folder, load_config_from_folder
 import os
 from string import Template
 
+from multi_robot_multi_goal_planning.problems import get_env_by_name
 
 def get_initial_solution_time(results):
     all_initial_solution_times = []
@@ -62,26 +64,65 @@ def get_success_rate(results, num_experiments):
 
     return  len(results) / num_experiments, 0, 0
 
-def get_dimensionality(env_name):
-    pass
+def get_dimensionality(all_experiment_data):
+    for planner_name, results in all_experiment_data.items():
+        for single_run_result in results:
+            if "paths" not in single_run_result:
+                continue
 
-def get_num_robots(env_name):
-    pass
+            for path in single_run_result["paths"]:
+                for pt in path:
+                    return len(pt['q'])
 
-def get_num_tasks(env_name):
-    pass
+    return 0
+    # return len(env.start_pos.state())
 
-def get_runtime(env_name):
-    pass
+def get_num_tasks(all_experiment_data):
+    for planner_name, results in all_experiment_data.items():
+        for single_run_result in results:
+            if "paths" not in single_run_result:
+                continue
+
+            for path in single_run_result["paths"]:
+                set_indices = set()
+                for pt in path:
+                    for m in pt['mode']:
+                        set_indices.add(m)
+
+                return len(set_indices)
+
+    return 0
+
+    # return len(env.tasks)
+
+def get_runtime(config):
+    return config["max_planning_time"]
+
+# def load_env(config):
+#     np.random.seed(config["seed"])
+#     random.seed(config["seed"])
+
+#     env = get_env_by_name(config["environment"])
+    
+#     return env
 
 def aggregate_data(folders):
     env_results = {}
     for experiment in folders:
         # TODO change behavior to add none
-        all_experiment_data = load_data_from_folder(experiment)
+        all_experiment_data = load_data_from_folder(experiment, 1)
+        config = load_config_from_folder(experiment)
+
+        # env = load_env(config)
+
         env_name = experiment.split(".")[-1][:-1]
 
         env_results[env_name] = {}
+
+        env_results[env_name]["runtime"] = get_runtime(config)
+        
+        env_results[env_name]["num_dims"] = get_dimensionality(all_experiment_data)
+        env_results[env_name]["num_tasks"] = get_num_tasks(all_experiment_data)
 
         for planner_name, results in all_experiment_data.items():
             t_init_median, t_init_lb, t_init_ub = get_initial_solution_time(results)
@@ -139,7 +180,10 @@ def print_table(aggregated_data):
 
 
 def print_latex_table(aggregated_data):
-    planner_names = list(next(iter(aggregated_data.values())).keys())
+    # planner_names = list(next(iter(aggregated_data.values())).keys())
+    planner_names = [
+        "prio", "birrt", "ait"
+    ]
     planner_key_to_name = {
         "prio": "Prio",
         "birrt": "BiRRT*",
@@ -149,29 +193,48 @@ def print_latex_table(aggregated_data):
     num_planners = len(planner_names)
     
     line_layout = [
+        "num_dims",
+        "num_tasks",
+        "runtime",
         "success_rate",
         "t_init_median",
         "c_init_median", 
         "c_final_median"
     ]
     key_to_name = {
-        "success_rate": "\\multicolumn{3}{c}{succ}",
-        "t_init_median": "\\multicolumn{3}{c}{$t_\\text{{init}}$}",
+        "num_dims": "\#Dim",
+        # "num_dims": "$N_d$",
+        "runtime": "$t_\\text{{max}}$ [s]",
+        "num_tasks": "\#Tasks",
+        # "num_tasks": "$N_t$",
+        "success_rate": "\\multicolumn{3}{c}{Success Rate}",
+        "t_init_median": "\\multicolumn{3}{c}{$t_\\text{{init}}$ [s]}",
         "c_init_median": "\\multicolumn{3}{c}{$c_\\text{{init}}$}",
-        "c_final_median": "\\multicolumn{3}{c}{$c_\\text{{final}}$}",
+        "c_final_median": "\\multicolumn{3}{c}{$c_{{t_\\text{{max}}}}$}",
     }
 
+    env_info = [
+        "num_dims",
+        "num_tasks",
+        "runtime",
+    ]
 
     num_cols = 1 + len(planner_names) * len(line_layout)
 
-    colspec = "l " + len(line_layout) * ("|" + len(planner_names) * "r")
+    colspec = "l |" + "r" * len(env_info) + 4 * ("|" + len(planner_names) * "r")
 
     header1 = " "
     for key in line_layout:
         header1 += f"& {key_to_name[key]} "
 
     header2 = " "
+    for key in env_info:
+        header2 += " & "
+
     for key in line_layout:
+        if key in env_info:
+            continue
+
         for planner_name in planner_names:
             header2 += f"& \multicolumn{{1}}{{c}}{{{planner_key_to_name[planner_name]}}}"
 
@@ -182,20 +245,31 @@ def print_latex_table(aggregated_data):
         escaped_env_name = env_name.replace("_", "\\_")
         body += f"{escaped_env_name} "
         for key in line_layout:
-            all_values = [
-                data[key] if data[key] is not None else float("inf")
-                for planner_name, data in all_planner_data.items()
-            ]
-            for i, v in enumerate(all_values):
-                if key == "success_rate":
-                    best_value = max(all_values)
-                else:
-                    best_value = min(all_values)
+            if key in env_info:
+                body += f"& ${all_planner_data[key]}$ "
 
-                if v == best_value:
-                    body += f"& $\\mathbf{{ {v:.2f} }}$"
-                else:
-                    body += f"& ${v:.2f}$ "
+            else:
+                # all_values = [
+                #     data[key] if data[key] is not None else float("inf")
+                #     for planner_name, data in all_planner_data.items() if planner_name in planner_names
+                # ]
+                all_values = []
+                for planner_name in planner_names:
+                    if all_planner_data[planner_name][key] is not None:
+                        all_values.append(all_planner_data[planner_name][key]) 
+                    else:
+                        all_values.append(float("inf"))
+
+                for i, v in enumerate(all_values):
+                    if key == "success_rate":
+                        best_value = max(all_values)
+                    else:
+                        best_value = min(all_values)
+
+                    if v == best_value:
+                        body += f"& $\\mathbf{{ {v:.2f} }}$"
+                    else:
+                        body += f"& ${v:.2f}$ "
 
         body += "\\\\ \n"
 
