@@ -268,6 +268,14 @@ def main():
     print("comp_time", info["times"])
     print("residuals", info["residuals"])
 
+    # threshold = 0.01
+
+    # for i, d in enumerate(info["residuals"]):
+    #     # If any value in the dict is larger than threshold → replace with empty dict
+    #     if any(abs(v) > threshold for v in d.values()):
+    #         info["residuals"][i] = {}
+
+
     if args.show_plots:
         plt.figure()
         plt.plot(info["times"], info["costs"], "-o", drawstyle="steps-post")

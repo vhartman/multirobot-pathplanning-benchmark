@@ -1,0 +1,47 @@
+{
+  "experiment_name": "rfl_giovanni_report",
+  "environment": "rai.rfl",
+  "per_agent_cost": "euclidean",
+  "cost_reduction": "max",
+  "max_planning_time": 600,
+  "num_runs": 100,
+  "seed":0,
+  "optimize": true,
+  "planners": [
+    {
+      "name": "birrtstar",
+      "type": "birrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "init_mode_sampling_type": "greedy",
+        "transition_nodes": 50,
+        "birrtstar_version": 2, 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+      }
+    },
+    {
+      "name": "rrtstar",
+      "type": "rrtstar",
+      "options": {
+        "informed_sampling": true,
+        "informed_sampling_version": 6,  
+        "distance_metric": "max_euclidean",
+        "p_goal": 0.4,
+        "p_stay": 0.0,
+        "p_uniform": 0.2,
+        "shortcutting": true,
+        "init_mode_sampling_type": "greedy", 
+        "locally_informed_sampling": true,
+        "informed_batch_size": 300
+
+      }
+    }
+  ]
+}
