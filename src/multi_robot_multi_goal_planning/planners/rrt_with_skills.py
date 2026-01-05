@@ -55,6 +55,12 @@ class Tree:
     def add_node(self, node, parent):
         pass
 
+# possible to solve with two aproachees:
+# - formulate as big problem with time as part of the planning space
+# -- fully time annotated: also means that we can formulate this properly as makespan cost as well.
+# - formulate as geometric problem, and deal with the timing in the rollout.
+# -- this means that we return a path that is partially annotated with time-info
+
 class RRTWithSkills(BasePlanner):
     def __init__(self, env: BaseProblem, config: RRTWithSkillsConfig | None = None):
         self.env = env
@@ -67,15 +73,49 @@ class RRTWithSkills(BasePlanner):
         t = Tree()
 
         while True:
+            ####################
+            # possibility where we do time in the planning space:
+            ####################
+
             # sample rnd node + time
+            # - goal bias
             # - possibly informed sampling
-            # - possibly goal bias
-            # - possibly project
+            # - possibly project for constrained planning
 
             # steer towards node
-            # - return an edge-type to support non-linear interpolation
+            # - return an edge-type to support non-linear interpolation: should likely consist of a sequence of nodes (with associated time).
+            # - steering behaviour depending on the mode we are in: there are modes that are skills
+            # -- if a mode corresponds to a skill: rollout;
+            # --- rollout of a skill: api should be ~step(configuration, delta t)
+            # --- step until we reach the sampled time or the goal is reached
+            # -- else: just linear interpolation, constrained planning/whatever
+            # - analogy: this is somewhat like kinodynamic planning, where the system dynamics are
+            #            given by the skill.
 
-            # check edge for collision
-            # - take edge as input, not to points
+            # check timed edge for collision
+            # - take timed edge as input, not points
 
             # add node if no collision
+
+            # rewiring?
+            # should work as normally, with the caveat that we can not connect to everywhere
+
+            # if path found: shortcutting
+            # -- shortcutting: should work as is.
+            # -- do not shortcut over skills
+
+            ####################
+            # possibility with stuff in rollout
+            ####################
+
+            # sample rnd node + mode
+            # same as above
+
+            # steer:
+            # - do similar to kinodynamic motion planning:
+            # - sample duration -> rollout steps that much
+            # - steer the linear interpolation to that location over the sampled time
+
+            # rest is the same
+
+            pass
