@@ -18,7 +18,7 @@ import multi_robot_multi_goal_planning.problems.rai_config as rai_config
 
 from .registry import register
 
-@register("rai.unassigned_two_dim")
+@register("rai.unassigned_tsp")
 class rai_two_dim_env(FreeMixin, rai_env):
     def __init__(self, agents_can_rotate=True):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=agents_can_rotate)

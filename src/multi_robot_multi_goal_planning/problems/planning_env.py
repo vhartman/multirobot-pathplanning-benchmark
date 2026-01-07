@@ -75,6 +75,9 @@ class Task:
     # things for the future:
     constraints = List[Constraint]
 
+    is_skill = False # redundant? should just check if a skill is given
+    skill = None # skill should be a function taking the config and the current env as arg, and returns a new config.
+
     def __init__(
         self,
         name,

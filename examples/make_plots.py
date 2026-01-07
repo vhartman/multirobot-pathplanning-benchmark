@@ -14,7 +14,7 @@ from compute_confidence_intervals import computeConfidenceInterval
 
 
 def load_data_from_folder(
-    folder: str, load_paths: bool = False
+    folder: str, load_paths: int = 0
 ) -> Dict[str, List[Any]]:
     all_subfolders = [
         name for name in os.listdir(folder) if os.path.isdir(os.path.join(folder, name))
@@ -105,7 +105,10 @@ def load_data_from_folder(
 
             if load_paths:
                 paths = []
-                for file in sorted_files:
+                for j, file in enumerate(sorted_files):
+                    if j >= load_paths:
+                        break
+                        
                     with open(run_subfolder + file) as f:
                         path_data = json.load(f)
                         paths.append(path_data)

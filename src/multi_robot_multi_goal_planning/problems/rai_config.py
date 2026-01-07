@@ -5916,81 +5916,107 @@ def make_husky_single_arm_box_stacking_env():
     def compute_rearrangment(
         robot_prefix, box, goal
     ):
-        # set everything but the crrent box to non-contact
-        c_tmp = ry.Config()
-        c_tmp.addConfigurationCopy(C)
+        c_org = ry.Config()
+        c_org.addConfigurationCopy(C)
 
-        robot_base = robot_prefix + "base_joint"
-        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+        while True:
+            # set everything but the crrent box to non-contact
+            c_tmp = ry.Config()
+            c_tmp.addConfigurationCopy(C)
 
-        q_home = c_tmp.getJointState()
+            robot_base = robot_prefix + "base_joint"
+            c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
 
-        for frame_name in boxes:
-            if frame_name == box:
-                break
+            q_home = c_tmp.getJointState()
 
-            pos = c_tmp.getFrame("goal" + frame_name[3:]).getPosition()
-            c_tmp.getFrame(frame_name).setPosition(pos)
+            for frame_name in boxes:
+                if frame_name == box:
+                    break
 
-        komo = ry.KOMO(
-            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
-        )
-        komo.addObjective(
-            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
-        )
+                pos = c_tmp.getFrame("goal" + frame_name[3:]).getPosition()
+                c_tmp.getFrame(frame_name).setPosition(pos)
 
-        komo.addControlObjective([], 0, 1e-1)
-        komo.addControlObjective([], 1, 1e0)
-        # komo.addControlObjective([], 2, 1e-1)
+            komo = ry.KOMO(
+                c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+            )
+            komo.addObjective(
+                [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+            )
 
-        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
-        # komo.addObjective(
-        #     [1, 2],
-        #     ry.FS.distance,
-        #     [robot_prefix + "ur_vacuum", box],
-        #     ry.OT.ineq,
-        #     [-1e0],
-        #     [0.02],
-        # )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.positionDiff,
-            [robot_prefix + "ur_vacuum", box],
-            ry.OT.eq,
-            [1e1, 1e1, 1e1],
-            [0., 0, 0.1]
-        )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.scalarProductYZ,
-            [robot_prefix + "ur_ee_marker", box],
-            ry.OT.sos,
-            [1e1],
-        )
-        komo.addObjective(
-            [1, 2],
-            ry.FS.scalarProductXZ,
-            [robot_prefix + "ur_ee_marker", box],
-            ry.OT.eq,
-            [1e1],
-            [-1]
-        )
+            komo.addControlObjective([], 0, 1e-1)
+            komo.addControlObjective([], 1, 1e0)
+            # komo.addControlObjective([], 2, 1e-1)
 
-        # for pick and place directly
-        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
-        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+            komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
+            # komo.addObjective(
+            #     [1, 2],
+            #     ry.FS.distance,
+            #     [robot_prefix + "ur_vacuum", box],
+            #     ry.OT.ineq,
+            #     [-1e0],
+            #     [0.02],
+            # )
+            komo.addObjective(
+                [1, 2],
+                ry.FS.positionDiff,
+                [robot_prefix + "ur_vacuum", box],
+                ry.OT.eq,
+                [1e1, 1e1, 1e1],
+                [0., 0, 0.1]
+            )
+            komo.addObjective(
+                [1, 2],
+                ry.FS.scalarProductYZ,
+                [robot_prefix + "ur_ee_marker", box],
+                ry.OT.sos,
+                [1e1],
+            )
+            komo.addObjective(
+                [1, 2],
+                ry.FS.scalarProductXZ,
+                [robot_prefix + "ur_ee_marker", box],
+                ry.OT.eq,
+                [1e1],
+                [-1]
+            )
 
-        komo.addObjective(
-            times=[3, -1],
-            feature=ry.FS.jointState,
-            frames=[],
-            type=ry.OT.eq,
-            scale=[1e0],
-            target=q_home,
-        )
+            # for pick and place directly
+            komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+            komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
 
-        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
-        return keyframes
+            komo.addObjective(
+                times=[3, -1],
+                feature=ry.FS.jointState,
+                frames=[],
+                type=ry.OT.eq,
+                scale=[1e0],
+                target=q_home,
+            )
+
+            keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+            
+            def check_coll(phase):
+                q = c_org.getJointState()
+                if robot_prefix == "a1_":
+                    q[0:9] = keyframes[phase]
+                    q[9:12] = keyframes[phase][0:3]
+                else:
+                    q[9:] = keyframes[phase]
+                    q[0:3] = keyframes[phase][0:3]
+
+                c_org.setJointState(q)
+                pen = c_org.getCollisionsTotalPenetration()
+
+                # c_org.view(True)
+                return pen
+
+            pen_0 = check_coll(0)
+            pen_1 = check_coll(1)
+
+            # print(pen_0, pen_1)
+            
+            if pen_0 > -0.001 and pen_1 > -0.001:
+                return keyframes
 
     k1 = compute_rearrangment("a1_", "obj0", "goal0")
     k2 = compute_rearrangment("a2_", "obj1", "goal1")
