@@ -251,7 +251,6 @@ def main():
 
     # interpolated_path = interpolate_path(path, 0.05)
     # shortcut_discretized_path = interpolate_path(shortcut_path)
-
     interpolated_path = resample_on_manifold(path, 0.05, planner, env)
     shortcut_discretized_path = resample_on_manifold(shortcut_path, 0.05, planner, env)
 
@@ -266,36 +265,29 @@ def main():
 
     print("cost", info["costs"])
     print("comp_time", info["times"])
-    print("residuals", info["residuals"])
-
-    # threshold = 0.3 # 0.032
-
-    # for i, d in enumerate(info["residuals"]):
-    #     # If any value in the dict is larger than threshold → replace with empty dict
-    #     if any(abs(v) > threshold for v in d.values()):
-    #         info["residuals"][i] = {}
+    # print("residuals", info["residuals"])
 
 
     if args.show_plots:
         plt.figure()
         plt.plot(info["times"], info["costs"], "-o", drawstyle="steps-post")
 
-        # plotting residuals
-        all_keys = set()
-        for d in info["residuals"]:
-            all_keys.update(d.keys())
-        curves = {k: [] for k in all_keys}
-        for d in info["residuals"]:
-            for k in all_keys:
-                curves[k].append(d.get(k, 0.0))
-        plt.figure()
-        for name, values in curves.items():
-            plt.plot(values, "-o", label=name)
-        plt.legend()
-        plt.xlabel("Timestep")
-        plt.ylabel("Residual value")
-        plt.title("Constraint Residuals Over Path")
-        plt.tight_layout()
+        # # plotting residuals
+        # all_keys = set()
+        # for d in info["residuals"]:
+        #     all_keys.update(d.keys())
+        # curves = {k: [] for k in all_keys}
+        # for d in info["residuals"]:
+        #     for k in all_keys:
+        #         curves[k].append(d.get(k, 0.0))
+        # plt.figure()
+        # for name, values in curves.items():
+        #     plt.plot(values, "-o", label=name)
+        # plt.legend()
+        # plt.xlabel("Timestep")
+        # plt.ylabel("Residual value")
+        # plt.title("Constraint Residuals Over Path")
+        # plt.tight_layout()
                 
 
         plt.figure()
@@ -372,15 +364,6 @@ def main():
         adapt_to_max_distance=True,
         stop_at_mode=args.stop_at_mode,
     )
-
-    # print("displaying path from nonlinear interpolation")
-    # env.display_path(
-    #     interpolated_path_nl,
-    #     stop=False,
-    #     stop_at_end=True,
-    #     adapt_to_max_distance=True,
-    #     stop_at_mode=args.stop_at_mode,
-    # )
 
     # print("displaying path from shortcut path")
     # env.display_path(

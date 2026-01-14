@@ -142,12 +142,10 @@ class RRTstar(BaseRRTstar):
             # Mode selection
             active_mode = self.random_mode()
 
-            print(active_mode) # to check progress of the planner
+            # print(active_mode) # to check progress of the planner
 
             # RRT* core
             # q_rand = self.sample_configuration(active_mode)
-            # q_rand = self.sample_configuration_aff_cspace(active_mode)
-            q_rand = self.sample_configuration_nl(active_mode)
             # q_rand = self.sample_configuration_aff_cspace(active_mode)
             q_rand = self.sample_configuration_nl(active_mode)
             if not q_rand:

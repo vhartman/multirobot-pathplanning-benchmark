@@ -220,15 +220,7 @@ def robot_mode_shortcut_no_constr(
         ):
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
-
-                # if not np.array_equal(new_path[i+k].mode, path_element[k].mode):
-                # print('fucked up')
-        # else:
-        #     print("in colllision")
-        # env.show(True)
-
-        # print(i, j, len(path_element))
-
+        
         current_time = time.time()
         times.append(current_time - start_time)
         costs.append(path_cost(new_path, env.batch_config_cost))
@@ -430,13 +422,13 @@ def robot_mode_shortcut(
 
             # safety: must match segment length and endpoints
             if len(path_element) != (j - i + 1):
-                print("ERROR: length mismatch")
+                # print("ERROR: length mismatch")
                 continue
             if not np.allclose(path_element[0].q.state(), new_path[i].q.state(), atol=1e-8):
-                print("ERROR: start state mismatch")
+                # print("ERROR: start state mismatch")
                 continue
             if not np.allclose(path_element[-1].q.state(), new_path[j].q.state(), atol=1e-8):
-                print("ERROR: end state mismatch")
+                # print("ERROR: end state mismatch")
                 continue
 
 
@@ -486,9 +478,9 @@ def robot_mode_shortcut(
     assert np.linalg.norm(new_path[-1].q.state() - path[-1].q.state()) < 1e-6
     assert np.linalg.norm(new_path[0].q.state() - path[0].q.state()) < 1e-6
 
-    # print("original cost:", path_cost(path, env.batch_config_cost))
-    # print("Attempted shortcuts:", cnt)
-    # print("new cost:", path_cost(new_path, env.batch_config_cost))
+    print("original cost:", path_cost(path, env.batch_config_cost))
+    print("Attempted shortcuts:", cnt)
+    print("new cost:", path_cost(new_path, env.batch_config_cost))
     # print("Total shortcuts tried:", totsc)
     # print("Shortcuts skipped due to constraints:", skipsc)
 
@@ -665,14 +657,6 @@ def robot_mode_shortcut_nl(
         ):
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
-
-                # if not np.array_equal(new_path[i+k].mode, path_element[k].mode):
-                # print('fucked up')
-        # else:
-        #     print("in colllision")
-        # env.show(True)
-
-        # print(i, j, len(path_element))
 
         current_time = time.time()
         times.append(current_time - start_time)
@@ -881,7 +865,7 @@ def robot_mode_shortcut_nl_opt(
     rr_robot = 0
 
     while True:
-        print("Shortcutting attempts:", iter_attempts, "Accepted:", cnt)
+        # print("Shortcutting attempts:", iter_attempts, "Accepted:", cnt)
         iter_attempts += 1
         if cnt >= max_iter or iter_attempts >= max_attempts:
             break
@@ -975,16 +959,8 @@ def robot_mode_shortcut_nl_opt(
     print("Accepted shortcuts:", cnt)
     print("final cost:", path_cost(new_path, env.batch_config_cost))
 
-    print("SINGLE SHORTCUTTING LOOP COSTS:", costs)
+    # print("SINGLE SHORTCUTTING LOOP COSTS:", costs)
 
     new_path = ensure_mode_switch_duplication(new_path)
-
-    # print("Final path length after ensuring mode switch duplication:", len(new_path))
-    # for k in range(1, len(new_path)):
-    #     print("Mode check", k, new_path[k].mode, new_path[k-1].mode)
-    #     if new_path[k].mode != new_path[k-1].mode:
-    #         print("Mode switch at index", k)
-    #         print("States identical check:", np.allclose(new_path[k].q.state(), new_path[k-1].q.state()))
-    #         assert np.allclose(new_path[k].q.state(), new_path[k-1].q.state()), "Mode switch duplication violated!"
 
     return new_path, [costs, times]

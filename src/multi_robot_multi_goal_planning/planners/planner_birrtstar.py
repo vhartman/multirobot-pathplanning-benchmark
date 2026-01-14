@@ -43,10 +43,10 @@ class BidirectionalRRTstar(BaseRRTstar):
                         self.trees[mode].remove_node(current_node, "B")
 
             children = current_node.children
-            print(current_node.id, len(children))
+            # print(current_node.id, len(children))
             if children:
                 for _, child in enumerate(children):
-                    print("updating child id:", child.id)
+                    # print("updating child id:", child.id)
                     child.cost = current_node.cost + child.cost_to_parent
                 stack.extend(children)
 
@@ -397,7 +397,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             # Mode selection
             active_mode = self.random_mode()
 
-            print(active_mode) # to check progress of the planner
+            # print(active_mode) # to check progress of the planner
             # print(active_mode.entry_configuration.q)
 
             # self.env.show_config(active_mode.entry_configuration, blocking = True)

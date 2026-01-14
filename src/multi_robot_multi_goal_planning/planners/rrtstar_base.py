@@ -918,7 +918,7 @@ class BaseRRTstar(BasePlanner):
         failed_attemps = 0
         while True:
             if failed_attemps > 10000:
-                print("Failed to sample transition configuration after 10000 attempts.")
+                # print("Failed to sample transition configuration after 10000 attempts.")
                 if self.config.with_mode_validation:
                     self.modes.remove(mode)
                     self.mode_validation.add_invalid_mode(mode)
@@ -1705,7 +1705,7 @@ class BaseRRTstar(BasePlanner):
 
         # fallback if primary fails
         if q_proj is None:
-            print("Affine projection failed, trying fallback.")
+            # print("Affine projection failed, trying fallback.")
             q_proj = self.project_cnkz(q, aff_eq)
         return q_proj
 
@@ -1726,7 +1726,7 @@ class BaseRRTstar(BasePlanner):
                    self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
                     return q_proj
 
-        print("Failed affine uniform sampling after", max_tries, "tries.")
+        # print("Failed affine uniform sampling after", max_tries, "tries.")
         return None
     
 
@@ -1767,7 +1767,7 @@ class BaseRRTstar(BasePlanner):
         else:  # forward expansion
             return self.sample_transition_configuration_aff_cspace(mode)
 
-        print(f"Failed goal sampling after {max_tries} tries in mode {mode}.")
+        # print(f"Failed goal sampling after {max_tries} tries in mode {mode}.")
         return None
 
     def sample_transition_configuration_aff_cspace(self, mode: Mode) -> Optional[Configuration]:
@@ -1985,7 +1985,7 @@ class BaseRRTstar(BasePlanner):
             return q_proj
 
         # fallback: SLSQP
-        print("Nonlinear projection failed, trying fallback.")
+        # print("Nonlinear projection failed, trying fallback.")
         return self.project_nlp(q, constraints_all, mode=mode, env=self.env)
 
 
@@ -2012,7 +2012,7 @@ class BaseRRTstar(BasePlanner):
                     self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
                     return q_proj
 
-        print("Failed nonlinear uniform sampling after", max_tries, "tries.")
+        # print("Failed nonlinear uniform sampling after", max_tries, "tries.")
         return None
 
     def sample_goal_nl(
@@ -2062,7 +2062,7 @@ class BaseRRTstar(BasePlanner):
                         self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
                         return q_proj
 
-            print(f"Failed nonlinear goal sampling after {max_tries} tries in mode {mode}.")
+            # print(f"Failed nonlinear goal sampling after {max_tries} tries in mode {mode}.")
             return None
 
         # forward expansion
@@ -2094,7 +2094,7 @@ class BaseRRTstar(BasePlanner):
                 self.satisfies_aff_eq_constraints(mode, aff_eq, q_proj) and 
                 self.satisfies_aff_ineq_constraints(mode, aff_ineq, q_proj)):
                 return q_proj
-        print(f"Failed nonlinear transition sampling after {max_tries} tries in mode {mode}.")
+        # print(f"Failed nonlinear transition sampling after {max_tries} tries in mode {mode}.")
         return None
 
     def sample_informed_nl(self, mode: Mode) -> Optional[Configuration]:
@@ -2394,12 +2394,6 @@ class BaseRRTstar(BasePlanner):
                 index = np.where(
                     self.trees[node.state.mode].get_node_ids_subtree() == parent.id
                 )
-
-                # # debugging
-                # print("CALLING NEAR FROM TREE EXTENSION 1") 
-                # print("node_ids_subtree:", self.trees[node.state.mode].get_node_ids_subtree())
-                # print("parent id:", parent.id)
-                # print("index:", index)
                 
                 N_near_batch, n_near_costs, node_indices = self.near(
                     node.state.mode, node, index
@@ -2429,12 +2423,6 @@ class BaseRRTstar(BasePlanner):
                 index = np.where(
                     self.trees[node.state.mode].get_node_ids_subtree() == parent.id
                 )
-                # # debugging
-                # print("CALLING NEAR FROM TREE EXTENSION 2") 
-                # print("node_ids_previous_subtree:", self.trees[mode].get_node_ids_subtree())
-                # print("node_ids_subtree:", self.trees[node.state.mode].get_node_ids_subtree())
-                # print("parent id:", parent.id)
-                # print("index:", index)
 
                 N_near_batch, n_near_costs, node_indices = self.near(
                     node.state.mode, node, index
