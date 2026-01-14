@@ -409,7 +409,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not q_rand:
                 continue
 
-            self.env.show_config(q_rand, blocking = False)
+            # self.env.show_config(q_rand, blocking = False)
             
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand

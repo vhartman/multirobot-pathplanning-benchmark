@@ -1,11 +1,11 @@
 {
-  "experiment_name": "husky_giovanni_report",
-  "environment": "rai.husky_single_arm_stacking",
+  "experiment_name": "shapes_giovanni",
+  "environment": "rai.constrained_relative_pose_with_obstacle",
   "per_agent_cost": "euclidean",
   "cost_reduction": "max",
   "max_planning_time": 600,
   "num_runs": 100,
-  "seed":1,
+  "seed":0,
   "optimize": true,
   "planners": [
     {

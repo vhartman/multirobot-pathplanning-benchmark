@@ -148,6 +148,8 @@ class RRTstar(BaseRRTstar):
             # q_rand = self.sample_configuration(active_mode)
             # q_rand = self.sample_configuration_aff_cspace(active_mode)
             q_rand = self.sample_configuration_nl(active_mode)
+            # q_rand = self.sample_configuration_aff_cspace(active_mode)
+            q_rand = self.sample_configuration_nl(active_mode)
             if not q_rand:
                 continue
 

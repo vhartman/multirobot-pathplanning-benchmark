@@ -268,7 +268,7 @@ def main():
     print("comp_time", info["times"])
     print("residuals", info["residuals"])
 
-    # threshold = 0.01
+    # threshold = 0.3 # 0.032
 
     # for i, d in enumerate(info["residuals"]):
     #     # If any value in the dict is larger than threshold → replace with empty dict
