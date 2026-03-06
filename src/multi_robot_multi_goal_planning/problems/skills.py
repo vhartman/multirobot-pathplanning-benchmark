@@ -7,6 +7,7 @@ import robotic
 from dataclasses import dataclass
 from typing import Optional, List
 from scipy.spatial.transform import Rotation as R, Slerp
+from scipy.interpolate import interp1d
 
 ##########
 # Note: might be a cooler demo if we also have skills that are 'env aware'
@@ -323,9 +324,14 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
   """Skill for a given object trajectory, where the robots end effectors keep a constant 
   transformation to the object.
   """
-  def __init__(self, ee_names, transformations, obj_start_pose, obj_end_pose):
-    self.obj_start_pose = obj_start_pose
-    self.obj_end_pose = obj_end_pose
+  def __init__(self, ee_names, transformations, poses, times=None):
+    self.poses = np.array(poses)
+    num_poses = len(self.poses)
+    
+    if times is None:
+        self.times = np.linspace(0,1,num_poses)
+    else:
+        self.times = np.array(times)
     
     self.duration = 1
 
@@ -334,20 +340,25 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
     # we assume that ee_pose + transformation == obj_pose
     self.transformation = transformations
 
-    self.max_num_ik_iters = 10
+    self.max_num_ik_iters = 100
 
-    self.key_rots = R.from_quat([self.obj_start_pose[3:], self.obj_end_pose[3:]], scalar_first=True)
-    self.slerp = Slerp([0,1], self.key_rots)
+    self.pos_interp = interp1d(self.times, self.poses[:, :3], axis=0, kind='linear')
+
+    self.key_rots = R.from_quat(self.poses[:, 3:], scalar_first=True)
+    self.slerp = Slerp(self.times, self.key_rots)
 
   def _get_desired_obj_pose_at_time(self, t):
-    # TODO: check if we need to do the quaternion interpolation properly
-    p_new = self.obj_start_pose[:3] + t * (self.obj_end_pose[:3] - self.obj_start_pose[:3]) 
+    t = np.clip(t, self.times[0], self.times[-1])
     
+    # Interpolate position
+    p_new = self.pos_interp(t)
+    
+    # Interpolate rotation
     R_t = self.slerp([t])[0]
     q = R_t.as_quat(scalar_first=True)
 
-    return np.concatenate([p_new, q])
-
+    return np.concatenate([p_new, q])    
+    
   def step(self, t, q, env, dt=0.1):
     env.C.setJointState(q, self.joints)
     desired_pose = self._get_desired_obj_pose_at_time(t)

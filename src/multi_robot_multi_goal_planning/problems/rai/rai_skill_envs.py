@@ -426,7 +426,7 @@ class rai_multi_agent_scripted_insert_base(rai_env):
                 Task(
                     f"pre_pick_{i}",
                     [robot],
-                    SingleGoal(pre_pick + np.random.rand(6) * 0.1),
+                    SingleGoal(pre_pick + np.random.rand(6) * 0.05),
                 ),
                 Task(
                     f"pick_{i}",
@@ -439,7 +439,7 @@ class rai_multi_agent_scripted_insert_base(rai_env):
                 Task(
                     f"pre_place_{i}",
                     [robot],
-                    SingleGoal(pre_place + np.random.rand(6) * 0.1),
+                    SingleGoal(pre_place + np.random.rand(6) * 0.05),
                 ),
                 Task(
                     f"place_{i}",
@@ -526,98 +526,19 @@ class rai_single_agent_learned_insert(SequenceMixin, rai_env):
 # multi agent rearrangement with skills
 @register("rai.multi_agent_rearrangement")
 class rai_multi_agent_pick_and_place(SequenceMixin, rai_env):
-    def __init__(self, num_agents=4, num_objects=4):
-        self.C, poses = rai_config.make_multi_agent_pick_and_place()
-        # self.C.view(True)
-
-        self.robots = ["a1"]
-
-        rai_env.__init__(self)
-
-        home_pose = self.C.getJointState()
-
-        self.tasks = []
-        named_sequence = []
-
-        for robot, task in poses:
-            pass
-
-        self.sequence = self._make_sequence_from_names(
-          named_sequence
-        )
-
-        self.collision_tolerance = 0.001
-        self.collision_resolution = 0.005
-
-        BaseModeLogic.__init__(self)
-
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+    pass
 
 # TODO unfinished
 # multi agent rearrangement with skills
 @register("rai.multi_agent_stacking")
 class rai_multi_agent_stacking(SequenceMixin, rai_env):
-    def __init__(self, num_agents=4, num_objects=4):
-        self.C, poses = rai_config.make_multi_agent_stacking()
-        # self.C.view(True)
-
-        self.robots = ["a1"]
-
-        rai_env.__init__(self)
-
-        home_pose = self.C.getJointState()
-
-        self.tasks = []
-        named_sequence = []
-
-        for robot, task in poses:
-            pass
-
-        self.sequence = self._make_sequence_from_names(
-          named_sequence
-        )
-
-        self.collision_tolerance = 0.001
-        self.collision_resolution = 0.005
-
-        BaseModeLogic.__init__(self)
-
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+    pass
 
 # TODO unfinished
 # multi agent rearrangement with skills
 @register("rai.multi_agent_dexterous_stacking")
 class rai_multi_agent_stacking(SequenceMixin, rai_env):
-    def __init__(self, num_agents=4, num_objects=4):
-        self.C, poses = rai_config.make_multi_agent_stacking()
-        # self.C.view(True)
-
-        self.robots = ["a1"]
-
-        rai_env.__init__(self)
-
-        home_pose = self.C.getJointState()
-
-        self.tasks = []
-        named_sequence = []
-
-        for robot, task in poses:
-            pass
-
-        self.sequence = self._make_sequence_from_names(
-          named_sequence
-        )
-
-        self.collision_tolerance = 0.001
-        self.collision_resolution = 0.005
-
-        BaseModeLogic.__init__(self)
-
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+    pass
 
 # TODO unfinished
 # draw the crl logo with 3 robots:
@@ -723,6 +644,13 @@ class rai_dual_arm_transport(SequenceMixin, rai_env):
 
         self.C.setJointState(home_pose)
 
+        poses = [
+            obj_start_pose, 
+            obj_start_pose + np.array([0, 0, 0.1, 0, 0, 0, 0]), 
+            obj_goal_pose + np.array([0, 0, 0.1, 0, 0, 0, 0]),
+            obj_goal_pose
+        ]
+
         self.tasks = [
             Task(
                 "pick_1",
@@ -735,7 +663,7 @@ class rai_dual_arm_transport(SequenceMixin, rai_env):
                 "move",
                 ["a1", "a2"],
                 SingleGoal(self.pick_pose),
-                skill = DualRobotGrasping(ee_names, [a1_transformation, a2_transformation], obj_start_pose, obj_goal_pose),
+                skill = DualRobotGrasping(ee_names, [a1_transformation, a2_transformation], poses),
                 type="place",
                 frames=["table", "obj1"]
             
