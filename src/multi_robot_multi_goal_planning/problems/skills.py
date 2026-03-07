@@ -226,7 +226,7 @@ class VacuumGrasping(BaseDeterministicTimedSkill):
     raise NotImplementedError
 
 class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
-  def __init__(self, line_start_pos, line_goal_pos, ee_name):
+  def __init__(self, ee_name, poses, times=None):
     self.line_start_pos = line_start_pos
     self.line_goal_pos = line_goal_pos
 
@@ -234,9 +234,31 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
 
     self.ee_name = ee_name
 
-  def _get_desired_pose_at_time(self, t):
-    return self.line_start_pos + t * (self.line_goal_pos - self.line_start_pos)
+    self.poses = np.array(poses)
+    num_poses = len(self.poses)
+    
+    if times is None:
+        self.times = np.linspace(0,1,num_poses)
+    else:
+        self.times = np.array(times)
+    
+    self.pos_interp = interp1d(self.times, self.poses[:, :3], axis=0, kind='linear')
 
+    self.key_rots = R.from_quat(self.poses[:, 3:], scalar_first=True)
+    self.slerp = Slerp(self.times, self.key_rots)
+
+  def _get_desired_obj_pose_at_time(self, t):
+    t = np.clip(t, self.times[0], self.times[-1])
+    
+    # Interpolate position
+    p_new = self.pos_interp(t)
+    
+    # Interpolate rotation
+    R_t = self.slerp([t])[0]
+    q = R_t.as_quat(scalar_first=True)
+
+    return np.concatenate([p_new, q])    
+    
   def step(self, t, q, env, dt=0.1):
     # look up where we are on the trajctory
     desired_next_pos = self._get_desired_pose_at_time(t)
@@ -263,18 +285,31 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
     return False
 
 class EndEffectorPositionFollowing(BaseDeterministicTimedSkill):
-  def __init__(self, line_start_pos, line_goal_pos, ee_name):
-    self.line_start_pos = line_start_pos
-    self.line_goal_pos = line_goal_pos
+  def __init__(self, ee_name, positions, times=None):
 
     self.duration = 1
 
     self.ee_name = ee_name
 
-  def _get_desired_position_at_time(self, t):
-    return self.line_start_pos + t * (self.line_goal_pos - self.line_start_pos)
+    self.positions = np.array(positions)
+    num_poses = len(self.positions)
+    
+    if times is None:
+        self.times = np.linspace(0,1,num_poses)
+    else:
+        self.times = np.array(times)
+    
+    self.pos_interp = interp1d(self.times, self.positions[:, :3], axis=0, kind='linear')
 
-  def step(self, t, q, env, dt=0.1):
+  def _get_desired_position_at_time(self, t):
+    t = np.clip(t, self.times[0], self.times[-1])
+    
+    # Interpolate position
+    p_new = self.pos_interp(t)
+
+    return p_new
+
+  def step(self, t, q, env, dt=1):
     # look up where we are on the trajctory and get next position
     env.C.setJointState(q, self.joints)
 
@@ -325,6 +360,14 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
   transformation to the object.
   """
   def __init__(self, ee_names, transformations, poses, times=None):
+    self.duration = 1
+    self.max_num_ik_iters = 100
+
+    self.ee_names = ee_names
+
+    # we assume that ee_pose + transformation == obj_pose
+    self.transformation = transformations
+    
     self.poses = np.array(poses)
     num_poses = len(self.poses)
     
@@ -333,15 +376,6 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
     else:
         self.times = np.array(times)
     
-    self.duration = 1
-
-    self.ee_names = ee_names
-
-    # we assume that ee_pose + transformation == obj_pose
-    self.transformation = transformations
-
-    self.max_num_ik_iters = 100
-
     self.pos_interp = interp1d(self.times, self.poses[:, :3], axis=0, kind='linear')
 
     self.key_rots = R.from_quat(self.poses[:, 3:], scalar_first=True)

@@ -115,9 +115,12 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 # Debugging for single agent timed skill
-@register("rai.single_agent_drawing")
+@register([
+    ("rai.single_agent_drawing", {}),
+    ("rai.single_agent_drawing_square", {'square': True}),
+])
 class rai_single_agent_drawing(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, square=False):
         self.C, poses = rai_config.make_single_agent_drawing()
         # self.C.view(True)
 
@@ -129,10 +132,19 @@ class rai_single_agent_drawing(SequenceMixin, rai_env):
 
         #table_height = 0.1 
         table_height = 0.24 # Table top at z = 0.23
-        pts = [
-            np.array([-0.5, 0, table_height]), 
-            np.array([0.5, 0, table_height])
-        ]
+        if square:
+            pts = [
+                np.array([-0.5, -0.3, table_height]), 
+                np.array([0.5, -0.3, table_height]),
+                np.array([0.5, 0.3, table_height]),
+                np.array([-0.5, 0.3, table_height]),
+                np.array([-0.5, -0.3, table_height])
+            ]
+        else:
+            pts = [
+                np.array([-0.5, 0, table_height]), 
+                np.array([0.5, 0, table_height])
+            ]
         # path = LineSegment(pts)
 
         self.tasks = [
@@ -145,7 +157,7 @@ class rai_single_agent_drawing(SequenceMixin, rai_env):
                 "draw",
                 ["a1"],
                 SingleGoal(poses[0]), # TODO: figure out how to do skill goal checking (Valentin)
-                skill = EndEffectorPositionFollowing(*pts, "a1_stick_ee")
+                skill = EndEffectorPositionFollowing("a1_stick_ee", pts)
             ),
             Task(
                 "terminal",
