@@ -9,6 +9,8 @@ from typing import Optional, List
 from scipy.spatial.transform import Rotation as R, Slerp
 from scipy.interpolate import interp1d
 
+import time
+
 ##########
 # Note: might be a cooler demo if we also have skills that are 'env aware'
 # might also be more interesting planning wise.
@@ -88,7 +90,7 @@ class BaseDeterministicTimedSkill(ABC):
   def done(self, t, q, env):
     pass
   
-  def rollout(self, q_init, task, all_joints, env, t0, dt=0.1):
+  def rollout(self, q_init, task, all_joints, env, t0, dt=0.01):
     """
     Rollout deterministic timed skill for fixed duration
     """
@@ -263,14 +265,18 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
     # look up where we are on the trajctory
     desired_next_pos = self._get_desired_pose_at_time(t)
 
-    env.C.setJointState(q, self.joints)
-    [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_name], 1, desired_next_pos)
+    q_new = 1. * q
 
-    # compute pid law
-    q_dot = np.linalg.pinv(jac) @ err
+    for _ in range(100):
+      env.C.setJointState(q_new, self.joints)
+      [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_name], 1, desired_next_pos)
 
-    # integrate to get next pos
-    q_new = q - dt * q_dot
+      # compute pid law
+      q_dot = np.linalg.pinv(jac) @ err
+
+      # integrate to get next pos
+      q_new = q_new - dt * q_dot
+    
     return q_new
 
   def done(self, t, q, env):
@@ -311,16 +317,25 @@ class EndEffectorPositionFollowing(BaseDeterministicTimedSkill):
 
   def step(self, t, q, env, dt=1):
     # look up where we are on the trajctory and get next position
-    env.C.setJointState(q, self.joints)
-
     desired_position = self._get_desired_position_at_time(t)
-    [err, jac] = env.C.eval(robotic.FS.position, [self.ee_name], 1, desired_position)
-    
-    # compute pid law
-    q_dot = np.linalg.pinv(jac) @ err
 
-    # integrate to get next pos
-    q_new = q - dt * q_dot
+    q_new = 1. * q
+    for _ in range(100):
+      env.C.setJointState(q_new, self.joints)
+      [err, jac] = env.C.eval(robotic.FS.position, [self.ee_name], 1, desired_position)
+
+      if np.linalg.norm(err) < 1e-3:
+        break
+
+      # compute pid law
+      q_dot = np.linalg.pinv(jac) @ err
+
+      # integrate to get next pos
+      q_new = q_new - dt * q_dot
+
+    # env.C.view(False)
+    # time.sleep(0.1)
+
     return q_new
 
   def done(self, t, q, env):

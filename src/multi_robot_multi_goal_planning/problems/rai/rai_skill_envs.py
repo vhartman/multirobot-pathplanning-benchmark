@@ -131,19 +131,19 @@ class rai_single_agent_drawing(SequenceMixin, rai_env):
         home_pose = self.C.getJointState()
 
         #table_height = 0.1 
-        table_height = 0.24 # Table top at z = 0.23
+        table_height = 0.25 # Table top at z = 0.23
         if square:
             pts = [
-                np.array([-0.5, -0.3, table_height]), 
-                np.array([0.5, -0.3, table_height]),
-                np.array([0.5, 0.3, table_height]),
-                np.array([-0.5, 0.3, table_height]),
-                np.array([-0.5, -0.3, table_height])
+                np.array([-0.5, 0.0, table_height]), 
+                np.array([0.1, 0.0, table_height]),
+                np.array([0.1, -0.5, table_height]),
+                np.array([-0.5, -0.5, table_height]),
+                np.array([-0.5, 0.0, table_height])
             ]
         else:
             pts = [
                 np.array([-0.5, 0, table_height]), 
-                np.array([0.5, 0, table_height])
+                np.array([0.0, 0, table_height])
             ]
         # path = LineSegment(pts)
 
