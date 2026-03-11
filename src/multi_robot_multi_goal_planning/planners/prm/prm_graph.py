@@ -415,7 +415,7 @@ class MultimodalGraph:
             skill_nodes.append(n)
 
         # Only step-0 goes into self.nodes (visible to k-nearest)
-        self.add_nodes(skill_nodes[0])
+        self.add_node(skill_nodes[0])
 
         # Step 1+ go into separate storage (not visible to k-nearest)
         for n in skill_nodes[1:]:
