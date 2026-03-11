@@ -4,6 +4,7 @@ node_modules/
 # Ignore the results of benchmarking
 *.prof
 *.lprof
+*.json
 
 # Ignore logs
 logs/

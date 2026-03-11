@@ -59,7 +59,7 @@ from ..registry import register
 class rai_single_agent_screw(SequenceMixin, rai_env):
     def __init__(self):
         self.C, self.robots, [pick_pose, pre_screw_pose] = rai_config.make_ur10_screwing_env()
-        self.C.view(True)
+        # self.C.view(True)
 
         print(pick_pose, pre_screw_pose)
 
@@ -244,8 +244,13 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
 
         home_pose = self.C.getJointState()
 
-        pick_position = self.C.getFrame("obj1").getPose()
-        place_position = self.C.getFrame("goal1").getPose()
+        self.C.setJointState(pre_pick, self.robot_joints["a1"])
+        pose = self.C.getFrame("a1_ur_gripper_center").getPose()
+        self.C.setJointState(home_pose)
+
+        pick_pose = self.C.getFrame("obj1").getPose()
+        pick_pose[3:] = pose[3:]
+        place_pose = self.C.getFrame("goal1").getPose()
 
         self.tasks = [
             Task(
@@ -257,9 +262,9 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
                 "pick",
                 ["a1"],
                 SingleGoal(home_pose),
-                frames=["a1_ur_ee_marker", "obj1"],
+                frames=["a1_ur_gripper_center", "obj1"],
                 type="pick",
-                skill = EEPoseGoalReaching(pick_position, "a1_ur_ee_marker")
+                skill = EEPoseGoalReaching(pick_pose, "a1_ur_gripper_center")
             ),
             Task(
                 "pre_place",
@@ -270,7 +275,7 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
                 "place",
                 ["a1"],
                 SingleGoal(home_pose),
-                skill = EEPoseGoalReaching(place_position, "obj1"),
+                skill = EEPoseGoalReaching(place_pose, "obj1"),
                 type="place",
                 frames=["table", "obj1"]
             ),
