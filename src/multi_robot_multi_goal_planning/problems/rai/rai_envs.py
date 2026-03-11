@@ -1203,6 +1203,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         for i, r in enumerate(self.robots):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+            self.safe_pose[r][3] = -2
 
 class rai_ur10_arm_bottle_env_base(rai_env):
     def __init__(self, num_bottles=2):

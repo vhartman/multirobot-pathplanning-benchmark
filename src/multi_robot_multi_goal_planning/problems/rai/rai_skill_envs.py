@@ -34,7 +34,8 @@ from ..skills import (
     EndEffectorPositionFollowing,
     StochasticBinPick,
     DualRobotGrasping,
-    ModelBasedInsertion
+    ModelBasedInsertion,
+    RelativePoseReaching
 )
 
 from ..constraints import (
@@ -1299,6 +1300,80 @@ class rai_bimanual_sorting(SequenceMixin, rai_env):
         self.safe_pose = {}
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+@register("rai.skill_handover")
+class rai_skill_handover(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, keyframes = rai_config.make_handover_env(skill=True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        self.C.setJointState(keyframes[2])
+        a1_pose = self.C.getFrame("a1_ur_vacuum").getPose()
+        a2_pose = self.C.getFrame("a2_ur_vacuum").getPose()
+        self.C.setJointState(home_pose)
+
+        self.C.view(True)
+
+        offset = relative_pose(a2_pose, a1_pose)
+
+        self.tasks = [
+            Task(
+                "a1_pick",
+                ["a1"],
+                SingleGoal(keyframes[0][self.robot_idx["a1"]]),
+                type="pick",
+                frames=["a1_ur_vacuum", "obj1"],
+            ),
+            Task(
+                "pre_handover",
+                ["a1", "a2"],
+                SingleGoal(keyframes[1])
+            ),
+            Task(
+                "handover",
+                ["a1", "a2"],
+                SingleGoal(keyframes[2]),
+                type="handover",
+                frames=["a2_ur_vacuum", "obj1"],
+                skill = RelativePoseReaching(self.robot_joints["a1"] + self.robot_joints["a2"], "a1_ur_vacuum", "a2_ur_vacuum", offset)
+            ),
+            Task(
+                "a2_place",
+                ["a2"],
+                SingleGoal(keyframes[3][self.robot_idx["a2"]]),
+                type="place",
+                frames=["table", "obj1"],
+            ),
+            Task("terminal", ["a1", "a2"], SingleGoal(keyframes[4])),
+        ]
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_pick", "pre_handover", "handover", "a2_place", "terminal"]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.05
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+            self.safe_pose[r][3] = -2
 
 # TODO unfinished
 # inspiration: https://arxiv.org/pdf/2511.04758

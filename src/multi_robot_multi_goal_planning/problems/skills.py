@@ -17,6 +17,7 @@ import time
 ##########
 
 # TODO:
+# - enable choosing only subset of joints to plan for -> enables planning for e.g. grippers/dex hands
 # - unify interface -> merge (t,q) into 'state' or somethign like that to make life easier
 
 @dataclass
@@ -186,11 +187,10 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
     q_dot = np.linalg.pinv(jac) @ err
 
     if self.scale_stepsize:
-      stepsize = np.linalg.norm(q_dot)
-      q_dir = q_dot / stepsize
-
-      if dt * stepsize > 1:
-        q_dot = q_dir
+      max_step = 0.5
+      current_speed = np.linalg.norm(q_dot)
+      if current_speed > max_step:
+          q_dot = (q_dot / current_speed) * max_step
 
     # integrate to get next pos
     q_new = q - dt * q_dot
@@ -231,23 +231,34 @@ class RelativePoseReaching(DeterministicBaseSkill):
     self.frame_2_name = frame_2_name
     self.relative_transformation = transformation
 
-  def step(self, t, q, env):
+    # To deal with the double covering of the quaternions
+    self.mod_rel_transformation = 1. * self.relative_transformation
+    self.mod_rel_transformation[3:] = -self.mod_rel_transformation[3:]
+
+  def step(self, q, env, dt=0.1):
     env.C.setJointState(q, self.joints)
 
-    [err, jac] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
+    # TODO: Pretty sure this could be done better??
+    [err_1, jac_1] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
+    [err_2, jac_2] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.mod_rel_transformation)
 
-    q_dot = np.linalg.pinv(jac) @ err
+    if np.linalg.norm(err_1) < np.linalg.norm(err_2):
+      q_dot = np.linalg.pinv(jac_1) @ err_1
+    else:
+      q_dot = np.linalg.pinv(jac_2) @ err_2
 
     # integrate to get next pos
     q_new = q - dt * q_dot
-
+    
     return q_new
 
-  def done(self, t, q, env):
+  def done(self, q, env):
     env.C.setJointState(q, self.joints)
-    [err, jac] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
 
-    if np.linalg.norm(err) < 1e-3:
+    [err_1, jac_1] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
+    [err_2, jac_2] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.mod_rel_transformation)
+
+    if np.linalg.norm(err_1) < 1e-3 or np.linalg.norm(err_2) < 1e-3:
       return True
 
     return False
