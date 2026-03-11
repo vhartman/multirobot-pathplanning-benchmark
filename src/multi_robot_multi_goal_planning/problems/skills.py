@@ -7,11 +7,17 @@ import robotic
 from dataclasses import dataclass
 from typing import Optional, List
 from scipy.spatial.transform import Rotation as R, Slerp
+from scipy.interpolate import interp1d
+
+import time
 
 ##########
 # Note: might be a cooler demo if we also have skills that are 'env aware'
 # might also be more interesting planning wise.
 ##########
+
+# TODO:
+# - unify interface -> merge (t,q) into 'state' or somethign like that to make life easier
 
 @dataclass
 class SkillRolloutResult:
@@ -23,8 +29,8 @@ class SkillRolloutResult:
 
 # abstract class for skills. 
 class DeterministicBaseSkill(ABC):
-  def __init__(self):
-    self.joints = None # Store joint names when passed by planner
+  def __init__(self, joints):
+    self.joints = joints # Store joint names when passed by planner
     pass
 
   @abstractmethod
@@ -61,8 +67,8 @@ class DeterministicBaseSkill(ABC):
 
 # abstract class for stochastic skills.
 class StochasticBaseSkill(ABC):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    self.joints = joints
 
   @abstractmethod
   def step(self, q, env):
@@ -74,9 +80,8 @@ class StochasticBaseSkill(ABC):
 
 # abstract class for deterministic timed skills.
 class BaseDeterministicTimedSkill(ABC):
-  def __init__(self):
-    self.joints = None
-    pass
+  def __init__(self, joints):
+    self.joints = joints
 
   # TODO: should likely simply merge q and t to 'state'
   @abstractmethod
@@ -87,7 +92,7 @@ class BaseDeterministicTimedSkill(ABC):
   def done(self, t, q, env):
     pass
   
-  def rollout(self, q_init, task, all_joints, env, t0, dt=0.1):
+  def rollout(self, q_init, task, all_joints, env, t0, dt=0.01):
     """
     Rollout deterministic timed skill for fixed duration
     """
@@ -114,8 +119,8 @@ class BaseDeterministicTimedSkill(ABC):
 
 # abstract class for stochastic timed skills.
 class BaseStochasticTimedSkill(ABC):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    self.joints = joints
 
   @abstractmethod
   def step(self, q, t, env):
@@ -126,7 +131,9 @@ class BaseStochasticTimedSkill(ABC):
     pass
 
 class EEPositionGoalReaching(DeterministicBaseSkill):
-  def __init__(self, goal, ee_name):
+  def __init__(self, joints, goal, ee_name):
+    super().__init__(joints)
+
     self.goal_position = goal
     self.ee_name = ee_name
 
@@ -155,7 +162,9 @@ class EEPositionGoalReaching(DeterministicBaseSkill):
 
 # simple pid controller
 class EEPoseGoalReaching(DeterministicBaseSkill):
-  def __init__(self, goal, ee_name):
+  def __init__(self, joints, goal, ee_name):
+    super().__init__(joints)
+    
     self.goal_pose = goal
     self.ee_name = ee_name
 
@@ -212,11 +221,43 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
 
     return False
 
+# Should probably do this for all the other pose reaching things as well
+# This can for example be used for a handover
+class RelativePoseReaching(DeterministicBaseSkill):
+  def __init__(self, joints, frame_1_name, frame_2_name, transformation):
+    super().__init__(joints)
+    
+    self.frame_1_name = frame_1_name
+    self.frame_2_name = frame_2_name
+    self.relative_transformation = transformation
+
+  def step(self, t, q, env):
+    env.C.setJointState(q, self.joints)
+
+    [err, jac] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
+
+    q_dot = np.linalg.pinv(jac) @ err
+
+    # integrate to get next pos
+    q_new = q - dt * q_dot
+
+    return q_new
+
+  def done(self, t, q, env):
+    env.C.setJointState(q, self.joints)
+    [err, jac] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
+
+    if np.linalg.norm(err) < 1e-3:
+      return True
+
+    return False
+
 # question: can the mode be changed in a skill?
 # or does it need to be two skills?
 class VacuumGrasping(BaseDeterministicTimedSkill):
-  def __init__(self, box_pos):
-    pass
+  def __init__(self, joints, box_pos):
+    super().__init__(joints)
+
 
   def step(self, t, q, env):
     raise NotImplementedError
@@ -225,7 +266,9 @@ class VacuumGrasping(BaseDeterministicTimedSkill):
     raise NotImplementedError
 
 class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
-  def __init__(self, line_start_pos, line_goal_pos, ee_name):
+  def __init__(self, joints, ee_name, poses, times=None):
+    super().__init__(joints)
+    
     self.line_start_pos = line_start_pos
     self.line_goal_pos = line_goal_pos
 
@@ -233,21 +276,47 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
 
     self.ee_name = ee_name
 
-  def _get_desired_pose_at_time(self, t):
-    return self.line_start_pos + t * (self.line_goal_pos - self.line_start_pos)
+    self.poses = np.array(poses)
+    num_poses = len(self.poses)
+    
+    if times is None:
+        self.times = np.linspace(0,1,num_poses)
+    else:
+        self.times = np.array(times)
+    
+    self.pos_interp = interp1d(self.times, self.poses[:, :3], axis=0, kind='linear')
 
+    self.key_rots = R.from_quat(self.poses[:, 3:], scalar_first=True)
+    self.slerp = Slerp(self.times, self.key_rots)
+
+  def _get_desired_obj_pose_at_time(self, t):
+    t = np.clip(t, self.times[0], self.times[-1])
+    
+    # Interpolate position
+    p_new = self.pos_interp(t)
+    
+    # Interpolate rotation
+    R_t = self.slerp([t])[0]
+    q = R_t.as_quat(scalar_first=True)
+
+    return np.concatenate([p_new, q])    
+    
   def step(self, t, q, env, dt=0.1):
     # look up where we are on the trajctory
     desired_next_pos = self._get_desired_pose_at_time(t)
 
-    env.C.setJointState(q, self.joints)
-    [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_name], 1, desired_next_pos)
+    q_new = 1. * q
 
-    # compute pid law
-    q_dot = np.linalg.pinv(jac) @ err
+    for _ in range(100):
+      env.C.setJointState(q_new, self.joints)
+      [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_name], 1, desired_next_pos)
 
-    # integrate to get next pos
-    q_new = q - dt * q_dot
+      # compute pid law
+      q_dot = np.linalg.pinv(jac) @ err
+
+      # integrate to get next pos
+      q_new = q_new - dt * q_dot
+    
     return q_new
 
   def done(self, t, q, env):
@@ -262,29 +331,52 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
     return False
 
 class EndEffectorPositionFollowing(BaseDeterministicTimedSkill):
-  def __init__(self, line_start_pos, line_goal_pos, ee_name):
-    self.line_start_pos = line_start_pos
-    self.line_goal_pos = line_goal_pos
+  def __init__(self, joints, ee_name, positions, times=None):
+    super().__init__(joints)
 
     self.duration = 1
 
     self.ee_name = ee_name
 
-  def _get_desired_position_at_time(self, t):
-    return self.line_start_pos + t * (self.line_goal_pos - self.line_start_pos)
-
-  def step(self, t, q, env, dt=0.1):
-    # look up where we are on the trajctory and get next position
-    env.C.setJointState(q, self.joints)
-
-    desired_position = self._get_desired_position_at_time(t)
-    [err, jac] = env.C.eval(robotic.FS.position, [self.ee_name], 1, desired_position)
+    self.positions = np.array(positions)
+    num_poses = len(self.positions)
     
-    # compute pid law
-    q_dot = np.linalg.pinv(jac) @ err
+    if times is None:
+        self.times = np.linspace(0,1,num_poses)
+    else:
+        self.times = np.array(times)
+    
+    self.pos_interp = interp1d(self.times, self.positions[:, :3], axis=0, kind='linear')
 
-    # integrate to get next pos
-    q_new = q - dt * q_dot
+  def _get_desired_position_at_time(self, t):
+    t = np.clip(t, self.times[0], self.times[-1])
+    
+    # Interpolate position
+    p_new = self.pos_interp(t)
+
+    return p_new
+
+  def step(self, t, q, env, dt=1):
+    # look up where we are on the trajctory and get next position
+    desired_position = self._get_desired_position_at_time(t)
+
+    q_new = 1. * q
+    for _ in range(100):
+      env.C.setJointState(q_new, self.joints)
+      [err, jac] = env.C.eval(robotic.FS.position, [self.ee_name], 1, desired_position)
+
+      if np.linalg.norm(err) < 1e-3:
+        break
+
+      # compute pid law
+      q_dot = np.linalg.pinv(jac) @ err
+
+      # integrate to get next pos
+      q_new = q_new - dt * q_dot
+
+    # env.C.view(False)
+    # time.sleep(0.1)
+
     return q_new
 
   def done(self, t, q, env):
@@ -323,31 +415,42 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
   """Skill for a given object trajectory, where the robots end effectors keep a constant 
   transformation to the object.
   """
-  def __init__(self, ee_names, transformations, obj_start_pose, obj_end_pose):
-    self.obj_start_pose = obj_start_pose
-    self.obj_end_pose = obj_end_pose
+  def __init__(self, joints, ee_names, transformations, poses, times=None):
+    super().__init__(joints)
     
     self.duration = 1
+    self.max_num_ik_iters = 100
 
     self.ee_names = ee_names
 
     # we assume that ee_pose + transformation == obj_pose
     self.transformation = transformations
+    
+    self.poses = np.array(poses)
+    num_poses = len(self.poses)
+    
+    if times is None:
+        self.times = np.linspace(0,1,num_poses)
+    else:
+        self.times = np.array(times)
+    
+    self.pos_interp = interp1d(self.times, self.poses[:, :3], axis=0, kind='linear')
 
-    self.max_num_ik_iters = 10
-
-    self.key_rots = R.from_quat([self.obj_start_pose[3:], self.obj_end_pose[3:]], scalar_first=True)
-    self.slerp = Slerp([0,1], self.key_rots)
+    self.key_rots = R.from_quat(self.poses[:, 3:], scalar_first=True)
+    self.slerp = Slerp(self.times, self.key_rots)
 
   def _get_desired_obj_pose_at_time(self, t):
-    # TODO: check if we need to do the quaternion interpolation properly
-    p_new = self.obj_start_pose[:3] + t * (self.obj_end_pose[:3] - self.obj_start_pose[:3]) 
+    t = np.clip(t, self.times[0], self.times[-1])
     
+    # Interpolate position
+    p_new = self.pos_interp(t)
+    
+    # Interpolate rotation
     R_t = self.slerp([t])[0]
     q = R_t.as_quat(scalar_first=True)
 
-    return np.concatenate([p_new, q])
-
+    return np.concatenate([p_new, q])    
+    
   def step(self, t, q, env, dt=0.1):
     env.C.setJointState(q, self.joints)
     desired_pose = self._get_desired_obj_pose_at_time(t)
@@ -366,7 +469,10 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
 
         q_dot = np.linalg.pinv(jac) @ err
         q_new = q_new - 1.0 * q_dot # dt for rollout (traj discretization), not IK convergence
-    
+
+    # env.C.view(False)
+    # time.sleep(0.1)
+
     return q_new
 
   def done(self, t, q, env):
@@ -377,7 +483,9 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
 
 # basically the same thing as pose reaching, but with obstacle avoidance
 class ModelBasedInsertion(DeterministicBaseSkill):
-  def __init__(self, goal, ee_name):
+  def __init__(self, joints, goal, ee_name):
+    super().__init__(joints)
+    
     self.goal_pose = goal
     self.ee_name = ee_name
 
@@ -435,8 +543,8 @@ class ModelBasedInsertion(DeterministicBaseSkill):
     return False
 
 class Insertion(StochasticBaseSkill):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    super().__init__(joints)
 
   def step(self, q, env, dt=0.1):
     # query the policy
@@ -458,8 +566,8 @@ class DexterousGrasping(StochasticBaseSkill):
     raise NotImplementedError
 
 class Handover(DeterministicBaseSkill):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    super().__init__(joints)
 
   def step(self, q, env, dt=0.1):
     pass
@@ -471,7 +579,9 @@ class JogJoint(BaseDeterministicTimedSkill):
   """Skill for simple jogging (=moving a single joint in config space) of a joint
   at a given speed.
   """
-  def __init__(self, speed, idx, duration):
+  def __init__(self, joints, speed, idx, duration):
+    super().__init__(joints)
+    
     self.speed = speed
     self.idx = idx
     self.duration = duration
@@ -492,7 +602,9 @@ class JogJoint(BaseDeterministicTimedSkill):
 # Scrwing should actually also go down compared to just joint jogging
 # Technically based on sensor/force feedback
 class Screw(DeterministicBaseSkill):
-  def __init__(self,speed, ee_name):
+  def __init__(self, joints, speed, ee_name):
+    super().__init__(joints)
+    
     self.speed = speed
     self.ee_name = ee_name
 
@@ -508,9 +620,9 @@ class PrecomputedSkillDistribution(StochasticBaseSkill):
   """Stoachstic skill with precomputed end-distributions/precomputed trajectory distributions.
   Enables not requiring a learned/scripted function for the rollout.
   """
-  def __init__(self):
-    pass
-
+  def __init__(self, joints):
+    super().__init__(joints)
+    
   def step(self, q, env, dt=0.1):
     pass
 
@@ -520,8 +632,8 @@ class PrecomputedSkillDistribution(StochasticBaseSkill):
 # this can model bin picking form a bin where we do not care which item we take
 # could e.g. be a bin of all the same objects, and we do not care
 class StochasticBinPick(StochasticBaseSkill):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    super().__init__(joints)
 
   def step(self, q, env, dt=0.1):
     pass

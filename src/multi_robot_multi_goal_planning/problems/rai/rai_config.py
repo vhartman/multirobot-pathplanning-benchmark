@@ -3317,7 +3317,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
 
 
 def make_box_stacking_env(
-    num_robots=2, num_boxes=9, mixed_robots: bool = False, view: bool = False, make_and_return_all_keyframes: bool = False
+    num_robots=2, num_boxes=9, mixed_robots: bool = False, view: bool = False, make_and_return_all_keyframes: bool = False, skill_starts: bool = False
 ):
     assert num_boxes <= 9, "A maximum of 9 boxes are supported"
     assert num_robots <= 4, "A maximum of 4 robots are supported"
@@ -3482,20 +3482,18 @@ def make_box_stacking_env(
         # komo.addControlObjective([], 2, 1e-1)
 
         komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "gripper", box])
-        # komo.addObjective(
-        #     [1, 2],
-        #     ry.FS.distance,
-        #     [robot_prefix + "ur_gripper_center", box],
-        #     ry.OT.sos,
-        #     [1e0],
-        #     # [0.05],
-        # )
+        
+        grasp_offset = np.array([0., 0., 0.])
+        if skill_starts:
+            grasp_offset[2] = 0.2
+
         komo.addObjective(
             [1, 2],
             ry.FS.positionDiff,
             [robot_prefix + "gripper_center", box],
             ry.OT.sos,
             [1e1, 1e1, 1],
+            target=grasp_offset
         )
         komo.addObjective(
             [1, 2],
@@ -3513,48 +3511,13 @@ def make_box_stacking_env(
             [1e1],
             [1],
         )
-        # komo.addObjective(
-        #     [1, 2],
-        #     ry.FS.scalarProductZZ,
-        #     [robot_prefix + "ur_gripper", box],
-        #     ry.OT.sos,
-        #     [1e1],
-        # )
 
-        # komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", box])
-        # komo.addObjective(
-        #     [1, 2],
-        #     ry.FS.distance,
-        #     [robot_prefix + "ur_vacuum", box],
-        #     ry.OT.sos,
-        #     [1e0],
-        #     [0.05],
-        # )
-        # komo.addObjective(
-        #     [1, 2],
-        #     ry.FS.positionDiff,
-        #     [robot_prefix + "ur_vacuum", box],
-        #     ry.OT.sos,
-        #     [1e1, 1e1, 1],
-        # )
-        # komo.addObjective(
-        #     [1, 2],
-        #     ry.FS.scalarProductYZ,
-        #     [robot_prefix + "ur_ee_marker", box],
-        #     ry.OT.sos,
-        #     [1e1],
-        # )
-        # komo.addObjective(
-        #     [1, 2],
-        #     ry.FS.scalarProductZZ,
-        #     [robot_prefix + "ur_ee_marker", box],
-        #     ry.OT.sos,
-        #     [1e1],
-        # )
+        target_offset = np.array([0, 0, 0, 0, 0, 0, 0])
+        if skill_starts:
+            target_offset[2] = 0.2
 
         # for pick and place directly
-        # komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
-        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1], target=target_offset)
 
         komo.addObjective(
             times=[3, -1],
@@ -3652,7 +3615,7 @@ def make_box_stacking_env(
                     r,
                     b,
                     direct_pick_place_keyframes[r][b],
-                    goal,
+                    g,
                 )
             )
 
