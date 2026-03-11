@@ -16,6 +16,9 @@ import time
 # might also be more interesting planning wise.
 ##########
 
+# TODO:
+# - unify interface -> merge (t,q) into 'state' or somethign like that to make life easier
+
 @dataclass
 class SkillRolloutResult:
   trajectory: np.ndarray
@@ -209,6 +212,35 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
       mod_goal_pose[3:] = -mod_goal_pose[3:]
 
     [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_name], 1, mod_goal_pose)
+
+    if np.linalg.norm(err) < 1e-3:
+      return True
+
+    return False
+
+# Should probably do this for all the other pose reaching things as well
+# This can for example be used for a handover
+class RelativePoseReaching(DeterministicBaseSkill):
+  def __init__(self, frame_1_name, frame_2_name, transformation):
+    self.frame_1_name = frame_1_name
+    self.frame_2_name = frame_2_name
+    self.relative_transformation = transformation
+
+  def step(self, t, q, env):
+    env.C.setJointState(q, self.joints)
+
+    [err, jac] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
+
+    q_dot = np.linalg.pinv(jac) @ err
+
+    # integrate to get next pos
+    q_new = q - dt * q_dot
+
+    return q_new
+
+  def done(self, t, q, env):
+    env.C.setJointState(q, self.joints)
+    [err, jac] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
 
     if np.linalg.norm(err) < 1e-3:
       return True
@@ -426,7 +458,10 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
 
         q_dot = np.linalg.pinv(jac) @ err
         q_new = q_new - 1.0 * q_dot # dt for rollout (traj discretization), not IK convergence
-    
+
+    # env.C.view(False)
+    # time.sleep(0.1)
+
     return q_new
 
   def done(self, t, q, env):

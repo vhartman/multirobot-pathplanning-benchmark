@@ -500,6 +500,7 @@ class rai_multi_agent_scripted_insert(SequenceMixin, rai_multi_agent_scripted_in
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
+# TODO: add holding
 @register("rai.dep_multi_agent_scripted_insert")
 class rai_dep_multi_agent_scripted_insert(DependencyGraphMixin, rai_multi_agent_scripted_insert_base):
     def __init__(self):
@@ -542,9 +543,77 @@ class rai_multi_agent_pick_and_place(SequenceMixin, rai_env):
 
 # TODO unfinished
 # multi agent rearrangement with skills
-@register("rai.multi_agent_stacking")
+@register([
+    ("rai.skill_box_stacking", {}),
+    ("rai.skill_box_stacking_two_robots", {"num_robots": 2}),
+    ("rai.skill_box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
+    ("rai.skill_box_stacking_three_robots", {"num_robots": 3}),
+    ("rai.skill_box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
+])
 class rai_multi_agent_stacking(SequenceMixin, rai_env):
-    pass
+    def __init__(self, num_robots=4, num_boxes: int = 8):
+        self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
+            num_robots, num_boxes, skill_starts=True
+        )
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for r, b, qs, g in keyframes:
+            cnt = 0
+            for t, k in zip(task_names, qs):
+                task_name = r + t + "_" + b + "_" + str(cnt)
+                if t == "pick":
+                    ee_name = r + "gripper_center"
+                    self.tasks.append(Task("pre_" + task_name, [r], SingleGoal(k)))
+
+                    print(r)
+                    self.C.setJointState(k, self.robot_joints[r])
+                    robot_ee_pose = self.C.getFrame(ee_name).getPose()
+                    self.C.setJointState(home_pose)
+                    obj_pose = self.C.getFrame(b).getPose()
+
+                    grasp_pose = np.concatenate([obj_pose[:3], robot_ee_pose[3:]])
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b], 
+                        skill=EEPoseGoalReaching(grasp_pose, ee_name)))
+                else:
+                    self.tasks.append(Task("pre_" + task_name, [r], SingleGoal(k)))
+
+                    place_pose = self.C.getFrame(g).getPose()
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b], 
+                        skill=EEPoseGoalReaching(place_pose, b)))
+
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.01
+        # self.collision_resolution = 0.005
+        self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 # TODO unfinished
 # multi agent rearrangement with skills
@@ -892,10 +961,13 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
+# TODO: more robots, more things -> ideally programmatically
 @register("rai.multi_agent_bin_packing")
 class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, [a1_pre_pick_type_1, a1_pre_pick_type_2, a1_pre_place], [a2_pre_pick_type_1, a2_pre_pick_type_2, a2_pre_place] = rai_config.make_multi_agent_bin_packing_env()
+        self.C, \
+            [a1_pre_pick_type_1, a1_pre_pick_type_2, a1_pre_place], \
+            [a2_pre_pick_type_1, a2_pre_pick_type_2, a2_pre_place] = rai_config.make_multi_agent_bin_packing_env()
         self.C.view(True)
 
         self.robots = ["a1", "a2"]
