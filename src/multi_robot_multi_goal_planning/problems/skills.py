@@ -29,8 +29,8 @@ class SkillRolloutResult:
 
 # abstract class for skills. 
 class DeterministicBaseSkill(ABC):
-  def __init__(self):
-    self.joints = None # Store joint names when passed by planner
+  def __init__(self, joints):
+    self.joints = joints # Store joint names when passed by planner
     pass
 
   @abstractmethod
@@ -67,8 +67,8 @@ class DeterministicBaseSkill(ABC):
 
 # abstract class for stochastic skills.
 class StochasticBaseSkill(ABC):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    self.joints = joints
 
   @abstractmethod
   def step(self, q, env):
@@ -80,9 +80,8 @@ class StochasticBaseSkill(ABC):
 
 # abstract class for deterministic timed skills.
 class BaseDeterministicTimedSkill(ABC):
-  def __init__(self):
-    self.joints = None
-    pass
+  def __init__(self, joints):
+    self.joints = joints
 
   # TODO: should likely simply merge q and t to 'state'
   @abstractmethod
@@ -120,8 +119,8 @@ class BaseDeterministicTimedSkill(ABC):
 
 # abstract class for stochastic timed skills.
 class BaseStochasticTimedSkill(ABC):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    self.joints = joints
 
   @abstractmethod
   def step(self, q, t, env):
@@ -132,7 +131,9 @@ class BaseStochasticTimedSkill(ABC):
     pass
 
 class EEPositionGoalReaching(DeterministicBaseSkill):
-  def __init__(self, goal, ee_name):
+  def __init__(self, joints, goal, ee_name):
+    super().__init__(joints)
+
     self.goal_position = goal
     self.ee_name = ee_name
 
@@ -161,7 +162,9 @@ class EEPositionGoalReaching(DeterministicBaseSkill):
 
 # simple pid controller
 class EEPoseGoalReaching(DeterministicBaseSkill):
-  def __init__(self, goal, ee_name):
+  def __init__(self, joints, goal, ee_name):
+    super().__init__(joints)
+    
     self.goal_pose = goal
     self.ee_name = ee_name
 
@@ -221,7 +224,9 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
 # Should probably do this for all the other pose reaching things as well
 # This can for example be used for a handover
 class RelativePoseReaching(DeterministicBaseSkill):
-  def __init__(self, frame_1_name, frame_2_name, transformation):
+  def __init__(self, joints, frame_1_name, frame_2_name, transformation):
+    super().__init__(joints)
+    
     self.frame_1_name = frame_1_name
     self.frame_2_name = frame_2_name
     self.relative_transformation = transformation
@@ -250,8 +255,9 @@ class RelativePoseReaching(DeterministicBaseSkill):
 # question: can the mode be changed in a skill?
 # or does it need to be two skills?
 class VacuumGrasping(BaseDeterministicTimedSkill):
-  def __init__(self, box_pos):
-    pass
+  def __init__(self, joints, box_pos):
+    super().__init__(joints)
+
 
   def step(self, t, q, env):
     raise NotImplementedError
@@ -260,7 +266,9 @@ class VacuumGrasping(BaseDeterministicTimedSkill):
     raise NotImplementedError
 
 class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
-  def __init__(self, ee_name, poses, times=None):
+  def __init__(self, joints, ee_name, poses, times=None):
+    super().__init__(joints)
+    
     self.line_start_pos = line_start_pos
     self.line_goal_pos = line_goal_pos
 
@@ -323,7 +331,8 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
     return False
 
 class EndEffectorPositionFollowing(BaseDeterministicTimedSkill):
-  def __init__(self, ee_name, positions, times=None):
+  def __init__(self, joints, ee_name, positions, times=None):
+    super().__init__(joints)
 
     self.duration = 1
 
@@ -406,7 +415,9 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
   """Skill for a given object trajectory, where the robots end effectors keep a constant 
   transformation to the object.
   """
-  def __init__(self, ee_names, transformations, poses, times=None):
+  def __init__(self, joints, ee_names, transformations, poses, times=None):
+    super().__init__(joints)
+    
     self.duration = 1
     self.max_num_ik_iters = 100
 
@@ -472,7 +483,9 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
 
 # basically the same thing as pose reaching, but with obstacle avoidance
 class ModelBasedInsertion(DeterministicBaseSkill):
-  def __init__(self, goal, ee_name):
+  def __init__(self, joints, goal, ee_name):
+    super().__init__(joints)
+    
     self.goal_pose = goal
     self.ee_name = ee_name
 
@@ -530,8 +543,8 @@ class ModelBasedInsertion(DeterministicBaseSkill):
     return False
 
 class Insertion(StochasticBaseSkill):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    super().__init__(joints)
 
   def step(self, q, env, dt=0.1):
     # query the policy
@@ -553,8 +566,8 @@ class DexterousGrasping(StochasticBaseSkill):
     raise NotImplementedError
 
 class Handover(DeterministicBaseSkill):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    super().__init__(joints)
 
   def step(self, q, env, dt=0.1):
     pass
@@ -566,7 +579,9 @@ class JogJoint(BaseDeterministicTimedSkill):
   """Skill for simple jogging (=moving a single joint in config space) of a joint
   at a given speed.
   """
-  def __init__(self, speed, idx, duration):
+  def __init__(self, joints, speed, idx, duration):
+    super().__init__(joints)
+    
     self.speed = speed
     self.idx = idx
     self.duration = duration
@@ -587,7 +602,9 @@ class JogJoint(BaseDeterministicTimedSkill):
 # Scrwing should actually also go down compared to just joint jogging
 # Technically based on sensor/force feedback
 class Screw(DeterministicBaseSkill):
-  def __init__(self,speed, ee_name):
+  def __init__(self, joints, speed, ee_name):
+    super().__init__(joints)
+    
     self.speed = speed
     self.ee_name = ee_name
 
@@ -603,9 +620,9 @@ class PrecomputedSkillDistribution(StochasticBaseSkill):
   """Stoachstic skill with precomputed end-distributions/precomputed trajectory distributions.
   Enables not requiring a learned/scripted function for the rollout.
   """
-  def __init__(self):
-    pass
-
+  def __init__(self, joints):
+    super().__init__(joints)
+    
   def step(self, q, env, dt=0.1):
     pass
 
@@ -615,8 +632,8 @@ class PrecomputedSkillDistribution(StochasticBaseSkill):
 # this can model bin picking form a bin where we do not care which item we take
 # could e.g. be a bin of all the same objects, and we do not care
 class StochasticBinPick(StochasticBaseSkill):
-  def __init__(self):
-    pass
+  def __init__(self, joints):
+    super().__init__(joints)
 
   def step(self, q, env, dt=0.1):
     pass

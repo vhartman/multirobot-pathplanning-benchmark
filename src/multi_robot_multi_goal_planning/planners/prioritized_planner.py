@@ -1959,11 +1959,6 @@ class PrioritizedPlanner(BasePlanner):
         conf_type = type(env.get_start_pos()) 
         q_init = conf_type.from_list(start_pose).state() # Only involved robots
 
-        # Collect joints of involved robots (q_subset for skills)
-        task.skill.joints = []
-        for r in task.robots:
-            task.skill.joints.extend(env.robot_joints[r])
-        
         # Collect all joints (q_full)
         all_joints = []
         for r in env.robots:
