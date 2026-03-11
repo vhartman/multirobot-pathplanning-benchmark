@@ -139,7 +139,11 @@ class MultimodalGraph:
         for k, v in self.transition_nodes.items():
             num_transition_samples += len(v)
 
-        return num_samples + num_transition_samples
+        num_skill_chain_nodes = 0
+        for k, v in self.skill_chain_nodes.items():
+            num_skill_chain_nodes += len(v)
+
+        return num_samples + num_transition_samples + num_skill_chain_nodes
 
     def get_num_samples_in_mode(self, mode: Mode) -> int:
         num_samples = 0
