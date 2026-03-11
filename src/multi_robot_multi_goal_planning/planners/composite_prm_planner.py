@@ -362,7 +362,12 @@ class CompositePRM(BasePlanner):
             composite_traj.append(full_q)
 
         # 4. Collision check 
-        # TODO
+        # TODO only waypoint check for now. 
+        for step_idx in range(len(composite_traj)):
+            q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
+            if not self.env.is_collision_free(q_check, mode):
+                self.env.C.view(True)
+                return False, None
             
         # DEBUG
         dist_moved = np.linalg.norm(composite_traj[0] - composite_traj[-1])
@@ -388,6 +393,13 @@ class CompositePRM(BasePlanner):
         # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
         return True, valid_next_modes
         
+    def _mode_has_skill(self, mode: Mode) -> bool:
+        """Check if any robot's task in this mode has a skill"""
+        for task_id in mode.task_ids:
+            if task_id is not None and getattr(self.env.tasks[task_id], 'skill', None) is not None:
+                return True
+        return False
+
     # TODO:
     # - Introduce mode_subset_to_sample
     # - Fix function below:
@@ -497,7 +509,9 @@ class CompositePRM(BasePlanner):
                 else:
                     failed_attemps += 1
                     
-                continue # Skip the normal random geometric sampling (for now..)
+                # Skip the normal random geometric sampling for this iteration
+                # That way skill modes get exactly 1 skill-based transition and 0 geometric transitions
+                continue 
 
             # TODO (Liam) rest unchanged
             # Step 2: sample a transition configuration in that mode
@@ -752,13 +766,14 @@ class CompositePRM(BasePlanner):
             return None # Early exit
 
         # Step 5: informed refinement (biased towards informed set around best path -> ellipsoid)
+        # BUT filter modes first (no informed sampling in skill modes -> should only contain skill transitions and skill nodes) # TODO check if my reasoning is correct
+        non_skill_modes = [m for m in reached_modes if not self._mode_has_skill(m)]
+        
         if (
-            current_best_cost is not None 
-            and current_best_path is not None # If we have a path
-            and (
-                self.config.try_informed_sampling
-                or self.config.try_informed_transitions
-            )
+            current_best_cost is not None and
+            current_best_path is not None and # If we have a path
+            (self.config.try_informed_sampling or self.config.try_informed_transitions) and
+            non_skill_modes
         ):
             # Interpolate the current best path
             interpolated_path = interpolate_path(current_best_path)
@@ -767,7 +782,7 @@ class CompositePRM(BasePlanner):
             if self.config.try_informed_sampling:
                 print("Generating informed samples")
                 new_informed_states = informed_sampler.generate_samples(
-                    list(reached_modes),
+                    non_skill_modes, #list(reached_modes),
                     self.config.informed_batch_size,
                     interpolated_path,
                     try_direct_sampling=self.config.try_direct_informed_sampling,
@@ -782,7 +797,7 @@ class CompositePRM(BasePlanner):
             if self.config.try_informed_transitions:
                 print("Generating informed transitions")
                 new_informed_transitions = informed_sampler.generate_transitions(
-                    list(reached_modes),
+                    non_skill_modes, #list(reached_modes),
                     self.config.informed_transition_batch_size,
                     interpolated_path,
                     g=g,
