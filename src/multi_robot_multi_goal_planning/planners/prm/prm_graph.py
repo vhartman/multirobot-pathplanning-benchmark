@@ -127,6 +127,9 @@ class MultimodalGraph:
         self.transition_node_lb_cache = {}
         self.rev_transition_node_lb_cache = {}
 
+        # TODO (Liam) NEW 
+        self.skill_chain_nodes: Dict[Mode, List[Node]] = {} # Step>=1 skill nodes excluded from k-nearest
+
     def get_num_samples(self) -> int:
         num_samples = 0
         for k, v in self.nodes.items():
@@ -144,6 +147,9 @@ class MultimodalGraph:
             num_samples += len(self.nodes[mode])
         if mode in self.transition_nodes:
             num_samples += len(self.transition_nodes[mode])
+        # TODO (Liam) new
+        if mode in self.skill_chain_nodes:
+            num_samples += len(self.skill_chain_nodes[mode])
         return num_samples
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
@@ -407,8 +413,15 @@ class MultimodalGraph:
             n.is_skill_waypoint = True
             n.skill_step = i
             skill_nodes.append(n)
-            
-        self.add_nodes(skill_nodes)
+
+        # Only step-0 goes into self.nodes (visible to k-nearest)
+        self.add_nodes(skill_nodes[0])
+
+        # Step 1+ go into separate storage (not visible to k-nearest)
+        for n in skill_nodes[1:]:
+            if n.state.mode not in self.skill_chain_nodes:
+                self.skill_chain_nodes[n.state.mode] = []
+            self.skill_chain_nodes[n.state.mode].append(n)
         
         # 2. Add the final step as a transition node to the graph
         last_state = states[-1]
