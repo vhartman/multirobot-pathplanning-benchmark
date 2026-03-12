@@ -451,6 +451,7 @@ class InformedSampling:
                 path_segment_costs_cumsum = np.cumsum(path_segment_costs)
 
                 for _ in range(500):
+                    # 1. Picks two random points on the path
                     start_ind = random.randint(0, len(path) - 1)
                     end_ind = random.randint(0, len(path) - 1)
 
@@ -474,6 +475,7 @@ class InformedSampling:
                     path[start_ind].mode,
                     path[end_ind].mode,
                 ) not in in_between_mode_cache:
+                    # 2. Generates a list of all modes that exist between the two randomly picked points 
                     in_between_modes = self.get_inbetween_modes(
                         path[start_ind].mode, path[end_ind].mode
                     )
@@ -495,6 +497,8 @@ class InformedSampling:
                     )[0]
 
                 else:
+                    # 3. Randomly picks a mode from newly generated list of modes (in_between_mode_cache) 
+                    # Completely IGNORES the reached_modes!!!
                     m = random.choice(
                         in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
                     )
@@ -502,10 +506,16 @@ class InformedSampling:
                 # k = random.randint(start_ind, end_ind)
                 # m = path[k].mode
             else:
+                # 4. ONLY HERE the filtered non_skill_modes list is used (if locally_informed_sampling is False)
                 start_ind = 0
                 end_ind = len(path) - 1
                 m = self.sample_mode(reached_modes=reached_modes)
+
             if self.planning_approach == "sampling_based" and active_mode != m:
+                continue
+
+            if m not in reached_modes: # reached_modes = not_skill_modes in this case
+                num_attempts -= 1 # Don't waste an attempt budget on a rejected mode
                 continue
 
             # print(m)
@@ -771,6 +781,7 @@ class InformedSampling:
                 while True:
                     num_idx_attempts += 1
 
+                    # 1. Picks two random points on the path
                     start_ind = random.randint(0, len(path) - 1)
                     end_ind = random.randint(0, len(path) - 1)
                     
@@ -800,6 +811,7 @@ class InformedSampling:
                     path[start_ind].mode,
                     path[end_ind].mode,
                 ) not in in_between_mode_cache:
+                    # 2. Generates a list of all modes that exist between the two randomly picked points
                     in_between_modes = self.get_inbetween_modes(
                         path[start_ind].mode, path[end_ind].mode
                     )
@@ -809,6 +821,8 @@ class InformedSampling:
 
                 # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
 
+                # 3. Randomly picks a mode from newly generated list of modes (in_between_mode_cache) 
+                # Completely IGNORES the reached_modes!!!
                 mode = random.choice(
                     in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
                 )
@@ -816,10 +830,16 @@ class InformedSampling:
                 # k = random.randint(start_ind, end_ind)
                 # mode = path[k].mode
             else:
+                # 4. ONLY HERE the filtered non_skill_modes list is used (if locally_informed_sampling is False)
                 start_ind = 0
                 end_ind = len(path) - 1
                 mode = self.sample_mode(reached_modes=reached_modes)
+
             if self.planning_approach == "sampling_based" and active_mode != mode:
+                continue
+
+            if mode not in reached_modes: # reached_modes = not_skill_modes in this case
+                num_attempts -= 1  # Don't waste an attempt budget
                 continue
 
             # print(m)
