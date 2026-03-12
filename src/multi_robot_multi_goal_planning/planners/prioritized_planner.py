@@ -2312,7 +2312,7 @@ class PrioritizedPlanner(BasePlanner):
                 path = []
 
                 T = robot_paths.get_final_time() # Total makespan of the plan
-                N = 5 * int(np.ceil(T)) # Sample plan at N evenly spaced time points (uniform)
+                N = 50 * int(np.ceil(T)) # Sample plan at N evenly spaced time points (uniform)
 
                 # At each sample time, query configs and current modes from robot_paths
                 for i in range(N):
