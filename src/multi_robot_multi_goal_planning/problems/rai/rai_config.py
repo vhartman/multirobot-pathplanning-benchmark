@@ -3905,7 +3905,7 @@ def make_pyramid_env(
     return C, keyframes, all_robots
 
 
-def make_handover_env(view: bool = False):
+def make_handover_env(skill:bool = False, view: bool = False):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -3962,93 +3962,191 @@ def make_handover_env(view: bool = False):
         C.view(True)
 
     qHome = C.getJointState()
+    qHome[0] = -1
+    qHome[6] = -1
+    C.setJointState(qHome)
+
+    qHome = C.getJointState()
     box = "obj1"
 
-    komo = ry.KOMO(C, phases=4, slicesPerPhase=1, kOrder=1, enableCollisions=True)
-    # komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0])
-    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0])
+    if skill:
+        komo = ry.KOMO(C, phases=5, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        # komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0])
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0])
 
-    komo.addControlObjective([], 0, 1e-1)
-    # komo.addControlObjective([], 1, 1e-1)
-    # komo.addControlObjective([], 2, 1e-1)
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
 
-    komo.addModeSwitch([1, 2], ry.SY.stable, ["a1_" + "ur_vacuum", box])
-    komo.addObjective(
-        [1, 2], ry.FS.distance, ["a1_" + "ur_vacuum", box], ry.OT.sos, [1e1], [0.01]
-    )
-    komo.addObjective(
-        [1, 2],
-        ry.FS.distance,
-        ["a1_" + "ur_vacuum", box],
-        ry.OT.ineq,
-        [-1e0],
-        [0.00],
-    )
-    komo.addObjective(
-        [1, 2],
-        ry.FS.positionDiff,
-        ["a1_" + "ur_vacuum", box],
-        ry.OT.sos,
-        [1e1, 1e1, 0],
-    )
-    komo.addObjective(
-        [1, 2],
-        ry.FS.scalarProductXZ,
-        ["a1_" + "ur_ee_marker", "table"],
-        ry.OT.sos,
-        [2e1],
-        [-1],
-    )
+        komo.addModeSwitch([1, 3], ry.SY.stable, ["a1_" + "ur_vacuum", box])
+        komo.addObjective(
+            [1, 3], ry.FS.distance, ["a1_" + "ur_vacuum", box], ry.OT.sos, [1e1], [0.01]
+        )
+        komo.addObjective(
+            [1, 3],
+            ry.FS.distance,
+            ["a1_" + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.00],
+        )
+        komo.addObjective(
+            [1, 3],
+            ry.FS.positionDiff,
+            ["a1_" + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 0],
+            [-0.05, 0.05, 0]
+        )
+        komo.addObjective(
+            [1, 3],
+            ry.FS.scalarProductXZ,
+            ["a1_" + "ur_ee_marker", "table"],
+            ry.OT.sos,
+            [2e1],
+            [-1],
+        )
 
-    komo.addModeSwitch([2, 3], ry.SY.stable, ["a2_" + "ur_vacuum", box])
-    komo.addObjective(
-        [2, 3], ry.FS.distance, ["a2_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.0]
-    )
+        komo.addObjective(
+            [2], ry.FS.distance, ["a2_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.05]
+        )
 
-    komo.addObjective(
-        [2,3],
-        ry.FS.distance,
-        ["a2_" + "ur_vacuum", box],
-        ry.OT.ineq,
-        [-1e0],
-        [0.00],
-    )
-    komo.addObjective(
-        [2,3],
-        ry.FS.positionDiff,
-        ["a2_" + "ur_vacuum", box],
-        ry.OT.sos,
-        [1e1, 1e1, 0],
-    )
-    komo.addObjective(
-        [2,3],
-        ry.FS.scalarProductXZ,
-        ["a2_" + "ur_ee_marker", "table"],
-        ry.OT.sos,
-        [2e1],
-        [-1],
-    )
+        komo.addModeSwitch([3, 4], ry.SY.stable, ["a2_" + "ur_vacuum", box])
+        komo.addObjective(
+            [3, 4], ry.FS.distance, ["a2_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.0]
+        )
 
-    komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
-    komo.addObjective([3, -1], ry.FS.poseDiff, ["goal1", box], ry.OT.eq, [1e1])
+        komo.addObjective(
+            [3,4],
+            ry.FS.distance,
+            ["a2_" + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.00],
+        )
+        komo.addObjective(
+            [3,4],
+            ry.FS.positionDiff,
+            ["a2_" + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 0],
+            [0.05, -0.05, 0]
+        )
+        komo.addObjective(
+            [3,4],
+            ry.FS.scalarProductXZ,
+            ["a2_" + "ur_ee_marker", "table"],
+            ry.OT.sos,
+            [2e1],
+            [-1],
+        )
 
-    komo.addObjective(
-        times=[4],
-        feature=ry.FS.jointState,
-        frames=[],
-        type=ry.OT.eq,
-        scale=[1e0],
-        target=qHome,
-    )
+        komo.addModeSwitch([4, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([4, -1], ry.FS.poseDiff, ["goal1", box], ry.OT.eq, [1e1])
 
-    komo.addObjective(
-        times=[0, 4],
-        feature=ry.FS.jointState,
-        frames=[],
-        type=ry.OT.sos,
-        scale=[1e0],
-        target=qHome,
-    )
+        komo.addObjective(
+            times=[5],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=qHome,
+        )
+
+        komo.addObjective(
+            times=[0, 5],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e0],
+            target=qHome,
+        )
+    else:
+        komo = ry.KOMO(C, phases=4, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        # komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0])
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0])
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, ["a1_" + "ur_vacuum", box])
+        komo.addObjective(
+            [1, 2], ry.FS.distance, ["a1_" + "ur_vacuum", box], ry.OT.sos, [1e1], [0.01]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.distance,
+            ["a1_" + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.00],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            ["a1_" + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 0],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            ["a1_" + "ur_ee_marker", "table"],
+            ry.OT.sos,
+            [2e1],
+            [-1],
+        )
+
+        komo.addModeSwitch([2, 3], ry.SY.stable, ["a2_" + "ur_vacuum", box])
+        komo.addObjective(
+            [2, 3], ry.FS.distance, ["a2_" + "ur_vacuum", box], ry.OT.sos, [1e1], [-0.0]
+        )
+
+        komo.addObjective(
+            [2,3],
+            ry.FS.distance,
+            ["a2_" + "ur_vacuum", box],
+            ry.OT.ineq,
+            [-1e0],
+            [0.00],
+        )
+        komo.addObjective(
+            [2,3],
+            ry.FS.positionDiff,
+            ["a2_" + "ur_vacuum", box],
+            ry.OT.sos,
+            [1e1, 1e1, 0],
+        )
+        komo.addObjective(
+            [2,3],
+            ry.FS.scalarProductXZ,
+            ["a2_" + "ur_ee_marker", "table"],
+            ry.OT.sos,
+            [2e1],
+            [-1],
+        )
+
+        komo.addModeSwitch([3, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([3, -1], ry.FS.poseDiff, ["goal1", box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[4],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=qHome,
+        )
+
+        komo.addObjective(
+            times=[0, 4],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e0],
+            target=qHome,
+        )
 
     keyframes = solve_komo_problem(komo, 100, C, view, 3, -1.5)
 
