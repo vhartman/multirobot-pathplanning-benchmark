@@ -37,7 +37,6 @@ class Node:
         "blacklist",
         "id",
         # TODO (Liam) NEW
-        "is_skill_waypoint", 
         "skill_step"
     ]
 
@@ -70,7 +69,6 @@ class Node:
         Node.id_counter += 1
 
         # TODO (Liam) NEW 
-        self.is_skill_waypoint = False
         self.skill_step = -1
 
     def __lt__(self, other: "Node") -> bool:
@@ -413,8 +411,8 @@ class MultimodalGraph:
         
         # 1. Protect intermediate nodes and add them to the graph
         for i, s in enumerate(states[:-1]):
+            s.is_skill_waypoint = True
             n = Node(s)
-            n.is_skill_waypoint = True
             n.skill_step = i
             skill_nodes.append(n)
 
@@ -433,7 +431,7 @@ class MultimodalGraph:
         
         # 3. Protect the newly created transition node
         trans_node = self.transition_nodes[last_state.mode][-1]
-        trans_node.is_skill_waypoint = True
+        trans_node.state.is_skill_waypoint = True
         trans_node.skill_step = len(states) - 1
         skill_nodes.append(trans_node)
 
@@ -466,7 +464,7 @@ class MultimodalGraph:
         """
         # TODO (Liam) new
         # Skill waypoints bypass search entirely (use only chain neighbors set in add_skill_path)
-        if node.is_skill_waypoint and node.neighbors:
+        if node.state.is_skill_waypoint and node.neighbors:
             arr = np.array([n.state.q.q for n in node.neighbors], dtype=np.float64)
             return node.neighbors, arr
 
@@ -809,12 +807,13 @@ class MultimodalGraph:
                     continue
 
                 # TODO (Liam) new
-                # Avoid A* jumping into step-k!=0 of skill traj 
-                is_n1_skill = getattr(n1, 'is_skill_waypoint', False)
-                is_n_skill = getattr(n, 'is_skill_waypoint', False)
+                # Avoid A* jumping into middle or end of a skill traj 
+                is_n1_skill = n1.state.is_skill_waypoint
+                is_n_skill = n.state.is_skill_waypoint
 
                 if is_n_skill and not is_n1_skill:
-                    if n.skill_step != 0:
+                    # Normal nodes can only connect to start (step-0) of a skill chain
+                    if n.skill_step != 0: 
                         continue
                 
                 # TODO (Liam) rest unchanged           

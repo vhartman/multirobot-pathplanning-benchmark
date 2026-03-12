@@ -193,13 +193,19 @@ class State:
 
     q: Configuration
     mode: Mode
+    is_skill_waypoint: bool
 
-    def __init__(self, q: Configuration, m: Mode):
+    def __init__(self, q: Configuration, m: Mode, is_skill_waypoint: bool = False):
         self.q = q
         self.mode = m
+        self.is_skill_waypoint = is_skill_waypoint
 
     def to_dict(self):
-        return {"q": self.q.state().tolist(), "mode": self.mode.task_ids}
+        return {
+            "q": self.q.state().tolist(), 
+            "mode": self.mode.task_ids,
+            "is_skill_waypoint": self.is_skill_waypoint
+        }
 
 
 def state_dist(start: State, end: State) -> float:
