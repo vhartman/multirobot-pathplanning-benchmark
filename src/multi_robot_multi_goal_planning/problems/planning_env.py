@@ -31,6 +31,12 @@ from itertools import product
 
 from dataclasses import dataclass
 
+# TODO: 
+# - I want to enable 'conservative' modes, i.e. merging some modes
+#   that have reasonably similar collision properties.
+#   This would enable simplifying e.g. planning with a hand + skills
+#   where a robot might grasp things slightly different, but that can 
+#   still be treated as roughly the same.
 
 @cache
 def generate_binary_search_indices(N: int):

@@ -56,6 +56,11 @@ from ..registry import register
 # Debugging/testing envs: single agent
 ############
 
+# TODO: 
+# - make setting with goal region from which we start skill rather than
+#   goal pose -> the controllers induce a funnel from which these skills
+#   are possible to run.
+
 @register("rai.single_agent_screw")
 class rai_single_agent_screw(SequenceMixin, rai_env):
     def __init__(self):
