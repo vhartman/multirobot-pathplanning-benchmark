@@ -203,7 +203,8 @@ class CompositePRM(BasePlanner):
         self, 
         graph: MultimodalGraph, 
         batch_size: int, 
-        cost: float | None
+        cost: float | None,
+        non_skill_modes: List[Mode] | None = None,
     ) -> Tuple[List[State], int]:
         """
         Generate batch of collision-free free-space configurations (general roadmap nodes),
@@ -235,7 +236,8 @@ class CompositePRM(BasePlanner):
 
             # Step 1: sample mode
             m = self._sample_mode(
-                self.sorted_reached_modes,
+                non_skill_modes if non_skill_modes is not None else self.sorted_reached_modes,
+                # self.sorted_reached_modes, 
                 graph,
                 self.config.mode_sampling_type,
                 cost is not None,
@@ -385,8 +387,8 @@ class CompositePRM(BasePlanner):
             if not valid_next_modes:
                 return False, None 
 
-        # 5. Convert to PRM States and add nodes to graph
-        states = [State(self.env.start_pos.from_flat(q), mode) for q in composite_traj]
+        # 5. Convert to PRM States, mark them as skill waypoints and add to graph
+        states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
         g.add_skill_path(entry_node, states, valid_next_modes)
         
         # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
@@ -493,7 +495,7 @@ class CompositePRM(BasePlanner):
                 # Skip rollout if there already is a skill trajectory for this mode
                 existing_skill_nodes = [
                     n for n in g.nodes.get(mode, [])
-                    if getattr(n, 'is_skill_waypoint', False) and n.skill_step == 0
+                    if n.state.is_skill_waypoint and n.skill_step == 0
                 ]
                 if len(existing_skill_nodes) >= 1:
                     failed_attemps += 1
@@ -685,7 +687,7 @@ class CompositePRM(BasePlanner):
             original_count = len(g.nodes[mode])
             g.nodes[mode] = [
                 n for n in g.nodes[mode]
-                if getattr(n, "is_skill_waypoint", False) or
+                if n.state.is_skill_waypoint or
                     sum(self.env.batch_config_cost(n.state.q, focal_points)) <= current_best_cost
             ]
             num_pts_for_removal += original_count - len(g.nodes[mode])
@@ -695,7 +697,7 @@ class CompositePRM(BasePlanner):
             original_count = len(g.transition_nodes[mode])
             g.transition_nodes[mode] = [
                 n for n in g.transition_nodes[mode]
-                if getattr(n, "is_skill_waypoint", False) or
+                if n.state.is_skill_waypoint or
                     sum(self.env.batch_config_cost(n.state.q, focal_points)) <= current_best_cost
             ]
             num_pts_for_removal += original_count - len(g.transition_nodes[mode])
@@ -705,7 +707,7 @@ class CompositePRM(BasePlanner):
             original_count = len(g.reverse_transition_nodes[mode])
             g.reverse_transition_nodes[mode] = [
                 n for n in g.reverse_transition_nodes[mode]
-                if getattr(n, "is_skill_waypoint", False) or 
+                if n.state.is_skill_waypoint or 
                     sum(self.env.batch_config_cost(n.state.q, focal_points)) <= current_best_cost
             ]
 
@@ -744,12 +746,16 @@ class CompositePRM(BasePlanner):
             reached_modes=reached_modes,
         )
 
+        # Filter modes (no uniform & informed sampling in skill modes -> should only contain skill transitions and skill nodes!) # TODO check if my reasoning is correct
+        non_skill_modes = [m for m in reached_modes if not self._mode_has_skill(m)]
+
         # Step 3: add regular nodes (not transitions) within modes
         print("Sampling uniform")
         new_states, required_attempts_this_batch = self._sample_valid_uniform_batch(
             g,
             batch_size=effective_uniform_batch_size,
             cost=current_best_cost,
+            non_skill_modes=non_skill_modes,
         )
 
         g.add_states(new_states) # Adding new valid samples (regular nodes) to graph
@@ -766,9 +772,6 @@ class CompositePRM(BasePlanner):
             return None # Early exit
 
         # Step 5: informed refinement (biased towards informed set around best path -> ellipsoid)
-        # BUT filter modes first (no informed sampling in skill modes -> should only contain skill transitions and skill nodes) # TODO check if my reasoning is correct
-        non_skill_modes = [m for m in reached_modes if not self._mode_has_skill(m)]
-        
         if (
             current_best_cost is not None and
             current_best_path is not None and # If we have a path
@@ -788,6 +791,9 @@ class CompositePRM(BasePlanner):
                     try_direct_sampling=self.config.try_direct_informed_sampling,
                     g=g,
                 )
+                # new_informed_states = [ # TODO (Liam) remove -> taken care of in sampling_informed.py
+                #     s for s in new_informed_states if not self._mode_has_skill(s.mode)
+                # ]
                 # Add those informed new states to the graph 
                 g.add_states(new_informed_states)
 
@@ -802,6 +808,9 @@ class CompositePRM(BasePlanner):
                     interpolated_path,
                     g=g,
                 )
+                # new_informed_transitions = [ # TODO (Liam) remove -> taken care of in sampling_informed.py
+                #     (q, m, nm) for q, m, nm in new_informed_transitions if not self._mode_has_skill(m)
+                # ]
                 # Add those informed new transition nodes to the graph
                 g.add_transition_nodes(new_informed_transitions)
                 print(f"Adding {len(new_informed_transitions)} informed transitions")
@@ -904,6 +913,24 @@ class CompositePRM(BasePlanner):
 
             # PART 2: GRAPH SEARCH (search over nodes)
             while True:
+
+                # # TODO (Liam) DEBUG remove later -> print skill mode contents before every search
+                # for m in reached_modes:
+                #     if self._mode_has_skill(m):
+                #         nodes_in_mode = graph.nodes.get(m, [])
+                #         trans_in_mode = graph.transition_nodes.get(m, [])
+                #         rev_trans_in_mode = graph.reverse_transition_nodes.get(m, [])
+                #         skill_chain = graph.skill_chain_nodes.get(m, [])
+                #         non_skill_trans = [n for n in trans_in_mode if not n.state.is_skill_waypoint]
+                #         non_skill_nodes = [n for n in nodes_in_mode if not n.state.is_skill_waypoint]
+                #         print()
+                #         print(f"[DEBUG GRAPH] Skill mode {m.id}:")
+                #         print(f"Nodes: {len(nodes_in_mode)} (non-skill: {len(non_skill_nodes)})")
+                #         print(f"Transition_nodes: {len(trans_in_mode)} (non-skill: {len(non_skill_trans)})")
+                #         print(f"Reverse_transition_nodes: {len(rev_trans_in_mode)}")
+                #         print(f"Skill_chain_nodes: {len(skill_chain)}")
+                #         print()
+
                 # Search: A* from root to goal nodes to get candidate path
                 # Too expensive to check every single edge.. 
                 sparsely_checked_path = graph.search(
@@ -993,10 +1020,11 @@ class CompositePRM(BasePlanner):
                                     interpolation_resolution=self.config.shortcutting_interpolation_resolution,
                                 )
 
-                                # Remove interpolated points (just used for collision check)
-                                shortcut_path = shortcutting.remove_interpolated_nodes(
-                                    shortcut_path
-                                )
+                                # TODO (Liam) remove later -> check but the shortcutter already handles this internally
+                                # # Remove interpolated points (just used for collision check)
+                                # shortcut_path = shortcutting.remove_interpolated_nodes(
+                                #     shortcut_path
+                                # )
 
                                 shortcut_path_cost = path_cost(
                                     shortcut_path, self.env.batch_config_cost
@@ -1017,8 +1045,17 @@ class CompositePRM(BasePlanner):
 
                                     # Check shortcutted path (mode changes?)
                                     # Add path to graph
+                                    debug_skipped_skills = 0
+                                    debug_added_regular = 0
+                                    debug_added_trans = 0
+
                                     for i in range(len(interpolated_path)):
                                         s = interpolated_path[i]
+
+                                        if self._mode_has_skill(s.mode): # Avoid skill-mode states from being re-added to graph
+                                            debug_skipped_skills += 1
+                                            continue
+
                                         if not self.env.is_collision_free(s.q, s.mode):
                                             continue
 
@@ -1029,10 +1066,14 @@ class CompositePRM(BasePlanner):
                                         ):
                                             # Mode CHANGES -> add as transition
                                             graph.add_transition_nodes([(s.q, s.mode, [interpolated_path[i + 1].mode])])
+                                            debug_added_trans += 1
                                             pass
                                         else:
                                             # Mode SAME -> add as regular node
+                                            debug_added_regular += 1
                                             graph.add_states([s])
+
+                                    print(f"[DEBUG SHORTCUTTER] Graph updated! Skipped {debug_skipped_skills} skill waypoints. Added {debug_added_regular} regular nodes and {debug_added_trans} transition nodes.")
 
                         add_new_batch = True # To add more samples in next iteration
                         break # Exit inner loop

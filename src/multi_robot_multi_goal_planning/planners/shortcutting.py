@@ -267,8 +267,11 @@ def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]
             continue
         lam = np.dot(AB, AC) / np.dot(AC, AC)
 
+        # Preserve skill waypoints
+        is_skill = B.is_skill_waypoint
+
         # Check if AB is collinear to AC (AB = lambda * AC)
-        if np.linalg.norm(AB - lam * AC) > tolerance or A.mode != C.mode or B.is_skill_waypoint:
+        if np.linalg.norm(AB - lam * AC) > tolerance or A.mode != C.mode or is_skill: 
             simplified_path.append(B)
 
     simplified_path.append(path[-1])
