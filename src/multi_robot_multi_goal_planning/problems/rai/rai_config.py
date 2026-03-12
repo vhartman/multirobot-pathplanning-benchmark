@@ -7969,7 +7969,7 @@ def make_ur10_screwing_env(view: bool = False):
     return C, all_robots, [pick_pose, pre_screw_pose]
 
 
-def make_single_agent_drawing(view: bool = False):
+def make_single_agent_drawing(target_positions, view: bool = False):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -8061,10 +8061,17 @@ def make_single_agent_drawing(view: bool = False):
         keyframes = solve_komo_problem(komo, 20, c_tmp, False, 3, -1.5)
         return keyframes[0, :]
 
-    drawing_start_pos = compute_ik("a1_", [-0.5, 0, 0.1])
-    drawing_end_pos = compute_ik("a1_", [0.5, 0, 0.1])
+    joint_keyframes = []
+    current_q = None
 
-    return C, [drawing_start_pos, drawing_end_pos]
+    for pos in target_positions:
+        current_q = compute_ik("a1_", pos)
+        joint_keyframes.append(current_q)
+
+    # drawing_start_pos = compute_ik("a1_", [-0.5, 0, 0.1])
+    # drawing_end_pos = compute_ik("a1_", [0.5, 0, 0.1])
+
+    return C, joint_keyframes #[drawing_start_pos, drawing_end_pos]
 
 
 def make_single_agent_pick_and_place(view: bool = False):

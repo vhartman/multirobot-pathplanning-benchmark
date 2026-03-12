@@ -121,15 +121,6 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
 ])
 class rai_single_agent_drawing(SequenceMixin, rai_env):
     def __init__(self, square=False):
-        self.C, poses = rai_config.make_single_agent_drawing()
-        # self.C.view(True)
-
-        self.robots = ["a1"]
-
-        rai_env.__init__(self)
-
-        home_pose = self.C.getJointState()
-
         #table_height = 0.1 
         table_height = 0.25 # Table top at z = 0.23
         if square:
@@ -147,6 +138,15 @@ class rai_single_agent_drawing(SequenceMixin, rai_env):
             ]
         # path = LineSegment(pts)
 
+        self.C, poses = rai_config.make_single_agent_drawing(pts)
+        # self.C.view(True)
+
+        self.robots = ["a1"]
+
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
         self.tasks = [
             Task(
                 "pre_draw",
@@ -156,7 +156,7 @@ class rai_single_agent_drawing(SequenceMixin, rai_env):
             Task(
                 "draw",
                 ["a1"],
-                SingleGoal(poses[0]), # TODO: figure out how to do skill goal checking (Valentin)
+                SingleGoal(poses[-1]),
                 skill = EndEffectorPositionFollowing(self.robot_joints["a1"], "a1_stick_ee", pts)
             ),
             Task(
@@ -276,7 +276,7 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
                 SingleGoal(home_pose),
                 frames=["a1_ur_gripper_center", "obj1"],
                 type="pick",
-                skill = EEPoseGoalReaching(self.robot_joints["a1"], pick_position, "a1_ur_ee_marker")
+                skill = EEPoseGoalReaching(self.robot_joints["a1"], pick_pose, "a1_ur_gripper_center") #"a1_ur_ee_marker")
             ),
             Task(
                 "pre_place",
@@ -287,7 +287,7 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
                 "place",
                 ["a1"],
                 SingleGoal(home_pose),
-                skill = EEPoseGoalReaching(self.robot_joints["a1"], place_position, "obj1"),
+                skill = EEPoseGoalReaching(self.robot_joints["a1"], place_pose, "obj1"),
                 type="place",
                 frames=["table", "obj1"]
             ),
@@ -578,7 +578,7 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
                     self.C.setJointState(home_pose)
                     obj_pose = self.C.getFrame(b).getPose()
 
-                    grasp_pose = np.concatenate([obj_pose[:3], robot_ee_pose[3:]])
+                    grasp_pose = np.concatenate([obj_pose[:3], robot_ee_pose[3:]]) + np.array([0, 0, 0.05, 0, 0, 0, 0])
                     self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b], 
                         skill=EEPoseGoalReaching(self.robot_joints[r], grasp_pose, ee_name)))
                 else:
