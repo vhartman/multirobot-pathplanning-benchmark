@@ -310,7 +310,7 @@ class CompositePRM(BasePlanner):
 
         return q
     
-    def _skill_rollout(self, g, mode, active_task, used_entry_ids):
+    def _skill_rollout(self, g, mode, active_task, existing_skill_start_nodes):
         """
         Rollout skill from an entry node and add as skill chain into PRM graph
 
@@ -325,11 +325,14 @@ class CompositePRM(BasePlanner):
         if not candidate_entry_nodes:
             return False, None
 
-        # Filter already used entries
-        if used_entry_ids:
-            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in used_entry_ids]
-        if not candidate_entry_nodes:
-            return False, None
+        # Filter out already used entry nodes (phase 1: one rollout per entry node)
+        # Basically check if a the candidate entry nodes don't have a connection to a skill start node already (meaning they haven't been used yet)
+        if self.config.skill_phase == 1 and existing_skill_start_nodes:
+            used_entry_node_ids = {entry_node_id for sn in existing_skill_start_nodes for entry_node_id in sn.whitelist}
+            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in used_entry_node_ids]
+            
+            if not candidate_entry_nodes:
+                return False, None
 
         # 2. Select entry node (informed or random)
         if self.config.informed_entry_selection:
@@ -552,16 +555,8 @@ class CompositePRM(BasePlanner):
                     failed_attemps += 1
                     continue
 
-                # Track which entry nodes already have a rollout (avoid duplicates)
-                used_entry_ids = set()
-                if self.config.skill_phase == 1:
-                    for sn in existing_skill_start_nodes:
-                        for candidate_entry_node in g.reverse_transition_nodes.get(mode, []):
-                            if candidate_entry_node.id in sn.whitelist:
-                                used_entry_ids.add(candidate_entry_node.id)
-
                 # Run the rollout
-                success, valid_next_modes = self._skill_rollout(g, mode, active_task, used_entry_ids)
+                success, valid_next_modes = self._skill_rollout(g, mode, active_task, existing_skill_start_nodes)
                 
                 if success:
                     transitions += 1 
