@@ -65,6 +65,11 @@ class CompositePRMConfig:
     with_mode_validation: bool = False
     with_noise: bool = False
 
+    # TODO (Liam) new
+    skill_phase: int = 1
+    max_skill_rollouts: int = 1
+    informed_entry_selection: bool = False
+
 """
 NOTES (Liam):
 Remove later also within code, keep for now for better understanding 
@@ -305,37 +310,45 @@ class CompositePRM(BasePlanner):
 
         return q
     
-    def test_skill_rollout(self, g, mode, active_task):
+    def _skill_rollout(self, g, mode, active_task, used_entry_ids):
         """
-        Test if skill can be intercepted and rolled out correctly
-        """
-        # TODO (Liam) how to pick better entry nodes? Or is my idea "correct"?
-        # Always: task... -> mode switch -> task (with skill) -> mode switch -> ...
-        # So if mode has task with skill, it will start executing it directly after the previous mode switch, correct?
-        
+        Rollout skill from an entry node and add as skill chain into PRM graph
+
+        Phase 1: frozen inactive robots, random entry (from reverse_transition_nodes)
+        Phase 2: interpolated inactive robots, informed entry
+        """        
         # 1. Pick entry node for skill
-        candidate_nodes = g.reverse_transition_nodes.get(mode, [])
-        if not candidate_nodes:
-            candidate_nodes = g.nodes.get(mode, [])
-            
-        if not candidate_nodes:
-            return False
-            
-        entry_node = random.choice(candidate_nodes)
+        candidate_entry_nodes = g.reverse_transition_nodes.get(mode, [])
+        if not candidate_entry_nodes:
+            candidate_entry_nodes = g.nodes.get(mode, [])
+
+        if not candidate_entry_nodes:
+            return False, None
+
+        # Filter already used entries
+        if used_entry_ids:
+            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in used_entry_ids]
+        if not candidate_entry_nodes:
+            return False, None
+
+        # 2. Select entry node (informed or random)
+        if self.config.informed_entry_selection:
+            entry_node = self._select_informed_entry(candidate_entry_nodes, active_task, mode) # TODO not implemented
+        else:
+            entry_node = random.choice(candidate_entry_nodes)
+        
         q_entry = entry_node.state.q.state()
         
-        # Identify active joints for this task
+        # 3. Identify active joints for this task & extract starting configuration for active joints 
         active_joints = []
         for r in active_task.robots:
             active_joints.extend(self.env.robot_joints[r])
-            
         active_task.skill.joints = active_joints
         
         all_joints = []
         for r in self.env.robots:
             all_joints.extend(self.env.robot_joints[r])
             
-        # Extract starting configuration for active joints
         parts = []
         offset = 0
         for r in self.env.robots:
@@ -345,12 +358,63 @@ class CompositePRM(BasePlanner):
             offset += dim            
         q_init = np.concatenate(parts)
         
-        # 2. Rollout
+        # 4. Rollout skill
         skill_result = active_task.skill.rollout(q_init, active_task, all_joints, self.env, t0=0.0)
         skill_traj = skill_result.trajectory
                 
-        # 3. Reconstruct composite trajectory (freeze inactive robots)
+        # 5. Reconstruct composite trajectory: active robots (skill rollout) + inactive robots (phase 1: frozen, phase 2: interpolated)
+        if self.config.skill_phase == 1:
+            composite_traj = self._build_composite_traj_frozen(
+                q_entry, skill_traj, active_task
+            )
+        else:
+            composite_traj = self._build_composite_traj_sampled(
+                # TODO not implemented
+            ) 
+
+        # 6. Collision check # TODO only waypoint check for now. 
+        for step_idx in range(len(composite_traj)):
+            q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
+            if not self.env.is_collision_free(q_check, mode):
+                # self.env.C.view(True)
+                return False, None 
+            
+        # TODO fallback strategy
+        # Add some fallback for phase 2 instead of throwing traj away in step 6..? 
+        # Otherwise could it be that phase 2 would perform worse than phase 1..
+        # - If traj not valid -> try frozen inactive robots (phase 1)?
+        # -  
+            
+        # DEBUG
+        dist_moved = np.linalg.norm(composite_traj[0] - composite_traj[-1])
+        print(f"[DEBUG ROLLOUT] Mode {mode.id} Rollout | Steps: {len(composite_traj)} | Distance: {dist_moved:.4f}")
+        # return True
+
+        # 7. Compute valid next modes
+        q_final = self.env.start_pos.from_flat(composite_traj[-1])
+        if self.env.is_terminal_mode(mode):
+            valid_next_modes = []
+        else:
+            next_modes = self.env.get_next_modes(q_final, mode)
+            valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
+
+            if not valid_next_modes:
+                return False, None 
+
+        # 8. Convert to PRM States, mark them as skill waypoints and add to graph
+        states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
+        g.add_skill_path(entry_node, states, valid_next_modes)
+        
+        # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
+        # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
+        return True, valid_next_modes
+        
+    def _build_composite_traj_frozen(self, q_entry, skill_traj, active_task):
+        """
+        Phase 1: inactive robots stay at q_entry
+        """
         composite_traj = []
+
         for step_q_active in skill_traj:
             full_q = q_entry.copy()
             active_offset = 0
@@ -362,39 +426,29 @@ class CompositePRM(BasePlanner):
                     active_offset += dim
                 full_offset += dim
             composite_traj.append(full_q)
-
-        # 4. Collision check 
-        # TODO only waypoint check for now. 
-        for step_idx in range(len(composite_traj)):
-            q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
-            if not self.env.is_collision_free(q_check, mode):
-                self.env.C.view(True)
-                return False, None
-            
-        # DEBUG
-        dist_moved = np.linalg.norm(composite_traj[0] - composite_traj[-1])
-        print(f"[DEBUG ROLLOUT] Mode {mode.id} Rollout | Steps: {len(composite_traj)} | Distance: {dist_moved:.4f}")
-        # return True
-
-        # Determine valid next modes
-        q_final = self.env.start_pos.from_flat(composite_traj[-1])
-        if self.env.is_terminal_mode(mode):
-            valid_next_modes = []
-        else:
-            next_modes = self.env.get_next_modes(q_final, mode)
-            valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
-
-            if not valid_next_modes:
-                return False, None 
-
-        # 5. Convert to PRM States, mark them as skill waypoints and add to graph
-        states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
-        g.add_skill_path(entry_node, states, valid_next_modes)
         
-        # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
-        # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
-        return True, valid_next_modes
-        
+        return composite_traj
+    
+    def _build_composite_traj_sampled(self):
+        """
+        Phase 2: inactive robots get interpolated toward ???
+        """
+        # 
+        raise NotImplementedError
+    
+    def _select_informed_entry(self, candidate_entry_nodes, active_task, mode):
+        """
+        Pick entry node with active-robot config closest to skill's goal
+        """
+        # TODO not needed for now, as mode switch happens at SingleGoals -> returns every time same config -> only ever creates 1 entry_node -> 1 candidate
+        goal_sample = active_task.goal.sample(mode)
+        # - Loop through candidate nodes
+        # -- Loop through active robots
+        # --- Compute distance between active robots & goal_sample
+        # -- Update best distance and best node
+        # - Return best node  
+        raise NotImplementedError
+
     def _mode_has_skill(self, mode: Mode) -> bool:
         """Check if any robot's task in this mode has a skill"""
         for task_id in mode.task_ids:
@@ -407,9 +461,6 @@ class CompositePRM(BasePlanner):
     # - Fix function below:
     # -- reduce side-effects
 
-    # TODO (Liam) make changes in sample_valid_uniform_transitions()
-    # [x] Intercept if task is a skill (simple print)
-    # [x] Intercept if task is a skill & rollout skill 
     def sample_valid_uniform_transitions(
         self,
         g,
@@ -480,7 +531,7 @@ class CompositePRM(BasePlanner):
             )
 
             # TODO (Liam) new
-            # CRITICAL: Intercept if task is a skill
+            # Step 2A: intercept if task is a skill
             # 1. Get task for this mode (just like in _sample_uniform_transition_configuration)
             if reached_terminal_mode:
                 next_ids = self.init_next_ids.get(mode)
@@ -493,16 +544,24 @@ class CompositePRM(BasePlanner):
                 # print(f"[DEBUG SKILL] Intercepted skill for mode {mode.id}")
 
                 # Skip rollout if there already is a skill trajectory for this mode
-                existing_skill_nodes = [
+                existing_skill_start_nodes = [
                     n for n in g.nodes.get(mode, [])
                     if n.state.is_skill_waypoint and n.skill_step == 0
                 ]
-                if len(existing_skill_nodes) >= 1:
+                if len(existing_skill_start_nodes) >= self.config.max_skill_rollouts: # Caps at max_skill_rollouts skill trajectories per mode
                     failed_attemps += 1
                     continue
 
+                # Track which entry nodes already have a rollout (avoid duplicates)
+                used_entry_ids = set()
+                if self.config.skill_phase == 1:
+                    for sn in existing_skill_start_nodes:
+                        for candidate_entry_node in g.reverse_transition_nodes.get(mode, []):
+                            if candidate_entry_node.id in sn.whitelist:
+                                used_entry_ids.add(candidate_entry_node.id)
+
                 # Run the rollout
-                success, valid_next_modes = self.test_skill_rollout(g, mode, active_task)
+                success, valid_next_modes = self._skill_rollout(g, mode, active_task, used_entry_ids)
                 
                 if success:
                     transitions += 1 
@@ -516,7 +575,7 @@ class CompositePRM(BasePlanner):
                 continue 
 
             # TODO (Liam) rest unchanged
-            # Step 2: sample a transition configuration in that mode
+            # Step 2B: if no skill, sample a transition configuration in that mode
             # Generates config q with active robots constrained to goal positions & other robots free
             # Uses mode information (unlike _sample_valid_uniform_batch), because transition nodes need to satisfy specific goal/task constraints
             q = self._sample_uniform_transition_configuration(
@@ -603,6 +662,7 @@ class CompositePRM(BasePlanner):
                     failed_attemps += 1
                     continue
             else: # Graph rejected transition node (collision)
+                # self.env.C.view(True)
                 failed_attemps += 1
                 continue
             
@@ -670,8 +730,6 @@ class CompositePRM(BasePlanner):
 
         return reached_modes
 
-    # TODO (Liam) make changes in _prune()
-    # [x] Pruner shouldn't delete skill nodes 
     def _prune(self, g, current_best_cost):
         """
         Discards nodes that don't improve shorter path.
