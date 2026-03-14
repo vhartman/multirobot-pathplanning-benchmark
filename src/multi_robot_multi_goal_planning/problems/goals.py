@@ -28,8 +28,6 @@ class Goal(ABC):
     def from_data(cls, data):
         pass
 
-<<<<<<< Updated upstream
-=======
 # Goal to enable general constraints, e.g. on end effector
 class NonlinearGoal(Goal):
     def __init__(self, fun, sampler):
@@ -50,7 +48,6 @@ class NonlinearGoal(Goal):
     def from_data(cls, data):
         raise NotImplementedError
 
->>>>>>> Stashed changes
 
 # class DummyGoal(ABC):
 #     def __init__(self):
