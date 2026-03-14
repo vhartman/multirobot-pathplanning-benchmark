@@ -414,7 +414,8 @@ class CompositePRM(BasePlanner):
         
     def _build_composite_traj_frozen(self, q_entry, skill_traj, active_task):
         """
-        Phase 1: inactive robots stay at q_entry
+        Phase 1: Builds a composite trajectory where active robots follow the skill exactly, 
+        and inactive robots stay frozen at q_entry
         """
         composite_traj = []
 
@@ -432,9 +433,10 @@ class CompositePRM(BasePlanner):
         
         return composite_traj
     
-    def _build_composite_traj_sampled(self):
+    def _build_composite_traj_sampled(self, q_entry, skill_traj, active_task, mode):
         """
-        Phase 2: inactive robots get interpolated toward ???
+        Phase 2: Builds a composite trajectory where active robots follow the skill exactly, 
+        and inactive robots linearly interpolate to a new sampled target???
         """
         # 
         raise NotImplementedError
@@ -809,6 +811,7 @@ class CompositePRM(BasePlanner):
             batch_size=effective_uniform_batch_size,
             cost=current_best_cost,
             non_skill_modes=non_skill_modes,
+            # non_skill_modes = None, # Sample in ALL modes: inactive robots need PRM coverage in skill modes
         )
 
         g.add_states(new_states) # Adding new valid samples (regular nodes) to graph
