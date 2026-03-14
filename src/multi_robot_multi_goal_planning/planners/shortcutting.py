@@ -104,15 +104,15 @@ def robot_mode_shortcut(
     collision free.
     """
     non_redundant_path = remove_interpolated_nodes(path)
-    new_path = interpolate_path(non_redundant_path, interpolation_resolution)
+    working_path = interpolate_path(non_redundant_path, interpolation_resolution)
     
-    costs = [path_cost(new_path, env.batch_config_cost)]
+    costs = [path_cost(working_path, env.batch_config_cost)]
     times = [0.0]
     start_time = time.time()
 
-    cnt = 0
+    attempted_shortcuts = 0
     max_attempts = 250 * 10
-    iter = 0
+    iter_count = 0
     rr_robot = 0
 
     # TODO (Liam) Helper function to check if mode contains skill task for given robot
@@ -130,111 +130,123 @@ def robot_mode_shortcut(
         return contains_skill
 
     while True:
-        iter += 1
-        if cnt >= max_iter or iter >= max_attempts:
+        iter_count += 1
+        if attempted_shortcuts >= max_iter or iter_count >= max_attempts:
             break
 
-        i = np.random.randint(0, len(new_path))
-        j = np.random.randint(0, len(new_path))
+        start_idx = np.random.randint(0, len(working_path))
+        end_idx = np.random.randint(0, len(working_path))
 
-        if i > j:
-            i, j = j, i
+        if start_idx > end_idx:
+            start_idx, end_idx = end_idx, start_idx
 
-        if abs(j - i) < 2:
+        if abs(end_idx - start_idx) < 2:
             continue
 
-        # Choose (one) robot to shortcut
+        # 1, Choose (one) robot to shortcut
         if robot_choice == "round_robin":
             robots_to_shortcut = [rr_robot % len(env.robots)]
             rr_robot += 1
         else:
             robots_to_shortcut = [np.random.randint(0, len(env.robots))]
 
+        # 2. Check if this specific robot can be shortcutted
         can_shortcut_this = True
-        for r in robots_to_shortcut: # Only one robot in the list!
-            # Check 1: must be same task id at endpoints
-            if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
-                can_shortcut_this = False
-                break
-            # TODO (Liam) Check if [i,j] are part of skill segment (remove)
-            # Check 2: do not touch any part of a skill trajectory  
-            # for k in range(i, j+1):
-            #     if mode_contains_skill_for_robot(env, new_path[k].mode, r):
-            #         can_shortcut_this = False
-            #         break
-            if mode_contains_skill_for_robot(env, new_path[i].mode, r): # Either whole segment is or not a skill
-                can_shortcut_this = False
+        for r in robots_to_shortcut:
+            
+            # # Check 1: must be same task id at endpoints # TODO! Check if my reasoning is correct (allowing shortcutting over modes for inactive robots, so they don't have to go to a weird transition node if not needed..)
+            # if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
+            #     can_shortcut_this = False
+            #     break
+
+            # Check 2: do not touch any part of a skill trajectory # TODO (Liam) Check if [i,j] are part of skill segment (remove)
+            for k in range(start_idx, end_idx + 1):
+                if mode_contains_skill_for_robot(env, working_path[k].mode, r):
+                    can_shortcut_this = False
+                    break
+            # if mode_contains_skill_for_robot(env, new_path[i].mode, r): # Either whole segment is or not a skill
+            #     can_shortcut_this = False
+            
             if not can_shortcut_this:
                 # TODO (Liam) Stop checking further robots? (if multiple robots in list)
                 # Because we are doing joint shortcut (simultaneously for every robot in list)
                 break 
+
         if not can_shortcut_this:
             continue # Skip to next [i,j] if can't shortcut
 
-        q0 = new_path[i].q
-        q1 = new_path[j].q
+        start_q = working_path[start_idx].q
+        end_q = working_path[end_idx].q
 
-        # precopmute all the differences
-        q0_tmp = {}
-        q1_tmp = {}
-        diff_tmp = {}
+        # Precompute all the differences for the active robots
+        start_q_subset = {}
+        end_q_subset = {}
+        q_step_size = {}
         for r in robots_to_shortcut:
-            q0_tmp[r] = q0[r] * 1
-            q1_tmp[r] = q1[r] * 1
-            diff_tmp[r] = (q1_tmp[r] - q0_tmp[r]) / (j - i)
+            start_q_subset[r] = start_q[r] * 1
+            end_q_subset[r] = end_q[r] * 1
+            q_step_size[r] = (end_q_subset[r] - start_q_subset[r]) / (end_idx - start_idx)
 
-        # constuct pth element for the shortcut
-        path_element = []
-        for k in range(j - i + 1):
-            q = new_path[i + k].q.state() * 1.0
+        # Construct the proposed shortcut segment
+        proposed_shortcut = []
+        for k in range(end_idx - start_idx + 1):
+            q_flat = working_path[start_idx + k].q.state() * 1.0
 
             r_cnt = 0
             for r in range(len(env.robots)):
                 dim = env.robot_dims[env.robots[r]]
                 if r in robots_to_shortcut:
                     # we assume that we double the mode switch configurations
-                    if k != 0 and i+k != j and new_path[i+k].mode != new_path[i+k-1].mode:
-                        q_interp = q0_tmp[r] + diff_tmp[r] * (k-1)
+                    if k != 0 and start_idx + k != end_idx and working_path[start_idx + k].mode != working_path[start_idx + k - 1].mode:
+                        q_interp = start_q_subset[r] + q_step_size[r] * (k - 1)
                     else:
-                        q_interp = q0_tmp[r] + diff_tmp[r] * k
-                    q[r_cnt : r_cnt + dim] = q_interp
+                        q_interp = start_q_subset[r] + q_step_size[r] * k
+                    q_flat[r_cnt : r_cnt + dim] = q_interp
 
                 r_cnt += dim
 
-            path_element.append(
-                State(q0.from_flat(q), new_path[i + k].mode)
+            proposed_shortcut.append(
+                State(start_q.from_flat(q_flat), working_path[start_idx + k].mode)
             )
 
-        # check if the shortcut improves cost
-        if path_cost(path_element, env.batch_config_cost) >= path_cost(
-            new_path[i : j + 1], env.batch_config_cost
-        ):
+        current_segment = working_path[start_idx : end_idx + 1]
+
+        # # check if the shortcut improves cost
+        # if path_cost(path_element, env.batch_config_cost) >= path_cost(
+        #     current_segment, env.batch_config_cost
+        # ):
+        #     continue
+
+        if path_cost(proposed_shortcut, env.batch_config_cost) > path_cost( # TODO! Check my reasoning (max cost can be before and after 10, e.g., dominated by robot A, but robot B could improve cost from 5 -> 3, but with ">=", that improvement would be discarded..)
+            current_segment, env.batch_config_cost
+        ) + 1e-8:
             continue
 
-        assert np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6
-        assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
+        assert np.linalg.norm(proposed_shortcut[0].q.state() - start_q.state()) < 1e-6
+        assert np.linalg.norm(proposed_shortcut[-1].q.state() - end_q.state()) < 1e-6
 
-        cnt += 1
+        attempted_shortcuts += 1
 
         if env.is_path_collision_free(
-            path_element, resolution=resolution, tolerance=tolerance, check_start_and_end=False
+            proposed_shortcut, resolution=resolution, tolerance=tolerance, check_start_and_end=False
         ):
-            for k in range(j - i + 1):
-                new_path[i + k].q = path_element[k].q
+            # Apply the successful shortcut to the working trajectory
+            for k in range(end_idx - start_idx + 1):
+                working_path[start_idx + k].q = proposed_shortcut[k].q
 
         current_time = time.time()
         times.append(current_time - start_time)
-        costs.append(path_cost(new_path, env.batch_config_cost))
+        costs.append(path_cost(working_path, env.batch_config_cost))
 
-    assert new_path[-1].mode == path[-1].mode
-    assert np.linalg.norm(new_path[-1].q.state() - path[-1].q.state()) < 1e-6
-    assert np.linalg.norm(new_path[0].q.state() - path[0].q.state()) < 1e-6
+    assert working_path[-1].mode == path[-1].mode
+    assert np.linalg.norm(working_path[-1].q.state() - path[-1].q.state()) < 1e-6
+    assert np.linalg.norm(working_path[0].q.state() - path[0].q.state()) < 1e-6
 
-    print("original cost:", path_cost(path, env.batch_config_cost))
-    print("Attempted shortcuts", cnt)
-    print("new cost:", path_cost(new_path, env.batch_config_cost))
+    print("Original cost:", path_cost(path, env.batch_config_cost))
+    print("Attempted shortcuts", attempted_shortcuts)
+    print("New cost:", path_cost(working_path, env.batch_config_cost))
 
-    return new_path, [costs, times]
+    return working_path, [costs, times]
 
 
 def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]:
