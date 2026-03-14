@@ -820,6 +820,12 @@ class rai_env(BaseProblem):
         adapt_to_max_distance: bool = False,
         stop_at_mode: bool = False,
     ) -> None:
+        if export:
+            os.makedirs("./z.vid", exist_ok=True)
+            for f in os.listdir("./z.vid"):
+                if f.endswith(".png"):
+                    os.remove(os.path.join("./z.vid", f))
+
         for i in range(len(path)):
             self.set_to_mode(path[i].mode)
             for k in range(len(self.robots)):
@@ -838,7 +844,6 @@ class rai_env(BaseProblem):
             self.C.view(stop)
 
             if export:
-                os.makedirs("./z.vid", exist_ok=True)
                 self.C.view_savePng("./z.vid/")
 
             dt = pause_time # Fixed dt
