@@ -154,17 +154,18 @@ def robot_mode_shortcut(
         can_shortcut_this = True
         for r in robots_to_shortcut:
             
-            # # Check 1: must be same task id at endpoints # TODO! Check if my reasoning is correct (allowing shortcutting over modes for inactive robots, so they don't have to go to a weird transition node if not needed..)
-            # if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
-            #     can_shortcut_this = False
-            #     break
+            # Check 1: must be same task id at endpoints
+            if working_path[start_idx].mode.task_ids[r] != working_path[end_idx].mode.task_ids[r]:
+                can_shortcut_this = False
+                break
 
-            # Check 2: do not touch any part of a skill trajectory # TODO (Liam) Check if [i,j] are part of skill segment (remove)
+            # Check 2: do not touch any part of a skill trajectory 
             for k in range(start_idx, end_idx + 1):
                 if mode_contains_skill_for_robot(env, working_path[k].mode, r):
                     can_shortcut_this = False
                     break
-            # if mode_contains_skill_for_robot(env, new_path[i].mode, r): # Either whole segment is or not a skill
+
+            # if mode_contains_skill_for_robot(env, working_path[start_idx].mode, r): # Either whole segment is or not a skill
             #     can_shortcut_this = False
             
             if not can_shortcut_this:
@@ -217,7 +218,8 @@ def robot_mode_shortcut(
         # ):
         #     continue
 
-        if path_cost(proposed_shortcut, env.batch_config_cost) > path_cost( # TODO! Check my reasoning (max cost can be before and after 10, e.g., dominated by robot A, but robot B could improve cost from 5 -> 3, but with ">=", that improvement would be discarded..)
+        # TODO (Liam) check my reasoning (max cost can be before and after 10, e.g., dominated by robot A, but robot B could improve cost from 5 -> 3, but with ">=", that improvement would be discarded..)
+        if path_cost(proposed_shortcut, env.batch_config_cost) > path_cost( 
             current_segment, env.batch_config_cost
         ) + 1e-8:
             continue

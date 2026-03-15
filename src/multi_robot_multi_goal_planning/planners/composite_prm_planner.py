@@ -469,7 +469,7 @@ class CompositePRM(BasePlanner):
     def sample_valid_uniform_transitions(
         self,
         g,
-        transistion_batch_size: int,
+        transition_batch_size: int,
         cost: float | None,
         reached_modes: Set[Mode],
     ) -> Set[Mode]:
@@ -527,8 +527,8 @@ class CompositePRM(BasePlanner):
 
         # PHASE 2: main sampling loop
         while (
-            transitions < transistion_batch_size
-            and failed_attemps < 5 * transistion_batch_size
+            transitions < transition_batch_size
+            and failed_attemps < 5 * transition_batch_size
         ):
             # Step 1: pick a mode to sample a transition for, using chosen strategy
             mode = self._sample_mode(
@@ -554,7 +554,7 @@ class CompositePRM(BasePlanner):
                     if n.state.is_skill_waypoint and n.skill_step == 0
                 ]
                 if len(existing_skill_start_nodes) >= self.config.max_skill_rollouts: # Caps at max_skill_rollouts skill trajectories per mode
-                    failed_attemps += 1
+                    failed_attemps += 1 # Skip without burning failure budget?
                     continue
 
                 # Run the rollout
@@ -796,12 +796,12 @@ class CompositePRM(BasePlanner):
         print("Sampling transitions")
         reached_modes = self.sample_valid_uniform_transitions(
             g,
-            transistion_batch_size=effective_uniform_transition_batch_size,
+            transition_batch_size=effective_uniform_transition_batch_size,
             cost=current_best_cost,
             reached_modes=reached_modes,
         )
 
-        # Filter modes (no uniform & informed sampling in skill modes -> should only contain skill transitions and skill nodes!) # TODO check if my reasoning is correct
+        # Filter modes (no uniform & informed sampling in skill modes -> should only contain skill transitions and skill nodes!) 
         non_skill_modes = [m for m in reached_modes if not self._mode_has_skill(m)]
 
         # Step 3: add regular nodes (not transitions) within modes
@@ -810,8 +810,8 @@ class CompositePRM(BasePlanner):
             g,
             batch_size=effective_uniform_batch_size,
             cost=current_best_cost,
-            non_skill_modes=non_skill_modes,
-            # non_skill_modes = None, # Sample in ALL modes: inactive robots need PRM coverage in skill modes
+            non_skill_modes=None, # Sample in ALL modes # TODO check if necessary or waste
+            # non_skill_modes=non_skill_modes,
         )
 
         g.add_states(new_states) # Adding new valid samples (regular nodes) to graph
@@ -831,8 +831,8 @@ class CompositePRM(BasePlanner):
         if (
             current_best_cost is not None and
             current_best_path is not None and # If we have a path
-            (self.config.try_informed_sampling or self.config.try_informed_transitions) and
-            non_skill_modes
+            (self.config.try_informed_sampling or self.config.try_informed_transitions) #and
+            # non_skill_modes # TODO check
         ):
             # Interpolate the current best path
             interpolated_path = interpolate_path(current_best_path)
@@ -841,15 +841,12 @@ class CompositePRM(BasePlanner):
             if self.config.try_informed_sampling:
                 print("Generating informed samples")
                 new_informed_states = informed_sampler.generate_samples(
-                    non_skill_modes, #list(reached_modes),
+                    list(reached_modes), # non_skill_modes, # Regular nodes are fine in skill modes
                     self.config.informed_batch_size,
                     interpolated_path,
                     try_direct_sampling=self.config.try_direct_informed_sampling,
                     g=g,
                 )
-                # new_informed_states = [ # TODO (Liam) remove -> taken care of in sampling_informed.py
-                #     s for s in new_informed_states if not self._mode_has_skill(s.mode)
-                # ]
                 # Add those informed new states to the graph 
                 g.add_states(new_informed_states)
 
@@ -859,14 +856,11 @@ class CompositePRM(BasePlanner):
             if self.config.try_informed_transitions:
                 print("Generating informed transitions")
                 new_informed_transitions = informed_sampler.generate_transitions(
-                    non_skill_modes, #list(reached_modes),
+                    non_skill_modes, #list(reached_modes), Transition nodes are NOT fine in skill nodes
                     self.config.informed_transition_batch_size,
                     interpolated_path,
                     g=g,
                 )
-                # new_informed_transitions = [ # TODO (Liam) remove -> taken care of in sampling_informed.py
-                #     (q, m, nm) for q, m, nm in new_informed_transitions if not self._mode_has_skill(m)
-                # ]
                 # Add those informed new transition nodes to the graph
                 g.add_transition_nodes(new_informed_transitions)
                 print(f"Adding {len(new_informed_transitions)} informed transitions")
@@ -1076,11 +1070,15 @@ class CompositePRM(BasePlanner):
                                     interpolation_resolution=self.config.shortcutting_interpolation_resolution,
                                 )
 
-                                # TODO (Liam) remove later -> check but the shortcutter already handles this internally
-                                # # Remove interpolated points (just used for collision check)
-                                # shortcut_path = shortcutting.remove_interpolated_nodes(
-                                #     shortcut_path
-                                # )
+                                print(f"[DEBUG SHORTCUTPATH]: length before = {len(shortcut_path)}")
+
+                                # # TODO (Liam) DON'T COMMENT OUT! "Needed", because it removes interpolated points used during shortcutting
+                                # Remove interpolated points (just used for collision check)
+                                shortcut_path = shortcutting.remove_interpolated_nodes(
+                                    shortcut_path
+                                )
+
+                                print(f"[DEBUG SHORTCUTPATH]: length after = {len(shortcut_path)}")
 
                                 shortcut_path_cost = path_cost(
                                     shortcut_path, self.env.batch_config_cost
@@ -1099,37 +1097,54 @@ class CompositePRM(BasePlanner):
 
                                     interpolated_path = shortcut_path
 
+                                    # debug_skipped_skills = 0 # TODO remove
+                                    # debug_added_regular = 0
+                                    # debug_added_trans = 0
+
                                     # Check shortcutted path (mode changes?)
                                     # Add path to graph
-                                    debug_skipped_skills = 0
-                                    debug_added_regular = 0
-                                    debug_added_trans = 0
-
                                     for i in range(len(interpolated_path)):
                                         s = interpolated_path[i]
 
-                                        if self._mode_has_skill(s.mode): # Avoid skill-mode states from being re-added to graph
-                                            debug_skipped_skills += 1
-                                            continue
+                                        # TODO (Liam) COMMENT OUT! (remove)
+                                        # if self._mode_has_skill(s.mode):
+                                        #     debug_skipped_skills += 1
+                                        #     continue # Avoid skill-mode states from being re-added to graph
+                                        
+                                        # NOTE: My reasoning why this was wrong:
+                                        # - Idea was to not re-add same skill nodes to the graph as they don't change (protected from shortcutting)
+                                        # - Wrong! Because shortcutter can shortcut skill nodes (inactive robots) -> so we need to add those changed skill nodes!  
 
                                         if not self.env.is_collision_free(s.q, s.mode):
                                             continue
 
-                                        if (
+                                        is_mode_boundary = (
                                             i < len(interpolated_path) - 1
-                                            and interpolated_path[i].mode
-                                            != interpolated_path[i + 1].mode
-                                        ):
-                                            # Mode CHANGES -> add as transition
-                                            graph.add_transition_nodes([(s.q, s.mode, [interpolated_path[i + 1].mode])])
-                                            debug_added_trans += 1
-                                            pass
-                                        else:
-                                            # Mode SAME -> add as regular node
-                                            debug_added_regular += 1
-                                            graph.add_states([s])
+                                            and interpolated_path[i].mode != interpolated_path[i + 1].mode
+                                        )
 
-                                    print(f"[DEBUG SHORTCUTTER] Graph updated! Skipped {debug_skipped_skills} skill waypoints. Added {debug_added_regular} regular nodes and {debug_added_trans} transition nodes.")
+                                        if is_mode_boundary:
+                                            # TODO (Liam) COMMENT OUT! (remove)
+                                            # if self._mode_has_skill(s.mode): # Skip is skill mode, otherwise could create transition node bypassing skill -> WRONG!
+                                            #     continue
+
+                                            # NOTE: My reasoning why this was a mistake: 
+                                            # - Before the shortcutter: the transition node for skill had perfeclty aligned active robot but not inactive robot (causing unnecessary big motions)
+                                            # - After the shortcutter: the transition node for skill had perfeclty aligned active robot AND smoothly aligned inactive robot
+                                            # --> If we block that newly smoother transition node from getting added to graph, we throw away that smooth door and the next time
+                                            #     A* searches, it will go again through the old ugly door! And no worries about bypassing the skill when taking that new transition node
+                                            #     because this newly created door just has modified inactive robot configs, active robot configs (skill) doesn't change -> made sure of it in shortcutter!
+
+                                            # Mode CHANGES -> add state as transition 
+                                            graph.add_transition_nodes([(s.q, s.mode, [interpolated_path[i + 1].mode])])
+                                            # debug_added_trans += 1
+                                            # pass
+                                        else:
+                                            # Mode SAME -> add state as regular node (safe everywhere, dead-ends in skill modes..)
+                                            graph.add_states([s])
+                                            # debug_added_regular += 1
+
+                                    # print(f"[DEBUG SHORTCUTTER] Graph updated! Skipped {debug_skipped_skills} skill waypoints. Added {debug_added_regular} regular nodes and {debug_added_trans} transition nodes.")
 
                         add_new_batch = True # To add more samples in next iteration
                         break # Exit inner loop
