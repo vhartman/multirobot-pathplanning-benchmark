@@ -2193,6 +2193,7 @@ class PrioritizedPlanner(BasePlanner):
                     )
 
                 logger.debug(f"final_pose {final_pose}")
+                # env.C.view(True)
 
                 if path is None:
                     logger.warn("Failed planning.")
@@ -2312,11 +2313,22 @@ class PrioritizedPlanner(BasePlanner):
                 path = []
 
                 T = robot_paths.get_final_time() # Total makespan of the plan
-                N = 50 * int(np.ceil(T)) # Sample plan at N evenly spaced time points (uniform)
+
+                # Collect all stored waypoint timestamps (includes exact skill waypoints!)
+                all_times = set()
+                for r in env.robots:
+                    for rp in robot_paths.paths[r]:
+                        for t in rp.path.time:
+                            all_times.add(t)
+
+                # Add moderate uniform base for smooth free-motion segments
+                N_base = 5 * int(np.ceil(T)) # Like before, sample plan at N evenly spaced time points (uniform)
+                for i in range(N_base):
+                    all_times.add(i * T / max(N_base - 1, 1))
+                sorted_times = sorted(all_times)
 
                 # At each sample time, query configs and current modes from robot_paths
-                for i in range(N):
-                    t = i * T / (N - 1) # dt constant
+                for t in sorted_times:
                     q = robot_paths.get_robot_poses_at_time(env.robots, t)
                     config = conf_type.from_list(q)
                     mode = robot_paths.get_mode_at_time(t)
