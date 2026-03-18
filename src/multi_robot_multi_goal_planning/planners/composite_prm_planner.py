@@ -67,7 +67,7 @@ class CompositePRMConfig:
 
     # TODO (Liam) new
     skill_phase: int = 1
-    max_skill_rollouts: int = 1
+    max_skill_rollouts: int = 3
     informed_entry_selection: bool = False
 
 """
@@ -110,6 +110,11 @@ class CompositePRM(BasePlanner):
         self.first_search = True
         self.dummy_start_mode = False
         self.sorted_reached_modes = []
+
+        # TODO (Liam) new
+        self._used_skill_entry_ids: Dict[Mode, Set[int]] = {}       # mode -> set of successful entry node IDs
+        self._failed_skill_entry_ids: Dict[Mode, Set[int]] = {}     # mode -> set of failed entry node IDs
+        self._skill_traj_cache: Dict[(int, int), List]  = {}        # (mode.id, entry_node.id) -> skill_traj
 
     def _sample_mode(
         self,
@@ -314,10 +319,10 @@ class CompositePRM(BasePlanner):
         """
         Rollout skill from an entry node and add as skill chain into PRM graph
 
-        Phase 1: frozen inactive robots, random entry (from reverse_transition_nodes)
-        Phase 2: interpolated inactive robots, informed entry
+        PHASE 1: frozen inactive robots, random entry (from reverse_transition_nodes)
+        PHASE 2: interpolated inactive robots, informed entry
         """        
-        # 1. Pick entry node for skill
+        # 1. Get candidate entry nodes for skill
         candidate_entry_nodes = g.reverse_transition_nodes.get(mode, [])
         if not candidate_entry_nodes:
             candidate_entry_nodes = g.nodes.get(mode, [])
@@ -325,57 +330,79 @@ class CompositePRM(BasePlanner):
         if not candidate_entry_nodes:
             return False, None
 
-        # Filter out already used entry nodes (phase 1: one rollout per entry node)
-        # Basically check if a the candidate entry nodes don't have a connection to a skill start node already (meaning they haven't been used yet)
-        if self.config.skill_phase == 1 and existing_skill_start_nodes:
-            used_entry_node_ids = {entry_node_id for sn in existing_skill_start_nodes for entry_node_id in sn.whitelist}
-            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in used_entry_node_ids]
-            
-            if not candidate_entry_nodes:
-                return False, None
-
-        # 2. Select entry node (informed or random)
-        if self.config.informed_entry_selection:
-            entry_node = self._select_informed_entry(candidate_entry_nodes, active_task, mode) # TODO not implemented
-        else:
-            entry_node = random.choice(candidate_entry_nodes)
-        
-        q_entry = entry_node.state.q.state()
-        
-        # 3. Identify active joints for this task & extract starting configuration for active joints 
-        active_joints = []
-        for r in active_task.robots:
-            active_joints.extend(self.env.robot_joints[r])
-        active_task.skill.joints = active_joints
-        
-        all_joints = []
-        for r in self.env.robots:
-            all_joints.extend(self.env.robot_joints[r])
-            
-        parts = []
-        offset = 0
-        for r in self.env.robots:
-            dim = self.env.robot_dims[r]
-            if r in active_task.robots:
-                parts.append(q_entry[offset:offset+dim])
-            offset += dim            
-        q_init = np.concatenate(parts)
-        
-        # 4. Rollout skill
-        skill_result = active_task.skill.rollout(q_init, active_task, all_joints, self.env, t0=0.0)
-        skill_traj = skill_result.trajectory
-                
-        # 5. Reconstruct composite trajectory: active robots (skill rollout) + inactive robots (phase 1: frozen, phase 2: interpolated)
+        # 2. Filter out already used entry nodes 
+        failed_ids = self._failed_skill_entry_ids.get(mode, set())
         if self.config.skill_phase == 1:
-            composite_traj = self._build_composite_traj_frozen(
-                q_entry, skill_traj, active_task
-            )
+            # PHASE 1: one rollout per entry node 
+            used_ids = self._used_skill_entry_ids.get(mode, set())
+            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in used_ids and n.id not in failed_ids]
         else:
-            composite_traj = self._build_composite_traj_sampled(
-                # TODO not implemented
-            ) 
+            # PHASE 2: up to max_skill_rollouts, using same entry (different inactive configs each time)
+            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids]
 
-        # 6. Collision check # TODO only waypoint check for now. 
+        if not candidate_entry_nodes:
+            return False, None
+            
+        print(f"[DEBUG ROLLOUT ENTRY] Mode: {mode.id} | Phase: {self.config.skill_phase} | Candidates: {len(candidate_entry_nodes)} | Existing rollouts: {len(existing_skill_start_nodes)} |")
+
+        # 3. Select entry node from candidates (random)
+        entry_node = random.choice(candidate_entry_nodes)
+        q_entry = entry_node.state.q.state()
+
+        # 4. Rollout skill
+        cache_key = (mode.id, entry_node.id)
+        
+        if cache_key in getattr(self, '_skill_traj_cache', {}):
+            # Using cached skill trajectory
+            skill_traj = self._skill_traj_cache[cache_key]
+            print(f"[DEBUG SKILL] Reusing cached skill_traj")
+        else:
+            # Identify active joints for this task & extract starting configuration for active joints 
+            active_joints = []
+            for r in active_task.robots:
+                active_joints.extend(self.env.robot_joints[r])
+            active_task.skill.joints = active_joints
+
+            all_joints = []
+            for r in self.env.robots:
+                all_joints.extend(self.env.robot_joints[r])
+                
+            parts = []
+            offset = 0
+            for r in self.env.robots:
+                dim = self.env.robot_dims[r]
+                if r in active_task.robots:
+                    parts.append(q_entry[offset:offset+dim])
+                offset += dim            
+            q_init = np.concatenate(parts)
+
+            # Rollout skill
+            skill_result = active_task.skill.rollout(q_init, active_task, all_joints, self.env, t0=0.0)
+            skill_traj = skill_result.trajectory
+
+            # TODO check degenerate skill rollouts... 
+            dist_moved = np.linalg.norm(skill_traj[0] - skill_traj[-1])
+            if dist_moved < 1e-4:
+                print(f"[WARNING] Problem with rollout in mode {mode.id}: steps={len(skill_traj)}, dist={dist_moved:.4f}")
+                if mode not in self._failed_skill_entry_ids:
+                    self._failed_skill_entry_ids[mode] = set()
+                self._failed_skill_entry_ids[mode].add(entry_node.id)
+                return False, None
+                
+            # Cache successful skill trajectory
+            if not hasattr(self, '_skill_traj_cache'):
+                self._skill_traj_cache = {}
+            self._skill_traj_cache[cache_key] = skill_traj
+
+        # 6. Reconstruct composite trajectory
+        if self.config.skill_phase == 1:
+            # PHASE 1: active robots (skill rollout) + inactive robots (frozen)
+            composite_traj = self._build_composite_traj_frozen(q_entry, skill_traj, active_task)
+        else:
+            # PHASE 2: active robots (skill rollout) + inactive robots (???)
+            composite_traj = self._build_composite_traj_sampled() # TODO not implemented
+
+        # 7. Collision check # TODO only waypoint check for now. 
         for step_idx in range(len(composite_traj)):
             q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
             if not self.env.is_collision_free(q_check, mode):
@@ -388,12 +415,7 @@ class CompositePRM(BasePlanner):
         # - If traj not valid -> try frozen inactive robots (phase 1)?
         # -  
             
-        # DEBUG
-        dist_moved = np.linalg.norm(composite_traj[0] - composite_traj[-1])
-        print(f"[DEBUG ROLLOUT] Mode {mode.id} Rollout | Steps: {len(composite_traj)} | Distance: {dist_moved:.4f}")
-        # return True
-
-        # 7. Compute valid next modes
+        # 8. Compute valid next modes
         q_final = self.env.start_pos.from_flat(composite_traj[-1])
         if self.env.is_terminal_mode(mode):
             valid_next_modes = []
@@ -404,9 +426,14 @@ class CompositePRM(BasePlanner):
             if not valid_next_modes:
                 return False, None 
 
-        # 8. Convert to PRM States, mark them as skill waypoints and add to graph
+        # 9. Convert to PRM States, mark them as skill waypoints and add to graph
         states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
         g.add_skill_path(entry_node, states, valid_next_modes)
+
+        # 10. Mark entry node as used
+        if mode not in self._used_skill_entry_ids:
+            self._used_skill_entry_ids[mode] = set()
+        self._used_skill_entry_ids[mode].add(entry_node.id)
         
         # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
         # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
@@ -433,25 +460,25 @@ class CompositePRM(BasePlanner):
         
         return composite_traj
     
-    def _build_composite_traj_sampled(self, q_entry, skill_traj, active_task, mode):
+    def _build_composite_traj_sampled(self, q_entry, skill_traj, active_task):
         """
         Phase 2: Builds a composite trajectory where active robots follow the skill exactly, 
         and inactive robots linearly interpolate to a new sampled target???
         """
-        # 
-        raise NotImplementedError
-    
-    def _select_informed_entry(self, candidate_entry_nodes, active_task, mode):
-        """
-        Pick entry node with active-robot config closest to skill's goal
-        """
-        # TODO not needed for now, as mode switch happens at SingleGoals -> returns every time same config -> only ever creates 1 entry_node -> 1 candidate
-        goal_sample = active_task.goal.sample(mode)
-        # - Loop through candidate nodes
-        # -- Loop through active robots
-        # --- Compute distance between active robots & goal_sample
-        # -- Update best distance and best node
-        # - Return best node  
+        # TODO
+        
+        # Idea: 
+        # - PHASE 1: inactive robot configs "frozen"
+        # - PHASE 2: inactive robot configs sampled
+        
+        # Sampling
+        # - Use sampling strategy that is already implemented
+        # -- Allow sampling of random nodes within skill modes
+        # -- Manage linking, / collision checking with the skill rollout (step by step)
+        # - New sampling function
+        # -- Specifically only sample per skill step till we get S valid inactive robots configs
+        # -- Collision checking to validate + allow A* to go through this tube of possible configs for the inactive robots 
+        
         raise NotImplementedError
 
     def _mode_has_skill(self, mode: Mode) -> bool:
@@ -486,7 +513,7 @@ class CompositePRM(BasePlanner):
         - Validate those nodes and determine valid successor modes
         - Add transitions to graph 
         """
-        transitions, failed_attemps = 0, 0
+        transitions, failed_attempts = 0, 0
         reached_terminal_mode = False
         
         # PHASE 1: setup
@@ -528,7 +555,7 @@ class CompositePRM(BasePlanner):
         # PHASE 2: main sampling loop
         while (
             transitions < transition_batch_size
-            and failed_attemps < 5 * transition_batch_size
+            and failed_attempts < 5 * transition_batch_size
         ):
             # Step 1: pick a mode to sample a transition for, using chosen strategy
             mode = self._sample_mode(
@@ -554,7 +581,8 @@ class CompositePRM(BasePlanner):
                     if n.state.is_skill_waypoint and n.skill_step == 0
                 ]
                 if len(existing_skill_start_nodes) >= self.config.max_skill_rollouts: # Caps at max_skill_rollouts skill trajectories per mode
-                    failed_attemps += 1 # Skip without burning failure budget?
+                    failed_attempts += 1 # Skip without burning failure budget?
+                    # print(f"[DEBUG SKILL] Skip skill rollout (already one skill traj in mode {mode.id})")
                     continue
 
                 # Run the rollout
@@ -565,7 +593,8 @@ class CompositePRM(BasePlanner):
                     if valid_next_modes:
                         reached_modes.update(valid_next_modes)
                 else:
-                    failed_attemps += 1
+                    failed_attempts += 1
+                    # print(f"[DEBUG SKILL] Failed attempt ({failed_attempts})")
                     
                 # Skip the normal random geometric sampling for this iteration
                 # That way skill modes get exactly 1 skill-based transition and 0 geometric transitions
@@ -584,7 +613,7 @@ class CompositePRM(BasePlanner):
                 cost is not None
                 and sum(self.env.batch_config_cost(q, focal_points)) > cost
             ): # If sum of distances from sample to focal points > current best cost
-                failed_attemps += 1 
+                failed_attempts += 1 
                 continue # Reject samples outside the informed ellipsoid
 
             # Step 4-5: collision check & compute valid next modes
@@ -656,11 +685,11 @@ class CompositePRM(BasePlanner):
                         self.dummy_start_mode = True
 
                 else: # Graph rejected transition node (duplicate)
-                    failed_attemps += 1
+                    failed_attempts += 1
                     continue
             else: # Graph rejected transition node (collision)
                 # self.env.C.view(True)
-                failed_attemps += 1
+                failed_attempts += 1
                 continue
             
             # Step 9: Update reached modes with valid new successor modes (grow set of modes we can sample in)

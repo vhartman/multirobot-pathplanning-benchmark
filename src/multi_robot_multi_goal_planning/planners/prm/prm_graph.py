@@ -807,7 +807,7 @@ class MultimodalGraph:
                     continue
 
                 # TODO (Liam) new
-                # Avoid A* jumping into middle or end of a skill traj 
+                # Avoid A* jumping to skill transition node (end of skill traj) and bypass skill chain 
                 is_n1_skill = n1.state.is_skill_waypoint
                 is_n_skill = n.state.is_skill_waypoint
 

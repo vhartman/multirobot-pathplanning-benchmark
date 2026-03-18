@@ -166,7 +166,7 @@ def robot_mode_shortcut(
                     break
 
             # if mode_contains_skill_for_robot(env, working_path[start_idx].mode, r): # Either whole segment is or not a skill
-            #     can_shortcut_this = False
+            #     can_shortcut_this = False # TODO use instead of check 2 cause after check 1 we can be sure whole segment is fully or not in a skill mode
             
             if not can_shortcut_this:
                 # TODO (Liam) Stop checking further robots? (if multiple robots in list)
