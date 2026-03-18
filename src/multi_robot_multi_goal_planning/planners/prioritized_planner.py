@@ -2058,6 +2058,7 @@ class PrioritizedPlanner(BasePlanner):
         info = {"costs": [], "times": [], "paths": []}
         best_path = None
         computation_start_time = time.time()
+        skill_times = set() # Add skills back to trajectory (finalization step 6.)
 
         # OUTTER LOOP: Try different task sequences
         while True:
@@ -2168,6 +2169,9 @@ class PrioritizedPlanner(BasePlanner):
                         logger.warn('Skill trajectory in collision, trying next sequence.')
                         # env.C.view(True)
                         break
+                    else: 
+                        for r in involved_robots:
+                            skill_times.update(path[r].time) # Capture skill time (needed in step 6.)
                         
                 else:
                     # Planning with time aware RRT
@@ -2314,15 +2318,9 @@ class PrioritizedPlanner(BasePlanner):
 
                 T = robot_paths.get_final_time() # Total makespan of the plan
 
-                # Collect all stored waypoint timestamps (includes exact skill waypoints!)
-                all_times = set()
-                for r in env.robots:
-                    for rp in robot_paths.paths[r]:
-                        for t in rp.path.time:
-                            all_times.add(t)
-
-                # Add moderate uniform base for smooth free-motion segments
-                N_base = 5 * int(np.ceil(T)) # Like before, sample plan at N evenly spaced time points (uniform)
+                # Uniform base (same as original) + skill times (new) 
+                all_times = set(skill_times)
+                N_base = 5 * int(np.ceil(T)) # Sample plan at N evenly spaced time points
                 for i in range(N_base):
                     all_times.add(i * T / max(N_base - 1, 1))
                 sorted_times = sorted(all_times)
