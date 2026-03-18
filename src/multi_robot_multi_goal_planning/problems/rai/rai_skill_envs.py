@@ -1292,9 +1292,12 @@ class rai_bimanual_assembly(SequenceMixin, rai_env):
 
 # TODO unfinished
 # inspiration: https://arxiv.org/pdf/2511.04758
-@register("rai.bimanual_sorting")
+@register([
+    ("rai.bimanual_sorting", {}),
+    ("rai.bimanual_sorting_swapped", {'swap': True}),
+])
 class rai_bimanual_sorting(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, swap=False):
         self.C, a1_keyframes, a2_keyframes = rai_config.make_bimanual_sorting()
         # self.C.view(True)
 
@@ -1356,9 +1359,14 @@ class rai_bimanual_sorting(SequenceMixin, rai_env):
             ),
         )
 
-        self.sequence = self._make_sequence_from_names(
-            ["a1_pre_pick", "a1_pick", "a2_pre_pick", "a2_pick", "a1_pre_place", "a1_place", "a2_pre_place", "a2_place", "terminal"]
-        )
+        if swap:
+            self.sequence = self._make_sequence_from_names(
+                ["a1_pre_pick", "a2_pre_pick", "a1_pick", "a2_pick", "a1_pre_place", "a1_place", "a2_pre_place", "a2_place", "terminal"]
+            )
+        else:
+            self.sequence = self._make_sequence_from_names(
+                ["a1_pre_pick", "a1_pick", "a2_pre_pick", "a2_pick", "a1_pre_place", "a1_place", "a2_pre_place", "a2_place", "terminal"]
+            )
 
         self.collision_tolerance = 0.001
         self.collision_resolution = 0.005
