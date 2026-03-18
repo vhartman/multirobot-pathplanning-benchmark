@@ -185,6 +185,8 @@ def main():
         action="store_true",
         help="Display the configuration used for collision checking. (default: False)",
     )
+    parser.add_argument("--seed", type=int, default=1, help="Seed")
+
     args = parser.parse_args()
 
     folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
@@ -199,6 +201,9 @@ def main():
     random.seed(seed)
 
     path_data = load_path(args.path_filename)
+
+    np.random.seed(args.seed)
+    random.seed(args.seed)
 
     env = get_env_by_name(args.env_name)
     env.cost_reduction = "max"
