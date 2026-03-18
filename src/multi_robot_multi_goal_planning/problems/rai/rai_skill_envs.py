@@ -944,11 +944,16 @@ class rai_single_agent_bin_picking(SequenceMixin, rai_env):
 # TODO unfinished
 # in principle very similar to above, however here we have the insertion skill
 # running in the end. Other main diff is that we take stuff from outside, and move them inside the bin
-@register("rai.single_agent_bin_packing")
+@register([
+    ("rai.single_agent_bin_packing", {}),
+    ("rai.single_agent_bin_packing_goal_set", {'goal_set': True}),
+])
 class rai_single_agent_bin_packing(SequenceMixin, rai_env):
-    def __init__(self):
-        self.C, [pre_pick_type_1, pre_pick_type_2, pre_place] = rai_config.make_single_agent_bin_packing_env()
-        self.C.view(True)
+    def __init__(self, goal_set=False):
+        if goal_set:
+            self.C, [pre_pick_type_1, pre_pick_type_2, pre_place] = rai_config.make_single_agent_bin_packing_env(True)
+        else:
+            self.C, [pre_pick_type_1, pre_pick_type_2, pre_place] = rai_config.make_single_agent_bin_packing_env()
 
         self.robots = ["a1"]
 
@@ -963,7 +968,11 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
         
         self.tasks = []
 
-        self.C.setJointState(pre_place)
+        if goal_set:
+            self.C.setJointState(pre_place[0])
+        else:
+            self.C.setJointState(pre_place)
+
         pose = self.C.getFrame("a1_ur_ee_marker").getPose()
         self.C.setJointState(home_pose)
 
@@ -975,6 +984,11 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
             else:
                 pre_pick = pre_pick_type_2
             
+            if goal_set:
+                pre_place_goal = GoalSet(pre_place)
+            else:
+                pre_place_goal = SingleGoal(pre_place)
+
             grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.15, 0, 0, 0, 0])
             grasp_pose[3:] = 1.*pose[3:]
 
@@ -995,7 +1009,7 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
                 Task(
                     f"pre_place_{i}",
                     ["a1"],
-                    SingleGoal(pre_place),
+                    pre_place_goal,
                 ),
                 Task(
                     f"place_{i}",

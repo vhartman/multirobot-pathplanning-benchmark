@@ -8908,7 +8908,7 @@ def make_multi_agent_bin_picking():
     return C, [a1_pre_pick, a1_pre_place_pose_obj1, a1_pre_place_pose_obj2], [a2_pre_pick, a2_pre_place_pose_obj1, a2_pre_place_pose_obj2]
 
 
-def make_single_agent_bin_packing_env(view: bool = False):
+def make_single_agent_bin_packing_env(compute_multiple_pre_place: bool = False, view: bool = False):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -9013,7 +9013,7 @@ def make_single_agent_bin_packing_env(view: bool = False):
 
     # C.view(True)
 
-    def compute_poses(C, robot_prefix, box, goal):
+    def compute_poses(C, robot_prefix, box, goal, xy_offset = [0, 0]):
         # set everything but the current box to non-contact
         c_tmp = ry.Config()
         c_tmp.addConfigurationCopy(C)
@@ -9069,7 +9069,7 @@ def make_single_agent_bin_packing_env(view: bool = False):
             [robot_prefix + ee_name, "bin_floor"],
             ry.OT.sos,
             [1e1, 1e1, 1],
-            target=[0, 0, pre_grasp_offset]
+            target=[xy_offset[0], xy_offset[1], pre_grasp_offset]
         )
         komo.addObjective(
             [2],
@@ -9121,6 +9121,13 @@ def make_single_agent_bin_packing_env(view: bool = False):
     _, _ = compute_poses(C, "a1_ur_", "obj2", "goal2")
     pre_pick_type_2, _ = compute_poses(C, "a1_ur_", "obj3", "goal3")
     # _, _ = compute_poses(C, "a1_ur_", "obj4", "goal4")
+
+    if compute_multiple_pre_place:
+        pre_place = [pre_place]
+
+        for _ in range(10):
+            _, additional_pre_place = compute_poses(C, "a1_ur_", "obj1", "goal1", np.random.randn(2) * 0.05)
+            pre_place.append(additional_pre_place)
 
     return C, [pre_pick_type_1, pre_pick_type_2, pre_place]
 
