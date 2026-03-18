@@ -40,6 +40,9 @@ from multi_robot_multi_goal_planning.planners import (
 
 from run_experiment import export_planner_data
 
+import cProfile
+import pstats
+
 import logging
 # logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -183,7 +186,16 @@ def main():
     np.random.seed(args.seed + args.run_id)
     random.seed(args.seed + args.run_id)
 
+    profiler_planner = cProfile.Profile()
+    profiler_planner.enable()
+
     path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
+    
+    profiler_planner.disable()
+    profiler_planner.dump_stats('profiler_planner.prof')
+    stats_planner = pstats.Stats(profiler_planner)
+    stats_planner.sort_stats('cumulative')
+    stats_planner.print_stats(40)
 
     if args.save:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
