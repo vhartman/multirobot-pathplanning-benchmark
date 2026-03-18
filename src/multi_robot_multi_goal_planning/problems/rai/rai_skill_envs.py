@@ -67,8 +67,6 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
         self.C, self.robots, [pick_pose, pre_screw_pose] = rai_config.make_ur10_screwing_env()
         # self.C.view(True)
 
-        print(pick_pose, pre_screw_pose)
-
         rai_env.__init__(self)
 
         self.manipulating_env = True
@@ -108,6 +106,73 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
 
         self.sequence = self._make_sequence_from_names(
             ["pick", "pre_screw", "screw", "terminal"]
+        )
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE  
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+@register([
+    ("rai.hallway_counterexample", {}),
+    ("rai.hallway_counterexample_sweep", {'sweep': True}),
+])
+class rai_skill_hallway(SequenceMixin, rai_env):
+    def __init__(self, sweep=False):
+        self.C, self.keyframes = rai_config.make_only_short_tunnel()
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        if sweep:
+            pts = [
+                np.array([1.5, 0, 0.1]),
+                np.array([-1.5, 0, 0.1]),
+                np.array([-1.5, -1, 0.1]),
+                np.array([-1.5, 1, 0.1]),
+            ]
+            passage_skill = EndEffectorPositionFollowing(self.robot_joints["a1"], "a1", pts)
+        else:
+            passage_skill = JogJoint(joints=self.robot_joints[self.robots[0]], speed=-3 / 2, idx=0, duration=2.)
+
+        self.tasks = [
+            Task(
+                "a1_pre_tunnel_passage",
+                ["a1"],
+                SingleGoal(np.array([1.5, 0.])),
+            ),
+            Task("a1_tunnel_passage",
+                ["a1"],
+                SingleGoal(np.array([1.5, 0.])),
+                skill = passage_skill
+            ),
+            Task(
+                "a2_goal",
+                ["a2"],
+                SingleGoal(self.keyframes[1]),
+            ),
+            Task(
+                "a1_goal",
+                ["a1"],
+                SingleGoal(self.keyframes[0]),
+            ),
+            Task(
+                "terminal",
+                ["a1", "a2"],
+                SingleGoal(self.keyframes[2]),
+            ),
+        ]
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_pre_tunnel_passage", "a1_tunnel_passage", "a2_goal", "a1_goal", "terminal"]
         )
 
         self.collision_tolerance = 0.001
