@@ -381,9 +381,12 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 # TODO unfinished
-@register("rai.single_agent_scripted_insert")
+@register([
+    ("rai.single_agent_scripted_insert", {}),
+    ("rai.single_agent_scripted_insert_goal_set", {'goal_set': True}),
+])
 class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, goal_set=False):
         self.C, keyframes = rai_config.make_single_robot_insert()
 
         self.robots = ["a1"]
@@ -414,11 +417,18 @@ class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
             pick_pose[3:] = a1_pose[3:]
             pick_pose[2] += 0.11
 
+            if goal_set:
+                pre_pick_goal = GoalSet([pre_pick + np.random.rand(6) * 0.01 for _ in range(10)])
+                pre_place_goal = GoalSet([pre_place + np.random.rand(6) * 0.01 for _ in range(10)])
+            else:
+                pre_pick_goal = SingleGoal(pre_pick + np.random.rand(6) * 0.1)
+                pre_place_goal = SingleGoal(pre_place + np.random.rand(6) * 0.1)
+
             self.tasks.extend([
                 Task(
                     f"pre_pick_{i}",
                     ["a1"],
-                    SingleGoal(pre_pick + np.random.rand(6) * 0.1),
+                    pre_pick_goal,
                 ),
                 Task(
                     f"pick_{i}",
