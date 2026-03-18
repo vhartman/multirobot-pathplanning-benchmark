@@ -796,10 +796,14 @@ class rai_env(BaseProblem):
             viewer = self.C.get_viewer()
             self.C_cache[m].set_viewer(viewer)
             # self.C_cache[m].computeCollisions()
-            try:
-                self.C_cache[m].view_recopyMeshes()
-            except:
-                pass
+            
+            # TODO (Liam) not sure.. but goal of set_to_mode is to reconstruct scene graph when mode changes (attach, setContact(-1), delFrame)
+            # Forcing a mesh recopy after e.g. delFrame will try to update a mesh for a frame we just deleted -> c++ throws error
+            # Really needed? Seems like view() safely fixes changes on next call..
+            # try: 
+            #     self.C_cache[m].view_recopyMeshes()
+            # except:
+            #     pass
             self.C = self.C_cache[m]
 
         else:
