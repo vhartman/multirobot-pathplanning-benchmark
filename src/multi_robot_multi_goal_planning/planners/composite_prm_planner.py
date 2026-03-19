@@ -67,7 +67,7 @@ class CompositePRMConfig:
 
     # TODO (Liam) new
     skill_phase: int = 1
-    max_skill_rollouts: int = 3
+    max_skill_rollouts: int = 20
     informed_entry_selection: bool = False
 
 """
@@ -115,6 +115,7 @@ class CompositePRM(BasePlanner):
         self._used_skill_entry_ids: Dict[Mode, Set[int]] = {}       # mode -> set of successful entry node IDs
         self._failed_skill_entry_ids: Dict[Mode, Set[int]] = {}     # mode -> set of failed entry node IDs
         self._skill_traj_cache: Dict[(int, int), List]  = {}        # (mode.id, entry_node.id) -> skill_traj
+        self._exhausted_skill_modes: Set[Mode] = set()
 
     def _sample_mode(
         self,
@@ -315,7 +316,7 @@ class CompositePRM(BasePlanner):
 
         return q
     
-    def _skill_rollout(self, g, mode, active_task, existing_skill_start_nodes):
+    def _skill_rollout(self, g, mode, active_task):
         """
         Rollout skill from an entry node and add as skill chain into PRM graph
 
@@ -325,37 +326,37 @@ class CompositePRM(BasePlanner):
         # 1. Get candidate entry nodes for skill
         candidate_entry_nodes = g.reverse_transition_nodes.get(mode, [])
         if not candidate_entry_nodes:
-            candidate_entry_nodes = g.nodes.get(mode, [])
+            print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | No entry nodes yet")
+            return False, None # No entry nodes yet, wait
 
-        if not candidate_entry_nodes:
-            return False, None
-
-        # 2. Filter out already used entry nodes 
+        # 2. Filter out failed entry nodes (both phases) + used entries (phase 1 only)
         failed_ids = self._failed_skill_entry_ids.get(mode, set())
+        used_ids = self._used_skill_entry_ids.get(mode, set())
+
         if self.config.skill_phase == 1:
-            # PHASE 1: one rollout per entry node 
-            used_ids = self._used_skill_entry_ids.get(mode, set())
-            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in used_ids and n.id not in failed_ids]
+            # PHASE 1: one rollout per entry node (deterministic skill + frozen -> identical rollout)
+            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids and n.id not in used_ids]
         else:
             # PHASE 2: up to max_skill_rollouts, using same entry (different inactive configs each time)
             candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids]
 
         if not candidate_entry_nodes:
+            self._exhausted_skill_modes.add(mode) # All entry nodes tried
+            print(f"[DEBUG ROLLOUT SKILL] Mode: {mode.id} | All entry nodes tried (added mode {mode.id} to exhausted)")
             return False, None
             
-        print(f"[DEBUG ROLLOUT ENTRY] Mode: {mode.id} | Phase: {self.config.skill_phase} | Candidates: {len(candidate_entry_nodes)} | Existing rollouts: {len(existing_skill_start_nodes)} |")
+        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Phase: {self.config.skill_phase} | Candidates: {len(candidate_entry_nodes)}")
 
-        # 3. Select entry node from candidates (random)
+        # 3. Select entry node from candidates
         entry_node = random.choice(candidate_entry_nodes)
         q_entry = entry_node.state.q.state()
 
-        # 4. Rollout skill
+        # 4. Rollout skill (or use cache)
         cache_key = (mode.id, entry_node.id)
         
-        if cache_key in getattr(self, '_skill_traj_cache', {}):
-            # Using cached skill trajectory
+        if cache_key in self._skill_traj_cache:
             skill_traj = self._skill_traj_cache[cache_key]
-            print(f"[DEBUG SKILL] Reusing cached skill_traj")
+            print(f"[DEBUG SKILL TRAJECTORY] Reusing cached skill_traj")
         else:
             # Identify active joints for this task & extract starting configuration for active joints 
             active_joints = []
@@ -380,42 +381,45 @@ class CompositePRM(BasePlanner):
             skill_result = active_task.skill.rollout(q_init, active_task, all_joints, self.env, t0=0.0)
             skill_traj = skill_result.trajectory
 
-            # TODO check degenerate skill rollouts... 
+            # TODO check degenerate skill rollouts... need to define cases for failed rollouts (maybe only the collision..)
             dist_moved = np.linalg.norm(skill_traj[0] - skill_traj[-1])
             if dist_moved < 1e-4:
-                print(f"[WARNING] Problem with rollout in mode {mode.id}: steps={len(skill_traj)}, dist={dist_moved:.4f}")
-                if mode not in self._failed_skill_entry_ids:
-                    self._failed_skill_entry_ids[mode] = set()
-                self._failed_skill_entry_ids[mode].add(entry_node.id)
+                self._log_failed_skill_entry(mode, entry_node.id)
+                print(f"[DEBUG SKILL WARNING] Problem with rollout in mode {mode.id}: steps={len(skill_traj)}, dist={dist_moved:.4f}")
                 return False, None
                 
             # Cache successful skill trajectory
-            if not hasattr(self, '_skill_traj_cache'):
-                self._skill_traj_cache = {}
             self._skill_traj_cache[cache_key] = skill_traj
-
-        # 6. Reconstruct composite trajectory
-        if self.config.skill_phase == 1:
+            
+        # 5. Build composite trajectory
+        if self.config.skill_phase == 1 or self.config.skill_phase == 2:
             # PHASE 1: active robots (skill rollout) + inactive robots (frozen)
             composite_traj = self._build_composite_traj_frozen(q_entry, skill_traj, active_task)
         else:
             # PHASE 2: active robots (skill rollout) + inactive robots (???)
-            composite_traj = self._build_composite_traj_sampled() # TODO not implemented
+            composite_traj = self._build_composite_traj_sampled() # TODO (to be implemented later)
 
-        # 7. Collision check # TODO only waypoint check for now. 
+        # 6. Collision check (waypoints + edges)
         for step_idx in range(len(composite_traj)):
             q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
             if not self.env.is_collision_free(q_check, mode):
                 # self.env.C.view(True)
+                self._log_failed_skill_entry(mode, entry_node.id)
+                print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision (point)!)")
                 return False, None 
-            
-        # TODO fallback strategy
-        # Add some fallback for phase 2 instead of throwing traj away in step 6..? 
-        # Otherwise could it be that phase 2 would perform worse than phase 1..
-        # - If traj not valid -> try frozen inactive robots (phase 1)?
-        # -  
-            
-        # 8. Compute valid next modes
+            # Edge check between consecutive steps 
+            if step_idx > 0: 
+                q_prev = self.env.start_pos.from_flat(composite_traj[step_idx - 1])
+                if not self.env.is_edge_collision_free( # TODO check if needed (skill resolution vs. collision resolution)
+                    q_prev, q_check, mode, 
+                    resolution=self.env.collision_resolution,
+                    tolerance=self.env.collision_tolerance,
+                ):
+                    self._log_failed_skill_entry(mode, entry_node.id)
+                    print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision (edge)!)")
+                    return False, None
+                        
+        # 7. Compute valid next modes
         q_final = self.env.start_pos.from_flat(composite_traj[-1])
         if self.env.is_terminal_mode(mode):
             valid_next_modes = []
@@ -424,16 +428,13 @@ class CompositePRM(BasePlanner):
             valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
 
             if not valid_next_modes:
+                self._log_failed_skill_entry(mode, entry_node.id)
                 return False, None 
 
-        # 9. Convert to PRM States, mark them as skill waypoints and add to graph
+        # 8. Add skill points to graph and mark as used
         states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
         g.add_skill_path(entry_node, states, valid_next_modes)
-
-        # 10. Mark entry node as used
-        if mode not in self._used_skill_entry_ids:
-            self._used_skill_entry_ids[mode] = set()
-        self._used_skill_entry_ids[mode].add(entry_node.id)
+        self._log_used_skill_entry(mode, entry_node.id)
         
         # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
         # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
@@ -487,6 +488,22 @@ class CompositePRM(BasePlanner):
             if task_id is not None and getattr(self.env.tasks[task_id], 'skill', None) is not None:
                 return True
         return False
+
+    def _log_failed_skill_entry(self, mode, entry_node_id):
+        """
+        Update the failed_skill_entry_ids dict if an entry node fails to do a skill rollout
+        """
+        if mode not in self._failed_skill_entry_ids:
+            self._failed_skill_entry_ids[mode] = set()
+        self._failed_skill_entry_ids[mode].add(entry_node_id)
+
+    def _log_used_skill_entry(self, mode, entry_node_id):
+        """
+        Update the failed_skill_entry_ids dict if an entry node fails to do a skill rollout
+        """
+        if mode not in self._used_skill_entry_ids:
+            self._used_skill_entry_ids[mode] = set()
+        self._used_skill_entry_ids[mode].add(entry_node_id)
 
     # TODO:
     # - Introduce mode_subset_to_sample
@@ -575,23 +592,49 @@ class CompositePRM(BasePlanner):
             if getattr(active_task, 'skill', None) is not None:
                 # print(f"[DEBUG SKILL] Intercepted skill for mode {mode.id}")
 
-                # Skip rollout if there already is a skill trajectory for this mode
-                existing_skill_start_nodes = [
+                # Skip 1: mode exhausted but check for new candidates since
+                if mode in self._exhausted_skill_modes:
+                    candidate_entry_nodes = g.reverse_transition_nodes.get(mode, [])
+                    failed_ids = self._failed_skill_entry_ids.get(mode, set())
+                    used_ids = self._used_skill_entry_ids.get(mode, set())
+                    if self.config.skill_phase == 1:
+                        new_candidate_entry_Nodes = [n for n in candidate_entry_nodes
+                                if n.id not in failed_ids and n.id not in used_ids]
+                    else:
+                        new_candidate_entry_Nodes = [n for n in candidate_entry_nodes
+                                if n.id not in failed_ids]
+                    if new_candidate_entry_Nodes:
+                        self._exhausted_skill_modes.discard(mode) # New entry nodes appeared — re-enable this mode
+                        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
+                    else:
+                        # failed_attempts += 1 # TODO burn failed_attempts budget?
+                        continue 
+
+                # Skip 2: max rollout reached for this mode
+                existing_rollouts = [
                     n for n in g.nodes.get(mode, [])
                     if n.state.is_skill_waypoint and n.skill_step == 0
                 ]
-                if len(existing_skill_start_nodes) >= self.config.max_skill_rollouts: # Caps at max_skill_rollouts skill trajectories per mode
-                    failed_attempts += 1 # Skip without burning failure budget?
-                    # print(f"[DEBUG SKILL] Skip skill rollout (already one skill traj in mode {mode.id})")
-                    continue
+                if len(existing_rollouts) >= self.config.max_skill_rollouts: # Caps at max_skill_rollouts skill trajectories per mode
+                    # print(f"[DEBUG SKILL] Reached max. rollout ({self.config.max_skill_rollouts}) in mode {mode.id} --> skip rollout")
+                    # failed_attempts += 1 # TODO burn failed_attempts budget?
+                    continue 
 
                 # Run the rollout
-                success, valid_next_modes = self._skill_rollout(g, mode, active_task, existing_skill_start_nodes)
+                success, valid_next_modes = self._skill_rollout(g, mode, active_task)
                 
                 if success:
                     transitions += 1 
                     if valid_next_modes:
                         reached_modes.update(valid_next_modes)
+                        
+                        # Sync sampling pool!
+                        if len(reached_modes) != len(self.sorted_reached_modes):
+                            if not reached_terminal_mode:
+                                self.sorted_reached_modes = list(
+                                    sorted(reached_modes, key=lambda m: m.id)
+                                )
+                                mode_subset_to_sample = self.sorted_reached_modes
                 else:
                     failed_attempts += 1
                     # print(f"[DEBUG SKILL] Failed attempt ({failed_attempts})")
