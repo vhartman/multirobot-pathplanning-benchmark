@@ -30,7 +30,7 @@ from .mode_validation import ModeValidation
 from .termination_conditions import (
     PlannerTerminationCondition,
 )
-from .prm.prm_graph import MultimodalGraph
+from .prm.prm_graph import MultimodalGraph, Node
 
 @dataclass
 class CompositePRMConfig:
@@ -67,7 +67,7 @@ class CompositePRMConfig:
 
     # TODO (Liam) new
     skill_phase: int = 1
-    max_skill_rollouts: int = 20
+    max_skill_rollouts: int = 1
     informed_entry_selection: bool = False
 
 """
@@ -309,6 +309,20 @@ class CompositePRM(BasePlanner):
                 q.append(goal_sample[end_idx : end_idx + dim]) # Constrained to be at sampled goal config
                 end_idx += dim
             else: # Unconstrained robots
+                # Check if this robot's task in the current mode has a skill
+                robot_idx = self.env.robots.index(robot)
+                robot_task_id = mode.task_ids[robot_idx]
+
+                if robot_task_id is not None:
+                    robot_task = self.env.tasks[robot_task_id]
+                    if getattr(robot_task, 'skill', None) is not None:
+                        # Robot has upcoming skill: sample from task goal
+                        # (= skill initiation config, e.g. pre_pick pose)
+                        skill_init_sample = robot_task.goal.sample(mode)
+                        q.append(skill_init_sample)
+                        continue
+
+                # Default: random within limits
                 r_idx = self.env.robot_idx[robot]
                 lims = self.env.limits[:, r_idx]
                 q.append(np.random.uniform(lims[0], lims[1])) # Free to be anywhere (within limits)
@@ -384,7 +398,7 @@ class CompositePRM(BasePlanner):
             # TODO check degenerate skill rollouts... need to define cases for failed rollouts (maybe only the collision..)
             dist_moved = np.linalg.norm(skill_traj[0] - skill_traj[-1])
             if dist_moved < 1e-4:
-                self._log_failed_skill_entry(mode, entry_node.id)
+                self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
                 print(f"[DEBUG SKILL WARNING] Problem with rollout in mode {mode.id}: steps={len(skill_traj)}, dist={dist_moved:.4f}")
                 return False, None
                 
@@ -399,13 +413,22 @@ class CompositePRM(BasePlanner):
             # PHASE 2: active robots (skill rollout) + inactive robots (???)
             composite_traj = self._build_composite_traj_sampled() # TODO (to be implemented later)
 
+        # TODO DEBUG
+        print(f"[DEBUG SKILL COLL CHECK] Mode: {mode.id} | a2 frozen at: {q_entry[2:]}")
+        print(f"[DEBUG SKILL COLL CHECK] Skill traj length: {len(composite_traj)}")
+        print(f"[DEBUG SKILL COLL CHECK] Checking {len(composite_traj)} waypoints...")
+
         # 6. Collision check (waypoints + edges)
         for step_idx in range(len(composite_traj)):
             q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
             if not self.env.is_collision_free(q_check, mode):
                 # self.env.C.view(True)
-                self._log_failed_skill_entry(mode, entry_node.id)
-                print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision (point)!)")
+                
+                # TODO DEBUG
+                print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision at step {step_idx}/{len(composite_traj)}")
+                print(f"[DEBUG SKILL COLLISION] a1 pos: {composite_traj[step_idx][:2]}, a2 pos: {composite_traj[step_idx][2:]}")
+                
+                self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
                 return False, None 
             # Edge check between consecutive steps 
             if step_idx > 0: 
@@ -415,7 +438,7 @@ class CompositePRM(BasePlanner):
                     resolution=self.env.collision_resolution,
                     tolerance=self.env.collision_tolerance,
                 ):
-                    self._log_failed_skill_entry(mode, entry_node.id)
+                    self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
                     print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision (edge)!)")
                     return False, None
                         
@@ -428,14 +451,14 @@ class CompositePRM(BasePlanner):
             valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
 
             if not valid_next_modes:
-                self._log_failed_skill_entry(mode, entry_node.id)
+                self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
                 return False, None 
 
         # 8. Add skill points to graph and mark as used
         states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
         g.add_skill_path(entry_node, states, valid_next_modes)
-        self._log_used_skill_entry(mode, entry_node.id)
-        
+        self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
+
         # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
         # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
         return True, valid_next_modes
@@ -463,11 +486,11 @@ class CompositePRM(BasePlanner):
     
     def _build_composite_traj_sampled(self, q_entry, skill_traj, active_task):
         """
-        Phase 2: Builds a composite trajectory where active robots follow the skill exactly, 
-        and inactive robots linearly interpolate to a new sampled target???
+        Phase 2: For each skill step k, generates S composite configs, where active robots are fixed to
+        the skill trajectory and inactive robots are sampled uniformly and collision checked. 
         """
         # TODO
-        
+
         # Idea: 
         # - PHASE 1: inactive robot configs "frozen"
         # - PHASE 2: inactive robot configs sampled
@@ -489,21 +512,15 @@ class CompositePRM(BasePlanner):
                 return True
         return False
 
-    def _log_failed_skill_entry(self, mode, entry_node_id):
+    def _log_entry_to_dict(self, mode, entry_node_id, target_dict):
         """
-        Update the failed_skill_entry_ids dict if an entry node fails to do a skill rollout
+        Generalized logger:
+        - Updates the failed dict if an entry node fails to do a skill rollout.
+        - Updates the used dict if an entry node has already been used (phase 1 only)
         """
-        if mode not in self._failed_skill_entry_ids:
-            self._failed_skill_entry_ids[mode] = set()
-        self._failed_skill_entry_ids[mode].add(entry_node_id)
-
-    def _log_used_skill_entry(self, mode, entry_node_id):
-        """
-        Update the failed_skill_entry_ids dict if an entry node fails to do a skill rollout
-        """
-        if mode not in self._used_skill_entry_ids:
-            self._used_skill_entry_ids[mode] = set()
-        self._used_skill_entry_ids[mode].add(entry_node_id)
+        if mode not in target_dict:
+            target_dict[mode] = set()
+        target_dict[mode].add(entry_node_id)
 
     # TODO:
     # - Introduce mode_subset_to_sample
@@ -607,7 +624,7 @@ class CompositePRM(BasePlanner):
                         self._exhausted_skill_modes.discard(mode) # New entry nodes appeared — re-enable this mode
                         print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
                     else:
-                        # failed_attempts += 1 # TODO burn failed_attempts budget?
+                        failed_attempts += 1 # TODO burn failed_attempts budget?
                         continue 
 
                 # Skip 2: max rollout reached for this mode
@@ -637,7 +654,7 @@ class CompositePRM(BasePlanner):
                                 mode_subset_to_sample = self.sorted_reached_modes
                 else:
                     failed_attempts += 1
-                    # print(f"[DEBUG SKILL] Failed attempt ({failed_attempts})")
+                    print(f"[DEBUG SKILL] Failed attempt ({failed_attempts})")
                     
                 # Skip the normal random geometric sampling for this iteration
                 # That way skill modes get exactly 1 skill-based transition and 0 geometric transitions
@@ -882,8 +899,8 @@ class CompositePRM(BasePlanner):
             g,
             batch_size=effective_uniform_batch_size,
             cost=current_best_cost,
-            non_skill_modes=None, # Sample in ALL modes # TODO check if necessary or waste
-            # non_skill_modes=non_skill_modes,
+            # non_skill_modes=None,
+            non_skill_modes=non_skill_modes, # Don't sample in skill modes
         )
 
         g.add_states(new_states) # Adding new valid samples (regular nodes) to graph
@@ -913,7 +930,7 @@ class CompositePRM(BasePlanner):
             if self.config.try_informed_sampling:
                 print("Generating informed samples")
                 new_informed_states = informed_sampler.generate_samples(
-                    list(reached_modes), # non_skill_modes, # Regular nodes are fine in skill modes
+                    non_skill_modes, # list(reached_modes), # Don't sample in skill modes
                     self.config.informed_batch_size,
                     interpolated_path,
                     try_direct_sampling=self.config.try_direct_informed_sampling,
@@ -964,6 +981,11 @@ class CompositePRM(BasePlanner):
 
         assert self.env.is_collision_free(q0, m0)
 
+        # TODO DEBUG remove
+        # self.env.C.view(True)
+        print("[DEBUG ENV] Limits shape:", self.env.limits.shape)
+        print("[DEBUG ENV] Limits:\n", self.env.limits)
+
         reached_modes = set([m0]) # Set of modes M that we reached so far
         self.sorted_reached_modes = list(sorted(reached_modes, key=lambda m: m.id))
 
@@ -997,6 +1019,11 @@ class CompositePRM(BasePlanner):
         cnt = 0
         while True:
             if ptc.should_terminate(cnt, time.time() - start_time):
+
+                # TODO DEBUG remove
+                skill_states = [s for s in path if s.is_skill_waypoint]
+                print(f"[DEBUG OPT] New path has {len(skill_states)} skill waypoints")
+                
                 break # Loop until termination condition met
             
             # If we have solution, remove nodes outside informed ellipsoid (prune)
@@ -1053,6 +1080,14 @@ class CompositePRM(BasePlanner):
                 #         print(f"Skill_chain_nodes: {len(skill_chain)}")
                 #         print()
 
+                # TODO DBUG
+                for mode_obj in reached_modes:
+                    if self._mode_has_skill(mode_obj):
+                        trans = graph.transition_nodes.get(mode_obj, [])
+                        skill_trans = [t for t in trans if t.state.is_skill_waypoint]
+                        non_skill_trans = [t for t in trans if not t.state.is_skill_waypoint]
+                        print(f"[DEBUG PRE-A*] Skill mode {mode_obj.id}: {len(trans)} transitions ({len(skill_trans)} skill, {len(non_skill_trans)} NON-skill)")
+
                 # Search: A* from root to goal nodes to get candidate path
                 # Too expensive to check every single edge.. 
                 sparsely_checked_path = graph.search(
@@ -1105,7 +1140,21 @@ class CompositePRM(BasePlanner):
                         if (
                             current_best_cost is None
                             or new_path_cost < current_best_cost
-                        ):
+                        ):     
+                            # TODO DEBUG
+                            skill_states = [s for s in path if s.is_skill_waypoint]
+                            skill_modes_in_path = set(s.mode.id for s in path if self._mode_has_skill(s.mode))
+                            print()
+                            print(f"[DEBUG A*] New path found")
+                            print(f"[DEBUG A*] Path length: {len(path)}, cost: {new_path_cost}")
+                            print(f"[DEBUG A*] Skill waypoints in path: {len(skill_states)}")
+                            print(f"[DEBUG A*] Skill modes traversed: {skill_modes_in_path}")
+                            for m_id in skill_modes_in_path:
+                                states_in_mode = [s for s in path if s.mode.id == m_id]
+                                skill_states_in_mode = [s for s in states_in_mode if s.is_skill_waypoint]
+                                print(f"[DEBUG A*] -- Mode {m_id}: {len(states_in_mode)} total states, {len(skill_states_in_mode)} skill wp")
+                            print()
+
                             # Update current best path and cost
                             current_best_path = path
                             current_best_cost = new_path_cost
@@ -1131,6 +1180,16 @@ class CompositePRM(BasePlanner):
                             # PART 4: SHORTCUTTING
                             # Try to connect non-adjacent waypoints to remove unnecessary intermediate points
                             if self.config.try_shortcutting:
+                                
+                                # TODO DEBUG
+                                print()
+                                print(f"[DEBUG PRE-SHORTCUT] Before shortcutting")
+                                for m_id in skill_modes_in_path:
+                                    states_in_mode = [s for s in path if s.mode.id == m_id]
+                                    sw = [s for s in states_in_mode if s.is_skill_waypoint]
+                                    print(f"[DEBUG PRE-SHORTCUT] Mode {m_id}: {len(states_in_mode)} states, {len(sw)} skill wp")
+                                print()
+
                                 print("Shortcutting path")
                                 shortcut_path, _ = shortcutting.robot_mode_shortcut(
                                     self.env,
@@ -1144,6 +1203,17 @@ class CompositePRM(BasePlanner):
 
                                 print(f"[DEBUG SHORTCUTPATH]: length before = {len(shortcut_path)}")
 
+                                # TODO DEBUG
+                                print()
+                                print(f"[DEBUG POST-SHORTCUT] After shortcutting, before remove_interpolated")
+                                print(f"[DEBUG POST-SHORTCUT] Path length: {len(shortcut_path)}")
+                                for m_id in skill_modes_in_path:
+                                    states_in_mode = [s for s in shortcut_path if s.mode.id == m_id]
+                                    sw = [s for s in states_in_mode if s.is_skill_waypoint]
+                                    non_sw = [s for s in states_in_mode if not s.is_skill_waypoint]
+                                    print(f"[DEBUG POST-SHORTCUT] Mode {m_id}: {len(states_in_mode)} states, {len(sw)} skill wp, {len(non_sw)} non-skill")
+                                print()
+
                                 # # TODO (Liam) DON'T COMMENT OUT! "Needed", because it removes interpolated points used during shortcutting
                                 # Remove interpolated points (just used for collision check)
                                 shortcut_path = shortcutting.remove_interpolated_nodes(
@@ -1151,6 +1221,16 @@ class CompositePRM(BasePlanner):
                                 )
 
                                 print(f"[DEBUG SHORTCUTPATH]: length after = {len(shortcut_path)}")
+                                
+                                print()
+                                print(f"[DEBUG POST-REMOVAL] After remove_interpolated_nodes")
+                                print(f"[DEBUG POST-REMOVAL] Path length: {len(shortcut_path)}")
+                                for m_id in skill_modes_in_path:
+                                    states_in_mode = [s for s in shortcut_path if s.mode.id == m_id]
+                                    sw = [s for s in states_in_mode if s.is_skill_waypoint]
+                                    non_sw = [s for s in states_in_mode if not s.is_skill_waypoint]
+                                    print(f"[DEBUG POST-REMOVAL] Mode {m_id}: {len(states_in_mode)} states, {len(sw)} skill wp, {len(non_sw)} non-skill")
+                                print()
 
                                 shortcut_path_cost = path_cost(
                                     shortcut_path, self.env.batch_config_cost
@@ -1238,6 +1318,11 @@ class CompositePRM(BasePlanner):
                     break
 
             if not optimize and current_best_cost is not None:
+                
+                # TODO DEBUG remove
+                skill_states = [s for s in path if s.is_skill_waypoint]
+                print(f"[DEBUG OPT] New path has {len(skill_states)} skill waypoints")
+
                 break # Return first feasible path (if goal is not to optimize path..)
 
         if len(costs) > 0:
