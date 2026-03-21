@@ -130,10 +130,14 @@ class rai_skill_hallway(SequenceMixin, rai_env):
 
         rai_env.__init__(self)
 
+        # TODO (Liam) check why [DEBUG ENV] Limits: [[-2.  2. -2.  2.], [-2.  2. -2.  2.]]
+        self.limits = np.array([[-2., -2., -2., -2.], [ 2.,  2.,  2.,  2.]]) 
+
         home_pose = self.C.getJointState()
 
         if sweep:
             pts = [
+                # np.array([1.5, -1, 0.1]), # TODO (Liam) PRM1 fails if task1 is skill task
                 np.array([1.5, 0, 0.1]),
                 np.array([-1.5, 0, 0.1]),
                 np.array([-1.5, -1, 0.1]),
@@ -151,7 +155,7 @@ class rai_skill_hallway(SequenceMixin, rai_env):
             ),
             Task("a1_tunnel_passage",
                 ["a1"],
-                SingleGoal(np.array([1.5, 0.])),
+                SingleGoal(np.array([-1.5, 0.])),
                 skill = passage_skill
             ),
             Task(
@@ -172,6 +176,7 @@ class rai_skill_hallway(SequenceMixin, rai_env):
         ]
 
         self.sequence = self._make_sequence_from_names(
+            # ["a1_tunnel_passage", "a2_goal", "a1_goal", "terminal"] # TODO (Liam) PRM1 fails if task1 is skill task
             ["a1_pre_tunnel_passage", "a1_tunnel_passage", "a2_goal", "a1_goal", "terminal"]
         )
 
