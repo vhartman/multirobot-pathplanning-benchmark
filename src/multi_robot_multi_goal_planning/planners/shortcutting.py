@@ -240,6 +240,14 @@ def robot_mode_shortcut(
         times.append(current_time - start_time)
         costs.append(path_cost(working_path, env.batch_config_cost))
 
+    # TODO (Liam)
+    # Restore skill waypoint flags lost by interpolate_path
+    for s in working_path:
+        for task_id in s.mode.task_ids:
+            if getattr(env.tasks[task_id], 'skill', None) is not None:
+                s.is_skill_waypoint = True
+                break
+
     assert working_path[-1].mode == path[-1].mode
     assert np.linalg.norm(working_path[-1].q.state() - path[-1].q.state()) < 1e-6
     assert np.linalg.norm(working_path[0].q.state() - path[0].q.state()) < 1e-6
