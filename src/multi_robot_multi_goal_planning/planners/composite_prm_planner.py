@@ -456,7 +456,7 @@ class CompositePRM(BasePlanner):
 
         # 8. Add skill points to graph and mark as used
         states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
-        g.add_skill_path(entry_node, states, valid_next_modes)
+        g.add_skill_path(states, valid_next_modes, entry_node)
         self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
 
         # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
@@ -1249,23 +1249,12 @@ class CompositePRM(BasePlanner):
 
                                     interpolated_path = shortcut_path
 
-                                    # debug_skipped_skills = 0 # TODO remove
-                                    # debug_added_regular = 0
-                                    # debug_added_trans = 0
+                                    # Check shortcutted path (& handle mode changes)
+                                    # Update graph
+                                    current_skill_states = []
 
-                                    # Check shortcutted path (mode changes?)
-                                    # Add path to graph
                                     for i in range(len(interpolated_path)):
                                         s = interpolated_path[i]
-
-                                        # TODO (Liam) COMMENT OUT! (remove)
-                                        # if self._mode_has_skill(s.mode):
-                                        #     debug_skipped_skills += 1
-                                        #     continue # Avoid skill-mode states from being re-added to graph
-                                        
-                                        # NOTE: My reasoning why this was wrong:
-                                        # - Idea was to not re-add same skill nodes to the graph as they don't change (protected from shortcutting)
-                                        # - Wrong! Because shortcutter can shortcut skill nodes (inactive robots) -> so we need to add those changed skill nodes!  
 
                                         if not self.env.is_collision_free(s.q, s.mode):
                                             continue
@@ -1275,28 +1264,37 @@ class CompositePRM(BasePlanner):
                                             and interpolated_path[i].mode != interpolated_path[i + 1].mode
                                         )
 
-                                        if is_mode_boundary:
-                                            # TODO (Liam) COMMENT OUT! (remove)
-                                            # if self._mode_has_skill(s.mode): # Skip is skill mode, otherwise could create transition node bypassing skill -> WRONG!
-                                            #     continue
+                                        if self._mode_has_skill(s.mode):
+                                            # SKILL MODE: don't add nodes directly to graph, use add:skill_path!
+                                            # Collect the state
+                                            current_skill_states.append(s)
 
-                                            # NOTE: My reasoning why this was a mistake: 
-                                            # - Before the shortcutter: the transition node for skill had perfeclty aligned active robot but not inactive robot (causing unnecessary big motions)
-                                            # - After the shortcutter: the transition node for skill had perfeclty aligned active robot AND smoothly aligned inactive robot
-                                            # --> If we block that newly smoother transition node from getting added to graph, we throw away that smooth door and the next time
-                                            #     A* searches, it will go again through the old ugly door! And no worries about bypassing the skill when taking that new transition node
-                                            #     because this newly created door just has modified inactive robot configs, active robot configs (skill) doesn't change -> made sure of it in shortcutter!
+                                            # When the skill mode ends, add the collected current_skill_states  
+                                            if is_mode_boundary:
+                                                next_mode = interpolated_path[i + 1].mode
+                                                
+                                                # Handles hiding, neighbors, and whitelisting for skill nodes
+                                                graph.add_skill_path(states=current_skill_states, valid_next_modes=[next_mode])
+                                                skill_mode = current_skill_states[0].mode
+                                                print(f"[DEBUG GRAPH] Skill Mode {skill_mode} | Main Nodes: {len(graph.nodes.get(skill_mode, []))} | Hidden Skill Nodes: {len(graph.skill_chain_nodes.get(skill_mode, []))}")
+                                                
+                                                # TODO (Liam) consider removing old skill chain & transition node?
+                                                
+                                                # Reset for the next potential skill
+                                                current_skill_states = []
 
-                                            # Mode CHANGES -> add state as transition 
-                                            graph.add_transition_nodes([(s.q, s.mode, [interpolated_path[i + 1].mode])])
-                                            # debug_added_trans += 1
-                                            # pass
                                         else:
-                                            # Mode SAME -> add state as regular node (safe everywhere, dead-ends in skill modes..)
-                                            graph.add_states([s])
-                                            # debug_added_regular += 1
+                                            # NON-SKILL MODE: standard prm behaviour
+                                            s.is_skill_waypoint = False # To be sure # TODO (Liam) probably not necessary..
+                                            
+                                            if is_mode_boundary:
+                                                graph.add_transition_nodes([(s.q, s.mode, [interpolated_path[i + 1].mode])])
+                                            else:
+                                                graph.add_states([s])
 
-                                    # print(f"[DEBUG SHORTCUTTER] Graph updated! Skipped {debug_skipped_skills} skill waypoints. Added {debug_added_regular} regular nodes and {debug_added_trans} transition nodes.")
+                                    # Edge case: if a shortcutted skill path ends exactly on the goal without a boundary trigger
+                                    if current_skill_states:
+                                        graph.add_skill_path(states=current_skill_states, valid_next_modes=None)
 
                         add_new_batch = True # To add more samples in next iteration
                         break # Exit inner loop

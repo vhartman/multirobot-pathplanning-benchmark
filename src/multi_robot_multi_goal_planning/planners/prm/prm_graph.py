@@ -401,12 +401,19 @@ class MultimodalGraph:
                         self.reverse_transition_nodes[next_mode] = [next_node]
 
     # TODO (Liam) new
-    def add_skill_path(self, entry_node, states, valid_next_modes):
+    def add_skill_path(self, states, valid_next_modes, entry_node=None):
         """
-        Add skill states in the PRM graph.
-        """
-        # raise NotImplementedError
+        Adds a sequence of skill states into the PRM graph as a protected trajectory.
 
+        Intermediate states (step1 1 to N-1) are hidden from the spatial K-search to prevent
+        A* from bypassing the skill trajectory. The final state is added as a transition node
+        to allow mode switching. 
+
+        NOTE: entry_node is optional:
+        - If provided: The skill is explicitely linked to this node (used when saving a new rollout)
+        - If None: The skill is added as a new parallel chain (used when re-seeding an optimized shortcutted
+          path back into the graph)
+        """
         skill_nodes = []
         
         # 1. Protect intermediate nodes and add them to the graph
@@ -441,9 +448,11 @@ class MultimodalGraph:
             skill_nodes[i+1].whitelist.add(skill_nodes[i].id)
             skill_nodes[i].neighbors.append(skill_nodes[i+1])
         
-        entry_node.whitelist.add(skill_nodes[0].id)
-        skill_nodes[0].whitelist.add(entry_node.id)
-        entry_node.neighbors.append(skill_nodes[0])
+        # ONLY link the entry node if one was provided
+        if entry_node is not None:
+            entry_node.whitelist.add(skill_nodes[0].id)
+            skill_nodes[0].whitelist.add(entry_node.id)
+            entry_node.neighbors.append(skill_nodes[0])
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     # TODO (Liam) make changes in get_neighbors()
@@ -807,13 +816,14 @@ class MultimodalGraph:
                     continue
 
                 # TODO (Liam) new
-                # Avoid A* jumping to skill transition node (end of skill traj) and bypass skill chain 
-                is_n1_skill = n1.state.is_skill_waypoint
-                is_n_skill = n.state.is_skill_waypoint
+                # Avoid A* jumping to skill transition node (end of skill traj) and bypass skill chain
+                is_n1_skill = getattr(n1.state, 'is_skill_waypoint', False)
+                is_n_skill = getattr(n.state, 'is_skill_waypoint', False)
 
                 if is_n_skill and not is_n1_skill:
                     # Normal nodes can only connect to start (step-0) of a skill chain
-                    if n.skill_step != 0: 
+                    # The end of a skill is ALWAYS a transition node
+                    if n.is_transition: 
                         continue
                 
                 # TODO (Liam) rest unchanged           
