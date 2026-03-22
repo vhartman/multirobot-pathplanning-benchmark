@@ -121,9 +121,10 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
 @register([
     ("rai.hallway_counterexample", {}),
     ("rai.hallway_counterexample_sweep", {'sweep': True}),
+    ("rai.hallway_counterexample_wide_sweep", {'sweep': True, 'wide': True}),
 ])
 class rai_skill_hallway(SequenceMixin, rai_env):
-    def __init__(self, sweep=False):
+    def __init__(self, sweep=False, wide=False):
         self.C, self.keyframes = rai_config.make_only_short_tunnel()
 
         self.robots = ["a1", "a2"]
@@ -133,11 +134,15 @@ class rai_skill_hallway(SequenceMixin, rai_env):
         home_pose = self.C.getJointState()
 
         if sweep:
+            height = 1
+            if wide:
+                height = 1.4
+            
             pts = [
                 np.array([1.5, 0, 0.1]),
                 np.array([-1.5, 0, 0.1]),
-                np.array([-1.5, -1, 0.1]),
-                np.array([-1.5, 1, 0.1]),
+                np.array([-1.5, -height, 0.1]),
+                np.array([-1.5, height, 0.1]),
             ]
             passage_skill = EndEffectorPositionFollowing(self.robot_joints["a1"], "a1", pts)
         else:
