@@ -1422,6 +1422,8 @@ def make_only_short_tunnel(view: bool = False):
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
 
+    agent_radius = 0.35
+
     pre_agent_1_frame = (
         C.addFrame("pre_agent_1_frame")
         .setParent(table)
@@ -1433,7 +1435,7 @@ def make_only_short_tunnel(view: bool = False):
     )
 
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
-        ry.ST.cylinder, size=[0.06, 0.3]
+        ry.ST.cylinder, size=[0.06, agent_radius]
     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXY, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
     ).setJointState([1.5, -1.0])
@@ -1449,7 +1451,7 @@ def make_only_short_tunnel(view: bool = False):
     )
 
     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
-        ry.ST.cylinder, size=[0.06, 0.3]
+        ry.ST.cylinder, size=[0.06, agent_radius]
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXY, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
     ).setJointState([-1.5, -1.0])

@@ -121,9 +121,11 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
 @register([
     ("rai.hallway_counterexample", {}),
     ("rai.hallway_counterexample_sweep", {'sweep': True}),
+    ("rai.hallway_counterexample_wide_sweep", {'sweep': True, 'wide': True}),
+    ("rai.hallway_counterexample_wide_full_sweep", {'sweep': True, 'wide': True, 'full': True}),
 ])
 class rai_skill_hallway(SequenceMixin, rai_env):
-    def __init__(self, sweep=False):
+    def __init__(self, sweep=False, wide=False, full=False):
         self.C, self.keyframes = rai_config.make_only_short_tunnel()
 
         self.robots = ["a1", "a2"]
@@ -136,13 +138,28 @@ class rai_skill_hallway(SequenceMixin, rai_env):
         home_pose = self.C.getJointState()
 
         if sweep:
-            pts = [
-                # np.array([1.5, -1, 0.1]), # TODO (Liam) PRM1 fails if task1 is skill task
-                np.array([1.5, 0, 0.1]),
-                np.array([-1.5, 0, 0.1]),
-                np.array([-1.5, -1, 0.1]),
-                np.array([-1.5, 1, 0.1]),
-            ]
+            height = 1
+            if wide:
+                height = 1.5
+            
+            if full:
+                pts = [
+                    np.array([1.5, 0, 0.1]), # TODO (Liam) PRM1 fails with full sweep
+                    np.array([1.5, -height, 0.1]),
+                    np.array([1.5, height, 0.1]),
+                    np.array([1.5, 0, 0.1]),
+                    np.array([-1.5, 0, 0.1]),
+                    np.array([-1.5, -height, 0.1]),
+                    np.array([-1.5, height, 0.1]),
+                ]
+            else:
+                pts = [
+                    # np.array([1.5, -1, 0.1]), # TODO (Liam) PRM1 fails if task1 is skill task
+                    np.array([1.5, 0, 0.1]),
+                    np.array([-1.5, 0, 0.1]),
+                    np.array([-1.5, -height, 0.1]),
+                    np.array([-1.5, height, 0.1]),
+                ]
             passage_skill = EndEffectorPositionFollowing(self.robot_joints["a1"], "a1", pts)
         else:
             passage_skill = JogJoint(joints=self.robot_joints[self.robots[0]], speed=-3 / 2, idx=0, duration=2.)
