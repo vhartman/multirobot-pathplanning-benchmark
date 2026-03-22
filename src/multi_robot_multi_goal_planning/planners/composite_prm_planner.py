@@ -68,7 +68,6 @@ class CompositePRMConfig:
     # TODO (Liam) new
     skill_phase: int = 1
     max_skill_rollouts: int = 1
-    informed_entry_selection: bool = False
 
 """
 NOTES (Liam):
@@ -344,14 +343,14 @@ class CompositePRM(BasePlanner):
             return False, None # No entry nodes yet, wait
 
         # 2. Filter out failed entry nodes (both phases) + used entries (phase 1 only)
+        # - PHASE 1: one rollout per entry node (deterministic skill + frozen -> identical rollout)
+        # - PHASE 2: up to max_skill_rollouts, using same entry (different inactive configs each time)
         failed_ids = self._failed_skill_entry_ids.get(mode, set())
         used_ids = self._used_skill_entry_ids.get(mode, set())
 
         if self.config.skill_phase == 1:
-            # PHASE 1: one rollout per entry node (deterministic skill + frozen -> identical rollout)
             candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids and n.id not in used_ids]
         else:
-            # PHASE 2: up to max_skill_rollouts, using same entry (different inactive configs each time)
             candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids]
 
         if not candidate_entry_nodes:
@@ -406,11 +405,11 @@ class CompositePRM(BasePlanner):
             self._skill_traj_cache[cache_key] = skill_traj
             
         # 5. Build composite trajectory
+        # - PHASE 1: active robots (skill rollout) + inactive robots (frozen)
+        # - PHASE 2: active robots (skill rollout) + inactive robots (???)
         if self.config.skill_phase == 1 or self.config.skill_phase == 2:
-            # PHASE 1: active robots (skill rollout) + inactive robots (frozen)
             composite_traj = self._build_composite_traj_frozen(q_entry, skill_traj, active_task)
         else:
-            # PHASE 2: active robots (skill rollout) + inactive robots (???)
             composite_traj = self._build_composite_traj_sampled() # TODO (to be implemented later)
 
         # TODO DEBUG
@@ -583,14 +582,29 @@ class CompositePRM(BasePlanner):
             if not reached_terminal_mode:
                 self.sorted_reached_modes = sorted(reached_modes, key=lambda m: m.id)
 
-        # Mainly for debugging and reproducability
-        mode_subset_to_sample = self.sorted_reached_modes
+        mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
 
         # PHASE 2: main sampling loop
         while (
             transitions < transition_batch_size
             and failed_attempts < 5 * transition_batch_size
         ):
+            # Step 0: Check exhausted skill modes for new entry candidates
+            for mode in self._exhausted_skill_modes:
+                candidates = g.reverse_transition_nodes.get(mode, [])
+                failed_ids = self._failed_skill_entry_ids.get(mode, set())
+                used_ids = self._used_skill_entry_ids.get(mode, set())
+                if self.config.skill_phase == 1:
+                    new_candidate_entry_Nodes = [n for n in candidates if n.id not in failed_ids and n.id not in used_ids]
+                else:
+                    new_candidate_entry_Nodes = [n for n in candidates if n.id not in failed_ids]
+                if new_candidate_entry_Nodes:
+                    self._exhausted_skill_modes.discard(mode) # New entry nodes appeared — re-enable this mode
+                    print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
+
+            # Exclude exhausted skill modes from sampling pool
+            mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
+
             # Step 1: pick a mode to sample a transition for, using chosen strategy
             mode = self._sample_mode(
                 mode_subset_to_sample, g, mode_sampling_type, cost is None
@@ -609,23 +623,10 @@ class CompositePRM(BasePlanner):
             if getattr(active_task, 'skill', None) is not None:
                 # print(f"[DEBUG SKILL] Intercepted skill for mode {mode.id}")
 
-                # Skip 1: mode exhausted but check for new candidates since
+                # Skip 1: exhausted mode (safety guard)
                 if mode in self._exhausted_skill_modes:
-                    candidate_entry_nodes = g.reverse_transition_nodes.get(mode, [])
-                    failed_ids = self._failed_skill_entry_ids.get(mode, set())
-                    used_ids = self._used_skill_entry_ids.get(mode, set())
-                    if self.config.skill_phase == 1:
-                        new_candidate_entry_Nodes = [n for n in candidate_entry_nodes
-                                if n.id not in failed_ids and n.id not in used_ids]
-                    else:
-                        new_candidate_entry_Nodes = [n for n in candidate_entry_nodes
-                                if n.id not in failed_ids]
-                    if new_candidate_entry_Nodes:
-                        self._exhausted_skill_modes.discard(mode) # New entry nodes appeared — re-enable this mode
-                        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
-                    else:
-                        failed_attempts += 1 # TODO burn failed_attempts budget?
-                        continue 
+                    failed_attempts += 1
+                    continue
 
                 # Skip 2: max rollout reached for this mode
                 existing_rollouts = [
@@ -651,10 +652,12 @@ class CompositePRM(BasePlanner):
                                 self.sorted_reached_modes = list(
                                     sorted(reached_modes, key=lambda m: m.id)
                                 )
-                                mode_subset_to_sample = self.sorted_reached_modes
                 else:
                     failed_attempts += 1
                     print(f"[DEBUG SKILL] Failed attempt ({failed_attempts})")
+                
+                # Refresh pool to exclude newly exhausted skill modes
+                mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
                     
                 # Skip the normal random geometric sampling for this iteration
                 # That way skill modes get exactly 1 skill-based transition and 0 geometric transitions
@@ -721,7 +724,7 @@ class CompositePRM(BasePlanner):
                         self.sorted_reached_modes = list( # TODO Actual sampling pool, QUESTION sorted for determinism/reproducibility?
                             sorted(reached_modes, key=lambda m: m.id)
                         )
-                        mode_subset_to_sample = self.sorted_reached_modes
+                        mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
                     continue # Skip rest of loop as mode is no longer valid
 
                 # Step 7: add the transition config with its valid next modes to the graph
@@ -809,7 +812,7 @@ class CompositePRM(BasePlanner):
                     self.sorted_reached_modes = list(
                         sorted(reached_modes, key=lambda m: m.id)
                     )
-                    mode_subset_to_sample = self.sorted_reached_modes
+                    mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
 
         print(f"Adding {transitions} transitions")
         print(self.mode_validation.counter)
@@ -1020,9 +1023,9 @@ class CompositePRM(BasePlanner):
         while True:
             if ptc.should_terminate(cnt, time.time() - start_time):
 
-                # TODO DEBUG remove
-                skill_states = [s for s in path if s.is_skill_waypoint]
-                print(f"[DEBUG OPT] New path has {len(skill_states)} skill waypoints")
+                # # TODO DEBUG remove
+                # skill_states = [s for s in path if s.is_skill_waypoint]
+                # print(f"[DEBUG OPT] New path has {len(skill_states)} skill waypoints")
                 
                 break # Loop until termination condition met
             
