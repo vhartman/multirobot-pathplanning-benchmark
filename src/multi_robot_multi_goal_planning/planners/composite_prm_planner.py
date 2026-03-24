@@ -68,6 +68,8 @@ class CompositePRMConfig:
     # TODO (Liam) new
     skill_phase: int = 1
     max_skill_rollouts: int = 1
+    skill_corridor_width: int = 15
+    skill_k_neighbors: int = 5
 
 """
 NOTES (Liam):
@@ -404,64 +406,67 @@ class CompositePRM(BasePlanner):
             # Cache successful skill trajectory
             self._skill_traj_cache[cache_key] = skill_traj
             
-        # 5. Build composite trajectory
+        # 5. Build composite trajectory (phase specific)
         # - PHASE 1: active robots (skill rollout) + inactive robots (frozen)
-        # - PHASE 2: active robots (skill rollout) + inactive robots (???)
-        if self.config.skill_phase == 1 or self.config.skill_phase == 2:
+        if self.config.skill_phase == 1:
             composite_traj = self._build_composite_traj_frozen(q_entry, skill_traj, active_task)
-        else:
-            composite_traj = self._build_composite_traj_sampled() # TODO (to be implemented later)
 
-        # TODO DEBUG
-        print(f"[DEBUG SKILL COLL CHECK] Mode: {mode.id} | a2 frozen at: {q_entry[2:]}")
-        print(f"[DEBUG SKILL COLL CHECK] Skill traj length: {len(composite_traj)}")
-        print(f"[DEBUG SKILL COLL CHECK] Checking {len(composite_traj)} waypoints...")
+            # TODO DEBUG
+            print(f"[DEBUG SKILL COLL CHECK] Mode: {mode.id} | a2 frozen at: {q_entry[2:]}")
+            print(f"[DEBUG SKILL COLL CHECK] Skill traj length: {len(composite_traj)}")
+            print(f"[DEBUG SKILL COLL CHECK] Checking {len(composite_traj)} waypoints...")
 
-        # 6. Collision check (waypoints + edges)
-        for step_idx in range(len(composite_traj)):
-            q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
-            if not self.env.is_collision_free(q_check, mode):
-                # self.env.C.view(True)
-                
-                # TODO DEBUG
-                print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision at step {step_idx}/{len(composite_traj)}")
-                print(f"[DEBUG SKILL COLLISION] a1 pos: {composite_traj[step_idx][:2]}, a2 pos: {composite_traj[step_idx][2:]}")
-                
-                self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                return False, None 
-            # Edge check between consecutive steps 
-            if step_idx > 0: 
-                q_prev = self.env.start_pos.from_flat(composite_traj[step_idx - 1])
-                if not self.env.is_edge_collision_free( # TODO check if needed (skill resolution vs. collision resolution)
-                    q_prev, q_check, mode, 
-                    resolution=self.env.collision_resolution,
-                    tolerance=self.env.collision_tolerance,
-                ):
+            # 6. Collision check (waypoints + edges)
+            for step_idx in range(len(composite_traj)):
+                q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
+                if not self.env.is_collision_free(q_check, mode):
+                    # self.env.C.view(True)
+                    
+                    # TODO DEBUG
+                    print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision at step {step_idx}/{len(composite_traj)}")
+                    print(f"[DEBUG SKILL COLLISION] a1 pos: {composite_traj[step_idx][:2]}, a2 pos: {composite_traj[step_idx][2:]}")
+                    
                     self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                    print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision (edge)!)")
-                    return False, None
-                        
-        # 7. Compute valid next modes
-        q_final = self.env.start_pos.from_flat(composite_traj[-1])
-        if self.env.is_terminal_mode(mode):
-            valid_next_modes = []
-        else:
-            next_modes = self.env.get_next_modes(q_final, mode)
-            valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
+                    return False, None 
+                # Edge check between consecutive steps 
+                if step_idx > 0: 
+                    q_prev = self.env.start_pos.from_flat(composite_traj[step_idx - 1])
+                    if not self.env.is_edge_collision_free( # TODO check if needed (skill resolution vs. collision resolution)
+                        q_prev, q_check, mode, 
+                        resolution=self.env.collision_resolution,
+                        tolerance=self.env.collision_tolerance,
+                    ):
+                        self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
+                        print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision (edge)!)")
+                        return False, None
 
-            if not valid_next_modes:
-                self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                return False, None 
+            # 7. Compute valid next modes
+            q_final = self.env.start_pos.from_flat(composite_traj[-1])
+            if self.env.is_terminal_mode(mode):
+                valid_next_modes = []
+            else:
+                next_modes = self.env.get_next_modes(q_final, mode)
+                valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
 
-        # 8. Add skill points to graph and mark as used
-        states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
-        g.add_skill_path(states, valid_next_modes, entry_node)
-        self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
+                if not valid_next_modes:
+                    self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
+                    return False, None 
+
+            # 8. Add skill points to graph
+            states = [State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) for q in composite_traj]
+            g.add_skill_path(states, valid_next_modes, entry_node)
+
+        # 5. Build composite trajectory (phase specific)
+        # - PHASE 2: active robots (skill rollout) + inactive robots (build roadmap: pool of M inactive configs x N skill steps)
+        elif self.config.skill_phase == 2:
+            # TODO (Liam)
+            pass
 
         # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
         # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
+        self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
         return True, valid_next_modes
-        
+
     def _build_composite_traj_frozen(self, q_entry, skill_traj, active_task):
         """
         Phase 1: Builds a composite trajectory where active robots follow the skill exactly, 
@@ -483,12 +488,13 @@ class CompositePRM(BasePlanner):
         
         return composite_traj
     
-    def _build_composite_traj_sampled(self, q_entry, skill_traj, active_task):
+    def _build_composite_corridor(self, q_entry, skill_traj, active_task, mode):
         """
-        Phase 2: For each skill step k, generates S composite configs, where active robots are fixed to
-        the skill trajectory and inactive robots are sampled uniformly and collision checked. 
+        Phase 2: For each skill step k, sample S collision-free composite configs.
+        Active robots fixed to skill trajectory, inactive robots sampled randomly
+        ... 
         """
-        # TODO
+        # TODO (remove)
 
         # Idea: 
         # - PHASE 1: inactive robot configs "frozen"
@@ -502,6 +508,29 @@ class CompositePRM(BasePlanner):
         # -- Specifically only sample per skill step till we get S valid inactive robots configs
         # -- Collision checking to validate + allow A* to go through this tube of possible configs for the inactive robots 
         
+        raise NotImplementedError
+    
+    def _build_skill_roadmap(self, q_entry, skill_traj, active_task, mode):
+        """
+        Phase 2: build a roadmap for the inactive robot through the skill segment.
+
+        """
+        # Step 1: Sample a  pool of I collision free inactive robot configs
+        # - Only sampling inactive configs (within joint limits)
+        # - Not paired yet with any skill steps, just densifying the inactive config space
+        #  
+
+        # Step 2: For each skill step k:
+        # - For active config: take skill_traj[k]
+        # - For inactive config: loop through pool I
+        # -- Combine skill_traj[k] and pool[i]
+        # -- Collision check the composite config
+        # -- Valid: store as valid node (step k, pool index i) 
+        # -- Invalid: mark as blocked at this step
+
+        # Step 3: Return valid composite configs by step
+        # -  
+
         raise NotImplementedError
 
     def _mode_has_skill(self, mode: Mode) -> bool:
@@ -590,7 +619,8 @@ class CompositePRM(BasePlanner):
             and failed_attempts < 5 * transition_batch_size
         ):
             # Step 0: Check exhausted skill modes for new entry candidates
-            for mode in self._exhausted_skill_modes:
+            # (Create temporary list to avoid getting RuntimeError when .discard changes size of set we're iterating)
+            for mode in list(self._exhausted_skill_modes):
                 candidates = g.reverse_transition_nodes.get(mode, [])
                 failed_ids = self._failed_skill_entry_ids.get(mode, set())
                 used_ids = self._used_skill_entry_ids.get(mode, set())
@@ -1267,24 +1297,28 @@ class CompositePRM(BasePlanner):
                                             and interpolated_path[i].mode != interpolated_path[i + 1].mode
                                         )
 
-                                        if self._mode_has_skill(s.mode):
-                                            # SKILL MODE: don't add nodes directly to graph, use add:skill_path!
-                                            # Collect the state
-                                            current_skill_states.append(s)
+                                        if self._mode_has_skill(s.mode): 
+                                            if self.config.skill_phase == 2:
+                                                # TODO (Liam)
+                                                pass
+                                            else:
+                                                # SKILL MODE: don't add nodes directly to graph, use add:skill_path!
+                                                # Collect the state
+                                                current_skill_states.append(s)
 
-                                            # When the skill mode ends, add the collected current_skill_states  
-                                            if is_mode_boundary:
-                                                next_mode = interpolated_path[i + 1].mode
-                                                
-                                                # Handles hiding, neighbors, and whitelisting for skill nodes
-                                                graph.add_skill_path(states=current_skill_states, valid_next_modes=[next_mode])
-                                                skill_mode = current_skill_states[0].mode
-                                                print(f"[DEBUG GRAPH] Skill Mode {skill_mode} | Main Nodes: {len(graph.nodes.get(skill_mode, []))} | Hidden Skill Nodes: {len(graph.skill_chain_nodes.get(skill_mode, []))}")
-                                                
-                                                # TODO (Liam) consider removing old skill chain & transition node?
-                                                
-                                                # Reset for the next potential skill
-                                                current_skill_states = []
+                                                # When the skill mode ends, add the collected current_skill_states  
+                                                if is_mode_boundary:
+                                                    next_mode = interpolated_path[i + 1].mode
+                                                    
+                                                    # Handles hiding, neighbors, and whitelisting for skill nodes
+                                                    graph.add_skill_path(states=current_skill_states, valid_next_modes=[next_mode])
+                                                    skill_mode = current_skill_states[0].mode
+                                                    print(f"[DEBUG GRAPH] Skill Mode {skill_mode} | Main Nodes: {len(graph.nodes.get(skill_mode, []))} | Hidden Skill Nodes: {len(graph.skill_chain_nodes.get(skill_mode, []))}")
+                                                    
+                                                    # TODO (Liam) consider removing old skill chain & transition node?
+                                                    
+                                                    # Reset for the next potential skill
+                                                    current_skill_states = []
 
                                         else:
                                             # NON-SKILL MODE: standard prm behaviour

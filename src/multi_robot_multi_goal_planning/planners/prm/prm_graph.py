@@ -401,7 +401,7 @@ class MultimodalGraph:
                         self.reverse_transition_nodes[next_mode] = [next_node]
 
     # TODO (Liam) new
-    def add_skill_path(self, states, valid_next_modes, entry_node=None):
+    def add_skill_path(self, states, valid_next_modes, entry_node=None, whitelist_edges=True):
         """
         Adds a sequence of skill states into the PRM graph as a protected trajectory.
 
@@ -444,8 +444,9 @@ class MultimodalGraph:
 
         # 4. Link the sequence together through .neighbors and update whitelists
         for i in range(len(skill_nodes) - 1):
-            skill_nodes[i].whitelist.add(skill_nodes[i+1].id)
-            skill_nodes[i+1].whitelist.add(skill_nodes[i].id)
+            if whitelist_edges:
+                skill_nodes[i].whitelist.add(skill_nodes[i+1].id)
+                skill_nodes[i+1].whitelist.add(skill_nodes[i].id)
             skill_nodes[i].neighbors.append(skill_nodes[i+1])
         
         # ONLY link the entry node if one was provided
@@ -453,6 +454,26 @@ class MultimodalGraph:
             entry_node.whitelist.add(skill_nodes[0].id)
             skill_nodes[0].whitelist.add(entry_node.id)
             entry_node.neighbors.append(skill_nodes[0])
+
+    def add_skill_roadmap(self, roadmap_states, valid_next_modes, entry_node=None, k_neighbors=5):
+        """
+        Phase 2: Add a skill roadmap to the graph.
+        ...
+        """
+        # Step 1: create Node objects for each valid entry
+        # -  
+
+        # Step 2: put nodes into graph / storage (dict)
+        # - step-0 nodes -> self.nodes (visible to k-nearest so A* can enter)
+        # - step-1-(N-2) -> self.skill_chain_nodes (hidden from k-nearest)
+        # - step-(N-1) -> self.transition_nodes (exit to next mode) 
+
+        # Step 3: connect consecutive steps via k-nearest
+        # - Instead of connecting each step-k with each step-k+1 node, only do it for k-nearest 
+        # -- Use .neighbors to make the link
+        # -- Update whitelists if needed 
+
+        raise NotImplementedError
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     # TODO (Liam) make changes in get_neighbors()
