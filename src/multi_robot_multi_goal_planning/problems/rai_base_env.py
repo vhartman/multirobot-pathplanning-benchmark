@@ -798,8 +798,8 @@ class rai_env(BaseProblem):
             # self.C_cache[m].computeCollisions()
             
             # TODO (Liam) not sure.. but goal of set_to_mode is to reconstruct scene graph when mode changes (attach, setContact(-1), delFrame)
-            # Forcing a mesh recopy after e.g. delFrame will try to update a mesh for a frame we just deleted -> c++ throws error
-            # Really needed? Seems like view() safely fixes changes on next call..
+            # Is the error coming from forcing a mesh recopy after e.g. delFrame (tries to update a mesh for a frame we just deleted..)?
+            # Really needed? Seems like view() safely handles changes on next call..
             # try: 
             #     self.C_cache[m].view_recopyMeshes()
             # except:
@@ -856,7 +856,8 @@ class rai_env(BaseProblem):
                     v = 5 # Target visual velocity
                     diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean") # Max joint displacement
                     dt = diff / v # Sleep longer between distant points and shorter between close points
-                    dt = max(dt, 0.01)
+                    dt = max(dt, 0.01) # TODO (Liam) improve for better visualization (or new function to evenly resample)
+                    # print(f"dt={dt}\n")
 
             time.sleep(dt)
 
