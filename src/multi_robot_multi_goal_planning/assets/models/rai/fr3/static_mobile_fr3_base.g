@@ -54,24 +54,24 @@ base_joint (base base_link): { joint: rigid,}
 base_inertia_joint (base_link base_inertia): { joint: rigid,}
 caster_front_left_fixed_joint_origin (base_link): { Q: [0.3 0.2 0.08] }
 caster_front_left_fixed_joint (caster_front_left_fixed_joint_origin caster_front_left_fixed_link): { joint: rigid,}
-caster_front_left_steering_joint (caster_front_left_fixed_link caster_front_left_steering_link): { joint: hingeZ, ctrl_limits: [20 -1 500],}
+caster_front_left_steering_joint (caster_front_left_fixed_link caster_front_left_steering_link): { joint: rigid, ctrl_limits: [20 -1 500],}
 caster_front_left_joint_origin (caster_front_left_steering_link): { Q: [-0.035 0 -0.05] }
-caster_front_left_joint (caster_front_left_joint_origin caster_front_left_link): { joint: hingeY, ctrl_limits: [20 -1 500],}
+caster_front_left_joint (caster_front_left_joint_origin caster_front_left_link): { joint: rigid, ctrl_limits: [20 -1 500],}
 argo_drive_front_fixed_joint_origin (base_link): { Q: [0.3 -0.2 0.05] }
 argo_drive_front_fixed_joint (argo_drive_front_fixed_joint_origin argo_drive_front_fixed_link): { joint: rigid,}
-tmrv0_2_joint_0 (argo_drive_front_fixed_link argo_drive_front_steering_link): { joint: hingeZ, ctrl_limits: [20 -1 500],}
-tmrv0_2_joint_1 (argo_drive_front_steering_link argo_drive_front_link): { joint: hingeY, ctrl_limits: [20 -1 500],}
+tmrv0_2_joint_0 (argo_drive_front_fixed_link argo_drive_front_steering_link): { joint: rigid, ctrl_limits: [20 -1 500],}
+tmrv0_2_joint_1 (argo_drive_front_steering_link argo_drive_front_link): { joint: rigid, ctrl_limits: [20 -1 500],}
 rocker_arm_joint_origin (base_link): { Q: [-0.3 0.0 0.0845] }
-rocker_arm_joint (rocker_arm_joint_origin rocker_arm_link): { joint: hingeX, limits: [-0.16 0.18], ctrl_limits: [20 -1 500],}
+rocker_arm_joint (rocker_arm_joint_origin rocker_arm_link): { joint: rigid, limits: [-0.16 0.18], ctrl_limits: [20 -1 500],}
 caster_rear_right_fixed_joint_origin (rocker_arm_link): { Q: [0.0 -0.2 -0.004500000000000004] }
 caster_rear_right_fixed_joint (caster_rear_right_fixed_joint_origin caster_rear_right_fixed_link): { joint: rigid,}
-caster_rear_right_steering_joint (caster_rear_right_fixed_link caster_rear_right_steering_link): { joint: hingeZ, ctrl_limits: [20 -1 500],}
+caster_rear_right_steering_joint (caster_rear_right_fixed_link caster_rear_right_steering_link): { joint: rigid, ctrl_limits: [20 -1 500],}
 caster_rear_right_joint_origin (caster_rear_right_steering_link): { Q: [-0.035 0 -0.05] }
-caster_rear_right_joint (caster_rear_right_joint_origin caster_rear_right_link): { joint: hingeY, ctrl_limits: [20 -1 500],}
+caster_rear_right_joint (caster_rear_right_joint_origin caster_rear_right_link): { joint: rigid, ctrl_limits: [20 -1 500],}
 argo_drive_rear_fixed_joint_origin (rocker_arm_link): { Q: [0.0 0.2 -0.0345] }
 argo_drive_rear_fixed_joint (argo_drive_rear_fixed_joint_origin argo_drive_rear_fixed_link): { joint: rigid,}
-tmrv0_2_joint_2 (argo_drive_rear_fixed_link argo_drive_rear_steering_link): { joint: hingeZ, ctrl_limits: [20 -1 500],}
-tmrv0_2_joint_3 (argo_drive_rear_steering_link argo_drive_rear_link): { joint: hingeY, ctrl_limits: [20 -1 500],}
+tmrv0_2_joint_2 (argo_drive_rear_fixed_link argo_drive_rear_steering_link): { joint: rigid, ctrl_limits: [20 -1 500],}
+tmrv0_2_joint_3 (argo_drive_rear_steering_link argo_drive_rear_link): { joint: rigid, ctrl_limits: [20 -1 500],}
 imu_mounting_point_joint_origin (base_link): { Q: "t(0.260 0.0 0.1478) E(3.141592653589793 0 0)" }
 imu_mounting_point_joint (imu_mounting_point_joint_origin imu_mounting_point): { joint: rigid,}
 front_mounting_point_joint_origin (base_link): { Q: "t(0.380705 0.0 0.2345) E(3.141592653589793 0 0)" }
@@ -89,22 +89,13 @@ lidar_rear_mounting_point_joint (lidar_rear_mounting_point_joint_origin lidar_re
 franka_spine_fixed_joint_origin (base_link): { Q: [0.138289 0.0 0.350] }
 franka_spine_fixed_joint (franka_spine_fixed_joint_origin franka_spine): { joint: rigid,}
 franka_spine_vertical_joint_origin (franka_spine): { Q: [0.266711 0.0 0.1] }
-franka_spine_vertical_joint (franka_spine_vertical_joint_origin franka_spine_support): { joint: transZ, limits: [0.0 0.85], ctrl_limits: [0.1 -1 100],}
+franka_spine_vertical_joint (franka_spine_vertical_joint_origin franka_spine_support): { joint: rigid}
+# franka_spine_vertical_joint (franka_spine_vertical_joint_origin franka_spine_support): { joint: rigid, limits: [0.0 0.85], ctrl_limits: [0.1 -1 100],}
 mount_joint (franka_spine_support mount_link): { joint: rigid,}
 head_joint_origin (mount_link): { Q: [0 0 0.167] }
 head_joint (head_joint_origin head_link): { joint: rigid,}
 head_camera_mounting_point_joint_origin (head_link): { Q: "t(0.0498 -0.02 0.2345) E(0 0.7156 0)" }
 head_camera_mounting_point_joint (head_camera_mounting_point_joint_origin head_camera_mounting_point): { joint: rigid,}
 
-Include: <left_fr3.g>
-Prefix: false 
-
 left_base_joint_origin (mount_link): { Q: "t(0.0369 0.05018 0.050885) E(-0.89334809 -0.17456074 -0.46334506)" }
-left_base_joint (left_base_joint_origin left_base): { joint: rigid,}
-
-Include: <right_fr3.g>
-Prefix: false 
-
 right_base_joint_origin (mount_link): { Q: "t(0.0369 -0.05018 0.050885) E(0.89334809 -0.17456074 0.46334506)" }
-right_base_joint (right_base_joint_origin right_base): { joint: rigid,}
-
