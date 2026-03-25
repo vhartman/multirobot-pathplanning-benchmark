@@ -31,28 +31,32 @@ def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
     """
     new_path = []
 
-    # discretize path
+    # Discretize path
     for i in range(len(path) - 1):
-        q0 = path[i].q
-        q1 = path[i + 1].q
+        s_curr = path[i]
+        s_next = path[i+1]
 
-        # if path[i].mode != path[i + 1].mode:
-        #     new_path.append(State(config_type.from_list(q), path[i].mode))
-        #     continue
+        # Check for skill flag
+        is_skill = getattr(s_curr, 'is_skill_waypoint', False)
 
-        dist = config_dist(q0, q1, "euclidean")
-        N = int(dist / resolution)
-        N = max(1, N)
+        if is_skill:
+            # Do NOT create new State object, append exact original point
+            new_path.append(s_curr)
+        else:
+            # Standard free space interpolation
+            dist = config_dist(s_curr.q, s_next.q, "euclidean")
+            N = int(dist / resolution)
+            N = max(1, N)
 
-        q0_state = q0.state()
-        q1_state = q1.state()
-        dir = (q1_state - q0_state) / N
+            q0_state = s_curr.q.state()
+            q1_state = s_next.q.state()
+            dir = (q1_state - q0_state) / N
 
-        for j in range(N):
-            q = q0_state + dir * j
-            new_path.append(State(q0.from_flat(q), path[i].mode))
+            for j in range(N):
+                q = q0_state + dir * j
+                new_path.append(State(s_curr.q.from_flat(q), s_curr.mode))
 
-    # add the final state (which is not added in the interpolation before)
-    new_path.append(State(path[-1].q, path[-1].mode))
+    # Add the final state (which is not added in the interpolation before) while preserving the object
+    new_path.append(path[-1])
 
     return new_path
