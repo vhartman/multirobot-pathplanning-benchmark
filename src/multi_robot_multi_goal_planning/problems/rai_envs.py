@@ -2021,6 +2021,8 @@ class rai_static_fr3_env(SequenceMixin, rai_env):
 
         home_pose = self.C.getJointState()
 
+        # self.C.view(True)
+
         self.tasks = []
 
         for robot_name, [pre_pick, pre_place], obj_name, goal_name in zip(self.robots, [a1_keyframes, a2_keyframes], ["obj1", "obj2"], ["goal1", "goal2"]):
@@ -2053,7 +2055,7 @@ class rai_static_fr3_env(SequenceMixin, rai_env):
             ["a1_right_pick", "a2_left_pick", "a1_right_place", "a2_left_place", "terminal"]
         )
 
-        self.collision_tolerance = 0.001
+        self.collision_tolerance = 0.01
         self.collision_resolution = 0.005
 
         BaseModeLogic.__init__(self)

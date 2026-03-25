@@ -99,3 +99,6 @@ head_camera_mounting_point_joint (head_camera_mounting_point_joint_origin head_c
 
 left_base_joint_origin (mount_link): { Q: "t(0.0369 0.05018 0.050885) E(-0.89334809 -0.17456074 -0.46334506)" }
 right_base_joint_origin (mount_link): { Q: "t(0.0369 -0.05018 0.050885) E(0.89334809 -0.17456074 0.46334506)" }
+
+base_coll (base_link) {shape: box, size: [0.78 0.58 0.3], Q: "t(0. 0.0 0.195)", contact:-2}
+tower_coll (franka_spine) {shape: box, size: [0.16 0.3 1.1], Q: "t(0.07 0.0 0.55)", contact:-2}

@@ -87,3 +87,18 @@ right_fr3v2_joint7_origin (right_fr3v2_link6): { Q: "t(0.088 0 0) E(1.5707963267
 right_fr3v2_joint7 (right_fr3v2_joint7_origin right_fr3v2_link7): { joint: hingeZ, limits: [-3.05083335 3.05083335], ctrl_limits: [5.26 -1 12.0],}
 right_fr3v2_joint8_origin (right_fr3v2_link7): { Q: [0 0 0.107] }
 right_fr3v2_joint8 (right_fr3v2_joint8_origin right_fr3v2_link8): { joint: rigid,}
+
+#panda_coll0(right_fr3v2_link0): { shape: capsule, color: [1.,1.,1.,.9], size: [.1, .11], Q: "t(-.04 .0 .03) d(90 0 1 0)", contact: -2 }
+#panda_coll0b(panda_link0): { shape: capsule, color: [1.,1.,1.,.1], size: [.2, .06], Q: "t(-.2 -.12 .0) d(90 0 1 0)", contact: -2 }
+
+panda_coll1(right_fr3v2_joint1): { shape: capsule, color: [1.,1.,1.,.5], size: [.14, .08], Q: "t(0 0 -.15)", contact: -2 }
+panda_coll3(right_fr3v2_joint3): { shape: capsule, color: [1.,1.,1.,.5], size: [.2, .08], Q: "t(0 0 -.15)", contact: -2 }
+panda_coll5(right_fr3v2_joint5): { shape: capsule, color: [1.,1.,1.,.5], size: [.22, .09], Q: "t(0 .02 -.2)", contact: -2 }
+
+panda_coll2(right_fr3v2_joint2): { shape: capsule, color: [1.,1.,1.,.5], size: [.12, .08], Q: "t(0 0 .0)", contact: -2 }
+panda_coll4(right_fr3v2_joint4): { shape: capsule, color: [1.,1.,1.,.5], size: [.12, .08], Q: "t(0 0 .0)", contact: -2 }
+panda_coll6(right_fr3v2_joint6): { shape: capsule, color: [1.,1.,1.,.5], size: [.1, .07], Q: "t(0 .0 -.04)", contact: -2 }
+panda_coll7(right_fr3v2_joint7): { shape: capsule, color: [1.,1.,1.,.5], size: [.1, .07], Q: "t(0 .0 .01)", contact: -2 }
+
+Edit right_fr3v2_joint2: { q: -0.5 }
+Edit right_fr3v2_joint4: { q: -1 }

@@ -5435,25 +5435,25 @@ def make_static_fr3_duo_config():
 
     C.addFrame("obj1").setParent(table).setShape(
         ry.ST.box, [0.05, 0.05, 0.05]
-    ).setRelativePosition([0.8, -0.3, height]).setMass(
+    ).setRelativePosition([0.9, -0.3, height]).setMass(
         0.1
     ).setColor([1, 0, 0]).setContact(1).setJoint(ry.JT.rigid)
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.sphere, [0.1, 0.005]
-    ).setRelativePosition([0.8, 0.3, height]).setContact(
+    ).setRelativePosition([0.9, 0.2, height]).setContact(
         0
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("obj2").setParent(table).setShape(
         ry.ST.box, [0.05, 0.05, 0.05]
-    ).setRelativePosition([0.8, 0.3, height]).setMass(
+    ).setRelativePosition([0.9, 0.3, height]).setMass(
         0.1
     ).setColor([1, 0, 0]).setContact(1).setJoint(ry.JT.rigid)
 
     C.addFrame("goal2").setParent(table).setShape(
         ry.ST.sphere, [0.1, 0.005]
-    ).setRelativePosition([0.8, -0.3, height]).setContact(
+    ).setRelativePosition([0.9, -0.2, height]).setContact(
         0
     ).setJoint(ry.JT.rigid)
 
@@ -5470,7 +5470,7 @@ def make_static_fr3_duo_config():
         q_home = c_tmp.getJointState()
 
         komo = ry.KOMO(
-            c_tmp, phases=2, slicesPerPhase=1, kOrder=1, enableCollisions=False
+            c_tmp, phases=2, slicesPerPhase=1, kOrder=1, enableCollisions=True
         )
         komo.addObjective(
             [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
@@ -5481,7 +5481,7 @@ def make_static_fr3_duo_config():
         # komo.addControlObjective([], 1, 1e-1)
         # komo.addControlObjective([], 2, 1e-1)
 
-        pre_grasp_offset = 0.1
+        pre_grasp_offset = 0.2
 
         komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "_fr3v2_link8", box])
         komo.addObjective(
@@ -5489,7 +5489,7 @@ def make_static_fr3_duo_config():
             ry.FS.positionDiff,
             [robot_prefix + "_fr3v2_link8", box],
             ry.OT.sos,
-            [1e1, 1e1, 1],
+            [1e1, 1e1, 1e1],
             target=[0, 0, pre_grasp_offset]
         )
         komo.addObjective(
@@ -5529,7 +5529,7 @@ def make_static_fr3_duo_config():
             target=q_home,
         )
 
-        keyframes = solve_komo_problem(komo, 10, c_tmp, False, 3, 1.5)
+        keyframes = solve_komo_problem(komo, 10, c_tmp, False, 2, 1.5)
         return keyframes
     
     pre_pick_pose_a1, pre_place_pose_a1 = compute_poses(C, "a1_right", "obj1", "goal1")

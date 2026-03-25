@@ -96,6 +96,9 @@ head_joint (head_joint_origin head_link): { joint: rigid,}
 head_camera_mounting_point_joint_origin (head_link): { Q: "t(0.0498 -0.02 0.2345) E(0 0.7156 0)" }
 head_camera_mounting_point_joint (head_camera_mounting_point_joint_origin head_camera_mounting_point): { joint: rigid,}
 
+base_coll (base_link) {shape: box, size: [0.78 0.58 0.3], Q: "t(0. 0.0 0.195)", contact:-2}
+tower_coll (franka_spine) {shape: box, size: [0.16 0.3 1.1], Q: "t(0.07 0.0 0.55)", contact:-2}
+
 Include: <left_fr3.g>
 Prefix: false 
 
