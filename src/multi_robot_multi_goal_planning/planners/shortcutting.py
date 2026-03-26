@@ -44,6 +44,11 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
 
         if new_path[i].mode != new_path[j].mode:
             continue
+        
+        # TODO (Liam)
+        # Protect skill segments (no shortcutting skills)
+        if any(getattr(new_path[k], 'is_skill_waypoint', False) for k in range(i, j + 1)):
+            continue
 
         q0 = new_path[i].q
         q1 = new_path[j].q
@@ -103,8 +108,20 @@ def robot_mode_shortcut(
     Works by randomly sampling indices, then randomly choosing a robot, and then checking if the direct interpolation is
     collision free.
     """
+
+    # TODO test (remove)
+    counter_path = sum(1 for s in path if getattr(s, 'is_skill_waypoint', False))
+    print(f"[DEBUG SKILLS robot_mode_shortcut] Total Nodes: {len(path)} | Skill Nodes: {counter_path}")
+
     non_redundant_path = remove_interpolated_nodes(path)
+
+    counter_non_redundant_path = sum(1 for s in path if getattr(s, 'is_skill_waypoint', False))
+    print(f"[DEBUG SKILLS robot_mode_shortcut] Total Nodes: {len(non_redundant_path)} | Skill Nodes: {counter_non_redundant_path}")
+
     working_path = interpolate_path(non_redundant_path, interpolation_resolution)
+
+    counter_working_path = sum(1 for s in working_path if getattr(s, 'is_skill_waypoint', False))
+    print(f"[DEBUG SKILLS robot_mode_shortcut] Total Nodes: {len(working_path)} | Skill Nodes: {counter_working_path}")
     
     costs = [path_cost(working_path, env.batch_config_cost)]
     times = [0.0]
@@ -240,6 +257,14 @@ def robot_mode_shortcut(
         times.append(current_time - start_time)
         costs.append(path_cost(working_path, env.batch_config_cost))
 
+    # TODO! (Liam) REMOVE THIS PART
+    # # Restore skill waypoint flags lost by interpolate_path
+    # for s in working_path:
+    #     for task_id in s.mode.task_ids:
+    #         if getattr(env.tasks[task_id], 'skill', None) is not None:
+    #             s.is_skill_waypoint = True
+    #             break
+
     assert working_path[-1].mode == path[-1].mode
     assert np.linalg.norm(working_path[-1].q.state() - path[-1].q.state()) < 1e-6
     assert np.linalg.norm(working_path[0].q.state() - path[0].q.state()) < 1e-6
@@ -247,6 +272,9 @@ def robot_mode_shortcut(
     print("Original cost:", path_cost(path, env.batch_config_cost))
     print("Attempted shortcuts", attempted_shortcuts)
     print("New cost:", path_cost(working_path, env.batch_config_cost))
+
+    counter_final = sum(1 for s in working_path if getattr(s, 'is_skill_waypoint', False))
+    print(f"[DEBUG SKILLS robot_mode_shortcut] Total Nodes: {len(working_path)} | Skill Nodes: {counter_final}\n")
 
     return working_path, [costs, times]
 
