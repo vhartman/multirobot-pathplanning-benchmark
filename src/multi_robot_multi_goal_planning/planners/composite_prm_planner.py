@@ -116,7 +116,8 @@ class CompositePRM(BasePlanner):
         self._used_skill_entry_ids: Dict[Mode, Set[int]] = {}       # mode -> set of successful entry node IDs
         self._failed_skill_entry_ids: Dict[Mode, Set[int]] = {}     # mode -> set of failed entry node IDs
         self._skill_traj_cache: Dict[(int, int), List]  = {}        # (mode.id, entry_node.id) -> skill_traj
-        self._exhausted_skill_modes: Set[Mode] = set()
+        self._exhausted_skill_modes: Set[Mode] = set()              # no candidate_entry_nodes
+        self._saturated_skill_modes: Set[Mode] = set()              # hit max_skill_rollouts
 
     def _sample_mode(
         self,
@@ -366,45 +367,38 @@ class CompositePRM(BasePlanner):
         entry_node = random.choice(candidate_entry_nodes)
         q_entry = entry_node.state.q.state()
 
-        # 4. Rollout skill (or use cache)
-        cache_key = (mode.id, entry_node.id)
-        
-        if cache_key in self._skill_traj_cache:
-            skill_traj = self._skill_traj_cache[cache_key]
-            print(f"[DEBUG SKILL TRAJECTORY] Reusing cached skill_traj")
-        else:
-            # Identify active joints for this task & extract starting configuration for active joints 
-            active_joints = []
-            for r in active_task.robots:
-                active_joints.extend(self.env.robot_joints[r])
-            active_task.skill.joints = active_joints
+        # 4. Rollout skill
+        # Identify active joints for this task & extract starting configuration for active joints 
+        active_joints = []
+        for r in active_task.robots:
+            active_joints.extend(self.env.robot_joints[r])
+        active_task.skill.joints = active_joints
 
-            all_joints = []
-            for r in self.env.robots:
-                all_joints.extend(self.env.robot_joints[r])
-                
-            parts = []
-            offset = 0
-            for r in self.env.robots:
-                dim = self.env.robot_dims[r]
-                if r in active_task.robots:
-                    parts.append(q_entry[offset:offset+dim])
-                offset += dim            
-            q_init = np.concatenate(parts)
+        all_joints = []
+        for r in self.env.robots:
+            all_joints.extend(self.env.robot_joints[r])
+            
+        parts = []
+        offset = 0
+        for r in self.env.robots:
+            dim = self.env.robot_dims[r]
+            if r in active_task.robots:
+                parts.append(q_entry[offset:offset+dim])
+            offset += dim            
+        q_init = np.concatenate(parts)
 
-            # Rollout skill
-            skill_result = active_task.skill.rollout(q_init, active_task, all_joints, self.env, t0=0.0)
-            skill_traj = skill_result.trajectory
+        # TODO implement caching of skill trajectory for phase 2
 
-            # TODO check degenerate skill rollouts... need to define cases for failed rollouts (maybe only the collision..)
-            dist_moved = np.linalg.norm(skill_traj[0] - skill_traj[-1])
-            if dist_moved < 1e-4:
-                self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                print(f"[DEBUG SKILL WARNING] Problem with rollout in mode {mode.id}: steps={len(skill_traj)}, dist={dist_moved:.4f}")
-                return False, None
-                
-            # Cache successful skill trajectory
-            self._skill_traj_cache[cache_key] = skill_traj
+        # Rollout skill
+        skill_result = active_task.skill.rollout(q_init, active_task, all_joints, self.env, t0=0.0)
+        skill_traj = skill_result.trajectory
+
+        # TODO check degenerate skill rollouts... need to define cases for failed rollouts (maybe only the collision..)
+        dist_moved = np.linalg.norm(skill_traj[0] - skill_traj[-1])
+        if dist_moved < 1e-4:
+            self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
+            print(f"[DEBUG SKILL WARNING] Problem with rollout in mode {mode.id}: steps={len(skill_traj)}, dist={dist_moved:.4f}")
+            return False, None
             
         # 5. Build composite trajectory (phase specific)
         # - PHASE 1: active robots (skill rollout) + inactive robots (frozen)
@@ -550,6 +544,18 @@ class CompositePRM(BasePlanner):
             target_dict[mode] = set()
         target_dict[mode].add(entry_node_id)
 
+    def _get_valid_modes_to_sample(self):
+        """
+        Filters the reached modes to exclude modes that are:
+        1. Exhausted: no candidate entry nodes left 
+        2. Saturated: hit the max_skill_rollouts
+        """
+        return [
+            m for m in self.sorted_reached_modes
+            if m not in self._exhausted_skill_modes
+            and m not in self._saturated_skill_modes
+        ]
+
     # TODO:
     # - Introduce mode_subset_to_sample
     # - Fix function below:
@@ -611,7 +617,7 @@ class CompositePRM(BasePlanner):
             if not reached_terminal_mode:
                 self.sorted_reached_modes = sorted(reached_modes, key=lambda m: m.id)
 
-        mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
+        mode_subset_to_sample = self._get_valid_modes_to_sample()
 
         # PHASE 2: main sampling loop
         while (
@@ -633,7 +639,7 @@ class CompositePRM(BasePlanner):
                     print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
 
             # Exclude exhausted skill modes from sampling pool
-            mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
+            mode_subset_to_sample = self._get_valid_modes_to_sample()
 
             # Step 1: pick a mode to sample a transition for, using chosen strategy
             mode = self._sample_mode(
@@ -664,9 +670,11 @@ class CompositePRM(BasePlanner):
                     if n.state.is_skill_waypoint and n.skill_step == 0
                 ]
                 if len(existing_rollouts) >= self.config.max_skill_rollouts: # Caps at max_skill_rollouts skill trajectories per mode
-                    # print(f"[DEBUG SKILL] Reached max. rollout ({self.config.max_skill_rollouts}) in mode {mode.id} --> skip rollout")
-                    # failed_attempts += 1 # TODO burn failed_attempts budget?
-                    continue 
+                    print(f"[DEBUG SKILL] Reached max. rollout ({self.config.max_skill_rollouts}) in mode {mode.id} --> skip rollout")
+                    print(f"[DEBUG SKILL] Add mode {mode.id} to saturated modes")
+                    self._saturated_skill_modes.add(mode)
+                    mode_subset_to_sample = self._get_valid_modes_to_sample()
+                    continue # No failed_attempts, mode is done (saturated) 
 
                 # Run the rollout
                 success, valid_next_modes = self._skill_rollout(g, mode, active_task)
@@ -687,7 +695,7 @@ class CompositePRM(BasePlanner):
                     print(f"[DEBUG SKILL] Failed attempt ({failed_attempts})")
                 
                 # Refresh pool to exclude newly exhausted skill modes
-                mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
+                mode_subset_to_sample = self._get_valid_modes_to_sample()
                     
                 # Skip the normal random geometric sampling for this iteration
                 # That way skill modes get exactly 1 skill-based transition and 0 geometric transitions
@@ -754,7 +762,7 @@ class CompositePRM(BasePlanner):
                         self.sorted_reached_modes = list( # TODO Actual sampling pool, QUESTION sorted for determinism/reproducibility?
                             sorted(reached_modes, key=lambda m: m.id)
                         )
-                        mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
+                        mode_subset_to_sample = self._get_valid_modes_to_sample()
                     continue # Skip rest of loop as mode is no longer valid
 
                 # Step 7: add the transition config with its valid next modes to the graph
@@ -842,7 +850,7 @@ class CompositePRM(BasePlanner):
                     self.sorted_reached_modes = list(
                         sorted(reached_modes, key=lambda m: m.id)
                     )
-                    mode_subset_to_sample = [m for m in self.sorted_reached_modes if m not in self._exhausted_skill_modes]
+                    mode_subset_to_sample = self._get_valid_modes_to_sample()
 
         print(f"Adding {transitions} transitions")
         print(self.mode_validation.counter)
