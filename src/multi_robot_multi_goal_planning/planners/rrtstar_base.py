@@ -606,7 +606,8 @@ class BaseRRTstar(BasePlanner):
             new_modes = self.env.get_next_modes(q, mode)
             new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
             if new_modes == []:
-                self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
+                self.mode_validation.propagate_invalid(mode)
+                self.modes = self.mode_validation.remove_invalid_modes(self.modes)
             self.save_tree_data()
 
         for new_mode in new_modes:
@@ -659,7 +660,8 @@ class BaseRRTstar(BasePlanner):
         next_modes = self.env.get_next_modes(n.state.q, mode)
         next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
         if next_modes == []:
-            self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
+            self.mode_validation.propagate_invalid(mode)
+            self.modes = self.mode_validation.remove_invalid_modes(self.modes)
 
         for next_mode in next_modes:
             if next_mode not in self.modes:
@@ -897,11 +899,9 @@ class BaseRRTstar(BasePlanner):
             if failed_attemps > 10000:
                 print("Failed to sample transition configuration after 10000 attempts.")
                 if self.config.with_mode_validation:
-                    self.modes.remove(mode)
                     self.mode_validation.add_invalid_mode(mode)
-                    self.modes = self.mode_validation.track_invalid_modes(
-                        mode.prev_mode, self.modes
-                    )
+                    self.mode_validation.propagate_invalid(mode.prev_mode)
+                    self.modes = self.mode_validation.remove_invalid_modes(self.modes)
                 else:
                     self.blacklist_mode.add(mode)
                     self.modes.remove(mode)

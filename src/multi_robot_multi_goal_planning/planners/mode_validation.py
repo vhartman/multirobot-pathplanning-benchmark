@@ -1,4 +1,4 @@
-from typing import List, Set
+from typing import List
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
@@ -146,7 +146,7 @@ class ModeValidation:
         if not possible_next_task_combinations:
             # and the mode is not terminal -> add the mode to the invalid ones
             if not self.env.is_terminal_mode(mode):
-                _ = self.track_invalid_modes(mode)
+                self.propagate_invalid(mode)
             return None
 
         invalid_next_modes = self.invalid_next_ids.get(mode, set())
@@ -184,40 +184,24 @@ class ModeValidation:
 
         # assert False
 
-    # TODO: split in adding to blacklist, and removing from the list
-    def track_invalid_modes(
-        self, mode: Mode, modes: Set[Mode] = set()
-    ) -> Set[Mode]:
-        """
-        Tracks invalid modes by adding them to blacklist and removing them from the list.
-
-        Args:
-            mode (Mode): The mode to be tracked as invalid.
-
-        Returns:
-            modes: The filtered mode ist
-        """
+    def propagate_invalid(self, mode: Mode) -> None:
+        """Walk backwards from mode, blacklisting any mode that has no remaining valid
+        next-task combinations. Stops as soon as a mode still has feasible successors."""
         if not self.apply:
-            return modes
+            return
 
-        # we go backwards from the current mode, and add all the modes that do not have valid follow up modes/task ids
         while True:
-            # if mode == self.env.start_mode:
-            #     break
-
             invalid_next_ids = self.invalid_next_ids.get(mode, set())
-            possible_next_task_combinations = self.env.get_valid_next_task_combinations(
-                mode
-            )
-            # print(invalid_next_ids, possible_next_task_combinations)
-            # if there are more possible task combinations than invalid task combinations, that means that there is a 
-            # feasible combination.
+            possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
+            # if there are more possible task combinations than invalid ones, a feasible
+            # combination still exists — stop propagating.
             if len(invalid_next_ids) < len(possible_next_task_combinations):
                 break
-            modes.remove(mode)
             self.add_invalid_mode(mode)
             if mode == self.env.start_mode:
                 break
             mode = mode.prev_mode
 
-        return modes
+    def remove_invalid_modes(self, modes: List[Mode]) -> List[Mode]:
+        """Return a filtered copy of modes with all blacklisted modes removed."""
+        return [m for m in modes if m not in self.blacklist_modes]

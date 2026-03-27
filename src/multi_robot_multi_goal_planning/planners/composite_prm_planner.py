@@ -316,9 +316,8 @@ class CompositePRM(BasePlanner):
 
                         # if there are no valid next modes, we add this mode to the invalid modes (and remove them from the reached modes)
                         if valid_next_modes == []:
-                            reached_modes = self.mode_validation.track_invalid_modes(
-                                mode, reached_modes
-                            )
+                            self.mode_validation.propagate_invalid(mode)
+                            reached_modes = self.mode_validation.remove_invalid_modes(reached_modes)
 
                 # if the mode is not (anymore) in the reachable modes, do not add this to the transitions
                 if mode not in reached_modes:
