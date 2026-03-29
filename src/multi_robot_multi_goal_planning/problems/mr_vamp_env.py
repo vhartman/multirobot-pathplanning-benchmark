@@ -303,6 +303,8 @@ class vamp_quad_panda_env(SequenceMixin, VampEnv):
             Task("a1_goal", ["a1"], SingleGoal(np.array([0.0, 1, 1, 0, -2, 0, 0]))),
             # r2
             Task("a2_goal", ["a2"], SingleGoal(np.array([-0.0, 0, 1, 0, 2, 0, 0]))),
+            Task("a3_goal", ["a3"], SingleGoal(np.array([-0.0, 0, 1, 0, 2, 0, 0]))),
+            Task("a4_goal", ["a4"], SingleGoal(np.array([-0.0, 0, 1, 0, 2, 0, 0]))),
             # terminal mode
             Task(
                 "terminal",
@@ -312,7 +314,76 @@ class vamp_quad_panda_env(SequenceMixin, VampEnv):
         ]
 
         self.sequence = self._make_sequence_from_names(
-            ["a2_goal", "a1_goal", "terminal"]
+            ["a1_goal", "a2_goal", "a3_goal", "a4_goal", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array([0] * panda_dim)
+
+@register("vampmr.hex_panda")
+class vamp_hex_panda_env(SequenceMixin, VampEnv):
+    def __init__(self, agents_can_rotate=True):
+        VampEnv.__init__(self)
+
+        self.manipulating_env = False
+
+        self.env = mr_planner_core.VampEnvironment("panda_six")
+
+        # move all the table segments down a bit
+        for i in range(12):
+            name = "panda_six_table_segment_" + str(i)
+            self.env.remove_object(name)    
+            
+        info = self.env.info()
+        num_robots = int(info["num_robots"])
+
+
+        # self.env.enable_meshcat()
+        # self.env.update_scene()
+
+        panda_dim = 7
+        self.limits = np.array([[-2] * num_robots * panda_dim, [2] * num_robots * panda_dim])
+
+        self.start_pos = NpConfiguration.from_list([[0] * panda_dim, [0] * panda_dim, [0] * panda_dim, [0] * panda_dim, [0] * panda_dim, [0] * panda_dim])
+
+        self.robot_dims = {"a1": panda_dim, "a2": panda_dim, "a3": panda_dim, "a4": panda_dim, "a5": panda_dim, "a6": panda_dim}
+        self.robot_idx = {f"a{i+1}": list(range(i * panda_dim, (i + 1) * panda_dim)) for i in range(num_robots)}
+        # self.C.view(True)
+
+        print(self.robot_idx)
+
+        self.robots = ["a1", "a2", "a3", "a4", "a5", "a6"]
+
+        goal_pos = self.start_pos.q
+
+        self.tasks = [
+            # r1
+            Task("a1_goal", ["a1"], SingleGoal(np.array([0.0, 0.5, -1, 0, -0, 0, 0]))),
+            # r2
+            Task("a2_goal", ["a2"], SingleGoal(np.array([-0.0, 0.5, -1, 0, 0, 0, 0]))),
+            Task("a3_goal", ["a3"], SingleGoal(np.array([-0.0, 0.5, -1, 0, 0, 0, 0]))),
+            Task("a4_goal", ["a4"], SingleGoal(np.array([-0.0, 0.5, -1, 0, 0, 0, 0]))),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(goal_pos),
+            ),
+        ]
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_goal", "a2_goal", "a3_goal", "a4_goal", "terminal"]
         )
 
         self.collision_tolerance = 0.01
