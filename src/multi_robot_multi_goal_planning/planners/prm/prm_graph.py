@@ -473,7 +473,99 @@ class MultimodalGraph:
         # -- Use .neighbors to make the link
         # -- Update whitelists if needed 
 
-        raise NotImplementedError
+        # raise NotImplementedError
+
+        # TODO (Liam) need some max jump distance in the k-nearest (verify)
+        # TODO (Liam) iterate over enumerate(roadmap_states[:-1]) instead and then simply do step_nodes.append(exit_nodes) instead of all_steps = step_nodes[:-1] + [exit_nodes]
+        
+        N = len(roadmap_states)
+        mode = roadmap_states[0][0][1].mode
+
+        step_nodes = []
+        node_pool = {}
+
+        # 1. Create nodes and track pool index per node (for whitelist)
+        for k, entries in enumerate(roadmap_states):
+            nodes_at_k = []
+            for pool_idx, state in entries:
+                state.is_skill_waypoint = True
+                n = Node(state)
+                n.skill_step = k
+                node_pool[n.id] = pool_idx
+                nodes_at_k.append(n)
+            step_nodes.append(nodes_at_k)
+
+        # 2. Place into graph storage
+        # Step-0 node: added to self.nodes (visible to k-nearest so A* can find the entry)
+        for n in step_nodes[0]:
+            self.add_node(n)
+
+        # Intermediate steps: added to self.skill_chain_nodes (hidden from k-nearest)
+        for k in range(1, N - 1):
+            for n in step_nodes[k]:
+                if mode not in self.skill_chain_nodes:
+                    self.skill_chain_nodes[mode] = []
+                self.skill_chain_nodes[mode].append(n)
+
+        # Step-(N-1): added to transition nodes (exit to next mode)
+        exit_nodes = []
+        for pool_idx, state in roadmap_states[-1]:
+            self.add_transition_nodes([(state.q, state.mode, valid_next_modes)])
+            trans_node = self.transition_nodes[mode][-1]
+            trans_node.state.is_skill_waypoint = True
+            trans_node.skill_step = N - 1
+            node_pool[trans_node.id] = pool_idx
+            exit_nodes.append(trans_node)
+
+        # 3. Connect consecutive steps via k-nearest
+        all_steps = step_nodes[:-1] + [exit_nodes]
+
+        for k in range(len(all_steps) - 1):
+            curr_nodes = all_steps[k]
+            next_nodes = all_steps[k + 1]
+
+            if not next_nodes:
+                continue
+
+            # Compute distances from each current node to all next nodes
+            next_configs = np.array([n.state.q.state() for n in next_nodes])
+            k_clip = min(k_neighbors, len(next_nodes))
+
+            for n_curr in curr_nodes:
+                dists = np.linalg.norm(next_configs - n_curr.state.q.state(), axis=1)
+
+                if k_clip >= len(next_nodes):
+                    topk_indices = list(range(len(next_nodes)))
+                else:
+                    topk_indices = np.argpartition(dists, k_clip - 1)[:k_clip]
+
+                curr_pool = node_pool[n_curr.id]
+
+                # Update (link) neighbors
+                for j in topk_indices:
+                    n_next = next_nodes[j]
+                    n_curr.neighbors.append(n_next)
+
+                    # Whitelist nodes that have same pool index (same inactive config -> frozen lane edge)
+                    # TODO (Liam) maybe remove.. technically unsafe (can be assumed as skill steps usually small)
+                    # TODO (Liam) remove whitelist or edge check upfront -> expensive (NxM checks?)
+                    # if curr_pool == node_pool[n_next.id]:
+                    #     n_curr.whitelist.add(n_next.id)
+                    #     n_next.whitelist.add(n_curr.id)
+
+                    # TODO (Liam) instead do explicit edge check here instead of relying on A*
+                    # if self.env.is_edge_collision_free(...):
+                    #   n_curr.neighbors.append(n_next)
+                    #   whitelist..
+
+        # 4. Entry node links to all step-0 nodes
+        if entry_node is not None:
+            for n0 in step_nodes[0]:
+                entry_node.neighbors.append(n0)
+                # Whitelist pool_idx=0 lane (pool 0 was cloned from entry_node's inactive config)
+                if node_pool[n0.id] == 0:
+                    entry_node.whitelist.add(n0.id)
+                    n0.whitelist.add(entry_node.id)
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     # TODO (Liam) make changes in get_neighbors()
