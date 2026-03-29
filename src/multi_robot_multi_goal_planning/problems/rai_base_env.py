@@ -288,6 +288,8 @@ class rai_env(BaseProblem):
             [get_robot_state(self.C, r) for r in self.robots]
         )
 
+        self._uniform_sampler = self._make_uniform_sampler()
+
         self.manipulating_env = False
 
         self.limits = self.C.getJointLimits()
@@ -354,11 +356,24 @@ class rai_env(BaseProblem):
 
         return new_env
 
-    def sample_config_uniform_in_limits(self) -> NpConfiguration:
-        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = self.start_pos.from_flat(rnd)
+    def _make_uniform_sampler(self, batch_size=1000):
+        while True:
+            batch = np.random.uniform(
+                low=self.limits[0, :],
+                high=self.limits[1, :],
+                size=(batch_size, self.limits.shape[1]),
+            )
+            for i in range(batch_size):
+                yield self.start_pos.from_flat(batch[i])
 
-        return q
+    def sample_config_uniform_in_limits(self) -> NpConfiguration:
+        return next(self._uniform_sampler)
+
+    # def sample_config_uniform_in_limits_old(self) -> NpConfiguration:
+    #     rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
+    #     q = self.start_pos.from_flat(rnd)
+
+    #     return q
 
     def sample_goal_configuration(self, mode, task):
         goals_to_sample = task.robots
