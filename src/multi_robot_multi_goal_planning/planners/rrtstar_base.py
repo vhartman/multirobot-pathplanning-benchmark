@@ -275,9 +275,17 @@ class SingleTree(BaseTree):
         self.node_ids_subtree[position] = n.id
 
     def remove_node(self, n: Node, tree: str = "") -> None:
-        mask = self.node_ids_subtree != n.id
-        self.node_ids_subtree = self.node_ids_subtree[mask]
-        self.batch_subtree = self.batch_subtree[mask]
+        # old: mask = self.node_ids_subtree != n.id
+        # old: self.node_ids_subtree = self.node_ids_subtree[mask]
+        # old: self.batch_subtree = self.batch_subtree[mask]
+        # old: del self.subtree[n.id]
+
+        size = len(self.subtree)
+        idx = int(np.where(self.node_ids_subtree[:size] == n.id)[0][0])
+        last = size - 1
+        if idx != last:
+            self.node_ids_subtree[idx] = self.node_ids_subtree[last]
+            self.batch_subtree[idx] = self.batch_subtree[last]
         del self.subtree[n.id]
 
     def get_batch_subtree(self, tree: str = "") -> NDArray:
@@ -341,15 +349,31 @@ class BidirectionalTree(BaseTree):
 
     def remove_node(self, n: Node, tree: str = "") -> None:
         if tree == "A" or tree == "":
-            mask = self.node_ids_subtree != n.id
-            self.node_ids_subtree = self.node_ids_subtree[mask]
-            self.batch_subtree = self.batch_subtree[mask]
+            # old: mask = self.node_ids_subtree != n.id
+            # old: self.node_ids_subtree = self.node_ids_subtree[mask]
+            # old: self.batch_subtree = self.batch_subtree[mask]
+            # old: del self.subtree[n.id]
+
+            size = len(self.subtree)
+            idx = int(np.where(self.node_ids_subtree[:size] == n.id)[0][0])
+            last = size - 1
+            if idx != last:
+                self.node_ids_subtree[idx] = self.node_ids_subtree[last]
+                self.batch_subtree[idx] = self.batch_subtree[last]
             del self.subtree[n.id]
 
         if tree == "B":
-            mask = self.node_ids_subtree_b != n.id
-            self.node_ids_subtree_b = self.node_ids_subtree_b[mask]
-            self.batch_subtree_b = self.batch_subtree_b[mask]
+            # old: mask = self.node_ids_subtree_b != n.id
+            # old: self.node_ids_subtree_b = self.node_ids_subtree_b[mask]
+            # old: self.batch_subtree_b = self.batch_subtree_b[mask]
+            # old: del self.subtree_b[n.id]
+
+            size = len(self.subtree_b)
+            idx = int(np.where(self.node_ids_subtree_b[:size] == n.id)[0][0])
+            last = size - 1
+            if idx != last:
+                self.node_ids_subtree_b[idx] = self.node_ids_subtree_b[last]
+                self.batch_subtree_b[idx] = self.batch_subtree_b[last]
             del self.subtree_b[n.id]
 
     def get_batch_subtree(self, tree: str = "") -> NDArray:
