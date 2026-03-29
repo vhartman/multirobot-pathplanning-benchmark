@@ -9,6 +9,8 @@ from . import rai_free_envs
 from . import abstract_env
 from . import rai_envs_constrained
 
+from . import mr_vamp_env
+
 
 if importlib.util.find_spec("pinocchio") is not None:
     from . import pinocchio_env
