@@ -918,6 +918,12 @@ class BaseRRTstar(BasePlanner):
         Returns:
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
+        config_type = type(self.env.get_start_pos())
+        robot_lims = {
+            robot: self.env.limits[:, self.env.robot_idx[robot]]
+            for robot in self.env.robots
+        }
+
         failed_attemps = 0
         while True:
             if failed_attemps > 10000:
@@ -935,28 +941,32 @@ class BaseRRTstar(BasePlanner):
             if not next_ids and not self.env.is_terminal_mode(mode):
                 return
 
-            constrained_robot = self.env.get_active_task(mode, next_ids).robots
-            goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
-            q = []
+            task = self.env.get_active_task(mode, next_ids)
+            constrained_robot = task.robots
+            goal = task.goal.sample(mode)
+            # q = []
             end_idx = 0
 
-            for robot in self.env.robots:
+            q = self.env.sample_config_uniform_in_limits()
+            for i, robot in enumerate(self.env.robots):
                 if robot in constrained_robot:
                     dim = self.env.robot_dims[robot]
-                    q.append(goal[end_idx : end_idx + dim])
+                    q[i] = goal[end_idx : end_idx + dim]
                     end_idx += dim
-                else:
-                    r_idx = self.env.robot_idx[robot]
-                    lims = self.env.limits[:, r_idx]
-                    q.append(np.random.uniform(lims[0], lims[1]))
-            q = type(self.env.get_start_pos()).from_list(q)
+                    
+            # for robot in self.env.robots:
+            #     if robot in constrained_robot:
+            #         dim = self.env.robot_dims[robot]
+            #         q.append(goal[end_idx : end_idx + dim])
+            #         end_idx += dim
+                    
+            #     else:
+            #         lims = robot_lims[robot]
+            #         q.append(np.random.uniform(lims[0], lims[1]))
+            # q = config_type.from_list(q)
 
             if self.env.is_collision_free(q, mode):
-                # print("B")
-                # self.env.show()
                 return q
-            # print("A")
-            # self.env.show(False)
 
             failed_attemps += 1
 
