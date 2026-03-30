@@ -1559,6 +1559,17 @@ class BaseProblem(ABC):
     #     self.collision_tolerance = 0.01
     #     self.collision_resolution = 0.01
 
+    def __deepcopy__(self, memo):
+        uniform_sampler = self._uniform_sampler
+        self._uniform_sampler = None
+
+        new_env = copy.deepcopy(super(), memo)
+
+        self._uniform_sampler = uniform_sampler
+        new_env._uniform_sampler = new_env._make_uniform_sampler()
+
+        return new_env
+
     def serialize_tasks(self):
         # open file
         task_list = []

@@ -694,6 +694,17 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
         self._pool_lock = threading.Lock()
         self._available_data = list(range(len(self._data_pool)))
 
+    def __deepcopy__(self, memo):
+        executor, pool_lock = self._executor, self._pool_lock
+        self._executor, self._pool_lock = None, None
+        new_env = copy.deepcopy(super(), memo)
+        self._executor, self._pool_lock = executor, pool_lock
+        new_env._executor = ThreadPoolExecutor(
+            max_workers=len(new_env._data_pool), thread_name_prefix="collision_checker"
+        )
+        new_env._pool_lock = threading.Lock()
+        return new_env
+
     def close(self):
         if hasattr(self, "_executor"):
             self._executor.shutdown(wait=True)
