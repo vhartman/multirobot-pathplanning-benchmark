@@ -70,6 +70,11 @@ class VampEnv(BaseProblem):
 
         self.manipulating_env = False
 
+        # sg format: {obj_name: ("attached", robot_id, joints_list) |
+        #                       ("world",    robot_id_was, joints_at_detach)}
+        self.initial_sg: dict = {}
+        self._current_sg: dict = {}
+
         self.spec = ProblemSpec(
             agent_type=AgentType.MULTI_AGENT,
             constraints=ConstraintType.UNCONSTRAINED,
@@ -292,7 +297,53 @@ class VampEnv(BaseProblem):
             server.stop()
 
     def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
-        return {}
+        if not self.manipulating_env:
+            return {}
+
+        prev_mode = mode.prev_mode
+        if prev_mode is None:
+            return self.initial_sg.copy()
+
+        sg = prev_mode.sg.copy()
+
+        active_task = self.get_active_task(prev_mode, mode.task_ids)
+
+        if active_task.type is None or active_task.type == "goto":
+            return sg
+
+        obj_name = active_task.frames[1]
+        new_parent = active_task.frames[0]
+
+        if new_parent in self.robots:
+            # pick: robot grabs the object
+            robot_id = self.robots.index(new_parent)
+            joints = list(mode.entry_configuration[robot_id])
+            sg[obj_name] = ("attached", robot_id, joints)
+        else:
+            # place / handover to world: robot releases the object
+            prev_entry = prev_mode.sg.get(obj_name)
+            if prev_entry is not None and prev_entry[0] == "attached":
+                prev_robot_id = prev_entry[1]
+                joints = list(mode.entry_configuration[prev_robot_id])
+                sg[obj_name] = ("world", prev_robot_id, joints)
+            else:
+                sg[obj_name] = ("world", None, None)
+
+        return sg
+
+    def _apply_scenegraph(self, sg: dict) -> None:
+        """Sync mr_planner_core attachment state with *sg*, making minimal API calls."""
+        for obj_name, state in sg.items():
+            if self._current_sg.get(obj_name) == state:
+                continue
+            if state[0] == "attached":
+                _, robot_id, joints = state
+                self.env.attach_object(obj_name, robot_id, list(joints))
+            else:  # "world"
+                _, robot_id, joints = state
+                if robot_id is not None and joints is not None:
+                    self.env.detach_object(obj_name, robot_id, list(joints))
+            self._current_sg[obj_name] = state
 
     def show(self, blocking=True):
         self.env.update_scene()
@@ -323,6 +374,9 @@ class VampEnv(BaseProblem):
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         if q is None:
             raise ValueError
+
+        if mode is not None:
+            self.set_to_mode(mode)
 
         return not self.env.in_collision(q.as_list(), self_only=False)
 
@@ -396,14 +450,15 @@ class VampEnv(BaseProblem):
         # if N == 0:
         #     return True
 
+        if mode is not None:
+            self.set_to_mode(mode)
+
         return not self.env.motion_in_collision(q1.as_list(), q2.as_list(), step_size=resolution, self_only=False)
 
-    def set_to_mode(self, m: List[int]):
+    def set_to_mode(self, m: Mode):
         if not self.manipulating_env:
             return
-        else:
-            raise NotImplementedError("This is not supported for this environment.")
-
+        self._apply_scenegraph(m.sg)
 
 @register("vampmr.quad_panda")
 class vamp_quad_panda_env(SequenceMixin, VampEnv):
@@ -417,7 +472,7 @@ class vamp_quad_panda_env(SequenceMixin, VampEnv):
         self.robots = ["a1", "a2", "a3", "a4"]
 
         # self.env.enable_meshcat()
-        # self.env.reset_scene()
+        self.env.reset_scene()
 
         panda_dim = 7
         self.limits = np.array([[-2] * 4 * panda_dim, [2] * 4 * panda_dim])
@@ -429,13 +484,30 @@ class vamp_quad_panda_env(SequenceMixin, VampEnv):
 
         goal_pos = self.start_pos.q
 
+        goal_tf = np.eye(4)
+        goal_tf[2, 3] = 0.5
+
+        print(goal_tf)
+
+        ik_poses = {}
+        for i, r in enumerate(self.robots):
+            current_transform = self.env.end_effector_transform(i, [0]*7) 
+            current_transform = np.array(current_transform)    
+            current_transform[0, 3] = 0
+            current_transform[1, 3] = 0
+            current_transform[2, 3] = 0.2
+            pose = self.env.inverse_kinematics(i, current_transform, max_restarts=100, tol_pos=0.01, tol_ang=1)
+            print(pose)
+            if pose:
+                ik_poses[i] = pose
+
         self.tasks = [
             # r1
-            Task("a1_goal", ["a1"], SingleGoal(np.array([0.0, 1, 1, 0, -2, 0, 0]))),
+            Task("a1_goal", ["a1"], SingleGoal(np.array(ik_poses[0]))),
             # r2
-            Task("a2_goal", ["a2"], SingleGoal(np.array([-0.0, 0, 1, 0, 2, 0, 0]))),
-            Task("a3_goal", ["a3"], SingleGoal(np.array([-0.0, 0, 1, 0, 2, 0, 0]))),
-            Task("a4_goal", ["a4"], SingleGoal(np.array([-0.0, 0, 1, 0, 2, 0, 0]))),
+            Task("a2_goal", ["a2"], SingleGoal(np.array(ik_poses[1]))),
+            Task("a3_goal", ["a3"], SingleGoal(np.array(ik_poses[2]))),
+            Task("a4_goal", ["a4"], SingleGoal(np.array(ik_poses[3]))),
             # terminal mode
             Task(
                 "terminal",
@@ -541,13 +613,13 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         # self.env.enable_meshcat()
         # self.env.update_scene()
 
-        panda_dim = 6
-        self.limits = np.array([[-4] * num_robots * panda_dim, [4] * num_robots * panda_dim])
+        ur_dim = 6
+        self.limits = np.array([[-4] * num_robots * ur_dim, [4] * num_robots * ur_dim])
 
-        self.start_pos = NpConfiguration.from_list([[0] * panda_dim, [0] * panda_dim])
+        self.start_pos = NpConfiguration.from_list([[0] * ur_dim, [0] * ur_dim])
 
-        self.robot_dims = {"a1": panda_dim, "a2": panda_dim}
-        self.robot_idx = {f"a{i+1}": list(range(i * panda_dim, (i + 1) * panda_dim)) for i in range(num_robots)}
+        self.robot_dims = {"a1": ur_dim, "a2": ur_dim}
+        self.robot_idx = {f"a{i+1}": list(range(i * ur_dim, (i + 1) * ur_dim)) for i in range(num_robots)}
         # self.C.view(True)
 
         goal_pos = self.start_pos.q
@@ -579,7 +651,82 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
         self.safe_pose = {}
         for r in self.robots:
-            self.safe_pose[r] = np.array([0] * panda_dim)
+            self.safe_pose[r] = np.array([0] * ur_dim)
+
+
+@register("vampmr.dual_ur5_with_box")
+class vamp_hex_panda_env(SequenceMixin, VampEnv):
+    def __init__(self, agents_can_rotate=True):
+        VampEnv.__init__(self)
+        self.env = mr_planner_core.VampEnvironment("dual_ur5")
+
+        self.manipulating_env = True
+
+        info = self.env.info()
+        num_robots = int(info["num_robots"])
+
+        self.robots = ["a1", "a2"]
+
+        box = mr_planner_core.Object()
+        box.name = "box1"
+        box.shape = mr_planner_core.Object.Box
+        box.state = mr_planner_core.Object.Static
+        box.x = 0.5
+        box.y = 0.0
+        box.z = 0.5
+        box.qw = 1.0
+        box.qx = 0.0
+        box.qy = 0.0
+        box.qz = 0.0
+        box.width = 0.1   # x
+        box.height = 0.1  # y
+        box.length = 0.1  # z
+        self.env.add_object(box)
+
+        # self.env.enable_meshcat()
+        self.env.update_scene()
+
+        ur_dim = 6
+        self.limits = np.array([[-4] * num_robots * ur_dim, [4] * num_robots * ur_dim])
+
+        self.start_pos = NpConfiguration.from_list([[0] * ur_dim, [0] * ur_dim])
+
+        self.robot_dims = {"a1": ur_dim, "a2": ur_dim}
+        self.robot_idx = {f"a{i+1}": list(range(i * ur_dim, (i + 1) * ur_dim)) for i in range(num_robots)}
+        # self.C.view(True)
+
+        goal_pos = self.start_pos.q
+
+        self.initial_sg = {"box1": ("world", None, None)}
+
+        self.tasks = [
+            # r1
+            Task("a1_goal", ["a1"], SingleGoal(np.array([0.0, 0.5, -1, 0, -0, 0])), type="pick", frames=["a1", "box1"]),
+            # r2
+            Task("a2_goal", ["a2"], SingleGoal(np.array([-0.0, 0.5, -1, 0, 0, 0]))),
+            # terminal mode
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(goal_pos),
+            ),
+        ]
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_goal", "a2_goal", "terminal"]
+        )
+
+        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array([0] * ur_dim)
 
 @register("vampmr.quad_ur5")
 class vamp_hex_panda_env(SequenceMixin, VampEnv):
@@ -596,17 +743,17 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         # self.env.reset_scene()
         # self.env.update_scene()
 
-        panda_dim = 6
-        self.limits = np.array([[-4] * num_robots * panda_dim, [4] * num_robots * panda_dim])
+        ur_dim = 6
+        self.limits = np.array([[-4] * num_robots * ur_dim, [4] * num_robots * ur_dim])
 
-        self.start_pos = NpConfiguration.from_list([[0] * panda_dim, [0] * panda_dim, [0] * panda_dim, [0] * panda_dim])
+        self.start_pos = NpConfiguration.from_list([[0] * ur_dim, [0] * ur_dim, [0] * ur_dim, [0] * ur_dim])
         
         for i in range(4):
             self.start_pos[i][0] = 0
             self.start_pos[i][1] = 0
 
-        self.robot_dims = {"a1": panda_dim, "a2": panda_dim, "a3": panda_dim, "a4": panda_dim}
-        self.robot_idx = {f"a{i+1}": list(range(i * panda_dim, (i + 1) * panda_dim)) for i in range(num_robots)}
+        self.robot_dims = {"a1": ur_dim, "a2": ur_dim, "a3": ur_dim, "a4": ur_dim}
+        self.robot_idx = {f"a{i+1}": list(range(i * ur_dim, (i + 1) * ur_dim)) for i in range(num_robots)}
         # self.C.view(True)
 
         goal_pos = self.start_pos.q
@@ -638,4 +785,4 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
         self.safe_pose = {}
         for r in self.robots:
-            self.safe_pose[r] = np.array([0] * panda_dim)
+            self.safe_pose[r] = np.array([0] * ur_dim)
