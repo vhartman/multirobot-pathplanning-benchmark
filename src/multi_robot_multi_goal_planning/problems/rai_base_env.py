@@ -695,32 +695,30 @@ class rai_env(BaseProblem):
         if not self.manipulating_env:
             return
 
-        # do not remake the config if we are in the same mode as we have been before
-        if m == self.prev_mode:
-            return
+        # The prev_mode dedup only applies when updating self.C.
+        # When an explicit config is provided the caller manages its own state,
+        # so we must not skip the call or mutate self.prev_mode.
+        if config is None:
+            if m == self.prev_mode:
+                return
+            self.prev_mode = m
 
-        self.prev_mode = m
-
-        if use_cached and m in self.C_cache:
-            if config is not None:
-                config.clear()
-                config.addConfigurationCopy(self.C_cache[m])
-            else:
-                # for k, v in self.C_cache.items():
-                #     print(k)
-                #     v.setJointState(v.getJointState()*0)
-                #     # v.view(False)
-
-                self.C = self.C_cache[m]
-
-            # self.C.view(True)
+        if use_cached and m in self.C_cache and config is None:
+            # Note: the cache is built from C_base (collision geometry).
+            # When config is provided it typically comes from C_orig (visual
+            # geometry), so we skip the cache to avoid overwriting it.
+            self.C = self.C_cache[m]
             return
 
         tmp = ry.Config()
 
-        # self.C.clear()
-        # self.C_base.computeCollisions()
-        tmp.addConfigurationCopy(self.C_base)
+        if config is not None:
+            # Use the caller-supplied config as the base so that its geometry
+            # (e.g. visual meshes from C_orig) is preserved.  The caller is
+            # responsible for resetting config to the desired starting state.
+            tmp.addConfigurationCopy(config)
+        else:
+            tmp.addConfigurationCopy(self.C_base)
 
         mode_sequence = []
 
@@ -817,6 +815,9 @@ class rai_env(BaseProblem):
                 pass
             self.C = self.C_cache[m]
 
+        elif config is not None:
+            config.clear()
+            config.addConfigurationCopy(tmp)
         else:
             viewer = self.C.get_viewer()
             tmp.set_viewer(viewer)
@@ -868,3 +869,203 @@ class rai_env(BaseProblem):
 
         if stop_at_end:
             self.C.view(True)
+
+    def _viser_set_step(
+        self,
+        i: int,
+        path: List[State],
+        C_display: "ry.Config",
+        C_display_base: "ry.Config",
+        handles: dict,
+        mode_label=None,
+    ) -> None:
+        """Apply path[i] to C_display and push updated world poses to viser handles."""
+        state = path[i]
+
+        # Reset C_display to the visual base (C_orig copy) so that set_to_mode
+        # always starts from a clean state regardless of jump direction.
+        C_display.clear()
+        C_display.addConfigurationCopy(C_display_base)
+
+        # Apply scene-graph modifications (object attachments, side-effects) for
+        # the current mode directly onto C_display without touching self.C or the
+        # planning cache.
+        self.set_to_mode(state.mode, config=C_display, use_cached=False, place_in_cache=False)
+
+        for k, robot in enumerate(self.robots):
+            C_display.setJointState(state.q[k], get_robot_joints(C_display, robot))
+
+        for frame in C_display.getFrames():
+            if frame.name not in handles:
+                continue
+            handles[frame.name].position = np.array(frame.getPosition(), dtype=np.float32)
+            # viser wxyz convention: (w, x, y, z)
+            q = frame.getQuaternion()  # ry returns [w, x, y, z]
+            handles[frame.name].wxyz = np.array(q, dtype=np.float32)
+
+        if mode_label is not None:
+            m = state.mode
+            task_names = [self.tasks[tid].name for tid in m.task_ids]
+            task_names_str = "  \n".join(task_names)
+            mode_label.content = (
+                f"**Step:** {i} / {len(path) - 1}  \n"
+                f"**Mode:** `{m.task_ids}`  \n"
+                f"**Tasks:**   \n {task_names_str}"
+            )
+
+    def display_path_viser(
+        self,
+        paths: "List[List[State]] | List[State]",
+        pause_time: float = 0.05,
+        port: int = 8080,
+        path_labels: Optional[List[str]] = None,
+        primitives_only: bool = False,
+    ) -> None:
+        """Display one or more planned paths interactively in a viser web viewer.
+
+        Opens a viser server at http://localhost:<port>.  The GUI shows a path
+        selector dropdown, a step slider, and playback controls.
+
+        Args:
+            paths: A single path (List[State]) or a list of paths to compare.
+            pause_time: Initial time between frames during playback (seconds).
+            port: Port for the viser HTTP server.
+            path_labels: Optional display names for each path (defaults to "Path 0", …).
+            primitives_only: If True, skip file-loaded mesh shapes (shape type
+                ``'mesh'``) and only show primitives (box, sphere, cylinder, …).
+        """
+        # Accept a single path for convenience.
+        if paths and not isinstance(paths[0], list):
+            paths = [paths]
+        try:
+            import viser
+        except ImportError:
+            raise ImportError("viser is required for display_path_viser. Install with: pip install viser")
+
+        # C_display_base is the clean visual starting state (C_orig with meshes).
+        # C_display is reset to it before each mode application so that arbitrary
+        # slider jumps always produce a correct scene.
+        C_display_base = ry.Config()
+        C_display_base.addConfigurationCopy(self.C_orig)
+        C_display = ry.Config()
+        C_display.addConfigurationCopy(self.C_orig)
+
+        # --- build scene: one mesh handle per frame that has geometry ---
+        server = viser.ViserServer(port=port)
+        server.scene.set_up_direction("+z")
+        server.scene.world_axes.visible = False
+
+        handles: dict = {}
+        for frame in C_display.getFrames():
+            if primitives_only and frame.info().get("shape") == "mesh":
+                continue
+
+            verts = np.asarray(frame.getMeshPoints(), dtype=np.float32)
+            tris = np.asarray(frame.getMeshTriangles(), dtype=np.uint32)
+            if verts.ndim < 2 or tris.ndim < 2:
+                continue
+
+            # view_recopyMeshes() (called in __init__ before C_orig is made)
+            # strips color from frame.info(), but getMeshColors() retains
+            # per-vertex RGBA uint8 colors. Use those as the primary source.
+            mesh_colors = np.asarray(frame.getMeshColors())
+            if mesh_colors.ndim == 2 and len(mesh_colors) > 0:
+                first = mesh_colors[0]  # [R, G, B, A] in 0-255
+                color_rgb = (int(first[0]), int(first[1]), int(first[2]))
+                alpha = int(first[3]) if len(first) > 3 else 255
+                opacity = alpha / 255.0 if alpha < 255 else None
+            else:
+                # fallback for configs not yet through view_recopyMeshes
+                info = frame.info()
+                raw = info.get("color", [0.7, 0.7, 0.7])
+                color_rgb = tuple(int(c * 255) for c in raw[:3])
+                opacity = float(raw[3]) if len(raw) > 3 and raw[3] < 1.0 else None
+
+            handles[frame.name] = server.scene.add_mesh_simple(
+                name=f"frames/{frame.name}",
+                vertices=verts,
+                faces=tris,
+                color=color_rgb,
+                flat_shading=False,
+                opacity=opacity,
+            )
+
+        if path_labels is None:
+            path_labels = [f"Path {i} ({len(p)} steps)" for i, p in enumerate(paths)]
+
+        # --- GUI controls ---
+        path_dropdown = server.gui.add_dropdown(
+            label="Path",
+            options=path_labels,
+            initial_value=path_labels[0],
+        )
+        # Slider max is fixed to the longest path; the step is clamped when
+        # switching to a shorter path so we never index out of bounds.
+        max_steps = max(len(p) for p in paths)
+        step_slider = server.gui.add_slider(
+            label="Step",
+            min=0,
+            max=max_steps - 1,
+            step=1,
+            initial_value=0,
+        )
+        play_checkbox = server.gui.add_checkbox("Play", initial_value=False)
+        pause_time_field = server.gui.add_number(
+            "Pause time (s)", initial_value=pause_time, min=0.0, step=0.001
+        )
+        step_size_field = server.gui.add_number(
+            "Step size", initial_value=1, min=1, step=1
+        )
+        stop_btn = server.gui.add_button("Stop")
+        mode_label = server.gui.add_markdown("")
+
+        _stopped = False
+
+        def current_path() -> "List[State]":
+            idx = path_labels.index(path_dropdown.value)
+            return paths[idx]
+
+        def clamped_step() -> int:
+            return min(step_slider.value, len(current_path()) - 1)
+
+        @stop_btn.on_click
+        def _(_):
+            nonlocal _stopped
+            _stopped = True
+
+        @path_dropdown.on_update
+        def _(_):
+            play_checkbox.value = False
+            step_slider.value = 0
+            self._viser_set_step(
+                0, current_path(), C_display, C_display_base, handles, mode_label
+            )
+
+        @step_slider.on_update
+        def _(event):
+            if not play_checkbox.value:
+                step = min(event.target.value, len(current_path()) - 1)
+                self._viser_set_step(
+                    step, current_path(), C_display, C_display_base, handles, mode_label
+                )
+
+        # show initial frame
+        self._viser_set_step(0, current_path(), C_display, C_display_base, handles, mode_label)
+
+        print(f"[viser] Open http://localhost:{port} to view the path.")
+        print("[viser] Press Stop in the GUI or Ctrl-C to exit.")
+
+        try:
+            while not _stopped:
+                if play_checkbox.value:
+                    path = current_path()
+                    next_step = (clamped_step() + int(step_size_field.value)) % len(path)
+                    step_slider.value = next_step
+                    self._viser_set_step(
+                        next_step, path, C_display, C_display_base, handles, mode_label
+                    )
+                time.sleep(pause_time_field.value)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.stop()
