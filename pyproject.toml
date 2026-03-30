@@ -23,6 +23,7 @@ dependencies = [
 pinocchio = ["pin>=3.4" , "meshcat"]
 rai = ["robotic>=0.2.2,<0.3.0"]
 mujoco = ["mujoco", "mujoco-mjx"]
+viser = ["viser"]
 all = ["pin>=3.4", "meshcat", "robotic>=0.2.2,<0.3.0", "mujoco", "mujoco-mjx"]
 
 [tool.setuptools]

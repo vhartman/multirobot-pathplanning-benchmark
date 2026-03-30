@@ -185,6 +185,13 @@ def main():
         action="store_true",
         help="Display the configuration used for collision checking. (default: False)",
     )
+    
+    parser.add_argument(
+        "--viser",
+        action="store_true",
+        help="Use viser. (default: False)",
+    )
+
     args = parser.parse_args()
 
     folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
@@ -289,18 +296,24 @@ def main():
         print("cost", cost)
 
     print("Attempting to display path")
-    env.show()
     # display_path(env, real_path, True, True)
 
-    env.display_path(
-        path,
-        args.pause,
-        export=args.export,
-        pause_time=0.05,
-        stop_at_end=True,
-        adapt_to_max_distance=True,
-        stop_at_mode=False
-    )
+    if args.viser:
+        env.display_path_viser(
+            paths=[path],
+            primitives_only = True
+        )
+    else:
+        env.show()
+        env.display_path(
+            path,
+            args.pause,
+            export=args.export,
+            pause_time=0.05,
+            stop_at_end=True,
+            adapt_to_max_distance=True,
+            stop_at_mode=False
+        )
 
 
 if __name__ == "__main__":
