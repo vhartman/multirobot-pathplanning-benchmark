@@ -332,11 +332,13 @@ class rai_env(BaseProblem):
         C = self.C
         C_base = self.C_base
         C_orig = self.C_orig
+        uniform_sampler = self._uniform_sampler
 
-        # Temporarily remove C to allow deepcopy of other attributes
+        # Temporarily remove un-picklable attributes to allow deepcopy of other attributes
         self.C = None
         self.C_base = None
         self.C_orig = None
+        self._uniform_sampler = None
 
         # Create a deep copy of self without C
         new_env = copy.deepcopy(super(), memo)
@@ -353,6 +355,9 @@ class rai_env(BaseProblem):
         self.C_orig = C_orig
         new_env.C_orig = ry.Config()
         new_env.C_orig.addConfigurationCopy(self.C_orig)
+
+        self._uniform_sampler = uniform_sampler
+        new_env._uniform_sampler = new_env._make_uniform_sampler()
 
         return new_env
 
