@@ -2710,11 +2710,8 @@ class BaseITstar(BasePlanner):
                         #     "items from the set are in the array"
                         # )
                         if next_modes == []:
-                            self.reached_modes = (
-                                self.mode_validation.track_invalid_modes(
-                                    mode, self.reached_modes
-                                )
-                            )
+                            self.mode_validation.propagate_invalid(mode)
+                            self.reached_modes = self.mode_validation.remove_invalid_modes(self.reached_modes)
 
                 if mode not in self.reached_modes:
                     if update and not reached_terminal_mode:

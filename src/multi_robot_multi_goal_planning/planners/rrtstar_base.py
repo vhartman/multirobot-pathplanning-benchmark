@@ -275,9 +275,17 @@ class SingleTree(BaseTree):
         self.node_ids_subtree[position] = n.id
 
     def remove_node(self, n: Node, tree: str = "") -> None:
-        mask = self.node_ids_subtree != n.id
-        self.node_ids_subtree = self.node_ids_subtree[mask]
-        self.batch_subtree = self.batch_subtree[mask]
+        # old: mask = self.node_ids_subtree != n.id
+        # old: self.node_ids_subtree = self.node_ids_subtree[mask]
+        # old: self.batch_subtree = self.batch_subtree[mask]
+        # old: del self.subtree[n.id]
+
+        size = len(self.subtree)
+        idx = int(np.where(self.node_ids_subtree[:size] == n.id)[0][0])
+        last = size - 1
+        if idx != last:
+            self.node_ids_subtree[idx] = self.node_ids_subtree[last]
+            self.batch_subtree[idx] = self.batch_subtree[last]
         del self.subtree[n.id]
 
     def get_batch_subtree(self, tree: str = "") -> NDArray:
@@ -341,15 +349,31 @@ class BidirectionalTree(BaseTree):
 
     def remove_node(self, n: Node, tree: str = "") -> None:
         if tree == "A" or tree == "":
-            mask = self.node_ids_subtree != n.id
-            self.node_ids_subtree = self.node_ids_subtree[mask]
-            self.batch_subtree = self.batch_subtree[mask]
+            # old: mask = self.node_ids_subtree != n.id
+            # old: self.node_ids_subtree = self.node_ids_subtree[mask]
+            # old: self.batch_subtree = self.batch_subtree[mask]
+            # old: del self.subtree[n.id]
+
+            size = len(self.subtree)
+            idx = int(np.where(self.node_ids_subtree[:size] == n.id)[0][0])
+            last = size - 1
+            if idx != last:
+                self.node_ids_subtree[idx] = self.node_ids_subtree[last]
+                self.batch_subtree[idx] = self.batch_subtree[last]
             del self.subtree[n.id]
 
         if tree == "B":
-            mask = self.node_ids_subtree_b != n.id
-            self.node_ids_subtree_b = self.node_ids_subtree_b[mask]
-            self.batch_subtree_b = self.batch_subtree_b[mask]
+            # old: mask = self.node_ids_subtree_b != n.id
+            # old: self.node_ids_subtree_b = self.node_ids_subtree_b[mask]
+            # old: self.batch_subtree_b = self.batch_subtree_b[mask]
+            # old: del self.subtree_b[n.id]
+
+            size = len(self.subtree_b)
+            idx = int(np.where(self.node_ids_subtree_b[:size] == n.id)[0][0])
+            last = size - 1
+            if idx != last:
+                self.node_ids_subtree_b[idx] = self.node_ids_subtree_b[last]
+                self.batch_subtree_b[idx] = self.batch_subtree_b[last]
             del self.subtree_b[n.id]
 
     def get_batch_subtree(self, tree: str = "") -> NDArray:
@@ -606,7 +630,8 @@ class BaseRRTstar(BasePlanner):
             new_modes = self.env.get_next_modes(q, mode)
             new_modes = self.mode_validation.get_valid_modes(mode, tuple(new_modes))
             if new_modes == []:
-                self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
+                self.mode_validation.propagate_invalid(mode)
+                self.modes = self.mode_validation.remove_invalid_modes(self.modes)
             self.save_tree_data()
 
         for new_mode in new_modes:
@@ -659,7 +684,8 @@ class BaseRRTstar(BasePlanner):
         next_modes = self.env.get_next_modes(n.state.q, mode)
         next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
         if next_modes == []:
-            self.modes = self.mode_validation.track_invalid_modes(mode, self.modes)
+            self.mode_validation.propagate_invalid(mode)
+            self.modes = self.mode_validation.remove_invalid_modes(self.modes)
 
         for next_mode in next_modes:
             if next_mode not in self.modes:
@@ -892,16 +918,20 @@ class BaseRRTstar(BasePlanner):
         Returns:
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
+        config_type = type(self.env.get_start_pos())
+        robot_lims = {
+            robot: self.env.limits[:, self.env.robot_idx[robot]]
+            for robot in self.env.robots
+        }
+
         failed_attemps = 0
         while True:
             if failed_attemps > 10000:
                 print("Failed to sample transition configuration after 10000 attempts.")
                 if self.config.with_mode_validation:
-                    self.modes.remove(mode)
                     self.mode_validation.add_invalid_mode(mode)
-                    self.modes = self.mode_validation.track_invalid_modes(
-                        mode.prev_mode, self.modes
-                    )
+                    self.mode_validation.propagate_invalid(mode.prev_mode)
+                    self.modes = self.mode_validation.remove_invalid_modes(self.modes)
                 else:
                     self.blacklist_mode.add(mode)
                     self.modes.remove(mode)
@@ -911,28 +941,32 @@ class BaseRRTstar(BasePlanner):
             if not next_ids and not self.env.is_terminal_mode(mode):
                 return
 
-            constrained_robot = self.env.get_active_task(mode, next_ids).robots
-            goal = self.env.get_active_task(mode, next_ids).goal.sample(mode)
-            q = []
+            task = self.env.get_active_task(mode, next_ids)
+            constrained_robot = task.robots
+            goal = task.goal.sample(mode)
+            # q = []
             end_idx = 0
 
-            for robot in self.env.robots:
+            q = self.env.sample_config_uniform_in_limits()
+            for i, robot in enumerate(self.env.robots):
                 if robot in constrained_robot:
                     dim = self.env.robot_dims[robot]
-                    q.append(goal[end_idx : end_idx + dim])
+                    q[i] = goal[end_idx : end_idx + dim]
                     end_idx += dim
-                else:
-                    r_idx = self.env.robot_idx[robot]
-                    lims = self.env.limits[:, r_idx]
-                    q.append(np.random.uniform(lims[0], lims[1]))
-            q = type(self.env.get_start_pos()).from_list(q)
+                    
+            # for robot in self.env.robots:
+            #     if robot in constrained_robot:
+            #         dim = self.env.robot_dims[robot]
+            #         q.append(goal[end_idx : end_idx + dim])
+            #         end_idx += dim
+                    
+            #     else:
+            #         lims = robot_lims[robot]
+            #         q.append(np.random.uniform(lims[0], lims[1]))
+            # q = config_type.from_list(q)
 
             if self.env.is_collision_free(q, mode):
-                # print("B")
-                # self.env.show()
                 return q
-            # print("A")
-            # self.env.show(False)
 
             failed_attemps += 1
 
@@ -981,18 +1015,20 @@ class BaseRRTstar(BasePlanner):
             if q is None:
                 return
 
-            if random.choice([0, 1]) == 0:
-                return q
+            return q
 
-            while True:
-                q_noise = []
-                for r in range(len(self.env.robots)):
-                    q_robot = q.robot_state(r)
-                    noise = np.random.normal(0, 0.1, q_robot.shape)
-                    q_noise.append(q_robot + noise)
-                q = type(self.env.get_start_pos()).from_list(q_noise)
-                if self.env.is_collision_free(q, mode):
-                    return q
+            # if random.choice([0, 1]) == 0:
+            #     return q
+
+            # while True:
+            #     q_noise = []
+            #     for r in range(len(self.env.robots)):
+            #         q_robot = q.robot_state(r)
+            #         noise = np.random.normal(0, 0.1, q_robot.shape)
+            #         q_noise.append(q_robot + noise)
+            #     q = type(self.env.get_start_pos()).from_list(q_noise)
+            #     if self.env.is_collision_free(q, mode):
+            #         return q
 
     def _sample_uniform(self, mode: Mode):
         while True:

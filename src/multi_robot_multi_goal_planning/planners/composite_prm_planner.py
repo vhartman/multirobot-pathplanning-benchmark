@@ -207,21 +207,27 @@ class CompositePRM(BasePlanner):
 
         active_task = self.env.get_active_task(mode, next_ids)
         constrained_robot = active_task.robots
-        goal_sample = active_task.goal.sample(mode)
+        goal = active_task.goal.sample(mode)
 
         # sample a configuration
-        q = []
-        end_idx = 0
-        for robot in self.env.robots:
+        q = self.env.sample_config_uniform_in_limits()
+        for i, robot in enumerate(self.env.robots):
             if robot in constrained_robot:
                 dim = self.env.robot_dims[robot]
-                q.append(goal_sample[end_idx : end_idx + dim])
+                q[i] = goal[end_idx : end_idx + dim]
                 end_idx += dim
-            else:
-                r_idx = self.env.robot_idx[robot]
-                lims = self.env.limits[:, r_idx]
-                q.append(np.random.uniform(lims[0], lims[1]))
-        q = self.env.start_pos.from_list(q)
+        # q = []
+        # end_idx = 0
+        # for robot in self.env.robots:
+        #     if robot in constrained_robot:
+        #         dim = self.env.robot_dims[robot]
+        #         q.append(goal_sample[end_idx : end_idx + dim])
+        #         end_idx += dim
+        #     else:
+        #         r_idx = self.env.robot_idx[robot]
+        #         lims = self.env.limits[:, r_idx]
+        #         q.append(np.random.uniform(lims[0], lims[1]))
+        # q = self.env.start_pos.from_list(q)
 
         return q
 
@@ -316,9 +322,8 @@ class CompositePRM(BasePlanner):
 
                         # if there are no valid next modes, we add this mode to the invalid modes (and remove them from the reached modes)
                         if valid_next_modes == []:
-                            reached_modes = self.mode_validation.track_invalid_modes(
-                                mode, reached_modes
-                            )
+                            self.mode_validation.propagate_invalid(mode)
+                            reached_modes = self.mode_validation.remove_invalid_modes(reached_modes)
 
                 # if the mode is not (anymore) in the reachable modes, do not add this to the transitions
                 if mode not in reached_modes:

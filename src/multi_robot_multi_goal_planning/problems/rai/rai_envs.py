@@ -2010,6 +2010,63 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
+@register("rai.static_fr3_simple_sorting")
+class rai_static_fr3_env(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C, a1_keyframes, a2_keyframes = rai_config.make_static_fr3_duo_config()
+
+        self.robots = ["a1_right", "a2_left"]
+
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        home_pose = self.C.getJointState()
+
+        # self.C.view(True)
+
+        self.tasks = []
+
+        for robot_name, [pre_pick, pre_place], obj_name, goal_name in zip(self.robots, [a1_keyframes, a2_keyframes], ["obj1", "obj2"], ["goal1", "goal2"]):
+            self.tasks.extend([
+                Task(
+                    robot_name + "_pick",
+                    [robot_name],
+                    SingleGoal(pre_pick),
+                    frames=[robot_name + "_fr3v2_link8", obj_name],
+                    type="pick",
+                ),
+                Task(
+                    robot_name + "_place",
+                    [robot_name],
+                    SingleGoal(pre_place),
+                    type="place",
+                    frames=["table", obj_name]
+                )
+            ])
+
+        self.tasks.append(
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(home_pose),
+            ),
+        )
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_right_pick", "a2_left_pick", "a1_right_place", "a2_left_place", "terminal"]
+        )
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
 
 # mobile manip
 @register([

@@ -34,6 +34,7 @@ from ..goals import (
 )
 from ..rai_base_env import rai_env
 from ..constraints import (
+    AffineConfigurationSpaceInequalityConstraint,
     RelativeAffineTaskSpaceEqualityConstraint,
     AffineTaskSpaceEqualityConstraint,
     AffineConfigurationSpaceEqualityConstraint,
@@ -138,8 +139,8 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
                 "joint_place",
                 ["a1", "a2"],
                 SingleGoal(rel_movement_end), constraints=[
-                    RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], pose_projection_matrix, rel_pose),
-                    AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 1, 0]), 1e-3)
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1", "a2"], pose_projection_matrix, rel_pose, 1e-2),
+                    AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 1, 0]), 5e-2)
                     # AffineRelativeFrameOrientationConstraint(["a1", "a2"], "y", np.array([0, 0, 0]), 1e-3)
                 ]
             ),            
@@ -201,7 +202,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 self.robots,
                 SingleGoal(pick_pose),
                 type="pick", 
-                frames=["a1_ur_ee_marker", "obj1"]
+                frames=["a1_ur_ee_marker", "obj1"],
             ),
             Task(
                 "joint_place",
@@ -210,9 +211,9 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
                 type="place", 
                 frames=["table", "obj1"],
                 constraints=[
-                    RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], pose_projection_matrix,  rel_pose, 1e-2),
+                    RelativeAffineTaskSpaceEqualityConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], pose_projection_matrix,  rel_pose, 2e-2),
                     AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([0, 0, 1]), 5e-2),
-                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([0, -1, 0]), 5e-1)
+                    AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([0, -1, 0]), 5e-2)
                     # AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "y", np.array([1, -1, 0]), 5e-2),
                     # AffineRelativeFrameOrientationConstraint(["a1_ur_ee_marker", "a2_ur_ee_marker"], "z", np.array([-1, -1, 0]), 5e-2)
                 ]
@@ -691,6 +692,13 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
 
         self.constraints = [AffineConfigurationSpaceEqualityConstraint(np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0]]), np.array([0]))]
 
+        # we dont want the arms to cross each other
+        ineq_A= np.zeros((2, 2*9), dtype=int)
+        ineq_A[0, [1]] = [1] # y1 < 0
+        ineq_A[1, [10]] = [-1] # y2 < 0
+        ineq_B = np.zeros((2, 1))
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A, ineq_B)]
+
         self.tasks = [
             # joint
             Task(
@@ -792,9 +800,38 @@ class rai_rfl(SequenceMixin, rai_env):
 
         self.constraints = [AffineConfigurationSpaceEqualityConstraint(lhs_constraint, rhs_constraint)]
 
+        # we dont want the arms to cross each other
+        ineq_A1 = np.zeros((2, 4*9), dtype=int)
+        ineq_A1[0, [1, 10]] = [1, -1] # y1 - y2 < 0
+        ineq_A1[1, [19, 28]] = [1, -1] # y3 - y4 < 0
+        ineq_B1 = np.zeros((2, 1))
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A1, ineq_B1)]
+
+        # we dont want the gantries to cross each other
+        ineq_A2 = np.zeros((1, 4*9), dtype=int)
+        ineq_A2[0, [0, 18]] = [1, -1] # x1 - x3 < -2
+        ineq_B2 = np.zeros((1, 1))
+        ineq_B2[0] = 2.0 # coordinates of gantries are in different reference frames, that have a distance of 2.0 m
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A2, ineq_B2)]
+
+        # we dont want the arms to cross each other
+        ineq_A1 = np.zeros((2, 4*9), dtype=int)
+        ineq_A1[0, [1, 10]] = [1, -1] # y1 - y2 < 0
+        ineq_A1[1, [19, 28]] = [1, -1] # y3 - y4 < 0
+        ineq_B1 = np.zeros((2, 1))
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A1, ineq_B1)]
+
+        # we dont want the gantries to cross each other
+        ineq_A2 = np.zeros((1, 4*9), dtype=int)
+        ineq_A2[0, [0, 18]] = [1, -1] # x1 - x3 < -2
+        ineq_B2 = np.zeros((1, 1))
+        ineq_B2[0] = 2.0 # coordinates of gantries are in different reference frames, that have a distance of 2.0 m
+        self.constraints += [AffineConfigurationSpaceInequalityConstraint(ineq_A2, ineq_B2)]
+
+
         def get_additional_constraints(obj_name):
             if orientation_constraint:
-                return [AffineFrameOrientationConstraint(obj_name, "z", np.array([0, 0, 1]), np.array([1e-3]))]
+                return [AffineFrameOrientationConstraint(obj_name, "z", np.array([0, 0, 1]), np.array([1e-2]))]
             else:
                 return []
 
@@ -913,7 +950,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 SingleGoal(r1_keyframes[1]),
                 "place",
                 frames=["table", "obj_1"],
-                constraints=[AffineFrameOrientationConstraint("obj_1", "z", np.array([0, 0, 1]), np.array([1e-3]))]
+                constraints=[AffineFrameOrientationConstraint("obj_1", "z", np.array([0, 0, 1]), np.array([1e-2]))]
             ),
             Task(
                 "r2_pick",
@@ -928,7 +965,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
                 SingleGoal(r2_keyframes[1]),
                 "place",
                 frames=["table", "obj_2"],
-                constraints=[AffineFrameOrientationConstraint("obj_2", "z", np.array([0, 0, 1]), np.array([1e-3]))]
+                constraints=[AffineFrameOrientationConstraint("obj_2", "z", np.array([0, 0, 1]), np.array([1e-2]))]
             ),
             # terminal mode
             Task(
@@ -968,10 +1005,10 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
 
         h = 0.26
 
-        constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+        constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]), 1e-2)]
         if stick_upright:
             constraints.append(
-                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))
+                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-2]))
             )
         
         if ineq_orientation_constraint:
@@ -1028,16 +1065,16 @@ class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
 
         h = 0.26
 
-        r1_constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
-        r2_constraints = [AffineTaskSpaceEqualityConstraint("a2_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]))]
+        r1_constraints = [AffineTaskSpaceEqualityConstraint("a1_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]), 1e-2)]
+        r2_constraints = [AffineTaskSpaceEqualityConstraint("a2_stick_ee", np.array([[0, 0, 1, 0, 0, 0, 0]]), np.array([h]), 1e-2)]
 
         if stick_upright:
             r1_constraints.append(
-                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))
+                AffineFrameOrientationConstraint("a1_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-2]))
             )
 
             r2_constraints.append(
-                AffineFrameOrientationConstraint("a2_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-3]))            
+                AffineFrameOrientationConstraint("a2_stick_ee", "z", np.array([0, 0, -1]), np.array([1e-2]))            
             )
 
         if ineq_orientation_constraint:
