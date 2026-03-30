@@ -275,6 +275,8 @@ class rai_env(BaseProblem):
     collision_resolution: float
 
     def __init__(self):
+        super().__init__()
+
         self.robot_idx = {}
         self.robot_dims = {}
         self.robot_joints = {}
@@ -288,13 +290,9 @@ class rai_env(BaseProblem):
             [get_robot_state(self.C, r) for r in self.robots]
         )
 
-        self._uniform_sampler = self._make_uniform_sampler()
-
         self.manipulating_env = False
 
         self.limits = self.C.getJointLimits()
-
-        print(self.limits)
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
@@ -355,25 +353,6 @@ class rai_env(BaseProblem):
         new_env.C_orig.addConfigurationCopy(self.C_orig)
 
         return new_env
-
-    def _make_uniform_sampler(self, batch_size=1000):
-        while True:
-            batch = np.random.uniform(
-                low=self.limits[0, :],
-                high=self.limits[1, :],
-                size=(batch_size, self.limits.shape[1]),
-            )
-            for i in range(batch_size):
-                yield self.start_pos.from_flat(batch[i])
-
-    def sample_config_uniform_in_limits(self) -> NpConfiguration:
-        return next(self._uniform_sampler)
-
-    # def sample_config_uniform_in_limits_old(self) -> NpConfiguration:
-    #     rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-    #     q = self.start_pos.from_flat(rnd)
-
-    #     return q
 
     def sample_goal_configuration(self, mode, task):
         goals_to_sample = task.robots

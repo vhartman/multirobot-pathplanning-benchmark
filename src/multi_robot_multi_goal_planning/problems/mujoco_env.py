@@ -140,6 +140,8 @@ class MujocoEnvironment(BaseProblem):
         return joint_addr
 
     def __init__(self, xml_path, n_data_pool: int = 1):
+        super().__init__()
+        
         self.limits = None
 
         self.cost_metric = "euclidean"
@@ -319,12 +321,6 @@ class MujocoEnvironment(BaseProblem):
 
         if stop_at_end:
             self.show_config(path[-1].q, True)
-
-    def sample_config_uniform_in_limits(self):
-        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = self.start_pos.from_flat(rnd)
-
-        return q
 
     def _key_callback(self, key):
         # Enter key toggles pause

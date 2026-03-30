@@ -1554,7 +1554,8 @@ class BaseProblem(ABC):
     cost_metric: str = "euclidean"
     cost_reduction: str = "max"
 
-    # def __init__(self):
+    def __init__(self):
+        self._uniform_sampler = self._make_uniform_sampler()
     #     self.collision_tolerance = 0.01
     #     self.collision_resolution = 0.01
 
@@ -1682,9 +1683,18 @@ class BaseProblem(ABC):
     # def get_tasks_for_mode(self, mode: Mode) -> List[Task]:
     #     pass
 
-    @abstractmethod
+    def _make_uniform_sampler(self, batch_size=1000):
+        while True:
+            batch = np.random.uniform(
+                low=self.limits[0, :],
+                high=self.limits[1, :],
+                size=(batch_size, self.limits.shape[1]),
+            )
+            for i in range(batch_size):
+                yield self.start_pos.from_flat(batch[i])
+
     def sample_config_uniform_in_limits(self) -> Configuration:
-        pass
+        return next(self._uniform_sampler)
 
     # Collision checking and environment related methods
     @abstractmethod

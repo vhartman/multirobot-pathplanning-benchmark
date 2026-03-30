@@ -71,6 +71,8 @@ class PinocchioEnvironment(BaseProblem):
     def __init__(
         self, model, collision_model, visual_model, start_pos, robots, root_name="table"
     ):
+        super().__init__()
+        
         self.limits = np.vstack([model.lowerPositionLimit, model.upperPositionLimit])
 
         self.model = model
@@ -386,12 +388,6 @@ class PinocchioEnvironment(BaseProblem):
 
         if blocking:
             input("Press Enter to continue...")
-
-    def sample_config_uniform_in_limits(self):
-        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = self.start_pos.from_flat(rnd)
-
-        return q
 
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)

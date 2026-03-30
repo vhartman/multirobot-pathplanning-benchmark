@@ -58,6 +58,8 @@ class VampEnv(BaseProblem):
     """
 
     def __init__(self):
+        super().__init__()
+        
         self.limits = None
         self.start_pos = None
 
@@ -65,6 +67,8 @@ class VampEnv(BaseProblem):
 
         self.cost_metric = "euclidean"
         self.cost_reduction = "max"
+
+        self.manipulating_env = False
 
         self.spec = ProblemSpec(
             agent_type=AgentType.MULTI_AGENT,
@@ -114,29 +118,6 @@ class VampEnv(BaseProblem):
             path_as_list.append(per_agent_path)
 
         self.env.play_trajectory(path_as_list)
-        # for i in range(len(path)):
-        #     self.show_config(path[i].q, stop)
-
-        #     # if export:
-        #     #     self.C.view_savePng("./z.vid/")
-
-        #     dt = pause_time
-        #     if adapt_to_max_distance:
-        #         if i < len(path) - 1:
-        #             v = 5
-        #             diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean")
-        #             dt = diff / v
-
-        #     time.sleep(dt)
-
-        # if stop_at_end:
-        #     self.show_config(path[-1].q, True)
-
-    def sample_config_uniform_in_limits(self):
-        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = self.start_pos.from_flat(rnd)
-
-        return q
 
     def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         return {}
@@ -248,39 +229,16 @@ class VampEnv(BaseProblem):
             raise NotImplementedError("This is not supported for this environment.")
 
 
-def make_middle_obstacle_n_dim_env(dim=2):
-    num_agents = 2
-
-    joint_limits = np.ones((2, num_agents * dim)) * 2
-    joint_limits[0, :] = -2
-
-    start_poses = np.zeros(num_agents * dim)
-    start_poses[0] = -0.8
-    start_poses[dim] = 0.8
-
-    sphere_obs = Sphere(np.zeros(dim), 0.2)
-    rect_obs = Rectangle(np.array([0, 0.4]), np.array([0.5, 0.5]))
-
-    obstacles = [sphere_obs, rect_obs]
-
-    return start_poses, joint_limits, obstacles
-
-
-@register("vampmr.test")
-class vamp_test_env(SequenceMixin, VampEnv):
-    def __init__(self, agents_can_rotate=True):
-        pass
-
 @register("vampmr.quad_panda")
 class vamp_quad_panda_env(SequenceMixin, VampEnv):
     def __init__(self, agents_can_rotate=True):
         VampEnv.__init__(self)
-
-        self.manipulating_env = False
-
         self.env = mr_planner_core.VampEnvironment("panda_four")
+
         info = self.env.info()
         num_robots = int(info["num_robots"])
+
+        self.robots = ["a1", "a2", "a3", "a4"]
 
         # self.env.enable_meshcat()
         # self.env.reset_scene()
@@ -292,9 +250,6 @@ class vamp_quad_panda_env(SequenceMixin, VampEnv):
 
         self.robot_dims = {"a1": panda_dim, "a2": panda_dim, "a3": panda_dim, "a4": panda_dim}
         self.robot_idx = {f"a{i+1}": list(range(i * panda_dim, (i + 1) * panda_dim)) for i in range(num_robots)}
-        # self.C.view(True)
-
-        self.robots = ["a1", "a2", "a3", "a4"]
 
         goal_pos = self.start_pos.q
 
@@ -317,8 +272,6 @@ class vamp_quad_panda_env(SequenceMixin, VampEnv):
             ["a1_goal", "a2_goal", "a3_goal", "a4_goal", "terminal"]
         )
 
-        self.collision_tolerance = 0.01
-
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
         BaseModeLogic.__init__(self)
 
@@ -335,9 +288,6 @@ class vamp_quad_panda_env(SequenceMixin, VampEnv):
 class vamp_hex_panda_env(SequenceMixin, VampEnv):
     def __init__(self, agents_can_rotate=True):
         VampEnv.__init__(self)
-
-        self.manipulating_env = False
-
         self.env = mr_planner_core.VampEnvironment("panda_six")
 
         # move all the table segments down a bit
@@ -348,6 +298,7 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         info = self.env.info()
         num_robots = int(info["num_robots"])
 
+        self.robots = ["a1", "a2", "a3", "a4", "a5", "a6"]
 
         # self.env.enable_meshcat()
         # self.env.update_scene()
@@ -360,10 +311,6 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         self.robot_dims = {"a1": panda_dim, "a2": panda_dim, "a3": panda_dim, "a4": panda_dim, "a5": panda_dim, "a6": panda_dim}
         self.robot_idx = {f"a{i+1}": list(range(i * panda_dim, (i + 1) * panda_dim)) for i in range(num_robots)}
         # self.C.view(True)
-
-        print(self.robot_idx)
-
-        self.robots = ["a1", "a2", "a3", "a4", "a5", "a6"]
 
         goal_pos = self.start_pos.q
 
@@ -385,8 +332,6 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         self.sequence = self._make_sequence_from_names(
             ["a1_goal", "a2_goal", "a3_goal", "a4_goal", "terminal"]
         )
-
-        self.collision_tolerance = 0.01
 
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
         BaseModeLogic.__init__(self)
