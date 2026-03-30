@@ -115,6 +115,12 @@ def main():
         help="Show some analytics plots. (default: False)",
     )
 
+    parser.add_argument(
+        "--viser",
+        action="store_true",
+        help="Show the paths using viser. (default: False)",
+    )
+
     # Add planner-specific configs - this is the ONLY change needed!
     parser.add_arguments(CompositePRMConfig, dest="composite_prm_config", prefix="prm.")
     parser.add_arguments(BaseRRTConfig, dest="rrt_config", prefix="rrt.")
@@ -308,24 +314,31 @@ def main():
 
         plt.show()
 
-    print("displaying path from planner")
-    # display starting configuration to not run it immediately
-    env.show(blocking=True)
-    env.display_path(
-        interpolated_path,
-        stop=False,
-        stop_at_end=True,
-        adapt_to_max_distance=True,
-        stop_at_mode=args.stop_at_mode,
-    )
+    if args.viser:
+        env.display_path_viser(
+            paths=info["paths"] + [interpolated_path, single_mode_shortcut_path, shortcut_discretized_path],
+            primitives_only = True
+        )
 
-    print("displaying path from shortcut path")
-    env.display_path(
-        shortcut_discretized_path,
-        stop=False,
-        adapt_to_max_distance=True,
-        stop_at_mode=args.stop_at_mode,
-    )
+    else:
+        print("displaying path from planner")
+        # display starting configuration to not run it immediately
+        env.show(blocking=True)
+        env.display_path(
+            interpolated_path,
+            stop=False,
+            stop_at_end=True,
+            adapt_to_max_distance=True,
+            stop_at_mode=args.stop_at_mode,
+        )
+
+        print("displaying path from shortcut path")
+        env.display_path(
+            shortcut_discretized_path,
+            stop=False,
+            adapt_to_max_distance=True,
+            stop_at_mode=args.stop_at_mode,
+        )
 
     if hasattr(env, "close"):
         env.close()
