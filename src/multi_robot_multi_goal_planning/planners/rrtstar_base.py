@@ -1015,18 +1015,20 @@ class BaseRRTstar(BasePlanner):
             if q is None:
                 return
 
-            if random.choice([0, 1]) == 0:
-                return q
+            return q
 
-            while True:
-                q_noise = []
-                for r in range(len(self.env.robots)):
-                    q_robot = q.robot_state(r)
-                    noise = np.random.normal(0, 0.1, q_robot.shape)
-                    q_noise.append(q_robot + noise)
-                q = type(self.env.get_start_pos()).from_list(q_noise)
-                if self.env.is_collision_free(q, mode):
-                    return q
+            # if random.choice([0, 1]) == 0:
+            #     return q
+
+            # while True:
+            #     q_noise = []
+            #     for r in range(len(self.env.robots)):
+            #         q_robot = q.robot_state(r)
+            #         noise = np.random.normal(0, 0.1, q_robot.shape)
+            #         q_noise.append(q_robot + noise)
+            #     q = type(self.env.get_start_pos()).from_list(q_noise)
+            #     if self.env.is_collision_free(q, mode):
+            #         return q
 
     def _sample_uniform(self, mode: Mode):
         while True:
