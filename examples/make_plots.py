@@ -653,7 +653,7 @@ def main():
         "--yticks",
         default="",
         type=str,
-        help="Y ticks. (default:  and lets matplotlib do it automatically.)",
+        help="Y ticks. (default: Lets matplotlib do it automatically.)",
     )
     parser.add_argument(
         "--dont_add_title",

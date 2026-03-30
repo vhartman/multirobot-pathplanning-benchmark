@@ -52,7 +52,7 @@ def main():
     parser.add_argument(
         "--optimize",
         action="store_true",
-        help="Enable optimization (default: True)",
+        help="Enable optimization if the planner supports it. (default: False)",
     )
     parser.add_argument("--seed", type=int, default=1, help="Seed")
     parser.add_argument("--run_id", type=int, default=0, help="Run id. Used for debugging only.")
@@ -97,22 +97,27 @@ def main():
     parser.add_argument(
         "--save",
         action="store_true",
-        help="Try shortcutting the solution.",
+        help="save the computed solutions. (default false)",
     )
     parser.add_argument(
         "--stop_at_mode",
         action="store_true",
-        help="Generate samples near a previously found path (default: False)",
+        help="Stop at mode in the display-path function (default: False)",
     )
     parser.add_argument(
         "--insert_transition_nodes",
         action="store_true",
-        help="Shortcut the path. (default: False)",
+        help="Insert transition nodes to ensure they are doubled. (default: False)",
     )
     parser.add_argument(
         "--show_plots",
         action="store_true",
         help="Show some analytics plots. (default: False)",
+    )
+    parser.add_argument(
+        "--viser",
+        action="store_true",
+        help="Show the paths using viser. (default: False)",
     )
 
     # Add planner-specific configs - this is the ONLY change needed!
@@ -308,24 +313,31 @@ def main():
 
         plt.show()
 
-    print("displaying path from planner")
-    # display starting configuration to not run it immediately
-    env.show(blocking=True)
-    env.display_path(
-        interpolated_path,
-        stop=False,
-        stop_at_end=True,
-        adapt_to_max_distance=True,
-        stop_at_mode=args.stop_at_mode,
-    )
+    if args.viser:
+        env.display_path_viser(
+            paths=info["paths"] + [interpolated_path, single_mode_shortcut_path, shortcut_discretized_path],
+            primitives_only = True
+        )
 
-    print("displaying path from shortcut path")
-    env.display_path(
-        shortcut_discretized_path,
-        stop=False,
-        adapt_to_max_distance=True,
-        stop_at_mode=args.stop_at_mode,
-    )
+    else:
+        print("displaying path from planner")
+        # display starting configuration to not run it immediately
+        env.show(blocking=True)
+        env.display_path(
+            interpolated_path,
+            stop=False,
+            stop_at_end=True,
+            adapt_to_max_distance=True,
+            stop_at_mode=args.stop_at_mode,
+        )
+
+        print("displaying path from shortcut path")
+        env.display_path(
+            shortcut_discretized_path,
+            stop=False,
+            adapt_to_max_distance=True,
+            stop_at_mode=args.stop_at_mode,
+        )
 
     if hasattr(env, "close"):
         env.close()
