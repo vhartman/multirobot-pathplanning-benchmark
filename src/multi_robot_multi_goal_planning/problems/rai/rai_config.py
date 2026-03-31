@@ -8849,7 +8849,7 @@ def make_single_agent_bin_picking_env(view: bool = False):
 
     return C, [pre_pick, pre_place_pose_obj1, pre_place_pose_obj2]
 
-def make_multi_agent_bin_picking():
+def make_multi_agent_bin_picking(num_objs=4):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -8859,6 +8859,7 @@ def make_multi_agent_bin_picking():
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2])
+
         .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
         .setColor([0.6, 0.6, 0.6])
         .setContact(1)
@@ -8868,66 +8869,69 @@ def make_multi_agent_bin_picking():
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
-    ).setRelativePosition([-0., 0.5, 0]).setRelativeQuaternion(
+    ).setRelativePosition([-0., 0.6, 0]).setRelativeQuaternion(
         [0.7071, 0, 0, -0.7071]
     ).setJoint(ry.JT.rigid)
 
     C.addFile(robot_path, namePrefix="a2_").setParent(
         C.getFrame("table")
-    ).setRelativePosition([-0., -0.5, 0]).setRelativeQuaternion(
+    ).setRelativePosition([-0., -0.6, 0]).setRelativeQuaternion(
         [0.7071, 0, 0, 0.7071]
     ).setJoint(ry.JT.rigid)
 
-    # add obj
+    # add objs
+    positions = np.array([
+        [-0., -0.05, 0.1],
+        [-0., 0.05, 0.1],
+        [-0.1, 0.05, 0.1],
+        [0.1, -0.05, 0.1],
+        [0., -0.15, 0.1],
+        [0.1, -0.15, 0.1],
+        [0.1, 0.05, 0.1],
+        [-0.1, -0.05, 0.1],
+        [-0.1, -0.15, 0.1],
+    ])
+    goals = np.array([
+        [0.5, 0.0, 0.1],
+        [-0.5, 0.1, 0.1],
+        [0.5, 0.1, 0.1],
+        [-0.5, 0.0, 0.1],
+        [0.5, -0.1, 0.1],
+        [0.5, -0.2, 0.1],
+        [-0.5, -0.1, 0.1],
+        [-0.6, -0.1, 0.1],
+        [-0.5, -0.2, 0.1],
+    ])
+    colors = np.array([
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 1, 1],
+        [1, 1, 0],
+        [1, 1, 1],
+        [0, 1, 0.1],
+        [1, 0.2, 0],
+        [0.3, 1, 1],
+        [1, 0.5, 1],
+    ])
 
-    C.addFrame("obj1").setParent(table).setShape(
-        ry.ST.box, [0.05, 0.05, 0.025, 0.5]
-    ).setRelativePosition([-0., -0.05, 0.1]).setMass(
-        0.1
-    ).setColor([1, 0, 0]).setContact(1).setJoint(ry.JT.rigid)
+    for i in range(9):
+        pos = positions[i] + np.array([0, 0.05, 0])
+        col = colors[i]
 
-    C.addFrame("obj2").setParent(table).setShape(
-        ry.ST.box, [0.05, 0.05, 0.025, 0.5]
-    ).setRelativePosition([-0., 0.05, 0.1]).setMass(
-        0.1
-    ).setColor([0, 1, 0]).setContact(1).setJoint(ry.JT.rigid)
+        C.addFrame(f"obj{i+1}").setParent(table).setShape(
+            ry.ST.box, [0.05, 0.05, 0.025, 0.5]
+        ).setRelativePosition(pos).setMass(
+            0.1
+        ).setColor(col).setContact(1).setJoint(ry.JT.rigid)
 
-    C.addFrame("obj3").setParent(table).setShape(
-        ry.ST.box, [0.05, 0.05, 0.025, 0.5]
-    ).setRelativePosition([-0.1, 0.05, 0.1]).setMass(
-        0.1
-    ).setColor([0, 1, 1]).setContact(1).setJoint(ry.JT.rigid)
+        goal_pos = goals[i]
+        C.addFrame(f"goal{i+1}").setParent(table).setShape(
+            ry.ST.marker, [0.1, 0.005]
+        ).setRelativePosition(goal_pos).setContact(
+            0
+        ).setJoint(ry.JT.rigid)
 
-    C.addFrame("obj4").setParent(table).setShape(
-        ry.ST.box, [0.05, 0.05, 0.025, 0.5]
-    ).setRelativePosition([0.1, -0.05, 0.1]).setMass(
-        0.1
-    ).setColor([1, 1, 0]).setContact(1).setJoint(ry.JT.rigid)
-
-    C.addFrame("goal1").setParent(table).setShape(
-        ry.ST.marker, [0.1, 0.005]
-    ).setRelativePosition([0.5, 0., 0.1]).setContact(
-        0
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("goal2").setParent(table).setShape(
-        ry.ST.marker, [0.1, 0.005]
-    ).setRelativePosition([-0.5, 0.1, 0.1]).setContact(
-        0
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("goal3").setParent(table).setShape(
-        ry.ST.marker, [0.1, 0.005]
-    ).setRelativePosition([0.5, 0.1, 0.1]).setContact(
-        0
-    ).setJoint(ry.JT.rigid)
-
-    C.addFrame("goal4").setParent(table).setShape(
-        ry.ST.marker, [0.1, 0.005]
-    ).setRelativePosition([-0.5, 0., 0.1]).setContact(
-        0
-    ).setJoint(ry.JT.rigid)
-
+    wall_height = 0.2
     C.addFrame("bin_floor").setParent(table).setShape(
         ry.ST.box, size=[0.4, 0.4, 0.03]
     ).setContact(1).setRelativePosition(
@@ -8935,27 +8939,27 @@ def make_multi_agent_bin_picking():
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("bin_wall_l").setParent(C.getFrame("bin_floor")).setShape(
-        ry.ST.box, size=[0.03, 0.4, 0.2, 0.005]
+        ry.ST.box, size=[0.03, 0.4, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [-0.2, 0., 0.12]
+        [-0.23, 0., wall_height/2+0.02]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("bin_wall_r").setParent(C.getFrame("bin_floor")).setShape(
-        ry.ST.box, size=[0.03, 0.4, 0.2, 0.005]
+        ry.ST.box, size=[0.03, 0.4, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [0.2, 0., 0.12]
+        [0.23, 0., wall_height/2+0.02]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("bin_wall_t").setParent(C.getFrame("bin_floor")).setShape(
-        ry.ST.box, size=[0.37, 0.03, 0.2, 0.005]
+        ry.ST.box, size=[0.37, 0.03, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [0.0, 0.2, 0.12]
+        [0.0, 0.23, wall_height/2+0.02]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("bin_wall_b").setParent(C.getFrame("bin_floor")).setShape(
-        ry.ST.box, size=[0.37, 0.03, 0.2, 0.005]
+        ry.ST.box, size=[0.37, 0.03, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [0.0, -0.2, 0.12]
+        [0.0, -0.23, wall_height/2+0.02]
     ).setJoint(ry.JT.rigid)
 
     # C.view(True)
@@ -9041,13 +9045,16 @@ def make_multi_agent_bin_picking():
         keyframes = solve_komo_problem(komo, 10, c_tmp, False, 3, 1.5)
         return keyframes
     
-    a1_pre_pick, a1_pre_place_pose_obj1 = compute_poses(C, "a1_ur_", "obj1", "goal1")
-    _, a1_pre_place_pose_obj2 = compute_poses(C, "a1_ur_", "obj2", "goal2")
+    a1_pre_pick, a1_pre_place_pose_left = compute_poses(C, "a1_ur_", "obj1", "goal1")
+    _, a1_pre_place_pose_right = compute_poses(C, "a1_ur_", "obj2", "goal2")
     
-    a2_pre_pick, a2_pre_place_pose_obj1 = compute_poses(C, "a2_ur_", "obj1", "goal1")
-    _, a2_pre_place_pose_obj2 = compute_poses(C, "a2_ur_", "obj2", "goal2")
+    a2_pre_pick, a2_pre_place_pose_left = compute_poses(C, "a2_ur_", "obj1", "goal1")
+    _, a2_pre_place_pose_right = compute_poses(C, "a2_ur_", "obj2", "goal2")
     
-    return C, [a1_pre_pick, a1_pre_place_pose_obj1, a1_pre_place_pose_obj2], [a2_pre_pick, a2_pre_place_pose_obj1, a2_pre_place_pose_obj2]
+    left_objs = [i for i in range(len(goals)) if goals[i][0] > 0]
+    right_objs = [i for i in range(len(goals)) if goals[i][0] < 0]
+
+    return C, [a1_pre_pick, a1_pre_place_pose_left, a1_pre_place_pose_right], [a2_pre_pick, a2_pre_place_pose_left, a2_pre_place_pose_right], left_objs, right_objs
 
 
 def make_single_agent_bin_packing_env(compute_multiple_pre_place: bool = False, view: bool = False):
@@ -9273,7 +9280,7 @@ def make_single_agent_bin_packing_env(compute_multiple_pre_place: bool = False, 
 
     return C, [pre_pick_type_1, pre_pick_type_2, pre_place]
 
-def make_multi_agent_bin_packing_env(view: bool = False):
+def make_multi_agent_bin_packing_env(num_objs=3, view: bool = False):
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(

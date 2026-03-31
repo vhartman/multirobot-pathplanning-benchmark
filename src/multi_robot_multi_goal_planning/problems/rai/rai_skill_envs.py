@@ -626,13 +626,14 @@ class rai_multi_agent_pick_and_place(SequenceMixin, rai_env):
 # multi agent stacking with skills
 @register([
     ("rai.skill_box_stacking", {}),
+    ("rai.skill_box_stacking_unordered_sequence", {"ordered_sequence": False}),
     ("rai.skill_box_stacking_two_robots", {"num_robots": 2}),
     ("rai.skill_box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
     ("rai.skill_box_stacking_three_robots", {"num_robots": 3}),
     ("rai.skill_box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
 ])
 class rai_multi_agent_stacking(SequenceMixin, rai_env):
-    def __init__(self, num_robots=4, num_boxes: int = 8):
+    def __init__(self, num_robots=4, num_boxes: int = 8, ordered_sequence=True):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
             num_robots, num_boxes, skill_starts=True
         )
@@ -688,11 +689,14 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
 
         self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
-        # Stacking requires place actions to stay in keyframe order (base before top).
-        place_constraints = list(zip(place_tasks_in_order, place_tasks_in_order[1:]))
+        if ordered_sequence:
+            self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+        else:
+            # Stacking requires place actions to stay in keyframe order (base before top).
+            place_constraints = list(zip(place_tasks_in_order, place_tasks_in_order[1:]))
 
-        # self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
-        task_name_sequence = make_task_sequence(robot_chains, constraints=place_constraints, pair_pre_tasks=True, seed=0)
+            task_name_sequence = make_task_sequence(robot_chains, constraints=place_constraints, pair_pre_tasks=True, seed=0)
+        
         self.sequence = self._make_sequence_from_names(task_name_sequence + ["terminal"])
 
         BaseModeLogic.__init__(self)
@@ -1350,11 +1354,12 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 class rai_multi_agent_bin_picking_base(rai_env):
-    def __init__(self):
+    def __init__(self, num_objects=4):
         self.C, \
-            [a1_pre_pick, a1_pre_place_type_1, a1_pre_place_type_2], \
-            [a2_pre_pick, a2_pre_place_type_1, a2_pre_place_type_2] = \
-            rai_config.make_multi_agent_bin_picking()
+            [a1_pre_pick, a1_pre_place_type_left, a1_pre_place_type_right],\
+            [a2_pre_pick, a2_pre_place_type_left, a2_pre_place_type_right],\
+            left_objs, right_objs = \
+            rai_config.make_multi_agent_bin_picking(num_objects)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -1380,16 +1385,22 @@ class rai_multi_agent_bin_picking_base(rai_env):
 
         self.robot_objs = {"a1": [], "a2": []}
 
-        for i in range(1,5):
+        for i in range(1,num_objects+1):
             if i%2 == 1:
                 pre_pick = a1_pre_pick
-                place_pose = a1_pre_place_type_1
+                if i-1 in left_objs:
+                    place_pose = a1_pre_place_type_left
+                else:
+                    place_pose = a1_pre_place_type_right
                 robot = "a1"
                 pose = pose_a1
 
             else:
                 pre_pick = a2_pre_pick
-                place_pose = a2_pre_place_type_2
+                if i-1 in left_objs:
+                    place_pose = a2_pre_place_type_left
+                else:
+                    place_pose = a2_pre_place_type_right
                 robot = "a2"
                 pose = pose_a2
 
@@ -1442,15 +1453,16 @@ class rai_multi_agent_bin_picking_base(rai_env):
 # possible solution: just add the object where the robot ends up
 @register([
     ("rai.multi_agent_bin_picking", {}),
+    ("rai.multi_agent_bin_picking_four_objs", {"num_objs": 4}),
     ("rai.multi_agent_bin_picking_unordered_sequence", {'ordered_sequence': False}),
 ])
 class rai_multi_agent_bin_picking(SequenceMixin, rai_multi_agent_bin_picking_base):
-    def __init__(self, ordered_sequence = True):
-        rai_multi_agent_bin_picking_base.__init__(self)
+    def __init__(self, num_objs=9, ordered_sequence = True):
+        rai_multi_agent_bin_picking_base.__init__(self, num_objs)
 
         if ordered_sequence:
             task_name_sequence = []
-            for i in range(1,5):
+            for i in range(1,num_objs+1):
                 task_name_sequence.extend(
                     [f"pre_pick_{i}", f"pick_{i}", f"pre_place_{i}", f"place_{i}"]
                 )
