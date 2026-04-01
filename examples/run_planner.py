@@ -230,8 +230,8 @@ def main():
         env, path, 1000
     )
 
-    interpolated_path = interpolate_path(path, 0.05)
-    shortcut_discretized_path = interpolate_path(shortcut_path)
+    interpolated_path = interpolate_path(path, 0.05, kind="euclidean")
+    shortcut_discretized_path = interpolate_path(shortcut_path, kind="euclidean")
 
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))

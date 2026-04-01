@@ -24,7 +24,7 @@ def path_cost(path: List[State], batch_cost_fun, agent_slices=None) -> float:
     return np.sum(batch_costs)
 
 
-def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
+def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> List[State]:
     """
     Takes a path and interpolates it at the given resolution.
     Uses the euclidean distance between states to do the resolution.
@@ -40,7 +40,7 @@ def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
         #     new_path.append(State(config_type.from_list(q), path[i].mode))
         #     continue
 
-        dist = config_dist(q0, q1, "euclidean")
+        dist = config_dist(q0, q1, kind)
         N = int(dist / resolution)
         N = max(1, N)
 
