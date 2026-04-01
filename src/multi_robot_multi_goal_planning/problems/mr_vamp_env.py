@@ -297,7 +297,8 @@ class VampEnv(BaseProblem):
                         handle.wxyz = (float(q_o[3]), float(q_o[0]), float(q_o[1]), float(q_o[2]))
             # Update mode label
             m = state.mode
-            task_names_str = "  \n ".join(f"- {t.name}" for t in self.tasks)
+            task_names = [self.tasks[tid].name for tid in m.task_ids]
+            task_names_str = "  \n".join(task_names)
             annotation = ""
             if step_annotations is not None and step < len(step_annotations):
                 annotation = f"  \n{step_annotations[step]}"
@@ -566,7 +567,7 @@ class VampEnv(BaseProblem):
 
         N_max = min(N, N_max)
 
-        print(N_max)
+        # print(N_max)
 
         # for a distance < resolution * 2, we do not do collision checking
         # if N == 0:
