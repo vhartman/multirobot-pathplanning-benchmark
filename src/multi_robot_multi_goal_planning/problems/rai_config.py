@@ -8019,3 +8019,73 @@ def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="t
         )
 
     return C, robots, keyframes
+
+
+def make_rai_dual_ur5_env():
+    C = ry.Config()
+
+    world = C.addFrame("world")
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+
+    C.addFrame("goal1").setShape(
+        ry.ST.marker, [0.3, 0.2, 0.1, 0.005]
+    ).setPosition([0.4, 0, 0.3]).setColor([0.1, 0.1, 0.1, 0.2]).setContact(0)
+
+    robot_path = os.path.join(
+        os.path.dirname(__file__), "../assets/models/rai/ur5/ur5.g"
+        # os.path.dirname(__file__), "../assets/models/rai/ur5/ur5_spherized.g"
+    )
+
+    # Robot 1 at world origin
+    C.addFile(robot_path, namePrefix="a1_").setParent(world).setRelativePosition(
+        [0, 0, 0]
+    ).setRelativeQuaternion([1, 0, 0, 0]).setJoint(ry.JT.rigid)
+
+    # Robot 2 offset by ~88cm in X, rotated 180° around Z to face robot 1
+    C.addFile(robot_path, namePrefix="a2_").setParent(world).setRelativePosition(
+        [0.881, 0, 0]
+    ).setRelativeQuaternion([0, 0, 0, 1]).setJoint(ry.JT.rigid)
+
+    def compute_go_to_pose(robot_prefix,):
+        robot_base = robot_prefix + "base"
+        
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addObjective(
+            [1, 1],
+            ry.FS.positionDiff,
+            [robot_prefix + "ee_marker", "goal1"],
+            ry.OT.sos,
+            [1e1, 1e1, 1],
+        )
+
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
+
+    r1_pose = compute_go_to_pose("a1_")
+    r2_pose = compute_go_to_pose("a2_")
+
+    # print(r1_pose)
+    # print(r2_pose)
+
+    return C, [r1_pose, r2_pose]

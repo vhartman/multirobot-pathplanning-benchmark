@@ -601,9 +601,47 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
 @register("vampmr.dual_ur5")
 class vamp_hex_panda_env(SequenceMixin, VampEnv):
-    def __init__(self, agents_can_rotate=True):
+    def __init__(self, num_repetitions: int = 2):
         VampEnv.__init__(self)
         self.env = mr_planner_core.VampEnvironment("dual_ur5")
+
+        floor = mr_planner_core.Object()
+        floor.name = "floor"
+        floor.shape = mr_planner_core.Object.Box
+        floor.state = mr_planner_core.Object.Static
+        floor.x = 0.
+        floor.y = 0.0
+        floor.z = -0.0
+        floor.qw = 1.0
+        floor.qx = 0.0
+        floor.qy = 0.0
+        floor.qz = 0.0
+        floor.width = 10   # x
+        floor.height = 0.01  # y
+        floor.length = 10  # z
+        self.env.add_object(floor)
+
+        self.env.set_allowed_collision("floor", "ur5_0_arm_base_link", True)
+        self.env.set_allowed_collision("floor", "ur5_0_arm_shoulder_link", True)
+
+        self.env.set_allowed_collision("floor", "ur5_1_arm_base_link", True)
+        self.env.set_allowed_collision("floor", "ur5_1_arm_shoulder_link", True)
+        
+        def make_transform(angle_z, tx, ty, tz):
+            c, s = np.cos(angle_z), np.sin(angle_z)
+            return [
+                [c, -s, 0, tx],
+                [s,  c, 0, ty],
+                [0,  0, 1, tz],
+                [0,  0, 0,  1],
+            ]
+
+        q_offset = np.array([0, -np.pi/2, 0, -np.pi/2, 0, 0])
+        def rai_to_vamp_config(q_rai):
+            return q_rai + q_offset
+
+        self.env.set_robot_base_transform(0, make_transform(np.pi/2,        0.0,        0.0,        -0.9144))
+        self.env.set_robot_base_transform(1, make_transform(-np.pi/2, 0.88128092, -0.01226491, -0.9144))
 
         info = self.env.info()
         num_robots = int(info["num_robots"])
@@ -616,7 +654,10 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         ur_dim = 6
         self.limits = np.array([[-4] * num_robots * ur_dim, [4] * num_robots * ur_dim])
 
-        self.start_pos = NpConfiguration.from_list([[0] * ur_dim, [0] * ur_dim])
+        start_config_rai = np.array([0, 0, 0, 0, 0, 0])
+        start_config = rai_to_vamp_config(start_config_rai)
+
+        self.start_pos = NpConfiguration.from_list([start_config, start_config])
 
         self.robot_dims = {"a1": ur_dim, "a2": ur_dim}
         self.robot_idx = {f"a{i+1}": list(range(i * ur_dim, (i + 1) * ur_dim)) for i in range(num_robots)}
@@ -624,22 +665,24 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
         goal_pos = self.start_pos.q
 
-        self.tasks = [
-            # r1
-            Task("a1_goal", ["a1"], SingleGoal(np.array([0.0, 0.5, -1, 0, -0, 0]))),
-            # r2
-            Task("a2_goal", ["a2"], SingleGoal(np.array([-0.0, 0.5, -1, 0, 0, 0]))),
-            # terminal mode
-            Task(
-                "terminal",
-                self.robots,
-                SingleGoal(goal_pos),
-            ),
+        p1 = [ 6.05587010e-01, -1.82889078e-03, -1.86183192e+00, -7.57176381e-01, 8.65312213e-01, -8.24393655e-04]
+        p2 = [ 0.52888098, -0.14924623, -1.7284803,  -0.64827086,  0.72253539,  0.01270607]
+
+        goal_tasks = []
+        sequence_names = []
+        for rep in range(num_repetitions):
+            suffix = f"_{rep + 1}" if num_repetitions > 1 else ""
+            a1_name = f"a1_goal{suffix}"
+            a2_name = f"a2_goal{suffix}"
+            goal_tasks.append(Task(a1_name, ["a1"], SingleGoal(rai_to_vamp_config(np.array(p1)))))
+            goal_tasks.append(Task(a2_name, ["a2"], SingleGoal(rai_to_vamp_config(np.array(p2)))))
+            sequence_names += [a1_name, a2_name]
+
+        self.tasks = goal_tasks + [
+            Task("terminal", self.robots, SingleGoal(goal_pos)),
         ]
 
-        self.sequence = self._make_sequence_from_names(
-            ["a1_goal", "a2_goal", "terminal"]
-        )
+        self.sequence = self._make_sequence_from_names(sequence_names + ["terminal"])
 
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
         BaseModeLogic.__init__(self)
