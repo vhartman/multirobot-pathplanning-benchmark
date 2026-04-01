@@ -74,6 +74,9 @@ class VampEnv(BaseProblem):
         #                       ("world",    robot_id_was, joints_at_detach)}
         self.initial_sg: dict = {}
         self._current_sg: dict = {}
+        # Stores mr_planner_core.Object instances so objects can be reset to their
+        # initial world pose (e.g. when scrubbing backward across a pick).
+        self._initial_objects: dict = {}
 
         self.spec = ProblemSpec(
             agent_type=AgentType.MULTI_AGENT,
@@ -112,17 +115,25 @@ class VampEnv(BaseProblem):
         stop_at_mode: bool = False,
     ) -> None:
         self.env.enable_meshcat()
-        num_robots = path[0].q.num_agents()
 
-        path_as_list = []
-        for i in range(num_robots):
-            per_agent_path = []
-            for p in path:
-                per_agent_path.append(p.q[i])
+        for i in range(len(path)):
+            self.set_to_mode(path[i].mode)
+            self.show_config(path[i].q)
 
-            path_as_list.append(per_agent_path)
+            time.sleep(0.1)
+        
+        # self.env.enable_meshcat()
+        # num_robots = path[0].q.num_agents()
 
-        self.env.play_trajectory(path_as_list)
+        # path_as_list = []
+        # for i in range(num_robots):
+        #     per_agent_path = []
+        #     for p in path:
+        #         per_agent_path.append(p.q[i])
+
+        #     path_as_list.append(per_agent_path)
+
+        # # self.env.play_trajectory(path_as_list)
 
     def _viser_build_scene(self, server) -> None:
         """Add static environment objects (boxes, spheres, cylinders) to a viser server."""
@@ -132,8 +143,8 @@ class VampEnv(BaseProblem):
         for obj in objects:
             name = obj["name"]
             pos = obj["position"]        # [x, y, z]
-            q = obj["quaternion"]        # [qw, qx, qy, qz]
-            wxyz = (float(q[0]), float(q[1]), float(q[2]), float(q[3]))
+            q = obj["quaternion"]        # [qx, qy, qz, qw] (xyzw)
+            wxyz = (float(q[3]), float(q[0]), float(q[1]), float(q[2]))
             position = (float(pos[0]), float(pos[1]), float(pos[2]))
             shape = obj.get("type", obj.get("shape", ""))
 
@@ -170,7 +181,8 @@ class VampEnv(BaseProblem):
         pause_time: float = 0.05,
         port: int = 8080,
         path_labels: Optional[List[str]] = None,
-        primitives_only=False
+        primitives_only: bool = False,
+        step_annotations: "Optional[List[str]]" = None,
     ) -> None:
         """Display one or more planned paths interactively in viser.
 
@@ -182,6 +194,9 @@ class VampEnv(BaseProblem):
             pause_time: Initial time between frames during playback (seconds).
             port: Port for the viser HTTP server.
             path_labels: Optional display names for each path.
+            primitives_only: Unused (kept for API parity with rai version).
+            step_annotations: Optional per-step markdown strings appended to the
+                mode label panel (one entry per step in the single/first path).
         """
         if paths and not isinstance(paths[0], list):
             paths = [paths]
@@ -196,11 +211,14 @@ class VampEnv(BaseProblem):
         server.scene.set_up_direction("+z")
         server.scene.world_axes.visible = False
 
+        first_state = paths[0][0]
+        # Apply initial mode scenegraph so attached objects start in the right place
+        self.set_to_mode(first_state.mode)
+        self.env.set_joint_positions(first_state.q.as_list())
+
         # Add static environment objects
         self._viser_build_scene(server)
 
-        # Pre-create handles from initial config
-        first_state = paths[0][0]
         initial_spheres = self.env.get_sphere_poses(first_state.q.as_list())
 
         # Pre-create one icosphere handle per robot sphere
@@ -215,11 +233,80 @@ class VampEnv(BaseProblem):
             )
             sphere_handles.append(handle)
 
-        def _set_step(step: int, path: "List[State]") -> None:
+        # Pre-create handles for manipulable objects so their poses can be updated
+        _OBJ_COLOR = (220, 160, 80)
+        object_handles: dict = {}
+        if self.manipulating_env and self.initial_sg:
+            scene_objs = {obj["name"]: obj for obj in self.env.get_scene_objects()}
+            for obj_name in self.initial_sg:
+                if obj_name not in scene_objs:
+                    continue
+                obj = scene_objs[obj_name]
+                pos = obj["position"]
+                q_o = obj["quaternion"]
+                shape = obj.get("type", obj.get("shape", ""))
+                position = (float(pos[0]), float(pos[1]), float(pos[2]))
+                wxyz = (float(q_o[3]), float(q_o[0]), float(q_o[1]), float(q_o[2]))
+                if shape == "box":
+                    sz = obj["size"]
+                    h = server.scene.add_box(
+                        name=f"env/{obj_name}",
+                        color=_OBJ_COLOR,
+                        dimensions=(float(sz[0]), float(sz[1]), float(sz[2])),
+                        wxyz=wxyz,
+                        position=position,
+                    )
+                elif shape == "sphere":
+                    h = server.scene.add_icosphere(
+                        name=f"env/{obj_name}",
+                        radius=float(obj["radius"]),
+                        color=_OBJ_COLOR,
+                        wxyz=wxyz,
+                        position=position,
+                    )
+                elif shape == "cylinder":
+                    h = server.scene.add_cylinder(
+                        name=f"env/{obj_name}",
+                        radius=float(obj["radius"]),
+                        height=float(obj["length"]),
+                        color=_OBJ_COLOR,
+                        wxyz=wxyz,
+                        position=position,
+                    )
+                else:
+                    continue
+                object_handles[obj_name] = h
+
+        def _set_step(step: int, path: "List[State]", lbl) -> None:
             state = path[min(step, len(path) - 1)]
+            # Apply mode scenegraph (attach/detach objects) then set joint positions
+            self.set_to_mode(state.mode)
+            self.env.set_joint_positions(state.q.as_list())
+            # Update robot spheres
             spheres = self.env.get_sphere_poses(state.q.as_list())
             for handle, (cx, cy, cz, _r) in zip(sphere_handles, spheres):
                 handle.position = np.array([cx, cy, cz], dtype=np.float32)
+            # Update manipulable object poses
+            if object_handles:
+                scene_objs = {obj["name"]: obj for obj in self.env.get_scene_objects()}
+                for obj_name, handle in object_handles.items():
+                    if obj_name in scene_objs:
+                        p = scene_objs[obj_name]["position"]
+                        q_o = scene_objs[obj_name]["quaternion"]
+                        handle.position = (float(p[0]), float(p[1]), float(p[2]))
+                        handle.wxyz = (float(q_o[3]), float(q_o[0]), float(q_o[1]), float(q_o[2]))
+            # Update mode label
+            m = state.mode
+            task_names_str = "  \n ".join(f"- {t.name}" for t in self.tasks)
+            annotation = ""
+            if step_annotations is not None and step < len(step_annotations):
+                annotation = f"  \n{step_annotations[step]}"
+            lbl.content = (
+                f"**Step:** {step} / {len(path) - 1}  \n"
+                f"**Mode:** `{m.task_ids}`  \n"
+                f"**Tasks:**   \n {task_names_str}"
+                f"{annotation}"
+            )
 
         if path_labels is None:
             path_labels = [f"Path {i} ({len(p)} steps)" for i, p in enumerate(paths)]
@@ -228,7 +315,7 @@ class VampEnv(BaseProblem):
         path_dropdown = server.gui.add_dropdown(
             label="Path",
             options=path_labels,
-            initial_value=path_labels[0],
+            initial_value=path_labels[-1],
         )
         max_steps = max(len(p) for p in paths)
         step_slider = server.gui.add_slider(
@@ -241,6 +328,8 @@ class VampEnv(BaseProblem):
         step_size_field = server.gui.add_number(
             "Step size", initial_value=1, min=1, step=1,
         )
+        prev_btn = server.gui.add_button("◀ Prev")
+        next_btn = server.gui.add_button("Next ▶")
         stop_btn = server.gui.add_button("Stop")
         mode_label = server.gui.add_markdown("")
 
@@ -258,18 +347,33 @@ class VampEnv(BaseProblem):
             nonlocal _stopped
             _stopped = True
 
+        @prev_btn.on_click
+        def _(_):
+            play_checkbox.value = False
+            step = max(clamped_step() - int(step_size_field.value), 0)
+            step_slider.value = step
+            _set_step(step, current_path(), mode_label)
+
+        @next_btn.on_click
+        def _(_):
+            play_checkbox.value = False
+            step = min(clamped_step() + int(step_size_field.value), len(current_path()) - 1)
+            step_slider.value = step
+            _set_step(step, current_path(), mode_label)
+
         @path_dropdown.on_update
         def _(_):
             play_checkbox.value = False
             step_slider.value = 0
-            _set_step(0, current_path())
+            _set_step(0, current_path(), mode_label)
 
         @step_slider.on_update
         def _(event):
             if not play_checkbox.value:
-                _set_step(event.target.value, current_path())
+                step = min(event.target.value, len(current_path()) - 1)
+                _set_step(step, current_path(), mode_label)
 
-        _set_step(0, current_path())
+        _set_step(0, current_path(), mode_label)
 
         print(f"[viser] Open http://localhost:{port} to view the path.")
         print("[viser] Press Stop in the GUI or Ctrl-C to exit.")
@@ -280,16 +384,7 @@ class VampEnv(BaseProblem):
                     path = current_path()
                     next_step = (clamped_step() + int(step_size_field.value)) % len(path)
                     step_slider.value = next_step
-                    _set_step(next_step, path)
-                    m = path[next_step].mode
-                    task_names_str = "  \n ".join(
-                        f"- {t.name}" for t in self.tasks if t.name != "terminal"
-                    )
-                    mode_label.content = (
-                        f"**Step:** {next_step} / {len(path) - 1}  \n"
-                        f"**Mode:** `{m.task_ids}`  \n"
-                        f"**Tasks:**   \n {task_names_str}"
-                    )
+                    _set_step(next_step, path, mode_label)
                 time.sleep(pause_time_field.value)
         except KeyboardInterrupt:
             pass
@@ -317,14 +412,14 @@ class VampEnv(BaseProblem):
         if new_parent in self.robots:
             # pick: robot grabs the object
             robot_id = self.robots.index(new_parent)
-            joints = list(mode.entry_configuration[robot_id])
+            joints = tuple(mode.entry_configuration[robot_id])
             sg[obj_name] = ("attached", robot_id, joints)
         else:
             # place / handover to world: robot releases the object
             prev_entry = prev_mode.sg.get(obj_name)
             if prev_entry is not None and prev_entry[0] == "attached":
                 prev_robot_id = prev_entry[1]
-                joints = list(mode.entry_configuration[prev_robot_id])
+                joints = tuple(mode.entry_configuration[prev_robot_id])
                 sg[obj_name] = ("world", prev_robot_id, joints)
             else:
                 sg[obj_name] = ("world", None, None)
@@ -332,18 +427,43 @@ class VampEnv(BaseProblem):
         return sg
 
     def _apply_scenegraph(self, sg: dict) -> None:
-        """Sync mr_planner_core attachment state with *sg*, making minimal API calls."""
-        for obj_name, state in sg.items():
-            if self._current_sg.get(obj_name) == state:
+        """Sync mr_planner_core attachment state with *sg*."""
+        for obj_name, new_state in sg.items():
+            cur_state = self._current_sg.get(obj_name)
+            if cur_state == new_state:
                 continue
-            if state[0] == "attached":
-                _, robot_id, joints = state
+
+            if new_state[0] == "attached":
+                _, robot_id, joints = new_state
+                # If the object is currently at a placed (non-initial) world position,
+                # we must reset it to its initial world pose before attaching so that
+                # the relative transform T_rel is computed correctly.
+                if cur_state is not None and cur_state[0] == "world" and cur_state[1] is not None:
+                    if obj_name in self._initial_objects:
+                        self.env.remove_object(obj_name)
+                        self.env.add_object(self._initial_objects[obj_name])
                 self.env.attach_object(obj_name, robot_id, list(joints))
+
             else:  # "world"
-                _, robot_id, joints = state
-                if robot_id is not None and joints is not None:
-                    self.env.detach_object(obj_name, robot_id, list(joints))
-            self._current_sg[obj_name] = state
+                _, robot_id, joints = new_state
+                if robot_id is None:
+                    # Target is the initial world state — reset via remove+add so the
+                    # object lands at its original pose regardless of current state
+                    # (attached or at a placed position).
+                    if obj_name in self._initial_objects:
+                        if cur_state is not None and cur_state[0] == "attached":
+                            # Must detach before removing
+                            _, attach_robot_id, attach_joints = cur_state
+                            self.env.detach_object(obj_name, attach_robot_id, list(attach_joints))
+                        self.env.remove_object(obj_name)
+                        self.env.add_object(self._initial_objects[obj_name])
+                else:
+                    # Target is a specific placed world position.
+                    # The object must currently be attached for detach_object to work.
+                    if cur_state is not None and cur_state[0] == "attached":
+                        self.env.detach_object(obj_name, robot_id, list(joints))
+
+            self._current_sg[obj_name] = new_state
 
     def show(self, blocking=True):
         self.env.update_scene()
@@ -446,6 +566,8 @@ class VampEnv(BaseProblem):
 
         N_max = min(N, N_max)
 
+        print(N_max)
+
         # for a distance < resolution * 2, we do not do collision checking
         # if N == 0:
         #     return True
@@ -459,6 +581,48 @@ class VampEnv(BaseProblem):
         if not self.manipulating_env:
             return
         self._apply_scenegraph(m.sg)
+
+    def is_path_collision_free(
+        self,
+        path: List[State],
+        binary_order: bool = True,
+        resolution: Optional[float] = None,
+        tolerance: Optional[float] = None,
+        check_edges_in_order: bool = False,
+        check_start_and_end: bool = True,
+    ) -> bool:
+        if tolerance is None:
+            tolerance = self.collision_tolerance
+
+        if resolution is None:
+            resolution = self.collision_resolution
+
+        # print('end', path[-1].q.state())
+        # if check_start_and_end and not self.is_collision_free(path[-1].q, path[-1].mode):
+        #     return False
+
+        # check whole edge
+        for i in range(len(path)-1):
+            q1 = path[i].q
+            q2 = path[i + 1].q
+            mode = path[i].mode
+
+            if not self.is_edge_collision_free(
+                q1,
+                q2,
+                mode,
+                resolution=resolution,
+                tolerance=tolerance,
+                include_endpoints=False,
+            ):
+                return False
+
+            # valid_edges += 1
+
+        if not self.is_collision_free(path[-1].q, path[-1].mode):
+            return False
+
+        return True
 
 @register("vampmr.quad_panda")
 class vamp_quad_panda_env(SequenceMixin, VampEnv):
@@ -640,8 +804,8 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         def rai_to_vamp_config(q_rai):
             return q_rai + q_offset
 
-        self.env.set_robot_base_transform(0, make_transform(np.pi/2,        0.0,        0.0,        -0.9144))
-        self.env.set_robot_base_transform(1, make_transform(-np.pi/2, 0.88128092, -0.01226491, -0.9144))
+        self.env.set_robot_base_transform(0, make_transform(-np.pi/2,        0.0,        0.0,        -0.9144))
+        self.env.set_robot_base_transform(1, make_transform(np.pi/2, 0.88128092, -0.01226491, -0.9144))
 
         info = self.env.info()
         num_robots = int(info["num_robots"])
@@ -654,7 +818,9 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         ur_dim = 6
         self.limits = np.array([[-4] * num_robots * ur_dim, [4] * num_robots * ur_dim])
 
-        start_config_rai = np.array([0, 0, 0, 0, 0, 0])
+        # start_config_rai = np.array([0, 0, 0, 0, 0, 0])
+        start_config_rai = np.array([0, -.5, 1, .5, -1.57, 0])
+
         start_config = rai_to_vamp_config(start_config_rai)
 
         self.start_pos = NpConfiguration.from_list([start_config, start_config])
@@ -721,10 +887,49 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         box.qx = 0.0
         box.qy = 0.0
         box.qz = 0.0
-        box.width = 0.1   # x
+        box.width = 0.3   # x
         box.height = 0.1  # y
         box.length = 0.1  # z
         self.env.add_object(box)
+        self._initial_objects[box.name] = box
+
+        floor = mr_planner_core.Object()
+        floor.name = "floor"
+        floor.shape = mr_planner_core.Object.Box
+        floor.state = mr_planner_core.Object.Static
+        floor.x = 0.
+        floor.y = 0.0
+        floor.z = -0.0
+        floor.qw = 1.0
+        floor.qx = 0.0
+        floor.qy = 0.0
+        floor.qz = 0.0
+        floor.width = 10   # x
+        floor.height = 0.01  # y
+        floor.length = 10  # z
+        self.env.add_object(floor)
+
+        self.env.set_allowed_collision("floor", "ur5_0_arm_base_link", True)
+        self.env.set_allowed_collision("floor", "ur5_0_arm_shoulder_link", True)
+
+        self.env.set_allowed_collision("floor", "ur5_1_arm_base_link", True)
+        self.env.set_allowed_collision("floor", "ur5_1_arm_shoulder_link", True)
+
+        def make_transform(angle_z, tx, ty, tz):
+            c, s = np.cos(angle_z), np.sin(angle_z)
+            return [
+                [c, -s, 0, tx],
+                [s,  c, 0, ty],
+                [0,  0, 1, tz],
+                [0,  0, 0,  1],
+            ]
+
+        q_offset = np.array([0, -np.pi/2, 0, -np.pi/2, 0, 0])
+        def rai_to_vamp_config(q_rai):
+            return q_rai + q_offset
+
+        self.env.set_robot_base_transform(0, make_transform(-np.pi/2,        0.0,        0.0,        -0.9144))
+        self.env.set_robot_base_transform(1, make_transform(np.pi/2, 0.88128092, -0.01226491, -0.9144))
 
         # self.env.enable_meshcat()
         self.env.update_scene()
@@ -732,7 +937,10 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         ur_dim = 6
         self.limits = np.array([[-4] * num_robots * ur_dim, [4] * num_robots * ur_dim])
 
-        self.start_pos = NpConfiguration.from_list([[0] * ur_dim, [0] * ur_dim])
+        start_config_rai = np.array([0, -.5, 1, .5, -1.57, 0])
+        start_config = rai_to_vamp_config(start_config_rai)
+
+        self.start_pos = NpConfiguration.from_list([start_config, start_config])
 
         self.robot_dims = {"a1": ur_dim, "a2": ur_dim}
         self.robot_idx = {f"a{i+1}": list(range(i * ur_dim, (i + 1) * ur_dim)) for i in range(num_robots)}
@@ -744,9 +952,11 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
         self.tasks = [
             # r1
-            Task("a1_goal", ["a1"], SingleGoal(np.array([0.0, 0.5, -1, 0, -0, 0])), type="pick", frames=["a1", "box1"]),
+            Task("a1_goal", ["a1"], SingleGoal(start_config + np.array([0, 0.0, 0., 0, 0, 0])), type="pick", frames=["a1", "box1"]),
             # r2
-            Task("a2_goal", ["a2"], SingleGoal(np.array([-0.0, 0.5, -1, 0, 0, 0]))),
+            Task("a2_goal", ["a2"], SingleGoal(np.array([-0.0, -0.5, -1, 0, 0, 0]))),
+            # Task("a1_place", ["a1"], SingleGoal(start_config + np.array([0, 0, 0, 0, 1, 0]))),
+            Task("a1_place", ["a1"], SingleGoal(start_config + np.array([0, 0, 0, 0, 1, 0])), type="place", frames=["world", "box1"]),
             # terminal mode
             Task(
                 "terminal",
@@ -756,7 +966,7 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         ]
 
         self.sequence = self._make_sequence_from_names(
-            ["a1_goal", "a2_goal", "terminal"]
+            ["a1_goal", "a2_goal", "a1_place", "terminal"]
         )
 
         # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
@@ -773,9 +983,47 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
 @register("vampmr.quad_ur5")
 class vamp_hex_panda_env(SequenceMixin, VampEnv):
-    def __init__(self, agents_can_rotate=True):
+    def __init__(self, num_repetitions=2):
         VampEnv.__init__(self)
         self.env = mr_planner_core.VampEnvironment("quad_ur5")
+
+        floor = mr_planner_core.Object()
+        floor.name = "floor"
+        floor.shape = mr_planner_core.Object.Box
+        floor.state = mr_planner_core.Object.Static
+        floor.x = 0.
+        floor.y = 0.0
+        floor.z = -0.0
+        floor.qw = 1.0
+        floor.qx = 0.0
+        floor.qy = 0.0
+        floor.qz = 0.0
+        floor.width = 10   # x
+        floor.height = 0.01  # y
+        floor.length = 10  # z
+        self.env.add_object(floor)
+
+        for i in range(4):
+            self.env.set_allowed_collision("floor", f"ur5_{i}_arm_base_link", True)
+            self.env.set_allowed_collision("floor", f"ur5_{i}_arm_shoulder_link", True)
+        
+        def make_transform(angle_z, tx, ty, tz):
+            c, s = np.cos(angle_z), np.sin(angle_z)
+            return [
+                [c, -s, 0, tx],
+                [s,  c, 0, ty],
+                [0,  0, 1, tz],
+                [0,  0, 0,  1],
+            ]
+
+        q_offset = np.array([0, -np.pi/2, 0, -np.pi/2, 0, 0])
+        def rai_to_vamp_config(q_rai):
+            return q_rai + q_offset
+
+        self.env.set_robot_base_transform(0, make_transform(np.pi/2,   0.36, -0.36, -0.9144))
+        self.env.set_robot_base_transform(1, make_transform(-np.pi/2, -0.36, -0.36, -0.9144))
+        self.env.set_robot_base_transform(2, make_transform(np.pi/2, 0.36,  0.36, -0.9144))
+        self.env.set_robot_base_transform(3, make_transform(-np.pi/2, -0.36,  0.36, -0.9144))
 
         info = self.env.info()
         num_robots = int(info["num_robots"])
@@ -787,13 +1035,17 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         # self.env.update_scene()
 
         ur_dim = 6
-        self.limits = np.array([[-4] * num_robots * ur_dim, [4] * num_robots * ur_dim])
-
-        self.start_pos = NpConfiguration.from_list([[0] * ur_dim, [0] * ur_dim, [0] * ur_dim, [0] * ur_dim])
+        lower = rai_to_vamp_config(np.array([-np.pi, -2, -np.pi, -np.pi, -np.pi, -np.pi])).tolist()
+        upper = rai_to_vamp_config(np.array([np.pi, 0.75, np.pi, np.pi, np.pi, np.pi])).tolist()
+        self.limits = np.array([lower * num_robots, 
+                                upper * num_robots])
         
-        for i in range(4):
-            self.start_pos[i][0] = 0
-            self.start_pos[i][1] = 0
+        start_config_rai = np.array([0, -.5, 1, .5, -1.57, 0])
+        start_config = rai_to_vamp_config(start_config_rai)
+
+        self.start_pos = NpConfiguration.from_list([start_config, start_config, start_config, start_config])
+        
+        self.env.set_joint_positions(self.start_pos.as_list())
 
         self.robot_dims = {"a1": ur_dim, "a2": ur_dim, "a3": ur_dim, "a4": ur_dim}
         self.robot_idx = {f"a{i+1}": list(range(i * ur_dim, (i + 1) * ur_dim)) for i in range(num_robots)}
@@ -801,24 +1053,31 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
         goal_pos = self.start_pos.q
 
-        self.tasks = [
-            # r1
-            Task("a1_goal", ["a1"], SingleGoal(np.array([0.0, 0, -1, 0, -0, 0]))),
-            # r2
-            Task("a2_goal", ["a2"], SingleGoal(np.array([-0.0, 0, -1, 0, 0, 0]))),
-            # terminal mode
-            Task(
-                "terminal",
-                self.robots,
-                SingleGoal(goal_pos),
-            ),
+        p1 = np.array([-1.08443716e+00,  2.65812454e-01,  1.19333815e+00,4.95651623e-01, -1.51123655e+00, -6.12287039e-04])
+        p2 = np.array([ 0.25372525,  0.15432183,  1.37953107,  0.4719497 , -1.11911701, 0.01556415])
+        p3 = np.array([ 0.25500657,  0.15616105,  1.37700978,  0.47377805, -1.12129939, 0.00521846])
+        p4 = np.array([-1.08587427,  0.27071415,  1.18725584,  0.50407107, -1.5087889, 0.00212636])
+
+        goal_tasks = []
+        sequence_names = []
+        for rep in range(num_repetitions):
+            suffix = f"_{rep + 1}" if num_repetitions > 1 else ""
+            a1_name = f"a1_goal{suffix}"
+            a2_name = f"a2_goal{suffix}"
+            a3_name = f"a3_goal{suffix}"
+            a4_name = f"a4_goal{suffix}"
+            goal_tasks.append(Task(a1_name, ["a1"], SingleGoal(rai_to_vamp_config(p1))))
+            goal_tasks.append(Task(a2_name, ["a2"], SingleGoal(rai_to_vamp_config(p2))))
+            goal_tasks.append(Task(a3_name, ["a3"], SingleGoal(rai_to_vamp_config(p3))))
+            goal_tasks.append(Task(a4_name, ["a4"], SingleGoal(rai_to_vamp_config(p4))))
+            sequence_names += [a1_name, a2_name, a3_name, a4_name] 
+
+        self.tasks = goal_tasks + [
+            Task("terminal", self.robots, SingleGoal(goal_pos)),
         ]
 
-        self.sequence = self._make_sequence_from_names(
-            ["a1_goal", "a2_goal", "terminal"]
-        )
+        self.sequence = self._make_sequence_from_names(sequence_names + ["terminal"])
 
-        # AbstractEnvironment.__init__(self, 2, env.start_pos, env.limits)
         BaseModeLogic.__init__(self)
 
         self.collision_resolution = 0.01
