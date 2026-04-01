@@ -393,7 +393,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             i += 1
             # Mode selection
             active_mode = self.random_mode()
-            print(active_mode)
+            # print(active_mode)
             # Bi RRT* core
             q_rand = self.sample_configuration(active_mode)
             if not q_rand:

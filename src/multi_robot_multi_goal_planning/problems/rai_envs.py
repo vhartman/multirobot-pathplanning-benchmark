@@ -2403,6 +2403,52 @@ class rai_dual_ur5(SequenceMixin, rai_env):
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
 
+@register("rai.quad_ur5")
+class rai_dual_ur5(SequenceMixin, rai_env):
+    def __init__(self, num_repetitions: int = 2):
+        self.C, [r1_pose, r2_pose, r3_pose, r4_pose] = rai_config.make_rai_quad_ur5_env()
+
+        self.robots = ["a1", "a2", "a3", "a4"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        p1 = r1_pose[0]
+        p2 = r2_pose[0]
+        p3 = r3_pose[0]
+        p4 = r4_pose[0]
+
+        goal_tasks = []
+        sequence_names = []
+        for rep in range(num_repetitions):
+            suffix = f"_{rep + 1}" if num_repetitions > 1 else ""
+            a1_name = f"a1_goal{suffix}"
+            a2_name = f"a2_goal{suffix}"
+            a3_name = f"a3_goal{suffix}"
+            a4_name = f"a4_goal{suffix}"
+            goal_tasks.append(Task(a1_name, ["a1"], SingleGoal(np.array(p1))))
+            goal_tasks.append(Task(a2_name, ["a2"], SingleGoal(np.array(p2))))
+            goal_tasks.append(Task(a3_name, ["a3"], SingleGoal(np.array(p3))))
+            goal_tasks.append(Task(a4_name, ["a4"], SingleGoal(np.array(p4))))
+            sequence_names += [a1_name, a2_name, a3_name, a4_name] 
+
+        self.tasks = goal_tasks + [
+            Task("terminal", self.robots, SingleGoal(home_pose)),
+        ]
+
+        self.sequence = self._make_sequence_from_names(sequence_names + ["terminal"])
+
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        print(repr(self.limits))
+
+
 def export_env(env: rai_env):
     # export scene
     rai_env.C.writeURDF()
