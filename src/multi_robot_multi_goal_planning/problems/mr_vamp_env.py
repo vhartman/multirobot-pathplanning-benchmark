@@ -219,19 +219,39 @@ class VampEnv(BaseProblem):
         # Add static environment objects
         self._viser_build_scene(server)
 
-        initial_spheres = self.env.get_sphere_poses(first_state.q.as_list())
+        # Find maximum sphere count across all states (attached spheres at the end)
+        max_spheres = 0
+        for path in paths:
+            for state in path:
+                self.set_to_mode(state.mode)
+                n = len(self.env.get_sphere_poses(state.q.as_list()))
+                max_spheres = max(max_spheres, n)
 
-        # Pre-create one icosphere handle per robot sphere
+        # Create handles for all possible spheres
         sphere_handles = []
-        for i, (cx, cy, cz, r) in enumerate(initial_spheres):
+        for i in range(max_spheres):
             handle = server.scene.add_icosphere(
-                name=f"robots/sphere_{i}",
-                radius=float(r),
+                name=f"spheres/sphere_{i}",
+                radius=0.1,  # Default radius, will be updated
                 color=_ROBOT_COLOR,
-                position=(float(cx), float(cy), float(cz)),
+                position=(0.0, 0.0, 0.0),
                 subdivisions=2,
+                visible=False,
             )
             sphere_handles.append(handle)
+
+        # Initialize with first state
+        self.set_to_mode(first_state.mode)
+        self.env.set_joint_positions(first_state.q.as_list())
+        spheres = self.env.get_sphere_poses(first_state.q.as_list())
+
+        # Set initial visibility and properties (attached spheres are already at end)
+        for i, (cx, cy, cz, r) in enumerate(spheres):
+            sphere_handles[i].radius = float(r)
+            sphere_handles[i].position = np.array([cx, cy, cz], dtype=np.float32)
+            sphere_handles[i].visible = True
+
+        current_visible_count = len(spheres)
 
         # Pre-create handles for manipulable objects so their poses can be updated
         _OBJ_COLOR = (220, 160, 80)
@@ -277,15 +297,36 @@ class VampEnv(BaseProblem):
                     continue
                 object_handles[obj_name] = h
 
+        # Track current number of visible spheres to avoid unnecessary visibility changes
+        current_visible_count = len(spheres)
+
         def _set_step(step: int, path: "List[State]", lbl) -> None:
+            nonlocal current_visible_count
             state = path[min(step, len(path) - 1)]
             # Apply mode scenegraph (attach/detach objects) then set joint positions
             self.set_to_mode(state.mode)
             self.env.set_joint_positions(state.q.as_list())
-            # Update robot spheres
+            
+            # Get current spheres (robot spheres first, attached spheres at end)
             spheres = self.env.get_sphere_poses(state.q.as_list())
-            for handle, (cx, cy, cz, _r) in zip(sphere_handles, spheres):
-                handle.position = np.array([cx, cy, cz], dtype=np.float32)
+            total_spheres = len(spheres)
+            
+            def _set_visibility(count: int) -> None:
+                nonlocal current_visible_count
+                if count == current_visible_count:
+                    return
+                for i in range(max_spheres):
+                    sphere_handles[i].visible = (i < count)
+                current_visible_count = count
+
+            # Only update visibility when count changes
+            _set_visibility(total_spheres)
+
+            # Update positions/radii for all spheres that should be visible
+            for i, (cx, cy, cz, r) in enumerate(spheres):
+                sphere_handles[i].position = np.array([cx, cy, cz], dtype=np.float32)
+                sphere_handles[i].radius = float(r)
+            
             # Update manipulable object poses
             if object_handles:
                 scene_objs = {obj["name"]: obj for obj in self.env.get_scene_objects()}
@@ -295,6 +336,8 @@ class VampEnv(BaseProblem):
                         q_o = scene_objs[obj_name]["quaternion"]
                         handle.position = (float(p[0]), float(p[1]), float(p[2]))
                         handle.wxyz = (float(q_o[3]), float(q_o[0]), float(q_o[1]), float(q_o[2]))
+                        # handle.visible = False
+
             # Update mode label
             m = state.mode
             task_names = [self.tasks[tid].name for tid in m.task_ids]
