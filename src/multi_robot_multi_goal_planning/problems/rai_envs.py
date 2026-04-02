@@ -2365,6 +2365,43 @@ class rai_coop_tamp_architecture(SequenceMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
+@register("rai.dual_ur5")
+class rai_dual_ur5(SequenceMixin, rai_env):
+    def __init__(self, num_repetitions: int = 2):
+        self.C, [r1_pose, r2_pose] = rai_config.make_rai_dual_ur5_env()
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        p1 = r1_pose[0]
+        p2 = r2_pose[0]
+
+        goal_tasks = []
+        sequence_names = []
+        for rep in range(num_repetitions):
+            suffix = f"_{rep + 1}" if num_repetitions > 1 else ""
+            a1_name = f"a1_goal{suffix}"
+            a2_name = f"a2_goal{suffix}"
+            goal_tasks.append(Task(a1_name, ["a1"], SingleGoal(np.array(p1))))
+            goal_tasks.append(Task(a2_name, ["a2"], SingleGoal(np.array(p2))))
+            sequence_names += [a1_name, a2_name]
+
+        self.tasks = goal_tasks + [
+            Task("terminal", self.robots, SingleGoal(home_pose)),
+        ]
+
+        self.sequence = self._make_sequence_from_names(sequence_names + ["terminal"])
+
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
 
 def export_env(env: rai_env):
     # export scene
