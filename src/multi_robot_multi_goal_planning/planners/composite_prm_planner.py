@@ -66,11 +66,11 @@ class CompositePRMConfig:
     with_noise: bool = False
 
     # TODO (Liam) new
-    skill_phase: int = 3            # 1 (frozen), 2 (lanes), 3 (incremental)
-    max_skill_rollouts: int = 1     # 1 (single), N (multiple)
-    skill_corridor_width: int = 50  # phase 2
-    skill_k_neighbors: int = 20     # phase 2&3
-    skill_batch_size: int = 50      # phase 3
+    skill_phase: int = 2                    # 1 (frozen), 2 (lanes), 3 (incremental)
+    max_skill_rollouts: int | None = None     # 1 (single), None (unlimited), N (capped)
+    skill_corridor_width: int = 50          # phase 2
+    skill_k_neighbors: int = 20             # phase 2&3
+    skill_batch_size: int = 50              # phase 3
 
 """
 NOTES (Liam):
@@ -356,25 +356,31 @@ class CompositePRM(BasePlanner):
             return False, None # No entry nodes yet, wait
 
         # 2. Filter out failed entry nodes (both phases) + used entries (phase 1 only)
-        # - PHASE 1: one rollout per entry node (deterministic skill + frozen -> identical rollout)
-        # - PHASE 2: up to max_skill_rollouts, using same entry (different inactive configs each time)
+        # - PHASE 1: must be a new entry node (deterministic skill + frozen -> identical rollout)
+        # - PHASE 2: preger unused, but allow reuse up (different inactive configs each time)
         failed_ids = self._failed_skill_entry_ids.get(mode, set())
         used_ids = self._used_skill_entry_ids.get(mode, set())
-
-        if self.config.skill_phase == 1:
-            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids and n.id not in used_ids]
-        else:
-            candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids]
-
-        if not candidate_entry_nodes:
-            self._exhausted_skill_modes.add(mode) # All entry nodes tried
-            print(f"[DEBUG ROLLOUT SKILL] Mode: {mode.id} | All entry nodes tried (added mode {mode.id} to exhausted)")
-            return False, None
-            
-        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Phase: {self.config.skill_phase} | Candidates: {len(candidate_entry_nodes)}")
+        candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids]
+        unused_candidates = [n for n in candidate_entry_nodes if n.id not in used_ids]
 
         # 3. Select entry node from candidates
-        entry_node = random.choice(candidate_entry_nodes)
+        if self.config.skill_phase == 1:
+            if not unused_candidates:
+                self._exhausted_skill_modes.add(mode) # All entry nodes tried
+                print(f"[DEBUG ROLLOUT SKILL] Mode: {mode.id} | All entry nodes tried (added mode {mode.id} to exhausted)")
+                return False, None
+            entry_node = random.choice(unused_candidates)
+        else:
+            if unused_candidates:
+                entry_node = random.choice(unused_candidates)
+            elif candidate_entry_nodes:
+                entry_node = random.choice(candidate_entry_nodes)
+            else:
+                self._exhausted_skill_modes.add(mode) # All entry nodes tried
+                print(f"[DEBUG ROLLOUT SKILL] Mode: {mode.id} | All entry nodes tried (added mode {mode.id} to exhausted)")
+                return False, None
+            
+        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Phase: {self.config.skill_phase} | Candidates: {len(candidate_entry_nodes)}")        
         q_entry = entry_node.state.q.state()
 
         # 4. Rollout skill
@@ -840,16 +846,19 @@ class CompositePRM(BasePlanner):
             target_dict[mode] = set()
         target_dict[mode].add(entry_node_id)
 
-    def _get_valid_modes_to_sample(self):
+    def _get_valid_modes_to_sample(self, exclude_modes: Set[Mode] = None):
         """
         Filters the reached modes to exclude modes that are:
         1. Exhausted: no candidate entry nodes left 
         2. Saturated: hit the max_skill_rollouts
+        3. Rolled out this batch: already rolled out in the current batch (optional)
         """
+        exclude = exclude_modes if exclude_modes is not None else set()
         return [
             m for m in self.sorted_reached_modes
             if m not in self._exhausted_skill_modes
             and m not in self._saturated_skill_modes
+            and m not in exclude
         ]
 
     # TODO:
@@ -878,6 +887,7 @@ class CompositePRM(BasePlanner):
         - Add transitions to graph 
         """
         transitions, failed_attempts = 0, 0
+        modes_rolled_out_this_batch = set()
         reached_terminal_mode = False
         
         # PHASE 1: setup
@@ -913,14 +923,11 @@ class CompositePRM(BasePlanner):
             if not reached_terminal_mode:
                 self.sorted_reached_modes = sorted(reached_modes, key=lambda m: m.id)
 
-        mode_subset_to_sample = self._get_valid_modes_to_sample()
-
         # PHASE 2: main sampling loop
         while (
             transitions < transition_batch_size
             and failed_attempts < 5 * transition_batch_size
         ):
-            # TODO (Liam) new step0 -> O(1) comparison
             # Step 0: Check exhausted skill modes for new entry candidates
             for mode in list(self._exhausted_skill_modes):
                 total_candidates = len(g.reverse_transition_nodes.get(mode, []))
@@ -938,30 +945,18 @@ class CompositePRM(BasePlanner):
                         self._exhausted_skill_modes.discard(mode)
                         print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
 
-            # # TODO (remove) old step0 -> O(n) list comparison filter
-            # # Step 0: Check exhausted skill modes for new entry candidates
-            # # (Create temporary list to avoid getting RuntimeError when .discard changes size of set we're iterating)
-            # for mode in list(self._exhausted_skill_modes):
-            #     candidates = g.reverse_transition_nodes.get(mode, [])
-            #     failed_ids = self._failed_skill_entry_ids.get(mode, set())
-            #     used_ids = self._used_skill_entry_ids.get(mode, set())
-            #     if self.config.skill_phase == 1:
-            #         new_candidate_entry_Nodes = [n for n in candidates if n.id not in failed_ids and n.id not in used_ids]
-            #     else:
-            #         new_candidate_entry_Nodes = [n for n in candidates if n.id not in failed_ids]
-            #     if new_candidate_entry_Nodes:
-            #         self._exhausted_skill_modes.discard(mode) # New entry nodes appeared — re-enable this mode
-            #         print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
-
-            # Exclude exhausted skill modes from sampling pool
-            mode_subset_to_sample = self._get_valid_modes_to_sample()
+            # Exclude exhausted/saturated AND "skill modes rolled out in this batch" from sampling pool
+            mode_subset_to_sample = self._get_valid_modes_to_sample(exclude_modes=modes_rolled_out_this_batch)
+            
+            if not mode_subset_to_sample:
+                # No modes left to sample in this batch (e.g. all skill modes rolled out once)
+                break
 
             # Step 1: pick a mode to sample a transition for, using chosen strategy
             mode = self._sample_mode(
                 mode_subset_to_sample, g, mode_sampling_type, cost is None
             )
 
-            # TODO (Liam) new
             # Step 2A: Identify Tasks
             if reached_terminal_mode:
                 next_ids = self.init_next_ids.get(mode)
@@ -973,33 +968,23 @@ class CompositePRM(BasePlanner):
             if getattr(active_task, 'skill', None) is not None:
                 print(f"[DEBUG SKILL] Intercepted skill for mode {mode.id}")   
 
-                if self.config.skill_phase == 3:
-                    pass # Phase 3: never saturates, incremental batching
-                else:
-                    # # Phase 1/2: check rollout limit
-                    # if self.config.skill_phase == 2:
-                    #     num_existing_rollouts = len(self._used_skill_entry_ids.get(mode, set()))
-                    # else:
-                    #     num_existing_rollouts = sum(
-                    #         1 for n in g.nodes.get(mode, [])
-                    #         if n.state.is_skill_waypoint and n.skill_step == 0
-                    #     )
-                    num_existing_rollouts = self._skill_rollout_counts.get(mode, 0)
-                    if num_existing_rollouts >= self.config.max_skill_rollouts:
-                        print(f"[DEBUG SKILL] Reached max. rollout ({self.config.max_skill_rollouts}) in mode {mode.id} --> skip rollout")
-                        print(f"[DEBUG SKILL] Add mode {mode.id} to saturated modes")
-                        self._saturated_skill_modes.add(mode)
-                        mode_subset_to_sample = self._get_valid_modes_to_sample()
-                        continue # No failed_attempts, mode is done (saturated)
-
                 # Run the rollout
                 success, valid_next_modes = self._skill_rollout(g, mode, active_task)
                 
                 if success:
-                    if self.config.skill_phase == 3: # TODO!
+                    # Mark for the rest of THIS batch
+                    modes_rolled_out_this_batch.add(mode)
+
+                    if self.config.skill_phase == 3:
                         transitions += self.config.skill_batch_size 
                     else:
                         transitions += 1
+
+                    # Immediate saturation check
+                    if self.config.max_skill_rollouts is not None:
+                        if self._skill_rollout_counts.get(mode, 0) >= self.config.max_skill_rollouts:
+                            print(f"[DEBUG SKILL] Reached max. rollout ({self.config.max_skill_rollouts}) in mode {mode.id} --> Saturate")
+                            self._saturated_skill_modes.add(mode)
 
                     if valid_next_modes:
                         reached_modes.update(valid_next_modes)
@@ -1015,13 +1000,12 @@ class CompositePRM(BasePlanner):
                     print(f"[DEBUG SKILL] Failed attempt ({failed_attempts})")
                 
                 # Refresh pool to exclude newly exhausted skill modes
-                mode_subset_to_sample = self._get_valid_modes_to_sample()
+                mode_subset_to_sample = self._get_valid_modes_to_sample(exclude_modes=modes_rolled_out_this_batch)
                 
                 # Skip the normal random geometric sampling for this iteration
                 # That way skill modes get exactly 1 skill-based transition and 0 geometric transitions
                 continue 
 
-            # TODO (Liam) rest unchanged
             # Step 2C: if no skill, sample a transition configuration in that mode
             # Generates config q with active robots constrained to goal positions & other robots free
             # Uses mode information (unlike _sample_valid_uniform_batch), because transition nodes need to satisfy specific goal/task constraints
