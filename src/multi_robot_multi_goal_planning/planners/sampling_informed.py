@@ -848,36 +848,21 @@ class InformedSampling:
 
             for k in range(max_attempts_per_sample):
                 # completely random sample configuration from the (valid) domain robot by robot
-                q = []
+                q = self.env.sample_config_uniform_in_limits()
                 for i in range(len(self.env.robots)):
                     r = self.env.robots[i]
                     if r in goals_to_sample:
                         offset = 0
                         for _, task_robot in enumerate(active_task.robots):
                             if task_robot == r:
-                                q.append(
+                                q[i] = \
                                     goal_sample[
                                         offset : offset
                                         + self.env.robot_dims[task_robot]
                                     ]
-                                )
                                 break
                             offset += self.env.robot_dims[task_robot]
-                    else:  # uniform sample
-                        lims = self.env.limits[:, self.env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = (
-                                np.random.rand(self.env.robot_dims[r])
-                                * (lims[1, :] - lims[0, :])
-                                + lims[0, :]
-                            )
-                        else:
-                            qr = np.random.rand(self.env.robot_dims[r]) * 6 - 3
-
-                        q.append(qr)
-
-                q = self.env.start_pos.from_flat(np.concatenate(q))
-
+                    
                 to_q_cost = self.env.batch_config_cost(q, focal_points)
                 if to_q_cost[0] + to_q_cost[1] > current_cost:
                     continue
