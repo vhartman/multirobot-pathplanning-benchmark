@@ -210,6 +210,7 @@ class CompositePRM(BasePlanner):
         goal = active_task.goal.sample(mode)
 
         # sample a configuration
+        end_idx = 0
         q = self.env.sample_config_uniform_in_limits()
         for i, robot in enumerate(self.env.robots):
             if robot in constrained_robot:
