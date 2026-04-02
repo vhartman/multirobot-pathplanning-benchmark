@@ -414,14 +414,14 @@ class VampEnv(BaseProblem):
             # pick: robot grabs the object
             robot_id = self.robots.index(new_parent)
             joints = tuple(mode.entry_configuration[robot_id])
-            sg[obj_name] = ("attached", robot_id, joints)
+            sg[obj_name] = ("attached", robot_id, tuple(np.round(joints, 3)), joints)
         else:
             # place / handover to world: robot releases the object
             prev_entry = prev_mode.sg.get(obj_name)
             if prev_entry is not None and prev_entry[0] == "attached":
                 prev_robot_id = prev_entry[1]
                 joints = tuple(mode.entry_configuration[prev_robot_id])
-                sg[obj_name] = ("world", prev_robot_id, joints)
+                sg[obj_name] = ("world", prev_robot_id, tuple(np.round(joints, 3)), joints)
             else:
                 sg[obj_name] = ("world", None, None)
 
@@ -435,7 +435,7 @@ class VampEnv(BaseProblem):
                 continue
 
             if new_state[0] == "attached":
-                _, robot_id, joints = new_state
+                _, robot_id, _, joints = new_state
                 # If the object is currently at a placed (non-initial) world position,
                 # we must reset it to its initial world pose before attaching so that
                 # the relative transform T_rel is computed correctly.
@@ -446,7 +446,7 @@ class VampEnv(BaseProblem):
                 self.env.attach_object(obj_name, robot_id, list(joints))
 
             else:  # "world"
-                _, robot_id, joints = new_state
+                _, robot_id, _, joints = new_state
                 if robot_id is None:
                     # Target is the initial world state — reset via remove+add so the
                     # object lands at its original pose regardless of current state
@@ -454,7 +454,7 @@ class VampEnv(BaseProblem):
                     if obj_name in self._initial_objects:
                         if cur_state is not None and cur_state[0] == "attached":
                             # Must detach before removing
-                            _, attach_robot_id, attach_joints = cur_state
+                            _, attach_robot_id, _, attach_joints = cur_state
                             self.env.detach_object(obj_name, attach_robot_id, list(attach_joints))
                         self.env.remove_object(obj_name)
                         self.env.add_object(self._initial_objects[obj_name])
@@ -949,7 +949,7 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
         goal_pos = self.start_pos.q
 
-        self.initial_sg = {"box1": ("world", None, None)}
+        self.initial_sg = {"box1": ("world", None, None, None)}
 
         self.tasks = [
             # r1
@@ -1089,3 +1089,144 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         self.safe_pose = {}
         for r in self.robots:
             self.safe_pose[r] = np.array([0] * ur_dim)
+
+
+@register("vampmr.ur5_box_stacking")
+class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
+    def __init__(self, num_robots: int = 4, num_boxes: int = 8):
+        VampEnv.__init__(self)
+        self.env = mr_planner_core.VampEnvironment("quad_ur5")
+        self.manipulating_env = True
+
+        from . import rai_config
+        C, keyframes, all_robots = rai_config.make_box_stacking_env(
+            num_robots=num_robots, num_boxes=num_boxes, robot_types="ur5"
+        )
+
+        self.robots = [f"a{i+1}" for i in range(num_robots)]
+        ur_dim = 6
+
+        def make_transform(angle_z, tx, ty, tz):
+            c, s = np.cos(angle_z), np.sin(angle_z)
+            return [
+                [c, -s, 0, tx],
+                [s,  c, 0, ty],
+                [0,  0, 1, tz],
+                [0,  0, 0,  1],
+            ]
+
+        q_offset = np.array([0, -np.pi/2, 0, -np.pi/2, 0, 0])
+        def rai_to_vamp_config(q_rai):
+            return np.array(q_rai) + q_offset
+
+        # Robot base transforms — same layout as vampmr.quad_ur5; adjust offsets as needed
+        individual_offsets = [
+            [-0.1, 0.1, 0.],
+            [0., 0., 0.],
+            [0., 0., 0.],
+            [0.0, 0.02, 0.],
+        ]
+        for i in range(4):
+            pos = C.getFrame(f"a{i+1}_ur_base").getPosition() + np.array(individual_offsets[i]) * 0
+            z_offset = 0.9144 - 0.1
+            rot = np.pi/2
+            if i>=2:
+                rot = -np.pi/2
+            self.env.set_robot_base_transform(i, make_transform(rot + np.pi/2, pos[0], pos[1], pos[2] - z_offset))
+
+        for i in range(num_robots):
+            self.env.set_allowed_collision("floor", f"ur5_{i}_arm_base_link", True)
+            self.env.set_allowed_collision("floor", f"ur5_{i}_arm_shoulder_link", True)
+
+        # Floor
+        floor = mr_planner_core.Object()
+        floor.name = "floor"
+        floor.shape = mr_planner_core.Object.Box
+        floor.state = mr_planner_core.Object.Static
+        floor.x = 0.; floor.y = 0.; floor.z = 0.
+        floor.qw = 1.; floor.qx = 0.; floor.qy = 0.; floor.qz = 0.
+        floor.width = 10; floor.height = 0.01; floor.length = 10
+        self.env.add_object(floor)
+
+        # Table — get world pose from rai config
+        table_pos  = C.getFrame("table").getPosition()   # [x, y, z]
+        table_quat = C.getFrame("table").getQuaternion() # [w, x, y, z]
+
+        table_obj = mr_planner_core.Object()
+        table_obj.name = "table"
+        table_obj.shape = mr_planner_core.Object.Box
+        table_obj.state = mr_planner_core.Object.Static
+        table_obj.x = float(table_pos[0]); table_obj.y = float(table_pos[1]); table_obj.z = float(table_pos[2])
+        table_obj.qw = float(table_quat[3]); table_obj.qx = float(table_quat[0])
+        table_obj.qy = float(table_quat[1]); table_obj.qz = float(table_quat[2])
+        table_obj.width = 2.0; table_obj.height = 0.06; table_obj.length = 3.0
+        self.env.add_object(table_obj)
+
+        for i in range(num_robots):
+            self.env.set_allowed_collision("table", f"ur5_{i}_arm_base_link", True)
+            self.env.set_allowed_collision("table", f"ur5_{i}_arm_shoulder_link", True)
+
+        # Boxes — extract world positions from rai config
+        boxes_seen = []
+        for r_rai, b, qs, g in keyframes:
+            if b not in boxes_seen:
+                boxes_seen.append(b)
+
+        for box_name in boxes_seen:
+            pos  = C.getFrame(box_name).getPosition()   # [x, y, z]
+            quat = C.getFrame(box_name).getQuaternion() # [w, x, y, z]
+
+            box_obj = mr_planner_core.Object()
+            box_obj.name = box_name
+            box_obj.shape = mr_planner_core.Object.Box
+            box_obj.state = mr_planner_core.Object.Static
+            box_obj.x = float(pos[0]); box_obj.y = float(pos[1]); box_obj.z = float(pos[2])
+            box_obj.qw = float(quat[0]); box_obj.qx = float(quat[1])
+            box_obj.qy = float(quat[2]); box_obj.qz = float(quat[3])
+            box_obj.width = 0.05; box_obj.height = 0.05; box_obj.length = 0.05
+
+            self.env.add_object(box_obj)
+            self._initial_objects[box_name] = box_obj
+            self.initial_sg[box_name] = ("world", None, None, None)
+
+        # Joint limits and start config
+        lower = rai_to_vamp_config(np.array([-np.pi, -2, -np.pi, -np.pi, -np.pi, -np.pi])).tolist()
+        upper = rai_to_vamp_config(np.array([np.pi, 0.75, np.pi, np.pi, np.pi, np.pi])).tolist()
+        self.limits = np.array([lower * num_robots, upper * num_robots])
+
+        start_config = rai_to_vamp_config(np.array([0, -.5, 1, .5, -1.57, 0]))
+        self.start_pos = NpConfiguration.from_list([start_config] * num_robots)
+        self.env.set_joint_positions(self.start_pos.as_list())
+
+        self.robot_dims = {f"a{i+1}": ur_dim for i in range(num_robots)}
+        self.robot_idx = {f"a{i+1}": list(range(i * ur_dim, (i + 1) * ur_dim)) for i in range(num_robots)}
+
+        # Build pick/place tasks from rai keyframes
+        # keyframe format: (robot_prefix, box_name, [pick_q, place_q], goal_name)
+        # robot_prefix is like "a1_ur_"; split on "_" to get "a1"
+        self.tasks = []
+        task_names_seq = []
+
+        for r_rai, b, qs, _g in keyframes:
+            r = r_rai.split("_")[0]  # "a1_ur_" -> "a1"
+            pick_q  = rai_to_vamp_config(qs[0])
+            place_q = rai_to_vamp_config(qs[1])
+
+            pick_name  = f"{r}_pick_{b}"
+            place_name = f"{r}_place_{b}"
+
+            self.tasks.append(Task(pick_name,  [r], SingleGoal(pick_q),  "pick",  frames=[r, b]))
+            self.tasks.append(Task(place_name, [r], SingleGoal(place_q), "place", frames=["world", b]))
+            task_names_seq += [pick_name, place_name]
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.start_pos.q)))
+        task_names_seq.append("terminal")
+
+        self.sequence = self._make_sequence_from_names(task_names_seq)
+        BaseModeLogic.__init__(self)
+
+        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.00
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.safe_pose = {f"a{i+1}": np.array([0] * ur_dim) for i in range(num_robots)}

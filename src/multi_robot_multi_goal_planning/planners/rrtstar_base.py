@@ -1604,6 +1604,7 @@ class BaseRRTstar(BasePlanner):
         parent = self.operation.path_nodes[0]
         for i in range(1, len(discretized_path)):
             state = discretized_path[i]
+
             node = Node(state, self.operation)
             # node.parent = parent
             # self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)

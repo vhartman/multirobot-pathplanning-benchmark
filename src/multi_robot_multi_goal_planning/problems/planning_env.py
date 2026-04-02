@@ -1895,9 +1895,12 @@ class BaseProblem(ABC):
             # check if the state is collision free
             if not self.is_collision_free(path[i].q, mode):
                 print(f"There is a collision at index {i}")
-                col = self.C.getCollisionsTotalPenetration()
-                print("Penetration:", col)
-                # self.show()
+
+                if hasattr(self, "C"):
+                    col = self.C.getCollisionsTotalPenetration()
+                    print("Penetration:", col)
+                    # self.show()
+
                 collision = True
 
             # ensure that the mode switches are in the plan double
