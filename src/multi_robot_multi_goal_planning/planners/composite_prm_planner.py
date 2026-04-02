@@ -57,7 +57,7 @@ class CompositePRMConfig:
     # Optimization
     try_shortcutting: bool = True
     shortcutting_mode: str = "round_robin"
-    shortcutting_iters: int = 250
+    shortcutting_iters: int = 250 #1000
     shortcutting_interpolation_resolution: float = 0.1
 
     distance_metric: str = "max_euclidean"
@@ -66,10 +66,11 @@ class CompositePRMConfig:
     with_noise: bool = False
 
     # TODO (Liam) new
-    skill_phase: int = 2
-    max_skill_rollouts: int = 1
-    skill_corridor_width: int = 100
-    skill_k_neighbors: int = 20
+    skill_phase: int = 3            # 1 (frozen), 2 (lanes), 3 (incremental)
+    max_skill_rollouts: int = 1     # 1 (single), N (multiple)
+    skill_corridor_width: int = 50  # phase 2
+    skill_k_neighbors: int = 20     # phase 2&3
+    skill_batch_size: int = 50      # phase 3
 
 """
 NOTES (Liam):
@@ -117,6 +118,11 @@ class CompositePRM(BasePlanner):
         self._failed_skill_entry_ids: Dict[Mode, Set[int]] = {}     # mode -> set of failed entry node IDs
         self._exhausted_skill_modes: Set[Mode] = set()              # no candidate_entry_nodes
         self._saturated_skill_modes: Set[Mode] = set()              # hit max_skill_rollouts
+
+        self._skill_rollout_counts: Dict[Mode, int] = {}            # unified rollout counter for ALL phases
+        self._skill_traj_cache: Dict[Mode, np.ndarray] = {}         # mode -> skill trajectory (rollout once, reuse)
+        self._skill_valid_next_modes: Dict[Mode, List[Mode]] = {}   # mode -> valid next modes (computed once)
+        self._skill_entry_node: Dict[Mode, Node] = {}               # mode -> entry node used for initial rollout
 
     def _sample_mode(
         self,
@@ -338,7 +344,11 @@ class CompositePRM(BasePlanner):
 
         PHASE 1: frozen inactive robots, random entry (from reverse_transition_nodes)
         PHASE 2: interpolated inactive robots, informed entry
-        """        
+        """
+        # Phase 3: if trajectory already cached, skip rollout and just add a batch
+        if self.config.skill_phase == 3 and mode in self._skill_traj_cache:
+            return self._add_skill_batch(g, mode, active_task)
+        
         # 1. Get candidate entry nodes for skill
         candidate_entry_nodes = g.reverse_transition_nodes.get(mode, [])
         if not candidate_entry_nodes:
@@ -422,7 +432,7 @@ class CompositePRM(BasePlanner):
                     
                     self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
                     return False, None 
-                # Edge check between consecutive steps 
+                # Edge check between consecutive steps # TODO usually not done during graph build.. can be removed (but in phase 1 won't be computationally too important (single chain vs. roadmap..)?)
                 if step_idx > 0: 
                     q_prev = self.env.start_pos.from_flat(composite_traj[step_idx - 1])
                     if not self.env.is_edge_collision_free( # TODO check if needed (skill resolution vs. collision resolution)
@@ -473,7 +483,8 @@ class CompositePRM(BasePlanner):
                 if not valid_next_modes:
                     self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
                     return False, None
-
+            
+            # TODO (Liam) pool_idx not needed anymore -> remove
             # Convert to (pool_idx, State) and add to graph
             roadmap_states = [
                 [(pool_idx, State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True)) 
@@ -487,10 +498,43 @@ class CompositePRM(BasePlanner):
         # - PHASE 3: inactive robots (random and incremental)
         elif self.config.skill_phase == 3:
             # TODO (Liam)
-            pass
+            # pass
+
+            # First-time setup: cache trajectory and valid next modes, then add first batch
+            
+            # Compute valid next modes using entry's inactive config
+            # (only the active robot's final position matters for mode transition)
+            full_q_final = q_entry.copy()
+            active_offset_tmp = 0
+            full_offset_tmp = 0
+            for r in self.env.robots:
+                dim = self.env.robot_dims[r]
+                if r in active_task.robots:
+                    full_q_final[full_offset_tmp:full_offset_tmp+dim] = skill_traj[-1][active_offset_tmp:active_offset_tmp+dim]
+                    active_offset_tmp += dim
+                full_offset_tmp += dim
+
+            q_final = self.env.start_pos.from_flat(full_q_final)
+            if self.env.is_terminal_mode(mode):
+                valid_next_modes = []
+            else:
+                next_modes = self.env.get_next_modes(q_final, mode)
+                valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
+                if not valid_next_modes:
+                    self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
+                    return False, None
+
+            # Cache for all future batches
+            self._skill_traj_cache[mode] = skill_traj
+            self._skill_valid_next_modes[mode] = valid_next_modes
+            self._skill_entry_node[mode] = entry_node
+
+            # Add first batch (and return its result)
+            return self._add_skill_batch(g, mode, active_task)
 
         # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
         # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
+        self._skill_rollout_counts[mode] = self._skill_rollout_counts.get(mode, 0) + 1
         self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
         return True, valid_next_modes
 
@@ -538,8 +582,7 @@ class CompositePRM(BasePlanner):
 
         # raise NotImplementedError
         
-        # TODO: (remove) Doesn't work for single agent (can't sample inactive config pool..) need to find other way to get to the inactive config
-
+        # TODO: Fix for single agent (didn't work because couldn't sample inactive config pool..) need to find other way to get to the inactive config
         # Single agent guard
         inactive_robots = [r for r in self.env.robots if r not in active_task.robots]
         if not inactive_robots:
@@ -564,8 +607,9 @@ class CompositePRM(BasePlanner):
             offset += dim
         pool.append(np.concatenate(entry_inactive)) 
 
+        # TODO (Liam) find better way to deal with this
         # Check if any inactive robot has a skill in this mode
-        # If yes: freeze them at entry config (pool[0] only), don't allow random sampling # TODO (Liam) find better way to deal with this
+        # If yes: freeze them at entry config (pool[0] only), don't allow random sampling 
         inactive_robot_has_skill = any(
             getattr(self.env.tasks[mode.task_ids[self.env.robots.index(r)]], 'skill', None) is not None
             for r in self.env.robots
@@ -623,9 +667,161 @@ class CompositePRM(BasePlanner):
             
             roadmap.append(step_valid)
 
-        # TODO: edge check later
-
         return roadmap
+
+    def _add_skill_batch(self, g, mode, active_task):
+        """
+        Phase 3: Sample a batch of random inactive configs, collision-check against
+        each skill step, and add valid nodes to the graph incrementally.
+        """
+        skill_traj = self._skill_traj_cache[mode]
+        valid_next_modes = self._skill_valid_next_modes[mode]
+        entry_node = self._skill_entry_node[mode]
+        B = self.config.skill_batch_size
+        N = len(skill_traj)
+
+        # Identify inactive robots
+        inactive_robots = [r for r in self.env.robots if r not in active_task.robots]
+
+        # Extract the entry inactive config (needed for the freeze guard)
+        q_entry = entry_node.state.q.state()
+        entry_inactive_parts = []
+        offset = 0
+        for r in self.env.robots:
+            dim = self.env.robot_dims[r]
+            if r not in active_task.robots:
+                entry_inactive_parts.append(q_entry[offset:offset+dim])
+            offset += dim
+        entry_inactive_q = np.concatenate(entry_inactive_parts) if entry_inactive_parts else np.array([])
+
+        # TODO (Liam) find better way to deal with this
+        # Check if any inactive robot has a skill in this mode
+        # If yes: freeze them at entry config (pool[0] only), don't allow random sampling 
+        inactive_robot_has_skill = False
+        if inactive_robots:
+            inactive_robot_has_skill = any(
+                getattr(self.env.tasks[mode.task_ids[self.env.robots.index(r)]], 'skill', None) is not None
+                for r in inactive_robots
+                if mode.task_ids[self.env.robots.index(r)] is not None
+            )
+
+        # Single agent and freeze guard saturation
+        if not inactive_robots:
+            self._saturated_skill_modes.add(mode)
+            print(f"[DEBUG P3 BATCH] Single-agent detected. Saturating mode {mode.id} after 1 batch")
+            B = 1 # No inactive robots -> we need only 1 batch and that's it
+        elif inactive_robot_has_skill:
+            self._saturated_skill_modes.add(mode)
+            print(f"[DEBUG P3 BATCH] Freeze Guard active. Saturating mode {mode.id} after 1 batch")
+            B = 1
+
+        # TODO (Liam) instead of sampling B then go through k, sampling B while going through k?
+
+        # TODO approach with B inside loop
+        # # Sampling loop
+        # batch_states = []  # batch_states[k] = list of valid State objects
+        
+        # for k in range(N):
+        #     step_valid = []
+            
+        #     # Sample B configs INSIDE the time step loop
+        #     for _ in range(B):
+                
+        #         # Determine inactive_q based on guards vs true randomness
+        #         if not inactive_robots:
+        #             inactive_q = np.array([])
+        #         elif inactive_robot_has_skill:
+        #             # Freeze guard: robot is queued for a skill # TODO
+        #             inactive_q = entry_inactive_q
+        #         else:
+        #             # Sample a brand new random config at this specific time step
+        #             parts = []
+        #             for r in inactive_robots:
+        #                 r_idx = self.env.robot_idx[r]
+        #                 lims = self.env.limits[:, r_idx]
+        #                 parts.append(np.random.uniform(lims[0], lims[1]))
+        #             inactive_q = np.concatenate(parts)
+
+        #         # Compose full config
+        #         full_q = np.zeros(sum(self.env.robot_dims[r] for r in self.env.robots))
+        #         active_offset = 0
+        #         inactive_offset = 0
+        #         full_offset = 0
+        #         for r in self.env.robots:
+        #             dim = self.env.robot_dims[r]
+        #             if r in active_task.robots:
+        #                 full_q[full_offset:full_offset+dim] = skill_traj[k][active_offset:active_offset+dim]
+        #                 active_offset += dim
+        #             else:
+        #                 full_q[full_offset:full_offset+dim] = inactive_q[inactive_offset:inactive_offset+dim]
+        #                 inactive_offset += dim
+        #             full_offset += dim
+
+        #         # Collision check
+        #         q_check = self.env.start_pos.from_flat(full_q)
+        #         if self.env.is_collision_free(q_check, mode):
+        #             step_valid.append(State(q_check, mode, is_skill_waypoint=True))
+
+        #     batch_states.append(step_valid)
+
+        # TODO approach with B outside
+        # 1. Pre-sample the B inactive configurations outside the loop
+        pre_sampled_inactive = []
+        if not inactive_robots:
+            pre_sampled_inactive.append(np.array([]))
+        elif inactive_robot_has_skill:
+            pre_sampled_inactive.append(entry_inactive_q)
+        else:
+            for _ in range(B):
+                parts = []
+                for r in inactive_robots:
+                    r_idx = self.env.robot_idx[r]
+                    lims = self.env.limits[:, r_idx]
+                    parts.append(np.random.uniform(lims[0], lims[1]))
+                pre_sampled_inactive.append(np.concatenate(parts))
+
+        # 2. Apply these exact same B configurations across all steps
+        batch_states = []
+        for k in range(N):
+            step_valid = []
+            for inactive_q in pre_sampled_inactive:
+                
+                # Compose full config
+                full_q = np.zeros(sum(self.env.robot_dims[r] for r in self.env.robots))
+                active_offset = 0
+                inactive_offset = 0
+                full_offset = 0
+                for r in self.env.robots:
+                    dim = self.env.robot_dims[r]
+                    if r in active_task.robots:
+                        full_q[full_offset:full_offset+dim] = skill_traj[k][active_offset:active_offset+dim]
+                        active_offset += dim
+                    else:
+                        full_q[full_offset:full_offset+dim] = inactive_q[inactive_offset:inactive_offset+dim]
+                        inactive_offset += dim
+                    full_offset += dim
+
+                # Collision check
+                q_check = self.env.start_pos.from_flat(full_q)
+                if self.env.is_collision_free(q_check, mode):
+                    step_valid.append(State(q_check, mode, is_skill_waypoint=True))
+
+            batch_states.append(step_valid)
+
+        # Need at least 1 valid config at step 0 and step N-1 for this batch to be useful
+        total_valid = sum(len(s) for s in batch_states)
+        if not batch_states[0] or not batch_states[-1]:
+            print(f"[DEBUG P3 BATCH] Mode {mode.id} | Batch empty at entry/exit (valid={total_valid}) — skipping")
+            return False, None
+
+        # Add to graph
+        g.add_skill_batch(
+            mode, batch_states, valid_next_modes, entry_node,
+            k_neighbors=self.config.skill_k_neighbors,
+        )
+
+        print(f"[DEBUG P3 BATCH] Mode {mode.id} | Added {total_valid} nodes across {N} steps")
+        return True, valid_next_modes
 
     def _mode_has_skill(self, mode: Mode) -> bool:
         """Check if any robot's task in this mode has a skill"""
@@ -724,19 +920,38 @@ class CompositePRM(BasePlanner):
             transitions < transition_batch_size
             and failed_attempts < 5 * transition_batch_size
         ):
+            # TODO (Liam) new step0 -> O(1) comparison
             # Step 0: Check exhausted skill modes for new entry candidates
-            # (Create temporary list to avoid getting RuntimeError when .discard changes size of set we're iterating)
             for mode in list(self._exhausted_skill_modes):
-                candidates = g.reverse_transition_nodes.get(mode, [])
-                failed_ids = self._failed_skill_entry_ids.get(mode, set())
-                used_ids = self._used_skill_entry_ids.get(mode, set())
+                total_candidates = len(g.reverse_transition_nodes.get(mode, []))
+                failed_count = len(self._failed_skill_entry_ids.get(mode, set()))
+
                 if self.config.skill_phase == 1:
-                    new_candidate_entry_Nodes = [n for n in candidates if n.id not in failed_ids and n.id not in used_ids]
+                    # Un-exhaust if there are more candidates than (failed + used) combined
+                    used_count = len(self._used_skill_entry_ids.get(mode, set()))
+                    if total_candidates > (failed_count + used_count):
+                        self._exhausted_skill_modes.discard(mode)
+                        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
                 else:
-                    new_candidate_entry_Nodes = [n for n in candidates if n.id not in failed_ids]
-                if new_candidate_entry_Nodes:
-                    self._exhausted_skill_modes.discard(mode) # New entry nodes appeared — re-enable this mode
-                    print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
+                    # Un-exhaust if there are more candidates thatn failed nodes (can reuse successful nodes)
+                    if total_candidates > failed_count:
+                        self._exhausted_skill_modes.discard(mode)
+                        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
+
+            # # TODO (remove) old step0 -> O(n) list comparison filter
+            # # Step 0: Check exhausted skill modes for new entry candidates
+            # # (Create temporary list to avoid getting RuntimeError when .discard changes size of set we're iterating)
+            # for mode in list(self._exhausted_skill_modes):
+            #     candidates = g.reverse_transition_nodes.get(mode, [])
+            #     failed_ids = self._failed_skill_entry_ids.get(mode, set())
+            #     used_ids = self._used_skill_entry_ids.get(mode, set())
+            #     if self.config.skill_phase == 1:
+            #         new_candidate_entry_Nodes = [n for n in candidates if n.id not in failed_ids and n.id not in used_ids]
+            #     else:
+            #         new_candidate_entry_Nodes = [n for n in candidates if n.id not in failed_ids]
+            #     if new_candidate_entry_Nodes:
+            #         self._exhausted_skill_modes.discard(mode) # New entry nodes appeared — re-enable this mode
+            #         print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Exhausted entry node restored")
 
             # Exclude exhausted skill modes from sampling pool
             mode_subset_to_sample = self._get_valid_modes_to_sample()
@@ -758,25 +973,34 @@ class CompositePRM(BasePlanner):
             if getattr(active_task, 'skill', None) is not None:
                 print(f"[DEBUG SKILL] Intercepted skill for mode {mode.id}")   
 
-                if self.config.skill_phase == 2:
-                    num_existing_rollouts = len(self._used_skill_entry_ids.get(mode, set()))
+                if self.config.skill_phase == 3:
+                    pass # Phase 3: never saturates, incremental batching
                 else:
-                    num_existing_rollouts = sum(
-                        1 for n in g.nodes.get(mode, [])
-                        if n.state.is_skill_waypoint and n.skill_step == 0
-                    )
-                if num_existing_rollouts >= self.config.max_skill_rollouts:
-                    print(f"[DEBUG SKILL] Reached max. rollout ({self.config.max_skill_rollouts}) in mode {mode.id} --> skip rollout")
-                    print(f"[DEBUG SKILL] Add mode {mode.id} to saturated modes")
-                    self._saturated_skill_modes.add(mode)
-                    mode_subset_to_sample = self._get_valid_modes_to_sample()
-                    continue # No failed_attempts, mode is done (saturated)
+                    # # Phase 1/2: check rollout limit
+                    # if self.config.skill_phase == 2:
+                    #     num_existing_rollouts = len(self._used_skill_entry_ids.get(mode, set()))
+                    # else:
+                    #     num_existing_rollouts = sum(
+                    #         1 for n in g.nodes.get(mode, [])
+                    #         if n.state.is_skill_waypoint and n.skill_step == 0
+                    #     )
+                    num_existing_rollouts = self._skill_rollout_counts.get(mode, 0)
+                    if num_existing_rollouts >= self.config.max_skill_rollouts:
+                        print(f"[DEBUG SKILL] Reached max. rollout ({self.config.max_skill_rollouts}) in mode {mode.id} --> skip rollout")
+                        print(f"[DEBUG SKILL] Add mode {mode.id} to saturated modes")
+                        self._saturated_skill_modes.add(mode)
+                        mode_subset_to_sample = self._get_valid_modes_to_sample()
+                        continue # No failed_attempts, mode is done (saturated)
 
                 # Run the rollout
                 success, valid_next_modes = self._skill_rollout(g, mode, active_task)
                 
                 if success:
-                    transitions += 1 
+                    if self.config.skill_phase == 3: # TODO!
+                        transitions += self.config.skill_batch_size 
+                    else:
+                        transitions += 1
+
                     if valid_next_modes:
                         reached_modes.update(valid_next_modes)
                         

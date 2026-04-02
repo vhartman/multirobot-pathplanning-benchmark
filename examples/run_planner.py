@@ -231,6 +231,10 @@ def main():
     interpolated_path = interpolate_path(path, 0.05)
     shortcut_discretized_path = interpolate_path(shortcut_path)
 
+    # TODO DEBUG (remove)
+    counter = sum(1 for s in interpolated_path if getattr(s, 'is_skill_waypoint', False))
+    print(f"[DEBUG SKILLS - remove_interpolated_nodes] There are {counter} skill points in the interpolated_path")
+
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))
 

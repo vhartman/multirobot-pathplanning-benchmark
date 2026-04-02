@@ -86,6 +86,10 @@ coverage/
 temp/
 cache/
 
+# Ignore all markdown and pdf files
+*.md
+*.pdf
+
 /build/
 /CMakeCache.txt
 /CMakeFiles/

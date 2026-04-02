@@ -10,6 +10,8 @@ from typing import (
     Tuple,
 )
 
+from collections import defaultdict
+
 import numpy as np
 from matplotlib import pyplot as plt
 from numpy.typing import NDArray
@@ -126,7 +128,8 @@ class MultimodalGraph:
         self.rev_transition_node_lb_cache = {}
 
         # TODO (Liam) NEW 
-        self.skill_chain_nodes: Dict[Mode, List[Node]] = {} # Step>=1 skill nodes excluded from k-nearest
+        self.skill_chain_nodes = defaultdict(list) # Step>=1 skill nodes excluded from k-nearest
+        self.skill_step_nodes = defaultdict(lambda: defaultdict(list))  # Phase 3: mode -> step -> [nodes]
 
     def get_num_samples(self) -> int:
         num_samples = 0
@@ -428,8 +431,6 @@ class MultimodalGraph:
 
         # Step 1+ go into separate storage (not visible to k-nearest)
         for n in skill_nodes[1:]:
-            if n.state.mode not in self.skill_chain_nodes:
-                self.skill_chain_nodes[n.state.mode] = []
             self.skill_chain_nodes[n.state.mode].append(n)
         
         # 2. Add the final step as a transition node to the graph
@@ -443,6 +444,7 @@ class MultimodalGraph:
         skill_nodes.append(trans_node)
 
         # 4. Link the sequence together through .neighbors and update whitelists
+        # TODO (Liam) remove whitelisting -> no edge collision check was done!
         for i in range(len(skill_nodes) - 1):
             if whitelist_edges:
                 skill_nodes[i].whitelist.add(skill_nodes[i+1].id)
@@ -476,22 +478,23 @@ class MultimodalGraph:
         # raise NotImplementedError
 
         # TODO (Liam) need some max jump distance in the k-nearest (verify)
-        # TODO (Liam) iterate over enumerate(roadmap_states[:-1]) instead and then simply do step_nodes.append(exit_nodes) instead of all_steps = step_nodes[:-1] + [exit_nodes]
+        # TODO (Liam) OK use k-nerest function 
+        # TODO (Liam) OK iterate over enumerate(roadmap_states[:-1]) instead and then simply do step_nodes.append(exit_nodes) instead of all_steps = step_nodes[:-1] + [exit_nodes]
         
         N = len(roadmap_states)
         mode = roadmap_states[0][0][1].mode
 
         step_nodes = []
-        node_pool = {}
+        # node_pool = {}
 
         # 1. Create nodes and track pool index per node (for whitelist)
-        for k, entries in enumerate(roadmap_states):
+        for k, entries in enumerate(roadmap_states[:-1]):
             nodes_at_k = []
             for pool_idx, state in entries:
                 state.is_skill_waypoint = True
                 n = Node(state)
                 n.skill_step = k
-                node_pool[n.id] = pool_idx
+                # node_pool[n.id] = pool_idx
                 nodes_at_k.append(n)
             step_nodes.append(nodes_at_k)
 
@@ -503,8 +506,6 @@ class MultimodalGraph:
         # Intermediate steps: added to self.skill_chain_nodes (hidden from k-nearest)
         for k in range(1, N - 1):
             for n in step_nodes[k]:
-                if mode not in self.skill_chain_nodes:
-                    self.skill_chain_nodes[mode] = []
                 self.skill_chain_nodes[mode].append(n)
 
         # Step-(N-1): added to transition nodes (exit to next mode)
@@ -514,37 +515,42 @@ class MultimodalGraph:
             trans_node = self.transition_nodes[mode][-1]
             trans_node.state.is_skill_waypoint = True
             trans_node.skill_step = N - 1
-            node_pool[trans_node.id] = pool_idx
+            # node_pool[trans_node.id] = pool_idx
             exit_nodes.append(trans_node)
 
         # 3. Connect consecutive steps via k-nearest
-        all_steps = step_nodes[:-1] + [exit_nodes]
+        # all_steps = step_nodes[:-1] + [exit_nodes]
+        step_nodes.append(exit_nodes)
 
-        for k in range(len(all_steps) - 1):
-            curr_nodes = all_steps[k]
-            next_nodes = all_steps[k + 1]
+        for k in range(N-1):
+            self._connect_k_nearest_forward(step_nodes[k], step_nodes[k+1], k_neighbors)
 
-            if not next_nodes:
-                continue
+        # # TODO (remove) -> use function
+        # for k in range(len(all_steps) - 1):
+        #     curr_nodes = all_steps[k]
+        #     next_nodes = all_steps[k + 1]
 
-            # Compute distances from each current node to all next nodes
-            next_configs = np.array([n.state.q.state() for n in next_nodes])
-            k_clip = min(k_neighbors, len(next_nodes))
+        #     if not next_nodes:
+        #         continue
 
-            for n_curr in curr_nodes:
-                dists = np.linalg.norm(next_configs - n_curr.state.q.state(), axis=1)
+        #     # Compute distances from each current node to all next nodes
+        #     next_configs = np.array([n.state.q.state() for n in next_nodes])
+        #     k_clip = min(k_neighbors, len(next_nodes))
 
-                if k_clip >= len(next_nodes):
-                    topk_indices = list(range(len(next_nodes)))
-                else:
-                    topk_indices = np.argpartition(dists, k_clip - 1)[:k_clip]
+        #     for n_curr in curr_nodes:
+        #         dists = np.linalg.norm(next_configs - n_curr.state.q.state(), axis=1)
 
-                curr_pool = node_pool[n_curr.id]
+        #         if k_clip >= len(next_nodes):
+        #             topk_indices = list(range(len(next_nodes)))
+        #         else:
+        #             topk_indices = np.argpartition(dists, k_clip - 1)[:k_clip]
 
-                # Update (link) neighbors
-                for j in topk_indices:
-                    n_next = next_nodes[j]
-                    n_curr.neighbors.append(n_next)
+        #         curr_pool = node_pool[n_curr.id]
+
+        #         # Update (link) neighbors
+        #         for j in topk_indices:
+        #             n_next = next_nodes[j]
+        #             n_curr.neighbors.append(n_next)
 
                     # Whitelist nodes that have same pool index (same inactive config -> frozen lane edge)
                     # TODO (Liam) maybe remove.. technically unsafe (can be assumed as skill steps usually small)
@@ -562,10 +568,89 @@ class MultimodalGraph:
         if entry_node is not None:
             for n0 in step_nodes[0]:
                 entry_node.neighbors.append(n0)
-                # Whitelist pool_idx=0 lane (pool 0 was cloned from entry_node's inactive config)
-                if node_pool[n0.id] == 0:
-                    entry_node.whitelist.add(n0.id)
-                    n0.whitelist.add(entry_node.id)
+                # TODO (Liam) handle whitelisting
+
+    def add_skill_batch(self, mode, batch_states, valid_next_modes, entry_node=None, k_neighbors=5):
+        """
+        Phase 3: Add a batch of skill nodes (inactive) incrementally to the skill trajectory (active)
+        """
+        N = len(batch_states)
+        new_nodes_per_step = [[] for _ in range(N)]
+
+        # 1. Create nodes and place in graph storage
+        for k in range(N):
+            for state in batch_states[k]:
+                state.is_skill_waypoint = True
+
+                if k == N - 1:
+                    # Exit step: add as transition node
+                    self.add_transition_nodes([(state.q, mode, valid_next_modes)])
+                    trans_node = self.transition_nodes[mode][-1]
+                    trans_node.state.is_skill_waypoint = True
+                    trans_node.skill_step = k
+                    new_nodes_per_step[k].append(trans_node)
+                else:
+                    # Regular intermediate nodes
+                    n = Node(state)
+                    n.skill_step = k
+                    if k == 0:
+                        self.add_node(n) # Only node visible to k-nearest so A* can enter
+                    else:
+                        self.skill_chain_nodes[mode].append(n)
+                    new_nodes_per_step[k].append(n)
+
+            # Register in step index (for future cross-batch connections)
+            self.skill_step_nodes[mode][k].extend(new_nodes_per_step[k])
+
+        # 2. Connect forward edges (step k -> step k+1) via k-nearest
+        new_ids_per_step = [set(id(n) for n in new_nodes_per_step[k]) for k in range(N)]
+        
+        for k in range(N - 1):
+            new_at_k = new_nodes_per_step[k]
+            new_at_k1 = new_nodes_per_step[k + 1]
+            all_at_k1 = self.skill_step_nodes[mode].get(k + 1, [])
+
+            # Existing nodes at step k (everything tracked minus nodes from this batch)
+            existing_at_k = [
+                n for n in self.skill_step_nodes[mode].get(k, [])
+                if id(n) not in new_ids_per_step[k]
+            ]
+
+            # New k -> all k+1
+            if new_at_k and all_at_k1:
+                self._connect_k_nearest_forward(new_at_k, all_at_k1, k_neighbors)
+
+            # Existing k -> new k+1 only
+            if existing_at_k and new_at_k1:
+                self._connect_k_nearest_forward(existing_at_k, new_at_k1, k_neighbors)
+
+        # 3. Entry node -> new step-0 nodes
+        if entry_node is not None:
+            for n0 in new_nodes_per_step[0]:
+                entry_node.neighbors.append(n0)
+
+    def _connect_k_nearest_forward(self, from_nodes, to_nodes, k_neighbors):
+        """
+        Connects each node in from_nodes to its k-nearest in to_nodes
+        """
+        if not to_nodes:
+            return
+
+        to_configs = np.array([n.state.q.state() for n in to_nodes])
+        k_clip = min(k_neighbors, len(to_nodes))
+
+        for n_from in from_nodes:
+            dists = np.linalg.norm(to_configs - n_from.state.q.state(), axis=1)
+
+            if k_clip >= len(to_nodes):
+                topk_indices = list(range(len(to_nodes)))
+            else:
+                topk_indices = np.argpartition(dists, k_clip - 1)[:k_clip]
+
+            # TODO (Liam) add max_dist safety
+            for j in topk_indices:
+                n_to = to_nodes[j]
+                n_from.neighbors.append(n_to)
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     # TODO (Liam) make changes in get_neighbors()
@@ -883,6 +968,10 @@ class MultimodalGraph:
 
             if n0.id in n1.whitelist:
                 collision_free = True
+                # TODO (Liam) DEBUG
+                if not env.is_edge_collision_free(n0.state.q, n1.state.q, n0.state.mode, resolution): 
+                    print(f"[DEBUG SEARCH WHITELIST] Whitelisted edge {n0.id}->{n1.id} is actually IN COLLISION!!!")      
+                    print(f"[DEBUG SEARCH WHITELIST] Robot configs: {n0.state.q.state()} -> {n1.state.q.state()}")   
             else:
                 if n1.id in n0.blacklist:
                     continue
