@@ -763,47 +763,51 @@ class InformedSampling:
         # Precompute valid start/end index pools so we never sample a
         # (start, end, mode) combo that can't contain active_mode.
         # Uses mode-graph reachability to handle branches correctly.
-        if self.planning_approach == "sampling_based" and active_mode is not None:
-            # Descendants: modes reachable from active_mode (fixed graph → cache forever).
-            if active_mode not in self._mode_descendants_cache:
-                descendants: set = {active_mode}
-                queue = [active_mode]
-                while queue:
-                    m = queue.pop()
-                    for child in (m.next_modes or []):
-                        if child not in descendants:
-                            descendants.add(child)
-                            queue.append(child)
-                self._mode_descendants_cache[active_mode] = descendants
-            descendants = self._mode_descendants_cache[active_mode]
+        # if False: #self.planning_approach == "sampling_based" and active_mode is not None:
+        #     # Descendants: modes reachable from active_mode (fixed graph → cache forever).
+        #     if active_mode not in self._mode_descendants_cache:
+        #         descendants: set = {active_mode}
+        #         queue = [active_mode]
+        #         while queue:
+        #             m = queue.pop()
+        #             for child in (m.next_modes or []):
+        #                 if child not in descendants:
+        #                     descendants.add(child)
+        #                     queue.append(child)
+        #         self._mode_descendants_cache[active_mode] = descendants
+        #     descendants = self._mode_descendants_cache[active_mode]
 
-            # Ancestors: modes from which active_mode is reachable.
-            # Keyed by (mode, len(reached_modes)) so it refreshes when new modes arrive.
-            ancestors_key = (active_mode, len(reached_modes))
-            if ancestors_key not in self._mode_ancestors_cache:
-                reverse_edges: dict = {}
-                for m in reached_modes:
-                    for child in (m.next_modes or []):
-                        reverse_edges.setdefault(child, []).append(m)
-                ancestors: set = {active_mode}
-                queue = [active_mode]
-                while queue:
-                    m = queue.pop()
-                    for parent in reverse_edges.get(m, []):
-                        if parent not in ancestors:
-                            ancestors.add(parent)
-                            queue.append(parent)
-                self._mode_ancestors_cache[ancestors_key] = ancestors
-            ancestors = self._mode_ancestors_cache[ancestors_key]
+        #     # Ancestors: modes from which active_mode is reachable.
+        #     # Keyed by (mode, len(reached_modes)) so it refreshes when new modes arrive.
+        #     ancestors_key = (active_mode, len(reached_modes))
+        #     if ancestors_key not in self._mode_ancestors_cache:
+        #         reverse_edges: dict = {}
+        #         for m in reached_modes:
+        #             for child in (m.next_modes or []):
+        #                 reverse_edges.setdefault(child, []).append(m)
+        #         ancestors: set = {active_mode}
+        #         queue = [active_mode]
+        #         while queue:
+        #             m = queue.pop()
+        #             for parent in reverse_edges.get(m, []):
+        #                 if parent not in ancestors:
+        #                     ancestors.add(parent)
+        #                     queue.append(parent)
+        #         self._mode_ancestors_cache[ancestors_key] = ancestors
+        #     ancestors = self._mode_ancestors_cache[ancestors_key]
 
-            valid_start_indices = [i for i, s in enumerate(path) if s.mode in ancestors]
-            valid_end_indices = [i for i, s in enumerate(path) if s.mode in descendants]
+        #     valid_start_indices = [i for i, s in enumerate(path) if s.mode in ancestors]
+        #     valid_end_indices = [i for i, s in enumerate(path) if s.mode in descendants]
 
-            if not valid_start_indices or not valid_end_indices:
-                return new_transitions
-        else:
-            valid_start_indices = list(range(len(path)))
-            valid_end_indices = list(range(len(path)))
+        #     if not valid_start_indices or not valid_end_indices:
+        #         return new_transitions
+        # else:
+        #     valid_start_indices = list(range(len(path)))
+        #     valid_end_indices = list(range(len(path)))
+
+        # TODO: figure out whats going on and why this is better
+        valid_start_indices = list(range(len(path)))
+        valid_end_indices = list(range(len(path)))
 
         while len(new_transitions) < batch_size:
             num_attempts += 1

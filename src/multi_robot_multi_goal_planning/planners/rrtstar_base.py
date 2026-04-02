@@ -1327,7 +1327,7 @@ class BaseRRTstar(BasePlanner):
             if len(modes) == 0 or s.mode.task_ids != modes[-1]:
                 modes.append(s.mode.task_ids)
 
-        print(f"New cost: {cost}")
+        print(f"New cost: {cost} at time {time.time() - self.start_time}")
         print("Modes: ", modes)
 
     def generate_path(

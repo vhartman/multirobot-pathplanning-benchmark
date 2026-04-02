@@ -16,6 +16,6 @@ wrist_2_joint_origin (wrist_1_joint) 	{  Q:[0, 0.0463, 0.0804, -1, 0, 0, 0] }
 wrist_2_joint (wrist_2_joint_origin) 	{ , joint:hingeY, limits:[-3.2832, 3.2832, 6.28, -1, 28], ctrl_limits:[6.28, -1, 28] }
 wrist_2_link_0 (wrist_2_joint) 	{  Q:[0, -1.026, -0.1333, -1, 0, 0, 0], shape:mesh, color:[0.7, 0.7, 0.7, 1], mesh:'meshes/eSeries_UR5e_link5.obj', visual }
 wrist_3_joint_origin (wrist_2_joint) 	{  Q:[0, 0.0534, 0.0463, -1, 0, 0, 0] }
-wrist_3_joint (wrist_3_joint_origin) 	{ , joint:hingeZ, limits:[-3.2832, 3.2832, 6.28, -1, 28], ctrl_limits:[6.28, -1, 28] }
+wrist_3_joint (wrist_3_joint_origin) 	{ , joint:hingeZ, limits:[-6.2832, 6.2832, 6.28, -1, 28], ctrl_limits:[6.28, -1, 28] }
 wrist_3_link_0 (wrist_3_joint) 	{  Q:[0, -1.0794, -0.1796, -1, 0, 0, 0], shape:mesh, color:[0.7, 0.7, 0.7, 1], mesh:'meshes/eSeries_UR5e_link6.obj', visual }
 

@@ -2405,7 +2405,7 @@ class rai_dual_ur5(SequenceMixin, rai_env):
 
 
 @register("rai.quad_ur5")
-class rai_dual_ur5(SequenceMixin, rai_env):
+class rai_quad_ur5(SequenceMixin, rai_env):
     def __init__(self, num_repetitions: int = 2):
         self.C, [r1_pose, r2_pose, r3_pose, r4_pose] = rai_config.make_rai_quad_ur5_env()
 
