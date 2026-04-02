@@ -1,7 +1,7 @@
-base 	{  }
-base_link_0 (base) 	{  Q:[0, 0, 0, 0.707107, 0.707107, 0, 0], shape:mesh, color:[0.7, 0.7, 0.7, 1], mesh:'meshes/eSeries_UR5e_baseNoCable.obj', visual }
-shoulder_pan_joint_origin (base) 	{  Q:[0, 0, 0.0991, 0.707107, 0.707107, 0, 0] }
-shoulder_pan_joint (shoulder_pan_joint_origin) 	{ , joint:hingeY, limits:[-6.2832, 6.2832, 3.14, -1, 150], ctrl_limits:[3.14, -1, 150] }
+base_link: { multibody:true}
+base_link_0 (base_link) 	{  Q:[0, 0, 0, 0.707107, 0.707107, 0, 0], shape:mesh, color:[0.7, 0.7, 0.7, 1], mesh:'meshes/eSeries_UR5e_baseNoCable.obj', visual }
+shoulder_pan_joint_origin (base_link) 	{  Q:[0, 0, 0.0991, 0.707107, 0.707107, 0, 0] }
+shoulder_pan_joint (shoulder_pan_joint_origin) 	{ , joint:hingeY, limits:[-3.2832, 3.2832, 3.14, -1, 150], ctrl_limits:[3.14, -1, 150] }
 shoulder_link_0 (shoulder_pan_joint) 	{  Q:[0, -0.0991, 0, -1, 0, 0, 0], shape:mesh, color:[0.7, 0.7, 0.7, 1], mesh:'meshes/eSeries_UR5e_link1.obj', visual }
 shoulder_lift_joint_origin (shoulder_pan_joint) 	{  Q:[0, 0.0634, 0.0744, -1, 0, 0, 0] }
 shoulder_lift_joint (shoulder_lift_joint_origin) 	{ , joint:hingeZ, limits:[-2, 0.75, 3.14, -1, 150], ctrl_limits:[3.14, -1, 150] }

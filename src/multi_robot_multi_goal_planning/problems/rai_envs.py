@@ -1879,15 +1879,16 @@ class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
 # best cost found (max): 21.45
 @register([
     ("rai.box_stacking", {}),
+    ("rai.ur5_box_stacking", {"robot_type": "ur5"}),
     ("rai.box_stacking_two_robots", {"num_robots": 2}),
     ("rai.box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
     ("rai.box_stacking_three_robots", {"num_robots": 3}),
     ("rai.box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
 ])
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
-    def __init__(self, num_robots=4, num_boxes: int = 8):
+    def __init__(self, num_robots=4, num_boxes: int = 8, robot_type="ur10"):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
-            num_robots, num_boxes
+            num_robots, num_boxes, robot_types=robot_type
         )
 
         rai_env.__init__(self)
