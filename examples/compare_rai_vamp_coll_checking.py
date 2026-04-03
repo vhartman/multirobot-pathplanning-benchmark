@@ -13,7 +13,7 @@ import time
 import random
 
 
-def benchmark_collision_checking(envs, N=10000):
+def benchmark_collision_checking(envs, N_config=10000, N_edge=10000):
     conf_type = type(envs[0].get_start_pos())
 
     def sample_next_modes(env, mode: Mode):
@@ -84,7 +84,7 @@ def benchmark_collision_checking(envs, N=10000):
         for _ in range(max_iter):
             m_rnd = random.choice(tuple(reachable_modes))
             next_modes = sample_next_modes(env, m_rnd)
-            print(next_modes)
+            # print(next_modes)
             if next_modes is not None:
                 reachable_modes.update(next_modes)
         reachable_modes = tuple(reachable_modes)
@@ -92,39 +92,101 @@ def benchmark_collision_checking(envs, N=10000):
 
         modes_for_envs.append(reachable_modes)
     
-    is_collision_free_rai = envs[0].is_collision_free
-    is_collision_free_vamp = envs[1].is_collision_free
+    def config_benchmark():
+        is_collision_free_rai = envs[0].is_collision_free
+        is_collision_free_vamp = envs[1].is_collision_free
 
-    rai_time = 0
-    vamp_time = 0
+        rai_time = 0
+        vamp_time = 0
 
-    # actually do the benchmarking
-    print("Starting benchmark")
-    for _ in range(N):
+        rai_config_coll_counter = 0
+        vamp_config_coll_counter = 0
 
-        idx = random.randint(0, len(modes_for_envs[0])-1)
+        # actually do the benchmarking
+        print("Starting single sample benchmark")
+        for _ in range(N_config):
 
-        m_rai = modes_for_envs[0][idx]
-        m_vamp = modes_for_envs[1][idx]
+            idx = random.randint(0, len(modes_for_envs[0])-1)
 
-        q = env.sample_config_uniform_in_limits()
-    
-        start = time.time()
-        is_collision_free_rai(q, m_rai)
-        end = time.time()
+            m_rai = modes_for_envs[0][idx]
+            m_vamp = modes_for_envs[1][idx]
 
-        rai_time += end - start
+            q = env.sample_config_uniform_in_limits()
+        
+            start = time.time()
+            rai_res = is_collision_free_rai(q, m_rai)
+            end = time.time()
 
-        start = time.time()
-        is_collision_free_vamp(q, m_vamp)
-        end = time.time()
+            rai_time += end - start
 
-        vamp_time += end - start
+            start = time.time()
+            vamp_res = is_collision_free_vamp(q, m_vamp)
+            end = time.time()
 
+            vamp_time += end - start
 
-    print(f"Took on avg. {(rai_time) / N * 1000} ms for a rai collision check.")
-    print(f"Took on avg. {(vamp_time) / N * 1000} ms for a vamp collision check.")
+            rai_config_coll_counter += rai_res
+            vamp_config_coll_counter += vamp_res
 
+        print(rai_config_coll_counter, vamp_config_coll_counter)
+
+        print(f"Took on avg. {(rai_time) / N_config * 1000} ms for a rai collision check.")
+        print(f"Took on avg. {(vamp_time) / N_config * 1000} ms for a vamp collision check.")
+
+    def edge_benchmark():
+        is_collision_free_rai = envs[0].is_collision_free
+        is_collision_free_vamp = envs[1].is_collision_free
+        
+        is_edge_collision_free_rai = envs[0].is_edge_collision_free
+        is_edge_collision_free_vamp = envs[1].is_edge_collision_free
+
+        rai_time = 0
+        vamp_time = 0
+
+        rai_edge_coll_counter = 0
+        vamp_edge_coll_counter = 0
+
+        # actually do the benchmarking
+        print("Starting edge sample benchmark")
+        for _ in range(N_edge):
+
+            idx = random.randint(0, len(modes_for_envs[0])-1)
+
+            m_rai = modes_for_envs[0][idx]
+            m_vamp = modes_for_envs[1][idx]
+
+            while True:
+                q1 = env.sample_config_uniform_in_limits()
+                if is_collision_free_vamp(q1, m_vamp):
+                    break
+
+            while True:
+                q2 = env.sample_config_uniform_in_limits()
+                if is_collision_free_vamp(q2, m_vamp):
+                    break
+            
+            start = time.time()
+            rai_res = is_edge_collision_free_rai(q1, q2, m_rai)
+            end = time.time()
+
+            rai_time += end - start
+
+            start = time.time()
+            vamp_res = is_edge_collision_free_vamp(q1, q2, m_vamp)
+            end = time.time()
+
+            vamp_time += end - start
+
+            rai_edge_coll_counter += rai_res
+            vamp_edge_coll_counter += vamp_res
+
+        print(rai_edge_coll_counter, vamp_edge_coll_counter)
+
+        print(f"Took on avg. {(rai_time) / N_edge * 1000} ms for a rai collision check.")
+        print(f"Took on avg. {(vamp_time) / N_edge * 1000} ms for a vamp collision check.")
+
+    config_benchmark()
+    edge_benchmark()
 
 def main():
 
@@ -134,7 +196,7 @@ def main():
     env_rai = get_env_by_name("rai.ur5_box_stacking")
     env_vampmr = get_env_by_name("vampmr.ur5_box_stacking")
 
-    benchmark_collision_checking([env_rai, env_vampmr], 100_000)
+    benchmark_collision_checking([env_rai, env_vampmr], 1_000, 1_000)
 
 
 if __name__ == "__main__":
