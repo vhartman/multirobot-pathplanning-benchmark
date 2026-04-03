@@ -1894,7 +1894,7 @@ class BaseProblem(ABC):
 
             # check if the state is collision free
             if not self.is_collision_free(path[i].q, mode):
-                print(f"There is a collision at index {i}")
+                print(f"There is a collision at index {i}, mode {mode}")
 
                 if hasattr(self, "C"):
                     col = self.C.getCollisionsTotalPenetration()
