@@ -577,6 +577,9 @@ class BaseRRTstar(BasePlanner):
         self.check = set()
         self.blacklist_mode = set()
 
+        # calling once for compilation
+        # find_nearest_indices(np.zeros(5), 0)
+
     def add_tree(
         self,
         mode: Mode,
@@ -946,26 +949,14 @@ class BaseRRTstar(BasePlanner):
             task = self.env.get_active_task(mode, next_ids)
             constrained_robot = task.robots
             goal = task.goal.sample(mode)
-            # q = []
-            end_idx = 0
 
+            end_idx = 0
             q = self.env.sample_config_uniform_in_limits()
             for i, robot in enumerate(self.env.robots):
                 if robot in constrained_robot:
                     dim = self.env.robot_dims[robot]
                     q[i] = goal[end_idx : end_idx + dim]
                     end_idx += dim
-                    
-            # for robot in self.env.robots:
-            #     if robot in constrained_robot:
-            #         dim = self.env.robot_dims[robot]
-            #         q.append(goal[end_idx : end_idx + dim])
-            #         end_idx += dim
-                    
-            #     else:
-            #         lims = robot_lims[robot]
-            #         q.append(np.random.uniform(lims[0], lims[1]))
-            # q = config_type.from_list(q)
 
             if self.env.is_collision_free(q, mode):
                 return q
