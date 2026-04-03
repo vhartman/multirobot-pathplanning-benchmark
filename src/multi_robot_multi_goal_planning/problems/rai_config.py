@@ -3335,7 +3335,7 @@ def make_box_stacking_env(
 
     table = (
         C.addFrame("table")
-        .setPosition([0, 0, 0.2])
+        .setPosition([0, 0, 0.2-0.06/2])
         .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
         .setColor([0.6, 0.6, 0.6])
         .setContact(1)
@@ -3346,7 +3346,8 @@ def make_box_stacking_env(
     )
 
     ur5_path = os.path.join(
-        os.path.dirname(__file__), "../assets/models/rai/ur5/ur5.g"
+        # os.path.dirname(__file__), "../assets/models/rai/ur5/ur5.g"
+        os.path.dirname(__file__), "../assets/models/rai/ur5_vamp/ur5_vamp.g"
     )
 
     kuka_path = os.path.join(
@@ -3370,24 +3371,24 @@ def make_box_stacking_env(
         [0.7071, 0, 0, 0.7071],
     ]
     ur5_rotations = [
-        [0.7071, 0, 0, 0.7071],
-        [0.7071, 0, 0, 0.7071],
         [0.7071, 0, 0, -0.7071],
         [0.7071, 0, 0, -0.7071],
+        [0.7071, 0, 0, 0.7071],
+        [0.7071, 0, 0, 0.7071],
     ]
 
     positions = [
-        [-0.5, 0.5, 0],
-        [+0.5, 0.5, 0],
-        [+0.5, -0.6, 0],
-        [-0.5, -0.6, 0]
+        [-0.5, 0.5, 0.03],
+        [+0.5, 0.5, 0.03],
+        [+0.5, -0.6, 0.03],
+        [-0.5, -0.6, 0.03]
     ]
 
     ur5_positions = [
-        [-0.3, 0.3, 0],
-        [+0.3, 0.3, 0],
-        [+0.3, -0.4, 0],
-        [-0.3, -0.4, 0]
+        [-0.3, 0.3, 0.03],
+        [+0.5, 0.3, 0.03],
+        [+0.5, -0.4, 0.03],
+        [-0.3, -0.4, 0.03]
     ]
 
     def get_rotation(robot, i):
@@ -3478,6 +3479,7 @@ def make_box_stacking_env(
             pos = get_pos(j, k)
 
             C.addFrame("obj" + str(j) + str(k)).setParent(table).setShape(
+                # ry.ST.sphere, [0.05, 0.025]
                 ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 np.random.rand(3)

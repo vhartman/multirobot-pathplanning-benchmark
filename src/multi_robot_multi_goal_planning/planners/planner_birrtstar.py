@@ -393,13 +393,13 @@ class BidirectionalRRTstar(BaseRRTstar):
             i += 1
             # Mode selection
             active_mode = self.random_mode()
-            # print(active_mode)
+            print(active_mode)
             # Bi RRT* core
             q_rand = self.sample_configuration(active_mode)
             if not q_rand:
                 continue
 
-            # self.env.show_config(q_rand)
+            self.env.show_config(q_rand)
             
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand

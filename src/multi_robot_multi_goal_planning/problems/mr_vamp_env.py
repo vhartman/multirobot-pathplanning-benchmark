@@ -509,6 +509,10 @@ class VampEnv(BaseProblem):
 
             self._current_sg[obj_name] = new_state
 
+        self.env.reset_scene()
+        self.env.update_scene()
+
+
     def show(self, blocking=True):
         self.env.update_scene()
 
@@ -1141,6 +1145,8 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
         self.env = mr_planner_core.VampEnvironment("quad_ur5")
         self.manipulating_env = True
 
+        self.env.enable_meshcat()
+
         from . import rai_config
         C, keyframes, all_robots = rai_config.make_box_stacking_env(
             num_robots=num_robots, num_boxes=num_boxes, robot_types="ur5"
@@ -1160,7 +1166,7 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
 
         q_offset = np.array([0, -np.pi/2, 0, -np.pi/2, 0, 0])
         def rai_to_vamp_config(q_rai):
-            return np.array(q_rai) + q_offset
+            return np.array(q_rai) + q_offset * 0
 
         # Robot base transforms — same layout as vampmr.quad_ur5; adjust offsets as needed
         individual_offsets = [
@@ -1171,7 +1177,7 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
         ]
         for i in range(4):
             pos = C.getFrame(f"a{i+1}_ur_base").getPosition() + np.array(individual_offsets[i]) * 0
-            z_offset = 0.9144 - 0.1
+            z_offset = 0.9144 - 0.
             rot = np.pi/2
             if i>=2:
                 rot = -np.pi/2
@@ -1199,7 +1205,7 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
         table_obj.name = "table"
         table_obj.shape = mr_planner_core.Object.Box
         table_obj.state = mr_planner_core.Object.Static
-        table_obj.x = float(table_pos[0]); table_obj.y = float(table_pos[1]); table_obj.z = float(table_pos[2])
+        table_obj.x = float(table_pos[0]); table_obj.y = float(table_pos[1]); table_obj.z = float(table_pos[2]) - 0.02
         table_obj.qw = float(table_quat[3]); table_obj.qx = float(table_quat[0])
         table_obj.qy = float(table_quat[1]); table_obj.qz = float(table_quat[2])
         table_obj.width = 2.0; table_obj.height = 0.06; table_obj.length = 3.0
@@ -1232,12 +1238,16 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
             self._initial_objects[box_name] = box_obj
             self.initial_sg[box_name] = ("world", None, None, None)
 
+        self.env.update_scene()
+
+
         # Joint limits and start config
-        lower = rai_to_vamp_config(np.array([-np.pi, -2, -np.pi, -np.pi, -np.pi, -np.pi])).tolist()
-        upper = rai_to_vamp_config(np.array([np.pi, 0.75, np.pi, np.pi, np.pi, np.pi])).tolist()
+        lower = rai_to_vamp_config(np.array([-np.pi, -3, -np.pi, -np.pi, -np.pi, -np.pi])).tolist()
+        upper = rai_to_vamp_config(np.array([np.pi, 0.0, np.pi, np.pi, np.pi, np.pi])).tolist()
         self.limits = np.array([lower * num_robots, upper * num_robots])
 
-        start_config = rai_to_vamp_config(np.array([0, -.5, 1, .5, -1.57, 0]))
+        # start_config = rai_to_vamp_config(np.array([0, -.5, 1, .5, -1.57, 0]))
+        start_config = rai_to_vamp_config(np.array([0, -2., 1, -1, -1.57, 0]))
         self.start_pos = NpConfiguration.from_list([start_config] * num_robots)
         self.env.set_joint_positions(self.start_pos.as_list())
 
