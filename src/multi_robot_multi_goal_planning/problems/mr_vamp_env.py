@@ -1355,7 +1355,7 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
         self.tasks = []
         task_names_seq = []
 
-        for r_rai, b, qs, _g in keyframes:
+        for r_rai, b, qs, _g in keyframes[:num_boxes*2]:
             r = r_rai.split("_")[0]  # "a1_ur_" -> "a1"
             pick_q  = rai_to_vamp_config(qs[0])
             place_q = rai_to_vamp_config(qs[1])
