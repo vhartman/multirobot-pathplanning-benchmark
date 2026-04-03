@@ -78,6 +78,8 @@ class VampEnv(BaseProblem):
         # initial world pose (e.g. when scrubbing backward across a pick).
         self._initial_objects: dict = {}
 
+        self.current_mode = None
+
         self.spec = ProblemSpec(
             agent_type=AgentType.MULTI_AGENT,
             constraints=ConstraintType.UNCONSTRAINED,
@@ -472,6 +474,8 @@ class VampEnv(BaseProblem):
 
     def _apply_scenegraph(self, sg: dict) -> None:
         """Sync mr_planner_core attachment state with *sg*."""
+        # print(sg)
+        # print(self._curr)
         for obj_name, new_state in sg.items():
             cur_state = self._current_sg.get(obj_name)
             if cur_state == new_state:
@@ -484,23 +488,22 @@ class VampEnv(BaseProblem):
                 # the relative transform T_rel is computed correctly.
                 if cur_state is not None and cur_state[0] == "world" and cur_state[1] is not None:
                     if obj_name in self._initial_objects:
-                        self.env.remove_object(obj_name)
-                        self.env.add_object(self._initial_objects[obj_name])
+                        self.env.move_object(self._initial_objects[obj_name])
                 self.env.attach_object(obj_name, robot_id, list(joints))
 
             else:  # "world"
                 _, robot_id, _, joints = new_state
                 if robot_id is None:
-                    # Target is the initial world state — reset via remove+add so the
-                    # object lands at its original pose regardless of current state
-                    # (attached or at a placed position).
+                    # Target is the initial world state — reset to initial pose.
+                    # The object must currently be attached or at a placed position.
                     if obj_name in self._initial_objects:
                         if cur_state is not None and cur_state[0] == "attached":
-                            # Must detach before removing
+                            # Must detach before resetting pose
                             _, attach_robot_id, _, attach_joints = cur_state
                             self.env.detach_object(obj_name, attach_robot_id, list(attach_joints))
-                        self.env.remove_object(obj_name)
-                        self.env.add_object(self._initial_objects[obj_name])
+
+                        self.env.move_object(self._initial_objects[obj_name])
+
                 else:
                     # Target is a specific placed world position.
                     # The object must currently be attached for detach_object to work.
@@ -509,12 +512,16 @@ class VampEnv(BaseProblem):
 
             self._current_sg[obj_name] = new_state
 
-        self.env.reset_scene()
-        self.env.update_scene()
-
+        # self.env.reset_scene()
+        # self.env.update_scene()
 
     def show(self, blocking=True):
         self.env.update_scene()
+
+        for obj in self.env.get_scene_objects():
+            print(obj)
+
+        time.sleep(10)
 
     def show_config(self, q, blocking=True):
         self.env.set_joint_positions(q.as_list()) 
@@ -628,6 +635,11 @@ class VampEnv(BaseProblem):
     def set_to_mode(self, m: Mode):
         if not self.manipulating_env:
             return
+
+        if self.current_mode == m:
+            return
+
+        self.current_mode = m
         self._apply_scenegraph(m.sg)
 
     def is_path_collision_free(
@@ -1239,7 +1251,6 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
             self.initial_sg[box_name] = ("world", None, None, None)
 
         self.env.update_scene()
-
 
         # Joint limits and start config
         lower = rai_to_vamp_config(np.array([-np.pi, -3, -np.pi, -np.pi, -np.pi, -np.pi])).tolist()
