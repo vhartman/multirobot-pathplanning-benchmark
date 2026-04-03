@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import time
 
@@ -77,6 +78,10 @@ class VampEnv(BaseProblem):
         # Stores mr_planner_core.Object instances so objects can be reset to their
         # initial world pose (e.g. when scrubbing backward across a pick).
         self._initial_objects: dict = {}
+
+        # Cache world poses for each mode to support direct mode jumps and avoid
+        # stale pose propagation during world->world transitions.
+        self._mode_object_poses: dict = {}
 
         self.current_mode = None
 
@@ -472,33 +477,47 @@ class VampEnv(BaseProblem):
 
         return sg
 
+    def _reposition_object_to_robot_state(self, obj_name: str, robot_id: int, joints):
+        """Put object at the world pose corresponding to (robot_id, joints)."""
+        if obj_name in self._initial_objects:
+            self.env.move_object(self._initial_objects[obj_name])
+
+        self.env.attach_object(obj_name, robot_id, list(joints))
+        self.env.detach_object(obj_name, robot_id, list(joints))
+
     def _apply_scenegraph(self, sg: dict) -> None:
         """Sync mr_planner_core attachment state with *sg*."""
-        # print(sg)
-        # print(self._curr)
         for obj_name, new_state in sg.items():
             cur_state = self._current_sg.get(obj_name)
             if cur_state == new_state:
                 continue
 
-            if new_state[0] == "attached":
-                _, robot_id, _, joints = new_state
+            state_type = new_state[0]
+            robot_id = new_state[1] if len(new_state) > 1 else None
+            joints = new_state[3] if len(new_state) > 3 else None
+
+            if state_type == "attached":
                 # If the object is currently at a placed (non-initial) world position,
                 # we must reset it to its initial world pose before attaching so that
                 # the relative transform T_rel is computed correctly.
                 if cur_state is not None and cur_state[0] == "world" and cur_state[1] is not None:
                     if obj_name in self._initial_objects:
                         self.env.move_object(self._initial_objects[obj_name])
+
+                # If previously attached to a different robot, detach first.
+                if cur_state is not None and cur_state[0] == "attached" and cur_state[1] != robot_id:
+                    prev_robot_id = cur_state[1]
+                    prev_joints = cur_state[3] if len(cur_state) > 3 else None
+                    if prev_joints is not None:
+                        self.env.detach_object(obj_name, prev_robot_id, list(prev_joints))
+
                 self.env.attach_object(obj_name, robot_id, list(joints))
 
-            else:  # "world"
-                _, robot_id, _, joints = new_state
+            else:  # world
                 if robot_id is None:
                     # Target is the initial world state — reset to initial pose.
-                    # The object must currently be attached or at a placed position.
                     if obj_name in self._initial_objects:
                         if cur_state is not None and cur_state[0] == "attached":
-                            # Must detach before resetting pose
                             _, attach_robot_id, _, attach_joints = cur_state
                             self.env.detach_object(obj_name, attach_robot_id, list(attach_joints))
 
@@ -506,9 +525,12 @@ class VampEnv(BaseProblem):
 
                 else:
                     # Target is a specific placed world position.
-                    # The object must currently be attached for detach_object to work.
+                    # If we came from attached state, detach through normal place.
                     if cur_state is not None and cur_state[0] == "attached":
                         self.env.detach_object(obj_name, robot_id, list(joints))
+                    else:
+                        # If we came from a previous world state, compute placement exactly.
+                        self._reposition_object_to_robot_state(obj_name, robot_id, joints)
 
             self._current_sg[obj_name] = new_state
 
@@ -525,7 +547,7 @@ class VampEnv(BaseProblem):
 
     def show_config(self, q, blocking=True):
         self.env.set_joint_positions(q.as_list()) 
-        self.env.update_scene() # no need for this as it happens automatically in the set_joint_posisitons call
+        # self.env.update_scene() # no need for this as it happens automatically in the set_joint_posisitons call
 
         time.sleep(0.001)
 
@@ -632,6 +654,64 @@ class VampEnv(BaseProblem):
 
         return not self.env.motion_in_collision(q1.as_list(), q2.as_list(), step_size=resolution, self_only=False)
 
+    def _cache_mode_object_poses(self, mode: Mode) -> None:
+        poses = {}
+        for obj in self.env.get_scene_objects():
+            name = obj.get("name")
+            if name not in self._initial_objects:
+                continue
+
+            pos = obj.get("position")
+            quat = obj.get("quaternion")
+            poses[name] = {
+                "position": tuple(float(x) for x in pos),
+                "quaternion": tuple(float(x) for x in quat),
+            }
+
+        self._mode_object_poses[mode.id] = poses
+
+    def _apply_cached_mode(self, mode: Mode) -> None:
+        # First apply the (fast) scenegraph transitions to ensure attachment/detach state is correct.
+        self._apply_scenegraph(mode.sg)
+
+        # Then override world-placed object poses with the cached absolute poses.
+        mode_cache = self._mode_object_poses.get(mode.id, {})
+        for obj_name, state in mode.sg.items():
+            if state[0] != "world":
+                continue
+
+            robot_id = state[1] if len(state) > 1 else None
+            if robot_id is None:
+                continue
+
+            cached = mode_cache.get(obj_name)
+            if cached is None or obj_name not in self._initial_objects:
+                continue
+
+            # mr_planner_core.Object is not deepcopy-able via Python pickle, so mutate
+            # the initial template object temporarily while moving, then restore.
+            template_obj = self._initial_objects[obj_name]
+            original_pose = (
+                template_obj.x,
+                template_obj.y,
+                template_obj.z,
+                template_obj.qw,
+                template_obj.qx,
+                template_obj.qy,
+                template_obj.qz,
+            )
+
+            template_obj.x, template_obj.y, template_obj.z = cached["position"]
+            qw, qx, qy, qz = cached["quaternion"]
+            template_obj.qw, template_obj.qx, template_obj.qy, template_obj.qz = qw, qx, qy, qz
+
+            self.env.move_object(template_obj)
+
+            template_obj.x, template_obj.y, template_obj.z = original_pose[0:3]
+            template_obj.qw, template_obj.qx, template_obj.qy, template_obj.qz = original_pose[3:7]
+
+        self._current_sg = mode.sg.copy()
+
     def set_to_mode(self, m: Mode):
         if not self.manipulating_env:
             return
@@ -640,7 +720,13 @@ class VampEnv(BaseProblem):
             return
 
         self.current_mode = m
+
+        if m.id in self._mode_object_poses:
+            self._apply_cached_mode(m)
+            return
+
         self._apply_scenegraph(m.sg)
+        self._cache_mode_object_poses(m)
 
     def is_path_collision_free(
         self,
@@ -1157,8 +1243,6 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
         self.env = mr_planner_core.VampEnvironment("quad_ur5")
         self.manipulating_env = True
 
-        self.env.enable_meshcat()
-
         from . import rai_config
         C, keyframes, all_robots = rai_config.make_box_stacking_env(
             num_robots=num_robots, num_boxes=num_boxes, robot_types="ur5"
@@ -1250,20 +1334,20 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
             self._initial_objects[box_name] = box_obj
             self.initial_sg[box_name] = ("world", None, None, None)
 
-        self.env.update_scene()
-
         # Joint limits and start config
-        lower = rai_to_vamp_config(np.array([-np.pi, -3, -np.pi, -np.pi, -np.pi, -np.pi])).tolist()
-        upper = rai_to_vamp_config(np.array([np.pi, 0.0, np.pi, np.pi, np.pi, np.pi])).tolist()
-        self.limits = np.array([lower * num_robots, upper * num_robots])
-
-        # start_config = rai_to_vamp_config(np.array([0, -.5, 1, .5, -1.57, 0]))
-        start_config = rai_to_vamp_config(np.array([0, -2., 1, -1, -1.57, 0]))
-        self.start_pos = NpConfiguration.from_list([start_config] * num_robots)
-        self.env.set_joint_positions(self.start_pos.as_list())
+        # lower = rai_to_vamp_config(np.array([-np.pi, -3, -np.pi, -np.pi, -np.pi, -np.pi])).tolist()
+        # upper = rai_to_vamp_config(np.array([np.pi, 0.0, np.pi, np.pi, np.pi, np.pi])).tolist()
+        # self.limits = np.array([lower * num_robots, upper * num_robots])
 
         self.robot_dims = {f"a{i+1}": ur_dim for i in range(num_robots)}
         self.robot_idx = {f"a{i+1}": list(range(i * ur_dim, (i + 1) * ur_dim)) for i in range(num_robots)}
+        
+        # start_config = rai_to_vamp_config(np.array([0, -.5, 1, .5, -1.57, 0]))
+        # start_config = rai_to_vamp_config(np.array([0, -2., 1, -1, -1.57, 0]))
+        self.start_pos = NpConfiguration.from_list([C.getJointState()[self.robot_idx[r]] for r in self.robots])
+        self.env.set_joint_positions(self.start_pos.as_list())
+
+        self.limits = C.getJointLimits()
 
         # Build pick/place tasks from rai keyframes
         # keyframe format: (robot_prefix, box_name, [pick_q, place_q], goal_name)
