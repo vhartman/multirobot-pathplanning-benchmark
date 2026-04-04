@@ -419,7 +419,7 @@ class MultimodalGraph:
         """
         skill_nodes = []
         
-        # 1. Protect intermediate nodes and add them to the graph
+        # 1. Protect start + intermediate nodes and store them
         for i, s in enumerate(states[:-1]):
             s.is_skill_waypoint = True
             n = Node(s)
@@ -437,7 +437,7 @@ class MultimodalGraph:
         last_state = states[-1]
         self.add_transition_nodes([(last_state.q, last_state.mode, valid_next_modes)])
         
-        # 3. Protect the newly created transition node
+        # 3. Protect the final node (newly created transition node)
         trans_node = self.transition_nodes[last_state.mode][-1]
         trans_node.state.is_skill_waypoint = True
         trans_node.skill_step = len(states) - 1
@@ -460,27 +460,10 @@ class MultimodalGraph:
     def add_skill_roadmap(self, roadmap_states, valid_next_modes, entry_node=None, k_neighbors=5):
         """
         Phase 2: Add a skill roadmap to the graph.
-        ...
+        # TODO
         """
-        # Step 1: create Node objects for each valid entry
-        # -  
-
-        # Step 2: put nodes into graph / storage (dict)
-        # - step-0 nodes -> self.nodes (visible to k-nearest so A* can enter)
-        # - step-1-(N-2) -> self.skill_chain_nodes (hidden from k-nearest)
-        # - step-(N-1) -> self.transition_nodes (exit to next mode) 
-
-        # Step 3: connect consecutive steps via k-nearest
-        # - Instead of connecting each step-k with each step-k+1 node, only do it for k-nearest 
-        # -- Use .neighbors to make the link
-        # -- Update whitelists if needed 
-
-        # raise NotImplementedError
-
         # TODO (Liam) need some max jump distance in the k-nearest (verify)
-        # TODO (Liam) OK use k-nerest function 
-        # TODO (Liam) OK iterate over enumerate(roadmap_states[:-1]) instead and then simply do step_nodes.append(exit_nodes) instead of all_steps = step_nodes[:-1] + [exit_nodes]
-        
+        # TODO (Liam) remove things related to node_pool, also in _skill_rollout
         N = len(roadmap_states)
         mode = roadmap_states[0][0][1].mode
 
@@ -564,12 +547,13 @@ class MultimodalGraph:
                     #   n_curr.neighbors.append(n_next)
                     #   whitelist..
 
-        # 4. Entry node links to all step-0 nodes
-        if entry_node is not None:
-            for n0 in step_nodes[0]:
-                entry_node.neighbors.append(n0)
-                # TODO (Liam) handle whitelisting
-
+        # 4. Entry node links to all step-0 nodes # TODO (Liam) handle whitelisting?
+        # if entry_node is not None: # TODO remove: not connect to all
+        #     for n0 in step_nodes[0]:
+        #         entry_node.neighbors.append(n0)
+        if entry_node is not None and step_nodes[0]: # TODO: only connect to k-nearest
+            self._connect_k_nearest_forward([entry_node], step_nodes[0], k_neighbors)
+                
     def add_skill_batch(self, mode, batch_states, valid_next_modes, entry_node=None, k_neighbors=5):
         """
         Phase 3: Add a batch of skill nodes (inactive) incrementally to the skill trajectory (active)
@@ -625,10 +609,12 @@ class MultimodalGraph:
                 self._connect_k_nearest_forward(existing_at_k, new_at_k1, k_neighbors)
 
         # 3. Entry node -> new step-0 nodes
-        if entry_node is not None:
-            for n0 in new_nodes_per_step[0]:
-                entry_node.neighbors.append(n0)
-
+        # if entry_node is not None: # TODO remove: not connect to all
+        #     for n0 in new_nodes_per_step[0]:
+        #         entry_node.neighbors.append(n0)
+        if entry_node is not None and new_nodes_per_step[0]: # TODO: only connect to k-nearest
+            self._connect_k_nearest_forward([entry_node], new_nodes_per_step[0], k_neighbors)
+        
     def _connect_k_nearest_forward(self, from_nodes, to_nodes, k_neighbors):
         """
         Connects each node in from_nodes to its k-nearest in to_nodes
