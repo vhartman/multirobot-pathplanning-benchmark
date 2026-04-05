@@ -464,26 +464,40 @@ class VampEnv(BaseProblem):
             # pick: robot grabs the object
             robot_id = self.robots.index(new_parent)
             joints = tuple(mode.entry_configuration[robot_id])
-            sg[obj_name] = ("attached", robot_id, tuple(np.round(joints, 3)), joints)
+            sg[obj_name] = ("attached", robot_id, tuple(np.round(joints, 3)), joints, None)
         else:
             # place / handover to world: robot releases the object
             prev_entry = prev_mode.sg.get(obj_name)
             if prev_entry is not None and prev_entry[0] == "attached":
                 prev_robot_id = prev_entry[1]
                 joints = tuple(mode.entry_configuration[prev_robot_id])
-                sg[obj_name] = ("world", prev_robot_id, tuple(np.round(joints, 3)), joints)
+                pick_joints = prev_entry[3] if len(prev_entry) > 3 else None
+                sg[obj_name] = ("world", prev_robot_id, tuple(np.round(joints, 3)), joints, pick_joints)
             else:
-                sg[obj_name] = ("world", None, None)
+                # print("AAAAAA")
+                # print("AAAAAA")
+                # print("AAAAAA")
+                # print("AAAAAA")
+                sg[obj_name] = ("world", None, None, None, None)
 
         return sg
 
-    def _reposition_object_to_robot_state(self, obj_name: str, robot_id: int, joints):
-        """Put object at the world pose corresponding to (robot_id, joints)."""
+    def _reposition_object_to_robot_state(self, obj_name: str, robot_id: int, place_joints, pick_joints=None):
+        """Put object at the world pose corresponding to placing at (robot_id, place_joints).
+
+        pick_joints is the grasp configuration used when the object was picked up.
+        It determines T_rel (the relative transform from the end-effector to the object).
+        If pick_joints is None (unknown), this falls back to a no-op — callers should
+        provide pick_joints whenever possible.
+        """
+        if pick_joints is None:
+            return
+
         if obj_name in self._initial_objects:
             self.env.move_object(self._initial_objects[obj_name])
 
-        self.env.attach_object(obj_name, robot_id, list(joints))
-        self.env.detach_object(obj_name, robot_id, list(joints))
+        self.env.attach_object(obj_name, robot_id, list(pick_joints))
+        self.env.detach_object(obj_name, robot_id, list(place_joints))
 
     def _apply_scenegraph(self, sg: dict) -> None:
         """Sync mr_planner_core attachment state with *sg*."""
@@ -518,7 +532,7 @@ class VampEnv(BaseProblem):
                     # Target is the initial world state — reset to initial pose.
                     if obj_name in self._initial_objects:
                         if cur_state is not None and cur_state[0] == "attached":
-                            _, attach_robot_id, _, attach_joints = cur_state
+                            _, attach_robot_id, _, attach_joints, _ = cur_state
                             self.env.detach_object(obj_name, attach_robot_id, list(attach_joints))
 
                         self.env.move_object(self._initial_objects[obj_name])
@@ -527,15 +541,108 @@ class VampEnv(BaseProblem):
                     # Target is a specific placed world position.
                     # If we came from attached state, detach through normal place.
                     if cur_state is not None and cur_state[0] == "attached":
+                        # print(f"pre detach {obj_name}")
+                        # print(self.env.get_object(obj_name).z)
+
                         self.env.detach_object(obj_name, robot_id, list(joints))
+
+                        # print(f"pre detach {obj_name}")
+                        # print(self.env.get_object(obj_name).x, self.env.get_object(obj_name).y, self.env.get_object(obj_name).z)
                     else:
                         # If we came from a previous world state, compute placement exactly.
-                        self._reposition_object_to_robot_state(obj_name, robot_id, joints)
+                        pick_joints = new_state[4] if len(new_state) > 4 else None
+                        self._reposition_object_to_robot_state(obj_name, robot_id, joints, pick_joints)
 
-            self._current_sg[obj_name] = new_state
+        self._current_sg = sg
 
         # self.env.reset_scene()
         # self.env.update_scene()
+
+    
+    def _cache_mode_object_poses(self, mode: Mode) -> None:
+        poses = {}
+        for obj in self.env.get_scene_objects():
+            name = obj.get("name")
+            if name not in self._initial_objects:
+                continue
+
+            pos = obj.get("position")
+            quat = obj.get("quaternion")
+            poses[name] = {
+                "position": tuple(float(x) for x in pos),
+                "quaternion": tuple(float(x) for x in quat),
+            }
+
+            # print(f"caching {name}, mode {mode}")
+            # print(poses[name])
+
+        self._mode_object_poses[mode.id] = poses
+
+        # print()
+        # print(f"cacheing {mode}")
+        # for k, v in poses.items():
+        #     print(k, v)
+
+    def _apply_cached_mode(self, mode: Mode) -> None:
+        # First apply the (fast) scenegraph transitions to ensure attachment/detach state is correct.
+        self._apply_scenegraph(mode.sg)
+
+        # Then override world-placed object poses with the cached absolute poses.
+        mode_cache = self._mode_object_poses.get(mode.id, {})
+        for obj_name, state in mode.sg.items():
+            if state[0] != "world":
+                # print(f"skipping cache for {obj_name}")
+                continue
+
+            robot_id = state[1] if len(state) > 1 else None
+            if robot_id is None:
+                continue
+
+            cached = mode_cache.get(obj_name)
+            if cached is None or obj_name not in self._initial_objects:
+                continue
+
+            # mr_planner_core.Object is not deepcopy-able via Python pickle, so mutate
+            # the initial template object temporarily while moving, then restore.
+            template_obj = self.env.get_object(obj_name)
+
+            # print(f"pre cache application {obj_name}")
+            # print(template_obj.x, template_obj.y, template_obj.z)
+
+            template_obj.x, template_obj.y, template_obj.z = cached["position"]
+            qw, qx, qy, qz = cached["quaternion"]
+            template_obj.qw, template_obj.qx, template_obj.qy, template_obj.qz = qw, qx, qy, qz
+
+            self.env.move_object(template_obj)
+
+            # print("post cache application")
+            # print(self.env.get_object(obj_name).x, self.env.get_object(obj_name).y, self.env.get_object(obj_name).z)
+
+        self._current_sg = mode.sg.copy()
+
+    def set_to_mode(self, m: Mode):
+        if not self.manipulating_env:
+            return
+
+        if self.current_mode == m:
+            return
+
+        if m.id in self._mode_object_poses:
+            self._apply_cached_mode(m)
+            self.current_mode = m
+            # print(f"returning after application of cached mode {m}")
+            return
+
+        # TODO: this is still doing something wrong
+        # print(m.sg)
+        
+        self._apply_scenegraph(m.sg)
+        self._cache_mode_object_poses(m)
+
+        self.current_mode = m
+
+        # print()
+
 
     def show(self, blocking=True):
         self.env.update_scene()
@@ -653,80 +760,6 @@ class VampEnv(BaseProblem):
             self.set_to_mode(mode)
 
         return not self.env.motion_in_collision(q1.as_list(), q2.as_list(), step_size=resolution, self_only=False)
-
-    def _cache_mode_object_poses(self, mode: Mode) -> None:
-        poses = {}
-        for obj in self.env.get_scene_objects():
-            name = obj.get("name")
-            if name not in self._initial_objects:
-                continue
-
-            pos = obj.get("position")
-            quat = obj.get("quaternion")
-            poses[name] = {
-                "position": tuple(float(x) for x in pos),
-                "quaternion": tuple(float(x) for x in quat),
-            }
-
-        self._mode_object_poses[mode.id] = poses
-
-    def _apply_cached_mode(self, mode: Mode) -> None:
-        # First apply the (fast) scenegraph transitions to ensure attachment/detach state is correct.
-        self._apply_scenegraph(mode.sg)
-
-        # Then override world-placed object poses with the cached absolute poses.
-        mode_cache = self._mode_object_poses.get(mode.id, {})
-        for obj_name, state in mode.sg.items():
-            if state[0] != "world":
-                continue
-
-            robot_id = state[1] if len(state) > 1 else None
-            if robot_id is None:
-                continue
-
-            cached = mode_cache.get(obj_name)
-            if cached is None or obj_name not in self._initial_objects:
-                continue
-
-            # mr_planner_core.Object is not deepcopy-able via Python pickle, so mutate
-            # the initial template object temporarily while moving, then restore.
-            template_obj = self._initial_objects[obj_name]
-            original_pose = (
-                template_obj.x,
-                template_obj.y,
-                template_obj.z,
-                template_obj.qw,
-                template_obj.qx,
-                template_obj.qy,
-                template_obj.qz,
-            )
-
-            template_obj.x, template_obj.y, template_obj.z = cached["position"]
-            qw, qx, qy, qz = cached["quaternion"]
-            template_obj.qw, template_obj.qx, template_obj.qy, template_obj.qz = qw, qx, qy, qz
-
-            self.env.move_object(template_obj)
-
-            template_obj.x, template_obj.y, template_obj.z = original_pose[0:3]
-            template_obj.qw, template_obj.qx, template_obj.qy, template_obj.qz = original_pose[3:7]
-
-        self._current_sg = mode.sg.copy()
-
-    def set_to_mode(self, m: Mode):
-        if not self.manipulating_env:
-            return
-
-        if self.current_mode == m:
-            return
-
-        self.current_mode = m
-
-        if m.id in self._mode_object_poses:
-            self._apply_cached_mode(m)
-            return
-
-        self._apply_scenegraph(m.sg)
-        self._cache_mode_object_poses(m)
 
     def is_path_collision_free(
         self,
@@ -1094,7 +1127,7 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
 
         goal_pos = self.start_pos.q
 
-        self.initial_sg = {"box1": ("world", None, None, None)}
+        self.initial_sg = {"box1": ("world", None, None, None, None)}
 
         self.tasks = [
             # r1
@@ -1332,7 +1365,7 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
 
             self.env.add_object(box_obj)
             self._initial_objects[box_name] = box_obj
-            self.initial_sg[box_name] = ("world", None, None, None)
+            self.initial_sg[box_name] = ("world", None, None, None, None)
 
         # Joint limits and start config
         # lower = rai_to_vamp_config(np.array([-np.pi, -3, -np.pi, -np.pi, -np.pi, -np.pi])).tolist()
@@ -1366,6 +1399,9 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
             self.tasks.append(Task(pick_name,  [r], SingleGoal(pick_q),  "pick",  frames=[r, b]))
             self.tasks.append(Task(place_name, [r], SingleGoal(place_q), "place", frames=["world", b]))
             task_names_seq += [pick_name, place_name]
+
+            # print(place_name)
+            # print(place_q)
 
         self.tasks.append(Task("terminal", self.robots, SingleGoal(self.start_pos.q)))
         task_names_seq.append("terminal")

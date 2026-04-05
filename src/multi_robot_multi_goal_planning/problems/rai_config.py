@@ -3504,6 +3504,9 @@ def make_box_stacking_env(
         if cnt == num_boxes:
             break
 
+    # print("goal position")
+    # print(C.getFrame("goal21").getPosition())
+
     if view:
         C.view(True)
 
