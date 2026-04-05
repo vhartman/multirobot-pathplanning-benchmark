@@ -20,8 +20,7 @@ from .goals import (
     SingleGoal,
     GoalRegion,
     GoalSet,
-    ConditionalGoal,
-    ConstrainedGoal
+    ConditionalGoal
 )
 
 from functools import cache
@@ -1622,8 +1621,6 @@ class BaseProblem(ABC):
                     goal = GoalSet.from_data(task_data["goal"])
                 elif goal_type == "ConditionalGoal":
                     goal = ConditionalGoal.from_data(task_data["goal"])
-                elif goal_type == "ConstrainedGoal":
-                    goal = ConstrainedGoal.from_data(task_data["goal"])
 
                 assert goal is not None
 

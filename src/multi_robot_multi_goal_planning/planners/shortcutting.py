@@ -246,6 +246,9 @@ def robot_mode_shortcut(
 
         attempted_shortcuts += 1
 
+        # TODO: is path colision free makes this horrible, since the edges are the interpolated nodes
+        # Therefore, many edges have length 2. Possibly remove interpolated things here before checking?
+        # needs to be fixed.
         if env.is_path_collision_free(
             proposed_shortcut, resolution=resolution, tolerance=tolerance, check_start_and_end=False
         ):

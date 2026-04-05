@@ -30,7 +30,23 @@ class Goal(ABC):
 
 # Goal to enable general constraints, e.g. on end effector
 class NonlinearGoal(Goal):
-    pass
+    def __init__(self, fun, sampler):
+        # should take q, mode as argument, return True/False
+        self.fun = fun
+        self.sampler = sampler
+
+    def satisfies_constraints(self, q, mode: "Mode", tolerance: float) -> bool:
+        return fun(q, mode)
+
+    def sample(self, mode: "Mode") -> NDArray:
+        return self.sampler(mode)
+
+    def serialize(self) -> List:
+        raise NotImplementedError
+
+    @classmethod
+    def from_data(cls, data):
+        raise NotImplementedError
 
 
 # class DummyGoal(ABC):
@@ -40,7 +56,7 @@ class NonlinearGoal(Goal):
 #     def satisfies_constraints(self, q, tolerance):
 #         return True
 
-#     def sample(self):
+#     def sample(self, mode: "Mode"):
 #         pass
 
 
@@ -68,11 +84,6 @@ class GoalRegion(Goal):
     @classmethod
     def from_data(cls, data):
         return GoalRegion(np.array(data))
-
-
-# TODO: implement sampler to sample a goal
-class ConstrainedGoal(Goal):
-    pass
 
 
 class ConditionalGoal(Goal):

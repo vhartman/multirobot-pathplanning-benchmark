@@ -1037,7 +1037,7 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
                 Task(
                     f"pre_place_{i}",
                     ["a1"],
-                    SingleGoal(pre_place),
+                    pre_place_goal,
                 ),
                 Task(
                     f"place_{i}",
