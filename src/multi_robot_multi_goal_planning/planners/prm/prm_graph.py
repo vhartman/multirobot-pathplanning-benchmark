@@ -403,7 +403,7 @@ class MultimodalGraph:
                     else:
                         self.reverse_transition_nodes[next_mode] = [next_node]
  
-    def add_skill_batch(self, mode, batch_states, valid_next_modes, entry_node=None, k_neighbors=5):
+    def add_skill_batch(self, mode, batch_states, valid_next_modes, entry_node=None, k_neighbors=5, isolated=False):
         """
         Unified skill node add function for all phases.
 
@@ -441,8 +441,9 @@ class MultimodalGraph:
                 n.skill_step = k
                 new_nodes_per_step[k].append(n)
 
-            # Register in step index (enables cross-batch connectivity)
-            self.skill_step_nodes[mode][k].extend(new_nodes_per_step[k])
+            # Register in step index (enables cross-batch connectivity) - skip for isolated chains
+            if not isolated:
+                self.skill_step_nodes[mode][k].extend(new_nodes_per_step[k])
 
         # 2. Forward edges: step k -> step k+1 via k-nearest
         new_ids_per_step = [
@@ -452,19 +453,26 @@ class MultimodalGraph:
         for k in range(N - 1):
             new_at_k = new_nodes_per_step[k]
             new_at_k1 = new_nodes_per_step[k + 1]
-            all_at_k1= self.skill_step_nodes[mode].get(k + 1, [])
 
-            # New nodes at k -> ALL nodes at k+1 (intra + cross-batch)
-            if new_at_k and all_at_k1:
-                self._connect_k_nearest_forward(new_at_k, all_at_k1, k_neighbors)
+            if isolated:
+                # Isolated mode: only wire within this batch (no cross-batch)
+                if new_at_k and new_at_k1:
+                    self._connect_k_nearest_forward(new_at_k, new_at_k1, k_neighbors)
+            else:
+                # Normal mode: cross-connect with existing nodes at matching steps
+                all_at_k1= self.skill_step_nodes[mode].get(k + 1, [])
 
-            # Existing nodes at k -> NEW nodes at k+1 only (cross-batch)
-            existing_at_k = [
-                n for n in self.skill_step_nodes[mode].get(k, [])
-                if id(n) not in new_ids_per_step[k]
-            ]
-            if existing_at_k and new_at_k1:
-                self._connect_k_nearest_forward(existing_at_k, new_at_k1, k_neighbors)
+                # New nodes at k -> ALL nodes at k+1 (intra + cross-batch)
+                if new_at_k and all_at_k1:
+                    self._connect_k_nearest_forward(new_at_k, all_at_k1, k_neighbors)
+
+                # Existing nodes at k -> NEW nodes at k+1 only (cross-batch)
+                existing_at_k = [
+                    n for n in self.skill_step_nodes[mode].get(k, [])
+                    if id(n) not in new_ids_per_step[k]
+                ]
+                if existing_at_k and new_at_k1:
+                    self._connect_k_nearest_forward(existing_at_k, new_at_k1, k_neighbors)
 
         # 3. Entry node -> step-0 nodes
         # if entry_node is not None: # TODO (Liam) k-nearest or simply connect to all?
