@@ -66,11 +66,12 @@ class CompositePRMConfig:
     with_noise: bool = False
 
     # TODO (Liam) new
-    skill_phase: int = 2                    # 1 (frozen), 2 (lanes), 3 (incremental)
-    max_skill_rollouts: int | None = None     # 1 (single), None (unlimited), N (capped)
-    skill_corridor_width: int = 50          # phase 2
+    skill_phase: int = 3                    # 1 (frozen), 2 (lanes), 3 (incremental)
+    skill_max_rollouts: int | None = None   # 1 (single), None (unlimited), N (capped)
+    skill_corridor_width: int = 100         # phase 2
     skill_k_neighbors: int = 20             # phase 2&3
-    skill_batch_size: int = 50              # phase 3
+    skill_batch_size: int = 100             # phase 3
+    skill_batch_strategy: str = "inside"    # phase 3 (inside: NxB, outside: B lanes)
 
 """
 NOTES (Liam):
@@ -117,7 +118,7 @@ class CompositePRM(BasePlanner):
         self._used_skill_entry_ids: Dict[Mode, Set[int]] = {}       # mode -> set of successful entry node IDs
         self._failed_skill_entry_ids: Dict[Mode, Set[int]] = {}     # mode -> set of failed entry node IDs
         self._exhausted_skill_modes: Set[Mode] = set()              # no candidate_entry_nodes
-        self._saturated_skill_modes: Set[Mode] = set()              # hit max_skill_rollouts
+        self._saturated_skill_modes: Set[Mode] = set()              # hit skill_max_rollouts
 
         self._skill_rollout_counts: Dict[Mode, int] = {}            # unified rollout counter for ALL phases
         self._skill_traj_cache: Dict[Mode, np.ndarray] = {}         # mode -> skill trajectory (rollout once, reuse)
@@ -262,8 +263,6 @@ class CompositePRM(BasePlanner):
             )
 
             # Step 2: sample configuration (uniformly within joint limits)
-            # TODO: QUESTION Doesn't use mode information (unlike sample_valid_uniform_transitions). Why doesn't use mode?
-            # TODO: because purpose simply is to densify roadmap within free C-space? need mode only for collision check
             q = self.env.sample_config_uniform_in_limits()
 
             # Step 3: rejection (ellipsoid) and collision check 
@@ -338,17 +337,42 @@ class CompositePRM(BasePlanner):
 
         return q
     
+    # SKILL ROLLOUT
     def _skill_rollout(self, g, mode, active_task):
         """
-        Rollout skill from an entry node and add as skill chain into PRM graph
+        Rollout skill from an entry node and integrate the result to the PRM graph
 
-        PHASE 1: frozen inactive robots, random entry (from reverse_transition_nodes)
-        PHASE 2: interpolated inactive robots, informed entry
+        PHASE 1: frozen inactive configs 
+        PHASE 2: M-lane inactive configs (multiple skill chains for multiple rollouts)
+        PHASE 3: B-lane inactive configs (single skill rollout with increasing lanes for multiple rollouts)
+
+        Flow: 
+        - Phase 3 cache intercept (skip rollout if traj already cached)
+        - Entry node selection 
+        - Skill rollout
+        - Compute valid next modes
+        - Build batch_states (phase dependent)
+        - Inject in graph
         """
-        # Phase 3: if trajectory already cached, skip rollout and just add a batch
+        # Phase 3: on subsequent call for cached more, skip rollout and just add a new batch
         if self.config.skill_phase == 3 and mode in self._skill_traj_cache:
-            return self._add_skill_batch(g, mode, active_task)
-        
+            batch_states = self._build_phase3_batch(mode, active_task)
+            
+            if batch_states:
+                valid_next_modes = self._skill_valid_next_modes[mode]
+                entry_node = self._skill_entry_node[mode]
+                g.add_skill_batch(mode, batch_states, valid_next_modes, entry_node,
+                                  k_neighbors=self.config.skill_k_neighbors)
+                self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
+                return True, valid_next_modes
+            else:
+                entry_node = self._skill_entry_node[mode]
+                self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
+                del self._skill_traj_cache[mode]
+                del self._skill_valid_next_modes[mode]
+                del self._skill_entry_node[mode]
+                return False, None
+            
         # 1. Get candidate entry nodes for skill
         candidate_entry_nodes = g.reverse_transition_nodes.get(mode, [])
         if not candidate_entry_nodes:
@@ -356,8 +380,6 @@ class CompositePRM(BasePlanner):
             return False, None # No entry nodes yet, wait
 
         # 2. Filter out failed entry nodes (both phases) + used entries (phase 1 only)
-        # - PHASE 1: must be a new entry node (deterministic skill + frozen -> identical rollout)
-        # - PHASE 2: preger unused, but allow reuse up (different inactive configs each time)
         failed_ids = self._failed_skill_entry_ids.get(mode, set())
         used_ids = self._used_skill_entry_ids.get(mode, set())
         candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids]
@@ -365,12 +387,14 @@ class CompositePRM(BasePlanner):
 
         # 3. Select entry node from candidates
         if self.config.skill_phase == 1:
+            # Phase 1: deterministic skill + frozen -> identical rollout, must be new entry
             if not unused_candidates:
                 self._exhausted_skill_modes.add(mode) # All entry nodes tried
                 print(f"[DEBUG ROLLOUT SKILL] Mode: {mode.id} | All entry nodes tried (added mode {mode.id} to exhausted)")
                 return False, None
             entry_node = random.choice(unused_candidates)
         else:
+            # Phases 2&3: prefer unused, but allow reuse (different inactive configs each time)
             if unused_candidates:
                 entry_node = random.choice(unused_candidates)
             elif candidate_entry_nodes:
@@ -403,12 +427,10 @@ class CompositePRM(BasePlanner):
             offset += dim            
         q_init = np.concatenate(parts)
 
-        # TODO implement caching of skill trajectory for phase 2
-
-        # Rollout skill
         skill_result = active_task.skill.rollout(q_init, active_task, all_joints, self.env, t0=0.0)
         skill_traj = skill_result.trajectory
 
+        # Degenerate rollout check
         # TODO check degenerate skill rollouts... need to define cases for failed rollouts (maybe only the collision..)
         dist_moved = np.linalg.norm(skill_traj[0] - skill_traj[-1])
         if dist_moved < 1e-4:
@@ -416,421 +438,371 @@ class CompositePRM(BasePlanner):
             print(f"[DEBUG SKILL WARNING] Problem with rollout in mode {mode.id}: steps={len(skill_traj)}, dist={dist_moved:.4f}")
             return False, None
             
-        # 5. Build composite trajectory (phase specific)
-        # - PHASE 1: inactive robots (frozen)
+        # 5. Compute valid next modes (active robots final position affects mode transition)
+        composite_q_final = self._compose_config(q_entry, skill_traj[-1], active_task)
+        q_final = self.env.start_pos.from_flat(composite_q_final)
+        valid_next_modes = self._compute_skill_next_modes(mode, q_final, entry_node)
+        if valid_next_modes is None:
+            return False, None
+
+        # 6. Build batch_states (phase specific, each helper returns List[List[State]] or None)
+        # PHASE 1: inactive robots (frozen)
         if self.config.skill_phase == 1:
-            composite_traj = self._build_composite_traj_frozen(q_entry, skill_traj, active_task)
-
-            # TODO DEBUG
-            print(f"[DEBUG SKILL COLL CHECK] Mode: {mode.id} | a2 frozen at: {q_entry[2:]}")
-            print(f"[DEBUG SKILL COLL CHECK] Skill traj length: {len(composite_traj)}")
-            print(f"[DEBUG SKILL COLL CHECK] Checking {len(composite_traj)} waypoints...")
-
-            # 6. Collision check (waypoints + edges)
-            for step_idx in range(len(composite_traj)):
-                q_check = self.env.start_pos.from_flat(composite_traj[step_idx])
-                if not self.env.is_collision_free(q_check, mode):
-                    # self.env.C.view(True)
-                    
-                    # TODO DEBUG
-                    print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision at step {step_idx}/{len(composite_traj)}")
-                    print(f"[DEBUG SKILL COLLISION] a1 pos: {composite_traj[step_idx][:2]}, a2 pos: {composite_traj[step_idx][2:]}")
-                    
-                    self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                    return False, None 
-                # Edge check between consecutive steps # TODO usually not done during graph build.. can be removed (but in phase 1 won't be computationally too important (single chain vs. roadmap..)?)
-                if step_idx > 0: 
-                    q_prev = self.env.start_pos.from_flat(composite_traj[step_idx - 1])
-                    if not self.env.is_edge_collision_free( # TODO check if needed (skill resolution vs. collision resolution)
-                        q_prev, q_check, mode, 
-                        resolution=self.env.collision_resolution,
-                        tolerance=self.env.collision_tolerance,
-                    ):
-                        self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                        print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision (edge)!)")
-                        return False, None
-
-            # 7. Compute valid next modes
-            q_final = self.env.start_pos.from_flat(composite_traj[-1])
-            if self.env.is_terminal_mode(mode):
-                valid_next_modes = []
-            else:
-                next_modes = self.env.get_next_modes(q_final, mode)
-                valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
-
-                if not valid_next_modes:
-                    self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                    return False, None 
-
-            # 8. Add skill points to graph
-            states = [
-                State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True) 
-                for q in composite_traj
-            ]
-            g.add_skill_path(states, valid_next_modes, entry_node)
+            batch_states = self._build_phase1_batch(q_entry, skill_traj, active_task, mode)
+            k_neighbors = 1
         
-        # 5. Build composite trajectory (phase specific)
-        # - PHASE 2: inactive robots (build roadmap: pool of same M inactive configs x N skill steps)
+        # PHASE 2: inactive robots (build roadmap: pool of same M inactive configs x N skill steps)
         elif self.config.skill_phase == 2:
-            roadmap = self._build_skill_roadmap(q_entry, skill_traj, active_task, mode)
-            
-            if roadmap is None:
-                self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                print(f"[DEBUG ROADMAP] Failed to build roadmap in mode {mode.id}")
-                return False, None
-
-            # 7. Compute valid next modes (all exit configs share same active robot position)
-            q_final = self.env.start_pos.from_flat(roadmap[-1][0][1]) # TODO (Liam) 
-            if self.env.is_terminal_mode(mode):
-                valid_next_modes = []
-            else:
-                next_modes = self.env.get_next_modes(q_final, mode)
-                valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
-                if not valid_next_modes:
-                    self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                    return False, None
-            
-            # TODO (Liam) pool_idx not needed anymore -> remove
-            # Convert to (pool_idx, State) and add to graph
-            roadmap_states = [
-                [(pool_idx, State(self.env.start_pos.from_flat(q), mode, is_skill_waypoint=True)) 
-                 for pool_idx, q in step_entries]
-                 for step_entries in roadmap
-            ]
-            g.add_skill_roadmap(roadmap_states, valid_next_modes, entry_node,
-                                k_neighbors=self.config.skill_k_neighbors)
-
-        # 5. Build composite trajectory (phase specific)
-        # - PHASE 3: inactive robots (random and incremental)
+            batch_states = self._build_phase2_batch(q_entry, skill_traj, active_task, mode)
+            k_neighbors = self.config.skill_k_neighbors
+        
+        # PHASE 3: inactive robots (random and incremental)
         elif self.config.skill_phase == 3:
-            # TODO (Liam)
-            # pass
-
-            # First-time setup: cache trajectory and valid next modes, then add first batch
-            
-            # Compute valid next modes using entry's inactive config
-            # (only the active robot's final position matters for mode transition)
-            full_q_final = q_entry.copy()
-            active_offset_tmp = 0
-            full_offset_tmp = 0
-            for r in self.env.robots:
-                dim = self.env.robot_dims[r]
-                if r in active_task.robots:
-                    full_q_final[full_offset_tmp:full_offset_tmp+dim] = skill_traj[-1][active_offset_tmp:active_offset_tmp+dim]
-                    active_offset_tmp += dim
-                full_offset_tmp += dim
-
-            q_final = self.env.start_pos.from_flat(full_q_final)
-            if self.env.is_terminal_mode(mode):
-                valid_next_modes = []
-            else:
-                next_modes = self.env.get_next_modes(q_final, mode)
-                valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
-                if not valid_next_modes:
-                    self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-                    return False, None
-
-            # Cache for all future batches
+            # First-time: cache trajectory for future incremental batches
             self._skill_traj_cache[mode] = skill_traj
             self._skill_valid_next_modes[mode] = valid_next_modes
             self._skill_entry_node[mode] = entry_node
+            batch_states = self._build_phase3_batch(mode, active_task)
+            k_neighbors = self.config.skill_k_neighbors
+        
+        # 7. Graph injection and bookkeeping
+        if not batch_states:
+            self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
+            # Phase 3: clean up cache on failure
+            if self.config.skill_phase == 3:
+                del self._skill_traj_cache[mode]
+                del self._skill_valid_next_modes[mode]
+                del self._skill_entry_node[mode]
+            return False, None
 
-            # Add first batch (and return its result)
-            return self._add_skill_batch(g, mode, active_task)
-
-        # print(f"[DEBUG ROLLOUT] Successfully added {len(states)} protected nodes into Mode {mode.id}")
-        # print(f"[DEBUG LINKED SEQUENCE] Linked {len(states)} nodes to entry_node {entry_node.id} in Mode {mode.id}")        
-        self._skill_rollout_counts[mode] = self._skill_rollout_counts.get(mode, 0) + 1
+        g.add_skill_batch(mode, batch_states, valid_next_modes, entry_node, k_neighbors=k_neighbors)
         self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
         return True, valid_next_modes
 
-    def _build_composite_traj_frozen(self, q_entry, skill_traj, active_task):
+    # PHASE 1
+    def _build_phase1_batch(self, q_entry, skill_traj, active_task, mode):
         """
-        Phase 1: Builds a composite trajectory where active robots follow the skill exactly, 
-        and inactive robots stay frozen at q_entry
+        Phase 1: single frozen chain. Active robots follow skill_traj, inactive frozen at q_entry
+        Includes config + edge collision checking (cheap)
         """
-        composite_traj = []
+        batch_states = []
+        prev_q_check = None
 
-        for step_q_active in skill_traj:
-            full_q = q_entry.copy()
-            active_offset = 0
-            full_offset = 0
-            for r in self.env.robots:
-                dim = self.env.robot_dims[r]
-                if r in active_task.robots:
-                    full_q[full_offset:full_offset+dim] = step_q_active[active_offset:active_offset+dim]
-                    active_offset += dim
-                full_offset += dim
-            composite_traj.append(full_q)
-        
-        return composite_traj
+        for k in range(len(skill_traj)):
+            full_q = self._compose_config(q_entry, skill_traj[k], active_task)
+            q_check = self.env.start_pos.from_flat(full_q)
+
+            # Collision check (waypoints)
+            if not self.env.is_collision_free(q_check, mode):
+                print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision at step {k}/{len(skill_traj)}")
+                return None
+
+            # Collision check (edges)
+            # TODO usually not done during graph build.. can be removed (but in phase 1 won't be computationally important: single chain vs. roadmap)
+            if prev_q_check is not None:
+                if not self.env.is_edge_collision_free(
+                    prev_q_check, q_check, mode,
+                    resolution=self.env.collision_resolution,
+                    tolerance=self.env.collision_tolerance,
+                ):
+                    print(f"[DEBUG SKILL COLLISION] Mode: {mode.id} | Collision (edge) at step {k}!")
+                    return None
+
+            batch_states.append([State(q_check, mode, is_skill_waypoint=True)])
+            prev_q_check = q_check
+
+        return batch_states
     
-    def _build_skill_roadmap(self, q_entry, skill_traj, active_task, mode):
+    # PHASE 2
+    def _build_phase2_batch(self, q_entry, skill_traj, active_task, mode):
         """
-        Phase 2: build a roadmap for the inactive robot through the skill segment.
-
+        Phase 2: M frozen lanes. Active robots follow skill_traj, inactive robots get M candidate
+        configs (forming frozen lanes), each collision-checked at every skill step
+ 
+        Pool[0] = entry node's inactive config (anchor lane).
+        Pool[1..M-1] = random inactive configs (unless freeze guard is active).
         """
-        # Step 1: Sample a  pool of I collision free inactive robot configs
-        # - Only sampling inactive configs (within joint limits)
-        # - Not paired yet with any skill steps, just densifying the inactive config space
-        #  
-
-        # Step 2: For each skill step k:
-        # - For active config: take skill_traj[k]
-        # - For inactive config: loop through pool I
-        # -- Combine skill_traj[k] and pool[i]
-        # -- Collision check the composite config
-        # -- Valid: store as valid node (step k, pool index i) 
-        # -- Invalid: mark as blocked at this step
-
-        # Step 3: Return valid composite configs by step
-        # -  
-
-        # raise NotImplementedError
-        
-        # TODO: Fix for single agent (didn't work because couldn't sample inactive config pool..) need to find other way to get to the inactive config
-        # Single agent guard
         inactive_robots = [r for r in self.env.robots if r not in active_task.robots]
+ 
+        # Single-agent guard (no inactive robots -> 1 lane with just active)
         if not inactive_robots:
-            roadmap = []
-            for k, step_q_active in enumerate(skill_traj):
-                # Only 1 lane -> full_q is the step_q_active
-                roadmap.append([(0, step_q_active)])
-            return roadmap
-
-        # Multi agent pool generation
-        M = self.config.skill_corridor_width
-        pool = []
-
-        # 1. Initialize the pool of inactive configs
-        # Pool[0] = entry node's inactive config
-        entry_inactive = []
-        offset = 0
-        for r in self.env.robots:
-            dim = self.env.robot_dims[r]
-            if r not in active_task.robots:
-                entry_inactive.append(q_entry[offset:offset+dim])
-            offset += dim
-        pool.append(np.concatenate(entry_inactive)) 
-
-        # TODO (Liam) find better way to deal with this
-        # Check if any inactive robot has a skill in this mode
-        # If yes: freeze them at entry config (pool[0] only), don't allow random sampling 
-        inactive_robot_has_skill = any(
-            getattr(self.env.tasks[mode.task_ids[self.env.robots.index(r)]], 'skill', None) is not None
-            for r in self.env.robots
-            if r not in active_task.robots
-            and mode.task_ids[self.env.robots.index(r)] is not None
-        )
-
-        # assert inactive_robot_has_skill == False
-
-        if not inactive_robot_has_skill:
-
-            # 2. Sampling the random pool of inactive configs 
-            # Pool[1..M-1] = random inactive configs
-            attempts = 0
-            while len(pool) < M and attempts < 20 * M:
-                attempts += 1
-                parts = []
-                for r in self.env.robots:
-                    if r not in active_task.robots:
-                        r_idx = self.env.robot_idx[r]
-                        lims = self.env.limits[:, r_idx]
-                        parts.append(np.random.uniform(lims[0], lims[1]))
-                pool.append(np.concatenate(parts))
-
-        # 3. Build the grid
-        # For each step pair each pool config with active config and collision check
-        roadmap = [] # roadmap[k] = list of (pool_idx, full_composite_flat)
-        for k, step_q_active in enumerate(skill_traj):
+            batch_states = []
+            for k in range(len(skill_traj)):
+                full_q = self._compose_config(q_entry, skill_traj[k], active_task)
+                q_check = self.env.start_pos.from_flat(full_q)
+                batch_states.append([State(q_check, mode, is_skill_waypoint=True)])
+            return batch_states
+ 
+        # 1. Build pool of inactive configs
+        entry_inactive_q = self._extract_inactive_q(q_entry, active_task)
+        pool = [entry_inactive_q] # Anchor: always include the entry config
+ 
+        # Check if we should sample more lanes or forced to stay
+        if not self._inactive_robot_has_skill(mode, active_task): 
+            M = self.config.skill_corridor_width
+            # Sample M-1 additional random inactive configs
+            for _ in range(M - 1):
+                pool.append(self._sample_random_inactive_q(active_task))
+ 
+        # 2. Test all (pool x step) combinations
+        N = len(skill_traj)
+        batch_states = []
+ 
+        for k in range(N):
             step_valid = []
-            for pool_idx, inactive_q in enumerate(pool):
-                # Compose full config: active from skill_traj[k], inactive from pool[pool_idx]
-                full_q = np.zeros_like(q_entry)
-                active_offset = 0
-                inactive_offset = 0
-                full_offset = 0
+            for inactive_q in pool:
+                full_q = self._compose_config_from_parts(skill_traj[k], inactive_q, active_task)
+                
+                # Collision check of active/inactive combination
+                q_check = self.env.start_pos.from_flat(full_q)
+                if self.env.is_collision_free(q_check, mode):
+                    step_valid.append(State(q_check, mode, is_skill_waypoint=True))
+ 
+            if not step_valid: # Roadmap needs at least one config at every stepk to be valid
+                print(f"[ROADMAP] Mode {mode.id} step {k}/{N}: 0 valid configs -> aborting")
+                return None
+ 
+            batch_states.append(step_valid)
+ 
+        return batch_states
 
-                for r in self.env.robots:
-                    dim = self.env.robot_dims[r]
-                    if r in active_task.robots:
-                        full_q[full_offset:full_offset+dim] = step_q_active[active_offset:active_offset+dim]
-                        active_offset += dim
-                    else:
-                        full_q[full_offset:full_offset+dim] = inactive_q[inactive_offset:inactive_offset+dim]
-                        inactive_offset += dim
-                    full_offset += dim
+    # PHASE 3
+    def _build_phase3_batch(self, mode, active_task):
+        """
+        Phase 3: Samples a batch of inactive configs incrementally using the cached trajectory
+        Based on chosen config, uses: 
+        - Inside: goes through N step-k and for each samples B random inactive configs
+        - Outside: samples B random inactive configs and uses them for each N step-k
+        """
+        skill_traj = self._skill_traj_cache[mode]
+        entry_node = self._skill_entry_node[mode]
+        B = self.config.skill_batch_size
+        N = len(skill_traj)
+ 
+        # Guards: single-agent OR inactive has skill -> saturate after 1 batch
+        inactive_robots = [r for r in self.env.robots if r not in active_task.robots]
+        freeze_inactive = False
+ 
+        if not inactive_robots:
+            self._saturated_skill_modes.add(mode)
+            print(f"[DEBUG P3 BATCH] Single-agent detected. Saturating mode {mode.id} after 1 batch")
+            B = 1
+        elif self._inactive_robot_has_skill(mode, active_task):
+            # self._saturated_skill_modes.add(mode)
+            freeze_inactive = True
+            print(f"[DEBUG P3 BATCH] Freeze Guard active. Saturating mode {mode.id} after 1 batch")
+            B = 1
+ 
+        # Get the entry inactive config (anchor / freeze value)
+        q_entry = entry_node.state.q.state()
+        entry_inactive_q = self._extract_inactive_q(q_entry, active_task)
+ 
+        # Build batch_states[k] = list of valid States at step k
+        if self.config.skill_batch_strategy == "outside":
+            batch_states = self._sample_skill_batch_outside(
+                skill_traj, entry_inactive_q, active_task, mode,
+                inactive_robots, freeze_inactive, B, N,
+            )
+        elif self.config.skill_batch_strategy == "inside":
+            batch_states = self._sample_skill_batch_inside(
+                skill_traj, entry_inactive_q, active_task, mode,
+                inactive_robots, freeze_inactive, B, N,
+            )
+ 
+        # Validate: every step must have at least 1 valid config
+        total_valid = sum(len(s) for s in batch_states)
+        for k in range(N):
+            if not batch_states[k]:
+                print(f"[DEBUG P3 BATCH] Mode {mode.id} | Step {k}/{N} empty (valid={total_valid}) — aborting")
+                return None
+
+        return batch_states
+
+    def _sample_skill_batch_outside(
+        self, skill_traj, entry_inactive_q, active_task, mode,
+        inactive_robots, freeze_inactive, B, N,
+    ):
+        """
+        Phase 3 OUTSIDE strategy: 
+        Pre-sample B inactive configs and apply to every step k. Creates B frozen lanes (same 
+        inactive config across all steps). Like phase 2's _build_skill_roadmap, but incremental
+        """
+        # 1. Build pool (sampling outside)
+        pool = [entry_inactive_q] # Anchor
+        if not freeze_inactive and inactive_robots:
+            for _ in range(B - 1):
+                pool.append(self._sample_random_inactive_q(active_task))
+ 
+        # 2. Test all (pool x step) combinations
+        batch_states = []
+
+        for k in range(N):
+            step_valid = []
+
+            # Build full composite configuration
+            for inactive_q in pool:
+                full_q = self._compose_config_from_parts(skill_traj[k], inactive_q, active_task)
 
                 # Collision check of active/inactive combination
                 q_check = self.env.start_pos.from_flat(full_q)
                 if self.env.is_collision_free(q_check, mode):
-                    step_valid.append((pool_idx, full_q))
+                    step_valid.append(State(q_check, mode, is_skill_waypoint=True)) # TODO (Liam) why not .append(full_q) like in _build_skill_roadmap
 
-            if len(step_valid) == 0:
-                print(f"[DEBUG ROADMAP] Mode {mode.id} | Step {k}: 0 valid configs -> aborting")
-                return None
-            
-            roadmap.append(step_valid)
+            # TODO (Liam) why no "if not step_valid:" check like in the _build_skill_roadmap?
+            # As we are incrementally adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
 
-        return roadmap
+            batch_states.append(step_valid)
+ 
+        return batch_states
 
-    def _add_skill_batch(self, g, mode, active_task):
+    def _sample_skill_batch_inside(
+        self, skill_traj, entry_inactive_q, active_task, mode,
+        inactive_robots, freeze_inactive, B, N,
+    ):
         """
-        Phase 3: Sample a batch of random inactive configs, collision-check against
-        each skill step, and add valid nodes to the graph incrementally.
+        Phase 3 INSIDE strategy: 
+        At each step k, sample B fresh random inactive configs. Every node is fully independent,
+        more diverse but larger jumps between steps.
         """
-        skill_traj = self._skill_traj_cache[mode]
-        valid_next_modes = self._skill_valid_next_modes[mode]
-        entry_node = self._skill_entry_node[mode]
-        B = self.config.skill_batch_size
-        N = len(skill_traj)
+        batch_states = []
+        
+        # 1. Iterate through the N steps
+        for k in range(N):
+            step_valid = []
 
-        # Identify inactive robots
-        inactive_robots = [r for r in self.env.robots if r not in active_task.robots]
+            # 2. Sample fresh new random config per step k
+            for _ in range(B):
+                # Determine inactive_q # TODO (Liam) this needs to be revised
+                if not inactive_robots:
+                    inactive_q = np.array([])
+                elif freeze_inactive:
+                    inactive_q = entry_inactive_q
+                else:
+                    inactive_q = self._sample_random_inactive_q(active_task)
 
-        # Extract the entry inactive config (needed for the freeze guard)
-        q_entry = entry_node.state.q.state()
-        entry_inactive_parts = []
+                # Build full composite configuration
+                full_q = self._compose_config_from_parts(
+                    skill_traj[k], inactive_q, active_task
+                )
+                
+                # Collision check of active/inactive combination
+                q_check = self.env.start_pos.from_flat(full_q)
+                if self.env.is_collision_free(q_check, mode):
+                    step_valid.append(State(q_check, mode, is_skill_waypoint=True)) # TODO (Liam) why not .append(full_q) like in _build_skill_roadmap
+
+            # TODO (Liam) why no "if not step_valid:" check like in the _build_skill_roadmap?
+            # As we are incrementally adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
+
+            batch_states.append(step_valid)
+ 
+        return batch_states
+
+    # Other helper functions
+    def _extract_inactive_q(self, q_full, active_task):
+        """
+        Extract the inactive robot's joint values from a full composite config
+        """
+        parts = []
         offset = 0
+        
         for r in self.env.robots:
             dim = self.env.robot_dims[r]
             if r not in active_task.robots:
-                entry_inactive_parts.append(q_entry[offset:offset+dim])
+                parts.append(q_full[offset:offset + dim])
             offset += dim
-        entry_inactive_q = np.concatenate(entry_inactive_parts) if entry_inactive_parts else np.array([])
-
-        # TODO (Liam) find better way to deal with this
-        # Check if any inactive robot has a skill in this mode
-        # If yes: freeze them at entry config (pool[0] only), don't allow random sampling 
-        inactive_robot_has_skill = False
-        if inactive_robots:
-            inactive_robot_has_skill = any(
-                getattr(self.env.tasks[mode.task_ids[self.env.robots.index(r)]], 'skill', None) is not None
-                for r in inactive_robots
-                if mode.task_ids[self.env.robots.index(r)] is not None
-            )
-
-        # Single agent and freeze guard saturation
-        if not inactive_robots:
-            self._saturated_skill_modes.add(mode)
-            print(f"[DEBUG P3 BATCH] Single-agent detected. Saturating mode {mode.id} after 1 batch")
-            B = 1 # No inactive robots -> we need only 1 batch and that's it
-        elif inactive_robot_has_skill:
-            self._saturated_skill_modes.add(mode)
-            print(f"[DEBUG P3 BATCH] Freeze Guard active. Saturating mode {mode.id} after 1 batch")
-            B = 1
-
-        # TODO (Liam) instead of sampling B then go through k, sampling B while going through k?
-
-        # TODO approach with B inside loop
-        # # Sampling loop
-        # batch_states = []  # batch_states[k] = list of valid State objects
         
-        # for k in range(N):
-        #     step_valid = []
-            
-        #     # Sample B configs INSIDE the time step loop
-        #     for _ in range(B):
-                
-        #         # Determine inactive_q based on guards vs true randomness
-        #         if not inactive_robots:
-        #             inactive_q = np.array([])
-        #         elif inactive_robot_has_skill:
-        #             # Freeze guard: robot is queued for a skill # TODO
-        #             inactive_q = entry_inactive_q
-        #         else:
-        #             # Sample a brand new random config at this specific time step
-        #             parts = []
-        #             for r in inactive_robots:
-        #                 r_idx = self.env.robot_idx[r]
-        #                 lims = self.env.limits[:, r_idx]
-        #                 parts.append(np.random.uniform(lims[0], lims[1]))
-        #             inactive_q = np.concatenate(parts)
+        entry_inactive_q = np.concatenate(parts) if parts else np.array([])
+        return entry_inactive_q
 
-        #         # Compose full config
-        #         full_q = np.zeros(sum(self.env.robot_dims[r] for r in self.env.robots))
-        #         active_offset = 0
-        #         inactive_offset = 0
-        #         full_offset = 0
-        #         for r in self.env.robots:
-        #             dim = self.env.robot_dims[r]
-        #             if r in active_task.robots:
-        #                 full_q[full_offset:full_offset+dim] = skill_traj[k][active_offset:active_offset+dim]
-        #                 active_offset += dim
-        #             else:
-        #                 full_q[full_offset:full_offset+dim] = inactive_q[inactive_offset:inactive_offset+dim]
-        #                 inactive_offset += dim
-        #             full_offset += dim
+    def _sample_random_inactive_q(self, active_task):
+        """
+        Sample a uniformly random config for all inactive robots (within joint limits)
+        """
+        parts = []
+        
+        for r in self.env.robots:
+            if r not in active_task.robots:
+                r_idx = self.env.robot_idx[r]
+                lims = self.env.limits[:, r_idx]
+                parts.append(np.random.uniform(lims[0], lims[1]))
 
-        #         # Collision check
-        #         q_check = self.env.start_pos.from_flat(full_q)
-        #         if self.env.is_collision_free(q_check, mode):
-        #             step_valid.append(State(q_check, mode, is_skill_waypoint=True))
+        random_inactive_q = np.concatenate(parts) if parts else np.array([])
+        return random_inactive_q
+    
+    def _inactive_robot_has_skill(self, mode, active_task):
+        """
+        Check if any INACTIVE robot has a skill queued in this mode
+        If True, that robot shouldn't be randomly sampled
+        # TODO (Liam) find better way to handle this..
+        """
+        for r in self.env.robots:
+            if r in active_task.robots:
+                continue
+            robot_idx = self.env.robots.index(r)
+            task_id = mode.task_ids[robot_idx]
+            if task_id is not None:
+                if getattr(self.env.tasks[task_id], 'skill', None) is not None:
+                    return True
+        return False
 
-        #     batch_states.append(step_valid)
+    def _compose_config(self, q_entry, skill_step_q, active_task):
+        """
+        Composes a full config: active from skill, inactive from q_entry
+        """
+        inactive_parts = []
+        offset = 0
 
-        # TODO approach with B outside
-        # 1. Pre-sample the B inactive configurations outside the loop
-        pre_sampled_inactive = []
-        if not inactive_robots:
-            pre_sampled_inactive.append(np.array([]))
-        elif inactive_robot_has_skill:
-            pre_sampled_inactive.append(entry_inactive_q)
-        else:
-            for _ in range(B):
-                parts = []
-                for r in inactive_robots:
-                    r_idx = self.env.robot_idx[r]
-                    lims = self.env.limits[:, r_idx]
-                    parts.append(np.random.uniform(lims[0], lims[1]))
-                pre_sampled_inactive.append(np.concatenate(parts))
+        for r in self.env.robots:
+            dim = self.env.robot_dims[r]
+            if r not in active_task.robots:
+                inactive_parts.append(q_entry[offset:offset+dim])
+            offset += dim
+        inactive_q = np.concatenate(inactive_parts) if inactive_parts else np.array([])
 
-        # 2. Apply these exact same B configurations across all steps
-        batch_states = []
-        for k in range(N):
-            step_valid = []
-            for inactive_q in pre_sampled_inactive:
-                
-                # Compose full config
-                full_q = np.zeros(sum(self.env.robot_dims[r] for r in self.env.robots))
-                active_offset = 0
-                inactive_offset = 0
-                full_offset = 0
-                for r in self.env.robots:
-                    dim = self.env.robot_dims[r]
-                    if r in active_task.robots:
-                        full_q[full_offset:full_offset+dim] = skill_traj[k][active_offset:active_offset+dim]
-                        active_offset += dim
-                    else:
-                        full_q[full_offset:full_offset+dim] = inactive_q[inactive_offset:inactive_offset+dim]
-                        inactive_offset += dim
-                    full_offset += dim
+        full_q = self._compose_config_from_parts(skill_step_q, inactive_q, active_task)
+        return full_q
 
-                # Collision check
-                q_check = self.env.start_pos.from_flat(full_q)
-                if self.env.is_collision_free(q_check, mode):
-                    step_valid.append(State(q_check, mode, is_skill_waypoint=True))
+    def _compose_config_from_parts(self, skill_step_q, inactive_q, active_task):
+        """
+        Composes a full joint config from separate active and inactive parts
+        """
+        full_q = np.zeros(sum(self.env.robot_dims[r] for r in self.env.robots))
 
-            batch_states.append(step_valid)
+        active_offset = 0
+        inactive_offset = 0
+        full_offset = 0
 
-        # Need at least 1 valid config at step 0 and step N-1 for this batch to be useful
-        total_valid = sum(len(s) for s in batch_states)
-        if not batch_states[0] or not batch_states[-1]:
-            print(f"[DEBUG P3 BATCH] Mode {mode.id} | Batch empty at entry/exit (valid={total_valid}) — skipping")
-            return False, None
+        for r in self.env.robots:
+            dim = self.env.robot_dims[r]
+            if r in active_task.robots:
+                full_q[full_offset:full_offset+dim] = skill_step_q[active_offset:active_offset+dim]
+                active_offset += dim
+            else:
+                full_q[full_offset:full_offset+dim] = inactive_q[inactive_offset:inactive_offset+dim]
+                inactive_offset += dim
+            full_offset += dim
+        return full_q
 
-        # Add to graph
-        g.add_skill_batch(
-            mode, batch_states, valid_next_modes, entry_node,
-            k_neighbors=self.config.skill_k_neighbors,
-        )
+    def _compute_skill_next_modes(self, mode, q_final, entry_node):
+        """
+        Compute valid next modes after skill completion
+        """
+        if self.env.is_terminal_mode(mode):
+            return []
 
-        print(f"[DEBUG P3 BATCH] Mode {mode.id} | Added {total_valid} nodes across {N} steps")
-        return True, valid_next_modes
+        next_modes = self.env.get_next_modes(q_final, mode)
+        valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
+
+        if not valid_next_modes:
+            self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
+            return None
+
+        return valid_next_modes
 
     def _mode_has_skill(self, mode: Mode) -> bool:
-        """Check if any robot's task in this mode has a skill"""
+        """
+        Check if any robot's task in this mode has a skill
+        """
         for task_id in mode.task_ids:
             if task_id is not None and getattr(self.env.tasks[task_id], 'skill', None) is not None:
                 return True
@@ -850,7 +822,7 @@ class CompositePRM(BasePlanner):
         """
         Filters the reached modes to exclude modes that are:
         1. Exhausted: no candidate entry nodes left 
-        2. Saturated: hit the max_skill_rollouts
+        2. Saturated: hit the skill_max_rollouts
         3. Rolled out this batch: already rolled out in the current batch (optional)
         """
         exclude = exclude_modes if exclude_modes is not None else set()
@@ -973,17 +945,14 @@ class CompositePRM(BasePlanner):
                 
                 if success:
                     # Mark for the rest of THIS batch
+                    self._skill_rollout_counts[mode] = self._skill_rollout_counts.get(mode, 0) + 1
                     modes_rolled_out_this_batch.add(mode)
-
-                    if self.config.skill_phase == 3:
-                        transitions += self.config.skill_batch_size 
-                    else:
-                        transitions += 1
+                    transitions += 1
 
                     # Immediate saturation check
-                    if self.config.max_skill_rollouts is not None:
-                        if self._skill_rollout_counts.get(mode, 0) >= self.config.max_skill_rollouts:
-                            print(f"[DEBUG SKILL] Reached max. rollout ({self.config.max_skill_rollouts}) in mode {mode.id} --> Saturate")
+                    if self.config.skill_max_rollouts is not None:
+                        if self._skill_rollout_counts.get(mode, 0) >= self.config.skill_max_rollouts:
+                            print(f"[DEBUG SKILL] Reached max. rollout ({self.config.skill_max_rollouts}) in mode {mode.id} --> Saturate")
                             self._saturated_skill_modes.add(mode)
 
                     if valid_next_modes:
@@ -1022,7 +991,6 @@ class CompositePRM(BasePlanner):
                 continue # Reject samples outside the informed ellipsoid
 
             # Step 4-5: collision check & compute valid next modes
-            # TODO: QUESTION get_next_modes() can be seen as the oracle (returns which modes are reachable next)?
             if self.env.is_collision_free(q, mode):
                 # Current mode is a terminal mode
                 if self.env.is_terminal_mode(mode):
@@ -1063,7 +1031,7 @@ class CompositePRM(BasePlanner):
                 # If mode validation removed this mode, skip adding the transition and update sampling set
                 if mode not in reached_modes:
                     if not reached_terminal_mode:
-                        self.sorted_reached_modes = list( # TODO Actual sampling pool, QUESTION sorted for determinism/reproducibility?
+                        self.sorted_reached_modes = list(
                             sorted(reached_modes, key=lambda m: m.id)
                         )
                         mode_subset_to_sample = self._get_valid_modes_to_sample()
@@ -1326,7 +1294,6 @@ class CompositePRM(BasePlanner):
 
         assert self.env.is_collision_free(q0, m0)
 
-        # TODO DEBUG remove
         # self.env.C.view(True)
         print("[DEBUG ENV] Limits shape:", self.env.limits.shape)
         print("[DEBUG ENV] Limits:\n", self.env.limits)
@@ -1364,11 +1331,6 @@ class CompositePRM(BasePlanner):
         cnt = 0
         while True:
             if ptc.should_terminate(cnt, time.time() - start_time):
-
-                # # TODO DEBUG remove
-                # skill_states = [s for s in path if s.is_skill_waypoint]
-                # print(f"[DEBUG OPT] New path has {len(skill_states)} skill waypoints")
-                
                 break # Loop until termination condition met
             
             # If we have solution, remove nodes outside informed ellipsoid (prune)
@@ -1407,23 +1369,6 @@ class CompositePRM(BasePlanner):
 
             # PART 2: GRAPH SEARCH (search over nodes)
             while True:
-
-                # # TODO (Liam) DEBUG remove later -> print skill mode contents before every search
-                # for m in reached_modes:
-                #     if self._mode_has_skill(m):
-                #         nodes_in_mode = graph.nodes.get(m, [])
-                #         trans_in_mode = graph.transition_nodes.get(m, [])
-                #         rev_trans_in_mode = graph.reverse_transition_nodes.get(m, [])
-                #         skill_chain = graph.skill_chain_nodes.get(m, [])
-                #         non_skill_trans = [n for n in trans_in_mode if not n.state.is_skill_waypoint]
-                #         non_skill_nodes = [n for n in nodes_in_mode if not n.state.is_skill_waypoint]
-                #         print()
-                #         print(f"[DEBUG GRAPH] Skill mode {m.id}:")
-                #         print(f"Nodes: {len(nodes_in_mode)} (non-skill: {len(non_skill_nodes)})")
-                #         print(f"Transition_nodes: {len(trans_in_mode)} (non-skill: {len(non_skill_trans)})")
-                #         print(f"Reverse_transition_nodes: {len(rev_trans_in_mode)}")
-                #         print(f"Skill_chain_nodes: {len(skill_chain)}")
-                #         print()
 
                 # TODO DBUG
                 for mode_obj in reached_modes:
@@ -1564,8 +1509,7 @@ class CompositePRM(BasePlanner):
                                     print(f"[DEBUG POST-SHORTCUT] Mode {m_id}: {len(states_in_mode)} states, {len(sw)} skill wp, {len(non_sw)} non-skill")
                                 print()
 
-                                # # TODO (Liam) DON'T COMMENT OUT! "Needed", because it removes interpolated points used during shortcutting
-                                # Remove interpolated points (just used for collision check)
+                                # Remove interpolated points used in shortcutting (just used for collision check)
                                 shortcut_path = shortcutting.remove_interpolated_nodes(
                                     shortcut_path
                                 )
@@ -1599,8 +1543,7 @@ class CompositePRM(BasePlanner):
 
                                     interpolated_path = shortcut_path
 
-                                    # Check shortcutted path (& handle mode changes)
-                                    # Update graph
+                                    # Re-seed shortcutted path back into graph
                                     current_skill_states = []
 
                                     for i in range(len(interpolated_path)):
@@ -1616,26 +1559,25 @@ class CompositePRM(BasePlanner):
                                             and interpolated_path[i].mode != interpolated_path[i + 1].mode
                                         )
 
-                                        if self._mode_has_skill(s.mode): 
-                                        # if s.is_skill_waypoint:
-                                            # SKILL MODE: don't add nodes directly to graph, use add:skill_path!
-                                            # Collect the state
+                                        if self._mode_has_skill(s.mode):
+                                            # SKILL MODE: don't add nodes directly to graph, use add_skill_batch!
                                             current_skill_states.append(s)
 
-                                            # When the skill mode ends, add the collected current_skill_states  
                                             if is_mode_boundary:
-                                                next_mode = interpolated_path[i + 1].mode
-                                                
-                                                # Handles hiding, neighbors, and whitelisting for skill nodes
-                                                graph.add_skill_path(states=current_skill_states, valid_next_modes=[next_mode])
                                                 skill_mode = current_skill_states[0].mode
-                                                print(f"[DEBUG GRAPH] Skill Mode {skill_mode} | Main Nodes: {len(graph.nodes.get(skill_mode, []))} | Hidden Skill Nodes: {len(graph.skill_chain_nodes.get(skill_mode, []))}")
-                                                
-                                                # TODO (Liam) consider removing old skill chain & transition node?
-                                                
-                                                # Reset for the next potential skill
-                                                current_skill_states = []
+                                                next_mode = interpolated_path[i + 1].mode
+                                                entry_node = self._skill_entry_node.get(skill_mode)
 
+                                                print(f"[DEBUG RESEED] Re-adding {len(current_skill_states)} skill states to mode {skill_mode.id}")
+                                                print(f"[DEBUG RESEED] Chain BEFORE: {len(graph.skill_chain_nodes.get(current_skill_states[0].mode, []))}")
+
+                                                # TODO (Liam) DON'T allow crosslaning (shortcutted path are optimized and should be isolated..?)
+                                                batch_states = [[st] for st in current_skill_states]
+                                                graph.add_skill_batch(
+                                                    skill_mode, batch_states, [next_mode],
+                                                    entry_node, k_neighbors=1, isolated=True
+                                                )
+                                                current_skill_states = []
                                         else:
                                             # NON-SKILL MODE: standard prm behaviour
                                             s.is_skill_waypoint = False # To be sure # TODO (Liam) probably not necessary..
@@ -1645,9 +1587,13 @@ class CompositePRM(BasePlanner):
                                             else:
                                                 graph.add_states([s])
 
-                                    # Edge case: if a shortcutted skill path ends exactly on the goal without a boundary trigger
+                                    # Edge case: if a shortcutted skill path ends exactly on the goal without boundary
                                     if current_skill_states:
-                                        graph.add_skill_path(states=current_skill_states, valid_next_modes=None)
+                                        batch_states = [[st] for st in current_skill_states]
+                                        graph.add_skill_batch(
+                                            current_skill_states[0].mode, batch_states,
+                                            None, k_neighbors=1, isolated=True
+                                        )
 
                         add_new_batch = True # To add more samples in next iteration
                         break # Exit inner loop
