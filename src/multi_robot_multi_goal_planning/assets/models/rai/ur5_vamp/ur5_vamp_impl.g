@@ -87,10 +87,10 @@ coll1(shoulder_pan_joint_origin)  { shape:capsule color:[1.,1.,1.,.5] size:[.08 
 coll1_1(shoulder_lift_joint)      { shape:capsule color:[1.,1.,1.,.5] size:[.16 .065] Q:"t(0 -.07 0.0) d(90 1 0 0)", contact:-2 }
 coll2(shoulder_lift_joint)        { shape:capsule color:[1.,1.,1.,.5] size:[.35 .065] Q:"t(0 .0 .2) d(0 0 1 0)", contact:-2 }
 coll3(elbow_joint_origin)         { shape:capsule color:[1.,1.,1.,.5] size:[.16 .065] Q:"t(0 .08 0.0) d(90 1 0 0)", contact:-2 }
-coll4(elbow_joint)                { shape:capsule color:[1.,1.,1.,.5] size:[.37 .06] Q:"t(0 .0 .19) d(0 0 1 0)", contact:-2 }
-coll5(wrist_1_joint)              { shape:capsule color:[1.,1.,1.,.5] size:[.1 .047] Q:"t(0 0.02 -.0) d(90 1 0 0)", contact:-2 }
-coll6(wrist_2_joint)              { shape:capsule color:[1.,1.,1.,.5] size:[.12 .05] Q:"t(0. -.0 0.02) d(90 0 0 1)", contact:-2 }
-coll7(wrist_3_joint)              { shape:capsule color:[1.,1.,1.,.5] size:[.1 .05] Q:"t(0 0.02 -.0) d(90 1 0 0)", contact:-3 }
+coll4(elbow_joint)                { shape:capsule color:[1.,1.,1.,.5] size:[.37 .041] Q:"t(0 .0 .19) d(0 0 1 0)", contact:-2 }
+coll5(wrist_1_joint)              { shape:capsule color:[1.,1.,1.,.5] size:[.1 .042] Q:"t(0 0.02 -.0) d(90 1 0 0)", contact:-2 }
+coll6(wrist_2_joint)              { shape:capsule color:[1.,1.,1.,.5] size:[.12 .04] Q:"t(0. -.0 0.02) d(90 0 0 1)", contact:-2 }
+coll7(wrist_3_joint)              { shape:capsule color:[1.,1.,1.,.5] size:[.1 .042] Q:"t(0 0.03 -.0) d(90 1 0 0)", contact:-2 }
 
 
 Edit shoulder_pan_joint: { q: 0.0 }
@@ -103,5 +103,5 @@ Edit wrist_3_joint: { q: 0.0 }
 ee_marker (wrist_3_joint) { shape:marker, size:[.05], Q:"d(-90 1 0 0) t(0 0 .26)"}
 
 #Prefix: "ur_"
-Include: <../robotiq/robotiq.g>
+Include: <../robotiq/robotiq_tight.g>
 Edit robotiq_base (wrist_3_joint) { Q:"d(90 0 0 1) d(90 0 1 0) t(-.0 -.0 .13)" }

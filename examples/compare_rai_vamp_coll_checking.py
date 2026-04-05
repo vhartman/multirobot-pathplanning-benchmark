@@ -13,7 +13,31 @@ import time
 import random
 
 
-def benchmark_collision_checking(envs, N_config=10000, N_edge=10000):
+def display_disagreements(envs, states_per_env, labels, base_port=8080):
+    """Display disagreement states in viser, one server per env on consecutive ports."""
+    import threading
+
+    threads = []
+    for i, (env, states) in enumerate(zip(envs, states_per_env)):
+        port = base_port + i
+        print(f"Launching viser for env {i} on port {port} ({len(states)} paths)")
+        t = threading.Thread(
+            target=env.display_path_viser,
+            kwargs=dict(
+                paths=states,
+                port=port,
+                step_annotations=labels,
+            ),
+            daemon=True,
+        )
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+
+def benchmark_collision_checking(envs, N_config=10000, N_edge=10000, disp=False):
     conf_type = type(envs[0].get_start_pos())
 
     def sample_next_modes(env, mode: Mode):
@@ -74,6 +98,10 @@ def benchmark_collision_checking(envs, N_config=10000, N_edge=10000):
             else:
                 failed_attemps += 1
 
+    # Disagreement states: [env_0_states, env_1_states], [labels]
+    disagree_states = [[] for _ in envs]
+    disagree_labels = []
+
     modes_for_envs = []
 
     for env in envs:
@@ -109,7 +137,11 @@ def benchmark_collision_checking(envs, N_config=10000, N_edge=10000):
             idx = random.randint(0, len(modes_for_envs[0])-1)
 
             m_rai = modes_for_envs[0][idx]
-            m_vamp = modes_for_envs[1][idx]
+            
+            for i in range(len(modes_for_envs[1])):
+                if modes_for_envs[1][i].task_ids == m_rai.task_ids:
+                    m_vamp = modes_for_envs[1][i]
+                    break
 
             q = env.sample_config_uniform_in_limits()
         
@@ -128,10 +160,19 @@ def benchmark_collision_checking(envs, N_config=10000, N_edge=10000):
             rai_config_coll_counter += rai_res
             vamp_config_coll_counter += vamp_res
 
+            if rai_res != vamp_res:
+                disagree_states[0].append(State(q, m_rai))
+                disagree_states[1].append(State(q, m_vamp))
+                disagree_labels.append(
+                    f"cfg rai={'free' if rai_res else 'coll'} vamp={'free' if vamp_res else 'coll'}"
+                )
+
         print(rai_config_coll_counter, vamp_config_coll_counter)
 
         print(f"Took on avg. {(rai_time) / N_config * 1000} ms for a rai collision check.")
         print(f"Took on avg. {(vamp_time) / N_config * 1000} ms for a vamp collision check.")
+
+        
 
     def edge_benchmark():
         is_collision_free_rai = envs[0].is_collision_free
@@ -188,15 +229,28 @@ def benchmark_collision_checking(envs, N_config=10000, N_edge=10000):
     config_benchmark()
     edge_benchmark()
 
+    if disp and any(disagree_states[0]):
+        print(f"\nFound {len(disagree_states[0])} disagreements total. Launching viser...")
+        display_disagreements(
+            envs,
+            disagree_states,
+            disagree_labels,
+            base_port=8080,
+        )
+    elif disp:
+        print("No disagreements found — nothing to display.")
+
 def main():
 
     np.random.seed(0)
     random.seed(0)
-
     env_rai = get_env_by_name("rai.ur5_box_stacking")
+    
+    np.random.seed(0)
+    random.seed(0)
     env_vampmr = get_env_by_name("vampmr.ur5_box_stacking")
 
-    benchmark_collision_checking([env_rai, env_vampmr], 1_000, 1_000)
+    benchmark_collision_checking([env_rai, env_vampmr], 10_000, 100, disp=True)
 
 
 if __name__ == "__main__":

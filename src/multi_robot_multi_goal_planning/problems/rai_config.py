@@ -3336,7 +3336,7 @@ def make_box_stacking_env(
     table = (
         C.addFrame("table")
         .setPosition([0, 0, 0.2-0.06/2])
-        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setShape(ry.ST.box, size=[3, 3, 0.06, 0.005])
         .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )

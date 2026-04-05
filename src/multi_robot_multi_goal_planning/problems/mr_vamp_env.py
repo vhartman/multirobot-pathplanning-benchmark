@@ -1301,10 +1301,10 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
         table_obj.name = "table"
         table_obj.shape = mr_planner_core.Object.Box
         table_obj.state = mr_planner_core.Object.Static
-        table_obj.x = float(table_pos[0]); table_obj.y = float(table_pos[1]); table_obj.z = float(table_pos[2]) - 0.02
+        table_obj.x = float(table_pos[0]); table_obj.y = float(table_pos[1]); table_obj.z = float(table_pos[2])
         table_obj.qw = float(table_quat[3]); table_obj.qx = float(table_quat[0])
         table_obj.qy = float(table_quat[1]); table_obj.qz = float(table_quat[2])
-        table_obj.width = 2.0; table_obj.height = 0.06; table_obj.length = 3.0
+        table_obj.width = 3.0; table_obj.height = 0.06; table_obj.length = 3.0
         self.env.add_object(table_obj)
 
         for i in range(num_robots):
