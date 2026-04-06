@@ -220,6 +220,27 @@ planner_name_to_style = {
     "eitstar_global_sampling": "--",
 }
 
+# TODO (Liam) temporary.. remove later (just to get good colours for PRM plots now)
+def get_planner_color(name, config):
+    p_cfg = next((p for p in config.get("planners", []) if p.get("name") == name), None)
+    if p_cfg:
+        p_type = p_cfg.get("type", "")
+        opts = p_cfg.get("options", {})
+        if p_type in ["prioritized", "prio"]:
+            return "#FFD61F"  # Yellow
+        if p_type == "prm":
+            phase = opts.get("skill_phase")
+            if phase == 1:
+                return "black"
+            if phase == 2:
+                return "limegreen"
+            if phase == 3:
+                return "deeppink" if opts.get("skill_batch_strategy", "outside") == "inside" else "dodgerblue"
+
+    if name not in planner_name_to_color:
+        planner_name_to_color[name] = np.random.rand(3,)
+    return planner_name_to_color[name]
+
 
 def interpolate_costs(new_timesteps, times, costs):
     # if not times or not costs or len(times) != len(costs) or not new_timesteps:
@@ -306,12 +327,13 @@ def make_cost_plots(
         lb_initial_solution_cost = sorted_solution_costs[lb_index]
         ub_initial_solution_cost = sorted_solution_costs[ub_index - 1]
 
-        if planner_name in planner_name_to_color:
-            color = planner_name_to_color[planner_name]
-        else:
-            color = np.random.rand(
-                3,
-            )
+        # if planner_name in planner_name_to_color:
+        #     color = planner_name_to_color[planner_name]
+        # else:
+        #     color = np.random.rand(
+        #         3,
+        #     )
+        color = get_planner_color(planner_name, config)
         colors[planner_name] = color
 
         plt.errorbar(
@@ -541,12 +563,13 @@ def make_success_plot(
                 first_solution_found = min(first_solution_found, i)
                 break
 
-        if planner_name in planner_name_to_color:
-            color = planner_name_to_color[planner_name]
-        else:
-            color = np.random.rand(
-                3,
-            )
+        # if planner_name in planner_name_to_color:
+        #     color = planner_name_to_color[planner_name]
+        # else:
+        #     color = np.random.rand(
+        #         3,
+        #     )
+        color = get_planner_color(planner_name, config)
 
         ls = "-"
         if planner_name in planner_name_to_style:
