@@ -57,7 +57,7 @@ class CompositePRMConfig:
     # Optimization
     try_shortcutting: bool = True
     shortcutting_mode: str = "round_robin"
-    shortcutting_iters: int = 250 #1000
+    shortcutting_iters: int = 1000 #250
     shortcutting_interpolation_resolution: float = 0.1
 
     distance_metric: str = "max_euclidean"
@@ -304,37 +304,27 @@ class CompositePRM(BasePlanner):
         # Step 2: Identify the active task (being completed) and its constraints
         active_task = self.env.get_active_task(mode, next_ids) # By comparing elementwise which task ID changed -> finished task
         constrained_robot = active_task.robots # Need to satisfy goal constraint for transition to happen
-        goal_sample = active_task.goal.sample(mode) # Draw sample from goal region
+        goal = active_task.goal.sample(mode)
 
-        # Step 3: Build the composite configuration
-        q = []
+        # Step 3: Efficiently build the configuration
+        q = self.env.sample_config_uniform_in_limits()
+
         end_idx = 0
-        for robot in self.env.robots:
-            if robot in constrained_robot: # Constrained robots
+        for i, robot in enumerate(self.env.robots):
+            if robot in constrained_robot:
+                # Overwrite the pre-sampled random config with the goal config
                 dim = self.env.robot_dims[robot]
-                q.append(goal_sample[end_idx : end_idx + dim]) # Constrained to be at sampled goal config
+                q[i] = goal[end_idx : end_idx + dim] # Constrained to be at sampled goal config
                 end_idx += dim
-            else: # Unconstrained robots
+            else:
                 # Check if this robot's task in the current mode has a skill
-                robot_idx = self.env.robots.index(robot)
-                robot_task_id = mode.task_ids[robot_idx]
-
+                robot_task_id = mode.task_ids[i]
                 if robot_task_id is not None:
                     robot_task = self.env.tasks[robot_task_id]
-
                     # Robot has upcoming skill: sample from task goal
                     # (= skill initiation config, e.g. pre_pick pose)
                     if getattr(robot_task, 'skill', None) is not None:
-                        skill_init_sample = robot_task.goal.sample(mode)
-                        q.append(skill_init_sample)
-                        continue
-
-                # Default: random within limits
-                r_idx = self.env.robot_idx[robot]
-                lims = self.env.limits[:, r_idx]
-                q.append(np.random.uniform(lims[0], lims[1])) # Free to be anywhere (within limits)
-        q = self.env.start_pos.from_list(q)
-
+                        q[i] = robot_task.goal.sample(mode)
         return q
     
     # SKILL ROLLOUT
@@ -1022,10 +1012,9 @@ class CompositePRM(BasePlanner):
 
                         # Current mode is DEAD end
                         if valid_next_modes == []:
-                            # If no valid next modes exist, mark this mode as invalid & remove from reached modes
-                            reached_modes = self.mode_validation.track_invalid_modes(
-                                mode, reached_modes
-                            )
+                            # If no valid next modes exist, add this mode as invalid and remove from reached modes
+                            self.mode_validation.propagate_invalid(mode)
+                            reached_modes = self.mode_validation.remove_invalid_modes(reached_modes)
 
                 # Step 6: handle pruned modes
                 # If mode validation removed this mode, skip adding the transition and update sampling set
