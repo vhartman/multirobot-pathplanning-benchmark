@@ -228,9 +228,9 @@ def run_ablation(
 
 DEFAULT_CONFIG = {
     "seed": 2,
-    "num_runs": 2,
-    "optimize": False,
-    "max_planning_time": 100,
+    "num_runs": 10,
+    "optimize": True,
+    "max_planning_time": 50,
     "per_agent_cost": "euclidean",
     "cost_reduction": "max",
 }
@@ -241,7 +241,7 @@ def main():
     parser.add_argument("env", help="Environment name (e.g. rai.box_stacking_two_robots)")
     
     parser.add_argument("--parallel", action="store_true")
-    parser.add_argument("--num_processes", type=int, default=2)
+    parser.add_argument("--num_processes", type=int, default=10)
 
     args = parser.parse_args()
 

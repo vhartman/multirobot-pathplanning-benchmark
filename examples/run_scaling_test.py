@@ -22,15 +22,15 @@ from multi_robot_multi_goal_planning.problems.rai_envs import rai_ur10_arm_box_s
 
 
 DEFAULT_PLANNER_CONFIGS = [
-    {"name": "rrt", "type": "birrtstar", "options": {}},
+    {"name": "rrt", "type": "birrtstar", "options": {"with_mode_validation": False}},
     {"name": "prioritized", "type": "prioritized", "options": {}},
 ]
 
 DEFAULT_CONFIG = {
     "seed": 2,
-    "num_runs": 2,
+    "num_runs": 10,
     "optimize": False,
-    "max_planning_time": 100,
+    "max_planning_time": 500,
     "per_agent_cost": "euclidean",
     "cost_reduction": "max",
 }
@@ -83,7 +83,6 @@ def run_mobile_scaling(
     base_config: dict,
     parallel: bool,
     num_processes: int,
-    double_x: bool = False,
 ):
     for num_robots in range(1, 8):
         for num_x_boxes, num_z_boxes in [[2,2], [3,2], [3,3], [4,3], [4,4], [5,4], [5,5]]:
@@ -132,7 +131,7 @@ def main():
         "--parallel", action="store_true", help="Run experiments in parallel (default: False)"
     )
     parser.add_argument(
-        "--num_processes", type=int, default=2, help="Number of parallel processes (default: 2)"
+        "--num_processes", type=int, default=10, help="Number of parallel processes (default: 2)"
     )
     parser.add_argument(
         "--mode", type=str, choices=["stacking", "mobile", "mobile_double_x"],
@@ -155,14 +154,6 @@ def main():
             base_config=base_config,
             parallel=args.parallel,
             num_processes=args.num_processes,
-            double_x=False,
-        )
-    elif args.mode == "mobile_double_x":
-        run_mobile_scaling(
-            base_config=base_config,
-            parallel=args.parallel,
-            num_processes=args.num_processes,
-            double_x=True,
         )
 
 
