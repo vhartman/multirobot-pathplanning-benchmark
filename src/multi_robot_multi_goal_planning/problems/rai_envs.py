@@ -2218,10 +2218,10 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
 
 # mobile manip
 @register([
-    ("rai.mobile_wall_small", {"num_robots": 4}),
+    ("rai.mobile_wall_small", {"num_robots": 5}),
 ])
 class rai_mobile_manip_wall(SequenceMixin, rai_env):
-    def __init__(self, num_robots=4, wall_x = 5, wall_z = 3):
+    def __init__(self, num_robots=4, wall_x = 5, wall_z = 5):
         self.C, keyframes, sequenced_keyframes = rai_config.make_mobile_manip_with_small_stones_env(num_robots, wall_x, wall_z)
 
         self.robots = [k for k in keyframes]

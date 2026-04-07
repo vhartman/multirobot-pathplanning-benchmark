@@ -6972,7 +6972,7 @@ def make_mobile_manip_with_small_stones_env(num_robots, wall_x=5, wall_z=5):
             ry.FS.positionDiff,
             [robot_prefix + ee, box],
             ry.OT.sos,
-            [1e1, 1e1, 1e0],
+            [2e1, 2e1, 1e0],
         )
         komo.addObjective(
             [1, 2],
