@@ -2215,6 +2215,71 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
+
+# mobile manip
+@register([
+    ("rai.mobile_wall_small", {"num_robots": 4}),
+])
+class rai_mobile_manip_wall(SequenceMixin, rai_env):
+    def __init__(self, num_robots=4, wall_x = 5, wall_z = 3):
+        self.C, keyframes, sequenced_keyframes = rai_config.make_mobile_manip_with_small_stones_env(num_robots, wall_x, wall_z)
+
+        self.robots = [k for k in keyframes]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+        
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for robot_prefix, box, poses in sequenced_keyframes:
+            cnt = 0
+            for t, k in zip(task_names, poses):
+                task_name = robot_prefix + t + "_" + box + "_" + str(cnt)
+                if t == "pick":
+                    ee_name = robot_prefix + "gripper"
+                    self.tasks.append(
+                        Task(
+                            task_name,
+                            [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
+                        )
+                    )
+                else:
+                    self.tasks.append(
+                        Task(
+                            task_name,
+                            [robot_prefix], SingleGoal(k), t, frames=["table", box]
+                        )
+                    )
+
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.02
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+
 @register("rai.mobile_strut")
 class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
     def __init__(self):
