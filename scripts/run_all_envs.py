@@ -5,7 +5,7 @@ import datetime
 import os
 
 representative_envs = [
-    # ("rai.simple", 2, 100),
+    ("rai.simple", 2, 100),
     # ("rai.one_agent_many_goals", 2, 100),
     # ("rai.dep_two_agents_many_goals", 2, 100),
     # ("rai.three_agent_many_goals", 2, 500),
