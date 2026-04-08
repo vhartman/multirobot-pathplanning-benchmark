@@ -3703,6 +3703,63 @@ def make_box_stacking_env(
 
         return C, keyframes, all_robots
     
+def make_isolated_box_stacking_env(num_robots=2, num_boxes_per_robot=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False):
+    C = ry.Config()
+
+    C_individual, keyframes, robot = make_box_stacking_env(1, num_boxes_per_robot, robot_types)
+    
+    grid_spacing = 3.5
+    grid_cols = 3
+
+    all_keyframes = {}
+    all_robots = []
+
+    for i in range(num_robots):
+        prefix = f"prefix_{i}_"
+        C.addConfigurationCopy(C_individual, prefix)
+
+        col = i % grid_cols
+        row = i // grid_cols
+        offset = np.array([
+            (col - 1) * grid_spacing,
+            (row - 1) * grid_spacing,
+            0,
+        ])
+
+        for f in C.getFrames():
+            if prefix in f.name:
+                pos = C_individual.getFrame(f.name[len(prefix):]).getPosition()
+                f.setPosition(pos + offset)
+
+        per_robot_keyframes = []
+        for robot, box, poses, goal in keyframes:
+            per_robot_keyframes.append((prefix + robot, prefix + box, poses, prefix + goal))
+
+        all_keyframes[prefix + robot] = per_robot_keyframes
+
+        all_robots.append(prefix + robot)
+
+    # randomize keyframe ordering: merge per-robot sequences preserving relative order within each robot
+    sequenced_keyframes = []
+
+    randomized = False
+    if randomized:
+        indices = {r: 0 for r in all_keyframes}
+        robots_remaining = list(all_keyframes.keys())
+        while robots_remaining:
+            r = random.choice(robots_remaining)
+            sequenced_keyframes.append(all_keyframes[r][indices[r]])
+            indices[r] += 1
+            if indices[r] >= len(all_keyframes[r]):
+                robots_remaining.remove(r)
+
+    else:
+        for i in range(len(per_robot_keyframes)):
+            for r in all_robots:
+                sequenced_keyframes.append(all_keyframes[r][i])
+
+    return C, sequenced_keyframes, all_robots, all_keyframes
+
 def make_pyramid_env(
     num_robots=2, num_boxes=6, mixed_robots: bool = False, view: bool = False
 ):
