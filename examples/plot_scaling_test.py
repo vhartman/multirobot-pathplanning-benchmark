@@ -208,6 +208,52 @@ def make_per_planner_plot(data: dict, secondary_label: str = "boxes"):
     return fig
 
 
+def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks"):
+    """One subplot per planner: x = num_robots, one colored line per secondary key (tasks)."""
+    planners = sorted(data.keys())
+    all_robots = sorted({r for p in data.values() for (r, _) in p})
+    all_secondary = sorted({s for p in data.values() for (_, s) in p})
+
+    task_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_secondary), 1)))
+
+    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=False)
+    if len(planners) == 1:
+        axes = [axes]
+
+    for ax, planner in zip(axes, planners):
+        for i, s in enumerate(all_secondary):
+            xs, meds, lbs, ubs = [], [], [], []
+            for r in all_robots:
+                times = data[planner].get((r, s), [])
+                med, lb, ub = _median_and_ci(times)
+                if med is None:
+                    continue
+                xs.append(r)
+                meds.append(med)
+                lbs.append(med - lb)
+                ubs.append(ub - med)
+            if not xs:
+                continue
+            ax.errorbar(
+                xs, meds,
+                yerr=[lbs, ubs],
+                label=f"{s} {secondary_label.lower().split()[-1]}",
+                color=task_colors[i],
+                linestyle="-",
+                marker="o",
+                capsize=3,
+            )
+        ax.set_xlabel("Number of robots")
+        ax.set_ylabel("Median initial solution time [s]")
+        ax.set_title(planner)
+        ax.legend(title=secondary_label, fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle(f"Scaling with number of robots (per planner)", y=1.02)
+    fig.tight_layout()
+    return fig
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["stacking", "mobile"], default="mobile")
@@ -230,6 +276,9 @@ def main():
 
     fig2 = make_per_planner_plot(data, secondary_label=secondary_label)
     fig2.savefig(os.path.join(path, "scaling_plots_per_planner.pdf"), bbox_inches="tight")
+
+    fig3 = make_per_planner_robots_plot(data, secondary_label=secondary_label)
+    fig3.savefig(os.path.join(path, "scaling_plots_per_planner_robots.pdf"), bbox_inches="tight")
 
     plt.show()
 
