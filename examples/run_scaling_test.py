@@ -198,7 +198,7 @@ def main():
             parallel=args.parallel,
             num_processes=args.num_processes,
         )
-elif args.mode == "mobile":
+    elif args.mode == "mobile":
         run_mobile_scaling(
             base_config=base_config,
             parallel=args.parallel,
