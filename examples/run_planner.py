@@ -36,6 +36,8 @@ from multi_robot_multi_goal_planning.planners import (
     EITstar,
     RecedingHorizonConfig,
     RecedingHorizonPlanner,
+    RRTSkills,
+    RRTSkillsConfig
 )
 
 from run_experiment import export_planner_data
@@ -73,6 +75,7 @@ def main():
             "aitstar",
             "eitstar",
             "short_horizon",
+            "rrt_skills"
         ],
         default="composite_prm",
         help="Planner to use (default: composite_prm)",
@@ -128,6 +131,7 @@ def main():
     parser.add_arguments(BaseITConfig, dest="it_config", prefix="it.")
     parser.add_arguments(PrioritizedPlannerConfig, dest="prioritized_config", prefix="prio.")
     parser.add_arguments(RecedingHorizonConfig, dest="horizon_config", prefix="horizon.")
+    parser.add_arguments(RRTSkillsConfig, dest="rrt_skills_config", prefix="rrts.")
 
     args = parser.parse_args()
 
@@ -186,6 +190,11 @@ def main():
     elif args.planner == "short_horizon":
         config = args.horizon_config
         planner = RecedingHorizonPlanner(env, config)
+
+    elif args.planner == "rrt_skills":
+        config = args.rrt_skills_config
+        config.distance_metric = args.distance_metric
+        planner = RRTSkills(env, config)
 
     np.random.seed(args.seed + args.run_id)
     random.seed(args.seed + args.run_id)

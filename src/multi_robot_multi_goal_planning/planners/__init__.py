@@ -9,6 +9,8 @@ from .receding_horizon_wrapper import RecedingHorizonConfig, RecedingHorizonPlan
 from .prioritized_planner import PrioritizedPlanner, PrioritizedPlannerConfig
 from .shortcutting import single_mode_shortcut, robot_mode_shortcut
 
+from .rrt_skills import RRTSkills, RRTSkillsConfig
+
 __all__ = [
     "CompositePRM",
     "CompositePRMConfig",
@@ -24,4 +26,6 @@ __all__ = [
     "PrioritizedPlannerConfig",
     "single_mode_shortcut",
     "robot_mode_shortcut",
+    "RRTSkills",
+    "RRTSkillsConfig",
 ]
