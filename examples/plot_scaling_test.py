@@ -72,7 +72,7 @@ def _median_and_ci(times):
     return med, lb, ub
 
 
-def make_scaling_plots(data: dict, secondary_label: str = "boxes"):
+def make_scaling_plots(data: dict, secondary_label: str = "boxes", log_y: bool = False):
     planners = sorted(data.keys())
     all_robots = sorted({r for p in data.values() for (r, _) in p})
     all_secondary = sorted({s for p in data.values() for (_, s) in p})
@@ -90,7 +90,7 @@ def make_scaling_plots(data: dict, secondary_label: str = "boxes"):
     linestyles = ["-", "--", "-.", ":"]
     markers = ["o", "s", "^", "D", "v", "p"]
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
 
     # --- Plot 1: initial solution time vs secondary (boxes / wall area) ---
     ax = axes[0]
@@ -158,11 +158,13 @@ def make_scaling_plots(data: dict, secondary_label: str = "boxes"):
     ax.legend(fontsize=7, ncol=2)
     ax.grid(True, alpha=0.3)
 
+    if log_y:
+        axes[0].set_yscale("log")
     fig.tight_layout()
     return fig
 
 
-def make_per_planner_plot(data: dict, secondary_label: str = "boxes"):
+def make_per_planner_plot(data: dict, secondary_label: str = "boxes", log_y: bool = False):
     """One subplot per planner: x = secondary key, one colored line per num_robots."""
     planners = sorted(data.keys())
     all_robots = sorted({r for p in data.values() for (r, _) in p})
@@ -170,7 +172,7 @@ def make_per_planner_plot(data: dict, secondary_label: str = "boxes"):
 
     robot_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_robots), 1)))
 
-    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=False)
+    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=True)
     if len(planners) == 1:
         axes = [axes]
 
@@ -202,13 +204,15 @@ def make_per_planner_plot(data: dict, secondary_label: str = "boxes"):
         ax.set_title(planner)
         ax.legend(title="Robots", fontsize=8)
         ax.grid(True, alpha=0.3)
+        if log_y:
+            ax.set_yscale("log")
 
     fig.suptitle(f"Scaling with {secondary_label.lower()} (per planner)", y=1.02)
     fig.tight_layout()
     return fig
 
 
-def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks"):
+def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks", log_y: bool = False):
     """One subplot per planner: x = num_robots, one colored line per secondary key (tasks)."""
     planners = sorted(data.keys())
     all_robots = sorted({r for p in data.values() for (r, _) in p})
@@ -216,7 +220,7 @@ def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks"):
 
     task_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_secondary), 1)))
 
-    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=False)
+    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=True)
     if len(planners) == 1:
         axes = [axes]
 
@@ -248,6 +252,8 @@ def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks"):
         ax.set_title(planner)
         ax.legend(title=secondary_label, fontsize=8)
         ax.grid(True, alpha=0.3)
+        if log_y:
+            ax.set_yscale("log")
 
     fig.suptitle(f"Scaling with number of robots (per planner)", y=1.02)
     fig.tight_layout()
@@ -258,6 +264,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["stacking", "mobile"], default="mobile")
     parser.add_argument("--path", type=str, default=None)
+    parser.add_argument("--log_y", action="store_true", help="Use logarithmic y-axis")
     args = parser.parse_args()
 
     if args.path is not None:
@@ -271,13 +278,13 @@ def main():
 
     data = load_scaling_data(path, mode=args.mode)
 
-    fig = make_scaling_plots(data, secondary_label=secondary_label)
+    fig = make_scaling_plots(data, secondary_label=secondary_label, log_y=args.log_y)
     fig.savefig(os.path.join(path, "scaling_plots.pdf"), bbox_inches="tight")
 
-    fig2 = make_per_planner_plot(data, secondary_label=secondary_label)
+    fig2 = make_per_planner_plot(data, secondary_label=secondary_label, log_y=args.log_y)
     fig2.savefig(os.path.join(path, "scaling_plots_per_planner.pdf"), bbox_inches="tight")
 
-    fig3 = make_per_planner_robots_plot(data, secondary_label=secondary_label)
+    fig3 = make_per_planner_robots_plot(data, secondary_label=secondary_label, log_y=args.log_y)
     fig3.savefig(os.path.join(path, "scaling_plots_per_planner_robots.pdf"), bbox_inches="tight")
 
     plt.show()
