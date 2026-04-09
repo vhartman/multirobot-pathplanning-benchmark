@@ -31,7 +31,7 @@ DEFAULT_PLANNER_CONFIGS = [
 
 DEFAULT_CONFIG = {
     "seed": 3,
-    "num_runs": 10,
+    "num_runs": 25,
     "optimize": False,
     "max_planning_time": 500,
     "per_agent_cost": "euclidean",
@@ -46,11 +46,16 @@ def run_stacking_scaling(
 ):
     for num_robots in range(1, 5):
         for num_boxes in range(1, 9):
-            while True:
-                np.random.seed(base_config["seed"])
-                random.seed(base_config["seed"])
+            print(f"\n=== Scaling test: {num_robots} robots, {num_boxes} boxes ===")
+            config = copy.deepcopy(base_config)
+            config["experiment_name"] = "scaling"
+            config["environment"] = f"stacking_r{num_robots}_b{num_boxes}"
 
-                print(f"\n=== Scaling test: {num_robots} robots, {num_boxes} boxes ===")
+            while True:
+                config["seed"] += 1
+
+                np.random.seed(config["seed"])
+                random.seed(config["seed"])
 
                 env = rai_ur10_arm_box_stack_env(num_robots=num_robots, num_boxes=num_boxes)
                 env.cost_reduction = base_config["cost_reduction"]
@@ -68,11 +73,6 @@ def run_stacking_scaling(
                 if goal_mode_reachable:
                     del env_tmp
                     break
-
-
-            config = copy.deepcopy(base_config)
-            config["experiment_name"] = "scaling"
-            config["environment"] = f"stacking_r{num_robots}_b{num_boxes}"
 
             planners = []
             for planner_config in config["planners"]:
@@ -104,18 +104,33 @@ def run_isolated_stacking(
 ):
     for num_robots in range(1, 8 + 1):
         for num_boxes in range(1, 5):
-            np.random.seed(base_config["seed"])
-            random.seed(base_config["seed"])
-
             print(f"\n=== Scaling test: {num_robots} robots, {num_boxes} boxes ===")
-
-            env = rai_isolated_arm_box_stack_env(num_robots=num_robots, num_boxes=num_boxes)
-            env.cost_reduction = base_config["cost_reduction"]
-            env.cost_metric = base_config["per_agent_cost"]
-
             config = copy.deepcopy(base_config)
             config["experiment_name"] = "scaling"
             config["environment"] = f"stacking_r{num_robots}_b{num_boxes}"
+
+            while True:
+                config["seed"] += 1
+
+                np.random.seed(config["seed"])
+                random.seed(config["seed"])
+
+                env = rai_isolated_arm_box_stack_env(num_robots=num_robots, num_boxes=num_boxes)
+                env.cost_reduction = base_config["cost_reduction"]
+                env.cost_metric = base_config["per_agent_cost"]
+
+                # make copy of the env, and test if we can reach the terminal mode
+                env_tmp = copy.deepcopy(env)
+                modes = compute_reachable_modes(env_tmp, max_iter=5000)
+                goal_mode_reachable = False
+                for m in modes:
+                    if env_tmp.is_terminal_mode(m):
+                        goal_mode_reachable = True
+                        break
+
+                if goal_mode_reachable:
+                    del env_tmp
+                    break
 
             planners = []
             for planner_config in config["planners"]:
