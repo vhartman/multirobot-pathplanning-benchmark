@@ -530,6 +530,7 @@ class BaseRRTConfig:
     with_mode_validation: bool = True
     transition_sampler: str = "auto"  # "joint" | "per_robot" | "gibbs" | "auto"
     transition_sampler_gibbs_threshold: int = 4  # used by "auto": switch to gibbs at this many robots
+    transition_sampler_gibbs_sweeps: int = 1  # number of full Gibbs sweeps per sample attempt
     with_noise: bool = False
     with_tree_visualization: bool = False
     
@@ -971,16 +972,20 @@ class BaseRRTstar(BasePlanner):
         self, mode: Mode, pinned: Dict[str, NDArray] = {}
     ) -> Configuration | None:
         """
-        Gibbs sampling: seed from an existing tree node, then sweep each free robot by
-        drawing a fresh candidate and accepting it via a full collision check (including
-        inter-robot). Always resamples each robot — never keeps the seed value — so the
-        distribution converges to uniform over the joint collision-free space.
+        Approximate Gibbs sampling: seed from an existing tree node, then perform
+        multiple full sweeps over free robots. Each robot draws a fresh candidate
+        and accepts via a full collision check (including inter-robot).
 
-        Caveat: a not-yet-swept robot whose seed position collides with a pinned robot
-        can cause false rejections for earlier robots in the sweep. Multiple sweeps
-        (via the outer retry loop in sample_transition_configuration) resolve this.
-
-        Returns None if any free robot exceeds its per-robot attempt budget (100).
+        NOTE: This deviates from true Gibbs sampling. Standard Gibbs loops on each
+        variable until a valid sample is found, keeping the chain in a valid state
+        after every update. Here, if a robot exhausts its per-robot budget (100
+        attempts), we keep its current (potentially invalid) position and move on.
+        This is necessary to avoid false rejections caused by not-yet-swept robots
+        whose seed positions collide with the newly pinned robots. The consequence
+        is that intermediate states within a sweep can be invalid, which breaks the
+        theoretical convergence guarantee. In practice this is resolved over multiple
+        sweeps: the first sweep is approximate, subsequent sweeps are genuine Gibbs
+        steps since all robots have been resampled at least once.
         """
         seed = self._get_seed_for_mode(mode)
 
@@ -992,22 +997,32 @@ class BaseRRTstar(BasePlanner):
             i = self.env.robots.index(robot)
             q[i] = values
 
-        for i, robot in enumerate(self.env.robots):
-            if robot in pinned:
-                continue
-            lims = self.env.limits[:, self.env.robot_idx[robot]]
-            for _ in range(100):
-                q[i] = np.random.uniform(lims[0], lims[1])
-                if self.env.is_collision_free(q, mode):
-                    break
-            else:
-                return None
+        for _ in range(self.config.transition_sampler_gibbs_sweeps):
+            for i, robot in enumerate(self.env.robots):
+                if robot in pinned:
+                    continue
+                lims = self.env.limits[:, self.env.robot_idx[robot]]
+                for _ in range(10):
+                    q[i] = np.random.uniform(lims[0], lims[1])
+                    if self.env.is_collision_free(q, mode):
+                        break
+                # no early return on failure — robot j may be causing false rejections
+                # for robot i; continue sweeping and let subsequent sweeps resolve it
 
-        return q
+        if self.env.is_collision_free(q, mode):
+            return q
+        return None
 
     def _sample_collision_free(
         self, mode: Mode, pinned: Dict[str, NDArray] = {}
     ) -> Configuration | None:
+        # TODO: caching opportunity — every is_collision_free hit inside the per-robot
+        # and Gibbs samplers already produces a valid config, not just the final one.
+        # A per-mode cache (Dict[Mode, deque[Configuration]]) could store these and be
+        # consumed here first. On consumption, overwrite pinned slots with current goal
+        # values and re-validate cheaply. Unpinned calls skip the overwrite.
+        # Cost: one copy per cache push; benefit: fewer full sampling rounds, especially
+        # for high robot counts. Needs care around goal resampling (GoalRegion vs point).
         sampler = self._resolve_sampler()
         if sampler == "joint":
             return self._sample_collision_free_joint(mode, pinned)
@@ -1054,6 +1069,7 @@ class BaseRRTstar(BasePlanner):
 
             q = self._sample_collision_free(mode, pinned)
             if q is not None:
+                # self.env.show(False)
                 return q
 
             failed_attempts += 1
