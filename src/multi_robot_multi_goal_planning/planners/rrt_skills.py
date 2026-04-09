@@ -160,6 +160,7 @@ class Node:
         self.parent = parent
         self.children: List['Node'] = []
         self.cost: float = 0.0
+        self.cost_to_parent: float = 0.0
 
         # Flags for skills and transitions
         self.is_skill_waypoint: bool = False
@@ -171,7 +172,8 @@ class Node:
 # TODO [o] how to do preallocation? allocate and then double?
 # TODO [x] init the multi modal tree
 # TODO [ ] figure out how to add a new subtree and transition seeding at mode boundary
-# TODO [o] add root to multi modal tree? optional?
+# TODO [x] add root to multi modal tree? optional?
+# TODO [ ] import batch_config_cost batch_config_dist or access with self.env?
 
 class Subtree:
     """
@@ -197,6 +199,13 @@ class Subtree:
         self.batch_q[self.size] = node.state.q.state()
         self.nodes.append(node)
         self.size += 1
+
+    def get_near(self):
+        """
+        Returns (index, dist) for all nodes within radius
+        """
+        pass
+
 class MultiModalTree:
     """
     Collection of subtrees, one per mode
@@ -226,13 +235,12 @@ class MultiModalTree:
 # TODO [ ] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
 # TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
 # TODO [ ] differentiate between goal bias and transition bias?
-# TODO [ ] check in PRM transition cost=0.0?
+# TODO [x] check in PRM transition cost=0.0?
 # TODO [ ] in _check_transitions add skill completion check  
 # TODO [x] in _steer use config_cost(), restpecting distance_metric 
-# TODO [ ] in _check_transitions always create and insert seed node (even if mode already reached)
-# TODO [ ] in _initialize_planner add early return if self.tree.root is not None (not duplicated start mode/node) if plan() called again?
-# TODO [ ] in RRTSkills call the BasePlanner.__init__?
-
+# TODO [x] in _check_transitions always create and insert seed node (even if mode already reached)
+# TODO [x] in _initialize_planner add early return if self.tree.root is not None (not duplicated start mode/node) if plan() called again?
+# TODO [ ] add debug prints in the planning loop
 
 # TODO [ ] in _steer add skills -> call skill.step()
 # TODO [ ] add rewiring (RRT*)
@@ -246,7 +254,6 @@ class RRTSkills(BasePlanner):
     - Bidirectional search (optional)
     """
     def __init__(self, env: BaseProblem, config: RRTSkillsConfig):
-        # super().__init__(env)
         self.env = env
         self.config = config
         self.tree = MultiModalTree(env)
@@ -284,11 +291,19 @@ class RRTSkills(BasePlanner):
             state_new = self._steer(n_near, q_target, mode)
 
             if state_new and self._validate(state_new, n_near):
-                n_new = Node(state_new, parent=n_near)
+                if self.config.use_rrt_star:
+                    # RRT*: find best parent from near set
+                    parent, cost, cost_to_parent = self._find_best_parent()
+                else:
+                    # RRT: parent is n_near
+                    parent = n_near
+                    cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
+                    cost = n_near.cost + cost_to_parent
 
-                # Cost calculation
-                n_new.cost = n_near.cost + self.env.config_cost(n_near.state.q, n_new.state.q)
-
+                # Create and add new node
+                n_new = Node(state_new, parent=parent)
+                n_new.cost = cost
+                n_new.cost_to_parent = cost_to_parent
                 self._add_node(n_new, mode)
 
                 # 5. Check transitions and termination
@@ -304,9 +319,9 @@ class RRTSkills(BasePlanner):
 
                 self._check_transitions(n_new)
 
-                # # RRT* rewire
-                # if self.config.use_rrt_star:
-                #     self._rewire(n_new, mode) # TODO
+                # RRT*: rewire
+                if self.config.use_rrt_star:
+                    self._rewire(n_new, mode) # TODO
                 
                 # # BRRT*
                 # if self.config.is_bidirectional:
@@ -338,6 +353,10 @@ class RRTSkills(BasePlanner):
         start_node.cost = 0.0
         self.tree.root = start_node
         self.tree.subtrees[start_mode].add_node(start_node)
+
+        # RRT*
+        if self.config.use_rrt_star:
+            self._set_gamma_rrt_star()
 
     def _sample_mode(self) -> Mode:
         """
@@ -456,15 +475,34 @@ class RRTSkills(BasePlanner):
         return path[::-1]
 
     # TODO RRT*
+    def _set_gamma_rrt_star(self):
+        """
+        RRT*:
+        """
+        raise NotImplementedError
+
+    def _compute_rewiring_radius(self):
+        """
+        RRT*: shrinking ball radius
+        """
+        raise NotImplementedError
+
+    def _find_best_parent(self):
+        """
+        RRT*: find the lowest-cost parent from the near set
+        """
+        # return best_parent, best_cost, best_cost_to_parent
+        raise NotImplementedError
+
     def _rewire(self):
         """
-        RRT* rewire neighbors if n_new provides cheaper path
+        RRT*: rewire neighbors if n_new provides cheaper path
         """
         raise NotImplementedError
     
-    def _update_costs(self):
+    def _propagate_cost_improvement(self):
         """
-        RRT* propagate cost changes down the tree after rewiring
+        RRT*: propagate cost changes down the tree after rewiring
         """
         raise NotImplementedError
 
