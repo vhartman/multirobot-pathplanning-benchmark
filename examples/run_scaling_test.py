@@ -25,11 +25,12 @@ from multi_robot_multi_goal_planning.problems.rai_envs import rai_ur10_arm_box_s
 
 DEFAULT_PLANNER_CONFIGS = [
     {"name": "rrt", "type": "birrtstar", "options": {"with_mode_validation": False}},
+    {"name": "ait", "type": "aitstar", "options": {"with_mode_validation": False}},
     {"name": "prioritized", "type": "prioritized", "options": {}},
 ]
 
 DEFAULT_CONFIG = {
-    "seed": 2,
+    "seed": 3,
     "num_runs": 10,
     "optimize": False,
     "max_planning_time": 500,
@@ -102,7 +103,7 @@ def run_isolated_stacking(
     num_processes: int,
 ):
     for num_robots in range(1, 8 + 1):
-        for num_boxes in range(4, 5):
+        for num_boxes in range(1, 5):
             np.random.seed(base_config["seed"])
             random.seed(base_config["seed"])
 
