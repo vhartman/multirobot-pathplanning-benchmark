@@ -172,6 +172,7 @@ class Node:
 # TODO [x] init the multi modal tree
 # TODO [ ] figure out how to add a new subtree and transition seeding at mode boundary
 # TODO [o] add root to multi modal tree? optional?
+
 class Subtree:
     """
     Manages nodes and vectorized data for a specific mode
@@ -222,15 +223,21 @@ class MultiModalTree:
         idx = np.argmin(dists)
         return subtree.nodes[idx], float(dists[idx])
 
-# TODO [ ] add different mode sampling strategies like PRM (for now uniform)
-# TODO [ ] add reached_terminal_mode in _sample_transition_config like PRM?
+# TODO [ ] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
+# TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
 # TODO [ ] differentiate between goal bias and transition bias?
 # TODO [ ] check in PRM transition cost=0.0?
-# TODO [ ] add skill completion check in _check_transitions 
+# TODO [ ] in _check_transitions add skill completion check  
+# TODO [x] in _steer use config_cost(), restpecting distance_metric 
+# TODO [ ] in _check_transitions always create and insert seed node (even if mode already reached)
+# TODO [ ] in _initialize_planner add early return if self.tree.root is not None (not duplicated start mode/node) if plan() called again?
+# TODO [ ] in RRTSkills call the BasePlanner.__init__?
 
-# TODO [ ] add skills -> in _steer call skill.step()
+
+# TODO [ ] in _steer add skills -> call skill.step()
 # TODO [ ] add rewiring (RRT*)
 # TODO [ ] add bidirectional (BRRT*)
+
 class RRTSkills(BasePlanner):
     """
     RRT planner:
@@ -278,7 +285,6 @@ class RRTSkills(BasePlanner):
 
             if state_new and self._validate(state_new, n_near):
                 n_new = Node(state_new, parent=n_near)
-                self._add_node(n_new, mode)
 
                 # Cost calculation
                 n_new.cost = n_near.cost + self.env.config_cost(n_near.state.q, n_new.state.q)
@@ -287,7 +293,11 @@ class RRTSkills(BasePlanner):
 
                 # 5. Check transitions and termination
                 if self.env.done(n_new.state.q, mode):
-                    self.solution_node = n_new
+                    if self.solution_node is None or n_new.cost < self.solution_node.cost:
+                        # Better solution
+                        self.solution_node = n_new
+                        costs.append(self.solution_node.cost)
+                        times.append(time.time() - self.start_time)
                     
                     if not optimize:
                         break
@@ -302,11 +312,6 @@ class RRTSkills(BasePlanner):
                 # if self.config.is_bidirectional:
                 #     pass # TODO
 
-            # Record progress
-            if self.solution_node is not None:
-                costs.append(self.solution_node.cost)
-                times.append(time.time() - self.start_time)
-
         # Extract path and info
         path = self._extract_path(self.solution_node) if self.solution_node else None
         info = {
@@ -320,6 +325,9 @@ class RRTSkills(BasePlanner):
         """
         Setup start node and initial mode
         """
+        if self.tree.root is not None:
+            return # Already initialized
+        
         # Mode
         start_mode = self.env.get_start_mode()
         self.reached_modes.append(start_mode)
@@ -378,15 +386,16 @@ class RRTSkills(BasePlanner):
         - Normal mode: linear interpolation towards q_target
         - Skill mode: call skill.step() # TODO
         """
-        q_near = n_near.state.q.state()
-        q_t = q_target.state()
+        q_near_vec = n_near.state.q.state() # .state() returns NDArray
+        q_target_vec = q_target.state()
 
-        dist = np.linalg.norm(q_t - q_near)
+        # dist = np.linalg.norm(q_target_vec - q_near_vec)
+        dist = self.env.config_cost(n_near.state.q, q_target)
         if dist < 1e-6:
             return None
         
         step = min(dist, self.config.step_size)
-        q_new_vec = q_near + step * (q_t - q_near) / dist
+        q_new_vec = q_near_vec + step * (q_target_vec - q_near_vec) / dist
         
         q_new = self.env.get_start_pos().from_flat(q_new_vec)
         return State(q_new, mode)
@@ -422,16 +431,18 @@ class RRTSkills(BasePlanner):
             valid_next_modes = self.mode_validation.get_valid_modes(n_new.state.mode, list(next_modes))
         
             for next_mode in valid_next_modes:
+                # Register mode if new
                 if next_mode not in self.reached_modes:
                     self.reached_modes.append(next_mode)
                     self.tree.add_subtree(next_mode)
 
-                    # Seed next mode with a transition node
-                    seed_state = State(n_new.state.q, next_mode)
-                    seed_node = Node(seed_state, parent=n_new)
-                    seed_node.cost = n_new.cost # TODO 
-                    self.tree.subtrees[next_mode].add_node(seed_node)
-                    n_new.children.append(seed_node)
+                # Seed next mode with a transition node (always -> alternative entries provide different cost paths)
+                seed_state = State(n_new.state.q, next_mode)
+                seed_node = Node(seed_state, parent=n_new)
+                seed_node.cost = n_new.cost 
+
+                self.tree.subtrees[next_mode].add_node(seed_node)
+                n_new.children.append(seed_node)
 
     def _extract_path(self, node: Node) -> List[State]:
         """
