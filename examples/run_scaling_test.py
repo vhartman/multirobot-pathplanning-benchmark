@@ -10,6 +10,8 @@ from dataclasses import asdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from multi_robot_multi_goal_planning.problems.util import compute_reachable_modes
+
 from run_experiment import (
     setup_planner,
     run_experiment,
@@ -43,14 +45,29 @@ def run_stacking_scaling(
 ):
     for num_robots in range(1, 5):
         for num_boxes in range(1, 9):
-            np.random.seed(base_config["seed"])
-            random.seed(base_config["seed"])
+            while True:
+                np.random.seed(base_config["seed"])
+                random.seed(base_config["seed"])
 
-            print(f"\n=== Scaling test: {num_robots} robots, {num_boxes} boxes ===")
+                print(f"\n=== Scaling test: {num_robots} robots, {num_boxes} boxes ===")
 
-            env = rai_ur10_arm_box_stack_env(num_robots=num_robots, num_boxes=num_boxes)
-            env.cost_reduction = base_config["cost_reduction"]
-            env.cost_metric = base_config["per_agent_cost"]
+                env = rai_ur10_arm_box_stack_env(num_robots=num_robots, num_boxes=num_boxes)
+                env.cost_reduction = base_config["cost_reduction"]
+                env.cost_metric = base_config["per_agent_cost"]
+
+                # make copy of the env, and test if we can reach the terminal mode
+                env_tmp = copy.deepcopy(env)
+                modes = compute_reachable_modes(env_tmp)
+                goal_mode_reachable = False
+                for m in modes:
+                    if env_tmp.is_terminal_mode(m):
+                        goal_mode_reachable = True
+                        break
+
+                if goal_mode_reachable:
+                    del env_tmp
+                    break
+
 
             config = copy.deepcopy(base_config)
             config["experiment_name"] = "scaling"
@@ -177,8 +194,8 @@ def main():
         "--num_processes", type=int, default=10, help="Number of parallel processes (default: 2)"
     )
     parser.add_argument(
-        "--mode", type=str, choices=["stacking", "mobile", "mobile_double_x"],
-        default="mobile", help="Which scaling mode to run (default: mobile)"
+        "--mode", type=str, choices=["stacking", "mobile", "isolated_stacking"],
+        default="stacking", help="Which scaling mode to run (default: mobile)"
     )
 
     args = parser.parse_args()
