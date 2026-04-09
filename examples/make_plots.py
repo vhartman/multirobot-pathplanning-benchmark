@@ -582,7 +582,7 @@ def make_success_plot(
         else:
             plt.legend()
     plt.grid(which="both", axis="both", ls="--")
-    plt.ylabel("Success [%]")
+    plt.ylabel("Success [\%]")
     plt.xlabel("Computation Time [s]")
 
     if save:
@@ -664,7 +664,21 @@ def main():
     parser.add_argument(
         "--limited_max_time", type=float, default=None, help="Max time for the plot"
     )
+    plot_group = parser.add_mutually_exclusive_group()
+    plot_group.add_argument(
+        "--cost_only",
+        action="store_true",
+        help="Only generate the cost plot",
+    )
+    plot_group.add_argument(
+        "--success_only",
+        action="store_true",
+        help="Only generate the success plot",
+    )
     args = parser.parse_args()
+
+    make_cost = not args.success_only
+    make_success = not args.cost_only
 
     if args.use_paper_style:
         plt.style.use("./examples/paper_2.mplstyle")
@@ -698,33 +712,35 @@ def main():
                 all_experiment_data = load_data_from_folder(subfolder)
                 config = load_config_from_folder(subfolder)
 
-                make_cost_plots(
-                    all_experiment_data,
-                    config,
-                    args.save,
-                    subfolder,
-                    save_as_png=args.png,
-                    add_legend=args.legend,
-                    baseline_cost=args.baseline_cost,
-                    add_info=args.info,
-                    final_max_time=args.limited_max_time,
-                    logscale=args.logscale,
-                    yticks=yticks,
-                    add_title=not args.dont_add_title
-                )
-                plt.close()
+                if make_cost:
+                    make_cost_plots(
+                        all_experiment_data,
+                        config,
+                        args.save,
+                        subfolder,
+                        save_as_png=args.png,
+                        add_legend=args.legend,
+                        baseline_cost=args.baseline_cost,
+                        add_info=args.info,
+                        final_max_time=args.limited_max_time,
+                        logscale=args.logscale,
+                        yticks=yticks,
+                        add_title=not args.dont_add_title
+                    )
+                    plt.close()
 
-                make_success_plot(
-                    all_experiment_data,
-                    config,
-                    args.save,
-                    subfolder,
-                    save_as_png=args.png,
-                    add_legend=args.legend,
-                    add_info=args.info,
-                    final_max_time=args.limited_max_time,
-                )
-                plt.close()
+                if make_success:
+                    make_success_plot(
+                        all_experiment_data,
+                        config,
+                        args.save,
+                        subfolder,
+                        save_as_png=args.png,
+                        add_legend=args.legend,
+                        add_info=args.info,
+                        final_max_time=args.limited_max_time,
+                    )
+                    plt.close()
 
             except:
                 print("failed plotting.")
@@ -733,30 +749,32 @@ def main():
         all_experiment_data = load_data_from_folder(foldername)
         config = load_config_from_folder(foldername)
 
-        make_cost_plots(
-            all_experiment_data,
-            config,
-            args.save,
-            foldername,
-            save_as_png=args.png,
-            add_legend=args.legend,
-            baseline_cost=args.baseline_cost,
-            add_info=args.info,
-            final_max_time=args.limited_max_time,
-            logscale=args.logscale,
-            yticks=yticks,
-            add_title=not args.dont_add_title
-        )
-        make_success_plot(
-            all_experiment_data,
-            config,
-            args.save,
-            foldername,
-            save_as_png=args.png,
-            add_legend=args.legend,
-            add_info=args.info,
-            final_max_time=args.limited_max_time,
-        )
+        if make_cost:
+            make_cost_plots(
+                all_experiment_data,
+                config,
+                args.save,
+                foldername,
+                save_as_png=args.png,
+                add_legend=args.legend,
+                baseline_cost=args.baseline_cost,
+                add_info=args.info,
+                final_max_time=args.limited_max_time,
+                logscale=args.logscale,
+                yticks=yticks,
+                add_title=not args.dont_add_title
+            )
+        if make_success:
+            make_success_plot(
+                all_experiment_data,
+                config,
+                args.save,
+                foldername,
+                save_as_png=args.png,
+                add_legend=args.legend,
+                add_info=args.info,
+                final_max_time=args.limited_max_time,
+            )
 
         if not args.no_display:
             plt.show()
