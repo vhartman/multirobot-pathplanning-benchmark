@@ -125,6 +125,8 @@ from multi_robot_multi_goal_planning.problems.configuration import (
     Configuration,
     batch_config_dist,
 )
+from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
+from multi_robot_multi_goal_planning.planners import shortcutting
 from .baseplanner import BasePlanner
 from .mode_validation import ModeValidation
 from .termination_conditions import PlannerTerminationCondition
@@ -151,6 +153,12 @@ class RRTSkillsConfig:
 
     # BRRT*
     is_bidirectional: bool = False
+
+    # Shortcutting (post-processing)
+    try_shortcutting: bool = True
+    shortcutting_mode: str = "round_robin"
+    shortcutting_iters: int = 1000 #250
+    shortcutting_interpolation_resolution: float = 0.1
 
 class Node:
     """
@@ -277,6 +285,10 @@ class RRTSkills(BasePlanner):
         self.start_time = 0.0
         self.solution_node: Node = None
 
+        # Post-shortcut best path
+        self.best_path: List[State] = None
+        self.best_cost: float = float("inf")
+
     def plan(self, ptc: PlannerTerminationCondition, optimize: bool = False):
         """
         Main planning loop
@@ -324,24 +336,49 @@ class RRTSkills(BasePlanner):
                     if self.solution_node is None or n_new.cost < self.solution_node.cost:
                         # Better solution
                         self.solution_node = n_new
-                        costs.append(self.solution_node.cost)
+                        
+                        # Raw RRT path
+                        raw_path = self._extract_path(self.solution_node)
+                        raw_cost = path_cost(raw_path, self.env.batch_config_cost)
+                        costs.append(raw_cost)
                         times.append(time.time() - self.start_time)
+
+                        if raw_cost < self.best_cost:
+                            self.best_path = raw_path
+                            self.best_cost = raw_cost
+                        
+                        # Shortcutting
+                        if self.config.try_shortcutting:
+                            shortcut_path = self._shortcut(raw_path)
+                            shortcut_cost = path_cost(shortcut_path, self.env.batch_config_cost)
+                            if shortcut_cost <= self.best_cost:
+                                print(f"[RRT SHORTCUT] {self.best_cost:.3f} -> {shortcut_cost:.3f}")
+                                self.best_path = shortcut_path
+                                self.best_cost = shortcut_cost
+                                costs.append(shortcut_cost)
+                                times.append(time.time() - self.start_time)
                     
                     if not optimize:
                         break
 
                 self._check_transitions(n_new)
 
-                # RRT*: rewire
-                if self.config.use_rrt_star:
-                    self._rewire(n_new, mode) # TODO
+                # # RRT*: rewire
+                # if self.config.use_rrt_star:
+                #     self._rewire(n_new, mode) # TODO
                 
                 # # BRRT*
                 # if self.config.is_bidirectional:
                 #     pass # TODO
 
         # Extract path and info
-        path = self._extract_path(self.solution_node) if self.solution_node else None
+        if self.best_path is not None:
+            path = self.best_path
+        elif self.solution_node is not None:
+            path = self._extract_path(self.solution_node)
+        else: 
+            path = None
+
         info = {
             "costs": costs, 
             "times": times, 
@@ -481,6 +518,22 @@ class RRTSkills(BasePlanner):
 
                 self.tree.subtrees[next_mode].add_node(seed_node)
                 n_new.children.append(seed_node)
+
+    def _shortcut(self, path: List[State]) -> List[State]:
+        """
+        Post-processes a path with robot_mode_shortcut
+        Skill segments are protected
+        """
+        shortcut_path, _ = shortcutting.robot_mode_shortcut(
+            self.env, path, self.config.shortcutting_iters,
+            resolution=self.env.collision_resolution,
+            tolerance=self.env.collision_tolerance,
+            robot_choice=self.config.shortcutting_mode,
+            interpolation_resolution=self.config.shortcutting_interpolation_resolution
+        )
+
+        # Remove interpolated points used in shortcutting (collision check)
+        return shortcutting.remove_interpolated_nodes(shortcut_path)
 
     def _extract_path(self, node: Node) -> List[State]:
         """
