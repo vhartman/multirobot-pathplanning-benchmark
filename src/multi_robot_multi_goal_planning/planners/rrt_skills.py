@@ -247,9 +247,15 @@ class MultiModalTree:
 # TODO [x] in _check_transitions always create and insert seed node (even if mode already reached)
 # TODO [x] in _initialize_planner add early return if self.tree.root is not None (not duplicated start mode/node) if plan() called again?
 # TODO [ ] add debug prints in the planning loop
+# TODO [ ] shortcutting
+
+# TODO [ ] update _add_node to set skill flag
+# TODO [ ] update _check_transitions when skill is done
+# TODO [ ] differentiate between linear steer and skill steer
+# TODO [ ] 
 
 # TODO [ ] in _steer add skills -> call skill.step()
-# TODO [ ] add rewiring (RRT*)
+# TODO [o] add rewiring (RRT*)
 # TODO [ ] compute gamma (RRT*)
 # TODO [ ] add bidirectional (BRRT*)
 
@@ -426,6 +432,12 @@ class RRTSkills(BasePlanner):
         q_new = self.env.get_start_pos().from_flat(q_new_vec)
         return State(q_new, mode)
 
+    def _linear_steer(self): # TODO
+        """
+        Standard linear interpolation towards q_target
+        """
+        raise NotImplementedError
+
     def _validate(self, state_new: State, n_near: Node) -> bool:
         """
         Collision checking for configurations and edges
@@ -481,6 +493,25 @@ class RRTSkills(BasePlanner):
             curr = curr.parent
         return path[::-1]
 
+    # TODO SKILLS
+    def _skill_steer(self): # TODO
+        """
+        Advance skill by one step?
+        """
+        raise NotImplementedError
+
+    def _mode_has_skill(self, mode: Mode) -> bool: # TODO
+        """
+        Check if any robot's taks in this mode has a skill
+        """
+        raise NotImplementedError
+    
+    def _get_active_skill_task(self, mode: Mode): # TODO
+        """
+        Returns the task with a skill in this mode or None 
+        """
+        raise NotImplementedError
+    
     # TODO RRT*
     def _set_gamma_rrt_star(self): # TODO
         """
