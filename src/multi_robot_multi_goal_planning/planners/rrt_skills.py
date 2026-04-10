@@ -111,6 +111,7 @@ REUSABLE?
 
 import numpy as np
 import random
+import math
 import time
 from typing import Tuple, List, Dict, Optional, Any
 from dataclasses import dataclass
@@ -173,7 +174,7 @@ class Node:
 # TODO [x] init the multi modal tree
 # TODO [ ] figure out how to add a new subtree and transition seeding at mode boundary
 # TODO [x] add root to multi modal tree? optional?
-# TODO [ ] import batch_config_cost batch_config_dist or access with self.env?
+# TODO [x] import batch_config_cost batch_config_dist or access with self.env?
 
 class Subtree:
     """
@@ -200,11 +201,16 @@ class Subtree:
         self.nodes.append(node)
         self.size += 1
 
-    def get_near(self):
+    def get_near(self, q: Configuration, radius: float, metric: str = "max_euclidean"):
         """
         Returns (index, dist) for all nodes within radius
         """
-        pass
+        if self.size == 0:
+            return []
+        
+        dists = batch_config_dist(q, self.batch_q[:self.size], metric)
+        indices = np.where(dists < radius)[0]
+        return [(int(i), float(dists[i])) for i in indices]
 
 class MultiModalTree:
     """
@@ -244,6 +250,7 @@ class MultiModalTree:
 
 # TODO [ ] in _steer add skills -> call skill.step()
 # TODO [ ] add rewiring (RRT*)
+# TODO [ ] compute gamma (RRT*)
 # TODO [ ] add bidirectional (BRRT*)
 
 class RRTSkills(BasePlanner):
@@ -475,35 +482,83 @@ class RRTSkills(BasePlanner):
         return path[::-1]
 
     # TODO RRT*
-    def _set_gamma_rrt_star(self):
+    def _set_gamma_rrt_star(self): # TODO
         """
-        RRT*:
+        RRT*: asymptotic optimality constant
+        
+        gamma_rrtstar = (2(1+1/d))^(1/d) * (mu(X_free)/zeta_d)^(1/d)
+        d: dimensionality of state space
+        mu(X_free): Lebesque measure (volume) of obstacle-free search space
+        zeta: volume of unit ball in d-dimensional space
         """
-        raise NotImplementedError
+        # TODO where to best define self.d?
+        self.d = sum(self.env.robot_dims.values())
 
-    def _compute_rewiring_radius(self):
+        zeta_d = math.pi ** (self.d / 2) / (math.gamma(self.d / 2 + 1))
+        mu_Xfree = ... # TODO
+
+        gamma_rrt_star = (2 * (1 + 1 / self.d)) ** (1 / self.d) * (mu_Xfree / zeta_d) ** (1 / self.d)
+        raise gamma_rrt_star
+
+    def _compute_rewiring_radius(self, n: int): # TODO
         """
         RRT*: shrinking ball radius
-        """
-        raise NotImplementedError
 
-    def _find_best_parent(self):
+        r_n = min(gamma_rrtstar * (logn/n)^(1/d), eta)
+        n: number of nodes in tree
+        d: dimensionality of state space
+        gamma_rrtstar: asymptotic optimality constant
+        eta: step size
+        """
+        # TODO where to best define self.d?
+        self.d = sum(self.env.robot_dims.values())
+
+        r_n = min(
+            self._set_gamma_rrt_star * (np.log(n) / n) ** (1 / self.d), 
+            self.config.step_size
+        )
+        return r_n
+
+    def _find_best_parent(self): # TODO
         """
         RRT*: find the lowest-cost parent from the near set
         """
+        # Init best_variables
+        # Get set of near nodes from subtree
+        # Iterate through set
+        # - Get/compute cost for candidate (candidate.cost + dist) 
+        # - If cost lower -> collision check & update best_variables
+        # Return best_variables
+        
         # return best_parent, best_cost, best_cost_to_parent
         raise NotImplementedError
 
-    def _rewire(self):
+    def _rewire(self): # TODO
         """
         RRT*: rewire neighbors if n_new provides cheaper path
         """
+        # _compute_rewiring_radius()
+        # Get set of newar nodes from subtree
+        # Iterate through set
+        # - Skip (continue) if n_near is n_new.parent or if n_near is n_new or if n_near is skill waypoint
+        # - cost to check: n_new.cost + distance(n_new -> n_near)
+        # if that cost < n_near.cost AND collision free edge -> rewire:
+        # - Detach old parent: remove n_near from n_near.parent.children 
+        # - Set new parent: n_near.parent = n_new
+        # - Update also children of n_new, costs.. AND propagate cost!
+        #  
         raise NotImplementedError
     
-    def _propagate_cost_improvement(self):
+    def _propagate_cost_improvement(self): # TODO
         """
         RRT*: propagate cost changes down the tree after rewiring
         """
+        # Get children of the node -> stack them in list
+        # Iterate through list -> better while loop
+        # while stack:
+        # - pop -> child -> update cost of child (parent cost + cost to parent)
+        # - extend stack with children of that child
+        #
         raise NotImplementedError
 
     # TODO BRRT*
