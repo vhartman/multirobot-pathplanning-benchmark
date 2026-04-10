@@ -534,6 +534,9 @@ class BaseRRTConfig:
     # joint and gibbs per mode. Switch when gibbs becomes cheaper, switch back if not.
     # Warmup: minimum joint attempts before evaluating (avoids premature switching).
     transition_sampler_auto_warmup: int = 20
+    # probability of using home pose for free robots instead of the normal sampler
+    # quick experiment to gauge value of per-robot ellipsoid sampling idea
+    p_home_bias: float = 0.0
     with_noise: bool = False
     with_tree_visualization: bool = False
     
@@ -1069,6 +1072,22 @@ class BaseRRTstar(BasePlanner):
         # values and re-validate cheaply. Unpinned calls skip the overwrite.
         # Cost: one copy per cache push; benefit: fewer full sampling rounds, especially
         # for high robot counts. Needs care around goal resampling (GoalRegion vs point).
+
+        if self.config.p_home_bias > 0 and np.random.random() < self.config.p_home_bias:
+            next_ids = self.mode_validation.get_valid_next_ids(mode)
+            task = self.env.get_active_task(mode, next_ids)
+            active_robots = set(task.robots)
+            home = self.env.get_start_pos()
+            q = self.env.sample_config_uniform_in_limits()
+            for i, robot in enumerate(self.env.robots):
+                if robot in pinned:
+                    q[i] = pinned[robot]
+                elif robot not in active_robots:
+                    q[i] = home[i].copy()  # truly free robots go to home pose
+                # active robots keep their random value from sample_config_uniform_in_limits
+            if self.env.is_collision_free(q, mode):
+                return q
+
         sampler = self._resolve_sampler(mode)
         if sampler == "joint":
             q = self._sample_collision_free_joint(mode, pinned)
