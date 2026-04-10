@@ -529,8 +529,11 @@ class BaseRRTConfig:
     horizon_length: int = 1
     with_mode_validation: bool = True
     transition_sampler: str = "auto"  # "joint" | "per_robot" | "gibbs" | "auto"
-    transition_sampler_gibbs_threshold: int = 4  # used by "auto": switch to gibbs at this many robots
     transition_sampler_gibbs_sweeps: int = 1  # number of full Gibbs sweeps per sample attempt
+    # "auto" mode: switch from joint to gibbs per mode when rejection rate exceeds this
+    # after a minimum number of attempts
+    transition_sampler_auto_rejection_threshold: float = 0.95
+    transition_sampler_auto_warmup: int = 500
     with_noise: bool = False
     with_tree_visualization: bool = False
     
@@ -579,6 +582,10 @@ class BaseRRTstar(BasePlanner):
         )
         self.check = set()
         self.blacklist_mode = set()
+        self.home_pose_attempted_modes: set = set()
+        # per-mode joint sampling stats for "auto" sampler: (attempts, successes)
+        self._joint_sampling_stats: Dict[Mode, List[int]] = {}
+        self._gibbs_modes: set = set()  # modes that have been switched to gibbs
 
     def add_tree(
         self,
@@ -915,12 +922,28 @@ class BaseRRTstar(BasePlanner):
         self, mode: Mode, pinned: Dict[str, NDArray] = {}
     ) -> Configuration | None:
         """Joint rejection sampling: sample all free robots at once, accept if collision-free."""
+
+        if not hasattr(self, "sample_attempts"):
+            self.sample_attempts = 0
+
+        if not hasattr(self, "succ_samples"):
+            self.succ_samples = 0
+
+        if not hasattr(self, "coll_checks"):
+            self.coll_checks = 0
+
+        self.sample_attempts += 1
+
         q = self.env.sample_config_uniform_in_limits()
         for robot, values in pinned.items():
             i = self.env.robots.index(robot)
             q[i] = values
+
+        self.coll_checks += 1
         if self.env.is_collision_free(q, mode):
+            self.succ_samples += 1
             return q
+        
         return None
 
     def _sample_collision_free_per_robot(
@@ -954,9 +977,11 @@ class BaseRRTstar(BasePlanner):
             return q
         return None
 
-    def _resolve_sampler(self) -> str:
+    def _resolve_sampler(self, mode: Mode | None = None) -> str:
         if self.config.transition_sampler == "auto":
-            return "gibbs" if len(self.env.robots) >= self.config.transition_sampler_gibbs_threshold else "joint"
+            if mode is not None and mode in self._gibbs_modes:
+                return "gibbs"
+            return "joint"
         return self.config.transition_sampler
 
     def _get_seed_for_mode(self, mode: Mode) -> Configuration:
@@ -989,6 +1014,17 @@ class BaseRRTstar(BasePlanner):
         """
         seed = self._get_seed_for_mode(mode)
 
+        if not hasattr(self, "sample_attempts"):
+            self.sample_attempts = 0
+
+        if not hasattr(self, "succ_samples"):
+            self.succ_samples = 0
+
+        if not hasattr(self, "coll_checks"):
+            self.coll_checks = 0
+
+        self.sample_attempts += 1
+
         q = self.env.sample_config_uniform_in_limits()
         for i in range(len(self.env.robots)):
             q[i] = seed[i].copy()
@@ -1002,15 +1038,19 @@ class BaseRRTstar(BasePlanner):
                 if robot in pinned:
                     continue
                 lims = self.env.limits[:, self.env.robot_idx[robot]]
-                for _ in range(10):
+                for _ in range(100):
                     q[i] = np.random.uniform(lims[0], lims[1])
+                    self.coll_checks += 1
                     if self.env.is_collision_free(q, mode):
                         break
                 # no early return on failure — robot j may be causing false rejections
                 # for robot i; continue sweeping and let subsequent sweeps resolve it
 
+        self.coll_checks += 1
         if self.env.is_collision_free(q, mode):
+            self.succ_samples += 1
             return q
+
         return None
 
     def _sample_collision_free(
@@ -1023,9 +1063,18 @@ class BaseRRTstar(BasePlanner):
         # values and re-validate cheaply. Unpinned calls skip the overwrite.
         # Cost: one copy per cache push; benefit: fewer full sampling rounds, especially
         # for high robot counts. Needs care around goal resampling (GoalRegion vs point).
-        sampler = self._resolve_sampler()
+        sampler = self._resolve_sampler(mode)
         if sampler == "joint":
-            return self._sample_collision_free_joint(mode, pinned)
+            q = self._sample_collision_free_joint(mode, pinned)
+            if self.config.transition_sampler == "auto":
+                stats = self._joint_sampling_stats.setdefault(mode, [0, 0])
+                stats[0] += 1  # attempts
+                if q is not None:
+                    stats[1] += 1  # successes
+                if (stats[0] >= self.config.transition_sampler_auto_warmup and
+                        (stats[1] / stats[0]) < (1 - self.config.transition_sampler_auto_rejection_threshold)):
+                    self._gibbs_modes.add(mode)
+            return q
         elif sampler == "gibbs":
             return self._sample_collision_free_gibbs(mode, pinned)
         else:
@@ -1066,6 +1115,16 @@ class BaseRRTstar(BasePlanner):
                 dim = self.env.robot_dims[robot]
                 pinned[robot] = goal[end_idx : end_idx + dim]
                 end_idx += dim
+
+            # Try home pose + pinned once per mode across all calls
+            if mode not in self.home_pose_attempted_modes:
+                self.home_pose_attempted_modes.add(mode)
+                home = self.env.get_start_pos()
+                q = self.env.sample_config_uniform_in_limits()
+                for i, robot in enumerate(self.env.robots):
+                    q[i] = pinned[robot] if robot in pinned else home[i].copy()
+                if self.env.is_collision_free(q, mode):
+                    return q
 
             q = self._sample_collision_free(mode, pinned)
             if q is not None:
@@ -1657,7 +1716,7 @@ class BaseRRTstar(BasePlanner):
             return self.sample_informed(mode)
 
         # uniform sampling
-        sampler = self._resolve_sampler()
+        sampler = self._resolve_sampler(mode)
         if sampler == "gibbs":
             return self._sample_collision_free_gibbs(mode)
         elif sampler == "per_robot":
