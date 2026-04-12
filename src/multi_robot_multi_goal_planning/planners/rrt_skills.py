@@ -152,8 +152,8 @@ class RRTSkillsConfig:
     with_noise: bool = False
 
     # RRT*
-    use_rrt_star: bool = True
-    # use_rrt_star: bool = False
+    # use_rrt_star: bool = True
+    use_rrt_star: bool = False
     rewire_radius: float = 0.5 #
     gamma_rrtstar: float = 0.0
 
@@ -230,6 +230,17 @@ class Subtree:
         indices = np.where(dists < radius)[0]
         return [(int(i), float(dists[i])) for i in indices]
 
+    def get_nearest(self, q_target: Configuration, metric: str = "max_euclidean") -> Tuple[Node, float]:
+        """
+        Finds the nearest node in this subtree to the target configuration
+        """
+        if self.size == 0:
+            return None, float('inf')
+        
+        dists = batch_config_dist(q_target, self.batch_q[:self.size], metric)
+        idx = np.argmin(dists)
+        return self.nodes[idx], float(dists[idx])
+    
 class MultiModalTree:
     """
     Collection of subtrees, one per mode
@@ -247,15 +258,6 @@ class MultiModalTree:
         if mode not in self.subtrees:
             self.subtrees[mode] = Subtree(mode, self.robot_dims)
 
-    def get_nearest(self, mode: Mode, q_target: Configuration, metric: str = "max_euclidean") -> Tuple[Node, float]:
-        """
-        Finds the nearest node in the specified mode's subtree
-        """
-        subtree = self.subtrees.get(mode)
-        dists = batch_config_dist(q_target, subtree.batch_q[:subtree.size], metric)
-        idx = np.argmin(dists)
-        return subtree.nodes[idx], float(dists[idx])
-
 # RRT
 # TODO [o] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
 # TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
@@ -269,6 +271,12 @@ class MultiModalTree:
 # TODO [ ] in _steer add clippling of q_new to self.env.limits?
 # TODO [ ] in plan when creating/adding a new node, we only update parents, what about children? 
 # TODO [ ] in _sample_transition_config consider taking random node from tree for inactive instead of random sampling? (seems like tree struggles to grow with random sampling in certain envs -> yes, random sampling is the idea, but doesn't seem to be efficient -> maybe something else is the problem..)
+# TODO [ ] in _check_transitions, config check really needed or if config ok in modeA -> ok in modeB?
+
+# Improvements
+# TODO [ ] blacklisting
+# TODO [ ] exploit transition nodes already found, just like _sample_goal is doing
+# TODO [ ] add informed sampling
 
 # RRT-connect
 # TODO [ ] in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached
@@ -329,69 +337,49 @@ class RRTSkills(BasePlanner):
             q_target = self._sample_target(mode)
 
             # 3. Nearest neighbor
-            n_near, dist = self.tree.get_nearest(mode, q_target, self.config.distance_metric)
+            n_near, dist = self.tree.subtrees[mode].get_nearest(mode, q_target, self.config.distance_metric)
 
             # 4. Steer (linear or skill based)
             state_new = self._steer(n_near, q_target, mode)
 
-            if state_new and self._validate(state_new, n_near):
-                if self.config.use_rrt_star:
-                    # RRT*: find best parent from near set
-                    parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode)
-                else:
-                    # RRT: parent is n_near
-                    parent = n_near
-                    cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
-                    cost = n_near.cost + cost_to_parent
+            is_valid = state_new is not None and self._validate(state_new, n_near)
 
-                # Create and add new node
-                n_new = Node(state_new, parent=parent)
-                n_new.cost = cost
-                n_new.cost_to_parent = cost_to_parent
-                self._add_node(n_new, mode)
+            if is_valid:
+                n_new = self._create_and_add_node(state_new, n_near, mode)                                                   
+                self._check_transitions(n_new)                                                                               
 
-                # 5. Check termination and update solution
+                # RRT* rewire                                                                                                
+                if self.config.use_rrt_star:                                                                                 
+                    self._rewire(n_new, mode)                                                                                
+                    if iterations % 100 == 0 and self.solution_node and self.solution_node.cost < self.best_cost - 1e-9:
+                        self.best_path = self._extract_path(self.solution_node)                                              
+                        self.best_cost = path_cost(self.best_path, self.env.batch_config_cost)                               
+                        costs.append(self.best_cost)
+                        times.append(time.time() - self.start_time)                                        
+                                                                                                                            
                 if self.env.done(n_new.state.q, mode):
-                    if self.solution_node is None or n_new.cost < self.solution_node.cost:
-                        # Better solution
-                        self.solution_node = n_new
-                        
-                        # Raw RRT path
-                        raw_path = self._extract_path(self.solution_node)
-                        raw_cost = path_cost(raw_path, self.env.batch_config_cost)
-                        costs.append(raw_cost)
-                        times.append(time.time() - self.start_time)
+                    print(f"[DONE] self.env.done() is TRUE")
+                    if self.solution_node is None or n_new.cost < self.solution_node.cost:                                   
+                        self.solution_node = n_new                                                                           
+                        self.best_path = self._extract_path(n_new)                                                           
+                        self.best_cost = path_cost(self.best_path, self.env.batch_config_cost)
+                        print(f"[SOLUTION] best cost: {self.best_cost}")
+                        costs.append(self.best_cost)
+                        times.append(time.time() - self.start_time)                                        
 
-                        # Update solution
-                        if raw_cost < self.best_cost:
-                            self.best_path = raw_path
-                            self.best_cost = raw_cost
-                        
-                        # Shortcutting
-                        if self.config.try_shortcutting:
-                            shortcut_path = self._shortcut(raw_path)
-                            shortcut_cost = path_cost(shortcut_path, self.env.batch_config_cost)
-                            # Update solution 
-                            if shortcut_cost <= self.best_cost:
-                                print(f"[RRT SHORTCUT] {self.best_cost:.3f} -> {shortcut_cost:.3f}")
-                                self.best_path = shortcut_path
-                                self.best_cost = shortcut_cost
-                                costs.append(shortcut_cost)
-                                times.append(time.time() - self.start_time)
-                    
                     if not optimize:
                         break # Stop after first solution
                 
-                # 6. Check transitions to new modes
-                self._check_transitions(n_new)
-
-                # # RRT*: rewire
-                # if self.config.use_rrt_star:
-                #     self._rewire(n_new, mode) # TODO
-                
-                # # BRRT*
-                # if self.config.is_bidirectional:
-                #     pass # TODO
+        # Single terminal shortcut
+        if self.config.try_shortcutting and self.best_path is not None:
+            sc = self._shortcut(self.best_path)
+            sc_cost = path_cost(sc, self.env.batch_config_cost)
+            if sc_cost < self.best_cost:
+                print(f"[RRT FINAL SHORTCUT] {self.best_cost:.3f} -> {sc_cost:.3f}")
+                self.best_path = sc
+                self.best_cost = sc_cost
+                costs.append(sc_cost)
+                times.append(time.time() - self.start_time)
 
         # Extract path and info
         if self.best_path is not None:
@@ -475,7 +463,10 @@ class RRTSkills(BasePlanner):
         Samples a configuration that satisfies the transition of the current mode 
         """
         max_attempts = 1000
+        iters = 0
+
         for _ in range(max_attempts):
+            iters += 1
             # Get task that needs to be completed to switch mode
             next_task_ids = self.mode_validation.get_valid_next_ids(mode)
             if not next_task_ids and not self.env.is_terminal_mode(mode):
@@ -511,8 +502,10 @@ class RRTSkills(BasePlanner):
 
             # Validate that the constrained config is collision-free in current mode
             if self.env.is_collision_free(q, mode):
+                # print(f"[TRANSITION SAMPLING] done at {iters} iterations")
                 return q
             
+        print(f"[TRANSITION SAMPLING] failed at {iters} iterations")
         return None
     
     def _steer(self, n_near: Node, q_target: Configuration, mode: Mode) -> Optional[State]:
@@ -558,12 +551,26 @@ class RRTSkills(BasePlanner):
         
         return True
 
-    def _add_node(self, n_new: Node, mode: Mode):
+    def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode) -> Node:
         """
-        Inserts node into tree and update bookkeeping
+        Handles node creation and addition, including RRT* parent optimization
         """
+        if self.config.use_rrt_star:
+            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode)
+        else:
+            parent = n_near
+            cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
+            cost = n_near.cost + cost_to_parent
+
+        # Create
+        n_new = Node(state_new, parent=parent)
+        n_new.cost = cost
+        n_new.cost_to_parent = cost_to_parent
+
+        # Add
         self.tree.subtrees[mode].add_node(n_new)
         n_new.parent.children.append(n_new)
+        return n_new
 
     def _check_transitions(self, n_new: Node):
         """
