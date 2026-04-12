@@ -541,7 +541,8 @@ class BaseRRTConfig:
     with_tree_visualization: bool = False
     
     # BidirectionalRRTstar
-    transition_nodes: int = 50
+    transition_nodes: int = 10
+    p_reseed_transition: float = 0.01
     birrtstar_version: int = 2
     stepsize: float = 0
 
