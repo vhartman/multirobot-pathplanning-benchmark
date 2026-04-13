@@ -592,6 +592,22 @@ class BaseRRTstar(BasePlanner):
         # gibbs: [total_checks, successful_calls]
         self._joint_sampling_stats: Dict[Mode, List[int]] = {}
         self._gibbs_sampling_stats: Dict[Mode, List[int]] = {}
+        # timing instrumentation
+        self._sampling_time: float = 0.0
+        self._edge_check_time_success: float = 0.0
+        self._edge_check_time_failure: float = 0.0
+
+    def _timed_edge_collision_free(
+        self, q1: "Configuration", q2: "Configuration", mode: "Mode"
+    ) -> bool:
+        t0 = time.perf_counter()
+        result = self.env.is_edge_collision_free(q1, q2, mode)
+        dt = time.perf_counter() - t0
+        if result:
+            self._edge_check_time_success += dt
+        else:
+            self._edge_check_time_failure += dt
+        return result
 
     def add_tree(
         self,
@@ -1422,7 +1438,7 @@ class BaseRRTstar(BasePlanner):
             ]
             for idx in sorted_indices:
                 node = self.trees[mode].subtree.get(node_indices[idx].item())
-                if self.env.is_edge_collision_free(node.state.q, n_new.state.q, mode):
+                if self._timed_edge_collision_free(node.state.q, n_new.state.q, mode):
                     c_min = c_new_tensor[idx]
                     c_min_to_parent = batch_cost[idx]  # Update minimum cost
                     n_min = node  # Update parent node
@@ -1479,7 +1495,7 @@ class BaseRRTstar(BasePlanner):
                     n_new.state.mode == n_near.state.mode
                     or n_new.state.mode == n_near.state.mode.prev_mode
                 ):
-                    if self.env.is_edge_collision_free(
+                    if self._timed_edge_collision_free(
                         n_new.state.q, n_near.state.q, mode
                     ):
                         if n_near.parent is not None:
@@ -1731,16 +1747,21 @@ class BaseRRTstar(BasePlanner):
         Returns:
             Configuration: Configuration obtained by a sampling strategy based on preset probabilities and operational conditions.
         """
+        _t0 = time.perf_counter()
 
         if np.random.uniform(0, 1) < self.config.p_goal:
             # goal sampling
-            return self._sample_goal(
+            result = self._sample_goal(
                 mode, self.transition_node_ids, self.trees[mode].order
             )
+            self._sampling_time += time.perf_counter() - _t0
+            return result
 
         if self.config.informed_sampling and self.operation.init_sol:
             # informed_sampling
-            return self.sample_informed(mode)
+            result = self.sample_informed(mode)
+            self._sampling_time += time.perf_counter() - _t0
+            return result
 
         # uniform sampling
         sampler = self._resolve_sampler(mode)
@@ -1750,10 +1771,15 @@ class BaseRRTstar(BasePlanner):
                 stats = self._gibbs_sampling_stats.setdefault(mode, [0, 0])
                 stats[0] += n_checks
                 stats[1] += q is not None
+            self._sampling_time += time.perf_counter() - _t0
             return q
         elif sampler == "per_robot":
-            return self._sample_collision_free_per_robot(mode)
-        return self._sample_uniform(mode)
+            result = self._sample_collision_free_per_robot(mode)
+            self._sampling_time += time.perf_counter() - _t0
+            return result
+        result = self._sample_uniform(mode)
+        self._sampling_time += time.perf_counter() - _t0
+        return result
 
     def find_lb_transition_node(self, shortcutting_bool: bool = True) -> None:
         """

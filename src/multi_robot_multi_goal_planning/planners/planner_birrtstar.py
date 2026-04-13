@@ -424,7 +424,7 @@ class BidirectionalRRTstar(BaseRRTstar):
 
             if self.env.is_collision_free(
                 state_new.q, active_mode
-            ) and self.env.is_edge_collision_free(
+            ) and self._timed_edge_collision_free(
                 n_nearest.state.q, state_new.q, active_mode
             ):
                 n_new = Node(state_new, self.operation)

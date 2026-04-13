@@ -368,6 +368,153 @@ def make_per_robot_path_length_plot(
     return fig
 
 
+def load_timing_data(path: str, mode: str = "stacking") -> dict:
+    """
+    Loads timing.csv files written by run_experiment for RRT-based planners.
+
+    Returns:
+        data[planner_name][(num_robots, secondary_key)] = list of (sampling_time, edge_success_time, edge_failure_time)
+    """
+    if mode == "stacking":
+        pattern = re.compile(r"(\d{8}_\d{6})_scaling_stacking_r(\d+)_b(\d+)")
+        def extract_key(m):
+            return int(m.group(2)), int(m.group(3)) * 2
+    elif mode == "mobile":
+        pattern = re.compile(r"(\d{8}_\d{6})_scaling_mobile_r(\d+)_x(\d+)_z(\d+)")
+        def extract_key(m):
+            return int(m.group(2)), int(m.group(3)) * int(m.group(4)) * 2
+    else:
+        raise ValueError(f"Unknown mode: {mode!r}")
+
+    latest: dict = {}
+    for entry in os.listdir(path):
+        m = pattern.match(entry)
+        if m:
+            ts = m.group(1)
+            key = extract_key(m)
+            if key not in latest or ts > latest[key][0]:
+                latest[key] = (ts, entry)
+
+    data = defaultdict(lambda: defaultdict(list))
+
+    for key, (_, folder) in sorted(latest.items()):
+        exp_dir = os.path.join(path, folder)
+        if not os.path.isdir(exp_dir):
+            continue
+        for planner_name in os.listdir(exp_dir):
+            timing_file = os.path.join(exp_dir, planner_name, "timing.csv")
+            if not os.path.isfile(timing_file):
+                continue
+            with open(timing_file) as f:
+                f.readline()  # skip header
+                for line in f:
+                    parts = line.strip().split(",")
+                    if len(parts) != 4:
+                        continue
+                    _, s, es, ef = parts
+                    data[planner_name][key].append((float(s), float(es), float(ef)))
+
+    return dict(data)
+
+
+def _timing_plot(
+    timing_data: dict,
+    secondary_label: str,
+    absolute: bool,
+    log_y: bool,
+):
+    """Shared implementation for fraction and absolute timing plots."""
+    planners = sorted(timing_data.keys())
+    if not planners:
+        return None
+
+    all_robots = sorted({r for p in timing_data.values() for (r, _) in p})
+    all_secondary = sorted({s for p in timing_data.values() for (_, s) in p})
+
+    secondary_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_secondary), 1)))
+    metric_styles = ["-", "--", ":"]
+    metric_markers = ["o", "s", "^"]
+    metric_labels = ["sampling", "edge (free)", "edge (blocked)"]
+
+    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=True)
+    if len(planners) == 1:
+        axes = [axes]
+
+    for ax, planner in zip(axes, planners):
+        pdata = timing_data[planner]
+
+        for ci, s in enumerate(all_secondary):
+            for mi, metric_idx in enumerate([0, 1, 2]):
+                xs, ys = [], []
+                for r in all_robots:
+                    triples = pdata.get((r, s), [])
+                    if not triples:
+                        continue
+                    if absolute:
+                        vals = [t[metric_idx] for t in triples]
+                    else:
+                        totals = [sum(t) for t in triples]
+                        vals = [
+                            t[metric_idx] / tot if tot > 0 else 0.0
+                            for t, tot in zip(triples, totals)
+                        ]
+                    xs.append(r)
+                    ys.append(np.median(vals))
+
+                if not xs:
+                    continue
+
+                label = (
+                    f"{secondary_label.split()[-1]}={s}, {metric_labels[mi]}"
+                    if ci == 0 or mi == 0
+                    else None
+                )
+                # encode secondary key by color, metric by linestyle
+                ax.plot(
+                    xs, ys,
+                    color=secondary_colors[ci],
+                    linestyle=metric_styles[mi],
+                    marker=metric_markers[mi],
+                    label=f"t={s}, {metric_labels[mi]}",
+                    markersize=4,
+                )
+
+        ax.set_xlabel("Number of robots")
+        ax.set_ylabel(
+            "Median time [s]" if absolute else "Fraction of tracked time"
+        )
+        ax.set_title(planner)
+        ax.legend(fontsize=6, ncol=2)
+        ax.grid(True, alpha=0.3)
+        if not absolute:
+            ax.set_ylim(0, 1)
+        if log_y:
+            ax.set_yscale("log")
+
+    title = (
+        "Absolute time: sampling vs edge collision checking"
+        if absolute
+        else "Fraction of time: sampling vs edge collision checking"
+    )
+    fig.suptitle(title, y=1.02)
+    fig.tight_layout()
+    return fig
+
+
+def make_timing_breakdown_plot(
+    timing_data: dict, secondary_label: str = "tasks", log_y: bool = False
+):
+    """Fraction of tracked time per component, split by number of tasks."""
+    return _timing_plot(timing_data, secondary_label, absolute=False, log_y=log_y)
+
+
+def make_timing_absolute_plot(
+    timing_data: dict, secondary_label: str = "tasks", log_y: bool = False
+):
+    """Absolute median time per component, split by number of tasks."""
+    return _timing_plot(timing_data, secondary_label, absolute=True, log_y=log_y)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["stacking", "mobile"], default="mobile")
@@ -398,6 +545,16 @@ def main():
     path_length_data = load_per_robot_path_lengths(path, mode=args.mode)
     fig4 = make_per_robot_path_length_plot(path_length_data, secondary_label=secondary_label, log_y=args.log_y)
     fig4.savefig(os.path.join(path, "scaling_plots_per_robot_path_lengths.pdf"), bbox_inches="tight")
+
+    timing_data = load_timing_data(path, mode=args.mode)
+    if timing_data:
+        fig5 = make_timing_breakdown_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y)
+        if fig5 is not None:
+            fig5.savefig(os.path.join(path, "scaling_plots_timing_fraction.pdf"), bbox_inches="tight")
+
+        fig6 = make_timing_absolute_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y)
+        if fig6 is not None:
+            fig6.savefig(os.path.join(path, "scaling_plots_timing_absolute.pdf"), bbox_inches="tight")
 
     plt.show()
 

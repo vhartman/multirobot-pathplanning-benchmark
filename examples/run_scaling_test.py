@@ -24,14 +24,15 @@ from multi_robot_multi_goal_planning.problems.rai_envs import rai_ur10_arm_box_s
 
 
 DEFAULT_PLANNER_CONFIGS = [
-    {"name": "rrt", "type": "birrtstar", "options": {"with_mode_validation": False}},
-    {"name": "ait", "type": "aitstar", "options": {"with_mode_validation": False}},
-    {"name": "prioritized", "type": "prioritized", "options": {}},
+    # {"name": "rrt", "type": "birrtstar", "options": {"with_mode_validation": False, "transition_sampler": "gibbs"}},
+    {"name": "rrt_old", "type": "birrtstar", "options": {"with_mode_validation": False, "transition_sampler": "joint"}},
+    # {"name": "ait", "type": "aitstar", "options": {"with_mode_validation": False}},
+    # {"name": "prioritized", "type": "prioritized", "options": {}},
 ]
 
 DEFAULT_CONFIG = {
     "seed": 3,
-    "num_runs": 25,
+    "num_runs": 2,
     "optimize": False,
     "max_planning_time": 500,
     "per_agent_cost": "euclidean",
@@ -213,7 +214,6 @@ def main():
         "--mode", type=str, choices=["stacking", "mobile", "isolated_stacking"],
         default="stacking", help="Which scaling mode to run (default: mobile)"
     )
-
     args = parser.parse_args()
 
     base_config = copy.deepcopy(DEFAULT_CONFIG)
