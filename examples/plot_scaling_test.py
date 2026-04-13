@@ -260,6 +260,114 @@ def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks", log
     return fig
 
 
+def load_per_robot_path_lengths(path: str, mode: str = "stacking") -> dict:
+    """
+    For each scaling experiment folder, load path_0.json (first found solution) from
+    every run and compute per-robot path lengths.
+
+    Returns:
+        data[(num_robots, secondary_key)][planner_name] = list of per-robot length arrays
+    """
+    if mode == "stacking":
+        pattern = re.compile(r"(\d{8}_\d{6})_scaling_stacking_r(\d+)_b(\d+)")
+        def extract_key(m):
+            return int(m.group(2)), int(m.group(3)) * 2
+    elif mode == "mobile":
+        pattern = re.compile(r"(\d{8}_\d{6})_scaling_mobile_r(\d+)_x(\d+)_z(\d+)")
+        def extract_key(m):
+            return int(m.group(2)), int(m.group(3)) * int(m.group(4)) * 2
+    else:
+        raise ValueError(f"Unknown mode: {mode!r}")
+
+    latest: dict = {}
+    for entry in os.listdir(path):
+        m = pattern.match(entry)
+        if m:
+            ts, key, num_robots = m.group(1), extract_key(m), int(m.group(2))
+            if key not in latest or ts > latest[key][0]:
+                latest[key] = (ts, entry, num_robots)
+
+    data = defaultdict(lambda: defaultdict(list))
+
+    for key, (_, folder, num_robots) in sorted(latest.items()):
+        exp_dir = os.path.join(path, folder, "")
+        for planner_name, runs in load_data_from_folder(exp_dir, load_paths=1).items():
+            for run in runs:
+                if not run.get("paths"):
+                    continue
+                path_data = run["paths"][0]
+                if len(path_data) < 2:
+                    continue
+                qs = np.array([s["q"] for s in path_data])  # (T, D)
+                diffs = np.diff(qs, axis=0)                  # (T-1, D)
+                dof = qs.shape[1] // num_robots
+                lengths = np.array([
+                    np.linalg.norm(diffs[:, r*dof:(r+1)*dof], axis=1).sum()
+                    for r in range(num_robots)
+                ])
+                data[key][planner_name].append(lengths)
+
+    return dict(data)
+
+
+def make_per_robot_path_length_plot(
+    data: dict, secondary_label: str = "tasks", log_y: bool = False
+):
+    """
+    One subplot per planner: x = num_robots, one line per secondary key.
+    y = mean per-robot path length of the first found solution (median across runs).
+    """
+    planners = sorted({p for runs in data.values() for p in runs})
+    all_robots = sorted({r for (r, _) in data})
+    all_secondary = sorted({s for (_, s) in data})
+
+    task_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_secondary), 1)))
+
+    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=True)
+    if len(planners) == 1:
+        axes = [axes]
+
+    for ax, planner in zip(axes, planners):
+        for i, s in enumerate(all_secondary):
+            xs, meds, lbs, ubs = [], [], [], []
+            for r in all_robots:
+                runs = data.get((r, s), {}).get(planner, [])
+                if not runs:
+                    continue
+                # mean per-robot length for each run, then take median across runs
+                run_means = [lengths.mean() for lengths in runs]
+                n = len(run_means)
+                med = np.median(run_means)
+                lb_idx, ub_idx, _ = computeConfidenceInterval(n, 0.95)
+                sorted_means = np.sort(run_means)
+                xs.append(r)
+                meds.append(med)
+                lbs.append(med - sorted_means[lb_idx])
+                ubs.append(sorted_means[ub_idx - 1] - med)
+            if not xs:
+                continue
+            ax.errorbar(
+                xs, meds,
+                yerr=[lbs, ubs],
+                label=f"{s} {secondary_label.lower().split()[-1]}",
+                color=task_colors[i],
+                linestyle="-",
+                marker="o",
+                capsize=3,
+            )
+        ax.set_xlabel("Number of robots")
+        ax.set_ylabel("Median mean per-robot path length (first solution)")
+        ax.set_title(planner)
+        ax.legend(title=secondary_label, fontsize=8)
+        ax.grid(True, alpha=0.3)
+        if log_y:
+            ax.set_yscale("log")
+
+    fig.suptitle("Per-robot path length of first solution vs number of robots", y=1.02)
+    fig.tight_layout()
+    return fig
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["stacking", "mobile"], default="mobile")
@@ -286,6 +394,10 @@ def main():
 
     fig3 = make_per_planner_robots_plot(data, secondary_label=secondary_label, log_y=args.log_y)
     fig3.savefig(os.path.join(path, "scaling_plots_per_planner_robots.pdf"), bbox_inches="tight")
+
+    path_length_data = load_per_robot_path_lengths(path, mode=args.mode)
+    fig4 = make_per_robot_path_length_plot(path_length_data, secondary_label=secondary_label, log_y=args.log_y)
+    fig4.savefig(os.path.join(path, "scaling_plots_per_robot_path_lengths.pdf"), bbox_inches="tight")
 
     plt.show()
 
