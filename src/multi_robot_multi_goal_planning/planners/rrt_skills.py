@@ -131,6 +131,10 @@ from .baseplanner import BasePlanner
 from .mode_validation import ModeValidation
 from .termination_conditions import PlannerTerminationCondition
 
+from multi_robot_multi_goal_planning.problems.skills import (
+    BaseDeterministicTimedSkill
+)
+
 # TODO [ ] add all relevant hyperparams
 # TODO [ ] p_transition for mode specific goal AND p_goal for terminal goal?
 @dataclass
@@ -148,7 +152,7 @@ class RRTSkillsConfig:
     p_newest_mode: float = 0.8
     
     distance_metric: str = "max_euclidean"
-    with_mode_validation: bool = False
+    with_mode_validation: bool = True # Geometric pre-check on mode (blacklist_modes) # TODO
     with_noise: bool = False
 
     # RRT*
@@ -327,9 +331,16 @@ class RRTSkills(BasePlanner):
         costs = []
         times = []
 
+        # DEBUG prints (init)
+        self._init_debug_counters()
+
         while not ptc.should_terminate(iterations, time.time() - self.start_time):
             iterations += 1
 
+            # DEBUG prints
+            if iterations % 500 == 0:
+                self._print_debug(iterations)
+                
             # 1. Sample mode
             mode = self._sample_mode()
 
@@ -337,15 +348,23 @@ class RRTSkills(BasePlanner):
             q_target = self._sample_target(mode)
 
             # 3. Nearest neighbor
-            n_near, dist = self.tree.subtrees[mode].get_nearest(mode, q_target, self.config.distance_metric)
+            n_near, dist = self.tree.subtrees[mode].get_nearest(q_target, self.config.distance_metric)
+            if dist < self._dbg_min_nn_dist:
+                  self._dbg_min_nn_dist = dist
+
+            active_task = self._get_active_skill_task(mode)
+            is_skill_mode = (active_task is not None)
 
             # 4. Steer (linear or skill based)
             state_new = self._steer(n_near, q_target, mode)
 
-            is_valid = state_new is not None and self._validate(state_new, n_near)
+            # 5. Collision check
+            is_valid = state_new is not None and self._validate(state_new, n_near, is_skill=is_skill_mode)
+            if not is_valid:
+                self._dbg_validate_fail += 1
 
             if is_valid:
-                n_new = self._create_and_add_node(state_new, n_near, mode)                                                   
+                n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=is_skill_mode)                                                   
                 self._check_transitions(n_new)                                                                               
 
                 # RRT* rewire                                                                                                
@@ -447,8 +466,10 @@ class RRTSkills(BasePlanner):
         """
         # Goal/transition bias
         if random.random() < self.config.p_goal:
+            self._dbg_goal_bias_attempt += 1
             q_target = self._sample_transition_config(mode)
             if q_target is not None:
+                self._dbg_goal_bias_success += 1
                 return q_target
         
         # # Informed sampling
@@ -514,6 +535,17 @@ class RRTSkills(BasePlanner):
         - Normal mode: linear interpolation towards q_target
         - Skill mode: call skill.step() # TODO
         """
+        skill_task = self._get_active_skill_task(mode)
+
+        if skill_task is not None:
+            return self._skill_steer(n_near, skill_task, mode)
+        else:
+            return self._linear_steer(n_near, q_target, mode)
+
+    def _linear_steer(self, n_near: Node, q_target: Configuration, mode: Mode):
+        """
+        Standard linear interpolation towards q_target
+        """
         q_near_vec = n_near.state.q.state() # .state() returns NDArray
         q_target_vec = q_target.state()
 
@@ -523,8 +555,9 @@ class RRTSkills(BasePlanner):
             return None
         
         # Snap to target
-        if dist <= self.eta:
+        if dist <= self.eta: # TODO change, snaps all the time.. (or fix eta)
             q_new = q_target
+            self._dbg_snap_events += 1
         else:
             # step = min(dist, self.eta)
             step = self.eta
@@ -533,25 +566,23 @@ class RRTSkills(BasePlanner):
 
         return State(q_new, mode)
 
-    def _linear_steer(self): # TODO
-        """
-        Standard linear interpolation towards q_target
-        """
-        raise NotImplementedError
-
-    def _validate(self, state_new: State, n_near: Node) -> bool:
+    def _validate(self, state_new: State, n_near: Node, is_skill: bool) -> bool:
         """
         Collision checking for configurations and edges
         """
         if not self.env.is_collision_free(state_new.q, state_new.mode):
+            if is_skill and self._dbg_validate_fail % 100 == 0:  # Print every 100th fail to avoid spam
+                print(f"[DEBUG SKILL] State collision at t_norm = {n_near.skill_step/100:.2f} (approx)")
             return False
         
         if not self.env.is_edge_collision_free(state_new.q, n_near.state.q, state_new.mode):
+            if is_skill and self._dbg_validate_fail % 100 == 0:
+                print(f"[DEBUG SKILL] Edge collision from step {n_near.skill_step} to {n_near.skill_step + 1}")
             return False
         
         return True
 
-    def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode) -> Node:
+    def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode, is_skill: bool = False) -> Node:
         """
         Handles node creation and addition, including RRT* parent optimization
         """
@@ -567,6 +598,11 @@ class RRTSkills(BasePlanner):
         n_new.cost = cost
         n_new.cost_to_parent = cost_to_parent
 
+        # Skill node bookkeeping
+        if is_skill:
+            n_new.is_skill_waypoint = True
+            n_new.skill_step = n_near.skill_step + 1
+
         # Add
         self.tree.subtrees[mode].add_node(n_new)
         n_new.parent.children.append(n_new)
@@ -576,7 +612,33 @@ class RRTSkills(BasePlanner):
         """
         Checks if n_new triggers a mode switch 
         """
-        if self.env.is_transition(n_new.state.q, n_new.state.mode):
+        mode = n_new.state.mode
+        skill_task = self._get_active_skill_task(mode)
+
+        if skill_task is not None:
+            # Handle skill 
+            skill = skill_task.skill
+
+            # Extract subspace
+            q_full = n_new.state.q.state()
+            active_indices = self._get_active_subspace_indices(skill_task)
+            q_subspace = q_full[active_indices]
+
+            is_timed = isinstance(skill, BaseDeterministicTimedSkill)
+            if is_timed:
+                dt = 0.1
+                n_steps = max(1, round(skill.duration / dt))
+                t_norm = n_new.skill_step / n_steps
+                is_transition = skill.done(t_norm, q_subspace, self.env)
+            else:
+                is_transition = skill.done(q_subspace, self.env)
+            
+        else:
+            # Standard geometric transition check
+            is_transition = self.env.is_transition(n_new.state.q, n_new.state.mode)
+
+        if is_transition:
+            self._dbg_is_trans_true += 1
             n_new.is_transition = True
 
             # Next modes
@@ -584,11 +646,13 @@ class RRTSkills(BasePlanner):
             valid_next_modes = self.mode_validation.get_valid_modes(n_new.state.mode, list(next_modes))
 
             if not valid_next_modes:
+                self._dbg_get_next_empty += 1
                 return
 
             for next_mode in valid_next_modes:
                 # Skip if same configuration is not valid in new mode
                 if not self.env.is_collision_free(n_new.state.q, next_mode):
+                    self._dbg_seed_coll_fail += 1
                     continue
 
                 # Register mode if new
@@ -604,6 +668,7 @@ class RRTSkills(BasePlanner):
 
                 self.tree.subtrees[next_mode].add_node(seed_node)
                 n_new.children.append(seed_node)
+                self._dbg_seed_added += 1
 
     def _shortcut(self, path: List[State]) -> List[State]:
         """
@@ -632,22 +697,130 @@ class RRTSkills(BasePlanner):
             curr = curr.parent
         return path[::-1]
 
+    # TODO ADDITIONAL HELPER FUNCTIONS (plan)
+    def _init_debug_counters(self):
+        """
+        # NOTE: GENERATED WITH GEMINI
+
+        Initializes all debug counters.
+        """
+        self._dbg_goal_bias_attempt = 0
+        self._dbg_goal_bias_success = 0
+        self._dbg_snap_events = 0
+        self._dbg_validate_fail = 0
+        self._dbg_is_trans_true = 0
+        self._dbg_get_next_empty = 0
+        self._dbg_seed_coll_fail = 0
+        self._dbg_seed_added = 0
+        self._dbg_min_nn_dist = float("inf")
+
+        self._dbg_w_rewires = 0
+        self._dbg_w_best_parent_swaps = 0
+        self._dbg_w_near_size_sum = 0
+        self._dbg_w_near_size_count = 0
+        self._dbg_w_rewire_extracts = 0
+        self._dbg_w_shortcut_hits = 0
+        self._dbg_last_r_n = 0.0
+
+    def _print_debug(self, iterations: int):
+        """
+        # NOTE: GENERATED WITH GEMINI
+
+        Prints periodic performance telemetry and resets window counters.
+        """
+        nodes = sum(s.size for s in self.tree.subtrees.values())
+        tag = "RRT*" if self.config.use_rrt_star else "RRT"
+        sol_cost = self.solution_node.cost if self.solution_node is not None else float("inf")
+        near_avg = (self._dbg_w_near_size_sum / self._dbg_w_near_size_count 
+                    if self._dbg_w_near_size_count > 0 else 0.0)
+        
+        print(
+            f"[{tag}] it={iterations} nodes={nodes} modes={len(self.reached_modes)} "
+            f"best={self.best_cost:.3f} sol={sol_cost:.3f} "
+            f"eta={self.eta:.2f} r_n={self._dbg_last_r_n:.3f}\n"
+            f"       | w: rewires={self._dbg_w_rewires} "
+            f"bestP={self._dbg_w_best_parent_swaps} "
+            f"nearAvg={near_avg:.1f} "
+            f"reExt={self._dbg_w_rewire_extracts} "
+            f"sCut={self._dbg_w_shortcut_hits}\n"
+            f"       | c: snap={self._dbg_snap_events} "
+            f"vfail={self._dbg_validate_fail} "
+            f"gb={self._dbg_goal_bias_success}/{self._dbg_goal_bias_attempt} "
+            f"isT={self._dbg_is_trans_true} "
+            f"nextE={self._dbg_get_next_empty} "
+            f"sCF={self._dbg_seed_coll_fail} sAdd={self._dbg_seed_added} "
+            f"minNN={self._dbg_min_nn_dist:.3f}"
+        )
+        # Reset window counters
+        self._dbg_w_rewires = 0
+        self._dbg_w_best_parent_swaps = 0
+        self._dbg_w_near_size_sum = 0
+        self._dbg_w_near_size_count = 0
+        self._dbg_w_rewire_extracts = 0
+        self._dbg_w_shortcut_hits = 0
+
     # TODO SKILLS
-    def _skill_steer(self): # TODO
+    def _get_active_skill_task(self, mode: Mode):
         """
-        Advance skill by one step?
+        Returns the task with a skill in this mode or None 
         """
-        raise NotImplementedError
+        next_ids = self.mode_validation.get_valid_next_ids(mode)
+        if not next_ids:
+            return None
+        
+        task = self.env.get_active_task(mode, next_ids)
+        if hasattr(task, 'skill') and task.skill is not None:
+            return task
+        
+        return None
+    
+    def _skill_steer(self, n_near: Node, skill_task, mode: Mode):
+        """
+        Rolls the skill out by one step
+        """
+        skill = skill_task.skill
+        dt = 0.1 # TODO move to RRTSkillConfig..?
+        
+        q_full = n_near.state.q.state().copy() 
+
+        # 1. Extract active subspace for skill
+        active_indices = self._get_active_subspace_indices(skill_task)
+        q_subspace = q_full[active_indices]
+
+        # 2. Skill 
+        is_timed = isinstance(skill, BaseDeterministicTimedSkill)
+
+        if is_timed:
+            n_steps = max(1, round(skill.duration / dt))
+            t_norm = (n_near.skill_step + 1) / n_steps
+            q_subspace_new = skill.step(t_norm, q_subspace, self.env)
+        else:
+            q_subspace_new = skill.step(q_subspace, self.env)
+        
+        # 3. Re-compose the full configuration
+        # NOTE: inactive robots frozen (keep it simple for now..)
+        q_full_new = q_full.copy()
+        q_full_new[active_indices] = q_subspace_new
+
+        q_new = self.env.get_start_pos().from_flat(q_full_new)
+        return State(q_new, mode, True) # TODO
+
+    def _get_active_subspace_indices(self, active_task) -> List[int]:
+      """
+      Returns indices for the robots involved in the active task
+      """
+      active_indices = []
+      end_idx = 0
+      for robot in self.env.robots:
+          dim = self.env.robot_dims[robot]
+          if robot in active_task.robots:
+              active_indices.extend(range(end_idx, end_idx + dim))
+          end_idx += dim
+      return active_indices
 
     def _mode_has_skill(self, mode: Mode) -> bool: # TODO
         """
         Check if any robot's taks in this mode has a skill
-        """
-        raise NotImplementedError
-    
-    def _get_active_skill_task(self, mode: Mode): # TODO
-        """
-        Returns the task with a skill in this mode or None 
         """
         raise NotImplementedError
     
@@ -700,6 +873,11 @@ class RRTSkills(BasePlanner):
         r_n = self._compute_rewiring_radius(subtree.size)
         near_set = subtree.get_near(q_new, r_n, self.config.distance_metric)
 
+        # DEBUG
+        self._dbg_last_r_n = r_n
+        self._dbg_w_near_size_sum += len(near_set)
+        self._dbg_w_near_size_count += 1
+
         best_parent = n_near # TODO needs collision check?
         best_cost_to_parent = self.env.config_cost(n_near.state.q, q_new)
         best_cost = n_near.cost + best_cost_to_parent
@@ -715,6 +893,9 @@ class RRTSkills(BasePlanner):
                     best_parent = candidate
                     best_cost_to_parent = edge_cost
                     best_cost = potential_cost
+
+        if best_parent is not n_near:
+            self._dbg_w_best_parent_swaps += 1
 
         return best_parent, best_cost, best_cost_to_parent
 
@@ -738,6 +919,11 @@ class RRTSkills(BasePlanner):
         r_n = self._compute_rewiring_radius(subtree.size)
         near_set = subtree.get_near(n_new.state.q, r_n, self.config.distance_metric)
 
+        # DEBUG
+        self._dbg_last_r_n = r_n
+        self._dbg_w_near_size_sum += len(near_set)
+        self._dbg_w_near_size_count += 1
+
         for idx, _ in near_set:
             n_near = subtree.nodes[idx]
             if n_near is n_new or n_near is n_new.parent or n_near.is_skill_waypoint:
@@ -757,6 +943,7 @@ class RRTSkills(BasePlanner):
                     n_near.cost_to_parent = edge_cost
                     n_near.cost = potential_cost
                     self._propagate_cost_improvement(n_near)
+                    self._dbg_w_rewires += 1
     
     def _propagate_cost_improvement(self, node: Node):
         """
