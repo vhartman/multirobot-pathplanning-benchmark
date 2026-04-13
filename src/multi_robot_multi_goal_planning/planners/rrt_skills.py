@@ -1,6 +1,9 @@
 """
 Multi-modal RRT(*) with skills
 
+(OUTDATED NOTES..)
+# TODO update notes
+
 --------------------------------------
 DATA STRUCTURES:
 --------------------------------------
@@ -152,7 +155,7 @@ class RRTSkillsConfig:
     p_newest_mode: float = 0.8
     
     distance_metric: str = "max_euclidean"
-    with_mode_validation: bool = True # Geometric pre-check on mode (blacklist_modes) # TODO
+    with_mode_validation: bool = False # Geometric pre-check on mode (blacklist_modes) # TODO
     with_noise: bool = False
 
     # RRT*
@@ -286,10 +289,11 @@ class MultiModalTree:
 # TODO [ ] in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached
 
 # SKILLS
-# TODO [ ] update _add_node to set skill flag
-# TODO [ ] update _check_transitions when skill is done
-# TODO [ ] differentiate between linear steer and skill steer
-# TODO [ ] in _steer add skills -> call skill.step()
+# TODO [x] update _add_node to set skill flag
+# TODO [x] update _check_transitions when skill is done
+# TODO [x] differentiate between linear steer and skill steer
+# TODO [x] in _steer add skills -> call skill.step()
+# TODO [o] add unified structure with 3 expansion modes for skill rollouts (full, single, kino)
 
 # RRT*
 # TODO [o] add rewiring (RRT*)
@@ -455,7 +459,6 @@ class RRTSkills(BasePlanner):
         if self.config.mode_sampling_type == "greedy":
             if random.random() < self.config.p_newest_mode:
                 return self.reached_modes[-1]
-            return random.choice(self.reached_modes)
         
         # Uniform strategy
         return random.choice(self.reached_modes)
@@ -493,9 +496,8 @@ class RRTSkills(BasePlanner):
             if not next_task_ids and not self.env.is_terminal_mode(mode):
                 return None
 
-            active_task = self.env.get_active_task(mode, next_task_ids)
-
             # Sample the goal for the robots finishing their task
+            active_task = self.env.get_active_task(mode, next_task_ids)
             constrained_robots = active_task.robots
             goal = active_task.goal.sample(mode)
 
