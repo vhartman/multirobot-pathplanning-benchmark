@@ -287,6 +287,7 @@ def load_per_robot_path_lengths(path: str, mode: str = "stacking") -> dict:
             if key not in latest or ts > latest[key][0]:
                 latest[key] = (ts, entry, num_robots)
 
+    # data[key][planner] = list of (per_robot_lengths, total_max_l1_sum)
     data = defaultdict(lambda: defaultdict(list))
 
     for key, (_, folder, num_robots) in sorted(latest.items()):
@@ -305,7 +306,9 @@ def load_per_robot_path_lengths(path: str, mode: str = "stacking") -> dict:
                     np.linalg.norm(diffs[:, r*dof:(r+1)*dof], axis=1).sum()
                     for r in range(num_robots)
                 ])
-                data[key][planner_name].append(lengths)
+                # sum of max-abs across all joints per edge — proxy for total collision checks
+                max_l1_sum = np.max(np.abs(diffs), axis=1).sum()
+                data[key][planner_name].append((lengths, max_l1_sum))
 
     return dict(data)
 
@@ -314,8 +317,9 @@ def make_per_robot_path_length_plot(
     data: dict, secondary_label: str = "tasks", log_y: bool = False
 ):
     """
-    One subplot per planner: x = num_robots, one line per secondary key.
-    y = mean per-robot path length of the first found solution (median across runs).
+    Two rows of subplots, one column per planner.
+    Top row: mean per-robot path length (first solution).
+    Bottom row: sum of max-L1 distances along path (proxy for total collision checks).
     """
     planners = sorted({p for runs in data.values() for p in runs})
     all_robots = sorted({r for (r, _) in data})
@@ -323,47 +327,69 @@ def make_per_robot_path_length_plot(
 
     task_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_secondary), 1)))
 
-    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=True)
-    if len(planners) == 1:
-        axes = [axes]
+    fig, axes = plt.subplots(
+        2, len(planners), figsize=(6 * len(planners), 9),
+        sharex=True, squeeze=False,
+    )
 
-    for ax, planner in zip(axes, planners):
+    for col, planner in enumerate(planners):
+        ax_len = axes[0][col]
+        ax_l1  = axes[1][col]
+
         for i, s in enumerate(all_secondary):
-            xs, meds, lbs, ubs = [], [], [], []
+            xs_len, meds_len, lbs_len, ubs_len = [], [], [], []
+            xs_l1,  meds_l1,  lbs_l1,  ubs_l1  = [], [], [], []
+
             for r in all_robots:
                 runs = data.get((r, s), {}).get(planner, [])
                 if not runs:
                     continue
-                # mean per-robot length for each run, then take median across runs
-                run_means = [lengths.mean() for lengths in runs]
-                n = len(run_means)
-                med = np.median(run_means)
-                lb_idx, ub_idx, _ = computeConfidenceInterval(n, 0.95)
-                sorted_means = np.sort(run_means)
-                xs.append(r)
-                meds.append(med)
-                lbs.append(med - sorted_means[lb_idx])
-                ubs.append(sorted_means[ub_idx - 1] - med)
-            if not xs:
-                continue
-            ax.errorbar(
-                xs, meds,
-                yerr=[lbs, ubs],
-                label=f"{s} {secondary_label.lower().split()[-1]}",
-                color=task_colors[i],
-                linestyle="-",
-                marker="o",
-                capsize=3,
-            )
-        ax.set_xlabel("Number of robots")
-        ax.set_ylabel("Median mean per-robot path length (first solution)")
-        ax.set_title(planner)
-        ax.legend(title=secondary_label, fontsize=8)
-        ax.grid(True, alpha=0.3)
-        if log_y:
-            ax.set_yscale("log")
 
-    fig.suptitle("Per-robot path length of first solution vs number of robots", y=1.02)
+                run_means = [lengths.mean() for lengths, _ in runs]
+                med, lb, ub = _median_and_ci(run_means)
+                if med is not None:
+                    xs_len.append(r)
+                    meds_len.append(med)
+                    lbs_len.append(med - lb)
+                    ubs_len.append(ub - med)
+
+                l1_vals = [max_l1 for _, max_l1 in runs]
+                med, lb, ub = _median_and_ci(l1_vals)
+                if med is not None:
+                    xs_l1.append(r)
+                    meds_l1.append(med)
+                    lbs_l1.append(med - lb)
+                    ubs_l1.append(ub - med)
+
+            label = f"{s} {secondary_label.lower().split()[-1]}"
+            color = task_colors[i]
+
+            if xs_len:
+                ax_len.errorbar(
+                    xs_len, meds_len, yerr=[lbs_len, ubs_len],
+                    label=label, color=color, linestyle="-", marker="o", capsize=3,
+                )
+            if xs_l1:
+                ax_l1.errorbar(
+                    xs_l1, meds_l1, yerr=[lbs_l1, ubs_l1],
+                    label=label, color=color, linestyle="-", marker="o", capsize=3,
+                )
+
+        ax_len.set_title(planner)
+        ax_len.set_ylabel("Median mean per-robot path length")
+        ax_len.legend(title=secondary_label, fontsize=8)
+        ax_len.grid(True, alpha=0.3)
+
+        ax_l1.set_xlabel("Number of robots")
+        ax_l1.set_ylabel("Median sum of max-L1 dist (collision check proxy)")
+        ax_l1.legend(title=secondary_label, fontsize=8)
+        ax_l1.grid(True, alpha=0.3)
+
+        if log_y:
+            ax_len.set_yscale("log")
+            ax_l1.set_yscale("log")
+
+    fig.suptitle("Path length and collision check proxy of first solution", y=1.02)
     fig.tight_layout()
     return fig
 
@@ -423,82 +449,98 @@ def _timing_plot(
     absolute: bool,
     log_y: bool,
 ):
-    """Shared implementation for fraction and absolute timing plots."""
+    """Shared implementation for fraction and absolute timing plots.
+    Returns one figure per planner. Layout: 2-column grid over secondary keys.
+    Each subplot: x = num_robots, one errorbar line per metric with 95% CI.
+    """
     planners = sorted(timing_data.keys())
     if not planners:
-        return None
+        return []
 
     all_robots = sorted({r for p in timing_data.values() for (r, _) in p})
     all_secondary = sorted({s for p in timing_data.values() for (_, s) in p})
 
-    secondary_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_secondary), 1)))
+    metric_colors = ["steelblue", "seagreen", "tomato"]
     metric_styles = ["-", "--", ":"]
     metric_markers = ["o", "s", "^"]
     metric_labels = ["sampling", "edge (free)", "edge (blocked)"]
 
-    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=True)
-    if len(planners) == 1:
-        axes = [axes]
+    ncols = 2
+    nrows = int(np.ceil(len(all_secondary) / ncols))
 
-    for ax, planner in zip(axes, planners):
+    figs = []
+    for planner in planners:
         pdata = timing_data[planner]
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=(5 * ncols, 4 * nrows),
+            sharey=True, sharex=True,
+            squeeze=False,
+        )
 
-        for ci, s in enumerate(all_secondary):
-            for mi, metric_idx in enumerate([0, 1, 2]):
-                xs, ys = [], []
+        for si, s in enumerate(all_secondary):
+            ax = axes[si // ncols][si % ncols]
+            for mi in range(3):
+                xs, meds, lbs, ubs = [], [], [], []
                 for r in all_robots:
                     triples = pdata.get((r, s), [])
                     if not triples:
                         continue
                     if absolute:
-                        vals = [t[metric_idx] for t in triples]
+                        vals = [t[mi] for t in triples]
                     else:
                         totals = [sum(t) for t in triples]
                         vals = [
-                            t[metric_idx] / tot if tot > 0 else 0.0
+                            t[mi] / tot if tot > 0 else 0.0
                             for t, tot in zip(triples, totals)
                         ]
+                    med, lb, ub = _median_and_ci(vals)
+                    if med is None:
+                        continue
                     xs.append(r)
-                    ys.append(np.median(vals))
-
+                    meds.append(med)
+                    lbs.append(med - lb)
+                    ubs.append(ub - med)
                 if not xs:
                     continue
-
-                label = (
-                    f"{secondary_label.split()[-1]}={s}, {metric_labels[mi]}"
-                    if ci == 0 or mi == 0
-                    else None
-                )
-                # encode secondary key by color, metric by linestyle
-                ax.plot(
-                    xs, ys,
-                    color=secondary_colors[ci],
+                ax.errorbar(
+                    xs, meds,
+                    yerr=[lbs, ubs],
+                    color=metric_colors[mi],
                     linestyle=metric_styles[mi],
                     marker=metric_markers[mi],
-                    label=f"t={s}, {metric_labels[mi]}",
+                    label=metric_labels[mi],
+                    capsize=3,
                     markersize=4,
                 )
 
-        ax.set_xlabel("Number of robots")
-        ax.set_ylabel(
-            "Median time [s]" if absolute else "Fraction of tracked time"
-        )
-        ax.set_title(planner)
-        ax.legend(fontsize=6, ncol=2)
-        ax.grid(True, alpha=0.3)
-        if not absolute:
-            ax.set_ylim(0, 1)
-        if log_y:
-            ax.set_yscale("log")
+            ax.set_title(f"{secondary_label.split()[-1]}={s}", fontsize=9)
+            ax.grid(True, alpha=0.3)
+            if not absolute:
+                ax.set_ylim(0, 1)
+            if log_y:
+                ax.set_yscale("log")
+            if si // ncols == nrows - 1:
+                ax.set_xlabel("Number of robots")
+            if si % ncols == 0:
+                ax.set_ylabel("Median time [s]" if absolute else "Fraction of tracked time")
+            if si == 0:
+                ax.legend(fontsize=7)
 
-    title = (
-        "Absolute time: sampling vs edge collision checking"
-        if absolute
-        else "Fraction of time: sampling vs edge collision checking"
-    )
-    fig.suptitle(title, y=1.02)
-    fig.tight_layout()
-    return fig
+        # hide unused subplots
+        for si in range(len(all_secondary), nrows * ncols):
+            axes[si // ncols][si % ncols].set_visible(False)
+
+        title = (
+            f"{planner} — absolute time: sampling vs edge collision"
+            if absolute
+            else f"{planner} — fraction of time: sampling vs edge collision"
+        )
+        fig.suptitle(title)
+        fig.tight_layout()
+        figs.append((planner, fig))
+
+    return figs
 
 
 def make_timing_breakdown_plot(
@@ -548,13 +590,11 @@ def main():
 
     timing_data = load_timing_data(path, mode=args.mode)
     if timing_data:
-        fig5 = make_timing_breakdown_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y)
-        if fig5 is not None:
-            fig5.savefig(os.path.join(path, "scaling_plots_timing_fraction.pdf"), bbox_inches="tight")
+        for planner, fig in make_timing_breakdown_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y):
+            fig.savefig(os.path.join(path, f"scaling_plots_timing_fraction_{planner}.pdf"), bbox_inches="tight")
 
-        fig6 = make_timing_absolute_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y)
-        if fig6 is not None:
-            fig6.savefig(os.path.join(path, "scaling_plots_timing_absolute.pdf"), bbox_inches="tight")
+        for planner, fig in make_timing_absolute_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y):
+            fig.savefig(os.path.join(path, f"scaling_plots_timing_absolute_{planner}.pdf"), bbox_inches="tight")
 
     plt.show()
 
