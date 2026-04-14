@@ -209,7 +209,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if dist > self.eta:
                 return
 
-            if not self.env.is_edge_collision_free(
+            if not self._timed_edge_collision_free(
                 n_new.state.q, n_nearest_b.state.q, mode
             ):  # ORder rigth? TODO
                 return
@@ -226,19 +226,19 @@ class BidirectionalRRTstar(BaseRRTstar):
             # switch such that subtree is beginning from start and subtree_b from goal
             self.trees[mode].swap(self.config.balanced_trees)
             self.swap = False
-            if not self.env.is_edge_collision_free(
+            if not self._timed_edge_collision_free(
                 n_nearest_b.state.q, n_new.state.q, mode
             ):
                 return
-        
+
             self.update_tree(mode, n_new, n_nearest_b, cost[0])
 
         else:
-            if not self.env.is_edge_collision_free(
+            if not self._timed_edge_collision_free(
                 n_new.state.q, n_nearest_b.state.q, mode
             ):
                 return
-        
+
             self.update_tree(mode, n_nearest_b, n_new, cost[0])
 
         transition_node = self.get_transition_node(
