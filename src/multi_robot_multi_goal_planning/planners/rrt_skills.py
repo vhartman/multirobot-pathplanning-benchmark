@@ -150,16 +150,21 @@ class RRTSkillsConfig:
     p_goal: float = 0.3
     # p_terminal_goal: float = 0.1 
 
-    # Mode sampling
-    mode_sampling_type: str = "greedy" # "uniform" | "greedy"
+    # Mode sampling # TODO frontier implementation (from prm)
+    mode_sampling_type: str = "greedy" # "uniform" | "greedy" | "frontier"
     p_newest_mode: float = 0.8
     
     distance_metric: str = "max_euclidean"
     with_mode_validation: bool = False # Geometric pre-check on mode (blacklist_modes) # TODO
     with_noise: bool = False
 
+    # Skills # TODO full_rollout and kinodynamic
+    skill_expansion_strategy: str = "single_step" # "single_step" | "full_rollout" | "kinodynamic"
+    skill_dt: float = 0.01
+    kinodynamic_steps: int = 20 # Only for kinodynamic strategy 
+    inactive_steering_mode: str = "concurrent" # "freeze" | "concurrent"
+
     # RRT*
-    # use_rrt_star: bool = True
     use_rrt_star: bool = False
     rewire_radius: float = 0.5 #
     gamma_rrtstar: float = 0.0
@@ -356,42 +361,38 @@ class RRTSkills(BasePlanner):
             if dist < self._dbg_min_nn_dist:
                   self._dbg_min_nn_dist = dist
 
-            active_task = self._get_active_skill_task(mode)
-            is_skill_mode = (active_task is not None)
-
             # 4. Steer (linear or skill based)
-            state_new = self._steer(n_near, q_target, mode)
+            skill_task = self._get_active_skill_task(mode)
+            new_nodes = self._expand(n_near, q_target, mode, skill_task)
+            
+            if not new_nodes:
+                continue
 
-            # 5. Collision check
-            is_valid = state_new is not None and self._validate(state_new, n_near, is_skill=is_skill_mode)
-            if not is_valid:
-                self._dbg_validate_fail += 1
-
-            if is_valid:
-                n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=is_skill_mode)                                                   
-                self._check_transitions(n_new)                                                                               
+            # 5. Collision check 
+            for n_new in new_nodes:
+                self._check_transitions(n_new)
 
                 # RRT* rewire                                                                                                
                 if self.config.use_rrt_star:                                                                                 
                     self._rewire(n_new, mode)                                                                                
                     if iterations % 100 == 0 and self.solution_node and self.solution_node.cost < self.best_cost - 1e-9:
-                        self.best_path = self._extract_path(self.solution_node)                                              
-                        self.best_cost = path_cost(self.best_path, self.env.batch_config_cost)                               
-                        costs.append(self.best_cost)
-                        times.append(time.time() - self.start_time)                                        
-                                                                                                                            
-                if self.env.done(n_new.state.q, mode):
-                    print(f"[DONE] self.env.done() is TRUE")
-                    if self.solution_node is None or n_new.cost < self.solution_node.cost:                                   
-                        self.solution_node = n_new                                                                           
-                        self.best_path = self._extract_path(n_new)                                                           
+                        self.best_path = self._extract_path(self.solution_node)
                         self.best_cost = path_cost(self.best_path, self.env.batch_config_cost)
-                        print(f"[SOLUTION] best cost: {self.best_cost}")
                         costs.append(self.best_cost)
-                        times.append(time.time() - self.start_time)                                        
+                        times.append(time.time() - self.start_time)# TODO use _record_solution()
+                                                                                                                                                                
+            if self.env.done(new_nodes[-1].state.q, mode):
+                print(f"[DONE] self.env.done() is TRUE")
+                if self.solution_node is None or new_nodes[-1].cost < self.solution_node.cost:
+                    self.solution_node = new_nodes[-1]
+                    self.best_path = self._extract_path(new_nodes[-1])
+                    self.best_cost = path_cost(self.best_path, self.env.batch_config_cost)
+                    print(f"[SOLUTION] best cost: {self.best_cost}")
+                    costs.append(self.best_cost)
+                    times.append(time.time() - self.start_time) # TODO use _record_solution()
 
-                    if not optimize:
-                        break # Stop after first solution
+                if not optimize:
+                    break # Stop after first solution
                 
         # Single terminal shortcut
         if self.config.try_shortcutting and self.best_path is not None:
@@ -402,7 +403,7 @@ class RRTSkills(BasePlanner):
                 self.best_path = sc
                 self.best_cost = sc_cost
                 costs.append(sc_cost)
-                times.append(time.time() - self.start_time)
+                times.append(time.time() - self.start_time) # TODO use _record_solution()
 
         # Extract path and info
         if self.best_path is not None:
@@ -459,6 +460,8 @@ class RRTSkills(BasePlanner):
         if self.config.mode_sampling_type == "greedy":
             if random.random() < self.config.p_newest_mode:
                 return self.reached_modes[-1]
+            
+        # TODO frontier
         
         # Uniform strategy
         return random.choice(self.reached_modes)
@@ -531,7 +534,28 @@ class RRTSkills(BasePlanner):
         print(f"[TRANSITION SAMPLING] failed at {iters} iterations")
         return None
     
-    def _steer(self, n_near: Node, q_target: Configuration, mode: Mode) -> Optional[State]:
+    def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
+        """
+        
+        """
+        # Strategy for expanding/steering in NON-skill-modes
+        if skill_task is None:
+            state_new = self._linear_steer(n_near, q_target, mode)
+            if state_new is None or not self._validate(state_new, n_near, is_skill=False):
+                self._dbg_validate_fail += 1
+                return []
+            return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
+        
+        # Strategies for expanding/steering in skill-modes
+        strategy = self.config.skill_expansion_strategy
+        if strategy == "single_step":
+            return self._expand_single_step(n_near, q_target, mode, skill_task)
+        elif strategy == "full_rollout":
+            return self._expand_full_rollout() # TODO
+        elif strategy == "kinodynamic":
+            return self._expand_kinodynamic() # TODO
+
+    def _OLD_steer(self, n_near: Node, q_target: Configuration, mode: Mode) -> Optional[State]: # TODO remove
         """
         Mode dependent steering:
         - Normal mode: linear interpolation towards q_target
@@ -603,6 +627,7 @@ class RRTSkills(BasePlanner):
         # Skill node bookkeeping
         if is_skill:
             n_new.is_skill_waypoint = True
+            n_new.state.is_skill_waypoint = True # TODO (for shortcutter.. change and only keep on node..?)
             n_new.skill_step = n_near.skill_step + 1
 
         # Add
@@ -761,6 +786,12 @@ class RRTSkills(BasePlanner):
         self._dbg_w_rewire_extracts = 0
         self._dbg_w_shortcut_hits = 0
 
+    def _record_solution(self): # TODO
+        """
+        
+        """
+        raise NotImplementedError
+
     # TODO SKILLS
     def _get_active_skill_task(self, mode: Mode):
         """
@@ -776,7 +807,7 @@ class RRTSkills(BasePlanner):
         
         return None
     
-    def _skill_steer(self, n_near: Node, skill_task, mode: Mode):
+    def _OLD_skill_steer(self, n_near: Node, skill_task, mode: Mode): # TODO remove
         """
         Rolls the skill out by one step
         """
@@ -820,12 +851,72 @@ class RRTSkills(BasePlanner):
           end_idx += dim
       return active_indices
 
-    def _mode_has_skill(self, mode: Mode) -> bool: # TODO
+    def _mode_has_skill(self, mode: Mode) -> bool: # TODO remove (not used)
         """
         Check if any robot's taks in this mode has a skill
         """
         raise NotImplementedError
     
+    def _expand_single_step(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
+        """
+        Rolls the skill out by one step, with optional concurrent steering for the
+        inactive robots
+        """
+        skill = skill_task.skill
+        dt = self.config.skill_dt
+
+        q_full = n_near.state.q.state().copy()
+        q_target_vec = q_target.state()
+
+        # 1. Determine the base configuration (handling inactive config)
+        if self.config.inactive_steering_mode == "concurrent":
+            # Concurrent
+            steer_state = self._linear_steer(n_near, q_target, mode)
+            q_base = steer_state.q.state().copy() # TODO add fall back (?) if steer_state else q_full
+        else: 
+            # Freeze
+            q_base = q_full
+
+        # 2. Extract acrive subspace for skill
+        active_indices = self._get_active_subspace_indices(skill_task)
+        q_subspace = q_full[active_indices]
+
+        # 3. Skill step
+        all_joints = self.env.get_joint_names()
+        self.env.C.selectJoints(skill.joints)
+
+        if isinstance(skill, BaseDeterministicTimedSkill):
+            n_steps = max(1, round(skill.duration / dt))
+            t_norm = (n_near.skill_step + 1) / n_steps
+            q_subspace_new = skill.step(t_norm, q_subspace, self.env)
+        else: 
+            q_subspace_new = skill.step(q_subspace, self.env)
+
+        self.env.C.selectJoints(all_joints)
+
+        # 4. Overwrite the active subspace in the base configuration
+        q_base[active_indices] = q_subspace_new
+        q_new = self.env.get_start_pos().from_flat(q_base)
+        state_new = State(q_new, mode, is_skill_waypoint=True)
+
+        # 5. Validate and add node
+        if not self._validate(state_new, n_near, is_skill=True):
+            return []
+        
+        return [self._create_and_add_node(state_new, n_near, mode, is_skill=True)]
+    
+    def _expand_full_rollout(self) -> List[Node]: # TODO
+        """
+        
+        """
+        raise NotImplementedError
+    
+    def _expand_kinodynamic(self) -> List[Node]: # TODO
+        """
+        
+        """
+        raise NotImplementedError
+
     # TODO RRT*
     def _set_gamma_rrt_star(self):
         """
