@@ -571,6 +571,8 @@ class BaseRRTstar(BasePlanner):
         self.modes = []
         self.trees = {}
         self.transition_node_ids = {}
+        # pre-warm JIT-compiled helpers so compilation is not charged to plan()
+        find_nearest_indices(np.zeros(1, dtype=np.float64), 0.0)
         self.start_time = time.time()
         self.costs = []
         self.times = []
@@ -597,6 +599,10 @@ class BaseRRTstar(BasePlanner):
         self._coll_checking_time: float = 0.0
         self._edge_check_time_success: float = 0.0
         self._edge_check_time_failure: float = 0.0
+        # running c_free estimate via uniform samples from _sample_uniform
+        self._c_free_n_total: int = 0
+        self._c_free_n_free: int = 0
+        self._c_free_total_volume: float = 0.0
 
     def _timed_edge_collision_free(
         self, q1: "Configuration", q2: "Configuration", mode: "Mode"
@@ -873,10 +879,31 @@ class BaseRRTstar(BasePlanner):
 
         self.d = sum(self.env.robot_dims.values())
         unit_ball_volume = math.pi ** (self.d / 2) / math.gamma((self.d / 2) + 1)
-        self.get_lebesgue_measure_of_free_configuration_space()
+        self._unit_ball_volume = unit_ball_volume
+
+        # compute total C-space volume from joint limits (no collision checking)
+        total_volume = 1.0
+        for robot in self.env.robots:
+            lims = self.env.limits[:, self.env.robot_idx[robot]]
+            total_volume *= np.prod(lims[1] - lims[0])
+        self._c_free_total_volume = total_volume
+
+        # initialise c_free optimistically with total volume; refined online by _sample_uniform
+        self.c_free = total_volume
         self.gamma_rrtstar = (
             (2 * (1 + 1 / self.d)) ** (1 / self.d)
             * (self.c_free / unit_ball_volume) ** (1 / self.d)
+        ) * self.eta
+
+    _C_FREE_MIN_SAMPLES = 200   # don't update until we have this many uniform draws
+    _C_FREE_UPDATE_EVERY = 500  # update every this many additional draws
+
+    def _update_c_free_from_samples(self) -> None:
+        """Recompute c_free and gamma_rrtstar from running uniform-sample counts."""
+        self.c_free = (self._c_free_n_free / self._c_free_n_total) * self._c_free_total_volume
+        self.gamma_rrtstar = (
+            (2 * (1 + 1 / self.d)) ** (1 / self.d)
+            * (self.c_free / self._unit_ball_volume) ** (1 / self.d)
         ) * self.eta
 
     def get_home_poses(self, mode: Mode) -> List[NDArray]:
@@ -1250,8 +1277,14 @@ class BaseRRTstar(BasePlanner):
     def _sample_uniform(self, mode: Mode):
         while True:
             q = self.env.sample_config_uniform_in_limits()
-
+            self._c_free_n_total += 1
             if self.env.is_collision_free(q, mode):
+                self._c_free_n_free += 1
+                if (
+                    self._c_free_n_total >= self._C_FREE_MIN_SAMPLES
+                    and self._c_free_n_total % self._C_FREE_UPDATE_EVERY == 0
+                ):
+                    self._update_c_free_from_samples()
                 return q
             # self.env.show(False)
 
