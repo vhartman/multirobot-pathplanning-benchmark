@@ -93,7 +93,9 @@ class BidirectionalRRTstar(BaseRRTstar):
 
     def _add_transition_seed(self, mode: Mode) -> Optional[Node]:
         """Sample one transition config and add it as a new seed to subtree B. Returns the node, or None on failure or duplicate."""
+        _t0 = time.perf_counter()
         q = self.sample_transition_configuration(mode)
+        self._sampling_time += time.perf_counter() - _t0
         if q is None:
             return None
         # Reject if this config already exists among transition nodes
