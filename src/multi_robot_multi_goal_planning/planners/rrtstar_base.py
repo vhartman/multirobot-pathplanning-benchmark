@@ -594,6 +594,7 @@ class BaseRRTstar(BasePlanner):
         self._gibbs_sampling_stats: Dict[Mode, List[int]] = {}
         # timing instrumentation
         self._sampling_time: float = 0.0
+        self._coll_checking_time: float = 0.0
         self._edge_check_time_success: float = 0.0
         self._edge_check_time_failure: float = 0.0
 
@@ -607,6 +608,16 @@ class BaseRRTstar(BasePlanner):
             self._edge_check_time_success += dt
         else:
             self._edge_check_time_failure += dt
+        return result
+
+    
+    def _timed_collision_free(
+        self, q: "Configuration", mode: "Mode"
+    ) -> bool:
+        t0 = time.perf_counter()
+        result = self.env.is_collision_free(q, mode)
+        dt = time.perf_counter() - t0
+        self._coll_checking_time += dt
         return result
 
     def add_tree(

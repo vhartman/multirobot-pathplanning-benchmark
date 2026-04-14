@@ -299,12 +299,13 @@ def run_experiment(
                         write_header = not os.path.exists(timing_file)
                         with open(timing_file, "a") as tf:
                             if write_header:
-                                tf.write("run_id,sampling_time,edge_success_time,edge_failure_time\n")
+                                tf.write("run_id,sampling_time,edge_success_time,edge_failure_time,coll_checking_time\n")
                             tf.write(
                                 f"{run_id},"
                                 f"{p._sampling_time:.6f},"
                                 f"{p._edge_check_time_success:.6f},"
-                                f"{p._edge_check_time_failure:.6f}\n"
+                                f"{p._edge_check_time_failure:.6f},"
+                                f"{p._coll_checking_time:.6f}\n"
                             )
                 except Exception as e:
                     print(f"Error in {planner_name} run {run_id}: {e}")
@@ -369,12 +370,13 @@ def run_planner_process(
                     write_header = not os.path.exists(timing_file)
                     with open(timing_file, "a") as tf:
                         if write_header:
-                            tf.write("run_id,sampling_time,edge_success_time,edge_failure_time\n")
+                            tf.write("run_id,sampling_time,edge_success_time,edge_failure_time,coll_checking_time\n")
                         tf.write(
                             f"{run_id},"
                             f"{p._sampling_time:.6f},"
                             f"{p._edge_check_time_success:.6f},"
-                            f"{p._edge_check_time_failure:.6f}\n"
+                            f"{p._edge_check_time_failure:.6f},"
+                            f"{p._coll_checking_time:.6f}\n"
                         )
 
             except Exception as e:

@@ -283,9 +283,9 @@ class BidirectionalRRTstar(BaseRRTstar):
             ):  # Reached
                 return n_nearest_b
             
-            if self.env.is_collision_free(
+            if self._timed_collision_free(
                 state_new.q, mode
-            ) and self.env.is_edge_collision_free(
+            ) and self._timed_edge_collision_free(
                 n_nearest_b.state.q, state_new.q, mode
             ):
                 # Add n_new to tree
@@ -422,7 +422,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not state_new:
                 continue
 
-            if self.env.is_collision_free(
+            if self._timed_collision_free(
                 state_new.q, active_mode
             ) and self._timed_edge_collision_free(
                 n_nearest.state.q, state_new.q, active_mode

@@ -2,9 +2,9 @@
 Print a LaTeX table of median timing breakdown per environment.
 
 Rows: environments (experiment folders)
-Columns: sampling | edge (free) | edge (blocked) | other
+Columns: sampling | edge (free) | edge (blocked) | coll. check | other
 
-"other" = first_solution_time - (sampling + edge_free + edge_blocked)
+"other" = first_solution_time - (sampling + edge_free + edge_blocked + coll_check)
 
 If multiple planners are present in an experiment, only birrtstar is used.
 """
@@ -19,7 +19,7 @@ from make_plots import load_data_from_folder
 
 def load_timing_for_folder(experiment_folder: str) -> tuple[str | None, list[tuple]]:
     """
-    Returns (planner_name, [(first_sol_time, sampling, edge_free, edge_blocked), ...])
+    Returns (planner_name, [(first_sol_time, sampling, edge_free, edge_blocked, coll_check), ...])
     for the chosen planner, or (None, []) if no timing.csv found.
 
     Pairs timing.csv rows with timestamps by run_id.
@@ -46,17 +46,18 @@ def load_timing_for_folder(experiment_folder: str) -> tuple[str | None, list[tup
             f.readline()  # header
             for line in f:
                 parts = line.strip().split(",")
-                if len(parts) == 4:
+                if len(parts) == 5:
+                    run_id, s, es, ef, cc = parts
+                elif len(parts) == 4:
                     run_id, s, es, ef = parts
-                elif len(parts) == 5:
-                    run_id, _, s, es, ef = parts
+                    cc = "0"
                 else:
                     continue
                 run_id = int(run_id)
                 t_first = first_sol_times.get(run_id)
                 if t_first is None:
                     continue
-                rows.append((t_first, float(s), float(es), float(ef)))
+                rows.append((t_first, float(s), float(es), float(ef), float(cc)))
 
         if rows:
             candidates[entry.name] = rows
@@ -76,10 +77,11 @@ def aggregate_timing(folders: list[str]) -> dict:
     Returns:
         results[env_name] = {
             "planner": str,
-            "sampling": float,      # median
+            "sampling": float,       # median fraction
             "edge_free": float,
             "edge_blocked": float,
-            "other": float,         # median(first_sol_time) - above three
+            "coll_check": float,
+            "other": float,          # median(first_sol_time) - above four
         }
     """
     results = {}
@@ -93,19 +95,22 @@ def aggregate_timing(folders: list[str]) -> dict:
         samplings   = [r[1] for r in rows]
         edge_frees  = [r[2] for r in rows]
         edge_blocks = [r[3] for r in rows]
+        coll_checks = [r[4] for r in rows]
 
         med_t   = np.median(t_firsts)
         med_s   = np.median(samplings)
         med_ef  = np.median(edge_frees)
         med_eb  = np.median(edge_blocks)
+        med_cc  = np.median(coll_checks)
 
-        other = med_t - med_s - med_ef - med_eb
+        other = med_t - med_s - med_ef - med_eb - med_cc
         results[env_name] = {
             "planner": planner_name,
             "first_sol_time": med_t,
             "sampling": med_s / med_t if med_t > 0 else 0.0,
             "edge_free": med_ef / med_t if med_t > 0 else 0.0,
             "edge_blocked": med_eb / med_t if med_t > 0 else 0.0,
+            "coll_check": med_cc / med_t if med_t > 0 else 0.0,
             "other": other / med_t if med_t > 0 else 0.0,
         }
 
@@ -113,10 +118,10 @@ def aggregate_timing(folders: list[str]) -> dict:
 
 
 def print_latex_table(aggregated: dict) -> None:
-    colspec = "l | r | r r r r"
+    colspec = "l | r | r r r r r"
     header = (
         r"Environment & $t_\text{init}$ [s] "
-        r"& Sampling & Edge (free) & Edge (blocked) & Other"
+        r"& Sampling & Edge (free) & Edge (blocked) & Coll.\ check & Other"
     )
 
     rows = []
@@ -126,6 +131,7 @@ def print_latex_table(aggregated: dict) -> None:
             "sampling":     d["sampling"],
             "edge_free":    d["edge_free"],
             "edge_blocked": d["edge_blocked"],
+            "coll_check":   d["coll_check"],
             "other":        d["other"],
         }
         best = max(fracs, key=fracs.get)
@@ -139,7 +145,7 @@ def print_latex_table(aggregated: dict) -> None:
         t = f"${d['first_sol_time']:.2f}$"
         rows.append(
             f"{escaped} & {t} & {fmt_frac('sampling')} & {fmt_frac('edge_free')}"
-            f" & {fmt_frac('edge_blocked')} & {fmt_frac('other')} \\\\"
+            f" & {fmt_frac('edge_blocked')} & {fmt_frac('coll_check')} & {fmt_frac('other')} \\\\"
         )
 
     body = "\n".join(rows)
