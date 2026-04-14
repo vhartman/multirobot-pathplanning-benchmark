@@ -138,8 +138,6 @@ from multi_robot_multi_goal_planning.problems.skills import (
     BaseDeterministicTimedSkill
 )
 
-# TODO [ ] add all relevant hyperparams
-# TODO [ ] p_transition for mode specific goal AND p_goal for terminal goal?
 @dataclass
 class RRTSkillsConfig:
     """
@@ -160,7 +158,7 @@ class RRTSkillsConfig:
 
     # Skills # TODO full_rollout and kinodynamic
     skill_expansion_strategy: str = "single_step" # "single_step" | "full_rollout" | "kinodynamic"
-    skill_dt: float = 0.01
+    skill_dt: float = 0.01 # TODO check with the dt chosen in the skill envs
     kinodynamic_steps: int = 20 # Only for kinodynamic strategy 
     inactive_steering_mode: str = "concurrent" # "freeze" | "concurrent"
 
@@ -197,14 +195,6 @@ class Node:
         self.is_skill_waypoint: bool = False
         self.skill_step: int = 0
         self.is_transition: bool = False
-
-# TODO [ ] vectorized batch_q for fast nearest-neighbor lookups
-# TODO [x] pre-allocate so append(node) -> O(1) instead of O(N)
-# TODO [o] how to do preallocation? allocate and then double?
-# TODO [x] init the multi modal tree
-# TODO [ ] figure out how to add a new subtree and transition seeding at mode boundary
-# TODO [x] add root to multi modal tree? optional?
-# TODO [x] import batch_config_cost batch_config_dist or access with self.env?
 
 class Subtree:
     """
@@ -270,16 +260,39 @@ class MultiModalTree:
         if mode not in self.subtrees:
             self.subtrees[mode] = Subtree(mode, self.robot_dims)
 
+# OLD TODOS
+"""
+OLD TODOS:
+# General 
+# TODO [x] init the multi modal tree
+# TODO [x] vectorized batch_q for fast nearest-neighbor lookups
+# TODO [x] pre-allocate so append(node) -> O(1) instead of O(N)
+
 # RRT
-# TODO [o] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
-# TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
-# TODO [ ] differentiate between goal bias and transition bias?
+# TODO [x] add root to multi modal tree? optional?
+# TODO [x] import batch_config_cost batch_config_dist or access with self.env?
 # TODO [x] check in PRM transition cost=0.0?
 # TODO [x] in _steer use config_cost(), restpecting distance_metric 
 # TODO [x] in _check_transitions always create and insert seed node (even if mode already reached)
 # TODO [x] in _initialize_planner add early return if self.tree.root is not None (not duplicated start mode/node) if plan() called again?
+# TODO [x] global shortcutting
+
+# SKILLS
+# TODO [x] update _add_node to set skill flag
+# TODO [x] update _check_transitions when skill is done
+# TODO [x] differentiate between linear steer and skill steer
+# TODO [x] in _steer add skills -> call skill.step()
+
+"""
+
+# CURRENT TODOS
+"""
+CURRENT TODOS
+# RRT
+# TODO [o] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
+# TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
+# TODO [ ] differentiate between goal bias and transition bias?
 # TODO [ ] add debug prints in the planning loop
-# TODO [x] shortcutting
 # TODO [ ] in _steer add clippling of q_new to self.env.limits?
 # TODO [ ] in plan when creating/adding a new node, we only update parents, what about children? 
 # TODO [ ] in _sample_transition_config consider taking random node from tree for inactive instead of random sampling? (seems like tree struggles to grow with random sampling in certain envs -> yes, random sampling is the idea, but doesn't seem to be efficient -> maybe something else is the problem..)
@@ -294,11 +307,9 @@ class MultiModalTree:
 # TODO [ ] in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached
 
 # SKILLS
-# TODO [x] update _add_node to set skill flag
-# TODO [x] update _check_transitions when skill is done
-# TODO [x] differentiate between linear steer and skill steer
-# TODO [x] in _steer add skills -> call skill.step()
 # TODO [o] add unified structure with 3 expansion modes for skill rollouts (full, single, kino)
+# TODO [ ] check self.dt with chosen dt in skills..
+# TODO [ ] implement kindodynamic with SkillEdge 
 
 # RRT*
 # TODO [o] add rewiring (RRT*)
@@ -306,6 +317,13 @@ class MultiModalTree:
 # TODO [o] dynamically define step size eta
 # TODO [ ] in _find_best_parent, seeding best_parent = n_near needs edge collision check? 
 # TODO [ ] add bidirectional (BRRT*)
+
+# GENERAL
+# TODO [o] how to do preallocation? allocate and then double?
+# TODO [o] figure out how to add a new subtree and transition seeding at mode boundary
+# TODO [ ] add all relevant hyperparams to RRTSkillsConfig
+# TODO [ ] p_transition for mode specific goal AND p_goal for terminal goal?
+"""
 
 class RRTSkills(BasePlanner):
     """
@@ -460,8 +478,10 @@ class RRTSkills(BasePlanner):
         if self.config.mode_sampling_type == "greedy":
             if random.random() < self.config.p_newest_mode:
                 return self.reached_modes[-1]
+            return random.choice(self.reached_modes)
             
         # TODO frontier
+        # ...
         
         # Uniform strategy
         return random.choice(self.reached_modes)
@@ -507,6 +527,7 @@ class RRTSkills(BasePlanner):
             # Build configuration 
             q = self.env.sample_config_uniform_in_limits()
             
+            # TODO should remain random, or maybe not.. why have inactive random if we can do something smarter..?
             # # NOTE: instead of uniform sampling, use config from random node in subtree
             # subtree = self.tree.subtrees.get(mode)
             # idx = random.randint(0, subtree.size - 1)
@@ -638,10 +659,14 @@ class RRTSkills(BasePlanner):
     def _check_transitions(self, n_new: Node):
         """
         Checks if n_new triggers a mode switch 
+        - Normal mode: is_transition()?
+        - Skill mode: skill.done()?
+        If transition node -> get the next valid modes, add and seed new subtree
         """
         mode = n_new.state.mode
         skill_task = self._get_active_skill_task(mode)
 
+        # Check transition for skill mode
         if skill_task is not None:
             # Handle skill 
             skill = skill_task.skill
@@ -659,11 +684,13 @@ class RRTSkills(BasePlanner):
                 is_transition = skill.done(t_norm, q_subspace, self.env)
             else:
                 is_transition = skill.done(q_subspace, self.env)
-            
+        
+        # Check transition for normal (geometric) mode
         else:
             # Standard geometric transition check
             is_transition = self.env.is_transition(n_new.state.q, n_new.state.mode)
 
+        # Transition node -> get next modes, add and seed new subtree
         if is_transition:
             self._dbg_is_trans_true += 1
             n_new.is_transition = True
