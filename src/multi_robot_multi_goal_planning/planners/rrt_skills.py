@@ -144,13 +144,17 @@ class RRTSkillsConfig:
     Hyperparameters for the multi-modal RRT with skills
     """
     # RRT
-    step_size: float = 0.1 # set in initialize_planner 
+    step_size_strategy: str = "sqrt_d" # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots"
+    step_size: float = 0.1 # Constant
+    step_size_factor: float = 0.1 # Dynamic step size tuning factor
+
     p_goal: float = 0.3
     # p_terminal_goal: float = 0.1 
 
     # Mode sampling # TODO frontier implementation (from prm)
     mode_sampling_type: str = "greedy" # "uniform" | "greedy" | "frontier"
     p_newest_mode: float = 0.8
+    p_frontier: float = 0.98
     
     distance_metric: str = "max_euclidean"
     with_mode_validation: bool = False # Geometric pre-check on mode (blacklist_modes) # TODO
@@ -297,6 +301,9 @@ CURRENT TODOS
 # TODO [ ] in plan when creating/adding a new node, we only update parents, what about children? 
 # TODO [ ] in _sample_transition_config consider taking random node from tree for inactive instead of random sampling? (seems like tree struggles to grow with random sampling in certain envs -> yes, random sampling is the idea, but doesn't seem to be efficient -> maybe something else is the problem..)
 # TODO [ ] in _check_transitions, config check really needed or if config ok in modeA -> ok in modeB?
+# TODO [ ] in _sample_transition_config use a smarter approach than random config for inactive robots
+# TODO [o] in _linear_steer fix the dist computation (accidentally used cost function..)
+# TODO [ ] in _initialize_planner compare using eta=sqrt(d) and eta=sqrt(d/#robots)
 
 # Improvements
 # TODO [ ] blacklisting
@@ -321,7 +328,7 @@ CURRENT TODOS
 # GENERAL
 # TODO [o] how to do preallocation? allocate and then double?
 # TODO [o] figure out how to add a new subtree and transition seeding at mode boundary
-# TODO [ ] add all relevant hyperparams to RRTSkillsConfig
+# TODO [x] add all relevant hyperparams to RRTSkillsConfig
 # TODO [ ] p_transition for mode specific goal AND p_goal for terminal goal?
 """
 
@@ -393,35 +400,22 @@ class RRTSkills(BasePlanner):
                 # RRT* rewire                                                                                                
                 if self.config.use_rrt_star:                                                                                 
                     self._rewire(n_new, mode)                                                                                
-                    if iterations % 100 == 0 and self.solution_node and self.solution_node.cost < self.best_cost - 1e-9:
-                        self.best_path = self._extract_path(self.solution_node)
-                        self.best_cost = path_cost(self.best_path, self.env.batch_config_cost)
-                        costs.append(self.best_cost)
-                        times.append(time.time() - self.start_time)# TODO use _record_solution()
+                    if iterations % 100 == 0 and self.solution_node:
+                        self._record_solution(costs, times, node=self.solution_node)
                                                                                                                                                                 
             if self.env.done(new_nodes[-1].state.q, mode):
-                print(f"[DONE] self.env.done() is TRUE")
-                if self.solution_node is None or new_nodes[-1].cost < self.solution_node.cost:
-                    self.solution_node = new_nodes[-1]
-                    self.best_path = self._extract_path(new_nodes[-1])
-                    self.best_cost = path_cost(self.best_path, self.env.batch_config_cost)
-                    print(f"[SOLUTION] best cost: {self.best_cost}")
-                    costs.append(self.best_cost)
-                    times.append(time.time() - self.start_time) # TODO use _record_solution()
-
+                print(f"[RRT DONE] self.env.done() is TRUE")
+                if self._record_solution(costs, times, node=new_nodes[-1]):
+                    print(f"[RRT SOLUTION] Improved cost to: {self.best_cost:.3f}")
+                
                 if not optimize:
                     break # Stop after first solution
                 
         # Single terminal shortcut
         if self.config.try_shortcutting and self.best_path is not None:
             sc = self._shortcut(self.best_path)
-            sc_cost = path_cost(sc, self.env.batch_config_cost)
-            if sc_cost < self.best_cost:
-                print(f"[RRT FINAL SHORTCUT] {self.best_cost:.3f} -> {sc_cost:.3f}")
-                self.best_path = sc
-                self.best_cost = sc_cost
-                costs.append(sc_cost)
-                times.append(time.time() - self.start_time) # TODO use _record_solution()
+            if self._record_solution(costs, times, path=sc):
+                print(f"[RRT FINAL SHORTCUT] Improved cost to {self.best_cost:.3f}")
 
         # Extract path and info
         if self.best_path is not None:
@@ -446,9 +440,7 @@ class RRTSkills(BasePlanner):
             return # Already initialized
         
         # Dynamic step size
-        # self.eta = self.config.step_size
-        self.eta = math.sqrt(sum(self.env.robot_dims.values())) # TODO too aggressive.. maybe 0.1*sqrt(d)?
-        # self.eta = 0.5 * math.sqrt(sum(self.env.robot_dims.values()))
+        self.eta = self._compute_dynamic_eta()
         
         # Mode
         start_mode = self.env.get_start_mode()
@@ -465,11 +457,53 @@ class RRTSkills(BasePlanner):
         if self.config.use_rrt_star:
             self._set_gamma_rrt_star()
 
+    def _compute_dynamic_eta(self):
+        """
+        Dynamically compute step size eta based based on environment boundaries and chosen strategy
+        """
+        strategy = self.config.step_size_strategy
+    
+        if strategy == "constant":
+            return self.config.step_size
+        
+        elif strategy == "sqrt_d":
+            d = sum(self.env.robot_dims.values())
+            return math.sqrt(d)
+        
+        elif strategy == "sqrt_d_robots)":
+            num_robots = len(self.env.robots)
+            return math.sqrt(d / num_robots)
+
+        robot_diameters = []
+        offset = 0
+        for robot in self.env.robots:
+            dim = self.env.robot_dims[robot]
+            lo = self.env.limits[0, offset : offset + dim]
+            hi = self.env.limits[1, offset : offset + dim]
+            robot_diameters.append(np.linalg.norm(hi - lo))
+            offset += dim
+
+        workspace_diameter = max(robot_diameters)
+        
+        if strategy == "scaled":
+            return self.config.step_size_factor * workspace_diameter
+        
+        elif strategy == "sqrt_d_scaled":
+            d = sum(self.env.robot_dims.values())
+            return math.sqrt(d) / d * workspace_diameter
+            
+        else:
+            raise ValueError(f"Unknown step_size_strategy: {strategy}")
+
     def _sample_mode(self) -> Mode:
         """
         Selects which mode to expand next based on the selected strategy
-        - Uniform
-        - Greedy
+        - "uniform": pick uniformly from reached_modes
+        - "greedy": p_newest_mode to newest, else uniform
+        - "frontier": p_frontier split across modes without outgoing transitions, 
+                      remainder split across others by inverse node count 
+        
+        NOTE: frontier implementation from composite_prm_planner
         """
         if len(self.reached_modes) == 1:
             return self.reached_modes[0]
@@ -480,10 +514,57 @@ class RRTSkills(BasePlanner):
                 return self.reached_modes[-1]
             return random.choice(self.reached_modes)
             
-        # TODO frontier
-        # ...
-        
-        # Uniform strategy
+        # Frontier strategy # TODO check
+        if self.config.mode_sampling_type == "frontier":
+            total_nodes = sum(self.tree.subtrees[m].size for m in self.reached_modes)
+            p_frontier = self.config.p_frontier
+            p_remaining = 1.0 - p_frontier
+
+            frontier_modes = []
+            remaining_modes = []
+            sample_counts = {}
+            inv_prob = []
+
+            # Check for frontier modes in the list of so far discovered modes
+            for m in self.reached_modes:
+                sample_count = self.tree.subtrees[m].size
+                total_nodes += sample_count
+                sample_counts[m] = sample_count
+                if not m.next_modes:
+                    frontier_modes.append(m)
+                else:
+                    remaining_modes.append(m)
+                    inv_prob.append(1 - (sample_count / total_nodes))
+
+            # Special case: only frontier mode should be sampled
+            if p_frontier == 1.0:
+                if not frontier_modes:
+                    frontier_modes = self.reached_modes
+                if len(frontier_modes) > 0:
+                    p = [1 / len(frontier_modes)] * len(frontier_modes)
+                    return random.choices(frontier_modes, weights=p, k=1)[0]
+                else:
+                    return random.choice(self.reached_modes)
+
+            # Fallback to uniform if either partition is empty
+            if not remaining_modes or not frontier_modes:
+                return random.choice(self.reached_modes)
+
+            # Build probability distribution
+            total_inverse = sum(
+                1 - (sample_counts[m] / total_nodes) for m in remaining_modes
+            )
+            if total_inverse == 0:
+                return random.choice(self.reached_modes)
+
+            sorted_reached_modes = frontier_modes + remaining_modes
+            p = [p_frontier / len(frontier_modes)] * len(frontier_modes)
+            inv_prob = np.array(inv_prob)
+            p.extend((inv_prob / total_inverse) * p_remaining)
+
+            return random.choices(sorted_reached_modes, weights=p, k=1)[0]
+
+        # Uniform strategy (also fallback)
         return random.choice(self.reached_modes)
 
     def _sample_target(self, mode: Mode) -> Configuration:
@@ -596,8 +677,8 @@ class RRTSkills(BasePlanner):
         q_near_vec = n_near.state.q.state() # .state() returns NDArray
         q_target_vec = q_target.state()
 
-        # dist = np.linalg.norm(q_target_vec - q_near_vec)
-        dist = self.env.config_cost(n_near.state.q, q_target)
+        dist_array = batch_config_dist(n_near.state.q, [q_target], self.config.distance_metric)
+        dist = dist_array.item()
         if dist < 1e-6:
             return None
         
@@ -606,10 +687,17 @@ class RRTSkills(BasePlanner):
             q_new = q_target
             self._dbg_snap_events += 1
         else:
+            # print(f"[DEBUG LINEAR STEER] linear")
             # step = min(dist, self.eta)
-            step = self.eta
-            q_new_vec = q_near_vec + step * (q_target_vec - q_near_vec) / dist
-            q_new = self.env.get_start_pos().from_flat(q_new_vec)
+            q_new_vec = q_near_vec + self.eta * (q_target_vec - q_near_vec) / dist
+
+        # DEBUG
+        # dbg_dists = batch_config_dist(n_near.state.q, [q_target, q_new], self.config.distance_metric)
+        # for i, dist in enumerate(dbg_dists):
+        #     print(f"[DEBUG LINEAR STEER DIST] distance {i} = {dbg_dists[i]}")
+
+        # print(f"[DEBUG LINEAR STEER] dist = {dist:.4f}, eta = {self.eta:.4f}")
+        q_new = self.env.get_start_pos().from_flat(q_new_vec)
 
         return State(q_new, mode)
 
@@ -813,11 +901,38 @@ class RRTSkills(BasePlanner):
         self._dbg_w_rewire_extracts = 0
         self._dbg_w_shortcut_hits = 0
 
-    def _record_solution(self): # TODO
+    def _record_solution(self, costs: List[float], times: List[float], node: Optional[Node] = None, path: Optional[List[State]] = None):
         """
+        Tracks best_cost, best_path, and solution_node.
+        """
+        updated = False
+        now = time.time() - self.start_time
         
-        """
-        raise NotImplementedError
+        if node is not None:
+            # 1. Update solution_node if this node is better or it's the first solution
+            if self.solution_node is None or node.cost < self.solution_node.cost - 1e-9:
+                self.solution_node = node
+            
+            # 2. Update best_cost/best_path if this node provides an improvement over ANY best so far
+            if node.cost < self.best_cost - 1e-9:
+                self.best_cost = node.cost
+                self.best_path = self._extract_path(node)
+                print(f"[SOLUTION] New best cost: {self.best_cost:.3f}")
+                updated = True
+                
+        elif path is not None:
+            # 3. Path improved via post-processing (shortcutting)
+            new_cost = path_cost(path, self.env.batch_config_cost)
+            if new_cost < self.best_cost - 1e-9:
+                self.best_cost = new_cost
+                self.best_path = path
+                updated = True
+        
+        if updated:
+            costs.append(self.best_cost)
+            times.append(now)
+            return True
+        return False
 
     # TODO SKILLS
     def _get_active_skill_task(self, mode: Mode):
@@ -897,12 +1012,14 @@ class RRTSkills(BasePlanner):
 
         # 1. Determine the base configuration (handling inactive config)
         if self.config.inactive_steering_mode == "concurrent":
-            # Concurrent
             steer_state = self._linear_steer(n_near, q_target, mode)
-            q_base = steer_state.q.state().copy() # TODO add fall back (?) if steer_state else q_full
+            if steer_state is None: # If steering is completely blocked
+                q_base = q_full.copy()
+            else:
+                q_base = steer_state.q.state().copy()
         else: 
             # Freeze
-            q_base = q_full
+            q_base = q_full.copy()
 
         # 2. Extract acrive subspace for skill
         active_indices = self._get_active_subspace_indices(skill_task)
