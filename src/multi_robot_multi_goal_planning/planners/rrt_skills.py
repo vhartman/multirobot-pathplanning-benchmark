@@ -379,7 +379,7 @@ class RRTSkills(BasePlanner):
             mode = self._sample_mode()
 
             # 2. Sample target
-            q_target = self._sample_target(mode)
+            q_target, is_uniform = self._sample_target(mode)
 
             # 3. Nearest neighbor
             n_near, dist = self.tree.subtrees[mode].get_nearest(q_target, self.config.distance_metric)
@@ -388,7 +388,7 @@ class RRTSkills(BasePlanner):
 
             # 4. Steer (linear or skill based)
             skill_task = self._get_active_skill_task(mode)
-            new_nodes = self._expand(n_near, q_target, mode, skill_task)
+            new_nodes = self._expand(n_near, q_target, mode, skill_task, is_uniform)
             
             if not new_nodes:
                 continue
@@ -454,8 +454,11 @@ class RRTSkills(BasePlanner):
         self.tree.subtrees[start_mode].add_node(start_node)
 
         # RRT*
+        self.valid_samples = 0
+        self.total_samples = 0
         if self.config.use_rrt_star:
-            self._set_gamma_rrt_star()
+            self.mu_X_total = float(np.prod(self.env.limits[1] - self.env.limits[0]))
+            self._set_gamma_rrt_star(mu_X_free=self.mu_X_total) # Initial approximation (will get updated)
 
     def _compute_dynamic_eta(self):
         """
@@ -567,7 +570,7 @@ class RRTSkills(BasePlanner):
         # Uniform strategy (also fallback)
         return random.choice(self.reached_modes)
 
-    def _sample_target(self, mode: Mode) -> Configuration:
+    def _sample_target(self, mode: Mode) -> tuple[Configuration, bool]:
         """
         Samples a random configuration or goal bias / transition
         """
@@ -577,14 +580,14 @@ class RRTSkills(BasePlanner):
             q_target = self._sample_transition_config(mode)
             if q_target is not None:
                 self._dbg_goal_bias_success += 1
-                return q_target
+                return q_target, False # Not uniform
         
         # # Informed sampling
         # if self.solution_node and self.config.try_informed_sampling:
         #     pass # TODO
         
         # Uniform sampling
-        return self.env.sample_config_uniform_in_limits()
+        return self.env.sample_config_uniform_in_limits(), True # Is uniform
 
     def _sample_transition_config(self, mode: Mode) -> Configuration:
         """
@@ -636,14 +639,14 @@ class RRTSkills(BasePlanner):
         print(f"[TRANSITION SAMPLING] failed at {iters} iterations")
         return None
     
-    def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
+    def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task, is_uniform: bool = True) -> List[Node]:
         """
         
         """
         # Strategy for expanding/steering in NON-skill-modes
         if skill_task is None:
             state_new = self._linear_steer(n_near, q_target, mode)
-            if state_new is None or not self._validate(state_new, n_near, is_skill=False):
+            if state_new is None or not self._validate(state_new, n_near, is_skill=False, is_uniform=is_uniform):
                 self._dbg_validate_fail += 1
                 return []
             return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
@@ -701,15 +704,24 @@ class RRTSkills(BasePlanner):
 
         return State(q_new, mode)
 
-    def _validate(self, state_new: State, n_near: Node, is_skill: bool) -> bool:
+    def _validate(self, state_new: State, n_near: Node, is_skill: bool, is_uniform: bool = True) -> bool:
         """
         Collision checking for configurations and edges
         """
-        if not self.env.is_collision_free(state_new.q, state_new.mode):
+        # 1. Config check
+        is_state_free = self.env.is_collision_free(state_new.q, state_new.mode)
+
+        # 2. Update c_free self._update_cfree_estimate
+        if not is_skill:
+            self._update_cfree_estimate(was_valid=is_state_free, was_uniform=is_uniform)
+
+        # 3. Failure based on config check 
+        if not is_state_free:
             if is_skill and self._dbg_validate_fail % 100 == 0:  # Print every 100th fail to avoid spam
                 print(f"[DEBUG SKILL] State collision at t_norm = {n_near.skill_step/100:.2f} (approx)")
             return False
         
+        # 4. Edge check
         if not self.env.is_edge_collision_free(state_new.q, n_near.state.q, state_new.mode):
             if is_skill and self._dbg_validate_fail % 100 == 0:
                 print(f"[DEBUG SKILL] Edge collision from step {n_near.skill_step} to {n_near.skill_step + 1}")
@@ -1062,7 +1074,7 @@ class RRTSkills(BasePlanner):
         raise NotImplementedError
 
     # TODO RRT*
-    def _set_gamma_rrt_star(self):
+    def _set_gamma_rrt_star(self, mu_X_free: float = None):
         """
         RRT*: asymptotic optimality constant
         
@@ -1073,9 +1085,26 @@ class RRTSkills(BasePlanner):
         """
         self.d = sum(self.env.robot_dims.values())
         zeta_d = math.pi ** (self.d / 2) / (math.gamma(self.d / 2 + 1))
-        limits = self.env.limits
-        mu_Xfree = float(np.prod(limits[1] - limits[0])) # mu(Xfree) <= mu(X) -> r_n slightly larger 
-        self.gamma_rrt_star = (2 * (1 + 1 / self.d)) ** (1 / self.d) * (mu_Xfree / zeta_d) ** (1 / self.d)
+        self.gamma_rrt_star = (2 * (1 + 1 / self.d)) ** (1 / self.d) * (mu_X_free / zeta_d) ** (1 / self.d)
+
+    def _update_cfree_estimate(self, was_valid: bool, was_uniform: bool = True): # TODO (to be tested)
+        """
+        Approximates c_free by tracking current sample validity (online) 
+        """
+        # Only track samples from a global uniform distribution
+        if not was_uniform:
+            return
+        
+        # Track valid and total samples
+        self.total_samples += 1
+        if was_valid:
+            self.valid_samples += 1
+
+            # Compute mu_X_free and gamma after 100 samples & update periodically
+            if self.total_samples % 200 == 0 and self.total_samples > 100:
+                frac_free = self.valid_samples / self.total_samples
+                mu_X_free = frac_free * self.mu_X_total
+                self._set_gamma_rrt_star(mu_X_free)
 
     def _compute_rewiring_radius(self, n: int):
         """
