@@ -435,10 +435,14 @@ def load_timing_data(path: str, mode: str = "stacking") -> dict:
                 f.readline()  # skip header
                 for line in f:
                     parts = line.strip().split(",")
-                    if len(parts) != 4:
+                    if len(parts) == 5:
+                        _, s, es, ef, cc = parts
+                    elif len(parts) == 4:
+                        _, s, es, ef = parts
+                        cc = "0"
+                    else:
                         continue
-                    _, s, es, ef = parts
-                    data[planner_name][key].append((float(s), float(es), float(ef)))
+                    data[planner_name][key].append((float(s), float(es), float(ef), float(cc)))
 
     return dict(data)
 
@@ -460,10 +464,10 @@ def _timing_plot(
     all_robots = sorted({r for p in timing_data.values() for (r, _) in p})
     all_secondary = sorted({s for p in timing_data.values() for (_, s) in p})
 
-    metric_colors = ["steelblue", "seagreen", "tomato"]
-    metric_styles = ["-", "--", ":"]
-    metric_markers = ["o", "s", "^"]
-    metric_labels = ["sampling", "edge (free)", "edge (blocked)"]
+    metric_colors = ["steelblue", "seagreen", "tomato", "darkorange"]
+    metric_styles = ["-", "--", ":", "-."]
+    metric_markers = ["o", "s", "^", "D"]
+    metric_labels = ["sampling", "edge (free)", "edge (blocked)", "single config"]
 
     ncols = 2
     nrows = int(np.ceil(len(all_secondary) / ncols))
@@ -480,7 +484,7 @@ def _timing_plot(
 
         for si, s in enumerate(all_secondary):
             ax = axes[si // ncols][si % ncols]
-            for mi in range(3):
+            for mi in range(4):
                 xs, meds, lbs, ubs = [], [], [], []
                 for r in all_robots:
                     triples = pdata.get((r, s), [])
