@@ -118,10 +118,14 @@ def aggregate_timing(folders: list[str]) -> dict:
 
 
 def print_latex_table(aggregated: dict) -> None:
-    colspec = "l | r | r r r r r"
+    colspec = "l | r | r@{\\hspace{8pt}} r@{\\hspace{8pt}} r@{\\hspace{8pt}} r@{\\hspace{8pt}} r"
+    subheader  = r"& & \multicolumn{5}{c}{Fraction of total time [\%]} \\"
+    cmidrule1  = r"\cmidrule(lr){3-7}"
+    subheader2 = r"& & & \multicolumn{3}{c}{Collision checking} & \\"
+    cmidrule2  = r"\cmidrule(lr){4-6}"
     header = (
         r"Environment & $t_\text{init}$ [s] "
-        r"& Sampling & Edge (free) & Edge (blocked) & Coll.\ check & Other"
+        r"& Sampling & Single config & Edge (free) & Edge (blocked) & Other"
     )
 
     rows = []
@@ -137,15 +141,15 @@ def print_latex_table(aggregated: dict) -> None:
         best = max(fracs, key=fracs.get)
 
         def fmt_frac(key):
-            val = f"{fracs[key]:.3f}"
+            val = f"{fracs[key]*100:.1f}"
             if key == best:
                 return f"$\\mathbf{{{val}}}$"
             return f"${val}$"
 
         t = f"${d['first_sol_time']:.2f}$"
         rows.append(
-            f"{escaped} & {t} & {fmt_frac('sampling')} & {fmt_frac('edge_free')}"
-            f" & {fmt_frac('edge_blocked')} & {fmt_frac('coll_check')} & {fmt_frac('other')} \\\\"
+            f"{escaped} & {t} & {fmt_frac('sampling')} & {fmt_frac('coll_check')} & {fmt_frac('edge_free')}"
+            f" & {fmt_frac('edge_blocked')} & {fmt_frac('other')} \\\\"
         )
 
     body = "\n".join(rows)
@@ -153,13 +157,20 @@ def print_latex_table(aggregated: dict) -> None:
     TEX_TEMPLATE = Template(r"""
 \begin{tabular}{$colspec}
 \toprule
+$subheader
+$cmidrule1
+$subheader2
+$cmidrule2
 $header \\
 \midrule
 $body
 \bottomrule
 \end{tabular}
 """)
-    print(TEX_TEMPLATE.substitute(colspec=colspec, header=header, body=body))
+    print(TEX_TEMPLATE.substitute(
+        colspec=colspec, subheader=subheader, cmidrule1=cmidrule1,
+        subheader2=subheader2, cmidrule2=cmidrule2, header=header, body=body,
+    ))
 
 
 def get_subfolders(folder: str) -> list[str]:
