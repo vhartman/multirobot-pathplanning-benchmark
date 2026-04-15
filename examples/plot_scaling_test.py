@@ -431,18 +431,29 @@ def load_timing_data(path: str, mode: str = "stacking") -> dict:
             timing_file = os.path.join(exp_dir, planner_name, "timing.csv")
             if not os.path.isfile(timing_file):
                 continue
+
+            planner_data = load_data_from_folder(exp_dir + "/")
+            first_sol_times = {}
+            for run_idx, run in enumerate(planner_data.get(planner_name, [])):
+                times = run.get("times", [])
+                if times:
+                    first_sol_times[run_idx] = times[0]
+
             with open(timing_file) as f:
                 f.readline()  # skip header
                 for line in f:
                     parts = line.strip().split(",")
                     if len(parts) == 5:
-                        _, s, es, ef, cc = parts
+                        run_id, s, es, ef, cc = parts
                     elif len(parts) == 4:
-                        _, s, es, ef = parts
+                        run_id, s, es, ef = parts
                         cc = "0"
                     else:
                         continue
-                    data[planner_name][key].append((float(s), float(es), float(ef), float(cc)))
+                    t_first = first_sol_times.get(int(run_id))
+                    if t_first is None:
+                        continue
+                    data[planner_name][key].append((float(s), float(es), float(ef), float(cc), t_first))
 
     return dict(data)
 
@@ -493,10 +504,9 @@ def _timing_plot(
                     if absolute:
                         vals = [t[mi] for t in triples]
                     else:
-                        totals = [sum(t) for t in triples]
                         vals = [
-                            t[mi] / tot if tot > 0 else 0.0
-                            for t, tot in zip(triples, totals)
+                            t[mi] / t[4] if t[4] > 0 else 0.0
+                            for t in triples
                         ]
                     med, lb, ub = _median_and_ci(vals)
                     if med is None:
