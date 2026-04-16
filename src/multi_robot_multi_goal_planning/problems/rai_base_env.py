@@ -338,8 +338,13 @@ class rai_env(BaseProblem):
         self.C_base = None
         self.C_orig = None
 
+        self._uniform_sampler = None
+
         # Create a deep copy of self without C
         new_env = copy.deepcopy(super(), memo)
+
+        new_env._uniform_sampler = self._make_uniform_sampler()
+        self._uniform_sampler = self._make_uniform_sampler()
 
         # Restore C in both objects
         self.C = C

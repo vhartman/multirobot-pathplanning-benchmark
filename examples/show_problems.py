@@ -6,6 +6,7 @@ import multi_robot_multi_goal_planning.problems as problems
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.planning_env import Mode, State
 from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration
+from multi_robot_multi_goal_planning.problems.util import compute_reachable_modes
 
 import numpy as np
 import argparse
@@ -164,78 +165,10 @@ def visualize_modes(env: rai_env, export_images: bool = False, use_viser: bool =
         env.close()
     
 def benchmark_collision_checking(env: rai_env, N=10000):
-    conf_type = type(env.get_start_pos())
-
-    def sample_next_modes(mode: Mode):
-        if env.is_terminal_mode(mode):
-            return None
-        failed_attemps = 0
-        while True:
-            if failed_attemps > 1000:
-                print("Failed to sample next mode")
-                return None
-            possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
-            if len(possible_next_task_combinations) > 0:
-                ind = random.randint(0, len(possible_next_task_combinations) - 1)
-                active_task = env.get_active_task(
-                    mode, possible_next_task_combinations[ind]
-                )
-            else:
-                active_task = env.get_active_task(mode, None)
-
-            goals_to_sample = active_task.robots
-
-            goal_sample = active_task.goal.sample(mode)
-
-            q = []
-            for i in range(len(env.robots)):
-                r = env.robots[i]
-                if r in goals_to_sample:
-                    offset = 0
-                    for _, task_robot in enumerate(active_task.robots):
-                        if task_robot == r:
-                            q.append(
-                                goal_sample[
-                                    offset : offset + env.robot_dims[task_robot]
-                                ]
-                            )
-                            break
-                        offset += env.robot_dims[task_robot]
-                else:  # uniform sample
-                    lims = env.limits[:, env.robot_idx[r]]
-                    if lims[0, 0] < lims[1, 0]:
-                        qr = (
-                            np.random.rand(env.robot_dims[r])
-                            * (lims[1, :] - lims[0, :])
-                            + lims[0, :]
-                        )
-                    else:
-                        qr = np.random.rand(env.robot_dims[r]) * 6 - 3
-
-                    q.append(qr)
-
-            q = conf_type.from_list(q)
-
-            if env.is_collision_free(q, mode):                
-                next_modes = env.get_next_modes(q, mode)
-                # assert len(next_modes) == 1
-                # next_mode = next_modes[0]
-                return next_modes
-            else:
-                failed_attemps += 1
-
-    # create list of modes that we can reach
     print("Make mode list")
-    reachable_modes = set([env.get_start_mode()])
-    max_iter = 500
-    for _ in range(max_iter):
-        m_rnd = random.choice(tuple(reachable_modes))
-        next_modes = sample_next_modes(m_rnd)
-        print(next_modes)
-        if next_modes is not None:
-            reachable_modes.update(next_modes)
-    reachable_modes = tuple(reachable_modes)
+    reachable_modes = compute_reachable_modes(env)
     print("Found", len(reachable_modes), "reachable modes")
+    
     is_collision_free = env.is_collision_free
 
     # actually do the benchmarking

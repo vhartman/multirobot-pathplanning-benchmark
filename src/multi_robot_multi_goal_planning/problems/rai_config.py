@@ -3708,6 +3708,63 @@ def make_box_stacking_env(
 
         return C, keyframes, all_robots
     
+def make_isolated_box_stacking_env(num_robots=2, num_boxes_per_robot=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False):
+    C = ry.Config()
+
+    C_individual, keyframes, robot = make_box_stacking_env(1, num_boxes_per_robot, robot_types)
+    
+    grid_spacing = 3.5
+    grid_cols = 3
+
+    all_keyframes = {}
+    all_robots = []
+
+    for i in range(num_robots):
+        prefix = f"prefix_{i}_"
+        C.addConfigurationCopy(C_individual, prefix)
+
+        col = i % grid_cols
+        row = i // grid_cols
+        offset = np.array([
+            (col - 1) * grid_spacing,
+            (row - 1) * grid_spacing,
+            0,
+        ])
+
+        for f in C.getFrames():
+            if prefix in f.name:
+                pos = C_individual.getFrame(f.name[len(prefix):]).getPosition()
+                f.setPosition(pos + offset)
+
+        per_robot_keyframes = []
+        for robot, box, poses, goal in keyframes:
+            per_robot_keyframes.append((prefix + robot, prefix + box, poses, prefix + goal))
+
+        all_keyframes[prefix + robot] = per_robot_keyframes
+
+        all_robots.append(prefix + robot)
+
+    # randomize keyframe ordering: merge per-robot sequences preserving relative order within each robot
+    sequenced_keyframes = []
+
+    randomized = False
+    if randomized:
+        indices = {r: 0 for r in all_keyframes}
+        robots_remaining = list(all_keyframes.keys())
+        while robots_remaining:
+            r = random.choice(robots_remaining)
+            sequenced_keyframes.append(all_keyframes[r][indices[r]])
+            indices[r] += 1
+            if indices[r] >= len(all_keyframes[r]):
+                robots_remaining.remove(r)
+
+    else:
+        for i in range(len(per_robot_keyframes)):
+            for r in all_robots:
+                sequenced_keyframes.append(all_keyframes[r][i])
+
+    return C, sequenced_keyframes, all_robots, all_keyframes
+
 def make_pyramid_env(
     num_robots=2, num_boxes=6, mixed_robots: bool = False, view: bool = False
 ):
@@ -6869,6 +6926,211 @@ def make_box_pile_env(
 
     return C, keyframes
 
+def make_mobile_manip_with_small_stones_env(num_robots, wall_x=5, wall_z=5):
+    C = ry.Config()
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, -0.02])
+        .setShape(ry.ST.box, size=[20, 20, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    mobile_robot_path = os.path.join(
+        os.path.dirname(__file__), "../assets/models/rai/mobile-manipulator.g"
+    )
+
+    robots = []
+    for i in range(num_robots):
+        prefix = f"a{i}_"
+        C.addFile(mobile_robot_path, namePrefix=prefix).setPosition([0, 0, 0.25])
+        C.getFrame(prefix + "base").setColor(np.random.rand(3))
+        robots.append(prefix)
+
+    q = C.getJointState()
+
+    angles = [2 * np.pi * i / num_robots for i in range(num_robots)]
+    r = 3.
+    base_pos = np.array(
+        [[r * np.cos(a), r * np.sin(a), a + np.pi] for a in angles]
+    )
+
+    for i in range(num_robots):
+        q[6 * i] = base_pos[i, 0]
+        q[6 * i + 1] = base_pos[i, 1]
+        q[6 * i + 2] = base_pos[i, 2]
+
+    C.setJointState(q)
+
+    C.addFrame("coll").setParent(table).setShape(
+        ry.ST.box, [1.5, 0.5, 0.03, 0.005]
+    ).setPosition([0, -0.5, 0.05]).setMass(0.1).setColor(
+        [1,1,1]
+    ).setContact(1)
+
+    w = wall_x
+    h = wall_z
+    size = np.array([0.2, 0.1, 0.1])
+
+    all_boxes = []
+
+    for i in range(h):
+        for j in range(w):
+            pos = np.array(
+                [
+                    j * size[0] * 1.5 - w / 2 * size[0] + size[0] / 2,
+                    1 + i * size[2] * 1.5 + 0.05 + 0.1,
+                    0.2,
+                ]
+            )
+
+            color = np.random.rand(3)
+            box_name = "obj_" + str(i) + str(j)
+            all_boxes.append(box_name)
+            C.addFrame(box_name).setParent(table).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
+                color
+            ).setContact(1).setJoint(ry.JT.rigid)
+
+            goal_pos = np.array(
+                [
+                    j * size[0] * 1.2 - w / 2 * size[0] + size[0] / 2,
+                    -0.5,
+                    (h-i-1) * size[2] * 1.1 + 0.05 + 0.1,
+                ]
+            )
+            goal_name = "obj_goal_" + str(i) + str(j)
+            C.addFrame(goal_name).setParent(table).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition(goal_pos).setMass(0.1).setColor(
+                [color[0], color[1], color[2], 0.5]
+            ).setContact(0).setJoint(ry.JT.rigid)
+
+    def compute_pick_and_place(c_tmp, box, goal, robot_prefix):
+        ee = "gripper"
+
+        robot_base = robot_prefix + "base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.eq, [1e1], [-0.0])
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + ee, box])
+        komo.addObjective(
+            [1, 2], ry.FS.distance, [robot_prefix + ee, box], ry.OT.sos, [1e1], [-0.0]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + ee, box],
+            ry.OT.sos,
+            [2e1, 2e1, 1e0],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductZZ,
+            [robot_prefix + ee, box],
+            ry.OT.sos,
+            [1e1],
+            [1],
+        )
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.positionDiff,
+        #     ["a1_" + "ur_ee_marker", box],
+        #     ry.OT.sos,
+        #     [1e0],
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, ["a2"], ry.OT.sos, [1e0, 1e1, 0], [1., -0.5, 0]
+        # )
+
+        # komo.addObjective(
+        #     [2], ry.FS.position, [box], ry.OT.sos, [1e0, 1e0, 0], [1, -1, 0]
+        # )
+
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", box])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        keyframes = solve_komo_problem(komo, 100, c_tmp, False, 5, -2.5)
+        return keyframes
+
+    keyframes = {}
+    c_tmp = ry.Config()
+    c_tmp.addConfigurationCopy(C)
+
+    for r in range(num_robots):
+        robot_prefix = f"a{r}_"
+        keyframes[robot_prefix] = {}
+
+        for i in range(wall_x):
+            for j in range(wall_z):
+                c_tmp_2 = ry.Config()
+                c_tmp_2.addConfigurationCopy(c_tmp)
+                # c_tmp_2.computeCollisions()
+
+                box = f"obj_{j}{i}"
+                box_goal = f"obj_goal_{j}{i}"
+
+                res = compute_pick_and_place(c_tmp_2, box, box_goal, robot_prefix)
+
+                if res is not None:
+                    keyframes[robot_prefix][(i,j)] = res
+
+    # make sequence from all computed keyframes
+    sequenced_keyframes = []
+
+    height = [0] * wall_x
+
+    sequential_robot_choice = True
+    prev_robot = 0
+
+    while True:
+        x = random.randint(0, wall_x-1)
+
+        if height[x] >= wall_z:
+            continue
+
+        z = wall_z - height[x] - 1
+
+        if sequential_robot_choice:
+            r = prev_robot
+            prev_robot += 1
+            prev_robot = prev_robot % num_robots
+        else:
+            r = random.randint(0, num_robots-1)
+
+        if (x, z) in keyframes[f"a{r}_"]:
+            sequenced_keyframes.append((f"a{r}_", f"obj_{z}{x}", keyframes[f"a{r}_"][(x,z)]))
+
+            height[x] += 1
+
+        if all([h == wall_z for h in height]):
+            break
+
+        print(height)
+
+    return C, keyframes, sequenced_keyframes
 
 def make_mobile_manip_env(num_robots=5, view: bool = False):
     C = ry.Config()

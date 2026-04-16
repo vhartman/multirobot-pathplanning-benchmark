@@ -84,25 +84,32 @@ class BidirectionalRRTstar(BaseRRTstar):
             self.add_tree(new_mode, tree_instance)
 
             # Initialize transition nodes
-            node = None
-            for i in range(self.config.transition_nodes):
-                q = self.sample_transition_configuration(new_mode)
-                if q is None:
-                    if new_mode in self.modes:
+            for _ in range(self.config.transition_nodes):
+                node = self._add_transition_seed(new_mode)
+                if node is None:
+                    if new_mode in self.modes and not self.transition_node_ids.get(new_mode):
                         self.modes.remove(new_mode)
                     break
-        
-                if i > 0 and np.equal(q.state(), node.state.q.state()).all():
-                    break
-        
-                node = Node(State(q, new_mode), self.operation)
-                node.cost_to_parent = 0.0
-                self.mark_node_as_transition(new_mode, node)
-                self.trees[new_mode].add_node(node, "B")
-                self.operation.costs = self.trees[new_mode].ensure_capacity(
-                    self.operation.costs, node.id
-                )
-                node.cost = np.inf
+
+    def _add_transition_seed(self, mode: Mode) -> Optional[Node]:
+        """Sample one transition config and add it as a new seed to subtree B. Returns the node, or None on failure or duplicate."""
+        q = self._sample_transition_config_fn(mode)
+        if q is None:
+            return None
+        # Reject if this config already exists among transition nodes
+        for nid in self.transition_node_ids.get(mode, []):
+            existing = self.trees[mode].subtree.get(nid) or self.trees[mode].subtree_b.get(nid)
+            if existing is not None and np.equal(q.state(), existing.state.q.state()).all():
+                return None
+        node = Node(State(q, mode), self.operation)
+        node.cost_to_parent = 0.0
+        node.cost = np.inf
+        self.mark_node_as_transition(mode, node)
+        self.trees[mode].add_node(node, "B")
+        self.operation.costs = self.trees[mode].ensure_capacity(
+            self.operation.costs, node.id
+        )
+        return node
 
     def manage_transition(self, mode: Mode, n_new: Node) -> None:
         if mode not in self.modes:
@@ -202,7 +209,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if dist > self.eta:
                 return
 
-            if not self.env.is_edge_collision_free(
+            if not self._check_edge_cf(
                 n_new.state.q, n_nearest_b.state.q, mode
             ):  # ORder rigth? TODO
                 return
@@ -219,19 +226,19 @@ class BidirectionalRRTstar(BaseRRTstar):
             # switch such that subtree is beginning from start and subtree_b from goal
             self.trees[mode].swap(self.config.balanced_trees)
             self.swap = False
-            if not self.env.is_edge_collision_free(
+            if not self._check_edge_cf(
                 n_nearest_b.state.q, n_new.state.q, mode
             ):
                 return
-        
+
             self.update_tree(mode, n_new, n_nearest_b, cost[0])
 
         else:
-            if not self.env.is_edge_collision_free(
+            if not self._check_edge_cf(
                 n_new.state.q, n_nearest_b.state.q, mode
             ):
                 return
-        
+
             self.update_tree(mode, n_nearest_b, n_new, cost[0])
 
         transition_node = self.get_transition_node(
@@ -276,9 +283,9 @@ class BidirectionalRRTstar(BaseRRTstar):
             ):  # Reached
                 return n_nearest_b
             
-            if self.env.is_collision_free(
+            if self._check_config_cf(
                 state_new.q, mode
-            ) and self.env.is_edge_collision_free(
+            ) and self._check_edge_cf(
                 n_nearest_b.state.q, state_new.q, mode
             ):
                 # Add n_new to tree
@@ -393,14 +400,20 @@ class BidirectionalRRTstar(BaseRRTstar):
             i += 1
             # Mode selection
             active_mode = self.random_mode()
-            print(active_mode)
+            # print(active_mode)
+            # Optionally add a new transition seed to subtree B
+            if (
+                self.config.p_reseed_transition > 0
+                and np.random.random() < self.config.p_reseed_transition
+            ):
+                self._add_transition_seed(active_mode)
+                continue
+                
             # Bi RRT* core
-            q_rand = self.sample_configuration(active_mode)
+            q_rand = self._sample_config_fn(active_mode)
             if not q_rand:
                 continue
 
-            # self.env.show_config(q_rand, blocking=False)
-            
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
             )
@@ -409,9 +422,9 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not state_new:
                 continue
 
-            if self.env.is_collision_free(
+            if self._check_config_cf(
                 state_new.q, active_mode
-            ) and self.env.is_edge_collision_free(
+            ) and self._check_edge_cf(
                 n_nearest.state.q, state_new.q, active_mode
             ):
                 n_new = Node(state_new, self.operation)
@@ -455,6 +468,11 @@ class BidirectionalRRTstar(BaseRRTstar):
         self.update_results_tracking(self.operation.cost, self.operation.path)
         info = {"costs": self.costs, "times": self.times, "paths": self.all_paths}
         # print(self.mode_validation.counter)
+
+        # if hasattr(self, "sample_attempts"):
+        #     print("succ", self.succ_samples)
+        #     print("attempts", self.sample_attempts)
+        #     print("coll_checks", self.coll_checks)
 
         # ensure that the mode-switch nodes are there once in every mode.
         path_w_doubled_modes = []
