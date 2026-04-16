@@ -118,14 +118,14 @@ def aggregate_timing(folders: list[str]) -> dict:
 
 
 def print_latex_table(aggregated: dict) -> None:
-    colspec = "l | r | r@{\\hspace{8pt}} r@{\\hspace{8pt}} r@{\\hspace{8pt}} r@{\\hspace{8pt}} r"
-    subheader  = r"& & \multicolumn{5}{c}{Fraction of total time [\%]} \\"
-    cmidrule1  = r"\cmidrule(lr){3-7}"
-    subheader2 = r"& & & \multicolumn{3}{c}{Collision checking} & \\"
-    cmidrule2  = r"\cmidrule(lr){4-6}"
+    colspec = "l | r@{\\hspace{8pt}} r@{\\hspace{8pt}} r@{\\hspace{8pt}} r@{\\hspace{8pt}} r"
+    subheader  = r"& \multicolumn{5}{c}{Fraction of total time [\%]} \\"
+    cmidrule1  = r"\cmidrule(lr){2-6}"
+    subheader2 = r"& & \multicolumn{3}{c}{Collision checking} & \\"
+    cmidrule2  = r"\cmidrule(lr){3-5}"
     header = (
-        r"Environment & $t_\text{init}$ [s] "
-        r"& Sampling & Single config & Edge (free) & Edge (blocked) & Other"
+        r"Environment"
+        r"& Rnd. Sampling & Single config & Edge (free) & Edge (blocked) & Other"
     )
 
     rows = []
@@ -146,9 +146,8 @@ def print_latex_table(aggregated: dict) -> None:
                 return f"$\\mathbf{{{val}}}$"
             return f"${val}$"
 
-        t = f"${d['first_sol_time']:.2f}$"
         rows.append(
-            f"{escaped} & {t} & {fmt_frac('sampling')} & {fmt_frac('coll_check')} & {fmt_frac('edge_free')}"
+            f"{escaped} & {fmt_frac('sampling')} & {fmt_frac('coll_check')} & {fmt_frac('edge_free')}"
             f" & {fmt_frac('edge_blocked')} & {fmt_frac('other')} \\\\"
         )
 
