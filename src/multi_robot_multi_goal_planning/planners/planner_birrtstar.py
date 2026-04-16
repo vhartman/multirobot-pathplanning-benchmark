@@ -402,7 +402,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             i += 1
             # Mode selection
             active_mode = self.random_mode()
-            print(active_mode)
+            # print(active_mode)
             # Optionally add a new transition seed to subtree B
             if (
                 self.config.p_reseed_transition > 0
