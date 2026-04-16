@@ -1934,6 +1934,68 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
             print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
+# best cost found (max): 21.45
+@register([
+    ("rai.isolated_box_stacking", {}),
+    ("rai.isolated_ur5_box_stacking", {"robot_type": "ur5"}),
+    ("rai.isolated_box_stacking_two_robots", {"num_robots": 2}),
+    ("rai.isolated_box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
+    ("rai.isolated_box_stacking_three_robots", {"num_robots": 3}),
+    ("rai.isolated_box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
+])
+class rai_isolated_arm_box_stack_env(SequenceMixin, rai_env):
+    def __init__(self, num_robots=6, num_boxes: int = 4, robot_type="ur10"):
+        self.C, keyframes, self.robots, _ = rai_config.make_isolated_box_stacking_env(
+            num_robots, num_boxes, robot_types=robot_type
+        )
+        print(self.C.getJointState())
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for r, b, qs, g in keyframes:
+            cnt = 0
+            for t, k in zip(task_names, qs):
+                task_name = r + t + "_" + b + "_" + str(cnt)
+                if t == "pick":
+                    ee_name = r + "gripper_center"
+                    prefix = r[:9]
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b]))
+                else:
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[prefix + "table", b]))
+
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        print(self.sequence)
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.00
+        # self.collision_resolution = 0.005
+        self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
+
 
 @register([
     ("rai.dep_box_stacking", {}),
@@ -2206,6 +2268,71 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
         self.collision_resolution = 0.02
 
         self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+
+
+# mobile manip
+@register([
+    ("rai.mobile_wall_small", {"num_robots": 6}),
+])
+class rai_mobile_manip_wall(SequenceMixin, rai_env):
+    def __init__(self, num_robots=4, wall_x = 4, wall_z = 3):
+        self.C, keyframes, sequenced_keyframes = rai_config.make_mobile_manip_with_small_stones_env(num_robots, wall_x, wall_z)
+
+        self.robots = [k for k in keyframes]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+        
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for robot_prefix, box, poses in sequenced_keyframes:
+            cnt = 0
+            for t, k in zip(task_names, poses):
+                task_name = robot_prefix + t + "_" + box + "_" + str(cnt)
+                if t == "pick":
+                    ee_name = robot_prefix + "gripper"
+                    self.tasks.append(
+                        Task(
+                            task_name,
+                            [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
+                        )
+                    )
+                else:
+                    self.tasks.append(
+                        Task(
+                            task_name,
+                            [robot_prefix], SingleGoal(k), t, frames=["table", box]
+                        )
+                    )
+
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.02
+
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {}
