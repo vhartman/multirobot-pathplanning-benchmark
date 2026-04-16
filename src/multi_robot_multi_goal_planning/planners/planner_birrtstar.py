@@ -93,9 +93,7 @@ class BidirectionalRRTstar(BaseRRTstar):
 
     def _add_transition_seed(self, mode: Mode) -> Optional[Node]:
         """Sample one transition config and add it as a new seed to subtree B. Returns the node, or None on failure or duplicate."""
-        _t0 = time.perf_counter()
-        q = self.sample_transition_configuration(mode)
-        self._sampling_time += time.perf_counter() - _t0
+        q = self._sample_transition_config_fn(mode)
         if q is None:
             return None
         # Reject if this config already exists among transition nodes
@@ -211,7 +209,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if dist > self.eta:
                 return
 
-            if not self._timed_edge_collision_free(
+            if not self._check_edge_cf(
                 n_new.state.q, n_nearest_b.state.q, mode
             ):  # ORder rigth? TODO
                 return
@@ -228,7 +226,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             # switch such that subtree is beginning from start and subtree_b from goal
             self.trees[mode].swap(self.config.balanced_trees)
             self.swap = False
-            if not self._timed_edge_collision_free(
+            if not self._check_edge_cf(
                 n_nearest_b.state.q, n_new.state.q, mode
             ):
                 return
@@ -236,7 +234,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             self.update_tree(mode, n_new, n_nearest_b, cost[0])
 
         else:
-            if not self._timed_edge_collision_free(
+            if not self._check_edge_cf(
                 n_new.state.q, n_nearest_b.state.q, mode
             ):
                 return
@@ -285,9 +283,9 @@ class BidirectionalRRTstar(BaseRRTstar):
             ):  # Reached
                 return n_nearest_b
             
-            if self._timed_collision_free(
+            if self._check_config_cf(
                 state_new.q, mode
-            ) and self._timed_edge_collision_free(
+            ) and self._check_edge_cf(
                 n_nearest_b.state.q, state_new.q, mode
             ):
                 # Add n_new to tree
@@ -412,7 +410,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 continue
                 
             # Bi RRT* core
-            q_rand = self.sample_configuration(active_mode)
+            q_rand = self._sample_config_fn(active_mode)
             if not q_rand:
                 continue
 
@@ -424,9 +422,9 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not state_new:
                 continue
 
-            if self._timed_collision_free(
+            if self._check_config_cf(
                 state_new.q, active_mode
-            ) and self._timed_edge_collision_free(
+            ) and self._check_edge_cf(
                 n_nearest.state.q, state_new.q, active_mode
             ):
                 n_new = Node(state_new, self.operation)

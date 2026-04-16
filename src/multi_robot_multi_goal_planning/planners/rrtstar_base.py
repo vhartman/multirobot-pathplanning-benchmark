@@ -599,10 +599,29 @@ class BaseRRTstar(BasePlanner):
         self._coll_checking_time: float = 0.0
         self._edge_check_time_success: float = 0.0
         self._edge_check_time_failure: float = 0.0
+        
+        # Toggle timed vs untimed edge collision checking (change one line):
+        # self._check_edge_cf = self._timed_edge_collision_free  # timed
+        self._check_edge_cf = self._edge_collision_free      # untimed
+        
+        # self._check_config_cf = self._timed_collision_free      # timed
+        self._check_config_cf = self._collision_free      # untimed
+
+        # self._sample_config_fn = self._timed_sample_configuration  # timed
+        self._sample_config_fn = self.sample_configuration             # untimed
+
+        # self._sample_transition_config_fn = self._timed_sample_transition_configuration  # timed
+        self._sample_transition_config_fn = self.sample_transition_configuration             # untimed
+
         # running c_free estimate via uniform samples from _sample_uniform
         self._c_free_n_total: int = 0
         self._c_free_n_free: int = 0
         self._c_free_total_volume: float = 0.0
+
+    def _edge_collision_free(
+        self, q1: "Configuration", q2: "Configuration", mode: "Mode"
+    ) -> bool:
+        return self.env.is_edge_collision_free(q1, q2, mode)
 
     def _timed_edge_collision_free(
         self, q1: "Configuration", q2: "Configuration", mode: "Mode"
@@ -616,7 +635,6 @@ class BaseRRTstar(BasePlanner):
             self._edge_check_time_failure += dt
         return result
 
-    
     def _timed_collision_free(
         self, q: "Configuration", mode: "Mode"
     ) -> bool:
@@ -625,6 +643,11 @@ class BaseRRTstar(BasePlanner):
         dt = time.perf_counter() - t0
         self._coll_checking_time += dt
         return result
+
+    def _collision_free(
+        self, q: "Configuration", mode: "Mode"
+    ) -> bool:
+        return self.env.is_collision_free(q, mode)
 
     def add_tree(
         self,
@@ -1482,7 +1505,7 @@ class BaseRRTstar(BasePlanner):
             ]
             for idx in sorted_indices:
                 node = self.trees[mode].subtree.get(node_indices[idx].item())
-                if self._timed_edge_collision_free(node.state.q, n_new.state.q, mode):
+                if self._check_edge_cf(node.state.q, n_new.state.q, mode):
                     c_min = c_new_tensor[idx]
                     c_min_to_parent = batch_cost[idx]  # Update minimum cost
                     n_min = node  # Update parent node
@@ -1539,7 +1562,7 @@ class BaseRRTstar(BasePlanner):
                     n_new.state.mode == n_near.state.mode
                     or n_new.state.mode == n_near.state.mode.prev_mode
                 ):
-                    if self._timed_edge_collision_free(
+                    if self._check_edge_cf(
                         n_new.state.q, n_near.state.q, mode
                     ):
                         if n_near.parent is not None:
@@ -1791,23 +1814,14 @@ class BaseRRTstar(BasePlanner):
         Returns:
             Configuration: Configuration obtained by a sampling strategy based on preset probabilities and operational conditions.
         """
-        _t0 = time.perf_counter()
-
         if np.random.uniform(0, 1) < self.config.p_goal:
-            # goal sampling
-            result = self._sample_goal(
+            return self._sample_goal(
                 mode, self.transition_node_ids, self.trees[mode].order
             )
-            self._sampling_time += time.perf_counter() - _t0
-            return result
 
         if self.config.informed_sampling and self.operation.init_sol:
-            # informed_sampling
-            result = self.sample_informed(mode)
-            self._sampling_time += time.perf_counter() - _t0
-            return result
+            return self.sample_informed(mode)
 
-        # uniform sampling
         sampler = self._resolve_sampler(mode)
         if sampler == "gibbs":
             q, n_checks = self._sample_collision_free_gibbs(mode)
@@ -1815,13 +1829,20 @@ class BaseRRTstar(BasePlanner):
                 stats = self._gibbs_sampling_stats.setdefault(mode, [0, 0])
                 stats[0] += n_checks
                 stats[1] += q is not None
-            self._sampling_time += time.perf_counter() - _t0
             return q
         elif sampler == "per_robot":
-            result = self._sample_collision_free_per_robot(mode)
-            self._sampling_time += time.perf_counter() - _t0
-            return result
-        result = self._sample_uniform(mode)
+            return self._sample_collision_free_per_robot(mode)
+        return self._sample_uniform(mode)
+
+    def _timed_sample_configuration(self, mode: Mode) -> Configuration | None:
+        _t0 = time.perf_counter()
+        result = self.sample_configuration(mode)
+        self._sampling_time += time.perf_counter() - _t0
+        return result
+
+    def _timed_sample_transition_configuration(self, mode: Mode) -> Configuration | None:
+        _t0 = time.perf_counter()
+        result = self.sample_transition_configuration(mode)
         self._sampling_time += time.perf_counter() - _t0
         return result
 
