@@ -72,7 +72,7 @@ def _median_and_ci(times):
     return med, lb, ub
 
 
-def make_scaling_plots(data: dict, secondary_label: str = "boxes", log_y: bool = False):
+def make_scaling_plots(data: dict, secondary_label: str = "boxes", log_y: bool = False, paper: bool = False):
     planners = sorted(data.keys())
     all_robots = sorted({r for p in data.values() for (r, _) in p})
     all_secondary = sorted({s for p in data.values() for (_, s) in p})
@@ -90,7 +90,7 @@ def make_scaling_plots(data: dict, secondary_label: str = "boxes", log_y: bool =
     linestyles = ["-", "--", "-.", ":"]
     markers = ["o", "s", "^", "D", "v", "p"]
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5) if paper else (13, 5), sharey=True)
 
     # --- Plot 1: initial solution time vs secondary (boxes / wall area) ---
     ax = axes[0]
@@ -120,8 +120,9 @@ def make_scaling_plots(data: dict, secondary_label: str = "boxes", log_y: bool =
                 alpha=alphas[i],
             )
     ax.set_xlabel(secondary_label)
-    ax.set_ylabel("Median initial solution time [s]")
-    ax.set_title(f"Scaling with {secondary_label.lower()}")
+    ax.set_ylabel("Init sol. time [s]")
+    if not paper:
+        ax.set_title(f"Scaling with {secondary_label.lower()}")
     ax.legend(fontsize=7, ncol=2)
     ax.grid(True, alpha=0.3)
 
@@ -153,8 +154,9 @@ def make_scaling_plots(data: dict, secondary_label: str = "boxes", log_y: bool =
                 alpha=alphas[i],
             )
     ax.set_xlabel("Number of robots")
-    ax.set_ylabel("Median initial solution time [s]")
-    ax.set_title("Scaling with number of robots")
+    ax.set_ylabel("Init sol. time [s]")
+    if not paper:
+        ax.set_title("Scaling with number of robots")
     ax.legend(fontsize=7, ncol=2)
     ax.grid(True, alpha=0.3)
 
@@ -164,7 +166,7 @@ def make_scaling_plots(data: dict, secondary_label: str = "boxes", log_y: bool =
     return fig
 
 
-def make_per_planner_plot(data: dict, secondary_label: str = "boxes", log_y: bool = False):
+def make_per_planner_plot(data: dict, secondary_label: str = "boxes", log_y: bool = False, paper: bool = False):
     """One subplot per planner: x = secondary key, one colored line per num_robots."""
     planners = sorted(data.keys())
     all_robots = sorted({r for p in data.values() for (r, _) in p})
@@ -172,7 +174,8 @@ def make_per_planner_plot(data: dict, secondary_label: str = "boxes", log_y: boo
 
     robot_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_robots), 1)))
 
-    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=True)
+    figsize = (8 * len(planners), 5) if paper else (6 * len(planners), 5)
+    fig, axes = plt.subplots(1, len(planners), figsize=figsize, sharey=True)
     if len(planners) == 1:
         axes = [axes]
 
@@ -200,19 +203,21 @@ def make_per_planner_plot(data: dict, secondary_label: str = "boxes", log_y: boo
                 capsize=3,
             )
         ax.set_xlabel(secondary_label)
-        ax.set_ylabel("Median initial solution time [s]")
-        ax.set_title(planner)
+        ax.set_ylabel("Initial sol. time [s]")
+        if not paper:
+            ax.set_title(planner)
         ax.legend(title="Robots", fontsize=8)
         ax.grid(True, alpha=0.3)
         if log_y:
             ax.set_yscale("log")
 
-    fig.suptitle(f"Scaling with {secondary_label.lower()} (per planner)", y=1.02)
+    if not paper:
+        fig.suptitle(f"Scaling with {secondary_label.lower()} (per planner)", y=1.02)
     fig.tight_layout()
     return fig
 
 
-def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks", log_y: bool = False):
+def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks", log_y: bool = False, paper: bool = False):
     """One subplot per planner: x = num_robots, one colored line per secondary key (tasks)."""
     planners = sorted(data.keys())
     all_robots = sorted({r for p in data.values() for (r, _) in p})
@@ -220,7 +225,8 @@ def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks", log
 
     task_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_secondary), 1)))
 
-    fig, axes = plt.subplots(1, len(planners), figsize=(6 * len(planners), 5), sharey=True)
+    figsize = (8 * len(planners), 5) if paper else (6 * len(planners), 5)
+    fig, axes = plt.subplots(1, len(planners), figsize=figsize, sharey=True)
     if len(planners) == 1:
         axes = [axes]
 
@@ -248,14 +254,16 @@ def make_per_planner_robots_plot(data: dict, secondary_label: str = "tasks", log
                 capsize=3,
             )
         ax.set_xlabel("Number of robots")
-        ax.set_ylabel("Median initial solution time [s]")
-        ax.set_title(planner)
+        ax.set_ylabel("Initial sol. time [s]")
+        if not paper:
+            ax.set_title(planner)
         ax.legend(title=secondary_label, fontsize=8)
         ax.grid(True, alpha=0.3)
         if log_y:
             ax.set_yscale("log")
 
-    fig.suptitle(f"Scaling with number of robots (per planner)", y=1.02)
+    if not paper:
+        fig.suptitle(f"Scaling with number of robots (per planner)", y=1.02)
     fig.tight_layout()
     return fig
 
@@ -314,7 +322,7 @@ def load_per_robot_path_lengths(path: str, mode: str = "stacking") -> dict:
 
 
 def make_per_robot_path_length_plot(
-    data: dict, secondary_label: str = "tasks", log_y: bool = False
+    data: dict, secondary_label: str = "tasks", log_y: bool = False, paper: bool = False
 ):
     """
     Two rows of subplots, one column per planner.
@@ -328,7 +336,7 @@ def make_per_robot_path_length_plot(
     task_colors = plt.cm.viridis(np.linspace(0.1, 0.9, max(len(all_secondary), 1)))
 
     fig, axes = plt.subplots(
-        2, len(planners), figsize=(6 * len(planners), 9),
+        2, len(planners), figsize=(8 * len(planners), 10) if paper else (6 * len(planners), 9),
         sharex=True, squeeze=False,
     )
 
@@ -375,7 +383,8 @@ def make_per_robot_path_length_plot(
                     label=label, color=color, linestyle="-", marker="o", capsize=3,
                 )
 
-        ax_len.set_title(planner)
+        if not paper:
+            ax_len.set_title(planner)
         ax_len.set_ylabel("Median mean per-robot path length")
         ax_len.legend(title=secondary_label, fontsize=8)
         ax_len.grid(True, alpha=0.3)
@@ -389,7 +398,8 @@ def make_per_robot_path_length_plot(
             ax_len.set_yscale("log")
             ax_l1.set_yscale("log")
 
-    fig.suptitle("Path length and collision check proxy of first solution", y=1.02)
+    if not paper:
+        fig.suptitle("Path length and collision check proxy of first solution", y=1.02)
     fig.tight_layout()
     return fig
 
@@ -463,32 +473,49 @@ def _timing_plot(
     secondary_label: str,
     absolute: bool,
     log_y: bool,
+    filter_planner: str | None = None,
+    filter_secondary: int | None = None,
+    paper: bool = False,
+    legend: bool = True,
 ):
     """Shared implementation for fraction and absolute timing plots.
     Returns one figure per planner. Layout: 2-column grid over secondary keys.
     Each subplot: x = num_robots, one errorbar line per metric with 95% CI.
+
+    filter_planner: if set, only produce a figure for that planner.
+    filter_secondary: if set, produce a single-panel figure for that secondary key only.
+    paper: if True, produce a compact single-panel figure (no suptitle, tight layout).
     """
     planners = sorted(timing_data.keys())
+    if filter_planner is not None:
+        planners = [p for p in planners if p == filter_planner]
     if not planners:
         return []
 
     all_robots = sorted({r for p in timing_data.values() for (r, _) in p})
     all_secondary = sorted({s for p in timing_data.values() for (_, s) in p})
+    if filter_secondary is not None:
+        all_secondary = [s for s in all_secondary if s == filter_secondary]
 
     metric_colors = ["steelblue", "seagreen", "tomato", "darkorange"]
     metric_styles = ["-", "--", ":", "-."]
     metric_markers = ["o", "s", "^", "D"]
     metric_labels = ["sampling", "edge (free)", "edge (blocked)", "single config"]
 
-    ncols = 2
-    nrows = int(np.ceil(len(all_secondary) / ncols))
+    single_panel = len(all_secondary) == 1
+    ncols = 1 if single_panel else 2
+    nrows = 1 if single_panel else int(np.ceil(len(all_secondary) / ncols))
 
     figs = []
     for planner in planners:
         pdata = timing_data[planner]
+        if paper:
+            figsize = (8, 5) if single_panel else (8 * ncols, 5 * nrows)
+        else:
+            figsize = (5 * ncols, 4 * nrows)
         fig, axes = plt.subplots(
             nrows, ncols,
-            figsize=(5 * ncols, 4 * nrows),
+            figsize=figsize,
             sharey=True, sharex=True,
             squeeze=False,
         )
@@ -528,29 +555,30 @@ def _timing_plot(
                     markersize=4,
                 )
 
-            ax.set_title(f"{secondary_label.split()[-1]}={s}", fontsize=9)
+            if not paper:
+                ax.set_title(f"{secondary_label.split()[-1]}={s}", fontsize=9)
             ax.grid(True, alpha=0.3)
             if not absolute:
                 ax.set_ylim(0, 1)
             if log_y:
                 ax.set_yscale("log")
-            if si // ncols == nrows - 1:
-                ax.set_xlabel("Number of robots")
+            ax.set_xlabel("Number of robots")
             if si % ncols == 0:
-                ax.set_ylabel("Median time [s]" if absolute else "Fraction of tracked time")
-            if si == 0:
+                ax.set_ylabel("Initial sol. time [s]" if absolute else "Fraction of total time")
+            if legend:
                 ax.legend(fontsize=7)
 
         # hide unused subplots
         for si in range(len(all_secondary), nrows * ncols):
             axes[si // ncols][si % ncols].set_visible(False)
 
-        title = (
-            f"{planner} — absolute time: sampling vs edge collision"
-            if absolute
-            else f"{planner} — fraction of time: sampling vs edge collision"
-        )
-        fig.suptitle(title)
+        if not paper:
+            title = (
+                f"{planner} — absolute time: sampling vs edge collision"
+                if absolute
+                else f"{planner} — fraction of time: sampling vs edge collision"
+            )
+            fig.suptitle(title)
         fig.tight_layout()
         figs.append((planner, fig))
 
@@ -558,17 +586,25 @@ def _timing_plot(
 
 
 def make_timing_breakdown_plot(
-    timing_data: dict, secondary_label: str = "tasks", log_y: bool = False
+    timing_data: dict, secondary_label: str = "tasks", log_y: bool = False,
+    filter_planner: str | None = None, filter_secondary: int | None = None,
+    paper: bool = False, legend: bool = True,
 ):
-    """Fraction of tracked time per component, split by number of tasks."""
-    return _timing_plot(timing_data, secondary_label, absolute=False, log_y=log_y)
+    """Fraction of total time per component, split by number of tasks."""
+    return _timing_plot(timing_data, secondary_label, absolute=False, log_y=log_y,
+                        filter_planner=filter_planner, filter_secondary=filter_secondary,
+                        paper=paper, legend=legend)
 
 
 def make_timing_absolute_plot(
-    timing_data: dict, secondary_label: str = "tasks", log_y: bool = False
+    timing_data: dict, secondary_label: str = "tasks", log_y: bool = False,
+    filter_planner: str | None = None, filter_secondary: int | None = None,
+    paper: bool = False, legend: bool = True,
 ):
     """Absolute median time per component, split by number of tasks."""
-    return _timing_plot(timing_data, secondary_label, absolute=True, log_y=log_y)
+    return _timing_plot(timing_data, secondary_label, absolute=True, log_y=log_y,
+                        filter_planner=filter_planner, filter_secondary=filter_secondary,
+                        paper=paper, legend=legend)
 
 
 def main():
@@ -576,7 +612,17 @@ def main():
     parser.add_argument("--mode", choices=["stacking", "mobile"], default="mobile")
     parser.add_argument("--path", type=str, default=None)
     parser.add_argument("--log_y", action="store_true", help="Use logarithmic y-axis")
+    parser.add_argument("--paper", action="store_true", help="Apply paper style (paper_2.mplstyle)")
+    parser.add_argument("--planner", type=str, default=None, help="Filter timing plots to this planner name")
+    parser.add_argument("--secondary", type=int, default=None, help="Filter timing plots to this secondary key value")
+    parser.add_argument("--out", type=str, default=None, help="Output path for single-panel timing figures (stem; _fraction.pdf and _absolute.pdf are appended)")
+    parser.add_argument("--legend", action="store_true", help="Add legend to timing plots")
+    parser.add_argument("--png", action="store_true", help="Save as PNG instead of PDF")
     args = parser.parse_args()
+
+    if args.paper:
+        style_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paper_2.mplstyle")
+        plt.style.use(style_path)
 
     if args.path is not None:
         path = args.path
@@ -587,28 +633,52 @@ def main():
 
     secondary_label = "Number of tasks"
 
-    data = load_scaling_data(path, mode=args.mode)
+    timing_kwargs = dict(
+        filter_planner=args.planner,
+        filter_secondary=args.secondary,
+        paper=args.paper,
+        legend=args.legend,
+    )
 
-    fig = make_scaling_plots(data, secondary_label=secondary_label, log_y=args.log_y)
-    fig.savefig(os.path.join(path, "scaling_plots.pdf"), bbox_inches="tight")
+    ext = "png" if args.png else "pdf"
 
-    fig2 = make_per_planner_plot(data, secondary_label=secondary_label, log_y=args.log_y)
-    fig2.savefig(os.path.join(path, "scaling_plots_per_planner.pdf"), bbox_inches="tight")
+    def filter_planner(d: dict) -> dict:
+        if args.planner is None:
+            return d
+        return {k: v for k, v in d.items() if k == args.planner}
 
-    fig3 = make_per_planner_robots_plot(data, secondary_label=secondary_label, log_y=args.log_y)
-    fig3.savefig(os.path.join(path, "scaling_plots_per_planner_robots.pdf"), bbox_inches="tight")
+    if args.secondary is None:
+        data = filter_planner(load_scaling_data(path, mode=args.mode))
 
-    path_length_data = load_per_robot_path_lengths(path, mode=args.mode)
-    fig4 = make_per_robot_path_length_plot(path_length_data, secondary_label=secondary_label, log_y=args.log_y)
-    fig4.savefig(os.path.join(path, "scaling_plots_per_robot_path_lengths.pdf"), bbox_inches="tight")
+        fig = make_scaling_plots(data, secondary_label=secondary_label, log_y=args.log_y, paper=args.paper)
+        fig.savefig(os.path.join(path, f"scaling_plots.{ext}"), bbox_inches="tight")
 
-    timing_data = load_timing_data(path, mode=args.mode)
+        fig2 = make_per_planner_plot(data, secondary_label=secondary_label, log_y=args.log_y, paper=args.paper)
+        fig2.savefig(os.path.join(path, f"scaling_plots_per_planner.{ext}"), bbox_inches="tight")
+
+        fig3 = make_per_planner_robots_plot(data, secondary_label=secondary_label, log_y=args.log_y, paper=args.paper)
+        fig3.savefig(os.path.join(path, f"scaling_plots_per_planner_robots.{ext}"), bbox_inches="tight")
+
+        path_length_data = load_per_robot_path_lengths(path, mode=args.mode)
+        # path_length_data is keyed by (robots, secondary); inner dicts are keyed by planner
+        if args.planner is not None:
+            path_length_data = {
+                key: {args.planner: runs[args.planner]}
+                for key, runs in path_length_data.items()
+                if args.planner in runs
+            }
+        fig4 = make_per_robot_path_length_plot(path_length_data, secondary_label=secondary_label, log_y=args.log_y, paper=args.paper)
+        fig4.savefig(os.path.join(path, f"scaling_plots_per_robot_path_lengths.{ext}"), bbox_inches="tight")
+
+    timing_data = filter_planner(load_timing_data(path, mode=args.mode))
     if timing_data:
-        for planner, fig in make_timing_breakdown_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y):
-            fig.savefig(os.path.join(path, f"scaling_plots_timing_fraction_{planner}.pdf"), bbox_inches="tight")
+        for planner, fig in make_timing_breakdown_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y, **timing_kwargs):
+            out = f"{args.out}_fraction.{ext}" if args.out else os.path.join(path, f"scaling_plots_timing_fraction_{planner}.{ext}")
+            fig.savefig(out, bbox_inches="tight")
 
-        for planner, fig in make_timing_absolute_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y):
-            fig.savefig(os.path.join(path, f"scaling_plots_timing_absolute_{planner}.pdf"), bbox_inches="tight")
+        for planner, fig in make_timing_absolute_plot(timing_data, secondary_label=secondary_label, log_y=args.log_y, **timing_kwargs):
+            out = f"{args.out}_absolute.{ext}" if args.out else os.path.join(path, f"scaling_plots_timing_absolute_{planner}.{ext}")
+            fig.savefig(out, bbox_inches="tight")
 
     plt.show()
 
