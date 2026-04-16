@@ -542,7 +542,7 @@ class BaseRRTConfig:
     
     # BidirectionalRRTstar
     transition_nodes: int = 10
-    p_reseed_transition: float = 0.01
+    p_reseed_transition: float = 0.00
     birrtstar_version: int = 2
     stepsize: float = 0
 
