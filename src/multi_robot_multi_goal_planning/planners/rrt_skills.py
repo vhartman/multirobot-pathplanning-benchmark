@@ -145,14 +145,14 @@ class RRTSkillsConfig:
     """
     # RRT
     step_size_strategy: str = "sqrt_d" # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots"
-    step_size: float = 0.1 # Constant
+    step_size: float = 1 # Constant
     step_size_factor: float = 0.1 # Dynamic step size tuning factor
 
-    p_goal: float = 0.3
+    p_goal: float = 0.2
     # p_terminal_goal: float = 0.1 
 
     # Mode sampling # TODO frontier implementation (from prm)
-    mode_sampling_type: str = "greedy" # "uniform" | "greedy" | "frontier"
+    mode_sampling_type: str = "frontier" # "uniform" | "greedy" | "frontier"
     p_newest_mode: float = 0.8
     p_frontier: float = 0.98
     
@@ -473,7 +473,8 @@ class RRTSkills(BasePlanner):
             d = sum(self.env.robot_dims.values())
             return math.sqrt(d)
         
-        elif strategy == "sqrt_d_robots)":
+        elif strategy == "sqrt_d_robots":
+            d = sum(self.env.robot_dims.values())
             num_robots = len(self.env.robots)
             return math.sqrt(d / num_robots)
 
@@ -693,6 +694,7 @@ class RRTSkills(BasePlanner):
             # print(f"[DEBUG LINEAR STEER] linear")
             # step = min(dist, self.eta)
             q_new_vec = q_near_vec + self.eta * (q_target_vec - q_near_vec) / dist
+            q_new = self.env.get_start_pos().from_flat(q_new_vec)
 
         # DEBUG
         # dbg_dists = batch_config_dist(n_near.state.q, [q_target, q_new], self.config.distance_metric)
@@ -700,8 +702,6 @@ class RRTSkills(BasePlanner):
         #     print(f"[DEBUG LINEAR STEER DIST] distance {i} = {dbg_dists[i]}")
 
         # print(f"[DEBUG LINEAR STEER] dist = {dist:.4f}, eta = {self.eta:.4f}")
-        q_new = self.env.get_start_pos().from_flat(q_new_vec)
-
         return State(q_new, mode)
 
     def _validate(self, state_new: State, n_near: Node, is_skill: bool, is_uniform: bool = True) -> bool:
@@ -712,7 +712,7 @@ class RRTSkills(BasePlanner):
         is_state_free = self.env.is_collision_free(state_new.q, state_new.mode)
 
         # 2. Update c_free self._update_cfree_estimate
-        if not is_skill:
+        if self.config.use_rrt_star and not is_skill:
             self._update_cfree_estimate(was_valid=is_state_free, was_uniform=is_uniform)
 
         # 3. Failure based on config check 
@@ -1016,46 +1016,97 @@ class RRTSkills(BasePlanner):
         Rolls the skill out by one step, with optional concurrent steering for the
         inactive robots
         """
-        skill = skill_task.skill
-        dt = self.config.skill_dt
 
-        q_full = n_near.state.q.state().copy()
-        q_target_vec = q_target.state()
+        new_version = True
 
-        # 1. Determine the base configuration (handling inactive config)
-        if self.config.inactive_steering_mode == "concurrent":
-            steer_state = self._linear_steer(n_near, q_target, mode)
-            if steer_state is None: # If steering is completely blocked
+        if new_version:
+            # TODO! NEW VERSION
+            skill = skill_task.skill
+            dt = self.config.skill_dt
+
+            q_full = n_near.state.q.state().copy()
+            active_indices = self._get_active_subspace_indices(skill_task)
+            q_subspace = q_full[active_indices]
+
+            # 1. Skill step for active robots
+            all_joints = self.env.get_joint_names()
+            self.env.C.selectJoints(skill.joints)
+
+            if isinstance(skill, BaseDeterministicTimedSkill):
+                n_steps = max(1, round(skill.duration / dt))
+                t_norm = (n_near.skill_step + 1) / n_steps
+                q_subspace_new = skill.step(t_norm, q_subspace, self.env)
+            else: 
+                q_subspace_new = skill.step(q_subspace, self.env)
+
+            self.env.C.selectJoints(all_joints)
+
+            # 2. Steer inactive robots with bounded step (active displacement)
+            active_displacement = np.linalg.norm(q_subspace_new - q_subspace)
+
+            if self.config.inactive_steering_mode == "concurrent": # TODO also check that active_displacement > 1e-8..
+                q_target_vec = q_target.state()
+                q_near_vec = q_full.copy()
+
+                direction = q_target_vec - q_near_vec
+                direction[active_indices] = 0.0
+                
+                inactive_dist = np.linalg.norm(direction)
+                if inactive_dist > 1e-8:
+                    eta_inactive = min(active_displacement, inactive_dist)
+                    q_base = q_near_vec + eta_inactive * (direction / inactive_dist)
+                else:
+                    q_base = q_near_vec
+            else: 
+                # Freeze
                 q_base = q_full.copy()
-            else:
-                q_base = steer_state.q.state().copy()
+
+            # 3. Overwrite the active subspace in the base configuration with the skill result
+            q_base[active_indices] = q_subspace_new
+            q_new = self.env.get_start_pos().from_flat(q_base)
+            state_new = State(q_new, mode, is_skill_waypoint=True)
         else: 
-            # Freeze
-            q_base = q_full.copy()
+            # TODO! OLD VERSION
+            skill = skill_task.skill
+            dt = self.config.skill_dt
 
-        # 2. Extract acrive subspace for skill
-        active_indices = self._get_active_subspace_indices(skill_task)
-        q_subspace = q_full[active_indices]
+            q_full = n_near.state.q.state().copy()
+            q_target_vec = q_target.state()
 
-        # 3. Skill step
-        all_joints = self.env.get_joint_names()
-        self.env.C.selectJoints(skill.joints)
+            # 1. Determine the base configuration (handling inactive config)
+            if self.config.inactive_steering_mode == "concurrent":
+                steer_state = self._linear_steer(n_near, q_target, mode)
+                if steer_state is None: # If steering is completely blocked
+                    q_base = q_full.copy()
+                else:
+                    q_base = steer_state.q.state().copy()
+            else: 
+                # Freeze
+                q_base = q_full.copy()
 
-        if isinstance(skill, BaseDeterministicTimedSkill):
-            n_steps = max(1, round(skill.duration / dt))
-            t_norm = (n_near.skill_step + 1) / n_steps
-            q_subspace_new = skill.step(t_norm, q_subspace, self.env)
-        else: 
-            q_subspace_new = skill.step(q_subspace, self.env)
+            # 2. Extract acrive subspace for skill
+            active_indices = self._get_active_subspace_indices(skill_task)
+            q_subspace = q_full[active_indices]
 
-        self.env.C.selectJoints(all_joints)
+            # 3. Skill step
+            all_joints = self.env.get_joint_names()
+            self.env.C.selectJoints(skill.joints)
 
-        # 4. Overwrite the active subspace in the base configuration
-        q_base[active_indices] = q_subspace_new
-        q_new = self.env.get_start_pos().from_flat(q_base)
-        state_new = State(q_new, mode, is_skill_waypoint=True)
+            if isinstance(skill, BaseDeterministicTimedSkill):
+                n_steps = max(1, round(skill.duration / dt))
+                t_norm = (n_near.skill_step + 1) / n_steps
+                q_subspace_new = skill.step(t_norm, q_subspace, self.env)
+            else: 
+                q_subspace_new = skill.step(q_subspace, self.env)
 
-        # 5. Validate and add node
+            self.env.C.selectJoints(all_joints)
+
+            # 4. Overwrite the active subspace in the base configuration
+            q_base[active_indices] = q_subspace_new
+            q_new = self.env.get_start_pos().from_flat(q_base)
+            state_new = State(q_new, mode, is_skill_waypoint=True)
+
+        # 4. Validate and add node
         if not self._validate(state_new, n_near, is_skill=True):
             return []
         
