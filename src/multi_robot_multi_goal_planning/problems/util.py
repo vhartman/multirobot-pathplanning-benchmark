@@ -1,8 +1,51 @@
-import numpy as np
+import random
 from typing import List
 
-from .planning_env import State
+import numpy as np
+
+from .planning_env import BaseProblem, Mode, State
 from .configuration import config_dist
+
+
+def compute_reachable_modes(env: BaseProblem, max_iter: int = 500) -> tuple[Mode, ...]:
+    """Sample reachable modes by repeatedly trying to transition from known modes."""
+    conf_type = type(env.get_start_pos())
+
+    def _try_transition(mode: Mode):
+        if env.is_terminal_mode(mode):
+            return None
+        failed = 0
+        while True:
+            if failed > 1000:
+                return None
+            combos = env.get_valid_next_task_combinations(mode)
+            if combos:
+                active_task = env.get_active_task(mode, combos[random.randint(0, len(combos) - 1)])
+            else:
+                active_task = env.get_active_task(mode, None)
+
+            goal_sample = active_task.goal.sample(mode)
+            q = env.sample_config_uniform_in_limits()
+
+            for i, r in enumerate(env.robots):
+                if r in active_task.robots:
+                    offset = 0
+                    for task_robot in active_task.robots:
+                        if task_robot == r:
+                            q[i] = goal_sample[offset: offset + env.robot_dims[task_robot]]
+                            break
+                        offset += env.robot_dims[task_robot]
+
+            if env.is_collision_free(q, mode):
+                return env.get_next_modes(q, mode)
+            failed += 1
+
+    reachable = {env.get_start_mode()}
+    for _ in range(max_iter):
+        next_modes = _try_transition(random.choice(tuple(reachable)))
+        if next_modes is not None:
+            reachable.update(next_modes)
+    return tuple(reachable)
 
 
 def path_cost(path: List[State], batch_cost_fun, agent_slices=None) -> float:
@@ -24,7 +67,7 @@ def path_cost(path: List[State], batch_cost_fun, agent_slices=None) -> float:
     return np.sum(batch_costs)
 
 
-def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
+def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> List[State]:
     """
     Takes a path and interpolates it at the given resolution.
     Uses the euclidean distance between states to do the resolution.
@@ -40,7 +83,7 @@ def interpolate_path(path: List[State], resolution: float = 0.1) -> List[State]:
         #     new_path.append(State(config_type.from_list(q), path[i].mode))
         #     continue
 
-        dist = config_dist(q0, q1, "euclidean")
+        dist = config_dist(q0, q1, kind)
         N = int(dist / resolution)
         N = max(1, N)
 

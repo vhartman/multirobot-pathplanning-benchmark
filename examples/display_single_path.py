@@ -178,7 +178,7 @@ def main():
     parser.add_argument(
         "--pause",
         action="store_true",
-        help="Stop at mode switches. (used for debugging. default: False)",
+        help="Pause after each state. (used for debugging. default: False)",
     )
     parser.add_argument(
         "--show_coll_config",

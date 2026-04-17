@@ -88,6 +88,11 @@ class InformedSampling:
         self.locally_informed_sampling = locally_informed_sampling
         self.include_lb = include_lb
         self.conf_type = type(self.env.get_start_pos())
+        # Cache for mode-graph reachability used in sampling_based transition generation.
+        # Descendants depend only on the fixed mode graph; ancestors also depend on
+        # reached_modes (which grows), so they are keyed by (mode, len(reached_modes)).
+        self._mode_descendants_cache: dict = {}
+        self._mode_ancestors_cache: dict = {}
 
     def sample_mode(
         self, reached_modes: List[Mode], mode_sampling_type: str = "uniform_reached"
@@ -755,13 +760,61 @@ class InformedSampling:
 
         in_between_mode_cache = {}
 
+        # Precompute valid start/end index pools so we never sample a
+        # (start, end, mode) combo that can't contain active_mode.
+        # Uses mode-graph reachability to handle branches correctly.
+        # if False: #self.planning_approach == "sampling_based" and active_mode is not None:
+        #     # Descendants: modes reachable from active_mode (fixed graph → cache forever).
+        #     if active_mode not in self._mode_descendants_cache:
+        #         descendants: set = {active_mode}
+        #         queue = [active_mode]
+        #         while queue:
+        #             m = queue.pop()
+        #             for child in (m.next_modes or []):
+        #                 if child not in descendants:
+        #                     descendants.add(child)
+        #                     queue.append(child)
+        #         self._mode_descendants_cache[active_mode] = descendants
+        #     descendants = self._mode_descendants_cache[active_mode]
+
+        #     # Ancestors: modes from which active_mode is reachable.
+        #     # Keyed by (mode, len(reached_modes)) so it refreshes when new modes arrive.
+        #     ancestors_key = (active_mode, len(reached_modes))
+        #     if ancestors_key not in self._mode_ancestors_cache:
+        #         reverse_edges: dict = {}
+        #         for m in reached_modes:
+        #             for child in (m.next_modes or []):
+        #                 reverse_edges.setdefault(child, []).append(m)
+        #         ancestors: set = {active_mode}
+        #         queue = [active_mode]
+        #         while queue:
+        #             m = queue.pop()
+        #             for parent in reverse_edges.get(m, []):
+        #                 if parent not in ancestors:
+        #                     ancestors.add(parent)
+        #                     queue.append(parent)
+        #         self._mode_ancestors_cache[ancestors_key] = ancestors
+        #     ancestors = self._mode_ancestors_cache[ancestors_key]
+
+        #     valid_start_indices = [i for i, s in enumerate(path) if s.mode in ancestors]
+        #     valid_end_indices = [i for i, s in enumerate(path) if s.mode in descendants]
+
+        #     if not valid_start_indices or not valid_end_indices:
+        #         return new_transitions
+        # else:
+        #     valid_start_indices = list(range(len(path)))
+        #     valid_end_indices = list(range(len(path)))
+
+        # TODO: figure out whats going on and why this is better
+        valid_start_indices = list(range(len(path)))
+        valid_end_indices = list(range(len(path)))
+
         while len(new_transitions) < batch_size:
             num_attempts += 1
 
             if num_attempts > batch_size:
                 break
 
-            # print(len(new_samples))
             # sample mode
             if self.locally_informed_sampling:
                 path_segment_costs_cumsum = np.cumsum(path_segment_costs)
@@ -771,9 +824,9 @@ class InformedSampling:
                 while True:
                     num_idx_attempts += 1
 
-                    start_ind = random.randint(0, len(path) - 1)
-                    end_ind = random.randint(0, len(path) - 1)
-                    
+                    start_ind = random.choice(valid_start_indices)
+                    end_ind = random.choice(valid_end_indices)
+
                     if num_idx_attempts > 1000:
                         found_potential_indices = False
                         break
@@ -796,31 +849,32 @@ class InformedSampling:
                 if not found_potential_indices:
                     break
 
-                if (
-                    path[start_ind].mode,
-                    path[end_ind].mode,
-                ) not in in_between_mode_cache:
-                    in_between_modes = self.get_inbetween_modes(
-                        path[start_ind].mode, path[end_ind].mode
+                if self.planning_approach == "sampling_based" and active_mode is not None:
+                    mode = active_mode
+                else:
+                    if (
+                        path[start_ind].mode,
+                        path[end_ind].mode,
+                    ) not in in_between_mode_cache:
+                        in_between_modes = self.get_inbetween_modes(
+                            path[start_ind].mode, path[end_ind].mode
+                        )
+                        in_between_mode_cache[
+                            (path[start_ind].mode, path[end_ind].mode)
+                        ] = in_between_modes
+
+                    # k = random.randint(start_ind, end_ind)
+                    # mode = path[k].mode
+                    mode = random.choice(
+                        in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
                     )
-                    in_between_mode_cache[
-                        (path[start_ind].mode, path[end_ind].mode)
-                    ] = in_between_modes
-
-                # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
-
-                mode = random.choice(
-                    in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
-                )
-
-                # k = random.randint(start_ind, end_ind)
-                # mode = path[k].mode
             else:
                 start_ind = 0
                 end_ind = len(path) - 1
-                mode = self.sample_mode(reached_modes=reached_modes)
-            if self.planning_approach == "sampling_based" and active_mode != mode:
-                continue
+                if self.planning_approach == "sampling_based" and active_mode is not None:
+                    mode = active_mode
+                else:
+                    mode = self.sample_mode(reached_modes=reached_modes)
 
             # print(m)
 
@@ -848,36 +902,21 @@ class InformedSampling:
 
             for k in range(max_attempts_per_sample):
                 # completely random sample configuration from the (valid) domain robot by robot
-                q = []
+                q = self.env.sample_config_uniform_in_limits()
                 for i in range(len(self.env.robots)):
                     r = self.env.robots[i]
                     if r in goals_to_sample:
                         offset = 0
                         for _, task_robot in enumerate(active_task.robots):
                             if task_robot == r:
-                                q.append(
+                                q[i] = \
                                     goal_sample[
                                         offset : offset
                                         + self.env.robot_dims[task_robot]
                                     ]
-                                )
                                 break
                             offset += self.env.robot_dims[task_robot]
-                    else:  # uniform sample
-                        lims = self.env.limits[:, self.env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            qr = (
-                                np.random.rand(self.env.robot_dims[r])
-                                * (lims[1, :] - lims[0, :])
-                                + lims[0, :]
-                            )
-                        else:
-                            qr = np.random.rand(self.env.robot_dims[r]) * 6 - 3
-
-                        q.append(qr)
-
-                q = self.env.start_pos.from_flat(np.concatenate(q))
-
+                    
                 to_q_cost = self.env.batch_config_cost(q, focal_points)
                 if to_q_cost[0] + to_q_cost[1] > current_cost:
                     continue

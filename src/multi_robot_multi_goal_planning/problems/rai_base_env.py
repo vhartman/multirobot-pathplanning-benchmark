@@ -294,8 +294,6 @@ class rai_env(BaseProblem):
 
         self.limits = self.C.getJointLimits()
 
-        print(self.limits)
-
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
 
@@ -340,8 +338,13 @@ class rai_env(BaseProblem):
         self.C_orig = None
         self._uniform_sampler = None
 
+        self._uniform_sampler = None
+
         # Create a deep copy of self without C
         new_env = copy.deepcopy(super(), memo)
+
+        new_env._uniform_sampler = self._make_uniform_sampler()
+        self._uniform_sampler = self._make_uniform_sampler()
 
         # Restore C in both objects
         self.C = C
@@ -883,6 +886,7 @@ class rai_env(BaseProblem):
         C_display_base: "ry.Config",
         handles: dict,
         mode_label=None,
+        step_annotations=None,
     ) -> None:
         """Apply path[i] to C_display and push updated world poses to viser handles."""
         state = path[i]
@@ -912,11 +916,14 @@ class rai_env(BaseProblem):
             m = state.mode
             task_names = [self.tasks[tid].name for tid in m.task_ids]
             task_names_str = "  \n".join(task_names)
-            mode_label.content = (
+            content = (
                 f"**Step:** {i} / {len(path) - 1}  \n"
                 f"**Mode:** `{m.task_ids}`  \n"
                 f"**Tasks:**   \n {task_names_str}"
             )
+            if step_annotations is not None and i < len(step_annotations):
+                content += "\n\n---\n\n" + step_annotations[i]
+            mode_label.content = content
 
     def display_path_viser(
         self,
@@ -925,6 +932,7 @@ class rai_env(BaseProblem):
         port: int = 8080,
         path_labels: Optional[List[str]] = None,
         primitives_only: bool = False,
+        step_annotations: "Optional[List[str]]" = None,
     ) -> None:
         """Display one or more planned paths interactively in a viser web viewer.
 
@@ -938,6 +946,8 @@ class rai_env(BaseProblem):
             path_labels: Optional display names for each path (defaults to "Path 0", …).
             primitives_only: If True, skip file-loaded mesh shapes (shape type
                 ``'mesh'``) and only show primitives (box, sphere, cylinder, …).
+            step_annotations: Optional per-step markdown strings appended to the
+                mode label panel (one entry per step in the single/first path).
         """
         # Accept a single path for convenience.
         if paths and not isinstance(paths[0], list):
@@ -1021,6 +1031,8 @@ class rai_env(BaseProblem):
         step_size_field = server.gui.add_number(
             "Step size", initial_value=1, min=1, step=1
         )
+        prev_btn = server.gui.add_button("◀ Prev")
+        next_btn = server.gui.add_button("Next ▶")
         stop_btn = server.gui.add_button("Stop")
         mode_label = server.gui.add_markdown("")
 
@@ -1038,12 +1050,30 @@ class rai_env(BaseProblem):
             nonlocal _stopped
             _stopped = True
 
+        @prev_btn.on_click
+        def _(_):
+            play_checkbox.value = False
+            step = max(clamped_step() - int(step_size_field.value), 0)
+            step_slider.value = step
+            self._viser_set_step(
+                step, current_path(), C_display, C_display_base, handles, mode_label, step_annotations
+            )
+
+        @next_btn.on_click
+        def _(_):
+            play_checkbox.value = False
+            step = min(clamped_step() + int(step_size_field.value), len(current_path()) - 1)
+            step_slider.value = step
+            self._viser_set_step(
+                step, current_path(), C_display, C_display_base, handles, mode_label, step_annotations
+            )
+
         @path_dropdown.on_update
         def _(_):
             play_checkbox.value = False
             step_slider.value = 0
             self._viser_set_step(
-                0, current_path(), C_display, C_display_base, handles, mode_label
+                0, current_path(), C_display, C_display_base, handles, mode_label, step_annotations
             )
 
         @step_slider.on_update
@@ -1051,11 +1081,11 @@ class rai_env(BaseProblem):
             if not play_checkbox.value:
                 step = min(event.target.value, len(current_path()) - 1)
                 self._viser_set_step(
-                    step, current_path(), C_display, C_display_base, handles, mode_label
+                    step, current_path(), C_display, C_display_base, handles, mode_label, step_annotations
                 )
 
         # show initial frame
-        self._viser_set_step(0, current_path(), C_display, C_display_base, handles, mode_label)
+        self._viser_set_step(0, current_path(), C_display, C_display_base, handles, mode_label, step_annotations)
 
         print(f"[viser] Open http://localhost:{port} to view the path.")
         print("[viser] Press Stop in the GUI or Ctrl-C to exit.")
@@ -1067,7 +1097,7 @@ class rai_env(BaseProblem):
                     next_step = (clamped_step() + int(step_size_field.value)) % len(path)
                     step_slider.value = next_step
                     self._viser_set_step(
-                        next_step, path, C_display, C_display_base, handles, mode_label
+                        next_step, path, C_display, C_display_base, handles, mode_label, step_annotations
                     )
                 time.sleep(pause_time_field.value)
         except KeyboardInterrupt:

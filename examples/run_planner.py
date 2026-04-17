@@ -52,7 +52,7 @@ def main():
     parser.add_argument(
         "--optimize",
         action="store_true",
-        help="Enable optimization (default: True)",
+        help="Enable optimization if the planner supports it. (default: False)",
     )
     parser.add_argument("--seed", type=int, default=1, help="Seed")
     parser.add_argument("--run_id", type=int, default=0, help="Run id. Used for debugging only.")
@@ -97,24 +97,23 @@ def main():
     parser.add_argument(
         "--save",
         action="store_true",
-        help="Try shortcutting the solution.",
+        help="save the computed solutions. (default false)",
     )
     parser.add_argument(
         "--stop_at_mode",
         action="store_true",
-        help="Generate samples near a previously found path (default: False)",
+        help="Stop at mode in the display-path function (default: False)",
     )
     parser.add_argument(
         "--insert_transition_nodes",
         action="store_true",
-        help="Shortcut the path. (default: False)",
+        help="Insert transition nodes to ensure they are doubled. (default: False)",
     )
     parser.add_argument(
         "--show_plots",
         action="store_true",
         help="Show some analytics plots. (default: False)",
     )
-
     parser.add_argument(
         "--viser",
         action="store_true",
@@ -231,8 +230,8 @@ def main():
         env, path, 1000
     )
 
-    interpolated_path = interpolate_path(path, 0.05)
-    shortcut_discretized_path = interpolate_path(shortcut_path)
+    interpolated_path = interpolate_path(path, 0.05, kind="euclidean")
+    shortcut_discretized_path = interpolate_path(shortcut_path, kind="euclidean")
 
     print("Checking original path for validity")
     print(env.is_valid_plan(interpolated_path))

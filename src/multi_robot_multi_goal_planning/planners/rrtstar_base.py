@@ -528,11 +528,23 @@ class BaseRRTConfig:
     apply_long_horizon: bool = False
     horizon_length: int = 1
     with_mode_validation: bool = True
+    
+    sampler: str = "auto"  # "joint" | "per_robot" | "gibbs" | "auto"
+    sampler_gibbs_sweeps: int = 1  # number of full Gibbs sweeps per sample attempt
+    # "auto" mode: use expected collision checks per successful sample to pick between
+    # joint and gibbs per mode. Switch when gibbs becomes cheaper, switch back if not.
+    # Warmup: minimum joint attempts before evaluating (avoids premature switching).
+    sampler_auto_warmup: int = 20
+    
+    # probability of using home pose for free robots instead of the normal sampler
+    # quick experiment to gauge value of per-robot ellipsoid sampling idea
+    p_home_bias: float = 0.0
     with_noise: bool = False
     with_tree_visualization: bool = False
     
     # BidirectionalRRTstar
-    transition_nodes: int = 50
+    transition_nodes: int = 10
+    p_reseed_transition: float = 0.00
     birrtstar_version: int = 2
     stepsize: float = 0
 
@@ -561,6 +573,8 @@ class BaseRRTstar(BasePlanner):
         self.modes = []
         self.trees = {}
         self.transition_node_ids = {}
+        # pre-warm JIT-compiled helpers so compilation is not charged to plan()
+        find_nearest_indices(np.zeros(1, dtype=np.float64), 0.0)
         self.start_time = time.time()
         self.costs = []
         self.times = []
@@ -576,6 +590,66 @@ class BaseRRTstar(BasePlanner):
         )
         self.check = set()
         self.blacklist_mode = set()
+        self.home_pose_attempted_modes: set = set()
+        # per-mode sampling stats for "auto" sampler
+        # joint: [attempts, successes]
+        # gibbs: [total_checks, successful_calls]
+        self._joint_sampling_stats: Dict[Mode, List[int]] = {}
+        self._gibbs_sampling_stats: Dict[Mode, List[int]] = {}
+        # timing instrumentation
+        self._sampling_time: float = 0.0
+        self._coll_checking_time: float = 0.0
+        self._edge_check_time_success: float = 0.0
+        self._edge_check_time_failure: float = 0.0
+        
+        # Toggle timed vs untimed edge collision checking (change one line):
+        # self._check_edge_cf = self._timed_edge_collision_free  # timed
+        self._check_edge_cf = self._edge_collision_free      # untimed
+        
+        # self._check_config_cf = self._timed_collision_free      # timed
+        self._check_config_cf = self._collision_free      # untimed
+
+        # self._sample_config_fn = self._timed_sample_configuration  # timed
+        self._sample_config_fn = self.sample_configuration             # untimed
+
+        # self._sample_transition_config_fn = self._timed_sample_transition_configuration  # timed
+        self._sample_transition_config_fn = self.sample_transition_configuration             # untimed
+
+        # running c_free estimate via uniform samples from _sample_uniform
+        self._c_free_n_total: int = 0
+        self._c_free_n_free: int = 0
+        self._c_free_total_volume: float = 0.0
+
+    def _edge_collision_free(
+        self, q1: "Configuration", q2: "Configuration", mode: "Mode"
+    ) -> bool:
+        return self.env.is_edge_collision_free(q1, q2, mode)
+
+    def _timed_edge_collision_free(
+        self, q1: "Configuration", q2: "Configuration", mode: "Mode"
+    ) -> bool:
+        t0 = time.perf_counter()
+        result = self.env.is_edge_collision_free(q1, q2, mode)
+        dt = time.perf_counter() - t0
+        if result:
+            self._edge_check_time_success += dt
+        else:
+            self._edge_check_time_failure += dt
+        return result
+
+    def _timed_collision_free(
+        self, q: "Configuration", mode: "Mode"
+    ) -> bool:
+        t0 = time.perf_counter()
+        result = self.env.is_collision_free(q, mode)
+        dt = time.perf_counter() - t0
+        self._coll_checking_time += dt
+        return result
+
+    def _collision_free(
+        self, q: "Configuration", mode: "Mode"
+    ) -> bool:
+        return self.env.is_collision_free(q, mode)
 
     def add_tree(
         self,
@@ -830,10 +904,31 @@ class BaseRRTstar(BasePlanner):
 
         self.d = sum(self.env.robot_dims.values())
         unit_ball_volume = math.pi ** (self.d / 2) / math.gamma((self.d / 2) + 1)
-        self.get_lebesgue_measure_of_free_configuration_space()
+        self._unit_ball_volume = unit_ball_volume
+
+        # compute total C-space volume from joint limits (no collision checking)
+        total_volume = 1.0
+        for robot in self.env.robots:
+            lims = self.env.limits[:, self.env.robot_idx[robot]]
+            total_volume *= np.prod(lims[1] - lims[0])
+        self._c_free_total_volume = total_volume
+
+        # initialise c_free optimistically with total volume; refined online by _sample_uniform
+        self.c_free = total_volume
         self.gamma_rrtstar = (
             (2 * (1 + 1 / self.d)) ** (1 / self.d)
             * (self.c_free / unit_ball_volume) ** (1 / self.d)
+        ) * self.eta
+
+    _C_FREE_MIN_SAMPLES = 200   # don't update until we have this many uniform draws
+    _C_FREE_UPDATE_EVERY = 500  # update every this many additional draws
+
+    def _update_c_free_from_samples(self) -> None:
+        """Recompute c_free and gamma_rrtstar from running uniform-sample counts."""
+        self.c_free = (self._c_free_n_free / self._c_free_n_total) * self._c_free_total_volume
+        self.gamma_rrtstar = (
+            (2 * (1 + 1 / self.d)) ** (1 / self.d)
+            * (self.c_free / self._unit_ball_volume) ** (1 / self.d)
         ) * self.eta
 
     def get_home_poses(self, mode: Mode) -> List[NDArray]:
@@ -908,6 +1003,189 @@ class BaseRRTstar(BasePlanner):
         # else:
         #     return goal[self.env.robot_idx[r]]
 
+    def _sample_collision_free_joint(
+        self, mode: Mode, pinned: Dict[str, NDArray] = {}
+    ) -> Configuration | None:
+        """Joint rejection sampling: sample all free robots at once, accept if collision-free."""
+
+        if not hasattr(self, "sample_attempts"):
+            self.sample_attempts = 0
+
+        if not hasattr(self, "succ_samples"):
+            self.succ_samples = 0
+
+        if not hasattr(self, "coll_checks"):
+            self.coll_checks = 0
+
+        self.sample_attempts += 1
+
+        q = self.env.sample_config_uniform_in_limits()
+        for robot, values in pinned.items():
+            i = self.env.robots.index(robot)
+            q[i] = values
+
+        self.coll_checks += 1
+        if self.env.is_collision_free(q, mode):
+            self.succ_samples += 1
+            return q
+        
+        return None
+
+    def _sample_collision_free_per_robot(
+        self, mode: Mode, pinned: Dict[str, NDArray] = {}
+    ) -> Configuration | None:
+        """
+        Per-robot rejection sampling: retry each free robot independently using
+        per-robot collision checking, then do a final full check for inter-robot
+        collisions. Avoids the exponential curse of dimensionality of joint sampling.
+
+        Returns None if any free robot exceeds its per-robot attempt budget (100).
+        """
+        q = self.env.sample_config_uniform_in_limits()
+
+        for robot, values in pinned.items():
+            i = self.env.robots.index(robot)
+            q[i] = values
+
+        for i, robot in enumerate(self.env.robots):
+            if robot in pinned:
+                continue
+            lims = self.env.limits[:, self.env.robot_idx[robot]]
+            for _ in range(100):
+                if self.env.is_collision_free_for_robot([robot], q.state(), mode):
+                    break
+                q[i] = np.random.uniform(lims[0], lims[1])
+            else:
+                return None
+
+        if self.env.is_collision_free(q, mode):
+            return q
+        return None
+
+    def _resolve_sampler(self, mode: Mode | None = None) -> str:
+        if self.config.sampler == "auto":
+            if mode is None:
+                return "joint"
+            joint_stats = self._joint_sampling_stats.get(mode)
+            if joint_stats is None or joint_stats[0] < self.config.sampler_auto_warmup:
+                return "joint"
+            # expected checks per successful sample:
+            #   joint: 1/p_success = attempts/successes (inf if no success yet)
+            #   gibbs: total_checks/successful_calls (inf if no success yet)
+            joint_attempts, joint_successes = joint_stats
+            expected_joint = joint_attempts / max(joint_successes, 1e-9)
+            gibbs_stats = self._gibbs_sampling_stats.get(mode)
+            if gibbs_stats is None or gibbs_stats[1] == 0:
+                # no gibbs data yet — switch speculatively if joint is very expensive
+                return "gibbs" if joint_successes == 0 else "joint"
+            expected_gibbs = gibbs_stats[0] / gibbs_stats[1]
+            return "gibbs" if expected_gibbs < expected_joint else "joint"
+        return self.config.sampler
+
+    def _get_seed_for_mode(self, mode: Mode) -> Configuration:
+        """Returns a random existing node config for the given mode, or start_pos as fallback."""
+        if mode in self.trees:
+            node_ids = self.trees[mode].get_node_ids_subtree()
+            if len(node_ids) > 0:
+                node = self.trees[mode].get_node(np.random.choice(node_ids))
+                return node.state.q
+        return self.env.get_start_pos()
+
+    def _sample_collision_free_gibbs(
+        self, mode: Mode, pinned: Dict[str, NDArray] = {}
+    ) -> Tuple[Configuration | None, int]:
+        """
+        Approximate Gibbs sampling: seed from an existing tree node, then perform
+        multiple full sweeps over free robots. Each robot draws a fresh candidate
+        and accepts via a full collision check (including inter-robot).
+
+        Returns (config, n_checks) so the caller can track expected cost.
+
+        NOTE: This deviates from true Gibbs sampling. Standard Gibbs loops on each
+        variable until a valid sample is found, keeping the chain in a valid state
+        after every update. Here, if a robot exhausts its per-robot budget (100
+        attempts), we keep its current (potentially invalid) position and move on.
+        This is necessary to avoid false rejections caused by not-yet-swept robots
+        whose seed positions collide with the newly pinned robots. The consequence
+        is that intermediate states within a sweep can be invalid, which breaks the
+        theoretical convergence guarantee. In practice this is resolved over multiple
+        sweeps: the first sweep is approximate, subsequent sweeps are genuine Gibbs
+        steps since all robots have been resampled at least once.
+        """
+        seed = self._get_seed_for_mode(mode)
+        n_checks = 0
+
+        q = self.env.sample_config_uniform_in_limits()
+        for i in range(len(self.env.robots)):
+            q[i] = seed[i].copy()
+
+        for robot, values in pinned.items():
+            i = self.env.robots.index(robot)
+            q[i] = values
+
+        for _ in range(self.config.sampler_gibbs_sweeps):
+            for i, robot in enumerate(self.env.robots):
+                if robot in pinned:
+                    continue
+                lims = self.env.limits[:, self.env.robot_idx[robot]]
+                for _ in range(100):
+                    q[i] = np.random.uniform(lims[0], lims[1])
+                    n_checks += 1
+                    if self.env.is_collision_free(q, mode):
+                        break
+                # no early return on failure — robot j may be causing false rejections
+                # for robot i; continue sweeping and let subsequent sweeps resolve it
+
+        n_checks += 1
+        if self.env.is_collision_free(q, mode):
+            return q, n_checks
+
+        return None, n_checks
+
+    def _sample_collision_free(
+        self, mode: Mode, pinned: Dict[str, NDArray] = {}
+    ) -> Configuration | None:
+        # TODO: caching opportunity — every is_collision_free hit inside the per-robot
+        # and Gibbs samplers already produces a valid config, not just the final one.
+        # A per-mode cache (Dict[Mode, deque[Configuration]]) could store these and be
+        # consumed here first. On consumption, overwrite pinned slots with current goal
+        # values and re-validate cheaply. Unpinned calls skip the overwrite.
+        # Cost: one copy per cache push; benefit: fewer full sampling rounds, especially
+        # for high robot counts. Needs care around goal resampling (GoalRegion vs point).
+
+        if self.config.p_home_bias > 0 and np.random.random() < self.config.p_home_bias:
+            next_ids = self.mode_validation.get_valid_next_ids(mode)
+            task = self.env.get_active_task(mode, next_ids)
+            active_robots = set(task.robots)
+            home = self.env.get_start_pos()
+            q = self.env.sample_config_uniform_in_limits()
+            for i, robot in enumerate(self.env.robots):
+                if robot in pinned:
+                    q[i] = pinned[robot]
+                elif robot not in active_robots:
+                    q[i] = home[i].copy()  # truly free robots go to home pose
+                # active robots keep their random value from sample_config_uniform_in_limits
+            if self.env.is_collision_free(q, mode):
+                return q
+
+        sampler = self._resolve_sampler(mode)
+        if sampler == "joint":
+            q = self._sample_collision_free_joint(mode, pinned)
+            if self.config.sampler == "auto":
+                stats = self._joint_sampling_stats.setdefault(mode, [0, 0])
+                stats[0] += 1           # attempts = collision checks (1 per joint attempt)
+                stats[1] += q is not None  # successes
+            return q
+        elif sampler == "gibbs":
+            q, n_checks = self._sample_collision_free_gibbs(mode, pinned)
+            if self.config.sampler == "auto":
+                stats = self._gibbs_sampling_stats.setdefault(mode, [0, 0])
+                stats[0] += n_checks    # total collision checks
+                stats[1] += q is not None  # successful calls
+            return q
+        else:
+            return self._sample_collision_free_per_robot(mode, pinned)
+
     def sample_transition_configuration(self, mode) -> Configuration | None:
         """
         Samples a collision-free transition configuration for the given mode.
@@ -918,15 +1196,9 @@ class BaseRRTstar(BasePlanner):
         Returns:
             Configuration: Collision-free configuration constructed by combining goal samples (active robots) with random samples (non-active robots).
         """
-        config_type = type(self.env.get_start_pos())
-        robot_lims = {
-            robot: self.env.limits[:, self.env.robot_idx[robot]]
-            for robot in self.env.robots
-        }
-
-        failed_attemps = 0
+        failed_attempts = 0
         while True:
-            if failed_attemps > 10000:
+            if failed_attempts > 10000:
                 print("Failed to sample transition configuration after 10000 attempts.")
                 if self.config.with_mode_validation:
                     self.mode_validation.add_invalid_mode(mode)
@@ -942,33 +1214,30 @@ class BaseRRTstar(BasePlanner):
                 return
 
             task = self.env.get_active_task(mode, next_ids)
-            constrained_robot = task.robots
             goal = task.goal.sample(mode)
-            # q = []
+            pinned = {}
             end_idx = 0
+            for robot in task.robots:
+                dim = self.env.robot_dims[robot]
+                pinned[robot] = goal[end_idx : end_idx + dim]
+                end_idx += dim
 
-            q = self.env.sample_config_uniform_in_limits()
-            for i, robot in enumerate(self.env.robots):
-                if robot in constrained_robot:
-                    dim = self.env.robot_dims[robot]
-                    q[i] = goal[end_idx : end_idx + dim]
-                    end_idx += dim
-                    
-            # for robot in self.env.robots:
-            #     if robot in constrained_robot:
-            #         dim = self.env.robot_dims[robot]
-            #         q.append(goal[end_idx : end_idx + dim])
-            #         end_idx += dim
-                    
-            #     else:
-            #         lims = robot_lims[robot]
-            #         q.append(np.random.uniform(lims[0], lims[1]))
-            # q = config_type.from_list(q)
+            # Try home pose + pinned once per mode across all calls
+            if mode not in self.home_pose_attempted_modes:
+                self.home_pose_attempted_modes.add(mode)
+                home = self.env.get_start_pos()
+                q = self.env.sample_config_uniform_in_limits()
+                for i, robot in enumerate(self.env.robots):
+                    q[i] = pinned[robot] if robot in pinned else home[i].copy()
+                if self.env.is_collision_free(q, mode):
+                    return q
 
-            if self.env.is_collision_free(q, mode):
+            q = self._sample_collision_free(mode, pinned)
+            if q is not None:
+                # self.env.show(False)
                 return q
 
-            failed_attemps += 1
+            failed_attempts += 1
 
     def _sample_goal(
         self,
@@ -1033,8 +1302,14 @@ class BaseRRTstar(BasePlanner):
     def _sample_uniform(self, mode: Mode):
         while True:
             q = self.env.sample_config_uniform_in_limits()
-
+            self._c_free_n_total += 1
             if self.env.is_collision_free(q, mode):
+                self._c_free_n_free += 1
+                if (
+                    self._c_free_n_total >= self._C_FREE_MIN_SAMPLES
+                    and self._c_free_n_total % self._C_FREE_UPDATE_EVERY == 0
+                ):
+                    self._update_c_free_from_samples()
                 return q
             # self.env.show(False)
 
@@ -1232,7 +1507,7 @@ class BaseRRTstar(BasePlanner):
             ]
             for idx in sorted_indices:
                 node = self.trees[mode].subtree.get(node_indices[idx].item())
-                if self.env.is_edge_collision_free(node.state.q, n_new.state.q, mode):
+                if self._check_edge_cf(node.state.q, n_new.state.q, mode):
                     c_min = c_new_tensor[idx]
                     c_min_to_parent = batch_cost[idx]  # Update minimum cost
                     n_min = node  # Update parent node
@@ -1289,7 +1564,7 @@ class BaseRRTstar(BasePlanner):
                     n_new.state.mode == n_near.state.mode
                     or n_new.state.mode == n_near.state.mode.prev_mode
                 ):
-                    if self.env.is_edge_collision_free(
+                    if self._check_edge_cf(
                         n_new.state.q, n_near.state.q, mode
                     ):
                         if n_near.parent is not None:
@@ -1327,7 +1602,7 @@ class BaseRRTstar(BasePlanner):
             if len(modes) == 0 or s.mode.task_ids != modes[-1]:
                 modes.append(s.mode.task_ids)
 
-        print(f"New cost: {cost}")
+        print(f"New cost: {cost} at time {time.time() - self.start_time}")
         print("Modes: ", modes)
 
     def generate_path(
@@ -1541,19 +1816,37 @@ class BaseRRTstar(BasePlanner):
         Returns:
             Configuration: Configuration obtained by a sampling strategy based on preset probabilities and operational conditions.
         """
-
         if np.random.uniform(0, 1) < self.config.p_goal:
-            # goal sampling
             return self._sample_goal(
                 mode, self.transition_node_ids, self.trees[mode].order
             )
 
         if self.config.informed_sampling and self.operation.init_sol:
-            # informed_sampling
             return self.sample_informed(mode)
 
-        # uniform sampling
+        sampler = self._resolve_sampler(mode)
+        if sampler == "gibbs":
+            q, n_checks = self._sample_collision_free_gibbs(mode)
+            if self.config.sampler == "auto":
+                stats = self._gibbs_sampling_stats.setdefault(mode, [0, 0])
+                stats[0] += n_checks
+                stats[1] += q is not None
+            return q
+        elif sampler == "per_robot":
+            return self._sample_collision_free_per_robot(mode)
         return self._sample_uniform(mode)
+
+    def _timed_sample_configuration(self, mode: Mode) -> Configuration | None:
+        _t0 = time.perf_counter()
+        result = self.sample_configuration(mode)
+        self._sampling_time += time.perf_counter() - _t0
+        return result
+
+    def _timed_sample_transition_configuration(self, mode: Mode) -> Configuration | None:
+        _t0 = time.perf_counter()
+        result = self.sample_transition_configuration(mode)
+        self._sampling_time += time.perf_counter() - _t0
+        return result
 
     def find_lb_transition_node(self, shortcutting_bool: bool = True) -> None:
         """

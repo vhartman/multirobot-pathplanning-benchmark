@@ -4,8 +4,9 @@ from multi_robot_multi_goal_planning.problems import (
 )
 import multi_robot_multi_goal_planning.problems as problems
 from multi_robot_multi_goal_planning.problems.rai.rai_envs import rai_env
-from multi_robot_multi_goal_planning.problems.planning_env import Mode
+from multi_robot_multi_goal_planning.problems.planning_env import Mode, State
 from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration
+from multi_robot_multi_goal_planning.problems.util import compute_reachable_modes
 
 import numpy as np
 import argparse
@@ -13,10 +14,56 @@ import time
 import random
 
 
-def visualize_modes(env: rai_env, export_images: bool = False):
-    env.show()
+def _mode_annotation(env, q_config, m, task) -> str:
+    """Build a markdown annotation string for a single mode step."""
+    conf_type = type(env.get_start_pos())
+    lines = []
+
+    if task.name is not None:
+        lines.append(f"**Task:** {task.name}")
+    lines.append(f"**Robots:** {', '.join(task.robots)}")
+
+    collision_free = env.is_collision_free(q_config, m)
+    lines.append(f"**Collision free:** {'✓' if collision_free else '✗'}")
+
+    if task.constraints:
+        lines.append("**Task constraints:**")
+        task_ok = True
+        for constraint in task.constraints:
+            ok = constraint.is_fulfilled(q_config, m, env)
+            res = constraint.F(q_config.state(), m, env)
+            task_ok = task_ok and ok
+            lines.append(f"- {'✓' if ok else '✗'} residual: `{np.round(res, 4).tolist()}`")
+        lines.append(f"**Task constraints fulfilled:** {'✓' if task_ok else '✗'}")
+
+    if env.constraints:
+        lines.append("**Env constraints:**")
+        env_ok = True
+        for constraint in env.constraints:
+            ok = constraint.is_fulfilled(q_config, m, env)
+            res = constraint.F(q_config.state(), m, env)
+            env_ok = env_ok and ok
+            lines.append(f"- {'✓' if ok else '✗'} residual: `{np.round(res, 4).tolist()}`")
+        lines.append(f"**Env constraints fulfilled:** {'✓' if env_ok else '✗'}")
+
+    return "  \n".join(lines)
+
+
+def visualize_modes(env: rai_env, export_images: bool = False, use_viser: bool = False):
+    
+    if not use_viser:
+        env.show()
 
     q_home = env.start_pos
+    conf_type = type(env.get_start_pos())
+
+    # Accumulated for viser display
+    viser_states = []
+    viser_annotations = []
+
+    if use_viser:
+        viser_states.append(State(env.start_pos, env.start_mode))
+        viser_annotations.append("Home")
 
     m = env.start_mode
     while True:
@@ -77,25 +124,17 @@ def visualize_modes(env: rai_env, export_images: bool = False):
         print("Goal state (all robots)")
         print(q)
 
-        # for _ in range(1000):
-        #     q_rnd = env.sample_config_uniform_in_limits()
-
-        #     for i, constraint in enumerate(env.tasks[1].constraints):
-        #         print(constraint.F(q_rnd.state(), m, env))
-        #         if constraint.is_fulfilled(q_rnd, m, env):
-        #             print(i)
-        #             # env.show_config(q_rnd)
-        #             env.C.view(True)
+        q_config = conf_type.from_list(q)
 
         print(
             "Is collision free: ",
-            env.is_collision_free(type(env.get_start_pos()).from_list(q), m),
+            env.is_collision_free(q_config, m),
         )
         task_constraints_fulfilled = True
         for constraint in task.constraints:
-            if not constraint.is_fulfilled(type(env.get_start_pos()).from_list(q), m, env):
+            if not constraint.is_fulfilled(q_config, m, env):
                 task_constraints_fulfilled = False
-            print("Residual:", constraint.F(type(env.get_start_pos()).from_list(q).state(), m, env))
+            print("Residual:", constraint.F(q_config.state(), m, env))
 
         print(
             "Fulfills task constraints: ", task_constraints_fulfilled
@@ -103,10 +142,10 @@ def visualize_modes(env: rai_env, export_images: bool = False):
 
         env_constraints_fulfilled = True
         for constraint in env.constraints:
-            if not constraint.is_fulfilled(type(env.get_start_pos()).from_list(q), m, env):
+            if not constraint.is_fulfilled(q_config, m, env):
                 env_constraints_fulfilled = False
-            print("Residual:", constraint.F(type(env.get_start_pos()).from_list(q).state(), m, env))
-            
+            print("Residual:", constraint.F(q_config.state(), m, env))
+
         print(
             "Fulfills env constraints: ", env_constraints_fulfilled
         )
@@ -116,95 +155,36 @@ def visualize_modes(env: rai_env, export_images: bool = False):
         #     if c[2] < 0:
         #         print(c)
 
-        if export_images:
+        if use_viser and isinstance(env, rai_env):
+            viser_states.append(State(q_config, m))
+            viser_annotations.append(_mode_annotation(env, q_config, m, task))
+        elif export_images:
             env.show(False)
             env.C.view_savePng("./z.img/")
         else:
-            env.show_config(type(env.get_start_pos()).from_list(q))
+            env.show_config(q_config)
 
         if env.is_terminal_mode(m):
             break
 
-        ms = env.get_next_modes(type(env.get_start_pos()).from_list(q), m)
+        ms = env.get_next_modes(q_config, m)
         assert len(ms) == 1
         m = ms[0]
 
-    if hasattr(env, "close"):
+    if use_viser and isinstance(env, rai_env):
+        env.display_path_viser(
+            viser_states,
+            primitives_only=True,
+            step_annotations=viser_annotations,
+        )
+    elif hasattr(env, "close"):
         env.close()
     
 def benchmark_collision_checking(env: rai_env, N=10000):
-    conf_type = type(env.get_start_pos())
-
-    def sample_next_modes(mode: Mode):
-        if env.is_terminal_mode(mode):
-            return None
-        failed_attemps = 0
-        while True:
-            if failed_attemps > 1000:
-                print("Failed to sample next mode")
-                return None
-            possible_next_task_combinations = env.get_valid_next_task_combinations(mode)
-            if len(possible_next_task_combinations) > 0:
-                ind = random.randint(0, len(possible_next_task_combinations) - 1)
-                active_task = env.get_active_task(
-                    mode, possible_next_task_combinations[ind]
-                )
-            else:
-                active_task = env.get_active_task(mode, None)
-
-            goals_to_sample = active_task.robots
-
-            goal_sample = active_task.goal.sample(mode)
-
-            q = []
-            for i in range(len(env.robots)):
-                r = env.robots[i]
-                if r in goals_to_sample:
-                    offset = 0
-                    for _, task_robot in enumerate(active_task.robots):
-                        if task_robot == r:
-                            q.append(
-                                goal_sample[
-                                    offset : offset + env.robot_dims[task_robot]
-                                ]
-                            )
-                            break
-                        offset += env.robot_dims[task_robot]
-                else:  # uniform sample
-                    lims = env.limits[:, env.robot_idx[r]]
-                    if lims[0, 0] < lims[1, 0]:
-                        qr = (
-                            np.random.rand(env.robot_dims[r])
-                            * (lims[1, :] - lims[0, :])
-                            + lims[0, :]
-                        )
-                    else:
-                        qr = np.random.rand(env.robot_dims[r]) * 6 - 3
-
-                    q.append(qr)
-
-            q = conf_type.from_list(q)
-
-            if env.is_collision_free(q, mode):                
-                next_modes = env.get_next_modes(q, mode)
-                # assert len(next_modes) == 1
-                # next_mode = next_modes[0]
-                return next_modes
-            else:
-                failed_attemps += 1
-
-    # create list of modes that we can reach
     print("Make mode list")
-    reachable_modes = set([env.get_start_mode()])
-    max_iter = 500
-    for _ in range(max_iter):
-        m_rnd = random.choice(tuple(reachable_modes))
-        next_modes = sample_next_modes(m_rnd)
-        print(next_modes)
-        if next_modes is not None:
-            reachable_modes.update(next_modes)
-    reachable_modes = tuple(reachable_modes)
+    reachable_modes = compute_reachable_modes(env)
     print("Found", len(reachable_modes), "reachable modes")
+    
     is_collision_free = env.is_collision_free
 
     # actually do the benchmarking
@@ -244,6 +224,11 @@ def main():
         action="store_true",
         help="Export images of modes. (default: False)",
     )
+    parser.add_argument(
+        "--viser",
+        action="store_true",
+        help="Use viser for visualization (rai envs only). (default: False)",
+    )
     parser.add_argument("--seed", type=int, default=0, help="Seed")
     args = parser.parse_args()
 
@@ -271,7 +256,7 @@ def main():
         benchmark_collision_checking(env)
     elif args.mode == "modes":
         print("Environment modes/goals")
-        visualize_modes(env, args.export)
+        visualize_modes(env, args.export, use_viser=args.viser)
 
 
 if __name__ == "__main__":
