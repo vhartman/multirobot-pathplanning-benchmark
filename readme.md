@@ -167,15 +167,23 @@ The information that is needed for plots, is a list of all paths that were found
 There are initial tests in the `tests/` folder.
 This could and should be expanded.
 
-# Benchmarking
+# Profiling
 
 You can run the commands above for running a planner, and generate a profile while running it with
 
 ```
-python3 -m cProfile -o res.prof  examples/run_planner.py [env] [options]
+py-spy record -F -r 500 -o profile.out --nonblocking -f speedscope -- python3  examples/run_planner.py [env] [options]
 ```
 
-The resulting profile can be visualized with `snakeviz res.prof`.
+(requiring an installation of py-spy).
+The resulting profile can be visualized with https://www.speedscope.app/.
+
+Additionally, to see more easily where time is spent in the planner during a complete run, you can visualize the profile with 
+
+```
+python examples/plot_aggregated_pyspy.py [profile.out]
+```
+which discretizes the profile into buckets, and plots where the time is spent over the complete runtime, highlighting stuff like collision checking and shortcutting.
 
 Alternatively, `kernprof` provides line-by-line profiling, by simply adding `@profile` as decorator to the function of interest, and running planner via
 
