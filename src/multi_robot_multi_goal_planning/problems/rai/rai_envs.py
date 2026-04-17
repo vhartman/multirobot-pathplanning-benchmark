@@ -1901,7 +1901,7 @@ class rai_isolated_arm_box_stack_env(SequenceMixin, rai_env):
                 task_name = r + t + "_" + b + "_" + str(cnt)
                 if t == "pick":
                     ee_name = r + "gripper_center"
-                    prefix = r[:9]
+                    prefix = r[:9] # TODO: fix
                     self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b]))
                 else:
                     self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[prefix + "table", b]))

@@ -27,12 +27,12 @@ DEFAULT_PLANNER_CONFIGS = [
     # {"name": "rrt", "type": "birrtstar", "options": {"with_mode_validation": False, "sampler": "gibbs"}},
     {"name": "rrt_old", "type": "birrtstar", "options": {"with_mode_validation": False, "sampler": "joint"}},
     # {"name": "ait", "type": "aitstar", "options": {"with_mode_validation": False}},
-    # {"name": "prioritized", "type": "prioritized", "options": {}},
+    {"name": "prioritized", "type": "prioritized", "options": {"multirobot_shortcut_iters": 0}},
 ]
 
 DEFAULT_CONFIG = {
     "seed": 3,
-    "num_runs": 2,
+    "num_runs": 20,
     "optimize": False,
     "max_planning_time": 500,
     "per_agent_cost": "euclidean",
@@ -103,7 +103,7 @@ def run_isolated_stacking(
     parallel: bool,
     num_processes: int,
 ):
-    for num_robots in range(1, 8 + 1):
+    for num_robots in range(1, 9 + 1):
         for num_boxes in range(1, 5):
             print(f"\n=== Scaling test: {num_robots} robots, {num_boxes} boxes ===")
             config = copy.deepcopy(base_config)
