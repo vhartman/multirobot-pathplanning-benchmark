@@ -24,8 +24,8 @@ from multi_robot_multi_goal_planning.problems.rai_envs import rai_ur10_arm_box_s
 
 
 DEFAULT_PLANNER_CONFIGS = [
-    # {"name": "rrt", "type": "birrtstar", "options": {"with_mode_validation": False, "transition_sampler": "gibbs"}},
-    {"name": "rrt_old", "type": "birrtstar", "options": {"with_mode_validation": False, "transition_sampler": "joint"}},
+    # {"name": "rrt", "type": "birrtstar", "options": {"with_mode_validation": False, "sampler": "gibbs"}},
+    {"name": "rrt_old", "type": "birrtstar", "options": {"with_mode_validation": False, "sampler": "joint"}},
     # {"name": "ait", "type": "aitstar", "options": {"with_mode_validation": False}},
     # {"name": "prioritized", "type": "prioritized", "options": {}},
 ]
