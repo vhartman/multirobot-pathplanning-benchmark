@@ -216,7 +216,7 @@ class rai_skill_hallway(SequenceMixin, rai_env):
 class rai_single_agent_drawing(SequenceMixin, rai_env):
     def __init__(self, square=False):
         #table_height = 0.1 
-        table_height = 0.25 # Table top at z = 0.23
+        table_height = 0.26 # Table top at z = 0.23
         if square:
             pts = [
                 np.array([-0.5, 0.0, table_height]), 
@@ -540,7 +540,8 @@ class rai_multi_agent_scripted_insert_base(rai_env):
             pick_pose = self.C.getFrame(obj_name).getPose()
             place_pose = self.C.getFrame(goal_name).getPose()
 
-            pick_pose[3:] = a1_pose[3:]
+            ee_pose = a1_pose if robot == "a1" else a2_pose
+            pick_pose[3:] = ee_pose[3:]
             pick_pose[2] += 0.11
 
             self.tasks.extend([
@@ -883,7 +884,7 @@ class rai_dual_arm_transport(SequenceMixin, rai_env):
 class rai_single_agent_bin_picking(SequenceMixin, rai_env):
     def __init__(self):
         self.C, [pre_pick, pre_place_type_1, pre_place_type_2] = rai_config.make_single_agent_bin_picking_env()
-        self.C.view(True)
+        # self.C.view(True)
 
         self.robots = ["a1"]
 
@@ -1017,8 +1018,17 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
             else:
                 pre_place_goal = SingleGoal(pre_place)
 
-            grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.15, 0, 0, 0, 0])
-            grasp_pose[3:] = 1.*pose[3:]
+            obj_frame = self.C.getFrame(f"obj{i}")
+            obj_pose = obj_frame.getPose()
+            obj_size = obj_frame.getSize() 
+            half_height = obj_size[2] / 2.0
+            grasp_clearance = 0.06
+
+            grasp_pose = obj_pose.copy()
+            grasp_pose[2] = obj_pose[2] + half_height + grasp_clearance
+            grasp_pose[3:] = 1. * pose[3:]
+            # grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.15, 0, 0, 0, 0])
+            # grasp_pose[3:] = 1.*pose[3:]
 
             self.tasks.extend([
                 Task(
@@ -1086,7 +1096,7 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
         self.C, \
             [a1_pre_pick_type_1, a1_pre_pick_type_2, a1_pre_place], \
             [a2_pre_pick_type_1, a2_pre_pick_type_2, a2_pre_place] = rai_config.make_multi_agent_bin_packing_env()
-        self.C.view(True)
+        # self.C.view(True)
 
         self.robots = ["a1", "a2"]
 
@@ -1122,9 +1132,17 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
                 pose = a2_pose
                 pre_place = a2_pre_place
             
+            obj_frame = self.C.getFrame(f"obj{i}")
+            obj_pose = obj_frame.getPose()
+            obj_size = obj_frame.getSize() 
+            half_height = obj_size[2] / 2.0
+            grasp_clearance = 0.06
 
-            grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.15, 0, 0, 0, 0])
-            grasp_pose[3:] = 1.*pose[3:]
+            grasp_pose = obj_pose.copy()
+            grasp_pose[2] = obj_pose[2] + half_height + grasp_clearance
+            grasp_pose[3:] = 1. * pose[3:]
+            # grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.15, 0, 0, 0, 0])
+            # grasp_pose[3:] = 1.*pose[3:]
 
             self.tasks.extend([
                 Task(
@@ -1187,8 +1205,8 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
 class rai_multi_agent_bin_picking_base(rai_env):
     def __init__(self):
         self.C, \
-            [a1_pre_pick, a1_pre_place_type_1, a1_pre_place_type_2], \
-            [a2_pre_pick, a2_pre_place_type_1, a2_pre_place_type_2] = \
+            [a1_pre_pick, a1_pre_place_type_1, a1_pre_place_type_2, a1_pre_place_type_3, a1_pre_place_type_4], \
+            [a2_pre_pick, a2_pre_place_type_1, a2_pre_place_type_2, a2_pre_place_type_3, a2_pre_place_type_4] = \
             rai_config.make_multi_agent_bin_picking()
         # self.C.view(True)
 
@@ -1212,17 +1230,20 @@ class rai_multi_agent_bin_picking_base(rai_env):
         self.C.setJointState(a2_pre_pick, self.robot_joints["a2"])
         pose_a2 = self.C.getFrame("a2_ur_gripper_center").getPose()
         self.C.setJointState(home_pose)
+        
+        a1_pre_places = [a1_pre_place_type_1, a1_pre_place_type_2, a1_pre_place_type_3, a1_pre_place_type_4]
+        a2_pre_places = [a2_pre_place_type_1, a2_pre_place_type_2, a2_pre_place_type_3, a2_pre_place_type_4]
 
         for i in range(1,5):
             if i%2 == 1:
                 pre_pick = a1_pre_pick
-                place_pose = a1_pre_place_type_1
+                place_pose = a1_pre_places[i-1]
                 robot = "a1"
                 pose = pose_a1
 
             else:
                 pre_pick = a2_pre_pick
-                place_pose = a2_pre_place_type_2
+                place_pose = a2_pre_places[i-1]
                 robot = "a2"
                 pose = pose_a2
                 
@@ -1449,7 +1470,7 @@ class rai_skill_handover(SequenceMixin, rai_env):
         a2_pose = self.C.getFrame("a2_ur_vacuum").getPose()
         self.C.setJointState(home_pose)
 
-        self.C.view(True)
+        # self.C.view(True)
 
         offset = relative_pose(a2_pose, a1_pose)
 
