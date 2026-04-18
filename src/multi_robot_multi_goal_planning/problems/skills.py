@@ -3,7 +3,6 @@ import numpy as np
 from abc import ABC, abstractmethod
 import robotic
 
-# TODO (Liam)
 from dataclasses import dataclass
 from typing import Optional, List
 from scipy.spatial.transform import Rotation as R, Slerp
@@ -30,9 +29,9 @@ class SkillRolloutResult:
 
 # abstract class for skills. 
 class DeterministicBaseSkill(ABC):
-  def __init__(self, joints):
+  def __init__(self, joints, dt=0.1):
     self.joints = joints # Store joint names when passed by planner
-    pass
+    self.dt = dt
 
   @abstractmethod
   def step(self, q, env):
@@ -43,7 +42,7 @@ class DeterministicBaseSkill(ABC):
   def done(self, q, env):
     pass
 
-  def rollout(self, q_init, task, all_joints, env, t0, dt=0.1, max_steps=1000):
+  def rollout(self, q_init, task, all_joints, env, t0, max_steps=1000):
     """
     Rollout deterministic untimed skill till convergence
     """
@@ -53,14 +52,14 @@ class DeterministicBaseSkill(ABC):
     times = [t0]
     
     for _ in range(max_steps):
-        q = self.step(q, env, dt)
-        times.append(times[-1] + dt)
+        q = self.step(q, env)
+        times.append(times[-1] + self.dt)
         trajectory.append(q)
         
         if self.done(q, env):
             break
         
-    env.C.selectJoints(all_joints) # Restore full space # TODO check!
+    env.C.selectJoints(all_joints) # Restore full space
     return SkillRolloutResult(
         trajectory=np.array(trajectory),
         times=np.array(times),
@@ -68,8 +67,9 @@ class DeterministicBaseSkill(ABC):
 
 # abstract class for stochastic skills.
 class StochasticBaseSkill(ABC):
-  def __init__(self, joints):
+  def __init__(self, joints, dt=0.1):
     self.joints = joints
+    self.dt = dt
 
   @abstractmethod
   def step(self, q, env):
@@ -81,8 +81,9 @@ class StochasticBaseSkill(ABC):
 
 # abstract class for deterministic timed skills.
 class BaseDeterministicTimedSkill(ABC):
-  def __init__(self, joints):
+  def __init__(self, joints, dt=0.01):
     self.joints = joints
+    self.dt = dt
 
   # TODO: should likely simply merge q and t to 'state'
   @abstractmethod
@@ -93,26 +94,26 @@ class BaseDeterministicTimedSkill(ABC):
   def done(self, t, q, env):
     pass
   
-  def rollout(self, q_init, task, all_joints, env, t0, dt=0.01):
+  def rollout(self, q_init, task, all_joints, env, t0):
     """
     Rollout deterministic timed skill for fixed duration
     """
     env.C.selectJoints(task.skill.joints) # Restrict to subspace
-    n_steps = max(1, round(self.duration / dt))
+    n_steps = max(1, round(self.duration / self.dt))
     q = q_init.copy()
     trajectory = [q]
     times = [t0]
 
     for i in range(n_steps):
         t_norm = (i + 1) / n_steps
-        q = self.step(t_norm, q, env, dt)
-        times.append(times[-1] + dt)
+        q = self.step(t_norm, q, env)
+        times.append(times[-1] + self.dt)
         trajectory.append(q)
         
         if self.done(t_norm, q, env):
             break
     
-    env.C.selectJoints(all_joints) # Restore full space # TODO check!
+    env.C.selectJoints(all_joints) # Restore full space
     return SkillRolloutResult(
         trajectory=np.array(trajectory),
         times=np.array(times),
@@ -132,15 +133,16 @@ class BaseStochasticTimedSkill(ABC):
     pass
 
 class EEPositionGoalReaching(DeterministicBaseSkill):
-  def __init__(self, joints, goal, ee_name):
-    super().__init__(joints)
+  def __init__(self, joints, goal, ee_name, dt=0.1, ik_gain=1.0):
+    super().__init__(joints, dt=dt)
 
     self.goal_position = goal
     self.ee_name = ee_name
+    self.ik_gain = ik_gain
 
     self.qdot_clip = 0.2
 
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     # get jacobian
     env.C.setJointState(q, self.joints)
     [err, jac] = env.C.eval(robotic.FS.position, [self.ee_name], 1, self.goal_position)
@@ -149,7 +151,7 @@ class EEPositionGoalReaching(DeterministicBaseSkill):
     q_dot = np.linalg.pinv(jac) @ err
 
     # integrate to get next pos
-    q_new = q - dt * q_dot
+    q_new = q - self.ik_gain * q_dot
     return q_new
 
   def done(self, q, env):
@@ -163,15 +165,16 @@ class EEPositionGoalReaching(DeterministicBaseSkill):
 
 # simple pid controller
 class EEPoseGoalReaching(DeterministicBaseSkill):
-  def __init__(self, joints, goal, ee_name):
-    super().__init__(joints)
+  def __init__(self, joints, goal, ee_name, dt=0.1, ik_gain=1.0):
+    super().__init__(joints, dt=dt)
     
     self.goal_pose = goal
     self.ee_name = ee_name
+    self.ik_gain = ik_gain
 
     self.scale_stepsize = False
 
-  def step(self, q, env, dt=1.):
+  def step(self, q, env):
     # get jacobian
     env.C.setJointState(q, self.joints)
 
@@ -193,7 +196,7 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
           q_dot = (q_dot / current_speed) * max_step
 
     # integrate to get next pos
-    q_new = q - dt * q_dot
+    q_new = q - self.ik_gain * q_dot
 
     # print(env.C.getFrame(self.ee_name).getPose())
     # print(self.goal_pose)
@@ -224,8 +227,8 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
 # Should probably do this for all the other pose reaching things as well
 # This can for example be used for a handover
 class RelativePoseReaching(DeterministicBaseSkill):
-  def __init__(self, joints, frame_1_name, frame_2_name, transformation):
-    super().__init__(joints)
+  def __init__(self, joints, frame_1_name, frame_2_name, transformation, dt=0.1):
+    super().__init__(joints, dt=dt)
     
     self.frame_1_name = frame_1_name
     self.frame_2_name = frame_2_name
@@ -235,7 +238,7 @@ class RelativePoseReaching(DeterministicBaseSkill):
     self.mod_rel_transformation = 1. * self.relative_transformation
     self.mod_rel_transformation[3:] = -self.mod_rel_transformation[3:]
 
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     env.C.setJointState(q, self.joints)
 
     # TODO: Pretty sure this could be done better??
@@ -248,7 +251,7 @@ class RelativePoseReaching(DeterministicBaseSkill):
       q_dot = np.linalg.pinv(jac_2) @ err_2
 
     # integrate to get next pos
-    q_new = q - dt * q_dot
+    q_new = q - self.dt * q_dot
     
     return q_new
 
@@ -277,13 +280,14 @@ class VacuumGrasping(BaseDeterministicTimedSkill):
     raise NotImplementedError
 
 class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
-  def __init__(self, joints, ee_name, poses, times=None):
-    super().__init__(joints)
+  def __init__(self, joints, ee_name, poses, times=None, dt=0.01, ik_gain=0.1):
+    super().__init__(joints, dt=dt)
     
     self.line_start_pos = line_start_pos
     self.line_goal_pos = line_goal_pos
 
     self.duration = 1
+    self.ik_gain = ik_gain
 
     self.ee_name = ee_name
 
@@ -312,7 +316,7 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
 
     return np.concatenate([p_new, q])    
     
-  def step(self, t, q, env, dt=0.1):
+  def step(self, t, q, env):
     # look up where we are on the trajctory
     desired_next_pos = self._get_desired_pose_at_time(t)
 
@@ -326,7 +330,7 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
       q_dot = np.linalg.pinv(jac) @ err
 
       # integrate to get next pos
-      q_new = q_new - dt * q_dot
+      q_new = q_new - self.ik_gain * q_dot
     
     return q_new
 
@@ -342,10 +346,11 @@ class EndEffectorPoseFollowing(BaseDeterministicTimedSkill):
     return False
 
 class EndEffectorPositionFollowing(BaseDeterministicTimedSkill):
-  def __init__(self, joints, ee_name, positions, times=None):
-    super().__init__(joints)
+  def __init__(self, joints, ee_name, positions, times=None, dt=0.01, ik_gain=1.0):
+    super().__init__(joints, dt=dt)
 
     self.duration = 1
+    self.ik_gain = ik_gain
 
     self.ee_name = ee_name
 
@@ -367,7 +372,7 @@ class EndEffectorPositionFollowing(BaseDeterministicTimedSkill):
 
     return p_new
 
-  def step(self, t, q, env, dt=1):
+  def step(self, t, q, env):
     # look up where we are on the trajctory and get next position
     desired_position = self._get_desired_position_at_time(t)
 
@@ -383,7 +388,7 @@ class EndEffectorPositionFollowing(BaseDeterministicTimedSkill):
       q_dot = np.linalg.pinv(jac) @ err
 
       # integrate to get next pos
-      q_new = q_new - dt * q_dot
+      q_new = q_new - self.ik_gain * q_dot
 
     # env.C.view(False)
     # time.sleep(0.1)
@@ -426,11 +431,12 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
   """Skill for a given object trajectory, where the robots end effectors keep a constant 
   transformation to the object.
   """
-  def __init__(self, joints, ee_names, transformations, poses, times=None):
-    super().__init__(joints)
+  def __init__(self, joints, ee_names, transformations, poses, times=None, dt=0.01, ik_gain=1.0):
+    super().__init__(joints, dt=dt)
     
     self.duration = 1
     self.max_num_ik_iters = 100
+    self.ik_gain = ik_gain
 
     self.ee_names = ee_names
 
@@ -462,7 +468,7 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
 
     return np.concatenate([p_new, q])    
     
-  def step(self, t, q, env, dt=0.1):
+  def step(self, t, q, env):
     env.C.setJointState(q, self.joints)
     desired_pose = self._get_desired_obj_pose_at_time(t)
     q_new = q.copy()
@@ -479,7 +485,7 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
           break
 
         q_dot = np.linalg.pinv(jac) @ err
-        q_new = q_new - 1.0 * q_dot # dt for rollout (traj discretization), not IK convergence
+        q_new = q_new - self.ik_gain * q_dot # dt for rollout (traj discretization), not IK convergence
 
     # env.C.view(False)
     # time.sleep(0.1)
@@ -494,15 +500,15 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
 
 # basically the same thing as pose reaching, but with obstacle avoidance
 class ModelBasedInsertion(DeterministicBaseSkill):
-  def __init__(self, joints, goal, ee_name):
-    super().__init__(joints)
+  def __init__(self, joints, goal, ee_name, dt=0.1):
+    super().__init__(joints, dt=dt)
     
     self.goal_pose = goal
     self.ee_name = ee_name
 
     self.qdot_clip = 0.2
 
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     # get jacobian
     env.C.setJointState(q, self.joints)
 
@@ -514,11 +520,34 @@ class ModelBasedInsertion(DeterministicBaseSkill):
 
     [pose_err, pose_jac] = env.C.eval(robotic.FS.pose, [self.ee_name], 1, mod_goal_pose)
 
+    # # TODO (Liam) double check -> idea: use nullspace (avoids fighting between pid and "collision"-corrector) and no need for 100 iterations..
+    # # Check for collisions at current state
+    # env.C.computeCollisions()
+    # [coll_err, coll_jac] = env.C.eval(robotic.FS.accumulatedCollisions, [])
+    
+    # # Primary task: collision avoidance (want coll_err -> 0)
+    # coll_pinv = np.linalg.pinv(coll_jac)
+    # coll_q_dot = coll_pinv @ coll_err
+
+    # # Secondary task: pose reaching (in null-space of collision avoidance task)
+    # coll_null = np.eye(len(q)) - coll_pinv @ coll_jac
+    # pose_jac_projected = pose_jac @ coll_null
+
+    # # Compute pose velocity in nullspace (collision correction already applide)
+    # pose_q_dot_null = np.linalg.pinv(pose_jac_projected) @ (pose_err - pose_jac @ coll_q_dot)
+
+    # total_q_dot = coll_q_dot + pose_q_dot_null
+
+    # # integrate to get next pos
+    # q_new = q - self.dt * total_q_dot
+
+    # return q_new
+
     # compute pid law
     pose_q_dot = np.linalg.pinv(pose_jac) @ pose_err
 
     # integrate to get next pos
-    q_new = q - dt * pose_q_dot
+    q_new = q - self.dt * pose_q_dot
 
     # correct position such that we are not in collision
     for _ in range(100):
@@ -554,10 +583,10 @@ class ModelBasedInsertion(DeterministicBaseSkill):
     return False
 
 class Insertion(StochasticBaseSkill):
-  def __init__(self, joints):
-    super().__init__(joints)
+  def __init__(self, joints, dt=0.1):
+    super().__init__(joints, dt=dt)
 
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     # query the policy
     # onnx?
     # decide noise level ourselves?
@@ -567,20 +596,20 @@ class Insertion(StochasticBaseSkill):
     raise NotImplementedError
 
 class DexterousGrasping(StochasticBaseSkill):
-  def __init__(self):
-    pass
+  def __init__(self, joints, dt=0.1):
+    super().__init__(joints, dt=dt)
 
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     pass
 
   def done(self, q, env):
     raise NotImplementedError
 
 class Handover(DeterministicBaseSkill):
-  def __init__(self, joints):
-    super().__init__(joints)
+  def __init__(self, joints, dt=0.1):
+    super().__init__(joints, dt=dt)
 
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     pass
 
   def done(self, q, env):
@@ -590,19 +619,19 @@ class JogJoint(BaseDeterministicTimedSkill):
   """Skill for simple jogging (=moving a single joint in config space) of a joint
   at a given speed.
   """
-  def __init__(self, joints, speed, idx, duration):
-    super().__init__(joints)
+  def __init__(self, joints, speed, idx, duration, dt=0.01):
+    super().__init__(joints, dt=dt)
     
     self.speed = speed
     self.idx = idx
     self.duration = duration
 
-  def step(self, t, q, env, dt=0.1):
+  def step(self, t, q, env):
     qn = q.copy()
-    qn[self.idx] += self.speed * dt
+    qn[self.idx] += self.speed * self.dt
     return qn
 
-  def done(self, t, q, env, dt=0.1):
+  def done(self, t, q, env):
     #if t > self.duration:
     #print(t%10)
     if t > 1.0:
@@ -613,13 +642,13 @@ class JogJoint(BaseDeterministicTimedSkill):
 # Scrwing should actually also go down compared to just joint jogging
 # Technically based on sensor/force feedback
 class Screw(DeterministicBaseSkill):
-  def __init__(self, joints, speed, ee_name):
-    super().__init__(joints)
+  def __init__(self, joints, speed, ee_name, dt=0.1):
+    super().__init__(joints, dt=dt)
     
     self.speed = speed
     self.ee_name = ee_name
 
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     pass
 
   def done(self, q, env):
@@ -631,10 +660,10 @@ class PrecomputedSkillDistribution(StochasticBaseSkill):
   """Stoachstic skill with precomputed end-distributions/precomputed trajectory distributions.
   Enables not requiring a learned/scripted function for the rollout.
   """
-  def __init__(self, joints):
-    super().__init__(joints)
+  def __init__(self, joints, dt=0.1):
+    super().__init__(joints, dt=dt)
     
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     pass
 
   def done(self, q, env):
@@ -643,10 +672,10 @@ class PrecomputedSkillDistribution(StochasticBaseSkill):
 # this can model bin picking form a bin where we do not care which item we take
 # could e.g. be a bin of all the same objects, and we do not care
 class StochasticBinPick(StochasticBaseSkill):
-  def __init__(self, joints):
-    super().__init__(joints)
+  def __init__(self, joints, dt=0.1):
+    super().__init__(joints, dt=dt)
 
-  def step(self, q, env, dt=0.1):
+  def step(self, q, env):
     pass
 
   def done(self, q, env):
