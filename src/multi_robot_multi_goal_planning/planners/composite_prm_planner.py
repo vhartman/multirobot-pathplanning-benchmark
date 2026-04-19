@@ -71,7 +71,7 @@ class CompositePRMConfig:
     skill_corridor_width: int = 100         # phase 2
     skill_k_neighbors: int = 20             # phase 2&3
     skill_batch_size: int = 100             # phase 3
-    skill_batch_strategy: str = "inside"    # phase 3 (inside: NxB, outside: B lanes)
+    skill_batch_strategy: str = "outside"    # phase 3 (inside: NxB, outside: B lanes)
 
 """
 NOTES (Liam):
@@ -397,16 +397,13 @@ class CompositePRM(BasePlanner):
         print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Phase: {self.config.skill_phase} | Candidates: {len(candidate_entry_nodes)}")        
         q_entry = entry_node.state.q.state()
 
+        # Reset env before rollout begins # TODO (check, but solved multi_agent_scripted_insert problem)
+        self.env.C.setJointState(q_entry)
+
         # 4. Rollout skill
         # Identify active joints for this task & extract starting configuration for active joints 
-        active_joints = []
-        for r in active_task.robots:
-            active_joints.extend(self.env.robot_joints[r])
-        active_task.skill.joints = active_joints
-
-        all_joints = []
-        for r in self.env.robots:
-            all_joints.extend(self.env.robot_joints[r])
+        active_joints = self.env.get_joint_names(active_task.robots)
+        all_joints = self.env.get_joint_names()
             
         parts = []
         offset = 0
@@ -578,7 +575,7 @@ class CompositePRM(BasePlanner):
             print(f"[DEBUG P3 BATCH] Single-agent detected. Saturating mode {mode.id} after 1 batch")
             B = 1
         elif self._inactive_robot_has_skill(mode, active_task):
-            # self._saturated_skill_modes.add(mode)
+            self._saturated_skill_modes.add(mode)
             freeze_inactive = True
             print(f"[DEBUG P3 BATCH] Freeze Guard active. Saturating mode {mode.id} after 1 batch")
             B = 1
@@ -623,9 +620,9 @@ class CompositePRM(BasePlanner):
             for _ in range(B - 1):
                 pool.append(self._sample_random_inactive_q(active_task))
  
-        # 2. Test all (pool x step) combinations
         batch_states = []
 
+        # 2. Iterate through N skill steps and test all (pool x step) combinations
         for k in range(N):
             step_valid = []
 
@@ -636,10 +633,10 @@ class CompositePRM(BasePlanner):
                 # Collision check of active/inactive combination
                 q_check = self.env.start_pos.from_flat(full_q)
                 if self.env.is_collision_free(q_check, mode):
-                    step_valid.append(State(q_check, mode, is_skill_waypoint=True)) # TODO (Liam) why not .append(full_q) like in _build_skill_roadmap
+                    step_valid.append(State(q_check, mode, is_skill_waypoint=True))
 
-            # TODO (Liam) why no "if not step_valid:" check like in the _build_skill_roadmap?
-            # As we are incrementally adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
+            # No "if not step_valid:" check like in the _build_phase2_batch because here we are incrementally
+            # adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
 
             batch_states.append(step_valid)
  
@@ -656,7 +653,7 @@ class CompositePRM(BasePlanner):
         """
         batch_states = []
         
-        # 1. Iterate through the N steps
+        # 1. Iterate through N skill steps and test all (fresh batch x step) combinations
         for k in range(N):
             step_valid = []
 
@@ -678,11 +675,11 @@ class CompositePRM(BasePlanner):
                 # Collision check of active/inactive combination
                 q_check = self.env.start_pos.from_flat(full_q)
                 if self.env.is_collision_free(q_check, mode):
-                    step_valid.append(State(q_check, mode, is_skill_waypoint=True)) # TODO (Liam) why not .append(full_q) like in _build_skill_roadmap
+                    step_valid.append(State(q_check, mode, is_skill_waypoint=True))
 
-            # TODO (Liam) why no "if not step_valid:" check like in the _build_skill_roadmap?
-            # As we are incrementally adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
-
+            # No "if not step_valid:" check like in the _build_phase2_batch because here we are incrementally
+            # adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
+ 
             batch_states.append(step_valid)
  
         return batch_states
@@ -1222,8 +1219,7 @@ class CompositePRM(BasePlanner):
         if (
             current_best_cost is not None and
             current_best_path is not None and # If we have a path
-            (self.config.try_informed_sampling or self.config.try_informed_transitions) #and
-            # non_skill_modes # TODO check
+            (self.config.try_informed_sampling or self.config.try_informed_transitions)
         ):
             # Interpolate the current best path
             interpolated_path = interpolate_path(current_best_path)

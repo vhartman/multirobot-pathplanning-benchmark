@@ -1,5 +1,6 @@
 import heapq
 import math
+import time
 from typing import (
     Any,
     ClassVar,
@@ -129,7 +130,8 @@ class MultimodalGraph:
 
         # TODO (Liam) NEW 
         self.skill_chain_nodes = defaultdict(list) # Step>=1 skill nodes excluded from k-nearest
-        self.skill_step_nodes = defaultdict(lambda: defaultdict(list))  # Phase 3: mode -> step -> [nodes]
+        self.skill_step_nodes = defaultdict(lambda: defaultdict(list))  # mode -> step -> [nodes]
+        self.skill_k_neighbors = 20 # default, updated by first add_skill_batch call
 
     def get_num_samples(self) -> int:
         num_samples = 0
@@ -407,17 +409,17 @@ class MultimodalGraph:
         """
         Unified skill node add function for all phases.
 
-        In general: adds a batch of skill nodes to the graph and wires them with forward k-nearest edges 
-        between consecutive steps. Supports incremental calls: new nodes are cross-connected with previously 
-        registered nodes at matching steps via skill_step_nodes.
+        Adds a batch of skill nodes to the graph and wires them with forward k-nearest edges
+        between consecutive steps. Supports incremental calls: new nodes are cross-connected
+        with previously registered nodes at matching steps via skill_step_nodes.
 
-        - Entry step (step-0): 
-        - Intermediate steps (step-1...step-N-1): 
-        - Exit step (step-n): 
+        - Entry step (k=0): regular node, visible to spatial k-nearest so A* can enter the chain
+        - Intermediate steps (k=1..N-2): hidden nodes in skill_chain_nodes, excluded from spatial search
+        - Exit step (k=N-1): transition node, to next mode
         """
-        # TODO (Liam) edge check upfront & whitelist -> no, usually no edge check when building graph.. relying on A*?
         N = len(batch_states)
         new_nodes_per_step = [[] for _ in range(N)]
+        self.skill_k_neighbors = k_neighbors  # store for lazy neighbor discovery in get_neighbors
 
         # 1. Create nodes and place in graph storage
         for k in range(N):
@@ -441,47 +443,25 @@ class MultimodalGraph:
                 n.skill_step = k
                 new_nodes_per_step[k].append(n)
 
-            # Register in step index (enables cross-batch connectivity) - skip for isolated chains
+            # Register in step index (enables cross-batch connectivity) / skip for isolated chains
             if not isolated:
                 self.skill_step_nodes[mode][k].extend(new_nodes_per_step[k])
 
         # 2. Forward edges: step k -> step k+1 via k-nearest
-        new_ids_per_step = [
-            set(id(n) for n in new_nodes_per_step[k]) for k in range(N)
-        ]
-
-        for k in range(N - 1):
-            new_at_k = new_nodes_per_step[k]
-            new_at_k1 = new_nodes_per_step[k + 1]
-
-            if isolated:
-                # Isolated mode: only wire within this batch (no cross-batch)
+        # - Isolated chains (e.g., if selected for re-seeded shortcutted paths): pre-wire within this batch
+        # - Normal batches: NO pre-wiring, A* discovers neighbors lazily in get_neighbors
+        if isolated:
+            for k in range(N - 1):
+                new_at_k = new_nodes_per_step[k]
+                new_at_k1 = new_nodes_per_step[k + 1]
                 if new_at_k and new_at_k1:
                     self._connect_k_nearest_forward(new_at_k, new_at_k1, k_neighbors)
-            else:
-                # Normal mode: cross-connect with existing nodes at matching steps
-                all_at_k1= self.skill_step_nodes[mode].get(k + 1, [])
 
-                # New nodes at k -> ALL nodes at k+1 (intra + cross-batch)
-                if new_at_k and all_at_k1:
-                    self._connect_k_nearest_forward(new_at_k, all_at_k1, k_neighbors)
-
-                # Existing nodes at k -> NEW nodes at k+1 only (cross-batch)
-                existing_at_k = [
-                    n for n in self.skill_step_nodes[mode].get(k, [])
-                    if id(n) not in new_ids_per_step[k]
-                ]
-                if existing_at_k and new_at_k1:
-                    self._connect_k_nearest_forward(existing_at_k, new_at_k1, k_neighbors)
-
-        # 3. Entry node -> step-0 nodes
-        # if entry_node is not None: # TODO (Liam) k-nearest or simply connect to all?
-        #     for n0 in new_nodes_per_step[0]:
-        #         entry_node.neighbors.append(n0)
-        if entry_node is not None and new_nodes_per_step[0]:
-            self._connect_k_nearest_forward( 
-                [entry_node], new_nodes_per_step[0], k_neighbors
-            )
+        # 3. Entry node -> step-0 nodes (connect all)
+        if entry_node is not None: 
+            for n0 in new_nodes_per_step[0]:
+                if n0 not in entry_node.neighbors:
+                    entry_node.neighbors.append(n0)
 
     def _connect_k_nearest_forward(self, from_nodes, to_nodes, k_neighbors):
         """
@@ -504,7 +484,7 @@ class MultimodalGraph:
 
             for j in topk_indices:
                 n_to = to_nodes[j]
-                if n_to not in n_from.neighbors: # TODO (Liam) useful duplicate neighbor guard?
+                if n_to not in n_from.neighbors:
                     n_from.neighbors.append(n_to)
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
@@ -523,11 +503,26 @@ class MultimodalGraph:
         - If the node is part of a skill trajectory, the spacial search is bypassed so A* is forced to
           step through the unrolled sequence.
         """
-        # TODO (Liam) new
-        # Skill waypoints bypass search entirely (use only chain neighbors set in add_skill_path)
-        if node.state.is_skill_waypoint and node.neighbors:
-            arr = np.array([n.state.q.q for n in node.neighbors], dtype=np.float64)
-            return node.neighbors, arr
+        # Skill waypoints: bypass spatial search, use chain structure instead
+        if node.state.is_skill_waypoint:
+            # Isolated chains from re-seeding (shortcutting) have set .neighbors (use pre-wired)
+            # TODO (Liam) check if my re-seeding (isolated) logic makes sense.. 
+            if node.neighbors:
+                arr = np.array([n.state.q.q for n in node.neighbors], dtype=np.float64)
+                return node.neighbors, arr
+
+            # Non-isolated: lazy discovery -> return ALL candidates at step k+1
+            # A* will sort it out -> avoids build cross-batch wiring (was very expensive!)
+            mode = node.state.mode
+            k = node.skill_step
+            next_step = k + 1
+            if mode in self.skill_step_nodes and next_step in self.skill_step_nodes[mode]:
+                candidates = self.skill_step_nodes[mode][next_step]
+                if candidates:
+                    arr = np.array([n.state.q.q for n in candidates], dtype=np.float64)
+                    return candidates, arr
+
+            return [], None
 
         # TODO (Liam) rest unchanged
         key = node.state.mode
