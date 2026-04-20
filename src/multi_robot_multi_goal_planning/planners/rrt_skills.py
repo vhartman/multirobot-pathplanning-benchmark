@@ -329,6 +329,7 @@ CURRENT TODOS
 # TODO [x] check self.dt with chosen dt in skills..
 # TODO [o] implement kindodynamic with SkillEdge 
 # TODO [ ] check deviation between actual skill x-steps and interpolation between ends of the SkillEdge
+# TODO [o] skill edge cost correct computation 
 
 # RRT*
 # TODO [o] add rewiring (RRT*)
@@ -410,7 +411,7 @@ class RRTSkills(BasePlanner):
                 self._check_transitions(n_new)
 
                 # RRT* rewire                                                                                                
-                if self.config.use_rrt_star:                                                                                 
+                if self.config.use_rrt_star and not n_new.is_skill_waypoint:                                                                                 
                     self._rewire(n_new, mode)                                                                                
                     if iterations % 100 == 0 and self.solution_node:
                         self._record_solution(costs, times, node=self.solution_node)
@@ -1193,28 +1194,31 @@ class RRTSkills(BasePlanner):
             t_norms=np.array(t_norms_list)
         )
 
-        # TODO (okay for now) but careful, that's the straight line cost.. not sum of intermediate step cost.. would be problem only in RRT* tho? but won't break optimality as in rewiring we are skipping skill nodes..? 
         n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=True)
         n_new.skill_step = base_step + actual_steps
         n_new.skill_edge = skill_edge
 
-        # TODO
-        # edge_cost = self._skill_edge_cost(waypoints)
-        # n_new.cost_to_parent = edge_cost
-        # n_new.cost = n_near.cost + edge_cost 
+        # TODO (okay for now) but careful, that's the straight line cost.. not sum of intermediate step cost.. would be problem only in RRT* tho? but won't break optimality as in rewiring we are skipping skill nodes..? 
+        edge_cost = self._skill_edge_cost(np.asarray(waypoints), mode)
+        n_new.cost_to_parent = edge_cost
+        n_new.cost = n_near.cost + edge_cost 
 
         # Debug
         self._dbg_kino_edges += 1
 
         return [n_new]
 
-    def _skill_edge_cost(self) -> float:
+    def _skill_edge_cost(self, waypoints: np.ndarray, mode: Mode) -> float:
         """
         Computes true cost for kinodynamic edges instead of using straight-line parent-to-end-costs
         """ 
         total = 0.0
-        raise NotImplementedError
-
+        q_from_flat = self.env.get_start_pos().from_flat
+        for i in range(len(waypoints) - 1):
+            total += self.env.config_cost(q_from_flat(waypoints[i]), q_from_flat(waypoints[i + 1]))
+        
+        return total 
+    
     # TODO RRT*
     def _set_gamma_rrt_star(self, mu_X_free: float = None):
         """
