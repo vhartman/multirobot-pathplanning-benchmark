@@ -834,7 +834,7 @@ class BaseRRTstar(BasePlanner):
         self.gamma_rrtstar = (
             (2 * (1 + 1 / self.d)) ** (1 / self.d)
             * (self.c_free / unit_ball_volume) ** (1 / self.d)
-        ) * self.eta
+        ) * self.eta # TODO (LIam) should NOT have * self.eta here! 
 
     def get_home_poses(self, mode: Mode) -> List[NDArray]:
         """
