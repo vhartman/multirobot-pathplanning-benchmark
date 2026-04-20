@@ -1989,3 +1989,11 @@ class BaseProblem(ABC):
         stop_at_mode: bool = False,
     ) -> None:
         raise NotImplementedError
+
+    @abstractmethod
+    def get_joint_names(self, robots: Optional[List[str]] = None) -> List[str]:
+        """
+        Returns a flat list of joint names for the specified robots. 
+        If robots is None, returns joint names for all robots in the environment.
+        """
+        pass

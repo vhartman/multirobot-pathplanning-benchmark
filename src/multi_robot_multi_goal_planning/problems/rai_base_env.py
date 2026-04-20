@@ -244,8 +244,8 @@ def delete_visual_only_frames(C):
     # that is, the frames that do not have a child, and are not
     # contact frames
     for f in C_coll.getFrames():
-        if hasattr(f, 'info'):
-            info = f.info()
+        if hasattr(f, 'info') or hasattr(f, 'asDict'):
+            info = f.info() if hasattr(f, 'info') else f.asDict()
             if "shape" in info and info["shape"] == "mesh":
                 C_coll.delFrame(f.name)
         # else:
@@ -373,6 +373,15 @@ class rai_env(BaseProblem):
 
     def sample_config_uniform_in_limits(self) -> NpConfiguration:
         return next(self._uniform_sampler)
+
+    def get_joint_names(self, robots: Optional[List[str]] = None) -> List[str]:
+        if robots is None:
+            robots = self.robots
+
+        joint_names = []
+        for robot in robots:
+            joint_names.extend(self.robot_joints[robot])
+        return joint_names
 
     # def sample_config_uniform_in_limits_old(self) -> NpConfiguration:
     #     rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
@@ -972,7 +981,8 @@ class rai_env(BaseProblem):
 
         handles: dict = {}
         for frame in C_display.getFrames():
-            if primitives_only and frame.info().get("shape") == "mesh":
+            info = frame.info() if hasattr(frame, 'info') else frame.asDict()
+            if primitives_only and info.get("shape") == "mesh":
                 continue
 
             verts = np.asarray(frame.getMeshPoints(), dtype=np.float32)
@@ -981,7 +991,7 @@ class rai_env(BaseProblem):
                 continue
 
             # view_recopyMeshes() (called in __init__ before C_orig is made)
-            # strips color from frame.info(), but getMeshColors() retains
+            # strips color from frame info, but getMeshColors() retains
             # per-vertex RGBA uint8 colors. Use those as the primary source.
             mesh_colors = np.asarray(frame.getMeshColors())
             if mesh_colors.ndim == 2 and len(mesh_colors) > 0:
@@ -991,7 +1001,6 @@ class rai_env(BaseProblem):
                 opacity = alpha / 255.0 if alpha < 255 else None
             else:
                 # fallback for configs not yet through view_recopyMeshes
-                info = frame.info()
                 raw = info.get("color", [0.7, 0.7, 0.7])
                 color_rgb = tuple(int(c * 255) for c in raw[:3])
                 opacity = float(raw[3]) if len(raw) > 3 and raw[3] < 1.0 else None

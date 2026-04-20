@@ -171,7 +171,7 @@ class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
         # that is, the frames that do not have a child, and are not
         # contact frames
         for f in self.C_coll.getFrames():
-            info = f.info()
+            info = f.info() if hasattr(f, 'info') else f.asDict()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
 
@@ -207,7 +207,7 @@ class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
         # that is, the frames that do not have a child, and are not
         # contact frames
         for f in self.C_coll.getFrames():
-            info = f.info()
+            info = f.info() if hasattr(f, 'info') else f.asDict()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
 
@@ -241,7 +241,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         # that is, the frames that do not have a child, and are not
         # contact frames
         for f in self.C_coll.getFrames():
-            info = f.info()
+            info = f.info() if hasattr(f, 'info') else f.asDict()
             if "shape" in info and info["shape"] == "mesh":
                 self.C_coll.delFrame(f.name)
 
