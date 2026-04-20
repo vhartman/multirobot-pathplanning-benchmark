@@ -677,18 +677,22 @@ class RRTSkills(BasePlanner):
         
         raise ValueError(f"Unknown skill_explansion_strategy: {strategy}")
 
-    def _OLD_steer(self, n_near: Node, q_target: Configuration, mode: Mode) -> Optional[State]: # TODO remove
+    def _steer_inactive(self, q_full: np.ndarray, q_target_vec: np.ndarray, active_indices: np.ndarray, dt: float) -> np.ndarray:
         """
-        Mode dependent steering:
-        - Normal mode: linear interpolation towards q_target
-        - Skill mode: call skill.step() # TODO
+        Concurrent inactive robot steering, bounded by inactive_max_vel * dt
         """
-        skill_task = self._get_active_skill_task(mode)
+        if self.config.inactive_steering_mode != "concurrent":
+            return q_full.copy()
+        
+        direction = q_target_vec - q_full
+        direction[active_indices] = 0.0
+        inactive_dist = np.linalg.norm(direction)
 
-        if skill_task is not None:
-            return self._skill_steer(n_near, skill_task, mode)
-        else:
-            return self._linear_steer(n_near, q_target, mode)
+        if inactive_dist <= 1e-8:
+            return q_full.copy()
+        eta_inactive = min(self.config.inactive_max_vel * dt, inactive_dist)
+
+        return q_full + eta_inactive * (direction / inactive_dist)
 
     def _linear_steer(self, n_near: Node, q_target: Configuration, mode: Mode):
         """
@@ -997,37 +1001,6 @@ class RRTSkills(BasePlanner):
         
         return None
     
-    def _OLD_skill_steer(self, n_near: Node, skill_task, mode: Mode): # TODO remove
-        """
-        Rolls the skill out by one step
-        """
-        skill = skill_task.skill
-        dt = 0.1 # TODO move to RRTSkillConfig..?
-        
-        q_full = n_near.state.q.state().copy() 
-
-        # 1. Extract active subspace for skill
-        active_indices = self._get_active_subspace_indices(skill_task)
-        q_subspace = q_full[active_indices]
-
-        # 2. Skill 
-        is_timed = isinstance(skill, BaseDeterministicTimedSkill)
-
-        if is_timed:
-            n_steps = max(1, round(skill.duration / dt))
-            t_norm = (n_near.skill_step + 1) / n_steps
-            q_subspace_new = skill.step(t_norm, q_subspace, self.env)
-        else:
-            q_subspace_new = skill.step(q_subspace, self.env)
-        
-        # 3. Re-compose the full configuration
-        # NOTE: inactive robots frozen (keep it simple for now..)
-        q_full_new = q_full.copy()
-        q_full_new[active_indices] = q_subspace_new
-
-        q_new = self.env.get_start_pos().from_flat(q_full_new)
-        return State(q_new, mode, True) # TODO
-
     def _get_active_subspace_indices(self, active_task) -> List[int]:
       """
       Returns indices for the robots involved in the active task
@@ -1073,20 +1046,7 @@ class RRTSkills(BasePlanner):
         self.env.C.selectJoints(all_joints)
 
         # 2. Steer inactive robots with bounded step 
-        if self.config.inactive_steering_mode == "concurrent":
-            q_target_vec = q_target.state()
-            direction = q_target_vec - q_full
-            direction[active_indices] = 0.0
-            
-            inactive_dist = np.linalg.norm(direction)
-            if inactive_dist > 1e-8:
-                eta_inactive = min(self.config.inactive_max_vel * dt, inactive_dist)
-                q_base = q_full + eta_inactive * (direction / inactive_dist)
-            else:
-                q_base = q_full.copy()
-        else: 
-            # Freeze
-            q_base = q_full.copy()
+        q_base = self._steer_inactive(q_full, q_target.state(), active_indices, dt)
 
         # 3. Overwrite the active subspace in the base configuration with the skill result
         q_base[active_indices] = q_subspace_new
@@ -1143,18 +1103,7 @@ class RRTSkills(BasePlanner):
             self.env.C.selectJoints(all_joints)
 
             # Inactive steering (same bounded logic as single_step)
-            if self.config.inactive_steering_mode == "concurrent":
-                direction = q_target_vec - q_curr
-                direction[active_indices] = 0.0
-                inactive_dist = np.linalg.norm(direction)
-                if inactive_dist > 1e-8:
-                    eta_inactive = min(self.config.inactive_max_vel * dt, inactive_dist)
-                    q_next = q_curr + eta_inactive * (direction / inactive_dist)
-                else:
-                    q_next = q_curr.copy()
-            else:
-                q_next = q_curr.copy()
-
+            q_next = self._steer_inactive(q_curr, q_target_vec, active_indices, dt)
             q_next[active_indices] = q_subspace_new
 
             # Collision check this step
