@@ -131,7 +131,6 @@ class MultimodalGraph:
         # TODO (Liam) NEW 
         self.skill_chain_nodes = defaultdict(list) # Step>=1 skill nodes excluded from k-nearest
         self.skill_step_nodes = defaultdict(lambda: defaultdict(list))  # mode -> step -> [nodes]
-        self.skill_k_neighbors = 20 # default, updated by first add_skill_batch call
 
     def get_num_samples(self) -> int:
         num_samples = 0
@@ -405,13 +404,13 @@ class MultimodalGraph:
                     else:
                         self.reverse_transition_nodes[next_mode] = [next_node]
  
-    def add_skill_batch(self, mode, batch_states, valid_next_modes, entry_node=None, k_neighbors=5, isolated=False):
+    def add_skill_batch(self, mode, batch_states, valid_next_modes, entry_node=None):
         """
         Unified skill node add function for all phases.
 
-        Adds a batch of skill nodes to the graph and wires them with forward k-nearest edges
-        between consecutive steps. Supports incremental calls: new nodes are cross-connected
-        with previously registered nodes at matching steps via skill_step_nodes.
+        Adds a batch of skill nodes to the graph and indexes them by skill step.
+        Step-to-step connectivity is discovered lazily in get_neighbors(), where each
+        skill node exposes the candidates at the next skill step.
 
         - Entry step (k=0): regular node, visible to spatial k-nearest so A* can enter the chain
         - Intermediate steps (k=1..N-2): hidden nodes in skill_chain_nodes, excluded from spatial search
@@ -419,7 +418,6 @@ class MultimodalGraph:
         """
         N = len(batch_states)
         new_nodes_per_step = [[] for _ in range(N)]
-        self.skill_k_neighbors = k_neighbors  # store for lazy neighbor discovery in get_neighbors
 
         # 1. Create nodes and place in graph storage
         for k in range(N):
@@ -443,19 +441,10 @@ class MultimodalGraph:
                 n.skill_step = k
                 new_nodes_per_step[k].append(n)
 
-            # Register in step index (enables cross-batch connectivity) / skip for isolated chains
-            if not isolated:
-                self.skill_step_nodes[mode][k].extend(new_nodes_per_step[k])
+            # Register in step index (enables cross-batch connectivity)
+            self.skill_step_nodes[mode][k].extend(new_nodes_per_step[k])
 
-        # 2. Forward edges: step k -> step k+1 via k-nearest
-        # - Isolated chains (e.g., if selected for re-seeded shortcutted paths): pre-wire within this batch
-        # - Normal batches: NO pre-wiring, A* discovers neighbors lazily in get_neighbors
-        if isolated:
-            for k in range(N - 1):
-                new_at_k = new_nodes_per_step[k]
-                new_at_k1 = new_nodes_per_step[k + 1]
-                if new_at_k and new_at_k1:
-                    self._connect_k_nearest_forward(new_at_k, new_at_k1, k_neighbors)
+        # No pre-wiring, A* discovers step-to-step candidates lazily in get_neighbors
 
         # 3. Entry node -> step-0 nodes (connect all)
         if entry_node is not None: 
@@ -463,29 +452,6 @@ class MultimodalGraph:
                 if n0 not in entry_node.neighbors:
                     entry_node.neighbors.append(n0)
 
-    def _connect_k_nearest_forward(self, from_nodes, to_nodes, k_neighbors):
-        """
-        Connects each node in from_nodes to its k-nearest in to_nodes via directed .neighbors edges
-        """
-        # TODO (Liam) need some max jump distance in the k-nearest (verify)
-        if not to_nodes:
-            return
-
-        to_configs = np.array([n.state.q.state() for n in to_nodes])
-        k_clip = min(k_neighbors, len(to_nodes))
-
-        for n_from in from_nodes:
-            dists = np.linalg.norm(to_configs - n_from.state.q.state(), axis=1)
-
-            if k_clip >= len(to_nodes):
-                topk_indices = range(len(to_nodes))
-            else:
-                topk_indices = np.argpartition(dists, k_clip - 1)[:k_clip]
-
-            for j in topk_indices:
-                n_to = to_nodes[j]
-                if n_to not in n_from.neighbors:
-                    n_from.neighbors.append(n_to)
 
     # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
     def get_neighbors(
@@ -500,19 +466,18 @@ class MultimodalGraph:
         - Uses vectorized approaches (batched distance function) & caching to speed things up. 
 
         Distinction for skills:
-        - If the node is part of a skill trajectory, the spacial search is bypassed so A* is forced to
-          step through the unrolled sequence.
+        - If the node is part of a skill trajectory, spacial search is bypassed so A* steps through
+          the unrolled skill sequence
         """
         # Skill waypoints: bypass spatial search, use chain structure instead
         if node.state.is_skill_waypoint:
-            # Isolated chains from re-seeding (shortcutting) have set .neighbors (use pre-wired)
-            # TODO (Liam) check if my re-seeding (isolated) logic makes sense.. 
+            # Transition nodes have cross-mode neighbors set by add_transition_nodes
             if node.neighbors:
                 arr = np.array([n.state.q.q for n in node.neighbors], dtype=np.float64)
                 return node.neighbors, arr
 
-            # Non-isolated: lazy discovery -> return ALL candidates at step k+1
-            # A* will sort it out -> avoids build cross-batch wiring (was very expensive!)
+            # Lazy discovery -> return ALL candidates at step k+1.
+            # Avoids expensive cross-batch pre-wiring, A* validates candidate edges lazily
             mode = node.state.mode
             k = node.skill_step
             next_step = k + 1

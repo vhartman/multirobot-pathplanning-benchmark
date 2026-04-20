@@ -69,7 +69,6 @@ class CompositePRMConfig:
     skill_phase: int = 3                    # 1 (frozen), 2 (lanes), 3 (incremental)
     skill_max_rollouts: int | None = None   # 1 (single), None (unlimited), N (capped)
     skill_corridor_width: int = 100         # phase 2
-    skill_k_neighbors: int = 20             # phase 2&3
     skill_batch_size: int = 100             # phase 3
     skill_batch_strategy: str = "outside"    # phase 3 (inside: NxB, outside: B lanes)
 
@@ -351,8 +350,7 @@ class CompositePRM(BasePlanner):
             if batch_states:
                 valid_next_modes = self._skill_valid_next_modes[mode]
                 entry_node = self._skill_entry_node[mode]
-                g.add_skill_batch(mode, batch_states, valid_next_modes, entry_node,
-                                  k_neighbors=self.config.skill_k_neighbors)
+                g.add_skill_batch(mode, batch_states, valid_next_modes, entry_node)
                 self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
                 return True, valid_next_modes
             else:
@@ -436,12 +434,10 @@ class CompositePRM(BasePlanner):
         # PHASE 1: inactive robots (frozen)
         if self.config.skill_phase == 1:
             batch_states = self._build_phase1_batch(q_entry, skill_traj, active_task, mode)
-            k_neighbors = 1
         
         # PHASE 2: inactive robots (build roadmap: pool of same M inactive configs x N skill steps)
         elif self.config.skill_phase == 2:
             batch_states = self._build_phase2_batch(q_entry, skill_traj, active_task, mode)
-            k_neighbors = self.config.skill_k_neighbors
         
         # PHASE 3: inactive robots (random and incremental)
         elif self.config.skill_phase == 3:
@@ -450,7 +446,6 @@ class CompositePRM(BasePlanner):
             self._skill_valid_next_modes[mode] = valid_next_modes
             self._skill_entry_node[mode] = entry_node
             batch_states = self._build_phase3_batch(mode, active_task)
-            k_neighbors = self.config.skill_k_neighbors
         
         # 7. Graph injection and bookkeeping
         if not batch_states:
@@ -462,7 +457,7 @@ class CompositePRM(BasePlanner):
                 del self._skill_entry_node[mode]
             return False, None
 
-        g.add_skill_batch(mode, batch_states, valid_next_modes, entry_node, k_neighbors=k_neighbors)
+        g.add_skill_batch(mode, batch_states, valid_next_modes, entry_node)
         self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
         return True, valid_next_modes
 
@@ -1556,12 +1551,9 @@ class CompositePRM(BasePlanner):
                                                 print(f"[DEBUG RESEED] Re-adding {len(current_skill_states)} skill states to mode {skill_mode.id}")
                                                 print(f"[DEBUG RESEED] Chain BEFORE: {len(graph.skill_chain_nodes.get(current_skill_states[0].mode, []))}")
 
-                                                # TODO (Liam) DON'T allow crosslaning (shortcutted path are optimized and should be isolated..?)
                                                 batch_states = [[st] for st in current_skill_states]
                                                 graph.add_skill_batch(
-                                                    skill_mode, batch_states, [next_mode],
-                                                    entry_node, k_neighbors=1, isolated=True
-                                                )
+                                                    skill_mode, batch_states, [next_mode], entry_node)
                                                 current_skill_states = []
                                         else:
                                             # NON-SKILL MODE: standard prm behaviour
@@ -1576,9 +1568,7 @@ class CompositePRM(BasePlanner):
                                     if current_skill_states:
                                         batch_states = [[st] for st in current_skill_states]
                                         graph.add_skill_batch(
-                                            current_skill_states[0].mode, batch_states,
-                                            None, k_neighbors=1, isolated=True
-                                        )
+                                            current_skill_states[0].mode, batch_states, None)
 
                         add_new_batch = True # To add more samples in next iteration
                         break # Exit inner loop
