@@ -132,6 +132,7 @@ from multi_robot_multi_goal_planning.problems.util import interpolate_path, path
 from multi_robot_multi_goal_planning.planners import shortcutting
 from .baseplanner import BasePlanner
 from .mode_validation import ModeValidation
+from .sampling_informed import InformedSampling
 from .termination_conditions import PlannerTerminationCondition
 
 from multi_robot_multi_goal_planning.problems.skills import (
@@ -176,13 +177,15 @@ class RRTSkillsConfig:
 
     # Informed sampling
     try_informed_sampling: bool = False
-    # ... 
+    locally_informed_sampling: bool = False
+    informed_batch_size: int = 300
 
     # Shortcutting (post-processing)
     try_shortcutting: bool = True
     shortcutting_mode: str = "round_robin"
     shortcutting_iters: int = 1000 #250
     shortcutting_interpolation_resolution: float = 0.1
+    shortcut_on_improvement: bool = True 
 
 @dataclass
 class SkillEdge:
@@ -307,7 +310,7 @@ CURRENT TODOS
 # TODO [o] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
 # TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
 # TODO [ ] differentiate between goal bias and transition bias?
-# TODO [ ] add debug prints in the planning loop
+# TODO [x] add debug prints in the planning loop
 # TODO [ ] in _steer add clippling of q_new to self.env.limits?
 # TODO [ ] in plan when creating/adding a new node, we only update parents, what about children? 
 # TODO [ ] in _sample_transition_config consider taking random node from tree for inactive instead of random sampling? (seems like tree struggles to grow with random sampling in certain envs -> yes, random sampling is the idea, but doesn't seem to be efficient -> maybe something else is the problem..)
@@ -319,7 +322,7 @@ CURRENT TODOS
 # Improvements
 # TODO [ ] blacklisting
 # TODO [ ] exploit transition nodes already found, just like _sample_goal is doing
-# TODO [ ] add informed sampling
+# TODO [o] add informed sampling
 
 # RRT-connect
 # TODO [ ] in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached
@@ -366,6 +369,11 @@ class RRTSkills(BasePlanner):
         # Post-shortcut best path
         self.best_path: List[State] = None
         self.best_cost: float = float("inf")
+        
+        # Informed sampling (init in _initialize_planner)
+        self.informed_sampler: InformedSampling = None
+        self.informed_path: List[State] = None 
+        self.improvement_count: int = 0 # For periodic shortcutting
 
     def plan(self, ptc: PlannerTerminationCondition, optimize: bool = False):
         """
@@ -416,6 +424,7 @@ class RRTSkills(BasePlanner):
                     if iterations % 100 == 0 and self.solution_node:
                         self._record_solution(costs, times, node=self.solution_node)
 
+            # 6. Check if we reached the terminal goal 
             final_state = new_nodes[-1].state                                                                                                                                     
             if self.env.done(final_state.q, final_state.mode):
                 print(f"[RRT DONE] self.env.done() is TRUE")
@@ -424,8 +433,17 @@ class RRTSkills(BasePlanner):
                 
                 if not optimize:
                     break # Stop after first solution
-                
-        # Single terminal shortcut
+            
+            # 7. Periodic re-extraction from tree (every 100 iterations to avoid overhead)
+            if optimize and self.solution_node is not None and iterations % 100 == 0:
+                # TODO
+                # 
+                # 
+                # 
+                #  
+                pass
+
+        # Final shortcut
         if self.config.try_shortcutting and self.best_path is not None:
             sc = self._shortcut(self.best_path)
             if self._record_solution(costs, times, path=sc):
@@ -467,12 +485,32 @@ class RRTSkills(BasePlanner):
         self.tree.root = start_node
         self.tree.subtrees[start_mode].add_node(start_node)
 
-        # RRT*
+        # RRT* gamma
         self.valid_samples = 0
         self.total_samples = 0
         if self.config.use_rrt_star:
             self.mu_X_total = float(np.prod(self.env.limits[1] - self.env.limits[0]))
             self._set_gamma_rrt_star(mu_X_free=self.mu_X_total) # Initial approximation (will get updated)
+
+        # Informed sampler (used after first solution)
+        if self.config.try_informed_sampling:
+            self.informed_sampler = InformedSampling(self.env, "sampling_based", self.config.locally_informed_sampling)
+
+    def _on_improvement(self):
+        """
+        Called every time the best cost improves, to handle periodic shortcutting and informed-path update
+        """
+        # TODO
+        # Periodic shortcut on improvement
+        #
+        # 
+        # 
+        #  
+        
+        # Update the interpolated path for informed sampling
+        self._update_informed_path()
+
+        raise NotImplementedError
 
     def _compute_dynamic_eta(self):
         """
@@ -597,9 +635,14 @@ class RRTSkills(BasePlanner):
                 self._dbg_goal_bias_success += 1
                 return q_target, False # Not uniform
         
-        # # Informed sampling
-        # if self.solution_node and self.config.try_informed_sampling:
-        #     pass # TODO
+        # Informed sampling (after first solution)
+        if self.solution_node is not None and self.config.try_informed_sampling:
+            # TODO
+            # 
+            # 
+            # 
+            #  
+            pass
         
         # Uniform sampling
         return self.env.sample_config_uniform_in_limits(), True # Is uniform
@@ -653,7 +696,30 @@ class RRTSkills(BasePlanner):
             
         print(f"[TRANSITION SAMPLING] failed at {iters} iterations")
         return None
-    
+
+    def _sample_informed(self, mode: Mode) -> Optional[Configuration]: # TODO
+        """
+        Gets single informed sample for the given mode using the InformedSampler
+        """
+        # TODO
+        # 
+        # 
+        # 
+        #   
+        raise not NotImplementedError
+
+    def _update_informed_path(self):
+        """
+        
+        """
+        # TODO
+        # 
+        # 
+        # 
+        # 
+        #  
+        raise not NotImplementedError
+
     def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task, is_uniform: bool = True) -> List[Node]:
         """
         
@@ -752,13 +818,17 @@ class RRTSkills(BasePlanner):
     def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode, is_skill: bool = False) -> Node:
         """
         Handles node creation and addition, including RRT* parent optimization
+
+        NOTE: find_best_parent always runs for non-skill nodes when use_rrt_star=True,
+        regardless of rewire_after_first_solution flag as it is cheap and should always
+        be beneficial..
         """
         if is_skill:
             parent = n_near
             cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
             cost = parent.cost + cost_to_parent
         elif self.config.use_rrt_star:
-            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode)
+            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode) # Always
         else:
             parent = n_near
             cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
@@ -792,7 +862,6 @@ class RRTSkills(BasePlanner):
 
         # Check transition for skill mode
         if skill_task is not None:
-            # Handle skill 
             skill = skill_task.skill
 
             # Extract subspace
@@ -955,7 +1024,8 @@ class RRTSkills(BasePlanner):
 
     def _record_solution(self, costs: List[float], times: List[float], node: Optional[Node] = None, path: Optional[List[State]] = None):
         """
-        Tracks best_cost, best_path, and solution_node.
+        Tracks best_cost, best_path, and solution_node
+        Returns True when best cost got updated
         """
         updated = False
         now = time.time() - self.start_time
@@ -998,7 +1068,6 @@ class RRTSkills(BasePlanner):
         task = self.env.get_active_task(mode, next_ids)
         if hasattr(task, 'skill') and task.skill is not None:
             return task
-        
         return None
     
     def _get_active_subspace_indices(self, active_task) -> List[int]:
@@ -1013,12 +1082,6 @@ class RRTSkills(BasePlanner):
               active_indices.extend(range(end_idx, end_idx + dim))
           end_idx += dim
       return active_indices
-
-    def _mode_has_skill(self, mode: Mode) -> bool: # TODO remove (not used)
-        """
-        Check if any robot's taks in this mode has a skill
-        """
-        raise NotImplementedError
     
     def _expand_single_step(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
         """
@@ -1099,6 +1162,7 @@ class RRTSkills(BasePlanner):
             rollout_steps = n_kino
             t_norms_list = [0.0]
 
+        skill_done = False
         for i in range(1, rollout_steps + 1):
             q_subspace = q_curr[active_indices]
 
@@ -1176,7 +1240,6 @@ class RRTSkills(BasePlanner):
         q_from_flat = self.env.get_start_pos().from_flat
         for i in range(len(waypoints) - 1):
             total += self.env.config_cost(q_from_flat(waypoints[i]), q_from_flat(waypoints[i + 1]))
-        
         return total 
     
     # TODO RRT*
@@ -1232,15 +1295,6 @@ class RRTSkills(BasePlanner):
         RRT*: find the lowest-cost parent from the near set
         Returns (best_parent, best_cost, cost_to_parent)
         """
-        # Init best_variables
-        # Get set of near nodes from subtree
-        # Iterate through set
-        # - Get/compute cost for candidate (candidate.cost + dist) 
-        # - If cost lower -> collision check & update best_variables
-        # Return best_variables
-        
-        # return best_parent, best_cost, best_cost_to_parent
-        # raise NotImplementedError
         subtree = self.tree.subtrees[mode]
         r_n = self._compute_rewiring_radius(subtree.size)
         near_set = subtree.get_near(q_new, r_n, self.config.distance_metric)
@@ -1275,18 +1329,6 @@ class RRTSkills(BasePlanner):
         """
         RRT*: rewire neighbors if n_new provides cheaper path
         """
-        # _compute_rewiring_radius()
-        # Get set of newar nodes from subtree
-        # Iterate through set
-        # - Skip (continue) if n_near is n_new.parent or if n_near is n_new or if n_near is skill waypoint
-        # - cost to check: n_new.cost + distance(n_new -> n_near)
-        # if that cost < n_near.cost AND collision free edge -> rewire:
-        # - Detach old parent: remove n_near from n_near.parent.children 
-        # - Set new parent: n_near.parent = n_new
-        # - Update also children of n_new, costs.. AND propagate cost!
-        #  
-        # raise NotImplementedError
-
         subtree = self.tree.subtrees[mode]
         r_n = self._compute_rewiring_radius(subtree.size)
         near_set = subtree.get_near(n_new.state.q, r_n, self.config.distance_metric)
@@ -1317,17 +1359,24 @@ class RRTSkills(BasePlanner):
                     self._propagate_cost_improvement(n_near)
                     self._dbg_w_rewires += 1
     
+    def _should_rewire(self) -> bool:
+        """
+        Determines if RRT* should rewire or not:
+        - If use_rrt_star = False: never rewire
+        - If rewire_after_first_solution = True: only rewire after first solution found
+        - Otherwise: always rewire when use_rrt_star = True
+        """
+        # TODO
+        # 
+        # 
+        # 
+        #   
+        raise not NotImplementedError
+
     def _propagate_cost_improvement(self, node: Node):
         """
         RRT*: propagate cost changes down the tree after rewiring
         """
-        # Get children of the node -> stack them in list
-        # Iterate through list -> better while loop
-        # while stack:
-        # - pop -> child -> update cost of child (parent cost + cost to parent)
-        # - extend stack with children of that child
-        #
-        # raise NotImplementedError
         stack = list(node.children)
         while stack:
             child = stack.pop()
