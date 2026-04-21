@@ -493,7 +493,7 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
     return q_new
 
   def done(self, t, q, env):
-    if t > 1.0:
+    if t >= 1.0:
       return True
 
     return False

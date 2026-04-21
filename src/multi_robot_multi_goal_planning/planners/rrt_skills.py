@@ -161,7 +161,7 @@ class RRTSkillsConfig:
     with_noise: bool = False
 
     # Skills # TODO full_rollout and kinodynamic
-    skill_expansion_strategy: str = "kinodynamic" # "single_step" | "kinodynamic" | "full_rollout" 
+    skill_expansion_strategy: str = "single_step" # "single_step" | "kinodynamic" | "full_rollout" 
     kinodynamic_steps: int = 5 # Only for kinodynamic strategy 
     inactive_steering_mode: str = "concurrent" # "freeze" | "concurrent"
     inactive_max_vel: float = 2.0 # TODO define value, units,...
@@ -1038,7 +1038,10 @@ class RRTSkills(BasePlanner):
 
         if isinstance(skill, BaseDeterministicTimedSkill):
             n_steps = max(1, round(skill.duration / dt))
-            t_norm = (n_near.skill_step + 1) / n_steps
+            if n_near.skill_step >= n_steps: # Avoid step past horizon
+                self.env.C.selectJoints(all_joints)
+                return []
+            t_norm = min((n_near.skill_step + 1) / n_steps, 1.0)
             q_subspace_new = skill.step(t_norm, q_subspace, self.env)
         else: 
             q_subspace_new = skill.step(q_subspace, self.env)
@@ -1086,9 +1089,17 @@ class RRTSkills(BasePlanner):
         q_target_vec = q_target.state()
 
         waypoints = [q_curr.copy()] # waypoints[0] = parent config
-        t_norms_list = [base_step / n_total_steps if is_timed else 0.0]
-        
-        for i in range(1, n_kino + 1):
+        if is_timed:
+            remaining_steps = n_total_steps - base_step
+            if remaining_steps <= 0:
+                return []
+            rollout_steps = min(n_kino, remaining_steps)
+            t_norms_list = [base_step / n_total_steps]
+        else: 
+            rollout_steps = n_kino
+            t_norms_list = [0.0]
+
+        for i in range(1, rollout_steps + 1):
             q_subspace = q_curr[active_indices]
 
             all_joints = self.env.get_joint_names()
@@ -1096,7 +1107,7 @@ class RRTSkills(BasePlanner):
             
             # Skill step
             if is_timed:
-                t_norm = (base_step + i) / n_total_steps
+                t_norm = min((base_step + i) / n_total_steps, 1.0)
                 q_subspace_new = skill.step(t_norm, q_subspace, self.env)
             else:
                 q_subspace_new = skill.step(q_subspace, self.env)
@@ -1117,7 +1128,7 @@ class RRTSkills(BasePlanner):
                 break
 
             waypoints.append(q_next.copy())
-            t_norms_list.append((base_step + i) / n_total_steps if is_timed else float(i))
+            t_norms_list.append(t_norm if is_timed else float(i))
 
             # Check skill completion
             if is_timed:
