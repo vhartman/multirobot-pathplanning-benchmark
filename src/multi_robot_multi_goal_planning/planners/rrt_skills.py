@@ -168,7 +168,7 @@ class RRTSkillsConfig:
     inactive_max_vel: float = 2.0 # TODO define value, units,...
 
     # RRT*
-    use_rrt_star: bool = True
+    use_rrt_star: bool = False
     rewire_after_first_solution: bool = False 
     rewire_radius: float = 0.5 # TODO not used
     gamma_rrtstar: float = 0.0
@@ -177,16 +177,18 @@ class RRTSkillsConfig:
     is_bidirectional: bool = False
 
     # Informed sampling
-    try_informed_sampling: bool = True
+    try_informed_sampling: bool = False
     locally_informed_sampling: bool = False
-    informed_batch_size: int = 300 # In "sampling_based" informed sampling, this is the budget, not the batch size
-    informed_transition_batch_site: int = 100
+    informed_batch_size: int = 300 # Irrelevant in "sampling_based" mode (one config per iter)
+    informed_transition_batch_size: int = 100 # Irrelevant in "sampling_based" mode (one config per iter)
 
     # Shortcutting (post-processing)
     try_shortcutting: bool = True
     shortcutting_mode: str = "round_robin"
     shortcutting_iters: int = 1000 #250
     shortcutting_interpolation_resolution: float = 0.1
+
+    shortcut_period_iters: int = 1000
 
 @dataclass
 class SkillEdge:
@@ -302,6 +304,11 @@ OLD TODOS:
 # TODO [x] differentiate between linear steer and skill steer
 # TODO [x] in _steer add skills -> call skill.step()
 
+# RRT*
+# TODO [x] compute gamma (RRT*) approximate mu(Xfree), then online updating 
+# TODO [x] dynamically define step size eta (use sqrt_d)
+
+
 """
 
 # CURRENT TODOS
@@ -324,6 +331,8 @@ CURRENT TODOS
 # TODO [ ] blacklisting
 # TODO [ ] exploit transition nodes already found, just like _sample_goal is doing
 # TODO [o] add informed sampling
+# TODO [ ] mode sampling strategy when doing informed sampling in optimize
+# TODO [ ] add sc path back to tree?
 
 # RRT-connect
 # TODO [ ] in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached
@@ -337,8 +346,7 @@ CURRENT TODOS
 
 # RRT*
 # TODO [o] add rewiring (RRT*)
-# TODO [o] compute gamma (RRT*) -> okay to approximate mu(Xfree)?
-# TODO [o] dynamically define step size eta
+# TODO [ ] rewiring in skill modes (inactive parts)
 # TODO [ ] in _find_best_parent, seeding best_parent = n_near needs edge collision check? 
 # TODO [ ] add bidirectional (BRRT*)
 
@@ -419,60 +427,34 @@ class RRTSkills(BasePlanner):
             for n_new in new_nodes:
                 self._check_transitions(n_new)
 
-                # RRT* rewire                                                                                                
-                if self._should_rewire() and not n_new.is_skill_waypoint:                                
-                    self._rewire(n_new, mode)                                                                                
+                # RRT* rewire
+                if self._should_rewire() and not n_new.is_skill_waypoint:
+                    self._rewire(n_new, mode)
 
             # 6. Check if we reached the terminal goal 
-            final_state = new_nodes[-1].state                                                                                                                                     
+            final_state = new_nodes[-1].state
             if self.env.done(final_state.q, final_state.mode):
                 print(f"[RRT DONE] self.env.done() is TRUE")
-                improved = self._record_solution(costs, times, node=new_nodes[-1])
-
-                if self.config.try_shortcutting:
-                    sc = self._shortcut(self._extract_path(new_nodes[-1]))
-                    improved = True                           
-                    self.improvement_count += 1                                                  
-                    print(f"[RRT SHORTCUT #{self.improvement_count}] Improved cost to {self.best_cost:.3f}") 
-
-                if improved:
-                    self._update_informed_path()
+                self.solution_node = new_nodes[-1]
+                self._record_solution(costs, times, node=self.solution_node)
 
                 if not optimize:
                     break # Stop after first solution
             
-            # 7. Periodic re-extraction from tree (every 10 iterations to avoid overhead)
-            # Improvement sources:
-            # - Rewiring dropping solution_node.cost
-            # - Informed samples enabling better shortcut 
-            if optimize and self.solution_node is not None and iterations % 10 == 0:
-                improved = self._record_solution(costs, times, node=self.solution_node)
-                
-                if self.config.try_shortcutting:
-                    sc = self._shortcut(self._extract_path(self.solution_node))
-                    if self._record_solution(costs, times, path=sc):
-                        improved = True
-                        self.improvement_count += 1
-                        print(f"[RRT SHORTCUT #{self.improvement_count}] Improved cost to {self.best_cost:.3f}") 
-                
-                if improved:
-                    self._update_informed_path()
+            # 7. Periodic re-extraction (only in optimize mode, after first solution)
+            if optimize and self.solution_node is not None and iterations % self.config.shortcut_period_iters == 0:
+                self._periodic_improve(costs, times)
 
         # Final shortcut
         if self.config.try_shortcutting and self.best_path is not None:
-            sc = self._shortcut(self.best_path)
-            if self._record_solution(costs, times, path=sc):
-                self.improvement_count += 1
-                print(f"[RRT FINAL SHORTCUT] Improved cost to {self.best_cost:.3f}")
+            sc_path = self._shortcut(self.best_path)
+            self._record_solution(costs, times, path=sc_path)
+            # TODO self.improvement_count += 1
+            print(f"[RRT FINAL SHORTCUT] Improved cost to {self.best_cost:.3f}")
 
-        # Extract path and info
-        if self.best_path is not None:
-            path = self.best_path
-        elif self.solution_node is not None:
-            path = self._extract_path(self.solution_node)
-        else: 
-            path = None
 
+        # Return
+        path = self.best_path
         info = {
             "costs": costs, 
             "times": times, 
@@ -638,8 +620,7 @@ class RRTSkills(BasePlanner):
                 return q_target, False # Not uniform
         
         # Informed sampling (after first solution, non-skill modes only) # TODO non skill modes only, correct reasoning?
-        if (self.solution_node is not None 
-            and self.config.try_informed_sampling
+        if (self.config.try_informed_sampling
             and self.informed_path is not None
             and not is_skill_mode):
             q_informed = self._sample_informed(mode)
@@ -663,7 +644,7 @@ class RRTSkills(BasePlanner):
             self._dbg_informed_trans_attempt += 1
             q = self.informed_sampler.generate_transitions(
                 self._non_skill_reached_modes(),
-                self.config.informed_batch_size,
+                self.config.informed_transition_batch_size,
                 self.informed_path,
                 active_mode=mode
             )
@@ -1027,7 +1008,7 @@ class RRTSkills(BasePlanner):
                     if self._dbg_w_near_size_count > 0 else 0.0)
         
         rewire_status = "ON" if self._should_rewire() else "OFF"
-        informed_status = "ON" if (self.solution_node and self.config.try_informed_sampling) else "OFF"
+        informed_status = "ON" if (self.informed_path is not None and self.config.try_informed_sampling) else "OFF"
         
         print(
             f"[{tag}] it={iterations} nodes={nodes} modes={len(self.reached_modes)} "
@@ -1060,39 +1041,44 @@ class RRTSkills(BasePlanner):
         self._dbg_w_shortcut_hits = 0
         self._dbg_kino_edges = 0
 
-    def _record_solution(self, costs: List[float], times: List[float], node: Optional[Node] = None, path: Optional[List[State]] = None):
+    def _record_solution(self, costs: List[float], times: List[float], 
+                         path: List[State] = None, node: Node = None):
         """
-        Tracks best_cost, best_path, and solution_node
+        Tracks best_cost and best_path from a candidate path or node
         Returns True when best cost got updated
         """
-        updated = False
-        now = time.time() - self.start_time
+        if path is None and node is not None:
+            path = self._extract_path(node)
+        if path is None or len(path) < 2:
+            return False
         
-        if node is not None:
-            # 1. Update solution_node if this node is better or it's the first solution
-            if self.solution_node is None or node.cost < self.solution_node.cost - 1e-9:
-                self.solution_node = node
-            
-            # 2. Update best_cost/best_path if this node provides an improvement over ANY best so far
-            if node.cost < self.best_cost - 1e-9:
-                self.best_cost = node.cost
-                self.best_path = self._extract_path(node)
-                print(f"[SOLUTION] New best cost: {self.best_cost:.3f}")
-                updated = True
-                
-        elif path is not None:
-            # 3. Path improved via post-processing (shortcutting)
-            new_cost = path_cost(path, self.env.batch_config_cost)
-            if new_cost < self.best_cost - 1e-9:
-                self.best_cost = new_cost
-                self.best_path = path
-                updated = True
+        new_cost = path_cost(path, self.env.batch_config_cost)
+        if new_cost >= self.best_cost - 1e-8:
+            return False
         
-        if updated:
-            costs.append(self.best_cost)
-            times.append(now)
-            return True
-        return False
+        self.best_cost = new_cost
+        self.best_path = list(path)
+        costs.append(self.best_cost)
+        times.append(time.time() - self.start_time)
+        return True
+
+    def _periodic_improve(self, costs: List[float], times: List[float]): # TODO
+        """
+        Periodic cost imporvement: re-extract from tree, shortcut and record
+        """
+        # Extract (maybe improved via rewiring)
+        improved = self._record_solution(costs, times, node=self.solution_node)
+        # TODO self.improvement_count += 1?
+
+        # Shortcut current best
+        if self.config.try_shortcutting and self.best_path is not None:
+            sc_path = self._shortcut(self.best_path)
+            if self._record_solution(costs, times, path=sc_path):
+                improved = True
+                self.improvement_count += 1
+                print(f"[RRT SHORTCUT #{self.improvement_count}] cost={self.best_cost:.3f}")
+
+        return improved  
 
     # TODO SKILLS
     def _get_active_skill_task(self, mode: Mode):
