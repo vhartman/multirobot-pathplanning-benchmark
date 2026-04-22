@@ -8310,7 +8310,7 @@ def make_single_agent_drawing(target_positions, view: bool = False):
         ry.ST.sphere, size=[0.02]
     ).setColor([1, 0, 0, 0.5]).setRelativePosition([0, 0, 0.15]).setContact(-1)
 
-    C.view(True)
+    # C.view(True)
 
     # keyframes:
     # draw start location (ee-goal)
@@ -8427,7 +8427,7 @@ def make_single_agent_pick_and_place(view: bool = False):
         [0, -0.0, 0.15]
     ).setJoint(ry.JT.rigid)
 
-    C.view(True)
+    # C.view(True)
 
     # keyframes:
     # draw start location (ee-goal)
@@ -8488,7 +8488,7 @@ def make_single_agent_pick_and_place(view: bool = False):
             target=q_home,
         )
 
-        keyframes = solve_komo_problem(komo, 5, c_tmp, True, 3, -1.5)
+        keyframes = solve_komo_problem(komo, 5, c_tmp, False, 3, -1.5)
         return keyframes
 
     pre_pick_pose, pre_place_pose = compute_poses(C, "a1_ur_", "obj1", "goal1")
