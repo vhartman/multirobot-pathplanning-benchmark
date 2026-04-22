@@ -168,24 +168,25 @@ class RRTSkillsConfig:
     inactive_max_vel: float = 2.0 # TODO define value, units,...
 
     # RRT*
-    use_rrt_star: bool = False
-    rewire_radius: float = 0.5 #
+    use_rrt_star: bool = True
+    rewire_after_first_solution: bool = False 
+    rewire_radius: float = 0.5 # TODO not used
     gamma_rrtstar: float = 0.0
 
     # BRRT*
     is_bidirectional: bool = False
 
     # Informed sampling
-    try_informed_sampling: bool = False
+    try_informed_sampling: bool = True
     locally_informed_sampling: bool = False
-    informed_batch_size: int = 300
+    informed_batch_size: int = 300 # In "sampling_based" informed sampling, this is the budget, not the batch size
+    informed_transition_batch_site: int = 100
 
     # Shortcutting (post-processing)
     try_shortcutting: bool = True
     shortcutting_mode: str = "round_robin"
     shortcutting_iters: int = 1000 #250
     shortcutting_interpolation_resolution: float = 0.1
-    shortcut_on_improvement: bool = True 
 
 @dataclass
 class SkillEdge:
@@ -419,34 +420,49 @@ class RRTSkills(BasePlanner):
                 self._check_transitions(n_new)
 
                 # RRT* rewire                                                                                                
-                if self.config.use_rrt_star and not n_new.is_skill_waypoint:                                                                                 
+                if self._should_rewire() and not n_new.is_skill_waypoint:                                
                     self._rewire(n_new, mode)                                                                                
-                    if iterations % 100 == 0 and self.solution_node:
-                        self._record_solution(costs, times, node=self.solution_node)
 
             # 6. Check if we reached the terminal goal 
             final_state = new_nodes[-1].state                                                                                                                                     
             if self.env.done(final_state.q, final_state.mode):
                 print(f"[RRT DONE] self.env.done() is TRUE")
-                if self._record_solution(costs, times, node=new_nodes[-1]):
-                    print(f"[RRT SOLUTION] Improved cost to: {self.best_cost:.3f}")
-                
+                improved = self._record_solution(costs, times, node=new_nodes[-1])
+
+                if self.config.try_shortcutting:
+                    sc = self._shortcut(self._extract_path(new_nodes[-1]))
+                    improved = True                           
+                    self.improvement_count += 1                                                  
+                    print(f"[RRT SHORTCUT #{self.improvement_count}] Improved cost to {self.best_cost:.3f}") 
+
+                if improved:
+                    self._update_informed_path()
+
                 if not optimize:
                     break # Stop after first solution
             
-            # 7. Periodic re-extraction from tree (every 100 iterations to avoid overhead)
-            if optimize and self.solution_node is not None and iterations % 100 == 0:
-                # TODO
-                # 
-                # 
-                # 
-                #  
-                pass
+            # 7. Periodic re-extraction from tree (every 10 iterations to avoid overhead)
+            # Improvement sources:
+            # - Rewiring dropping solution_node.cost
+            # - Informed samples enabling better shortcut 
+            if optimize and self.solution_node is not None and iterations % 10 == 0:
+                improved = self._record_solution(costs, times, node=self.solution_node)
+                
+                if self.config.try_shortcutting:
+                    sc = self._shortcut(self._extract_path(self.solution_node))
+                    if self._record_solution(costs, times, path=sc):
+                        improved = True
+                        self.improvement_count += 1
+                        print(f"[RRT SHORTCUT #{self.improvement_count}] Improved cost to {self.best_cost:.3f}") 
+                
+                if improved:
+                    self._update_informed_path()
 
         # Final shortcut
         if self.config.try_shortcutting and self.best_path is not None:
             sc = self._shortcut(self.best_path)
             if self._record_solution(costs, times, path=sc):
+                self.improvement_count += 1
                 print(f"[RRT FINAL SHORTCUT] Improved cost to {self.best_cost:.3f}")
 
         # Extract path and info
@@ -495,23 +511,7 @@ class RRTSkills(BasePlanner):
         # Informed sampler (used after first solution)
         if self.config.try_informed_sampling:
             self.informed_sampler = InformedSampling(self.env, "sampling_based", self.config.locally_informed_sampling)
-
-    def _on_improvement(self):
-        """
-        Called every time the best cost improves, to handle periodic shortcutting and informed-path update
-        """
-        # TODO
-        # Periodic shortcut on improvement
-        #
-        # 
-        # 
-        #  
-        
-        # Update the interpolated path for informed sampling
-        self._update_informed_path()
-
-        raise NotImplementedError
-
+    
     def _compute_dynamic_eta(self):
         """
         Dynamically compute step size eta based based on environment boundaries and chosen strategy
@@ -627,6 +627,8 @@ class RRTSkills(BasePlanner):
         """
         Samples a random configuration or goal bias / transition
         """
+        is_skill_mode = self._get_active_skill_task(mode) is not None
+
         # Goal/transition bias
         if random.random() < self.config.p_goal:
             self._dbg_goal_bias_attempt += 1
@@ -635,25 +637,43 @@ class RRTSkills(BasePlanner):
                 self._dbg_goal_bias_success += 1
                 return q_target, False # Not uniform
         
-        # Informed sampling (after first solution)
-        if self.solution_node is not None and self.config.try_informed_sampling:
-            # TODO
-            # 
-            # 
-            # 
-            #  
-            pass
+        # Informed sampling (after first solution, non-skill modes only) # TODO non skill modes only, correct reasoning?
+        if (self.solution_node is not None 
+            and self.config.try_informed_sampling
+            and self.informed_path is not None
+            and not is_skill_mode):
+            q_informed = self._sample_informed(mode)
+            if q_informed is not None:
+                self._dbg_informed_success += 1
+                return q_informed, False
         
-        # Uniform sampling
+        # Uniform sampling (fallback)
         return self.env.sample_config_uniform_in_limits(), True # Is uniform
 
     def _sample_transition_config(self, mode: Mode) -> Configuration:
         """
         Samples a configuration that satisfies the transition of the current mode 
         """
+        # Informed transition sampling (after first solution, non-skill mode, not terminal)
+        if (self.config.try_informed_sampling
+            and self.informed_sampler is not None
+            and self.informed_path is not None
+            and self._get_active_skill_task(mode) is None
+            and not self.env.is_terminal_mode(mode)):
+            self._dbg_informed_trans_attempt += 1
+            q = self.informed_sampler.generate_transitions(
+                self._non_skill_reached_modes(),
+                self.config.informed_batch_size,
+                self.informed_path,
+                active_mode=mode
+            )
+            if q is not None and q != []:
+                self._dbg_informed_trans_success += 1
+                return q # Else uniform below
+
+        # Uniform transition sampling
         max_attempts = 1000
         iters = 0
-
         for _ in range(max_attempts):
             iters += 1
             # Get task that needs to be completed to switch mode
@@ -697,28 +717,36 @@ class RRTSkills(BasePlanner):
         print(f"[TRANSITION SAMPLING] failed at {iters} iterations")
         return None
 
-    def _sample_informed(self, mode: Mode) -> Optional[Configuration]: # TODO
+    def _sample_informed(self, mode: Mode) -> Optional[Configuration]:
         """
         Gets single informed sample for the given mode using the InformedSampler
         """
-        # TODO
-        # 
-        # 
-        # 
-        #   
-        raise not NotImplementedError
+        if self.informed_sampler is None or self.informed_path is None:
+            return None
+
+        self._dbg_informed_attempt += 1
+
+        q = self.informed_sampler.generate_samples( # Returns one config in "sampling_based" mode
+            self.reached_modes,
+            self.config.informed_batch_size,
+            self.informed_path,
+            active_mode=mode,
+            # try_direct_sampling=???, # TODO check what that is (used in prm)
+        )
+
+        if q is None or q == []:
+            return None
+        return q
 
     def _update_informed_path(self):
         """
-        
+        Builds the interpolated path that the informed sampled uses as reference
+        (focal points for the PHS ellipsoid). Called after every cost improvement
         """
-        # TODO
-        # 
-        # 
-        # 
-        # 
-        #  
-        raise not NotImplementedError
+        if self.best_path is not None and len(self.best_path) > 1:
+            self.informed_path = interpolate_path(self.best_path)
+        else:
+            self.informed_path = None
 
     def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task, is_uniform: bool = True) -> List[Node]:
         """
@@ -737,7 +765,7 @@ class RRTSkills(BasePlanner):
         if strategy == "single_step":
             return self._expand_single_step(n_near, q_target, mode, skill_task)
         if strategy == "full_rollout":
-            return self._expand_full_rollout() # TODO
+            return self._expand_full_rollout() # TODO remove (won't need it)
         if strategy == "kinodynamic":
             return self._expand_kinodynamic(n_near, q_target, mode, skill_task)
         
@@ -964,6 +992,10 @@ class RRTSkills(BasePlanner):
         """
         self._dbg_goal_bias_attempt = 0
         self._dbg_goal_bias_success = 0
+        self._dbg_informed_attempt = 0
+        self._dbg_informed_success = 0
+        self._dbg_informed_trans_attempt = 0
+        self._dbg_informed_trans_success = 0
         self._dbg_snap_events = 0
         self._dbg_validate_fail = 0
         self._dbg_is_trans_true = 0
@@ -994,10 +1026,14 @@ class RRTSkills(BasePlanner):
         near_avg = (self._dbg_w_near_size_sum / self._dbg_w_near_size_count 
                     if self._dbg_w_near_size_count > 0 else 0.0)
         
+        rewire_status = "ON" if self._should_rewire() else "OFF"
+        informed_status = "ON" if (self.solution_node and self.config.try_informed_sampling) else "OFF"
+        
         print(
             f"[{tag}] it={iterations} nodes={nodes} modes={len(self.reached_modes)} "
             f"best={self.best_cost:.3f} sol={sol_cost:.3f} "
             f"eta={self.eta:.2f} r_n={self._dbg_last_r_n:.3f}\n"
+            f"rewire={rewire_status} informed={informed_status}\n"
             f"       | w: rewires={self._dbg_w_rewires} "
             f"bestP={self._dbg_w_best_parent_swaps} "
             f"nearAvg={near_avg:.1f} "
@@ -1006,11 +1042,14 @@ class RRTSkills(BasePlanner):
             f"       | c: snap={self._dbg_snap_events} "
             f"vfail={self._dbg_validate_fail} "
             f"gb={self._dbg_goal_bias_success}/{self._dbg_goal_bias_attempt} "
+            f"inf={self._dbg_informed_success}/{self._dbg_informed_attempt} "                        
+            f"infT={self._dbg_informed_trans_success}/{self._dbg_informed_trans_attempt} "  
             f"isT={self._dbg_is_trans_true} "
             f"nextE={self._dbg_get_next_empty} "
             f"sCF={self._dbg_seed_coll_fail} sAdd={self._dbg_seed_added} "
             f"minNN={self._dbg_min_nn_dist:.3f}\n"
             f"       | kino: edges={self._dbg_kino_edges} " 
+            f"impr={self.improvement_count}"
         )
         # Reset window counters
         self._dbg_w_rewires = 0
@@ -1019,7 +1058,6 @@ class RRTSkills(BasePlanner):
         self._dbg_w_near_size_count = 0
         self._dbg_w_rewire_extracts = 0
         self._dbg_w_shortcut_hits = 0
-
         self._dbg_kino_edges = 0
 
     def _record_solution(self, costs: List[float], times: List[float], node: Optional[Node] = None, path: Optional[List[State]] = None):
@@ -1070,6 +1108,12 @@ class RRTSkills(BasePlanner):
             return task
         return None
     
+    def _non_skill_reached_modes(self) -> List[Mode]:
+        """
+        Filter skill modes
+        """
+        return [m for m in self.reached_modes if self._get_active_skill_task(m) is None]
+
     def _get_active_subspace_indices(self, active_task) -> List[int]:
       """
       Returns indices for the robots involved in the active task
@@ -1366,12 +1410,11 @@ class RRTSkills(BasePlanner):
         - If rewire_after_first_solution = True: only rewire after first solution found
         - Otherwise: always rewire when use_rrt_star = True
         """
-        # TODO
-        # 
-        # 
-        # 
-        #   
-        raise not NotImplementedError
+        if not self.config.use_rrt_star:
+            return False
+        if self.config.rewire_after_first_solution:
+            return self.solution_node is not None
+        return True
 
     def _propagate_cost_improvement(self, node: Node):
         """
