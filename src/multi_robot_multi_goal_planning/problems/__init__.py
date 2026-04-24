@@ -9,7 +9,11 @@ from . import rai_free_envs
 from . import abstract_env
 from . import rai_envs_constrained
 
-from . import mr_vamp_env
+import sys
+sys.path.append("/usr/local/lib/python3.10/dist-packages")  # TODO: install mr_planner_core into venv
+if importlib.util.find_spec("mr_planner_core") is not None:
+    from . import mr_vamp_env
+sys.path.pop()
 
 
 if importlib.util.find_spec("pinocchio") is not None:
