@@ -3320,7 +3320,7 @@ def make_box_stacking_env(
     num_robots=2, num_boxes=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False
 ):
     assert num_boxes <= 9, "A maximum of 9 boxes are supported"
-    assert num_robots <= 4, "A maximum of 4 robots are supported"
+    assert num_robots <= 6, "A maximum of 6 robots are supported"
 
     if isinstance(robot_types, str):
         robot_types = [robot_types] * num_robots
@@ -3391,6 +3391,44 @@ def make_box_stacking_env(
         [-0.3, -0.4, 0.03]
     ]
 
+    if num_robots > 4:
+        rotations = [
+            [0.7071, 0, 0, -0.7071],
+            [0.7071, 0, 0, -0.7071],
+            [0.7071, 0, 0, 0.7071],
+            [0.7071, 0, 0, 0.7071],
+            [1, 0, 0, 0.],
+            [0, 0, 0, 1],
+        ]
+        ur5_rotations = [
+            [0.7071, 0, 0, -0.7071],
+            [0.7071, 0, 0, -0.7071],
+            [0.7071, 0, 0, 0.7071],
+            [0.7071, 0, 0, 0.7071],
+        
+            [0, 0, 0, 1],
+            [1, 0, 0, 0],
+        ]
+
+        positions = [
+            [-0.4, 0.5, 0.03],
+            [+0.4, 0.5, 0.03],
+            [+0.4, -0.6, 0.03],
+            [-0.4, -0.6, 0.03],
+            [-0.7, -0., 0.03],
+            [+0.7, -0., 0.03]
+        ]
+
+        ur5_positions = [
+            [-0.1, 0.3, 0.03],
+            [+0.3, 0.3, 0.03],
+            [+0.3, -0.4, 0.03],
+            [-0.1, -0.4, 0.03],
+            [+0.6, -0.1, 0.03],
+            [-0.4, -0.1, 0.03]
+        ]
+
+
     def get_rotation(robot, i):
         if robot == "ur5":
             return ur5_rotations[i]
@@ -3403,48 +3441,18 @@ def make_box_stacking_env(
         else:
             return positions[i]
 
-    robot_path, robot_type_prefix = get_robot_and_type_prefix(0)
-    all_robots.append(f"a1_{robot_type_prefix}")
 
-    C.addFile(robot_path, namePrefix="a1_").setParent(
-        C.getFrame("table")
-    ).setRelativePosition(get_position(robot_types[0], 0)).setRelativeQuaternion(
-        get_rotation(robot_types[0], 0)
-    ).setJoint(ry.JT.rigid)
+    for i in range(num_robots):
+        idx = i+1
 
-    # C.getFrame('a1_ur_coll0').setContact(-5)
-
-    if num_robots >= 2:
-        robot_path, robot_type_prefix = get_robot_and_type_prefix(1)
-        all_robots.append(f"a2_{robot_type_prefix}")
-
-        C.addFile(robot_path, namePrefix="a2_").setParent(
+        robot_path, robot_type_prefix = get_robot_and_type_prefix(i)
+        all_robots.append(f"a{idx}_{robot_type_prefix}")
+        C.addFile(robot_path, namePrefix=f"a{idx}_").setParent(
             C.getFrame("table")
-        ).setRelativePosition(get_position(robot_types[0], 1)).setRelativeQuaternion(
-            get_rotation(robot_types[1], 1)
+        ).setRelativePosition(get_position(robot_types[i], i)).setRelativeQuaternion(
+            get_rotation(robot_types[i], i)
         ).setJoint(ry.JT.rigid)
 
-    if num_robots >= 3:
-        robot_path, robot_type_prefix = get_robot_and_type_prefix(2)
-        all_robots.append(f"a3_{robot_type_prefix}")
-
-        C.addFile(robot_path, namePrefix="a3_").setParent(
-            C.getFrame("table")
-        ).setRelativePosition(get_position(robot_types[2], 2)).setRelativeQuaternion(
-            get_rotation(robot_types[2], 2)
-        ).setJoint(ry.JT.rigid)
-
-    if num_robots >= 4:
-        robot_path, robot_type_prefix = get_robot_and_type_prefix(3)
-        all_robots.append(f"a4_{robot_type_prefix}")
-
-        C.addFile(robot_path, namePrefix="a4_").setParent(
-            C.getFrame("table")
-        ).setRelativePosition(get_position(robot_types[3], 3)).setRelativeQuaternion(
-            get_rotation(robot_types[3], 3)
-        ).setJoint(ry.JT.rigid)
-
-    # C.getFrame('a2_ur_coll0').setContact(-5)
 
     w = 3
     d = 3
