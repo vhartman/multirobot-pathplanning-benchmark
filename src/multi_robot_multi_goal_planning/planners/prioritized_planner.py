@@ -1521,6 +1521,8 @@ def plan_in_time_space_bidirectional(
     curr_t_ub = max([end_times[r] for r in robots]) + (d / v_max) * 3
     # curr_t_ub = max_t
 
+    print("Upper bound time", max_t)
+
     curr_t_ub = max(curr_t_ub, t_lb)
 
     configurations = None
@@ -1595,6 +1597,7 @@ def plan_in_time_space_bidirectional(
         t_b = tmp
 
         if ptc.should_terminate(0, time.time() - computation_start_time):
+            print("Stopping due to time")
             break
 
         # increase upper bound that we are sampling
@@ -1693,6 +1696,7 @@ def plan_in_time_space_bidirectional(
             end_times,
             resolution=env.collision_resolution,
         ):
+            # print("coll free")
             # add to tree
             t_a.add_node(Node(t_new, q_new), n_close)  # add to tree
 
@@ -1789,6 +1793,9 @@ def plan_in_time_space_bidirectional(
 
                 # return path
                 return TimedPath(time=times, path=path)
+        else:
+            # print("not coll free")
+            pass
 
     print(f"Did not find a path in {max_iters} iters.")
     return None
@@ -2448,6 +2455,7 @@ class PrioritizedPlanner(BasePlanner):
                         ptc.max_runtime_in_s - (current_time - computation_start_time)
                     )
 
+                    print("start time", t0)
                     escape_path, _ = plan_robots_in_dyn_env(
                         self.config,
                         escape_planning_ptc,
