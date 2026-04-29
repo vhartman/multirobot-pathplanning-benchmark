@@ -148,47 +148,56 @@ class RRTSkillsConfig:
     step_size_strategy: str = "sqrt_d" # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots"
     step_size: float = 1 # Constant
     step_size_factor: float = 0.1 # Dynamic step size tuning factor
+    extension_strategy: str = "connect" # "linear" | "connect"
 
-    p_goal: float = 0.3
+    # Connect extension
+    eta_step: float = 0.1 # TODO!
+    connect_max_steps: int = 30 # TODO!
+    connect_target_policy: str = "transition" # "transition" | "all"
+
+    p_goal: float = 0.1 # TODO!
     # p_terminal_goal: float = 0.1 
 
-    # Mode sampling # TODO frontier implementation (from prm)
+    # Mode sampling
     mode_sampling_type: str = "frontier" # "uniform" | "greedy" | "frontier"
-    p_newest_mode: float = 0.8
-    p_frontier: float = 0.98
+    init_mode_sampling_type: str = "greedy"
+    p_greedy: float = 0.98 # TODO!
+    p_frontier: float = 0.98 # TODO!
     
     distance_metric: str = "max_euclidean"
     with_mode_validation: bool = False # Geometric pre-check on mode (blacklist_modes) # TODO
     with_noise: bool = False
 
-    # Skills # TODO full_rollout and kinodynamic
-    skill_expansion_strategy: str = "single_step" # "single_step" | "kinodynamic" | "full_rollout" 
+    # Skills
+    skill_expansion_strategy: str = "kinodynamic" # "single_step" | "kinodynamic" | "full_rollout" 
     kinodynamic_steps: int = 5 # Only for kinodynamic strategy 
     inactive_steering_mode: str = "concurrent" # "freeze" | "concurrent"
     inactive_max_vel: float = 2.0 # TODO define value, units,...
 
     # RRT*
-    use_rrt_star: bool = False
+    use_rrt_star: bool = True # TODO!
     rewire_after_first_solution: bool = False 
-    rewire_radius: float = 0.5 # TODO not used
+    # rewire_radius: float = 0.5
     gamma_rrtstar: float = 0.0
 
-    # BRRT*
-    is_bidirectional: bool = False
-
     # Informed sampling
-    try_informed_sampling: bool = False
+    try_informed_sampling: bool = True # TODO! 
     locally_informed_sampling: bool = False
     informed_batch_size: int = 300 # Irrelevant in "sampling_based" mode (one config per iter)
     informed_transition_batch_size: int = 100 # Irrelevant in "sampling_based" mode (one config per iter)
 
     # Shortcutting (post-processing)
-    try_shortcutting: bool = True
+    try_shortcutting: bool = True # TODO!
     shortcutting_mode: str = "round_robin"
-    shortcutting_iters: int = 1000 #250
+    periodic_shortcutting_iters: int = 1000
+    final_shortcutting_iters: int = 1000
     shortcutting_interpolation_resolution: float = 0.1
-
     shortcut_period_iters: int = 1000
+
+    sync_shortcut_to_tree: bool = False # TODO!
+
+    # BRRT*
+    is_bidirectional: bool = False
 
 @dataclass
 class SkillEdge:
@@ -214,7 +223,6 @@ class Node:
         # Flags for skills and transitions
         self.is_skill_waypoint: bool = False
         self.skill_step: int = 0
-        self.is_transition: bool = False
         self.skill_edge: Optional['SkillEdge'] = None # Kinodynamic only
 
 class Subtree:
@@ -288,8 +296,9 @@ OLD TODOS:
 # TODO [x] init the multi modal tree
 # TODO [x] vectorized batch_q for fast nearest-neighbor lookups
 # TODO [x] pre-allocate so append(node) -> O(1) instead of O(N)
+# TODO [x] add all relevant hyperparams to RRTSkillsConfig
 
-# RRT
+# # RRT
 # TODO [x] add root to multi modal tree? optional?
 # TODO [x] import batch_config_cost batch_config_dist or access with self.env?
 # TODO [x] check in PRM transition cost=0.0?
@@ -297,12 +306,23 @@ OLD TODOS:
 # TODO [x] in _check_transitions always create and insert seed node (even if mode already reached)
 # TODO [x] in _initialize_planner add early return if self.tree.root is not None (not duplicated start mode/node) if plan() called again?
 # TODO [x] global shortcutting
+# TODO [x] add debug prints in the planning loop
+
+# Improvements
+# TODO [x] mode sampling strategy when doing informed sampling in optimize
+# TODO [x] add informed sampling
+# TODO [x] do rrt-connect in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached ()
+# TODO [x] clean up to have the possibility to select between stepsize (also rrt connect..) 
+# TODO [x] in rrt-connect, add also intermediate ndoes to graph as would the original rrt-connect do? -> NO
 
 # SKILLS
 # TODO [x] update _add_node to set skill flag
 # TODO [x] update _check_transitions when skill is done
 # TODO [x] differentiate between linear steer and skill steer
 # TODO [x] in _steer add skills -> call skill.step()
+# TODO [x] check self.dt with chosen dt in skills..
+# TODO [x] add unified structure with 3 expansion modes for skill rollouts (full, single, kino) -> No full
+# TODO [x] implement kindodynamic with SkillEdge 
 
 # RRT*
 # TODO [x] compute gamma (RRT*) approximate mu(Xfree), then online updating 
@@ -318,7 +338,6 @@ CURRENT TODOS
 # TODO [o] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
 # TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
 # TODO [ ] differentiate between goal bias and transition bias?
-# TODO [x] add debug prints in the planning loop
 # TODO [ ] in _steer add clippling of q_new to self.env.limits?
 # TODO [ ] in plan when creating/adding a new node, we only update parents, what about children? 
 # TODO [ ] in _sample_transition_config consider taking random node from tree for inactive instead of random sampling? (seems like tree struggles to grow with random sampling in certain envs -> yes, random sampling is the idea, but doesn't seem to be efficient -> maybe something else is the problem..)
@@ -330,31 +349,31 @@ CURRENT TODOS
 # Improvements
 # TODO [ ] blacklisting
 # TODO [ ] exploit transition nodes already found, just like _sample_goal is doing
-# TODO [o] add informed sampling
-# TODO [ ] mode sampling strategy when doing informed sampling in optimize
-# TODO [ ] add sc path back to tree?
-
-# RRT-connect
-# TODO [ ] in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached
+# TODO [ ] informed sampling in skill modes (inactive-DOF-only sampler. otherwise sampler wastes effort computing and validating a FULL-config sample when only inactive part matters..)
+# TODO! [ ] add sc path back to tree
+# TODO [ ] detect cost improvement from rewiring without waiting for periodic check (I think that might be what makes planner_rrtstar good..)
+# TODO [ ] tune shortcutting_iters (too frequent -> tree small changes, waste of time / too infrequent -> misses improvements from rewiring)
+# TODO! [ ] track best transition nodes (lowest cost) in some transition registry so cheaper terminal candidate can be found via another transition or rewiring
+# TODO [ ] adaptive p_goal (0.3 till solution_node is not None -> then 0.1 e.g., to lower during the optimization phase)
+# TODO [ ] tune hyperparams
 
 # SKILLS
-# TODO [o] add unified structure with 3 expansion modes for skill rollouts (full, single, kino)
-# TODO [x] check self.dt with chosen dt in skills..
-# TODO [o] implement kindodynamic with SkillEdge 
+
 # TODO [ ] check deviation between actual skill x-steps and interpolation between ends of the SkillEdge
 # TODO [o] skill edge cost correct computation 
 
 # RRT*
 # TODO [o] add rewiring (RRT*)
+# TODO! [ ] rewire only in per-mode-subtree, does not change parents across mode boundaries (_propagate_cost_improvement does propagate cost values across modes)
 # TODO [ ] rewiring in skill modes (inactive parts)
 # TODO [ ] in _find_best_parent, seeding best_parent = n_near needs edge collision check? 
-# TODO [ ] add bidirectional (BRRT*)
+# TODO [ ] add bidirectional (BRRT*) in non skill modes (check first if old BIRRT* really is faster)
 
 # GENERAL
 # TODO [o] how to do preallocation? allocate and then double?
 # TODO [o] figure out how to add a new subtree and transition seeding at mode boundary
-# TODO [x] add all relevant hyperparams to RRTSkillsConfig
 # TODO [ ] p_transition for mode specific goal AND p_goal for terminal goal?
+# TODO [ ] in subtree.get_near() should we limit to k_nearest?
 """
 
 class RRTSkills(BasePlanner):
@@ -423,20 +442,22 @@ class RRTSkills(BasePlanner):
             if not new_nodes:
                 continue
 
-            # 5. Collision check 
+            # 5. Handle transitions and rewiring
             for n_new in new_nodes:
-                self._check_transitions(n_new)
+                next_mode_seeds = self._check_transitions(n_new)
 
                 # RRT* rewire
                 if self._should_rewire() and not n_new.is_skill_waypoint:
                     self._rewire(n_new, mode)
 
-            # 6. Check if we reached the terminal goal 
-            final_state = new_nodes[-1].state
-            if self.env.done(final_state.q, final_state.mode):
-                print(f"[RRT DONE] self.env.done() is TRUE")
-                self.solution_node = new_nodes[-1]
-                self._record_solution(costs, times, node=self.solution_node)
+                terminal_node = self._get_terminal_node(n_new, next_mode_seeds)
+                if terminal_node is not None:
+                    break
+            
+            # 6. Check if we reached the terminal goal
+            if terminal_node is not None:
+                print("[RRT DONE] self.env.done() is TRUE")
+                self._record_solution(costs, times, node=terminal_node)
 
                 if not optimize:
                     break # Stop after first solution
@@ -447,11 +468,12 @@ class RRTSkills(BasePlanner):
 
         # Final shortcut
         if self.config.try_shortcutting and self.best_path is not None:
-            sc_path = self._shortcut(self.best_path)
-            self._record_solution(costs, times, path=sc_path)
-            # TODO self.improvement_count += 1
-            print(f"[RRT FINAL SHORTCUT] Improved cost to {self.best_cost:.3f}")
+            sc_path = self._shortcut(self.best_path, self.config.final_shortcutting_iters)
+            if self._record_solution(costs, times, path=sc_path):
+                print(f"[RRT FINAL SHORTCUT] Improved cost to {self.best_cost:.3f}")
 
+                if self.config.sync_shortcut_to_tree:
+                    self._sync_shortcut_to_tree(sc_path)
 
         # Return
         path = self.best_path
@@ -462,6 +484,19 @@ class RRTSkills(BasePlanner):
         }
         return path, info
 
+    def _get_terminal_node(self, n_new: Node, next_mode_seeds: List[Node]) -> Optional[Node]:
+        """
+        
+        """
+        if self.env.done(n_new.state.q, n_new.state.mode):
+            return n_new
+        
+        for seed in next_mode_seeds:
+            if self.env.done(seed.state.q, seed.state.mode):
+                return seed
+            
+        return None
+
     def _initialize_planner(self):
         """
         Setup start node and initial mode
@@ -470,7 +505,12 @@ class RRTSkills(BasePlanner):
             return # Already initialized
         
         # Dynamic step size
-        self.eta = self._compute_dynamic_eta()
+        if self.config.extension_strategy == "linear":
+            self.eta = self._compute_dynamic_eta()
+        elif self.config.extension_strategy == "connect":
+            self.eta = self.config.eta_step
+        else:
+            raise ValueError(f"Unknown extension_strategy: {self.config.extension_strategy}")
         
         # Mode
         start_mode = self.env.get_start_mode()
@@ -528,8 +568,8 @@ class RRTSkills(BasePlanner):
         
         elif strategy == "sqrt_d_scaled":
             d = sum(self.env.robot_dims.values())
-            return math.sqrt(d) / d * workspace_diameter
-            
+            return workspace_diameter / math.sqrt(d)
+        
         else:
             raise ValueError(f"Unknown step_size_strategy: {strategy}")
 
@@ -537,7 +577,7 @@ class RRTSkills(BasePlanner):
         """
         Selects which mode to expand next based on the selected strategy
         - "uniform": pick uniformly from reached_modes
-        - "greedy": p_newest_mode to newest, else uniform
+        - "greedy": p_greedy to newest, else uniform
         - "frontier": p_frontier split across modes without outgoing transitions, 
                       remainder split across others by inverse node count 
         
@@ -545,16 +585,22 @@ class RRTSkills(BasePlanner):
         """
         if len(self.reached_modes) == 1:
             return self.reached_modes[0]
+
+        # Pick mode sampling strategy based on planning phase
+        if self.solution_node is None:
+            strategy = self.config.init_mode_sampling_type
+        else:
+            strategy = self.config.mode_sampling_type
         
         # Greedy strategy
-        if self.config.mode_sampling_type == "greedy":
-            if random.random() < self.config.p_newest_mode:
+        if strategy == "greedy":
+            if random.random() < self.config.p_greedy:
                 return self.reached_modes[-1]
             return random.choice(self.reached_modes)
             
         # Frontier strategy (from prm implementation) # TODO check
-        if self.config.mode_sampling_type == "frontier":
-            total_nodes = 0
+        if strategy == "frontier":
+            total_nodes = sum(self.tree.subtrees[m].size for m in self.reached_modes)
             p_frontier = self.config.p_frontier
             p_remaining = 1.0 - p_frontier
 
@@ -566,7 +612,6 @@ class RRTSkills(BasePlanner):
             # Check for frontier modes in the list of so far discovered modes
             for m in self.reached_modes:
                 sample_count = self.tree.subtrees[m].size
-                total_nodes += sample_count
                 sample_counts[m] = sample_count
                 if not m.next_modes:
                     frontier_modes.append(m)
@@ -586,6 +631,8 @@ class RRTSkills(BasePlanner):
 
             # Fallback to uniform if either partition is empty
             if not remaining_modes or not frontier_modes:
+                return random.choice(self.reached_modes)
+            if total_nodes == 0:
                 return random.choice(self.reached_modes)
 
             # Build probability distribution
@@ -695,7 +742,8 @@ class RRTSkills(BasePlanner):
                 # print(f"[TRANSITION SAMPLING] done at {iters} iterations")
                 return q
             
-        print(f"[TRANSITION SAMPLING] failed at {iters} iterations")
+        # print(f"[TRANSITION SAMPLING] failed at {iters} iterations")
+        print(f"[TRANSITION SAMPLING] mode={mode} task={active_task.name} goal_pose colliding (single-config retry pointless)")
         return None
 
     def _sample_informed(self, mode: Mode) -> Optional[Configuration]:
@@ -735,11 +783,11 @@ class RRTSkills(BasePlanner):
         """
         # Strategy for expanding/steering in NON-skill-modes
         if skill_task is None:
-            state_new = self._linear_steer(n_near, q_target, mode)
-            if state_new is None or not self._validate(state_new, n_near, is_skill=False, is_uniform=is_uniform):
-                self._dbg_validate_fail += 1
-                return []
-            return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
+            if self.config.extension_strategy == "linear":
+                return self._expand_linear(n_near, q_target, mode, is_uniform)
+            if self.config.extension_strategy == "connect":
+                return self._expand_connect(n_near, q_target, mode, is_uniform)
+            raise ValueError(f"Unknown extension_strategy: {self.config.extension_strategy}")
         
         # Strategies for expanding/steering in skill-modes
         strategy = self.config.skill_expansion_strategy
@@ -782,7 +830,7 @@ class RRTSkills(BasePlanner):
             return None
         
         # Snap to target
-        if dist <= self.eta: # TODO change, snaps all the time.. (or fix eta)
+        if dist <= self.eta: # TODO snapping to target (probably tries it all the time with big eta and fails in single_agent_bin_picking -> probably tries to connect all the time but edge in collision)
             q_new = q_target
             self._dbg_snap_events += 1
         else:
@@ -799,6 +847,19 @@ class RRTSkills(BasePlanner):
         # print(f"[DEBUG LINEAR STEER] dist = {dist:.4f}, eta = {self.eta:.4f}")
         return State(q_new, mode)
 
+    def _expand_linear(self, n_near: Node, q_target: Configuration, mode: Mode, is_uniform: bool) -> List[Node]:
+        """
+        Standard one-step RRT expansion for non-skill modes.
+        """
+        state_new = self._linear_steer(n_near, q_target, mode)
+        if state_new is None:
+            return []
+
+        if not self._validate(state_new, n_near, is_skill=False, is_uniform=is_uniform):
+            return []
+
+        return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
+
     def _validate(self, state_new: State, n_near: Node, is_skill: bool, is_uniform: bool = True) -> bool:
         """
         Collision checking for configurations and edges
@@ -812,12 +873,14 @@ class RRTSkills(BasePlanner):
 
         # 3. Failure based on config check 
         if not is_state_free:
+            self._dbg_validate_fail += 1
             if is_skill and self._dbg_validate_fail % 100 == 0:  # Print every 100th fail to avoid spam
                 print(f"[DEBUG SKILL] State collision at t_norm = {n_near.skill_step/100:.2f} (approx)")
             return False
         
         # 4. Edge check
         if not self.env.is_edge_collision_free(state_new.q, n_near.state.q, state_new.mode):
+            self._dbg_validate_fail += 1
             if is_skill and self._dbg_validate_fail % 100 == 0:
                 print(f"[DEBUG SKILL] Edge collision from step {n_near.skill_step} to {n_near.skill_step + 1}")
             return False
@@ -828,16 +891,15 @@ class RRTSkills(BasePlanner):
         """
         Handles node creation and addition, including RRT* parent optimization
 
-        NOTE: find_best_parent always runs for non-skill nodes when use_rrt_star=True,
-        regardless of rewire_after_first_solution flag as it is cheap and should always
-        be beneficial..
+        NOTE: _find_best_parent only runs after first solution is found. Before that, it's wasted work 
+        (no cost to optimize yet) that slows down init-solve.
         """
         if is_skill:
             parent = n_near
             cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
             cost = parent.cost + cost_to_parent
-        elif self.config.use_rrt_star:
-            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode) # Always
+        elif self._should_rewire(): # TODO check if my logic is correct with rewiring only after init sol
+            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode)
         else:
             parent = n_near
             cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
@@ -859,80 +921,88 @@ class RRTSkills(BasePlanner):
         n_new.parent.children.append(n_new)
         return n_new
 
-    def _check_transitions(self, n_new: Node):
+    def _check_transitions(self, n_new: Node) -> List[Node]:
         """
         Checks if n_new triggers a mode switch 
         - Normal mode: is_transition()?
         - Skill mode: skill.done()?
         If transition node -> get the next valid modes, add and seed new subtree
         """
+        created_seeds: List[Node] = []
+
+        if not self._is_mode_transition(n_new):
+            return created_seeds
+
         mode = n_new.state.mode
+        self._dbg_is_trans_true += 1
+
+        next_modes = self.env.get_next_modes(n_new.state.q, mode)
+        valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
+
+        if not valid_next_modes:
+            self._dbg_get_next_empty += 1
+            return created_seeds
+
+        for next_mode in valid_next_modes:
+            if not self.env.is_collision_free(n_new.state.q, next_mode):
+                self._dbg_seed_coll_fail += 1
+                continue
+
+            if next_mode not in self.reached_modes:
+                self.reached_modes.append(next_mode)
+                self.tree.add_subtree(next_mode)
+
+            seed_state = State(n_new.state.q, next_mode)
+            seed_node = Node(seed_state, parent=n_new)
+            seed_node.cost = n_new.cost
+            seed_node.cost_to_parent = 0.0
+
+            self.tree.subtrees[next_mode].add_node(seed_node)
+            n_new.children.append(seed_node)
+            created_seeds.append(seed_node)
+
+            self._dbg_seed_added += 1
+
+        return created_seeds
+
+    def _is_mode_transition(self, node: Node) -> bool:
+        """
+        
+        """
+        mode = node.state.mode
+
+        if self.env.is_terminal_mode(mode):
+            return False
+
         skill_task = self._get_active_skill_task(mode)
 
-        # Check transition for skill mode
-        if skill_task is not None:
-            skill = skill_task.skill
+        # Case 1: non-skill mode (geometric)
+        if skill_task is None:
+            goal_done = self.env.is_transition(node.state.q, mode)
+            return goal_done
 
-            # Extract subspace
-            q_full = n_new.state.q.state()
-            active_indices = self._get_active_subspace_indices(skill_task)
-            q_subspace = q_full[active_indices]
+        # Case 2: skill mode (skill done)
+        skill = skill_task.skill
+        q_full = node.state.q.state()
+        active_indices = self._get_active_subspace_indices(skill_task)
+        q_subspace = q_full[active_indices]
 
-            is_timed = isinstance(skill, BaseDeterministicTimedSkill)
-            if is_timed:
-                dt = skill.dt
-                n_steps = max(1, round(skill.duration / dt))
-                t_norm = n_new.skill_step / n_steps
-                is_transition = skill.done(t_norm, q_subspace, self.env)
-            else:
-                is_transition = skill.done(q_subspace, self.env)
-        
-        # Check transition for normal (geometric) mode
+        if isinstance(skill, BaseDeterministicTimedSkill):
+            n_steps = max(1, round(skill.duration / skill.dt))
+            t_norm = min(node.skill_step / n_steps, 1.0)
+            skill_done = skill.done(t_norm, q_subspace, self.env)
         else:
-            # Standard geometric transition check
-            is_transition = self.env.is_transition(n_new.state.q, n_new.state.mode)
+            skill_done = skill.done(q_subspace, self.env)
 
-        # Transition node -> get next modes, add and seed new subtree
-        if is_transition:
-            self._dbg_is_trans_true += 1
-            n_new.is_transition = True
+        return skill_done
 
-            # Next modes
-            next_modes = self.env.get_next_modes(n_new.state.q, n_new.state.mode)
-            valid_next_modes = self.mode_validation.get_valid_modes(n_new.state.mode, list(next_modes))
-
-            if not valid_next_modes:
-                self._dbg_get_next_empty += 1
-                return
-
-            for next_mode in valid_next_modes:
-                # Skip if same configuration is not valid in new mode
-                if not self.env.is_collision_free(n_new.state.q, next_mode):
-                    self._dbg_seed_coll_fail += 1
-                    continue
-
-                # Register mode if new
-                if next_mode not in self.reached_modes:
-                    self.reached_modes.append(next_mode)
-                    self.tree.add_subtree(next_mode)
-
-                # Seed next mode with a transition node (always -> alternative entries provide different cost paths)
-                seed_state = State(n_new.state.q, next_mode)
-                seed_node = Node(seed_state, parent=n_new)
-                seed_node.cost = n_new.cost 
-                seed_node.is_transition = True
-
-                self.tree.subtrees[next_mode].add_node(seed_node)
-                n_new.children.append(seed_node)
-                self._dbg_seed_added += 1
-
-    def _shortcut(self, path: List[State]) -> List[State]:
+    def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
         """
         Post-processes a path with robot_mode_shortcut
         Skill segments are protected
         """
         shortcut_path, _ = shortcutting.robot_mode_shortcut(
-            self.env, path, self.config.shortcutting_iters,
+            self.env, path, shortcutting_iters,
             resolution=self.env.collision_resolution,
             tolerance=self.env.collision_tolerance,
             robot_choice=self.config.shortcutting_mode,
@@ -941,6 +1011,12 @@ class RRTSkills(BasePlanner):
 
         # Remove interpolated points used in shortcutting (collision check)
         return shortcutting.remove_interpolated_nodes(shortcut_path)
+
+    def _sync_shortcut_to_tree(self, shortcut_path: List[State]): # TODO
+        """
+        Inserts shortcutted path nodes into the tree as a connected chain
+        """
+        raise not NotImplementedError
 
     def _extract_path(self, node: Node) -> List[State]:
         """
@@ -989,7 +1065,6 @@ class RRTSkills(BasePlanner):
         self._dbg_w_best_parent_swaps = 0
         self._dbg_w_near_size_sum = 0
         self._dbg_w_near_size_count = 0
-        self._dbg_w_rewire_extracts = 0
         self._dbg_w_shortcut_hits = 0
         self._dbg_last_r_n = 0.0
 
@@ -1013,12 +1088,11 @@ class RRTSkills(BasePlanner):
         print(
             f"[{tag}] it={iterations} nodes={nodes} modes={len(self.reached_modes)} "
             f"best={self.best_cost:.3f} sol={sol_cost:.3f} "
-            f"eta={self.eta:.2f} r_n={self._dbg_last_r_n:.3f}\n"
+            f"etaMacro={self.eta:.2f} etaStep={self.config.eta_step:.2f} "
             f"rewire={rewire_status} informed={informed_status}\n"
             f"       | w: rewires={self._dbg_w_rewires} "
             f"bestP={self._dbg_w_best_parent_swaps} "
             f"nearAvg={near_avg:.1f} "
-            f"reExt={self._dbg_w_rewire_extracts} "
             f"sCut={self._dbg_w_shortcut_hits}\n"
             f"       | c: snap={self._dbg_snap_events} "
             f"vfail={self._dbg_validate_fail} "
@@ -1028,8 +1102,7 @@ class RRTSkills(BasePlanner):
             f"isT={self._dbg_is_trans_true} "
             f"nextE={self._dbg_get_next_empty} "
             f"sCF={self._dbg_seed_coll_fail} sAdd={self._dbg_seed_added} "
-            f"minNN={self._dbg_min_nn_dist:.3f}\n"
-            f"       | kino: edges={self._dbg_kino_edges} " 
+            f"kinoEdges={self._dbg_kino_edges} "
             f"impr={self.improvement_count}"
         )
         # Reset window counters
@@ -1056,29 +1129,38 @@ class RRTSkills(BasePlanner):
         if new_cost >= self.best_cost - 1e-8:
             return False
         
+        # Update tree pointer ONLY when improvement came from a tree node
+        if node is not None:
+            self.solution_node = node
+        
         self.best_cost = new_cost
         self.best_path = list(path)
+        self._update_informed_path()
         costs.append(self.best_cost)
         times.append(time.time() - self.start_time)
         return True
 
-    def _periodic_improve(self, costs: List[float], times: List[float]): # TODO
+    def _periodic_improve(self, costs: List[float], times: List[float]):
         """
         Periodic cost imporvement: re-extract from tree, shortcut and record
         """
-        # Extract (maybe improved via rewiring)
-        improved = self._record_solution(costs, times, node=self.solution_node)
-        # TODO self.improvement_count += 1?
+        if self.solution_node is None:
+            return
 
-        # Shortcut current best
-        if self.config.try_shortcutting and self.best_path is not None:
-            sc_path = self._shortcut(self.best_path)
-            if self._record_solution(costs, times, path=sc_path):
-                improved = True
-                self.improvement_count += 1
-                print(f"[RRT SHORTCUT #{self.improvement_count}] cost={self.best_cost:.3f}")
+        if not self.config.try_shortcutting:
+            return
 
-        return improved  
+        if self.best_path is None:
+            return
+
+        sc_path = self._shortcut(self.best_path, self.config.periodic_shortcutting_iters)
+
+        if self._record_solution(costs, times, path=sc_path):
+            self.improvement_count += 1
+            print(f"[RRT SHORTCUT #{self.improvement_count}] cost={self.best_cost:.3f}")
+
+            if self.config.sync_shortcut_to_tree:
+                self._sync_shortcut_to_tree(sc_path)
 
     # TODO SKILLS
     def _get_active_skill_task(self, mode: Mode):
@@ -1262,6 +1344,69 @@ class RRTSkills(BasePlanner):
 
         return [n_new]
 
+    def _expand_connect(self, n_near: Node, q_target: Configuration, mode: Mode, is_uniform: bool) -> List[Node]:
+        """
+        
+        """
+        q_target_vec = q_target.state()
+        q_curr_vec = n_near.state.q.state().copy()
+        q_curr_cfg = n_near.state.q
+
+        eta_step  = self.eta
+        # max_steps = self.config.connect_max_steps 
+        # max_steps = 1 if is_uniform else self.config.connect_max_steps
+
+        if self.config.connect_target_policy == "transition":
+            is_transition_target = self.env.is_transition(q_target, mode)
+            max_steps = self.config.connect_max_steps if is_transition_target else 1
+        elif self.config.connect_target_policy == "all":
+            max_steps = self.config.connect_max_steps
+        else:
+            raise ValueError(f"Unknown connect_target_policy: {self.config.connect_target_policy}")
+        
+        progress = False
+        reached_snap = False
+        steps_taken = 0
+
+        for _ in range(max_steps):
+            dist = batch_config_dist(q_curr_cfg, [q_target], self.config.distance_metric).item()
+            if dist < 1e-6:
+                reached_snap = True
+                break
+
+            step = min(eta_step, dist)
+            snap = step >= dist - 1e-9
+            q_next_vec = q_target_vec.copy() if snap else q_curr_vec + step * (q_target_vec - q_curr_vec) / dist
+            q_next_cfg = self.env.get_start_pos().from_flat(q_next_vec)
+
+            if not self.env.is_collision_free(q_next_cfg, mode):
+                if self.config.use_rrt_star:
+                    self._update_cfree_estimate(was_valid=False, was_uniform=is_uniform)
+                break
+
+            if not self.env.is_edge_collision_free(q_curr_cfg, q_next_cfg, mode):
+                break
+
+            q_curr_vec = q_next_vec
+            q_curr_cfg = q_next_cfg
+            progress = True
+            steps_taken += 1
+            if self.config.use_rrt_star:
+                self._update_cfree_estimate(was_valid=True, was_uniform=is_uniform)
+
+            if snap:
+                reached_snap = True
+                break
+
+        if reached_snap:
+            self._dbg_snap_events += 1
+
+        if not progress:
+            return []
+
+        state_new = State(q_curr_cfg, mode)
+        return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
+
     def _skill_edge_cost(self, waypoints: np.ndarray, mode: Mode) -> float:
         """
         Computes true cost for kinodynamic edges instead of using straight-line parent-to-end-costs
@@ -1299,11 +1444,11 @@ class RRTSkills(BasePlanner):
         if was_valid:
             self.valid_samples += 1
 
-            # Compute mu_X_free and gamma after 100 samples & update periodically
-            if self.total_samples % 200 == 0 and self.total_samples > 100:
-                frac_free = self.valid_samples / self.total_samples
-                mu_X_free = frac_free * self.mu_X_total
-                self._set_gamma_rrt_star(mu_X_free)
+        # Compute mu_X_free and gamma after 100 samples & update periodically
+        if self.total_samples % 200 == 0 and self.total_samples > 100:
+            frac_free = self.valid_samples / self.total_samples
+            mu_X_free = frac_free * self.mu_X_total
+            self._set_gamma_rrt_star(mu_X_free)
 
     def _compute_rewiring_radius(self, n: int):
         """
