@@ -356,16 +356,20 @@ CURRENT TODOS
 # TODO! [ ] track best transition nodes (lowest cost) in some transition registry so cheaper terminal candidate can be found via another transition or rewiring
 # TODO [ ] adaptive p_goal (0.3 till solution_node is not None -> then 0.1 e.g., to lower during the optimization phase)
 # TODO [ ] tune hyperparams
+# TODO [ ] shortcuts self.best_path but not a freshly extracted path from self.solution:node after rewiring..
 
 # SKILLS
-
 # TODO [ ] check deviation between actual skill x-steps and interpolation between ends of the SkillEdge
 # TODO [o] skill edge cost correct computation 
 
 # RRT*
-# TODO [o] add rewiring (RRT*)
+# TODO! [o] add rewiring (RRT*)
 # TODO! [ ] rewire only in per-mode-subtree, does not change parents across mode boundaries (_propagate_cost_improvement does propagate cost values across modes)
-# TODO [ ] rewiring in skill modes (inactive parts)
+# TODO [ ] (later) rewiring in skill modes (inactive parts)
+# TODO! [ ] how to do rrt* with rrt-connect when not adding all the intermediate nodes? Otherwise long edges (from connect) can't be rewired with the rewiring radius..
+# TODO! [ ] old rrtstar is doing mode-boundary rewiring whereas ours doesn't
+# TODO! [ ] old rrtstar keeps/scans transition or terminal candidates and regenerates the path from the current lowest-cost terminal cnadidate, whereas we only check the just-created node/seeds
+# TODO [ ] rewiring improvements invisible unless a newly added terminal node improves the best path?
 # TODO [ ] in _find_best_parent, seeding best_parent = n_near needs edge collision check? 
 # TODO [ ] add bidirectional (BRRT*) in non skill modes (check first if old BIRRT* really is faster)
 
@@ -486,16 +490,32 @@ class RRTSkills(BasePlanner):
 
     def _get_terminal_node(self, n_new: Node, next_mode_seeds: List[Node]) -> Optional[Node]:
         """
-        
+        Registers newly-discovered terminal candidates in self.terminal_nodes and returns one
+        (if any) for immediate solution recording
         """
+        found: Optional[Node] = None
+
         if self.env.done(n_new.state.q, n_new.state.mode):
-            return n_new
+            if n_new not in self.terminal_nodes:
+                self.terminal_nodes.append(n_new)
+                found = n_new
         
         for seed in next_mode_seeds:
             if self.env.done(seed.state.q, seed.state.mode):
-                return seed
+                if seed not in self.terminal_nodes:
+                    self.terminal_nodes.append(seed)
+                if found is None:
+                    found = seed
             
-        return None
+        return found
+
+    def _get_best_terminal(self) -> Optional[Node]:
+        """
+        Returns the current lowest-cost terminal candidate (None if not discovered yet)
+        """
+        if not self.terminal_nodes:
+            return None
+        return min(self.terminal_nodes, key=lambda n: n.cost)
 
     def _initialize_planner(self):
         """
@@ -522,6 +542,9 @@ class RRTSkills(BasePlanner):
         start_node.cost = 0.0
         self.tree.root = start_node
         self.tree.subtrees[start_mode].add_node(start_node)
+
+        # Registry of all discovered terminal candidates
+        self.terminal_nodes: List[Node] = [] # For _periodic_improve to re-extract from cheapest
 
         # RRT* gamma
         self.valid_samples = 0
@@ -1142,17 +1165,27 @@ class RRTSkills(BasePlanner):
 
     def _periodic_improve(self, costs: List[float], times: List[float]):
         """
-        Periodic cost imporvement: re-extract from tree, shortcut and record
+        Periodic cost imporvement: 
+        1. Re-extract from cheapest terminal candidate
+            -> catches rewiring-induced cost reductions on the current solution path
+            -> catches the case where a different terminal has become cheaper
+        2. Shortcut the resulting best_path 
         """
-        if self.solution_node is None:
-            return
-
         if not self.config.try_shortcutting:
             return
+        
+        # 1. Re-extract from cheapest terminal
+        best_terminal = self._get_best_terminal()
+        if best_terminal is None:
+            return
 
+        # Extract and update best_path/best_cost only if cheaper
+        self._record_solution(costs, times, node=best_terminal)
+        
         if self.best_path is None:
             return
 
+        # 2. Shortcut current best_path
         sc_path = self._shortcut(self.best_path, self.config.periodic_shortcutting_iters)
 
         if self._record_solution(costs, times, path=sc_path):
