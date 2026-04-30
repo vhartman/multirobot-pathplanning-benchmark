@@ -154,6 +154,7 @@ class RRTSkillsConfig:
     eta_step: float = 0.1 # TODO!
     connect_max_steps: int = 30 # TODO!
     connect_target_policy: str = "transition" # "transition" | "all"
+    connect_add_all_nodes: bool = False
 
     p_goal: float = 0.1 # TODO!
     # p_terminal_goal: float = 0.1 
@@ -1379,15 +1380,20 @@ class RRTSkills(BasePlanner):
 
     def _expand_connect(self, n_near: Node, q_target: Configuration, mode: Mode, is_uniform: bool) -> List[Node]:
         """
+        RRT-Connect-style extension: goes from n_near towards q_target in steps of eta_step
+
+        Two modes:
+        1. connect_add_all_nodes=False: only final node enters the tree
+        - Fast for finding initial solutions but breaks RRT*-rewiring (long edges + small rewire radius).
         
+        2.connect_add_all_nodes=True: every intermediate step enters the tree
+        - Required for asymptotic optimality with use_rrt_star=True.
         """
         q_target_vec = q_target.state()
         q_curr_vec = n_near.state.q.state().copy()
         q_curr_cfg = n_near.state.q
 
         eta_step  = self.eta
-        # max_steps = self.config.connect_max_steps 
-        # max_steps = 1 if is_uniform else self.config.connect_max_steps
 
         if self.config.connect_target_policy == "transition":
             is_transition_target = self.env.is_transition(q_target, mode)
@@ -1397,21 +1403,27 @@ class RRTSkills(BasePlanner):
         else:
             raise ValueError(f"Unknown connect_target_policy: {self.config.connect_target_policy}")
         
+        add_all = self.config.connect_add_all_nodes
+        
+        new_nodes: List[Node] = []
+        n_parent = n_near # Parent for the next step (becomes previous step's node when add_all)
         progress = False
         reached_snap = False
-        steps_taken = 0
 
+        # 
         for _ in range(max_steps):
             dist = batch_config_dist(q_curr_cfg, [q_target], self.config.distance_metric).item()
             if dist < 1e-6:
                 reached_snap = True
                 break
-
+            
+            # Steer
             step = min(eta_step, dist)
             snap = step >= dist - 1e-9
             q_next_vec = q_target_vec.copy() if snap else q_curr_vec + step * (q_target_vec - q_curr_vec) / dist
             q_next_cfg = self.env.get_start_pos().from_flat(q_next_vec)
 
+            # Validate
             if not self.env.is_collision_free(q_next_cfg, mode):
                 if self.config.use_rrt_star:
                     self._update_cfree_estimate(was_valid=False, was_uniform=is_uniform)
@@ -1419,13 +1431,21 @@ class RRTSkills(BasePlanner):
 
             if not self.env.is_edge_collision_free(q_curr_cfg, q_next_cfg, mode):
                 break
-
+            
+            # Step accepted
             q_curr_vec = q_next_vec
             q_curr_cfg = q_next_cfg
             progress = True
-            steps_taken += 1
             if self.config.use_rrt_star:
                 self._update_cfree_estimate(was_valid=True, was_uniform=is_uniform)
+
+            if add_all:
+                # RRT*-connect: each step is a tree node with full ChooseParent treatment
+                # _rewire is then applied per node in plan()'s post-expand loop
+                state_step = State(q_curr_cfg, mode)
+                n_step = self._create_and_add_node(state_step, n_parent, mode, is_skill=False)
+                new_nodes.append(n_step)
+                n_parent = n_step
 
             if snap:
                 reached_snap = True
@@ -1436,9 +1456,17 @@ class RRTSkills(BasePlanner):
 
         if not progress:
             return []
+        
+        if not add_all:
+            # Satisficing connect: single node at the end of the chain
+            state_new = State(q_curr_cfg, mode)
+            new_nodes = [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
 
-        state_new = State(q_curr_cfg, mode)
-        return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
+
+        # state_new = State(q_curr_cfg, mode)
+        # return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
+        
+        return new_nodes
 
     def _skill_edge_cost(self, waypoints: np.ndarray, mode: Mode) -> float:
         """
