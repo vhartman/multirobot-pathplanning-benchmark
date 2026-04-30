@@ -234,6 +234,9 @@ def main():
     shortcut_discretized_path = interpolate_path(shortcut_path, kind="euclidean")
 
     print("Checking original path for validity")
+    print(env.is_valid_plan(path))
+
+    print("Checking original interpolated path for validity")
     print(env.is_valid_plan(interpolated_path))
 
     print("Checking mode-shortcutted path for validity")
@@ -315,7 +318,7 @@ def main():
 
     if args.viser:
         env.display_path_viser(
-            paths=info["paths"] + [interpolated_path, single_mode_shortcut_path, shortcut_discretized_path],
+            paths=info["paths"] + [interpolated_path, single_mode_shortcut_path, shortcut_path],
             primitives_only = True
         )
 

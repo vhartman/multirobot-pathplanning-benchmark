@@ -140,6 +140,8 @@ class MujocoEnvironment(BaseProblem):
         return joint_addr
 
     def __init__(self, xml_path, n_data_pool: int = 1):
+        super().__init__()
+        
         self.limits = None
 
         self.cost_metric = "euclidean"
@@ -319,12 +321,6 @@ class MujocoEnvironment(BaseProblem):
 
         if stop_at_end:
             self.show_config(path[-1].q, True)
-
-    def sample_config_uniform_in_limits(self):
-        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = self.start_pos.from_flat(rnd)
-
-        return q
 
     def _key_callback(self, key):
         # Enter key toggles pause
@@ -697,6 +693,17 @@ class OptimizedMujocoEnvironment(MujocoEnvironment):
         )
         self._pool_lock = threading.Lock()
         self._available_data = list(range(len(self._data_pool)))
+
+    def __deepcopy__(self, memo):
+        executor, pool_lock = self._executor, self._pool_lock
+        self._executor, self._pool_lock = None, None
+        new_env = copy.deepcopy(super(), memo)
+        self._executor, self._pool_lock = executor, pool_lock
+        new_env._executor = ThreadPoolExecutor(
+            max_workers=len(new_env._data_pool), thread_name_prefix="collision_checker"
+        )
+        new_env._pool_lock = threading.Lock()
+        return new_env
 
     def close(self):
         if hasattr(self, "_executor"):

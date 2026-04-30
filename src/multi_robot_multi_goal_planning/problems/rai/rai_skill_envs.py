@@ -697,7 +697,7 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
 
             task_name_sequence = make_task_sequence(robot_chains, constraints=place_constraints, pair_pre_tasks=True, seed=0)
         
-        self.sequence = self._make_sequence_from_names(task_name_sequence + ["terminal"])
+            self.sequence = self._make_sequence_from_names(task_name_sequence + ["terminal"])
 
         BaseModeLogic.__init__(self)
 

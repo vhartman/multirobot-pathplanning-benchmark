@@ -651,6 +651,9 @@ class BaseRRTstar(BasePlanner):
     ) -> bool:
         return self.env.is_collision_free(q, mode)
 
+        # calling once for compilation
+        # find_nearest_indices(np.zeros(5), 0)
+
     def add_tree(
         self,
         mode: Mode,
@@ -757,6 +760,7 @@ class BaseRRTstar(BasePlanner):
             return
         next_modes = self.env.get_next_modes(n.state.q, mode)
         next_modes = self.mode_validation.get_valid_modes(mode, tuple(next_modes))
+
         if next_modes == []:
             self.mode_validation.propagate_invalid(mode)
             self.modes = self.mode_validation.remove_invalid_modes(self.modes)
@@ -1207,6 +1211,7 @@ class BaseRRTstar(BasePlanner):
                 else:
                     self.blacklist_mode.add(mode)
                     self.modes.remove(mode)
+
                 return
 
             next_ids = self.mode_validation.get_valid_next_ids(mode)
@@ -1892,11 +1897,11 @@ class BaseRRTstar(BasePlanner):
         Returns:
             None: This method does not return any value.
         """
-
         mode = discretized_path[0].mode
         parent = self.operation.path_nodes[0]
         for i in range(1, len(discretized_path)):
             state = discretized_path[i]
+
             node = Node(state, self.operation)
             # node.parent = parent
             # self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)

@@ -551,7 +551,7 @@ def edge_collision_free_with_moving_obs(
     # Step 4: Determine the interpolation strategy 
     # At which time index we should start interpolating toward qe?
     for r in robots:
-        if ts < end_times[r] and te > end_times[r]:
+        if ts < end_times[r] and te >= end_times[r]:
             # CASE 1: Robot r finishes DURING this edge
             # Start interpolating from where the robot finished toward qe
             for idx in indices:
@@ -1135,6 +1135,7 @@ def plan_in_time_space_bidirectional(
     goal,
     t_lb,
     v_max=0.5,
+    max_stepsize = 5,
 ) -> TimedPath:
     """
     Bidirectional RRT planner operating in joint space-time configuration
@@ -1170,8 +1171,8 @@ def plan_in_time_space_bidirectional(
             assert False
 
         t_diff = rnd_node.t - close_node.t
-        q_diff = rnd_node.q.state() - close_node.q.state() # Vector form (direction + magnitude)
-        length = config_dist(rnd_node.q, close_node.q) # Scalar distance
+        q_diff = rnd_node.q.state() - close_node.q.state()
+        length = config_dist(rnd_node.q, close_node.q, "max")
 
         v = length / t_diff # Required velocity
 
@@ -1210,8 +1211,8 @@ def plan_in_time_space_bidirectional(
             assert False
 
         t_diff = close_node.t - rnd_node.t
-        q_diff = rnd_node.q.state() - close_node.q.state() # Vector form (direction + magnitude)
-        length = config_dist(rnd_node.q, close_node.q) # Scalar distance
+        q_diff = rnd_node.q.state() - close_node.q.state()
+        length = config_dist(rnd_node.q, close_node.q, "max")
 
         v = length / t_diff # Required velocity
 
@@ -1363,7 +1364,12 @@ def plan_in_time_space_bidirectional(
     logger.debug(f"start_times{end_times}")
     logger.debug(f"max time{max_t}")
 
+    # curr_t_ub = t_lb + (d / v_max) * 3
     curr_t_ub = max([end_times[r] for r in robots]) + (d / v_max) * 3 # Start with more reasonable initial bound
+    # curr_t_ub = max_t
+
+    print("Upper bound time", max_t)
+
     curr_t_ub = max(curr_t_ub, t_lb)
 
     configurations = None
@@ -1430,6 +1436,7 @@ def plan_in_time_space_bidirectional(
 
         # Termination checks
         if ptc.should_terminate(0, time.time() - computation_start_time):
+            print("Stopping due to time")
             break
 
         # Gradually expand time horizon (upper bound that we are sampling)
@@ -1503,10 +1510,10 @@ def plan_in_time_space_bidirectional(
         # Steering with direction awareness
         if t_a.reverse:
             # Time decreases (backward tree)
-            t_new, q_new = reverse_steer(n_close, Node(t_rnd, q_rnd), max_stepsize=10)
+            t_new, q_new = reverse_steer(n_close, Node(t_rnd, q_rnd), max_stepsize=max_stepsize)
         else:
             # Time increases (forward tree)
-            t_new, q_new = steer(n_close, Node(t_rnd, q_rnd), max_stepsize=10)
+            t_new, q_new = steer(n_close, Node(t_rnd, q_rnd), max_stepsize=max_stepsize)
 
         if t_new is None or q_new is None:
             continue
@@ -1618,8 +1625,11 @@ def plan_in_time_space_bidirectional(
                     
                 # Return path
                 return TimedPath(time=times, path=path)
+        else:
+            # print("not coll free")
+            pass
 
-    print("Did not find a path in max_iters.")
+    print(f"Did not find a path in {max_iters} iters.")
     return None
 
 def shortcut_with_dynamic_obstacles(
@@ -1845,7 +1855,7 @@ def plan_robots_in_dyn_env(
     # Both consider the other_paths as dynamic obstacles
     if use_bidirectional_planner:
         path = plan_in_time_space_bidirectional(
-            ptc, env, t0, other_paths, robots, end_times, goal, t_lb
+            ptc, env, t0, other_paths, robots, end_times, goal, t_lb, max_stepsize = config.stepsize,
         )
     else:
         path = plan_in_time_space(
@@ -1931,8 +1941,14 @@ class PrioritizedPlannerConfig:
     # gamma: float = 0.7
     # distance_metric: str = "euclidean"
     use_bidirectional_planner: bool = True
-    shortcut_iters: int = 100 # Per-task optimization (after planning each task)
-    multirobot_shortcut_iters: int = 100 # Global optimization (after completing all tasks)
+    shortcut_iters: int = 100
+    multirobot_shortcut_iters: int = 100
+
+    stepsize:int=10
+
+    max_start_to_earliest_end_diff: int = 50
+    remove_escapes_based_on_diff: bool = True
+
 
 class PrioritizedPlanner(BasePlanner):
     def __init__(
@@ -2130,11 +2146,48 @@ class PrioritizedPlanner(BasePlanner):
                 earliest_end_time = robot_paths.get_final_non_escape_time()
                 logger.debug(f"earliest end time {earliest_end_time}")
 
-                # Discard previously assigned escape paths (will replan after task)
-                robot_paths.remove_final_escape_path(involved_robots)
+                # remove escape path from plan
 
-                end_times = robot_paths.get_end_times(involved_robots)
-                t0 = min([v for k, v in end_times.items()])
+                if self.config.remove_escapes_based_on_diff:
+                    no_escape_path_end_times = robot_paths.get_non_escape_end_times(involved_robots)
+                    with_escape_end_times = robot_paths.get_end_times(involved_robots)
+                    
+                    remove_escape_paths = copy.copy(involved_robots)
+
+                    for r, t in no_escape_path_end_times.items():
+                        earliest_robot_start_time = max(0, earliest_end_time - self.config.max_start_to_earliest_end_diff)
+                        if t < earliest_robot_start_time and with_escape_end_times[r] < earliest_end_time:
+                            # keep escape path if the start time without escape path
+                            # is too far back.
+
+                            # TODO: double check this
+                            remove_escape_paths.remove(r)
+
+                            # if len(robot_paths.paths[r]) > 0:
+                            #     robot_paths.paths[r][-1].task_index = 0
+
+                    robot_paths.remove_final_escape_path(remove_escape_paths)
+                
+                    # overwrite the end times with the earliest end times we like for the robots
+                    # that still have an escape path.
+                    end_times = robot_paths.get_end_times(involved_robots)
+                    for r, t in end_times.items():
+                        if r not in remove_escape_paths or len(robot_paths.paths[r]) == 0:
+                            end_times[r] = max(0, earliest_end_time - self.config.max_start_to_earliest_end_diff)
+
+                    t0 = min([v for k, v in end_times.items()])
+                else:
+                    robot_paths.remove_final_escape_path(involved_robots)
+
+                    end_times = robot_paths.get_end_times(involved_robots)
+                    for r, t in end_times.items():
+                        if len(robot_paths.paths[r]) == 0:
+                            end_times[r] = max(0, earliest_end_time - self.config.max_start_to_earliest_end_diff)
+                    
+                    t0 = min([v for k, v in end_times.items()])
+
+                logger.info(f"Robot end times: {end_times}")
+                logger.info(f"Robot start time: {t0}")
 
                 # Get exact time (t0) and config (start_pose) from which new plan for involved robots should start
                 logger.debug("Collecting start times")
@@ -2262,7 +2315,7 @@ class PrioritizedPlanner(BasePlanner):
                         ptc.max_runtime_in_s - (current_time - computation_start_time)
                     )
 
-                    # Planning escape paths with time aware RRT
+                    print("start time", t0)
                     escape_path, _ = plan_robots_in_dyn_env(
                         self.config,
                         escape_planning_ptc,

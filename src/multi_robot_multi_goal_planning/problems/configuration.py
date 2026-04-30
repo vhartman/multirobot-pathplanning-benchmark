@@ -292,6 +292,9 @@ class NpConfiguration(Configuration):
     def state(self) -> NDArray:
         return self.q
 
+    def as_list(self) -> List:
+        return [self.robot_state(i) for i in range(self._num_agents)]
+
     @classmethod
     def _dist(cls, pt, other, metric: str = "euclidean") -> float:
         return cls._batch_dist(pt, [other], metric)[0]

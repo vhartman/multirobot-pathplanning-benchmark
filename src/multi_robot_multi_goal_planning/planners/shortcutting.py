@@ -94,7 +94,7 @@ def robot_mode_shortcut(
     resolution=0.001,
     tolerance=0.01,
     robot_choice = "round_robin",
-    interpolation_resolution: float=0.1
+    interpolation_resolution: float=0.5
 ):
     """
     Shortcutting the composite path one robot at a time, but allowing shortcutting over the modes as well if the

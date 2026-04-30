@@ -275,6 +275,8 @@ class rai_env(BaseProblem):
     collision_resolution: float
 
     def __init__(self):
+        super().__init__()
+
         self.robot_idx = {}
         self.robot_dims = {}
         self.robot_joints = {}
@@ -1012,7 +1014,7 @@ class rai_env(BaseProblem):
         path_dropdown = server.gui.add_dropdown(
             label="Path",
             options=path_labels,
-            initial_value=path_labels[0],
+            initial_value=path_labels[-1],
         )
         # Slider max is fixed to the longest path; the step is clamped when
         # switching to a shorter path so we never index out of bounds.

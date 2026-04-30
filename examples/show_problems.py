@@ -155,7 +155,7 @@ def visualize_modes(env: rai_env, export_images: bool = False, use_viser: bool =
         #     if c[2] < 0:
         #         print(c)
 
-        if use_viser and isinstance(env, rai_env):
+        if use_viser:
             viser_states.append(State(q_config, m))
             viser_annotations.append(_mode_annotation(env, q_config, m, task))
         elif export_images:
@@ -171,7 +171,7 @@ def visualize_modes(env: rai_env, export_images: bool = False, use_viser: bool =
         assert len(ms) == 1
         m = ms[0]
 
-    if use_viser and isinstance(env, rai_env):
+    if use_viser:
         env.display_path_viser(
             viser_states,
             primitives_only=True,

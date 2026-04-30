@@ -3392,7 +3392,7 @@ def make_box_stacking_env(
     num_robots=2, num_boxes=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False, skill_starts: bool = False
 ):
     assert num_boxes <= 9, "A maximum of 9 boxes are supported"
-    assert num_robots <= 4, "A maximum of 4 robots are supported"
+    assert num_robots <= 6, "A maximum of 6 robots are supported"
 
     if isinstance(robot_types, str):
         robot_types = [robot_types] * num_robots
@@ -3407,8 +3407,8 @@ def make_box_stacking_env(
 
     table = (
         C.addFrame("table")
-        .setPosition([0, 0, 0.2])
-        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setPosition([0, 0, 0.2-0.06/2])
+        .setShape(ry.ST.box, size=[3, 3, 0.06, 0.005])
         .setColor([0.6, 0.6, 0.6])
         .setContact(1)
     )
@@ -3418,7 +3418,8 @@ def make_box_stacking_env(
     )
 
     ur5_path = os.path.join(
-        os.path.dirname(__file__), "../assets/models/rai/ur5/ur5.g"
+        # os.path.dirname(__file__), "../assets/models/rai/ur5/ur5.g"
+        os.path.dirname(__file__), "../assets/models/rai/ur5_vamp/ur5_vamp.g"
     )
 
     kuka_path = os.path.join(
@@ -3442,25 +3443,63 @@ def make_box_stacking_env(
         [0.7071, 0, 0, 0.7071],
     ]
     ur5_rotations = [
-        [0.7071, 0, 0, 0.7071],
-        [0.7071, 0, 0, 0.7071],
         [0.7071, 0, 0, -0.7071],
         [0.7071, 0, 0, -0.7071],
+        [0.7071, 0, 0, 0.7071],
+        [0.7071, 0, 0, 0.7071],
     ]
 
     positions = [
-        [-0.5, 0.5, 0],
-        [+0.5, 0.5, 0],
-        [+0.5, -0.6, 0],
-        [-0.5, -0.6, 0]
+        [-0.5, 0.5, 0.03],
+        [+0.5, 0.5, 0.03],
+        [+0.5, -0.6, 0.03],
+        [-0.5, -0.6, 0.03]
     ]
 
     ur5_positions = [
-        [-0.3, 0.3, 0],
-        [+0.3, 0.3, 0],
-        [+0.3, -0.4, 0],
-        [-0.3, -0.4, 0]
+        [-0.3, 0.3, 0.03],
+        [+0.5, 0.3, 0.03],
+        [+0.5, -0.4, 0.03],
+        [-0.3, -0.4, 0.03]
     ]
+
+    if num_robots > 4:
+        rotations = [
+            [0.7071, 0, 0, -0.7071],
+            [0.7071, 0, 0, -0.7071],
+            [0.7071, 0, 0, 0.7071],
+            [0.7071, 0, 0, 0.7071],
+            [1, 0, 0, 0.],
+            [0, 0, 0, 1],
+        ]
+        ur5_rotations = [
+            [0.7071, 0, 0, -0.7071],
+            [0.7071, 0, 0, -0.7071],
+            [0.7071, 0, 0, 0.7071],
+            [0.7071, 0, 0, 0.7071],
+        
+            [0, 0, 0, 1],
+            [1, 0, 0, 0],
+        ]
+
+        positions = [
+            [-0.4, 0.5, 0.03],
+            [+0.4, 0.5, 0.03],
+            [+0.4, -0.6, 0.03],
+            [-0.4, -0.6, 0.03],
+            [-0.7, -0., 0.03],
+            [+0.7, -0., 0.03]
+        ]
+
+        ur5_positions = [
+            [-0.1, 0.3, 0.03],
+            [+0.3, 0.3, 0.03],
+            [+0.3, -0.4, 0.03],
+            [-0.1, -0.4, 0.03],
+            [+0.6, -0.1, 0.03],
+            [-0.4, -0.1, 0.03]
+        ]
+
 
     def get_rotation(robot, i):
         if robot == "ur5":
@@ -3474,48 +3513,18 @@ def make_box_stacking_env(
         else:
             return positions[i]
 
-    robot_path, robot_type_prefix = get_robot_and_type_prefix(0)
-    all_robots.append(f"a1_{robot_type_prefix}")
 
-    C.addFile(robot_path, namePrefix="a1_").setParent(
-        C.getFrame("table")
-    ).setRelativePosition(get_position(robot_types[0], 0)).setRelativeQuaternion(
-        get_rotation(robot_types[0], 0)
-    ).setJoint(ry.JT.rigid)
+    for i in range(num_robots):
+        idx = i+1
 
-    # C.getFrame('a1_ur_coll0').setContact(-5)
-
-    if num_robots >= 2:
-        robot_path, robot_type_prefix = get_robot_and_type_prefix(1)
-        all_robots.append(f"a2_{robot_type_prefix}")
-
-        C.addFile(robot_path, namePrefix="a2_").setParent(
+        robot_path, robot_type_prefix = get_robot_and_type_prefix(i)
+        all_robots.append(f"a{idx}_{robot_type_prefix}")
+        C.addFile(robot_path, namePrefix=f"a{idx}_").setParent(
             C.getFrame("table")
-        ).setRelativePosition(get_position(robot_types[0], 1)).setRelativeQuaternion(
-            get_rotation(robot_types[1], 1)
+        ).setRelativePosition(get_position(robot_types[i], i)).setRelativeQuaternion(
+            get_rotation(robot_types[i], i)
         ).setJoint(ry.JT.rigid)
 
-    if num_robots >= 3:
-        robot_path, robot_type_prefix = get_robot_and_type_prefix(2)
-        all_robots.append(f"a3_{robot_type_prefix}")
-
-        C.addFile(robot_path, namePrefix="a3_").setParent(
-            C.getFrame("table")
-        ).setRelativePosition(get_position(robot_types[2], 2)).setRelativeQuaternion(
-            get_rotation(robot_types[2], 2)
-        ).setJoint(ry.JT.rigid)
-
-    if num_robots >= 4:
-        robot_path, robot_type_prefix = get_robot_and_type_prefix(3)
-        all_robots.append(f"a4_{robot_type_prefix}")
-
-        C.addFile(robot_path, namePrefix="a4_").setParent(
-            C.getFrame("table")
-        ).setRelativePosition(get_position(robot_types[3], 3)).setRelativeQuaternion(
-            get_rotation(robot_types[3], 3)
-        ).setJoint(ry.JT.rigid)
-
-    # C.getFrame('a2_ur_coll0').setContact(-5)
 
     w = 3
     d = 3
@@ -3550,6 +3559,7 @@ def make_box_stacking_env(
             pos = get_pos(j, k)
 
             C.addFrame("obj" + str(j) + str(k)).setParent(table).setShape(
+                # ry.ST.sphere, [0.05, 0.025]
                 ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition([pos[0], pos[1], pos[2]]).setMass(0.1).setColor(
                 np.random.rand(3)
@@ -3573,6 +3583,9 @@ def make_box_stacking_env(
 
         if cnt == num_boxes:
             break
+
+    # print("goal position")
+    # print(C.getFrame("goal21").getPosition())
 
     if view:
         C.view(True)
@@ -10326,12 +10339,15 @@ def make_rai_dual_ur5_env():
     # Robot 1 at world origin
     C.addFile(robot_path, namePrefix="a1_").setParent(world).setRelativePosition(
         [0, 0, 0]
-    ).setRelativeQuaternion([1, 0, 0, 0]).setJoint(ry.JT.rigid)
+    ).setRelativeQuaternion([0, 0, 0, 1]).setJoint(ry.JT.rigid)
 
     # Robot 2 offset by ~88cm in X, rotated 180° around Z to face robot 1
     C.addFile(robot_path, namePrefix="a2_").setParent(world).setRelativePosition(
         [0.881, 0, 0]
-    ).setRelativeQuaternion([0, 0, 0, 1]).setJoint(ry.JT.rigid)
+    ).setRelativeQuaternion([1, 0, 0, 0]).setJoint(ry.JT.rigid)
+
+    start_config_rai = np.array([0, -.5, 1, .5, -1.57, 0])
+    C.setJointState(np.concatenate([start_config_rai, start_config_rai]))
 
     def compute_go_to_pose(robot_prefix,):
         robot_base = robot_prefix + "base"
