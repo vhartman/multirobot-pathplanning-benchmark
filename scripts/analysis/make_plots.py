@@ -681,7 +681,7 @@ def main():
     make_success = not args.cost_only
 
     if args.use_paper_style:
-        plt.style.use("./examples/paper_2.mplstyle")
+        plt.style.use("./scripts/analysis/paper_2.mplstyle")
 
     yticks = []
     if len(args.yticks) > 0:
