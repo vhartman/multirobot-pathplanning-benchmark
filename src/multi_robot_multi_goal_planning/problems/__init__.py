@@ -22,6 +22,6 @@ if importlib.util.find_spec("pinocchio") is not None:
 if importlib.util.find_spec("mujoco") is not None:
     from . import mujoco_env
 
-from .registry import get_env_by_name, get_all_environments
+from .core.registry import get_env_by_name, get_all_environments
 
 __all__ = ["get_env_by_name", "get_all_environments"]

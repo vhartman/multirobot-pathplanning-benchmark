@@ -30,14 +30,14 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     DependencyType,
     generate_binary_search_indices,
 )
-from multi_robot_multi_goal_planning.problems.goals import SingleGoal
+from multi_robot_multi_goal_planning.problems.core.goals import SingleGoal
 from .termination_conditions import (
     PlannerTerminationCondition,
     RuntimeTerminationCondition,
 )
 from .shortcutting import robot_mode_shortcut
 from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
-from multi_robot_multi_goal_planning.problems.configuration import (
+from multi_robot_multi_goal_planning.problems.core.configuration import (
     Configuration,
     batch_config_dist,
     config_dist,

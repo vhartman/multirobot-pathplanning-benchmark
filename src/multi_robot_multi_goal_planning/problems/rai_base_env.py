@@ -19,7 +19,7 @@ from .planning_env import (
     DependencyType,
     SafePoseType,
 )
-from .configuration import (
+from .core.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,

@@ -10,7 +10,7 @@ from .planning_env import (
     generate_binary_search_indices,
 )
 
-from .configuration import (
+from .core.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
@@ -27,7 +27,7 @@ from .planning_env import (
     Task,
     BaseProblem,
 )
-from .goals import (
+from .core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -35,7 +35,7 @@ from .goals import (
 )
 
 
-from .registry import register
+from .core.registry import register
 
 
 class Sphere:

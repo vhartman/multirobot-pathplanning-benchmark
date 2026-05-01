@@ -6,7 +6,7 @@ import time
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from .dependency_graph import DependencyGraph
+from .core.dependency_graph import DependencyGraph
 
 from .rai_config import *
 from .planning_env import (
@@ -15,7 +15,7 @@ from .planning_env import (
     State,
     Task,
 )
-from .goals import (
+from .core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -23,7 +23,7 @@ from .goals import (
 )
 from .rai_base_env import rai_env
 
-from .registry import register
+from .core.registry import register
 
 
 @register([

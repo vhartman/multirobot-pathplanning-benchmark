@@ -9,13 +9,13 @@ from enum import Enum
 from typing import List, Dict, Optional, Any, Tuple
 from numpy.typing import NDArray
 
-from .configuration import (
+from .core.configuration import (
     Configuration,
     config_dist,
 )
-from .dependency_graph import DependencyGraph
-from .constraints import Constraint
-from .goals import (
+from .core.dependency_graph import DependencyGraph
+from .core.constraints import Constraint
+from .core.goals import (
     Goal,
     SingleGoal,
     GoalRegion,

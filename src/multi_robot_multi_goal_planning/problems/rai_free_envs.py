@@ -7,7 +7,7 @@ from .planning_env import (
     Task,
     SafePoseType
 )
-from .goals import (
+from .core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -16,7 +16,7 @@ from .goals import (
 from .rai_base_env import rai_env
 import multi_robot_multi_goal_planning.problems.rai_config as rai_config
 
-from .registry import register
+from .core.registry import register
 
 @register("rai.unassigned_tsp")
 class rai_two_dim_env(FreeMixin, rai_env):

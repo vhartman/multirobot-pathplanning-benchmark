@@ -10,6 +10,8 @@ import numpy as np
 
 from typing import List, Dict, Optional, Any
 
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from compute_confidence_intervals import computeConfidenceInterval
 
 

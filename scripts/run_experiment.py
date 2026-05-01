@@ -27,7 +27,7 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
-from make_plots import make_cost_plots
+from analysis.make_plots import make_cost_plots
 # np.random.seed(100)
 
 from multi_robot_multi_goal_planning.planners import (

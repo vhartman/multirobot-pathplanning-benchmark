@@ -8,7 +8,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
 )
-from multi_robot_multi_goal_planning.problems.configuration import Configuration
+from multi_robot_multi_goal_planning.problems.core.configuration import Configuration
 
 
 # taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py

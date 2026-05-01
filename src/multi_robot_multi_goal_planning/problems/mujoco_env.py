@@ -11,7 +11,7 @@ from .planning_env import (
     generate_binary_search_indices,
 )
 
-from .configuration import (
+from .core.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
@@ -37,7 +37,7 @@ from .planning_env import (
     SingleGoal,
 )
 
-from .registry import register
+from .core.registry import register
 
 import mujoco
 from mujoco import mjx

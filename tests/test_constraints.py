@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 import copy
 
-from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration
+from multi_robot_multi_goal_planning.problems.core.configuration import NpConfiguration
 
 from multi_robot_multi_goal_planning.problems.constraints import (
     AffineConfigurationSpaceEqualityConstraint,
