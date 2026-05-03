@@ -473,22 +473,42 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
     desired_pose = self._get_desired_obj_pose_at_time(t)
     q_new = q.copy()
 
-    # This implementation is somewhat inefficient/computationally expensive as is
-    for i in range(len(self.ee_names)):
-      desired_ee_pose = compute_end_effector_pose(desired_pose, self.transformation[i])
+    # # TODO (version 1) This implementation is somewhat inefficient/computationally expensive as is
+    # for i in range(len(self.ee_names)):
+    #   desired_ee_pose = compute_end_effector_pose(desired_pose, self.transformation[i])
       
-      for j in range(self.max_num_ik_iters):
-        env.C.setJointState(q_new, self.joints)
-        [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_names[i]], 1, desired_ee_pose)
+    #   for j in range(self.max_num_ik_iters):
+    #     env.C.setJointState(q_new, self.joints)
+    #     [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_names[i]], 1, desired_ee_pose)
 
-        if np.linalg.norm(err) < 1e-3:
-          break
+    #     if np.linalg.norm(err) < 1e-3:
+    #       break
 
-        q_dot = np.linalg.pinv(jac) @ err
-        q_new = q_new - self.ik_gain * q_dot # dt for rollout (traj discretization), not IK convergence
+    #     q_dot = np.linalg.pinv(jac) @ err
+    #     q_new = q_new - self.ik_gain * q_dot # dt for rollout (traj discretization), not IK convergence
 
     # env.C.view(False)
     # time.sleep(0.1)
+
+    # TODO (version 2) with joint IK for all EEs simulatneously
+    for j in range(self.max_num_ik_iters):
+      env.C.setJointState(q_new, self.joints)
+      errs, jacs = [], []
+
+      for i in range(len(self.ee_names)):
+        desired_ee_pose = compute_end_effector_pose(desired_pose, self.transformation[i])
+        [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_names[i]], 1, desired_ee_pose)
+        errs.append(err)
+        jacs.append(jac)
+
+      err = np.concatenate(errs)
+      jac = np.vstack(jacs)
+
+      if np.linalg.norm(err) < 1e-3:
+        break
+
+      q_dot = np.linalg.pinv(jac) @ err
+      q_new = q_new - self.ik_gain * q_dot
 
     return q_new
 
@@ -634,7 +654,7 @@ class JogJoint(BaseDeterministicTimedSkill):
   def done(self, t, q, env):
     #if t > self.duration:
     #print(t%10)
-    if t > 1.0:
+    if t >= 1.0:
       return True
 
     return False
