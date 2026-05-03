@@ -3418,8 +3418,8 @@ def make_box_stacking_env(
     )
 
     ur5_path = os.path.join(
-        # os.path.dirname(__file__), "../assets/models/rai/ur5/ur5.g"
-        os.path.dirname(__file__), "../assets/models/rai/ur5_vamp/ur5_vamp.g"
+        # os.path.dirname(__file__), "../../assets/models/rai/ur5/ur5.g"
+        os.path.dirname(__file__), "../../assets/models/rai/ur5_vamp/ur5_vamp.g"
     )
 
     kuka_path = os.path.join(
@@ -5660,10 +5660,10 @@ def make_static_fr3_duo_config():
         ry.ST.box, size=[20, 20, 0.02, 0.005]
     ).setColor([0.9, 0.9, 0.9]).setContact(1)
 
-    fr3_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/fr3/static_mobile_fr3_base.g")
+    fr3_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/fr3/static_mobile_fr3_base.g")
     
-    fr3_left_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/fr3/left_fr3.g")
-    fr3_right_path = os.path.join(os.path.dirname(__file__), "../assets/models/rai/fr3/right_fr3.g")
+    fr3_left_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/fr3/left_fr3.g")
+    fr3_right_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/fr3/right_fr3.g")
 
     C.addFile(fr3_path, namePrefix="fr3_")
 
@@ -7086,7 +7086,7 @@ def make_mobile_manip_with_small_stones_env(num_robots, wall_x=5, wall_z=5):
     )
 
     mobile_robot_path = os.path.join(
-        os.path.dirname(__file__), "../assets/models/rai/mobile-manipulator.g"
+        os.path.dirname(__file__), "../../assets/models/rai/mobile-manipulator.g"
     )
 
     robots = []
@@ -10332,8 +10332,8 @@ def make_rai_dual_ur5_env():
     ).setPosition([0.4, 0, 0.3]).setColor([0.1, 0.1, 0.1, 0.2]).setContact(0)
 
     robot_path = os.path.join(
-        os.path.dirname(__file__), "../assets/models/rai/ur5/ur5.g"
-        # os.path.dirname(__file__), "../assets/models/rai/ur5/ur5_spherized.g"
+        os.path.dirname(__file__), "../../assets/models/rai/ur5/ur5.g"
+        # os.path.dirname(__file__), "../../assets/models/rai/ur5/ur5_spherized.g"
     )
 
     # Robot 1 at world origin
@@ -10404,8 +10404,8 @@ def make_rai_quad_ur5_env():
     ).setPosition([0., 0, 0.3]).setColor([0.1, 0.1, 0.1, 0.2]).setContact(0)
 
     robot_path = os.path.join(
-        os.path.dirname(__file__), "../assets/models/rai/ur5/ur5.g"
-        # os.path.dirname(__file__), "../assets/models/rai/ur5/ur5_spherized.g"
+        os.path.dirname(__file__), "../../assets/models/rai/ur5/ur5.g"
+        # os.path.dirname(__file__), "../../assets/models/rai/ur5/ur5_spherized.g"
     )
 
     # Robot 1 at world origin

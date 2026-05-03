@@ -12,7 +12,7 @@ from .planning_env import (
     generate_binary_search_indices,
 )
 
-from .configuration import (
+from .core.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
@@ -37,7 +37,7 @@ from .planning_env import (
     DependencyType,
     SafePoseType,
 )
-from .goals import (
+from .core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -50,7 +50,7 @@ from pathlib import Path
 
 from pinocchio.visualize import MeshcatVisualizer
 
-from .registry import register
+from .core.registry import register
 
 
 @jit((float64[:, :], float64[:, :]), nopython=True)

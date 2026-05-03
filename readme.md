@@ -26,7 +26,7 @@ Does the same thing as the command above, and is recommended. In that case, the 
 
 After the installation, you can run 
 ```
-python3 examples/run_planner.py abstract.test  --max_time=10 --optimize
+python3 scripts/run_planner.py abstract.test  --max_time=10 --optimize
 ```
 to test if the installation went well.
 This runs one of the abstract environments that do not require any more fancy backend with the default planner.
@@ -51,13 +51,13 @@ where you can clearly see **multiple robots** do **multiple tasks** (i.e., grasp
 A list of all problems can be generated with
 
 ```
-python3 examples/show_problems.py --mode list_all
+python3 scripts/show_problems.py --mode list_all
 ```
 
 and the problems/scenarios can be displayed with
 
 ```
-python3 examples/show_problems.py [env_name] --mode modes
+python3 scripts/show_problems.py [env_name] --mode modes
 ```
 
 which shows a specific environment and all its subgoals.
@@ -67,13 +67,13 @@ which shows a specific environment and all its subgoals.
 A planner can be run with 
 
 ```
-python3 examples/run_planner.py [env] [options]
+python3 scripts/run_planner.py [env] [options]
 ```
 
 which runs the default planner on the environment with the default configuration. A concrete example would be
 
 ```
-python3 examples/run_planner.py rai.2d_handover --optimize --max_time=50 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max
+python3 scripts/run_planner.py rai.2d_handover --optimize --max_time=50 --distance_metric=euclidean --per_agent_cost_function=euclidean --cost_reduction=max
 ```
 
 Planners can be configured with a configuration file. For examples, see `configs/defaults`.
@@ -82,7 +82,7 @@ All options that can be set with a configuration file can also be set in the com
 An experiment (i.e., multiple runs of multiple planners or of the same planner with multiple options) can be run with 
 
 ```
-python3 ./examples/run_experiment.py [path to experiment config]
+python3 ./scripts/run_experiment.py [path to experiment config]
 ```
 as a demo how such an experiment config file looks, we suggest the files in `confg/demo`.
 
@@ -90,7 +90,7 @@ as a demo how such an experiment config file looks, we suggest the files in `con
 Once an experiment finished (or even before - useful for looking at progress of the experiment/preliminary results), you can produce the success/cost evolution plots with 
 
 ```
-python3 examples/make_plots.py [path_to_experiment_folder]
+python3 scripts/analysis/make_plots.py [path_to_experiment_folder]
 ```
 There are a couple of flags to save the plot if desired, and to possibly change the style (`--png --use_paper_style --save`).
 
@@ -98,7 +98,7 @@ There are a couple of flags to save the plot if desired, and to possibly change 
 A path can be visualized  and possibly exported (using `--export`) with the command below assuming that the path was saved before (with `--save` for `run_planner.py` for example.)
 
 ```
-python3 examples/display_single_path.py [filename] [environment_name]
+python3 scripts/viz/display_single_path.py [filename] [environment_name]
 ```
 
 The images are saved to the folder `z.vid`, and can be concatenated to a video with 
@@ -172,7 +172,7 @@ This could and should be expanded.
 You can run the commands above for running a planner, and generate a profile while running it with
 
 ```
-py-spy record -F -r 500 -o profile.out --nonblocking -f speedscope -- python3  examples/run_planner.py [env] [options]
+py-spy record -F -r 500 -o profile.out --nonblocking -f speedscope -- python3  scripts/run_planner.py [env] [options]
 ```
 
 (requiring an installation of py-spy).
@@ -181,14 +181,14 @@ The resulting profile can be visualized with https://www.speedscope.app/.
 Additionally, to see more easily where time is spent in the planner during a complete run, you can visualize the profile with 
 
 ```
-python examples/plot_aggregated_pyspy.py [profile.out]
+python scripts/analysis/plot_aggregated_pyspy.py [profile.out]
 ```
 which discretizes the profile into buckets, and plots where the time is spent over the complete runtime, highlighting stuff like collision checking and shortcutting.
 
 Alternatively, `kernprof` provides line-by-line profiling, by simply adding `@profile` as decorator to the function of interest, and running planner via
 
 ```
-kernprof -l  examples/run_planner.py [env] [options]
+kernprof -l  scripts/run_planner.py [env] [options]
 ```
 
 # Extension & Future work

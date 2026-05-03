@@ -5,10 +5,10 @@ import random
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
+from multi_robot_multi_goal_planning.problems.core.dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai.rai_config as rai_config
-from ..configuration import config_dist
+from ..core.configuration import config_dist
 
 # from multi_robot_multi_goal_planning.problems.rai_config import *
 from ..planning_env import (
@@ -38,11 +38,11 @@ from ..skills import (
     RelativePoseReaching
 )
 
-from ..constraints import (
+from ..core.constraints import (
     relative_pose
 )
 
-from ..goals import (
+from ..core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -50,7 +50,7 @@ from ..goals import (
 )
 from ..rai_base_env import rai_env
 
-from ..registry import register
+from ..core.registry import register
 
 ############
 # Debugging/testing envs: single agent

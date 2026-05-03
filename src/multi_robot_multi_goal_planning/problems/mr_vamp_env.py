@@ -11,7 +11,7 @@ from .planning_env import (
     generate_binary_search_indices,
 )
 
-from .configuration import (
+from .core.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
@@ -36,7 +36,7 @@ from .planning_env import (
     DependencyType,
     SafePoseType,
 )
-from .goals import (
+from .core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -48,7 +48,7 @@ sys.path.append("/usr/local/lib/python3.10/dist-packages")  # TODO: install mr_p
 import mr_planner_core
 sys.path.pop()
 
-from .registry import register
+from .core.registry import register
 
 import meshcat
 import copy

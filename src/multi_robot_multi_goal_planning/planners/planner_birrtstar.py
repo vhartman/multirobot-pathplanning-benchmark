@@ -9,7 +9,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
 )
-from multi_robot_multi_goal_planning.problems.configuration import Configuration
+from multi_robot_multi_goal_planning.problems.core.configuration import Configuration
 
 from .rrtstar_base import (
     BaseRRTConfig,

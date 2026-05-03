@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 
 from .planning_env import BaseProblem, Mode, State
-from .configuration import config_dist
+from .core.configuration import config_dist
 
 
 def compute_reachable_modes(env: BaseProblem, max_iter: int = 500) -> tuple[Mode, ...]:

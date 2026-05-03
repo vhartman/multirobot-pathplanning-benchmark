@@ -1,7 +1,7 @@
 import numpy as np
 import random
 
-from ..dependency_graph import DependencyGraph
+from ..core.dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai.rai_config as rai_config
 
@@ -19,7 +19,7 @@ from ..planning_env import (
     DependencyType,
     SafePoseType,
 )
-from ..goals import (
+from ..core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -27,7 +27,7 @@ from ..goals import (
 )
 from ..rai_base_env import rai_env
 
-from ..registry import register
+from ..core.registry import register
 
 # In the follwoing, we want to test planners on a variety of tings
 # In particular, we first want to establish a few simple problems
