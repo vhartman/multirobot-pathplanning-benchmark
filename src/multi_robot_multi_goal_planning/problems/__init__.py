@@ -2,12 +2,12 @@ import os
 import sys
 import importlib.util
 
-from . import rai_envs
-from . import rai_single_goal_envs
-from . import rai_unordered_envs
-from . import rai_free_envs
+from .rai import rai_envs
+from .rai import rai_single_goal_envs
+from .rai import rai_unordered_envs
+from .rai import rai_free_envs
+from .rai import rai_envs_constrained
 from . import abstract_env
-from . import rai_envs_constrained
 
 import sys
 sys.path.append("/usr/local/lib/python3.10/dist-packages")  # TODO: install mr_planner_core into venv

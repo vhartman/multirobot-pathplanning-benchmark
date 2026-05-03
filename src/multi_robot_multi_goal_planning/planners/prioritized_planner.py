@@ -36,7 +36,7 @@ from .termination_conditions import (
     RuntimeTerminationCondition,
 )
 from .shortcutting import robot_mode_shortcut
-from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
+from multi_robot_multi_goal_planning.problems.rai.rai_envs import rai_env
 from multi_robot_multi_goal_planning.problems.core.configuration import (
     Configuration,
     batch_config_dist,

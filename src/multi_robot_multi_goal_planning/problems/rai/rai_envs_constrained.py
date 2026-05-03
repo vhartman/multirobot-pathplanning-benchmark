@@ -7,11 +7,11 @@ from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.core.dependency_graph import DependencyGraph
 
-import multi_robot_multi_goal_planning.problems.rai_config as rai_config
-from .core.configuration import config_dist
+from . import rai_config
+from ..core.configuration import config_dist
 
 # from multi_robot_multi_goal_planning.problems.rai_config import *
-from .planning_env import (
+from ..planning_env import (
     BaseModeLogic,
     SequenceMixin,
     DependencyGraphMixin,
@@ -26,14 +26,14 @@ from .planning_env import (
     DependencyType,
     SafePoseType,
 )
-from .core.goals import (
+from ..core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
     ConditionalGoal,
 )
-from .rai_base_env import rai_env
-from .core.constraints import (
+from ..rai_base_env import rai_env
+from ..core.constraints import (
     AffineConfigurationSpaceInequalityConstraint,
     RelativeAffineTaskSpaceEqualityConstraint,
     AffineTaskSpaceEqualityConstraint,
@@ -43,7 +43,7 @@ from .core.constraints import (
     relative_pose
 )
 
-from .core.registry import register
+from ..core.registry import register
 
 @register("rai.constrained_pose")
 class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):

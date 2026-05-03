@@ -4,7 +4,7 @@ import numpy as np
 from typing import List, Optional
 from numpy.typing import NDArray
 
-from .rai_config import get_robot_joints
+from .rai.rai_config import get_robot_joints
 from .planning_env import (
     BaseProblem,
     Mode,

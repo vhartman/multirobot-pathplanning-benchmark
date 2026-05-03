@@ -1,22 +1,22 @@
 import robotic as ry
 import numpy as np
 
-from .planning_env import (
+from ..planning_env import (
     BaseModeLogic,
     FreeMixin,
     Task,
     SafePoseType
 )
-from .core.goals import (
+from ..core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
     ConditionalGoal,
 )
-from .rai_base_env import rai_env
-import multi_robot_multi_goal_planning.problems.rai_config as rai_config
+from ..rai_base_env import rai_env
+from . import rai_config
 
-from .core.registry import register
+from ..core.registry import register
 
 @register("rai.unassigned_tsp")
 class rai_two_dim_env(FreeMixin, rai_env):
