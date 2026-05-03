@@ -837,7 +837,16 @@ class rai_dual_arm_transport(SequenceMixin, rai_env):
             obj_goal_pose
         ]
 
+        self.pre_pick_pose = rai_config.compute_bimanual_pre_pick_pose(
+            self.C, self.pick_pose, z_offset=0.0, x_widen=0.15,
+        )
+
         self.tasks = [
+            Task(
+                "pre_pick",
+                ["a1", "a2"],
+                SingleGoal(self.pre_pick_pose),
+            ),
             Task(
                 "pick_1",
                 ["a1", "a2"],
@@ -862,7 +871,8 @@ class rai_dual_arm_transport(SequenceMixin, rai_env):
         ]
 
         self.sequence = self._make_sequence_from_names(
-            ["pick_1", "move", "terminal"]
+            # ["pick_1", "move", "terminal"]
+            ["pre_pick", "pick_1", "move", "terminal"]
         )
 
         self.collision_tolerance = 0.001

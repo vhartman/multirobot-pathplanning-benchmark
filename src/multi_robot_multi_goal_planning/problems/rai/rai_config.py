@@ -4420,6 +4420,52 @@ def make_bimanual_grasping_env(obstacle, rotate=True, view: bool = False):
     return C, robots, keyframes
 
 
+def compute_bimanual_pre_pick_pose(
+    C,
+    pick_pose,
+    box: str = "obj1",
+    ee_a1: str = "a1_ur_ee_marker",
+    ee_a2: str = "a2_ur_ee_marker",
+    z_offset: float = 0.15,
+    x_widen: float = 0.15,
+):
+    """
+    Pre-grasp config: both EEs z_offset above the grasp position and x_widen further apart. 
+    Added as intermediate between home_pose and the bimanual grasp pose. Without, 
+    rrt_skills fails to plan from home -> pick_1. 
+
+    # TODO debug env and find root cause
+    """
+    C.setJointState(pick_pose)
+
+    komo = ry.KOMO(C, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0])
+    komo.addObjective([], ry.FS.jointLimits, [], ry.OT.ineq, [1e1], [-0.0])
+    komo.addControlObjective([], 0, 1e-1)
+
+    komo.addObjective(
+        [1], ry.FS.positionRel, [ee_a1, box],
+        ry.OT.eq, [1e1, 1e1, 1e1], [-(0.1 + x_widen), 0, z_offset],
+    )
+    komo.addObjective(
+        [1], ry.FS.positionRel, [ee_a2, box],
+        ry.OT.eq, [1e1, 1e1, 1e1], [+(0.1 + x_widen), 0, z_offset],
+    )
+    komo.addObjective([1], ry.FS.scalarProductXX, [ee_a1, box], ry.OT.eq, [1e1], [1])
+    komo.addObjective([1], ry.FS.scalarProductZZ, [ee_a1, box], ry.OT.eq, [1e1], [1])
+    komo.addObjective([1], ry.FS.scalarProductXX, [ee_a2, box], ry.OT.eq, [1e1], [-1])
+    komo.addObjective([1], ry.FS.scalarProductZZ, [ee_a2, box], ry.OT.eq, [1e1], [1])
+
+    keyframes = solve_komo_problem(komo, 50, C, False, 1, 1.5)
+    if keyframes is None:
+        raise RuntimeError(
+            "compute_bimanual_pre_pick_pose: KOMO failed "
+            f"(z_offset={z_offset}, x_widen={x_widen}). "
+            "Try smaller offsets."
+        )
+    return np.asarray(keyframes[0])
+
+
 def make_panda_waypoint_env(
     num_robots: int = 3,
     num_waypoints: int = 6,
