@@ -1828,7 +1828,7 @@ class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
     ("rai.box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
 ])
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
-    def __init__(self, num_robots=6, num_boxes: int = 8, robot_type="ur10"):
+    def __init__(self, num_robots=4, num_boxes: int = 8, robot_type="ur10"):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
             num_robots, num_boxes, robot_types=robot_type
         )
