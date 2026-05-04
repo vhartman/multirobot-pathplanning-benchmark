@@ -217,7 +217,6 @@ def make_piano_mover_env(view: bool = False):
             komo.view(True, "IK solution")
 
         keyframes = komo.getPath()
-        print(keyframes)
         return keyframes
 
     all_keyframes = []
@@ -315,8 +314,6 @@ class rai_unassigned_piano_mover(FreeMixin, rai_env):
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
-        print(all_keyframes)
-
         dim = 3
         if not agents_can_rotate:
             dim = 2
@@ -371,11 +368,8 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
             
             # print("robot index", robot_index)
 
-            print(primitive_type)
             if primitive_type == "pick":
                 for t, k in zip(pick_task_names, qs[0]):
-                    print(robots)
-                    print(k)
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
@@ -403,9 +397,6 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
         for k, v in place_tasks.items():
             self.task_groups.append(v)
 
-        print(self.task_groups)
-        print(self.task_dependencies)
-
         self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
         self.terminal_task = len(self.tasks) - 1
@@ -423,7 +414,6 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 @register("rai.unassigned_stacking")
@@ -458,16 +448,12 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
             if len(box_order) == 0 or box_order[-1] != box_name:
                 box_order.append(box_name)
 
-        print("box_order")
-        print(box_order)
-
         for r, box_name, qs in keyframes:
             if box_name not in pick_tasks:
                 pick_tasks[box_name] = []
                 place_tasks[box_name] = []
 
             robot_index = self.robots.index(r)
-            print(robot_index)
             
             cnt = 0
             for t, k in zip(pick_task_names, qs):
@@ -499,9 +485,6 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
             all_place_task_ids = place_tasks[box_name]
             all_prev_place_task_ids = place_tasks[box_order[i-1]]
 
-            print("place ids for box", all_place_task_ids)
-            print("prev place ids", all_prev_place_task_ids)
-
             for r_id, task_id in all_place_task_ids:
                 self.task_dependencies_any[task_id] = [task_id_others for _, task_id_others in all_prev_place_task_ids]
 
@@ -512,24 +495,24 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
         for k, v in place_tasks.items():
             self.task_groups.append(v)
 
-        print("task groups", self.task_groups)
-        print("dependencies", self.task_dependencies)
+        # print("task groups", self.task_groups)
+        # print("dependencies", self.task_dependencies)
 
-        print("Dependencies")
-        for k, v in self.task_dependencies.items():
-            print(self.tasks[k].name)
-            for idx in v:
-                print(self.tasks[idx].name)
+        # print("Dependencies")
+        # for k, v in self.task_dependencies.items():
+        #     print(self.tasks[k].name)
+        #     for idx in v:
+        #         print(self.tasks[idx].name)
             
-            print()
+        #     print()
 
-        print("Dependencies any")
-        for k, v in self.task_dependencies_any.items():
-            print("curr task", self.tasks[k].name)
-            for idx in v:
-                print(self.tasks[idx].name)
+        # print("Dependencies any")
+        # for k, v in self.task_dependencies_any.items():
+        #     print("curr task", self.tasks[k].name)
+        #     for idx in v:
+        #         print(self.tasks[idx].name)
             
-            print()
+        #     print()
 
         self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
@@ -548,7 +531,6 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 @register("rai.unordered_bottles")
@@ -667,5 +649,4 @@ class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])

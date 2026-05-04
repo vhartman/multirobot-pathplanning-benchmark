@@ -303,11 +303,8 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
             
             # print("robot index", robot_index)
 
-            print(primitive_type)
             if primitive_type == "pick":
                 for t, k in zip(pick_task_names, qs[0]):
-                    print(robots)
-                    print(k)
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
@@ -344,5 +341,4 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
