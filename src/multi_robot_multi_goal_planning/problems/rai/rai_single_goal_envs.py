@@ -182,8 +182,6 @@ class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
         self.robots = ["a0", "a1", "a2"]
         self.robots = self.robots[:num_robots]
 
-        print(self.robots)
-
         rai_env.__init__(self)
 
         self.tasks = [Task("terminal", self.robots, SingleGoal(keyframes[0]))]
@@ -216,8 +214,6 @@ class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
         self.C_coll = None
 
         self.robots = ["a0"]
-
-        print(self.robots)
 
         rai_env.__init__(self)
 

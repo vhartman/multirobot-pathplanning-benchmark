@@ -712,7 +712,6 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
 
         self.safe_pose = {}
         for r in self.robots:
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 # TODO unfinished
@@ -1689,7 +1688,6 @@ class rai_skill_handover(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
             self.safe_pose[r][3] = -2
 
