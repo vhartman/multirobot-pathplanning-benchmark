@@ -498,10 +498,17 @@ class InformedSampling:
 
                 else:
                     # 3. Randomly picks a mode from newly generated list of modes (in_between_mode_cache) 
-                    # Completely IGNORES the reached_modes!!!
-                    m = random.choice(
-                        in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
-                    )
+                    # Completely IGNORES the reached_modes!!! Therefore, filter before sampling
+                    in_between_modes = in_between_mode_cache[
+                        (path[start_ind].mode, path[end_ind].mode)
+                    ]
+                    candidate_modes = [
+                        mode for mode in in_between_modes if mode in reached_modes
+                    ]
+                    if not candidate_modes:
+                        continue
+
+                    m = random.choice(candidate_modes) 
 
                 # k = random.randint(start_ind, end_ind)
                 # m = path[k].mode
@@ -514,9 +521,6 @@ class InformedSampling:
             if self.planning_approach == "sampling_based" and active_mode != m:
                 continue
 
-            if m not in reached_modes: # reached_modes = not_skill_modes in this case
-                num_attempts -= 1 # Don't waste an attempt budget on a rejected mode
-                continue
 
             # print(m)
 
@@ -822,10 +826,17 @@ class InformedSampling:
                 # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
 
                 # 3. Randomly picks a mode from newly generated list of modes (in_between_mode_cache) 
-                # Completely IGNORES the reached_modes!!!
-                mode = random.choice(
-                    in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
-                )
+                # Completely IGNORES the reached_modes!!! Therefore, filter before sampling
+                in_between_modes = in_between_mode_cache[
+                    (path[start_ind].mode, path[end_ind].mode)
+                ]
+                candidate_modes = [
+                    mode for mode in in_between_modes if mode in reached_modes
+                ]
+                if not candidate_modes:
+                    continue
+
+                mode = random.choice(candidate_modes) 
 
                 # k = random.randint(start_ind, end_ind)
                 # mode = path[k].mode
@@ -836,10 +847,6 @@ class InformedSampling:
                 mode = self.sample_mode(reached_modes=reached_modes)
 
             if self.planning_approach == "sampling_based" and active_mode != mode:
-                continue
-
-            if mode not in reached_modes: # reached_modes = not_skill_modes in this case
-                num_attempts -= 1  # Don't waste an attempt budget
                 continue
 
             # print(m)
