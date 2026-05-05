@@ -151,19 +151,19 @@ class RRTSkillsConfig:
     extension_strategy: str = "connect" # "linear" | "connect"
 
     # Connect extension
-    eta_step: float = 0.1 # TODO!
-    connect_max_steps: int = 30 # TODO!
+    eta_step: float = 0.1
+    connect_max_steps: int = 30
     connect_target_policy: str = "transition" # "transition" | "all"
-    connect_add_all_nodes: bool = False
+    connect_add_all_nodes: bool = True
 
-    p_goal: float = 0.1 # TODO!
+    p_goal: float = 0.1
     # p_terminal_goal: float = 0.1 
 
     # Mode sampling
-    mode_sampling_type: str = "frontier" # "uniform" | "greedy" | "frontier"
-    init_mode_sampling_type: str = "greedy"
-    p_greedy: float = 0.98 # TODO!
-    p_frontier: float = 0.98 # TODO!
+    mode_sampling_type: str = "uniform" # "uniform" | "greedy" | "frontier"
+    init_mode_sampling_type: str = "frontier"
+    p_greedy: float = 0.98
+    p_frontier: float = 0.98
     
     distance_metric: str = "max_euclidean"
     with_mode_validation: bool = False # Geometric pre-check on mode (blacklist_modes) # TODO
@@ -176,26 +176,26 @@ class RRTSkillsConfig:
     inactive_max_vel: float = 2.0 # TODO define value, units,...
 
     # RRT*
-    use_rrt_star: bool = True # TODO!
-    rewire_after_first_solution: bool = False 
-    # rewire_radius: float = 0.5
+    use_rrt_star: bool = True
+    rewire_after_first_solution: bool = True 
+    rewire_radius_max: float = 1.0
     gamma_rrtstar: float = 0.0
 
     # Informed sampling
-    try_informed_sampling: bool = True # TODO! 
+    try_informed_sampling: bool = True
     locally_informed_sampling: bool = False
     informed_batch_size: int = 300 # Irrelevant in "sampling_based" mode (one config per iter)
     informed_transition_batch_size: int = 100 # Irrelevant in "sampling_based" mode (one config per iter)
 
     # Shortcutting (post-processing)
-    try_shortcutting: bool = True # TODO!
+    try_shortcutting: bool = True
     shortcutting_mode: str = "round_robin"
-    periodic_shortcutting_iters: int = 1000
+    periodic_shortcutting_iters: int = 500
     final_shortcutting_iters: int = 1000
     shortcutting_interpolation_resolution: float = 0.1
-    shortcut_period_iters: int = 1000
+    shortcut_period_iters: int = 500 #100 # 500
 
-    sync_shortcut_to_tree: bool = False # TODO!
+    sync_shortcut_to_tree: bool = True
 
     # BRRT*
     is_bidirectional: bool = False
@@ -344,18 +344,18 @@ CURRENT TODOS
 # TODO [ ] in _sample_transition_config consider taking random node from tree for inactive instead of random sampling? (seems like tree struggles to grow with random sampling in certain envs -> yes, random sampling is the idea, but doesn't seem to be efficient -> maybe something else is the problem..)
 # TODO [ ] in _check_transitions, config check really needed or if config ok in modeA -> ok in modeB?
 # TODO [ ] in _sample_transition_config use a smarter approach than random config for inactive robots
-# TODO [o] in _linear_steer fix the dist computation (accidentally used cost function..)
-# TODO [o] in _initialize_planner compare using eta=sqrt(d) and eta=sqrt(d/#robots)
+# TODO [x] in _linear_steer fix the dist computation (accidentally used cost function..)
+# TODO [x] in _initialize_planner compare using eta=sqrt(d) and eta=sqrt(d/#robots)
 
 # Improvements
 # TODO [ ] blacklisting
 # TODO [ ] exploit transition nodes already found, just like _sample_goal is doing
 # TODO [ ] informed sampling in skill modes (inactive-DOF-only sampler. otherwise sampler wastes effort computing and validating a FULL-config sample when only inactive part matters..)
-# TODO! [ ] add sc path back to tree
+# TODO [x] add sc path back to tree
 # TODO [ ] detect cost improvement from rewiring without waiting for periodic check (I think that might be what makes planner_rrtstar good..)
 # TODO [ ] tune shortcutting_iters (too frequent -> tree small changes, waste of time / too infrequent -> misses improvements from rewiring)
-# TODO! [ ] track best transition nodes (lowest cost) in some transition registry so cheaper terminal candidate can be found via another transition or rewiring
-# TODO [ ] adaptive p_goal (0.3 till solution_node is not None -> then 0.1 e.g., to lower during the optimization phase)
+# TODO [ ] track best transition nodes (lowest cost) in some transition registry so cheaper terminal candidate can be found via another transition or rewiring
+# TODO [x] adaptive p_goal (0.3 till solution_node is not None -> then 0.1 e.g., to lower during the optimization phase)
 # TODO [ ] tune hyperparams
 # TODO [ ] shortcuts self.best_path but not a freshly extracted path from self.solution:node after rewiring..
 
@@ -364,13 +364,13 @@ CURRENT TODOS
 # TODO [o] skill edge cost correct computation 
 
 # RRT*
-# TODO! [o] add rewiring (RRT*)
-# TODO! [ ] rewire only in per-mode-subtree, does not change parents across mode boundaries (_propagate_cost_improvement does propagate cost values across modes)
+# TODO [x] add rewiring (RRT*)
+# TODO [x] rewire only in per-mode-subtree, does not change parents across mode boundaries (_propagate_cost_improvement does propagate cost values across modes)
 # TODO [ ] (later) rewiring in skill modes (inactive parts)
-# TODO! [ ] how to do rrt* with rrt-connect when not adding all the intermediate nodes? Otherwise long edges (from connect) can't be rewired with the rewiring radius..
+# TODO [x] how to do rrt* with rrt-connect when not adding all the intermediate nodes? Otherwise long edges (from connect) can't be rewired with the rewiring radius..
 # TODO! [ ] old rrtstar is doing mode-boundary rewiring whereas ours doesn't
 # TODO! [ ] old rrtstar keeps/scans transition or terminal candidates and regenerates the path from the current lowest-cost terminal cnadidate, whereas we only check the just-created node/seeds
-# TODO [ ] rewiring improvements invisible unless a newly added terminal node improves the best path?
+# TODO [x] rewiring improvements invisible unless a newly added terminal node improves the best path?
 # TODO [ ] in _find_best_parent, seeding best_parent = n_near needs edge collision check? 
 # TODO [ ] add bidirectional (BRRT*) in non skill modes (check first if old BIRRT* really is faster)
 
@@ -914,21 +914,16 @@ class RRTSkills(BasePlanner):
     def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode, is_skill: bool = False) -> Node:
         """
         Handles node creation and addition, including RRT* parent optimization
-
-        NOTE: _find_best_parent only runs after first solution is found. Before that, it's wasted work 
-        (no cost to optimize yet) that slows down init-solve.
         """
-        if is_skill:
-            parent = n_near
-            cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
-            cost = parent.cost + cost_to_parent
-        elif self._should_rewire(): # TODO check if my logic is correct with rewiring only after init sol
-            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode)
-        else:
+        if is_skill or not self._should_rewire():
+            # Skill node or RRT* inactive -> always attach to n_near
             parent = n_near
             cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
             cost = n_near.cost + cost_to_parent
-
+        else:
+            # Non-skill node + RRT* active -> run RRT* choose parent
+            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode)
+        
         # Create
         n_new = Node(state_new, parent=parent)
         n_new.cost = cost
@@ -1036,11 +1031,30 @@ class RRTSkills(BasePlanner):
         # Remove interpolated points used in shortcutting (collision check)
         return shortcutting.remove_interpolated_nodes(shortcut_path)
 
-    def _sync_shortcut_to_tree(self, shortcut_path: List[State]): # TODO
+    def _sync_shortcut_to_tree(self, shortcut_path: List[State]):
         """
-        Inserts shortcutted path nodes into the tree as a connected chain
+        Inserts the shortcutted path back into the tree as a connected chain.
+        - Called after a successful periodic shortcut when sync_shortcut_to_tree=True
+        - Preserves skill waypoints and mode-switch boundaries exactly
+        - # TODO run best-parent/rewire during sync (attention -> skill nodes)        
         """
-        raise not NotImplementedError
+        parent_node = self.tree.root
+        
+        for state in shortcut_path[1:]:
+            new_node = Node(state, parent=parent_node)
+            new_node.cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
+            new_node.cost = parent_node.cost + new_node.cost_to_parent
+
+            if state.is_skill_waypoint:
+                new_node.is_skill_waypoint = True
+                new_node.skill_step = parent_node.skill_step + 1
+
+            self.tree.subtrees[state.mode].add_node(new_node)
+            parent_node.children.append(new_node)
+            parent_node = new_node
+        
+        self.terminal_nodes.append(parent_node)
+        self.solution_node = parent_node
 
     def _extract_path(self, node: Node) -> List[State]:
         """
@@ -1113,8 +1127,10 @@ class RRTSkills(BasePlanner):
             f"[{tag}] it={iterations} nodes={nodes} modes={len(self.reached_modes)} "
             f"best={self.best_cost:.3f} sol={sol_cost:.3f} "
             f"etaMacro={self.eta:.2f} etaStep={self.config.eta_step:.2f} "
+            f"rMax={self.config.rewire_radius_max:.2f} "
             f"rewire={rewire_status} informed={informed_status}\n"
             f"       | w: rewires={self._dbg_w_rewires} "
+            f"r_n={self._dbg_last_r_n} "
             f"bestP={self._dbg_w_best_parent_swaps} "
             f"nearAvg={near_avg:.1f} "
             f"sCut={self._dbg_w_shortcut_hits}\n"
@@ -1139,7 +1155,7 @@ class RRTSkills(BasePlanner):
         self._dbg_kino_edges = 0
 
     def _record_solution(self, costs: List[float], times: List[float], 
-                         path: List[State] = None, node: Node = None):
+                         path: List[State] = None, node: Node = None) -> bool:
         """
         Tracks best_cost and best_path from a candidate path or node
         Returns True when best cost got updated
@@ -1166,28 +1182,29 @@ class RRTSkills(BasePlanner):
 
     def _periodic_improve(self, costs: List[float], times: List[float]):
         """
-        Periodic cost imporvement: 
-        1. Re-extract from cheapest terminal candidate
-            -> catches rewiring-induced cost reductions on the current solution path
-            -> catches the case where a different terminal has become cheaper
-        2. Shortcut the resulting best_path 
+        Periodic improvement:
+        1. Always re-extract the cheapest terminal tree path so rewiring-only
+            improvements are visible.
+        2. If shortcutting is enabled, shortcut that fresh tree path, not the
+            previous best_path.
         """
-        if not self.config.try_shortcutting:
-            return
-        
         # 1. Re-extract from cheapest terminal
         best_terminal = self._get_best_terminal()
         if best_terminal is None:
             return
 
-        # Extract and update best_path/best_cost only if cheaper
-        self._record_solution(costs, times, node=best_terminal)
-        
-        if self.best_path is None:
+        tree_path = self._extract_path(best_terminal)
+        if len(tree_path) < 2:
             return
 
-        # 2. Shortcut current best_path
-        sc_path = self._shortcut(self.best_path, self.config.periodic_shortcutting_iters)
+        if self._record_solution(costs, times, path=tree_path, node=best_terminal):
+            print(f"[RRT TREE REWIRE] Improved cost to {self.best_cost:.3f}")
+
+        if not self.config.try_shortcutting:
+            return
+
+        # 2. Shortcut 
+        sc_path = self._shortcut(tree_path, self.config.periodic_shortcutting_iters)
 
         if self._record_solution(costs, times, path=sc_path):
             self.improvement_count += 1
@@ -1522,9 +1539,9 @@ class RRTSkills(BasePlanner):
         eta: step_size
         """
         if n <= 1:
-            return self.eta
-        r_n = self.gamma_rrt_star * (math.log(n) / n) ** (1 / self.d)
-        return min(r_n, self.eta) # TODO set self.rewire_radius instead
+            return self.config.rewire_radius_max
+        r_n = self.gamma_rrt_star * (math.log(n) / n) ** (1.0 / self.d)
+        return min(r_n, self.config.rewire_radius_max)
 
     def _find_best_parent(self, n_near: Node, q_new: Configuration, mode: Mode):
         """
