@@ -8068,7 +8068,7 @@ def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="t
         raise ValueError("Assembly name not existent.")
     
     path = os.path.join(
-        os.path.dirname(__file__), f"../assets/desc/{assembly_filename}.json"
+        os.path.dirname(__file__), f"../../assets/desc/{assembly_filename}.json"
     )
 
     if gripper_type == "vacuum":
