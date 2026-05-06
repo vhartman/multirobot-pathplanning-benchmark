@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Protocol
+from typing import Any, Callable, Dict, List
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,7 +12,6 @@ from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem, M
 
 PinnedRobots = Dict[str, NDArray]
 SeedFn = Callable[[Mode], Configuration]
-ActiveTaskFn = Callable[[Mode], Any]
 
 
 @dataclass
@@ -20,7 +19,6 @@ class CollisionFreeSamplerConfig:
     sampler: str = "auto"
     sampler_gibbs_sweeps: int = 1
     sampler_auto_warmup: int = 20
-    p_home_bias: float = 0.0
     max_per_robot_attempts: int = 100
 
     @classmethod
@@ -33,7 +31,6 @@ class CollisionFreeSamplerConfig:
             sampler_auto_warmup=getattr(
                 config, "sampler_auto_warmup", cls.sampler_auto_warmup
             ),
-            p_home_bias=getattr(config, "p_home_bias", cls.p_home_bias),
             max_per_robot_attempts=getattr(
                 config, "max_per_robot_attempts", cls.max_per_robot_attempts
             ),
@@ -45,21 +42,6 @@ class SamplingResult:
     q: Configuration | None
     collision_checks: int = 0
     sampler_name: str = ""
-
-
-class CollisionFreeSampler(Protocol):
-    def sample(
-        self, mode: Mode, pinned: PinnedRobots | None = None
-    ) -> Configuration | None:
-        pass
-
-    def sample_batch(
-        self,
-        mode: Mode,
-        batch_size: int,
-        pinned: PinnedRobots | None = None,
-    ) -> List[Configuration]:
-        pass
 
 
 class BaseCollisionFreeSampler:
@@ -233,13 +215,10 @@ class AutoCollisionFreeSampler(BaseCollisionFreeSampler):
         if sampler_name == "gibbs":
             result = self.gibbs_sampler._sample_result(mode, pinned)
             stats = self._gibbs_sampling_stats.setdefault(mode, [0, 0])
-            stats[0] += result.collision_checks
-            stats[1] += result.q is not None
-            return result
-
-        result = self.joint_sampler._sample_result(mode, pinned)
-        stats = self._joint_sampling_stats.setdefault(mode, [0, 0])
-        stats[0] += 1
+        else:
+            result = self.joint_sampler._sample_result(mode, pinned)
+            stats = self._joint_sampling_stats.setdefault(mode, [0, 0])
+        stats[0] += result.collision_checks
         stats[1] += result.q is not None
         return result
 

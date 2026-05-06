@@ -27,6 +27,7 @@ from .sampling_informed import InformedSampling
 from .mode_validation import ModeValidation
 from .baseplanner import BasePlanner
 from .collision_free_sampler import make_collision_free_sampler
+from .per_robot_phs_sampler import PerRobotPHSSampler
 
 
 class Operation:
@@ -530,7 +531,7 @@ class BaseRRTConfig:
     horizon_length: int = 1
     with_mode_validation: bool = True
     
-    sampler: str = "auto"  # "joint" | "per_robot" | "gibbs" | "auto"
+    sampler: str = "auto"  # "joint" | "per_robot" | "gibbs" | "auto" | "per_robot_phs"
     sampler_gibbs_sweeps: int = 1  # number of full Gibbs sweeps per sample attempt
     # "auto" mode: use expected collision checks per successful sample to pick between
     # joint and gibbs per mode. Switch when gibbs becomes cheaper, switch back if not.
@@ -592,11 +593,14 @@ class BaseRRTstar(BasePlanner):
         self.check = set()
         self.blacklist_mode = set()
         self.home_pose_attempted_modes: set = set()
-        self.collision_free_sampler = make_collision_free_sampler(
-            self.env,
-            self.config,
-            seed_fn=self._get_seed_for_mode,
-        )
+        if self.config.sampler == "per_robot_phs":
+            self.collision_free_sampler = PerRobotPHSSampler(self.env)
+        else:
+            self.collision_free_sampler = make_collision_free_sampler(
+                self.env,
+                self.config,
+                seed_fn=self._get_seed_for_mode,
+            )
         # timing instrumentation
         self._sampling_time: float = 0.0
         self._coll_checking_time: float = 0.0
@@ -1690,7 +1694,7 @@ class BaseRRTstar(BasePlanner):
             return self.sample_informed(mode)
 
         sampler = self.collision_free_sampler.selected_sampler_name(mode)
-        if sampler in ("gibbs", "per_robot"):
+        if sampler in ("gibbs", "per_robot", "per_robot_phs"):
             return self.collision_free_sampler.sample(mode)
         return self._sample_uniform(mode)
 
