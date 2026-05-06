@@ -218,7 +218,7 @@ class PinocchioEnvironment(BaseProblem):
     ):
         pass
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def _set_to_scenegraph(
         self, sg, update_visual: bool = False, update_collision_pairs=False
     ):
@@ -406,7 +406,7 @@ class PinocchioEnvironment(BaseProblem):
             tmp_agent_slice=tmp_agent_slice,
         )
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         if q is None:
             raise ValueError

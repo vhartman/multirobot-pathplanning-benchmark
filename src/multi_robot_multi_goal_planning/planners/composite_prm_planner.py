@@ -565,7 +565,7 @@ class CompositePRM(BasePlanner):
 
         return approximate_space_extent
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def plan(
         self,
         ptc: PlannerTerminationCondition,

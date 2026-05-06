@@ -139,7 +139,7 @@ class MultimodalGraph:
             num_samples += len(self.transition_nodes[mode])
         return num_samples
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def compute_lower_bound_to_goal(self, batch_cost, best_found_cost):
         """
         Computes the lower bound on the cost to reach to goal from any configuration by
@@ -219,7 +219,7 @@ class MultimodalGraph:
 
                     heapq.heappush(queue, (cost, n))
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def compute_lower_bound_from_start(self, batch_cost):
         """
         compute the lower bound to reach a configuration from the start.
@@ -385,7 +385,7 @@ class MultimodalGraph:
                     else:
                         self.reverse_transition_nodes[next_mode] = [next_node]
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def get_neighbors(
         self, node: Node, space_extent: Optional[float] = None
     ) -> Tuple[List[Node], NDArray | None]:
@@ -548,7 +548,7 @@ class MultimodalGraph:
 
         return best_nodes, arr
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def search(
         self,
         start_node: Node,

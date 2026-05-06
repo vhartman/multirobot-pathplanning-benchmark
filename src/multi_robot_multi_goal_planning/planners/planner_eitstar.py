@@ -404,7 +404,7 @@ class EITstar(BaseITstar):
         self.reverse_closed_set.add(node.id)
         self.reverse_tree_set.add(node.id)
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def expand_node_reverse(
         self, nodes: List[Node], first_search: bool = False, skip_goal_ids = None
     ) -> None:

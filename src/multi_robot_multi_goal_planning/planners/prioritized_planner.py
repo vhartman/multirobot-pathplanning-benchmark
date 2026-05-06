@@ -100,7 +100,7 @@ class MultiRobotPath:
 
         return self.timed_mode_sequence[idx - 1][1]
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def get_robot_poses_at_time(self, robots: List[str], t: float):
         poses = []
 
@@ -422,7 +422,7 @@ class Tree:
             parent.children.append(new_node)
 
 
-# @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+# @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
 def collision_free_with_moving_obs(
     env: BaseProblem,
     t,
@@ -498,7 +498,7 @@ def collision_free_with_moving_obs(
     return False
 
 
-# @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+# @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
 def edge_collision_free_with_moving_obs(
     env: BaseProblem,
     qs,

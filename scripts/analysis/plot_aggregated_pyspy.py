@@ -2,7 +2,7 @@
 Plot time spent in specific functions over time, from a py-spy speedscope profile.
 
 Usage:
-    python examples/plot_aggregated_pyspy.py [profile.out]
+    python scripts/analysis/plot_aggregated_pyspy.py [profile.out]
 
 The profile should be generated with:
     py-spy record --format speedscope -o profile.out -- python your_script.py

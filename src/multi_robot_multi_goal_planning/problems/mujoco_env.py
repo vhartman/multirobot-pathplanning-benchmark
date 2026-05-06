@@ -583,7 +583,7 @@ class MujocoEnvironment(BaseProblem):
 
         return sg
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def _set_to_scenegraph(self, sg):
         # child_xquat = np.empty(4)
         # rotated = np.empty(3)
