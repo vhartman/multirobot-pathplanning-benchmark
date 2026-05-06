@@ -14,6 +14,7 @@ from matplotlib import pyplot as plt
 from itertools import chain
 
 from multi_robot_multi_goal_planning.problems.core.configuration import (
+    Configuration,
     batch_config_dist,
 )
 from multi_robot_multi_goal_planning.problems.planning_env import (
@@ -31,6 +32,7 @@ from .termination_conditions import (
     PlannerTerminationCondition,
 )
 from .prm.prm_graph import MultimodalGraph
+from .collision_free_sampler import make_collision_free_sampler
 
 
 @dataclass
@@ -39,8 +41,8 @@ class CompositePRMConfig:
     distance_metric: str = "max_euclidean"
     use_k_nearest: bool = False
     try_informed_sampling: bool = True
-    uniform_batch_size: int = 200
-    uniform_transition_batch_size: int = 500
+    uniform_batch_size: int = 100
+    uniform_transition_batch_size: int = 100
     informed_batch_size: int = 500
     informed_transition_batch_size: int = 500
     locally_informed_sampling: bool = True
@@ -57,6 +59,10 @@ class CompositePRMConfig:
     init_transition_batch_size: int = 90
     with_mode_validation: bool = False
     with_noise: bool = False
+    sampler: str = "joint"  # "joint" | "per_robot" | "gibbs" | "auto"
+    sampler_gibbs_sweeps: int = 1
+    sampler_auto_warmup: int = 20
+    max_per_robot_attempts: int = 100
 
 
 class CompositePRM(BasePlanner):
@@ -73,6 +79,28 @@ class CompositePRM(BasePlanner):
         self.first_search = True
         self.dummy_start_mode = False
         self.sorted_reached_modes = []
+        self.graph: MultimodalGraph | None = None
+        self.collision_free_sampler = make_collision_free_sampler(
+            self.env,
+            self.config,
+            seed_fn=self._get_seed_for_mode,
+        )
+
+    def _get_seed_for_mode(self, mode: Mode) -> Configuration:
+        if self.graph is None:
+            return self.env.get_start_pos()
+
+        candidates = []
+        if mode in self.graph.nodes:
+            candidates.extend(self.graph.nodes[mode])
+        if mode in self.graph.transition_nodes:
+            candidates.extend(self.graph.transition_nodes[mode])
+        if mode in self.graph.reverse_transition_nodes:
+            candidates.extend(self.graph.reverse_transition_nodes[mode])
+
+        if candidates:
+            return random.choice(candidates).state.q
+        return self.env.get_start_pos()
 
     def _sample_mode(
         self,
@@ -179,7 +207,9 @@ class CompositePRM(BasePlanner):
             # print(m)
 
             # sample configuration
-            q = self.env.sample_config_uniform_in_limits()
+            q = self.collision_free_sampler.sample(m)
+            if q is None:
+                continue
 
             if (
                 cost is not None
@@ -187,9 +217,8 @@ class CompositePRM(BasePlanner):
             ):
                 continue
 
-            if self.env.is_collision_free(q, m):
-                new_samples.append(State(q, m))
-                num_valid += 1
+            new_samples.append(State(q, m))
+            num_valid += 1
 
             # self.env.show(False)
 
@@ -197,7 +226,7 @@ class CompositePRM(BasePlanner):
 
         return new_samples, num_attempts
 
-    def _sample_uniform_transition_configuration(self, mode, reached_terminal_mode):
+    def _sample_uniform_transition_pins(self, mode, reached_terminal_mode):
         # sample transition at the end of this mode
         if reached_terminal_mode:
             # init next ids: caches version of next ids
@@ -209,28 +238,15 @@ class CompositePRM(BasePlanner):
         constrained_robot = active_task.robots
         goal = active_task.goal.sample(mode)
 
-        # sample a configuration
+        pinned = {}
         end_idx = 0
-        q = self.env.sample_config_uniform_in_limits()
-        for i, robot in enumerate(self.env.robots):
+        for robot in self.env.robots:
             if robot in constrained_robot:
                 dim = self.env.robot_dims[robot]
-                q[i] = goal[end_idx : end_idx + dim]
+                pinned[robot] = goal[end_idx : end_idx + dim]
                 end_idx += dim
-        # q = []
-        # end_idx = 0
-        # for robot in self.env.robots:
-        #     if robot in constrained_robot:
-        #         dim = self.env.robot_dims[robot]
-        #         q.append(goal_sample[end_idx : end_idx + dim])
-        #         end_idx += dim
-        #     else:
-        #         r_idx = self.env.robot_idx[robot]
-        #         lims = self.env.limits[:, r_idx]
-        #         q.append(np.random.uniform(lims[0], lims[1]))
-        # q = self.env.start_pos.from_list(q)
 
-        return q
+        return pinned
 
     # TODO:
     # - Introduce mode_subset_to_sample
@@ -282,9 +298,13 @@ class CompositePRM(BasePlanner):
                 mode_subset_to_sample, g, mode_sampling_type, cost is None
             )
 
-            q = self._sample_uniform_transition_configuration(
+            pinned = self._sample_uniform_transition_pins(
                 mode, reached_terminal_mode
             )
+            q = self.collision_free_sampler.sample(mode, pinned)
+            if q is None:
+                failed_attemps += 1
+                continue
 
             # could this transition possibly improve the path?
             if (
@@ -294,71 +314,65 @@ class CompositePRM(BasePlanner):
                 failed_attemps += 1
                 continue
 
-            # check if the transition is collision free
-            if self.env.is_collision_free(q, mode):
-                if self.env.is_terminal_mode(mode):
-                    valid_next_modes = None
-                else:
-                    # we only cache the ones that are in the valid sequence
-                    if reached_terminal_mode:
-                        # we cache the next modes only if they are on the mode path
-                        if mode not in self.init_next_modes:
-                            next_modes = self.env.get_next_modes(q, mode)
-                            valid_next_modes = self.mode_validation.get_valid_modes(
-                                mode, list(next_modes)
-                            )
-                            self.init_next_modes[mode] = valid_next_modes
-
-                        valid_next_modes = self.init_next_modes[mode]
-                    else:
+            if self.env.is_terminal_mode(mode):
+                valid_next_modes = None
+            else:
+                # we only cache the ones that are in the valid sequence
+                if reached_terminal_mode:
+                    # we cache the next modes only if they are on the mode path
+                    if mode not in self.init_next_modes:
                         next_modes = self.env.get_next_modes(q, mode)
                         valid_next_modes = self.mode_validation.get_valid_modes(
                             mode, list(next_modes)
                         )
+                        self.init_next_modes[mode] = valid_next_modes
 
-                        assert not (
-                            set(valid_next_modes)
-                            & self.mode_validation.invalid_next_ids.get(mode, set())
-                        ), "There are invalid modes in the 'next_modes'."
-
-                        # if there are no valid next modes, we add this mode to the invalid modes (and remove them from the reached modes)
-                        if valid_next_modes == []:
-                            self.mode_validation.propagate_invalid(mode)
-                            reached_modes = self.mode_validation.remove_invalid_modes(reached_modes)
-
-                # if the mode is not (anymore) in the reachable modes, do not add this to the transitions
-                if mode not in reached_modes:
-                    if not reached_terminal_mode:
-                        self.sorted_reached_modes = list(
-                            sorted(reached_modes, key=lambda m: m.id)
-                        )
-                        mode_subset_to_sample = self.sorted_reached_modes
-                    continue
-
-                # add the transition to the graph
-                g.add_transition_nodes([(q, mode, valid_next_modes)])
-
-                # this seems to be a very strange way of checking if the transition was added?
-                # but this seems wrong
-                if (
-                    len(list(chain.from_iterable(g.transition_nodes.values())))
-                    > transitions
-                ):
-                    transitions += 1
-
-                    # if the mode that we added is the root mode with the state being equal to the root state, do not add it
-                    if (
-                        mode == g.root.state.mode
-                        and np.equal(q.state(), g.root.state.q.state()).all()
-                    ):
-                        reached_modes.discard(mode)
-                        self.dummy_start_mode = True
-
+                    valid_next_modes = self.init_next_modes[mode]
                 else:
-                    failed_attemps += 1
-                    continue
+                    next_modes = self.env.get_next_modes(q, mode)
+                    valid_next_modes = self.mode_validation.get_valid_modes(
+                        mode, list(next_modes)
+                    )
+
+                    assert not (
+                        set(valid_next_modes)
+                        & self.mode_validation.invalid_next_ids.get(mode, set())
+                    ), "There are invalid modes in the 'next_modes'."
+
+                    # if there are no valid next modes, we add this mode to the invalid modes (and remove them from the reached modes)
+                    if valid_next_modes == []:
+                        self.mode_validation.propagate_invalid(mode)
+                        reached_modes = self.mode_validation.remove_invalid_modes(reached_modes)
+
+            # if the mode is not (anymore) in the reachable modes, do not add this to the transitions
+            if mode not in reached_modes:
+                if not reached_terminal_mode:
+                    self.sorted_reached_modes = list(
+                        sorted(reached_modes, key=lambda m: m.id)
+                    )
+                    mode_subset_to_sample = self.sorted_reached_modes
+                continue
+
+            # add the transition to the graph
+            g.add_transition_nodes([(q, mode, valid_next_modes)])
+
+            # this seems to be a very strange way of checking if the transition was added?
+            # but this seems wrong
+            if (
+                len(list(chain.from_iterable(g.transition_nodes.values())))
+                > transitions
+            ):
+                transitions += 1
+
+                # if the mode that we added is the root mode with the state being equal to the root state, do not add it
+                if (
+                    mode == g.root.state.mode
+                    and np.equal(q.state(), g.root.state.q.state()).all()
+                ):
+                    reached_modes.discard(mode)
+                    self.dummy_start_mode = True
+
             else:
-                # self.env.show(False)
                 failed_attemps += 1
                 continue
 
@@ -565,7 +579,7 @@ class CompositePRM(BasePlanner):
 
         return approximate_space_extent
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def plan(
         self,
         ptc: PlannerTerminationCondition,
@@ -594,6 +608,7 @@ class CompositePRM(BasePlanner):
             lambda a, b: batch_config_dist(a, b, self.config.distance_metric),
             use_k_nearest=self.config.use_k_nearest,
         )
+        self.graph = graph
 
         current_best_cost = None
         current_best_path = None

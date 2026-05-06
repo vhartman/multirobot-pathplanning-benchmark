@@ -128,7 +128,7 @@ class MultiRobotPath:
 
         return self.timed_mode_sequence[idx - 1][1] # 2 = mode_B
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def get_robot_poses_at_time(self, robots: List[str], t: float):
         """
         Calculates the exact configuration of a given list of robots at a specific time
@@ -465,7 +465,7 @@ Edge collision free with moving obstacles:
 - Check if an entire edge (path segment) is collision free over time 
 =============================================================================================
 """
-# @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+# @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
 def collision_free_with_moving_obs(
     env: BaseProblem,
     t,
@@ -503,7 +503,8 @@ def collision_free_with_moving_obs(
         return True
     return False
 
-# @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+
+# @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
 def edge_collision_free_with_moving_obs(
     env: BaseProblem,
     qs,

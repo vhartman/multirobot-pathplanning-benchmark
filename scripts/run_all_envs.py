@@ -5,7 +5,7 @@ import datetime
 import os
 
 representative_envs = [
-    # ("rai.simple", 2, 100),
+    ("rai.simple", 2, 100),
     # ("rai.one_agent_many_goals", 2, 100),
     # ("rai.dep_two_agents_many_goals", 2, 100),
     # ("rai.three_agent_many_goals", 2, 500),
@@ -49,7 +49,7 @@ optimize = True
 planners = [
     # {"name": "prio", "type": "prioritized", "options": {}},
     {"name": "birrt", "type": "birrtstar", "options": {}},
-    {"name": "birrt_home", "type": "birrtstar", "options": {"p_home_bias": 0.05}},
+    # {"name": "birrt_home", "type": "birrtstar", "options": {"p_home_bias": 0.05}},
     # {"name": "ait", "type": "aitstar", "options": {}},
 ]
 
@@ -78,7 +78,7 @@ for env_name, seed, runtime in representative_envs:
         subprocess.run(
             [
                 "python",
-                "./examples/run_experiment.py",
+                "./scripts/run_experiment.py",
                 tmpfile_path,
                 "--num_processes",
                 str(num_parallel),
