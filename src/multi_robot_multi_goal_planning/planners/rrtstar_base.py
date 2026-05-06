@@ -603,17 +603,19 @@ class BaseRRTstar(BasePlanner):
         self._edge_check_time_failure: float = 0.0
         
         # Toggle timed vs untimed edge collision checking (change one line):
-        # self._check_edge_cf = self._timed_edge_collision_free  # timed
-        self._check_edge_cf = self._edge_collision_free      # untimed
-        
-        # self._check_config_cf = self._timed_collision_free      # timed
-        self._check_config_cf = self._collision_free      # untimed
+        timed = False
 
-        # self._sample_config_fn = self._timed_sample_configuration  # timed
-        self._sample_config_fn = self.sample_configuration             # untimed
-
-        # self._sample_transition_config_fn = self._timed_sample_transition_configuration  # timed
-        self._sample_transition_config_fn = self.sample_transition_configuration             # untimed
+        if timed:
+            self._check_edge_cf = self._timed_edge_collision_free  # timed
+            self._check_config_cf = self._timed_collision_free      # timed
+            self._sample_config_fn = self._timed_sample_configuration  # timed
+            self._sample_transition_config_fn = self._timed_sample_transition_configuration  # timed
+            pass
+        else:
+            self._check_edge_cf = self._edge_collision_free      # untimed
+            self._check_config_cf = self._collision_free      # untimed
+            self._sample_config_fn = self.sample_configuration             # untimed
+            self._sample_transition_config_fn = self.sample_transition_configuration             # untimed
 
         # running c_free estimate via uniform samples from _sample_uniform
         self._c_free_n_total: int = 0
