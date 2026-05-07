@@ -53,7 +53,7 @@ def default_cost_bound_fn(c_min: float, it: int) -> float:
     """Placeholder schedule — TUNE. Linear additive growth keeps the corridor
     widening even when c_min is near 0; multiplicative term ensures
     non-degenerate ellipsoid from the start."""
-    return c_min * 1.5 + 0.01 * it
+    return c_min * 1.5 + 0.001 * it
 
 
 class PerRobotPHSSampler:
@@ -64,10 +64,9 @@ class PerRobotPHSSampler:
     ):
         self.env = env
         self.c_bound_fn = c_bound_fn
-        self._iter = 0  # caller can also drive this externally via tick()
-
-    def tick(self) -> None:
-        self._iter += 1
+        # Per-mode call counter: ticks once per outer sample() call. Used by
+        # c_bound_fn so the corridor widens with mode-attention, not globally.
+        self._iter_per_mode: Dict[Mode, int] = {}
 
     def selected_sampler_name(self, mode: Optional[Mode] = None) -> str:
         # exposed for compatibility with collision_free_sampler.BaseCollisionFreeSampler
@@ -82,9 +81,10 @@ class PerRobotPHSSampler:
     ) -> Configuration | None:
         """Returns a collision-free configuration, or None after `max_attempts`."""
         pinned = pinned or {}
+        self._iter_per_mode[mode] = self._iter_per_mode.get(mode, 0) + 1
+        it = self._iter_per_mode[mode]
         for _ in range(max_attempts):
-            self._iter += 1
-            q = self._draw(mode, pinned)
+            q = self._draw(mode, pinned, it)
             if self.env.is_collision_free(q, mode):
                 return q
         return None
@@ -92,7 +92,9 @@ class PerRobotPHSSampler:
     # ------------------------------------------------------------------
     # candidate proposal
 
-    def _draw(self, mode: Mode, pinned: Dict[str, NDArray]) -> Configuration:
+    def _draw(
+        self, mode: Mode, pinned: Dict[str, NDArray], iteration: int
+    ) -> Configuration:
         # uniform fallback for any robot we can't bias (no forced goal,
         # degenerate foci, out-of-limits PHS draw, etc.)
         q = self.env.sample_config_uniform_in_limits()
@@ -113,7 +115,7 @@ class PerRobotPHSSampler:
                 continue
 
             c_min = float(np.linalg.norm(next_goal - prev_goal))
-            c = self.c_bound_fn(c_min, self._iter)
+            c = self.c_bound_fn(c_min, iteration)
 
             if c_min < 1e-9:
                 # foci coincide; PHS is undefined. For now stay at the goal.
