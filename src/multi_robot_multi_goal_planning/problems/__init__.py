@@ -8,6 +8,7 @@ from .rai import rai_unordered_envs
 from .rai import rai_free_envs
 from .rai import rai_envs_constrained
 from . import abstract_env
+from . import kino_env
 
 import sys
 sys.path.append("/usr/local/lib/python3.10/dist-packages")  # TODO: install mr_planner_core into venv
