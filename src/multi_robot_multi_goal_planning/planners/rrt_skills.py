@@ -454,6 +454,16 @@ class RRTSkills(BasePlanner):
             else phase_connect_add_all_nodes
         )
 
+    def _set_solution_node(self, node: Node):
+        """
+        Records a tree-backed solution and switches phase settings once
+        """
+        if self.solution_node is None:
+            self.solution_node = node
+            self._refresh_phase_params()
+        else:
+            self.solution_node = node
+
     def plan(self, ptc: PlannerTerminationCondition, optimize: bool = False):
         """
         Main planning loop
@@ -986,14 +996,18 @@ class RRTSkills(BasePlanner):
         
         return True
 
-    def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode, is_skill: bool = False) -> Node:
+    def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode, is_skill: bool = False, edge_cost_override: Optional[float] = None) -> Node:
         """
         Handles node creation and addition, including RRT* parent optimization
+        Optional edge_cost_override for kinodynamic skilledge to pass the true cost
         """
         if is_skill or not self._should_rewire():
             # Skill node or RRT* inactive -> always attach to n_near
             parent = n_near
-            cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
+            if edge_cost_override is not None:
+                cost_to_parent = edge_cost_override
+            else:
+                cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
             cost = n_near.cost + cost_to_parent
         else:
             # Non-skill node + RRT* active -> run RRT* choose parent
@@ -1022,13 +1036,14 @@ class RRTSkills(BasePlanner):
         """
         created_seeds: List[Node] = []
 
+        # Check if n_new is a transition
         if not self._is_mode_transition(n_new):
             return created_seeds
 
         mode = n_new.state.mode
         self._dbg_is_trans_true += 1
 
-        # Check if n_new is a transition
+        # Get valid next modes
         next_modes = self.env.get_next_modes(n_new.state.q, mode)
         valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
 
@@ -1036,8 +1051,8 @@ class RRTSkills(BasePlanner):
             self._dbg_get_next_empty += 1
             return created_seeds
 
-        # TODO really need to check if n_new in next_mode collision free, or always the case?
         for next_mode in valid_next_modes:
+            # TODO really need to check if n_new in next_mode collision free, or always the case?
             if not self.env.is_collision_free(n_new.state.q, next_mode):
                 self._dbg_seed_coll_fail += 1
                 continue
@@ -1110,30 +1125,50 @@ class RRTSkills(BasePlanner):
         # Remove interpolated points used in shortcutting (collision check)
         return shortcutting.remove_interpolated_nodes(shortcut_path)
 
-    def _sync_shortcut_to_tree(self, shortcut_path: List[State]):
+    def _sync_shortcut_to_tree(self, shortcut_path: List[State]) -> Optional[Node]:
         """
-        Inserts the shortcutted path back into the tree as a connected chain.
-        - Called after a successful periodic shortcut when sync_shortcut_to_tree=True
-        - Preserves skill waypoints and mode-switch boundaries exactly
-        - # TODO run best-parent/rewire during sync (attention -> skill nodes)        
+        Inserts a shortcutted path back into the tree as a fresh connected chain.
+        Near-duplicate snapping is intentionally disabled below until it is needed.
         """
+        if not shortcut_path or len(shortcut_path) < 2:
+            return None
+
         parent_node = self.tree.root
         
         for state in shortcut_path[1:]:
-            new_node = Node(state, parent=parent_node)
-            new_node.cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
-            new_node.cost = parent_node.cost + new_node.cost_to_parent
+            is_skill = getattr(state, "is_skill_waypoint", False)
+            cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
+            candidate_cost = parent_node.cost + cost_to_parent
 
-            if state.is_skill_waypoint:
+            # TODO Optional near-duplicate snapping, kept off for now:
+            # subtree = self.tree.subtrees[state.mode]
+            # nearest, dist = subtree.get_nearest(state.q, self.config.distance_metric)
+            # if nearest is not None and dist <= 1e-6 and nearest.cost <= candidate_cost + 1e-8:
+            #     parent_node = nearest
+            #     continue
+
+            new_node = Node(state, parent=parent_node)
+            new_node.cost_to_parent = cost_to_parent
+            new_node.cost = candidate_cost
+
+            if is_skill:
                 new_node.is_skill_waypoint = True
                 new_node.skill_step = parent_node.skill_step + 1
 
             self.tree.subtrees[state.mode].add_node(new_node)
             parent_node.children.append(new_node)
+
+            # if self._should_rewire() and not new_node.is_skill_waypoint and self._get_active_skill_task(state.mode) is None:
+            #     self._rewire(new_node, state.mode)
+
             parent_node = new_node
         
-        self.terminal_nodes.append(parent_node)
-        self.solution_node = parent_node
+        if self.env.done(parent_node.state.q, parent_node.state.mode): # TODO needed?
+            if parent_node not in self.terminal_nodes:
+                self.terminal_nodes.append(parent_node)
+            self._set_solution_node(parent_node)
+            return parent_node
+        return None
 
     def _extract_path(self, node: Node) -> List[State]:
         """
@@ -1237,7 +1272,7 @@ class RRTSkills(BasePlanner):
         self._dbg_kino_edges = 0
 
     def _record_solution(self, costs: List[float], times: List[float], 
-                         path: List[State] = None, node: Node = None) -> bool:
+                         path: List[State] = None, node: Node = None, cost: Optional[float] = None) -> bool:
         """
         Tracks best_cost and best_path from a candidate path or node
         Returns True when best cost got updated
@@ -1247,13 +1282,13 @@ class RRTSkills(BasePlanner):
         if path is None or len(path) < 2:
             return False
         
-        new_cost = path_cost(path, self.env.batch_config_cost)
+        new_cost = cost if cost is not None else path_cost(path, self.env.batch_config_cost)
         if new_cost >= self.best_cost - 1e-8:
             return False
         
         # Update tree pointer ONLY when improvement came from a tree node
         if node is not None:
-            self.solution_node = node
+            self._set_solution_node(node)
         
         self.best_cost = new_cost
         self.best_path = list(path)
@@ -1463,17 +1498,12 @@ class RRTSkills(BasePlanner):
             t_norms=np.array(t_norms_list)
         )
 
-        n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=True)
+        # Calculate exact cost before node creation (sum of segments)
+        edge_cost = self._skill_edge_cost(np.asarray(waypoints), mode)
+
+        n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=True, edge_cost_override=edge_cost)
         n_new.skill_step = base_step + actual_steps
         n_new.skill_edge = skill_edge
-
-        # TODO (okay for now) but careful, that's the straight line cost.. not sum of intermediate step cost.. would be problem only in RRT* tho? but won't break optimality as in rewiring we are skipping skill nodes..? 
-        edge_cost = self._skill_edge_cost(np.asarray(waypoints), mode)
-        n_new.cost_to_parent = edge_cost
-        n_new.cost = n_near.cost + edge_cost 
-
-        # Debug
-        self._dbg_kino_edges += 1
 
         return [n_new]
 
