@@ -1215,17 +1215,14 @@ class RRTSkills(BasePlanner):
             return
 
         tree_path = self._extract_path(best_terminal)
-        if len(tree_path) < 2:
-            return
-
         if self._record_solution(costs, times, path=tree_path, node=best_terminal):
             print(f"[RRT TREE REWIRE] Improved cost to {self.best_cost:.3f}")
 
-        if not self.config.try_shortcutting:
+        if not self.config.try_shortcutting or self.best_path is None or len(self.best_path) < 2:
             return
 
         # 2. Shortcut 
-        sc_path = self._shortcut(tree_path, self.config.periodic_shortcutting_iters)
+        sc_path = self._shortcut(self.best_path, self.config.periodic_shortcutting_iters)
 
         if self._record_solution(costs, times, path=sc_path):
             self.improvement_count += 1
@@ -1233,6 +1230,9 @@ class RRTSkills(BasePlanner):
 
             if self.config.sync_shortcut_to_tree:
                 self._sync_shortcut_to_tree(sc_path)
+                best_terminal = self._get_best_terminal()
+                if best_terminal is not None:
+                    self._record_solution(costs, times, node=best_terminal)
 
     # TODO SKILLS
     def _get_active_skill_task(self, mode: Mode):
