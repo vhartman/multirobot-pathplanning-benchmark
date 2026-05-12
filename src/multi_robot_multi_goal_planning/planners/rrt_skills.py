@@ -150,11 +150,17 @@ class RRTSkillsConfig:
     step_size_factor: float = 0.1 # Dynamic step size tuning factor
     extension_strategy: str = "connect" # "linear" | "connect"
 
-    # Connect extension
+   # Connect extension
     eta_step: float = 0.1
     connect_max_steps: int = 30
-    connect_target_policy: str = "transition" # "transition" | "all"
-    connect_add_all_nodes: bool = True
+    init_connect_target_policy: str = "transition" # "transition" | "all"
+    opt_connect_target_policy: str = "all" # "transition" | "all"
+
+    init_connect_add_all_nodes: bool = False
+    opt_connect_add_all_nodes: bool = True # For rewiring
+
+    connect_target_policy: Optional[str] = None # override
+    connect_add_all_nodes: Optional[bool] = None # override
 
     p_goal: float = 0.1
     # p_terminal_goal: float = 0.1 
@@ -174,6 +180,7 @@ class RRTSkillsConfig:
     kinodynamic_steps: int = 5 # Only for kinodynamic strategy 
     inactive_steering_mode: str = "concurrent" # "freeze" | "concurrent"
     inactive_max_vel: float = 2.0 # TODO define value, units,...
+    inactive_transition_source: str = "uniform_random" # "uniform_random" | "random_tree"
 
     # RRT*
     use_rrt_star: bool = True
@@ -183,7 +190,7 @@ class RRTSkillsConfig:
 
     # Informed sampling
     try_informed_sampling: bool = True
-    locally_informed_sampling: bool = False
+    locally_informed_sampling: bool = True
     informed_batch_size: int = 300 # Irrelevant in "sampling_based" mode (one config per iter)
     informed_transition_batch_size: int = 100 # Irrelevant in "sampling_based" mode (one config per iter)
 
@@ -195,7 +202,7 @@ class RRTSkillsConfig:
     shortcutting_interpolation_resolution: float = 0.1
     shortcut_period_iters: int = 500 #100 # 500
 
-    sync_shortcut_to_tree: bool = True
+    sync_shortcut_to_tree: bool = False # TODO!
 
     # BRRT*
     is_bidirectional: bool = False
@@ -410,6 +417,42 @@ class RRTSkills(BasePlanner):
         self.informed_sampler: InformedSampling = None
         self.informed_path: List[State] = None 
         self.improvement_count: int = 0 # For periodic shortcutting
+        self._refresh_phase_params()
+
+    def _refresh_phase_params(self):
+        """
+        Applies the active phase settings without mutating the config
+        """
+        # TODO can be written nicer (compact..)
+        in_initial_phase = self.solution_node is None
+
+        self._active_mode_sampling_type = (
+            self.config.init_mode_sampling_type
+            if in_initial_phase
+            else self.config.mode_sampling_type
+        )
+
+        phase_connect_target_policy = (
+            self.config.init_connect_target_policy
+            if in_initial_phase
+            else self.config.opt_connect_target_policy
+        )
+        phase_connect_add_all_nodes = (
+            self.config.init_connect_add_all_nodes
+            if in_initial_phase
+            else self.config.opt_connect_add_all_nodes
+        )
+
+        self._active_connect_target_policy = (
+            self.config.connect_target_policy
+            if self.config.connect_target_policy is not None
+            else phase_connect_target_policy
+        )
+        self._active_connect_add_all_nodes = (
+            self.config.connect_add_all_nodes
+            if self.config.connect_add_all_nodes is not None
+            else phase_connect_add_all_nodes
+        )
 
     def plan(self, ptc: PlannerTerminationCondition, optimize: bool = False):
         """
@@ -626,12 +669,8 @@ class RRTSkills(BasePlanner):
         """
         if len(self.reached_modes) == 1:
             return self.reached_modes[0]
-
-        # Pick mode sampling strategy based on planning phase
-        if self.solution_node is None:
-            strategy = self.config.init_mode_sampling_type
-        else:
-            strategy = self.config.mode_sampling_type
+        
+        strategy = self._active_mode_sampling_type
         
         # Greedy strategy
         if strategy == "greedy":
@@ -697,8 +736,6 @@ class RRTSkills(BasePlanner):
         """
         Samples a random configuration or goal bias / transition
         """
-        is_skill_mode = self._get_active_skill_task(mode) is not None
-
         # Goal/transition bias
         if random.random() < self.config.p_goal:
             self._dbg_goal_bias_attempt += 1
@@ -709,11 +746,14 @@ class RRTSkills(BasePlanner):
         
         # Informed sampling (after first solution, non-skill modes only) # TODO non skill modes only, correct reasoning?
         if (self.config.try_informed_sampling
-            and self.informed_path is not None
-            and not is_skill_mode):
+            and self.informed_path is not None):
+            # and not is_skill_mode): # TODO remove (now informed sampling in skill mode)
             q_informed = self._sample_informed(mode)
             if q_informed is not None:
                 self._dbg_informed_success += 1
+                # NOTE: In skill modes, only the INACTIVE parts of q_informed will be used
+                # (active overridden by skill.step). Basically provides informed inactive sampling
+                # in skill mode.
                 return q_informed, False
         
         # Uniform sampling (fallback)
@@ -740,7 +780,7 @@ class RRTSkills(BasePlanner):
                 self._dbg_informed_trans_success += 1
                 return q # Else uniform below
 
-        # Uniform transition sampling
+        # Transition sampling with selectable inactive-DOF source
         max_attempts = 1000
         iters = 0
         for _ in range(max_attempts):
@@ -755,15 +795,8 @@ class RRTSkills(BasePlanner):
             constrained_robots = active_task.robots
             goal = active_task.goal.sample(mode)
 
-            # Build configuration 
+            # Build transition candidate with constrained robots at goal
             q = self.env.sample_config_uniform_in_limits()
-            
-            # TODO should remain random, or maybe not.. why have inactive random if we can do something smarter..?
-            # # NOTE: instead of uniform sampling, use config from random node in subtree
-            # subtree = self.tree.subtrees.get(mode)
-            # idx = random.randint(0, subtree.size - 1)
-            # q_src = subtree.nodes[idx].state.q
-            # q = self.env.get_start_pos().from_flat(q_src.state().copy())
 
             # Apply constraints
             end_idx = 0
@@ -773,18 +806,43 @@ class RRTSkills(BasePlanner):
                     dim = self.env.robot_dims[robot]
                     q[i] = goal[end_idx : end_idx + dim]
                     end_idx += dim
-                else:
-                    # If robot has upcoming skill
-                    # ...
-                    pass
+
+            active_indices = np.array(self._get_active_subspace_indices(active_task), dtype=int)
+            source_node = self._select_inactive_source_node(mode, q, active_indices)
+            if source_node is not None:
+                constrained_set = set(constrained_robots)
+                for i, robot in enumerate(self.env.robots):
+                    if robot in constrained_set:
+                        continue
+                    q[i] = source_node.state.q.robot_state(i).copy()
 
             # Validate that the constrained config is collision-free in current mode
             if self.env.is_collision_free(q, mode):
-                # print(f"[TRANSITION SAMPLING] done at {iters} iterations")
                 return q
             
-        # print(f"[TRANSITION SAMPLING] failed at {iters} iterations")
-        print(f"[TRANSITION SAMPLING] mode={mode} task={active_task.name} goal_pose colliding (single-config retry pointless)")
+        return None
+    
+    def _select_inactive_source_node(
+        self,
+        mode: Mode,
+        q_active_goal: Configuration,
+        active_indices: np.ndarray,
+    ) -> Optional[Node]:
+        """
+        Selects a source node for inactive robot DOFs used during transition sampling
+        """
+        source = self.config.inactive_transition_source
+        if source == "uniform_random":
+            return None
+
+        subtree = self.tree.subtrees.get(mode)
+        if subtree is None or subtree.size == 0:
+            return None
+
+        if source == "random_tree":
+            idx = random.randint(0, subtree.size - 1)
+            return subtree.nodes[idx]
+
         return None
 
     def _sample_informed(self, mode: Mode) -> Optional[Configuration]:
@@ -1143,13 +1201,16 @@ class RRTSkills(BasePlanner):
         
         rewire_status = "ON" if self._should_rewire() else "OFF"
         informed_status = "ON" if (self.informed_path is not None and self.config.try_informed_sampling) else "OFF"
-        
+        connect_policy = self._active_connect_target_policy
+        connect_add_all = self._active_connect_add_all_nodes
+
         print(
             f"[{tag}] it={iterations} nodes={nodes} modes={len(self.reached_modes)} "
             f"best={self.best_cost:.3f} sol={sol_cost:.3f} "
             f"etaMacro={self.eta:.2f} etaStep={self.config.eta_step:.2f} "
             f"rMax={self.config.rewire_radius_max:.2f} "
             f"rewire={rewire_status} informed={informed_status}\n"
+            f"connect={connect_policy}/addAll={connect_add_all}\n"
             f"       | w: rewires={self._dbg_w_rewires} "
             f"r_n={self._dbg_last_r_n} "
             f"bestP={self._dbg_w_best_parent_swaps} "
@@ -1420,28 +1481,29 @@ class RRTSkills(BasePlanner):
         """
         RRT-Connect-style extension: goes from n_near towards q_target in steps of eta_step
 
-        Two modes:
-        1. connect_add_all_nodes=False: only final node enters the tree
+        Node insertion is phase-specific:
+        1. add_all_nodes=False: only final node enters the tree
         - Fast for finding initial solutions but breaks RRT*-rewiring (long edges + small rewire radius).
         
-        2.connect_add_all_nodes=True: every intermediate step enters the tree
+        2. add_all_nodes=True: every intermediate step enters the tree
         - Required for asymptotic optimality with use_rrt_star=True.
         """
         q_target_vec = q_target.state()
         q_curr_vec = n_near.state.q.state().copy()
         q_curr_cfg = n_near.state.q
 
-        eta_step  = self.eta
+        eta_step = self.eta
 
-        if self.config.connect_target_policy == "transition":
+        target_policy = self._active_connect_target_policy
+        if target_policy == "transition":
             is_transition_target = self.env.is_transition(q_target, mode)
             max_steps = self.config.connect_max_steps if is_transition_target else 1
-        elif self.config.connect_target_policy == "all":
+        elif target_policy == "all":
             max_steps = self.config.connect_max_steps
         else:
-            raise ValueError(f"Unknown connect_target_policy: {self.config.connect_target_policy}")
+            raise ValueError(f"Unknown connect_target_policy: {target_policy}")
         
-        add_all = self.config.connect_add_all_nodes
+        add_all = self._active_connect_add_all_nodes
         
         new_nodes: List[Node] = []
         n_parent = n_near # Parent for the next step (becomes previous step's node when add_all)
