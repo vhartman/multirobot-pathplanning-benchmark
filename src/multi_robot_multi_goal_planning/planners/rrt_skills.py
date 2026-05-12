@@ -358,6 +358,9 @@ CURRENT TODOS
 # TODO [x] adaptive p_goal (0.3 till solution_node is not None -> then 0.1 e.g., to lower during the optimization phase)
 # TODO [ ] tune hyperparams
 # TODO [ ] shortcuts self.best_path but not a freshly extracted path from self.solution:node after rewiring..
+# TODO [ ] add every shortcutted path back to tree instead of wasting nodes from sc_path with lower cost..? (could be beneficial for rewiring..?) / what about duplicate nodes?
+# TODO [ ] add node pruning on sync sc-path to tree (e.g., snapping to existing node if distance < threshold?)
+# TODO [ ] add node pruning to rrt* in general (e.g., some cost-based branch pruning: once rrt* finds initial path, use c_best as upper bound, and prune node + children if c(stars->x)+h(x->goal) > c_best
 
 # SKILLS
 # TODO [ ] check deviation between actual skill x-steps and interpolation between ends of the SkillEdge
@@ -448,11 +451,12 @@ class RRTSkills(BasePlanner):
                 continue
 
             # 5. Handle transitions and rewiring
+            terminal_node = None
             for n_new in new_nodes:
                 next_mode_seeds = self._check_transitions(n_new)
 
                 # RRT* rewire
-                if self._should_rewire() and not n_new.is_skill_waypoint:
+                if self._should_rewire() and not n_new.is_skill_waypoint and skill_task is None:
                     self._rewire(n_new, mode)
 
                 terminal_node = self._get_terminal_node(n_new, next_mode_seeds)
@@ -471,14 +475,27 @@ class RRTSkills(BasePlanner):
             if optimize and self.solution_node is not None and iterations % self.config.shortcut_period_iters == 0:
                 self._periodic_improve(costs, times)
 
+        # Final rescan first to capture any unrecorded rewiring gains
+        if optimize and self.solution_node is not None:
+            best_term = self._get_best_terminal()
+            if best_term is not None:
+                tree_path = self._extract_path(best_term)
+                tree_cost = path_cost(tree_path, self.env.batch_config_cost)
+                self._record_solution(costs, times, path=tree_path, node=best_term, cost=tree_cost)
+
         # Final shortcut
         if self.config.try_shortcutting and self.best_path is not None:
             sc_path = self._shortcut(self.best_path, self.config.final_shortcutting_iters)
-            if self._record_solution(costs, times, path=sc_path):
+            sc_cost = path_cost(sc_path, self.env.batch_config_cost) if sc_path and len(sc_path) > 1 else float("inf")
+            shortcut_improved = self._record_solution(costs, times, path=sc_path, cost=sc_cost)
+            if shortcut_improved:
                 print(f"[RRT FINAL SHORTCUT] Improved cost to {self.best_cost:.3f}")
 
                 if self.config.sync_shortcut_to_tree:
                     self._sync_shortcut_to_tree(sc_path)
+                    best_term = self._get_best_terminal()
+                    if best_term is not None:
+                        self._record_solution(costs, times, node=best_term)
 
         # Return
         path = self.best_path
@@ -942,10 +959,8 @@ class RRTSkills(BasePlanner):
 
     def _check_transitions(self, n_new: Node) -> List[Node]:
         """
-        Checks if n_new triggers a mode switch 
-        - Normal mode: is_transition()?
-        - Skill mode: skill.done()?
-        If transition node -> get the next valid modes, add and seed new subtree
+        Checks if n_new triggers a mode switch (mode-boundary node) and seeds all valid successor
+        modes at the same configuration.
         """
         created_seeds: List[Node] = []
 
@@ -955,6 +970,7 @@ class RRTSkills(BasePlanner):
         mode = n_new.state.mode
         self._dbg_is_trans_true += 1
 
+        # Check if n_new is a transition
         next_modes = self.env.get_next_modes(n_new.state.q, mode)
         valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
 
@@ -962,11 +978,13 @@ class RRTSkills(BasePlanner):
             self._dbg_get_next_empty += 1
             return created_seeds
 
+        # TODO really need to check if n_new in next_mode collision free, or always the case?
         for next_mode in valid_next_modes:
             if not self.env.is_collision_free(n_new.state.q, next_mode):
                 self._dbg_seed_coll_fail += 1
                 continue
-
+            
+            # Create the successor subtree treating transition nodes as start nodes of the next mode
             if next_mode not in self.reached_modes:
                 self.reached_modes.append(next_mode)
                 self.tree.add_subtree(next_mode)
@@ -979,6 +997,9 @@ class RRTSkills(BasePlanner):
             self.tree.subtrees[next_mode].add_node(seed_node)
             n_new.children.append(seed_node)
             created_seeds.append(seed_node)
+
+            if self._should_rewire() and not seed_node.is_skill_waypoint and self._get_active_skill_task(next_mode) is None:
+                self._rewire(seed_node, next_mode)
 
             self._dbg_seed_added += 1
 
@@ -1531,12 +1552,11 @@ class RRTSkills(BasePlanner):
     def _compute_rewiring_radius(self, n: int):
         """
         RRT*: shrinking ball radius
-
-        r_n = min(gamma_rrtstar * (logn/n)^(1/d), eta)
+        r_n = min(gamma_rrtstar * (logn/n)^(1/d), rewire_radius_max)
         n: number of nodes in tree
         d: dimensionality of state space
         gamma_rrtstar: asymptotic optimality constant
-        eta: step_size
+        rewire_radius_max: early-iteration cap, intentionally independent of eta_step?
         """
         if n <= 1:
             return self.config.rewire_radius_max
