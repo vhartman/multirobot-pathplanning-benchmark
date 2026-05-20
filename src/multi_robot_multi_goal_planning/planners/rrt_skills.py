@@ -1602,11 +1602,12 @@ class RRTSkills(BasePlanner):
         """
         Computes true cost for kinodynamic edges instead of using straight-line parent-to-end-costs
         """ 
-        total = 0.0
+        if len(waypoints) < 2:
+            return 0.0
+
         q_from_flat = self.env.get_start_pos().from_flat
-        for i in range(len(waypoints) - 1):
-            total += self.env.config_cost(q_from_flat(waypoints[i]), q_from_flat(waypoints[i + 1]))
-        return total 
+        configs = [q_from_flat(q) for q in waypoints]
+        return float(np.sum(self.env.batch_config_cost(configs[:-1], configs[1:])))
     
     # TODO RRT*
     def _set_gamma_rrt_star(self, mu_X_free: float = None):
