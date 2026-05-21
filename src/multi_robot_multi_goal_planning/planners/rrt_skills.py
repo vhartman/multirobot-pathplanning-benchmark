@@ -33,70 +33,78 @@ class RRTSkillsConfig:
     """
     Hyperparameters for the multi-modal RRT with skills
     """
-    # RRT
-    step_size_strategy: str = "sqrt_d" # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots"
-    step_size: float = 1 # Constant
-    step_size_factor: float = 0.1 # Dynamic step size tuning factor
-    extension_strategy: str = "connect" # "linear" | "connect"
+    # -----------------------------------------------------------------
+    # RRT* CORE PARAMETERS
+    # -----------------------------------------------------------------
+    
+    extension_strategy: str = "connect"                 # "linear" | "connect"
+    p_goal: float = 0.1
+    is_bidirectional: bool = False
+    distance_metric: str = "max_euclidean"
+    with_noise: bool = False
 
-   # Connect extension
+    # -----------------------------------------------------------------
+    # EXTEND NON-SKILL MODES PARAMETERS
+    # -----------------------------------------------------------------
+    
+    # LINEAR
+    step_size_strategy: str = "sqrt_d"                  # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots"
+    step_size: float = 1                                # Constant
+    step_size_factor: float = 0.1                       # Dynamic step size tuning factor
+
+    # CONNECT
     eta_step: float = 0.1
     connect_max_steps: int = 30
-    init_connect_target_policy: str = "transition" # "transition" | "all"
-    opt_connect_target_policy: str = "all" # "transition" | "all"
-
+    init_connect_target_policy: str = "transition"      # "transition" | "all"
+    opt_connect_target_policy: str = "all"              # "transition" | "all"
     init_connect_add_all_nodes: bool = False
-    opt_connect_add_all_nodes: bool = True # For rewiring
+    opt_connect_add_all_nodes: bool = True              # For rewiring
+    connect_target_policy: Optional[str] = None         # override
+    connect_add_all_nodes: Optional[bool] = None        # override
 
-    connect_target_policy: Optional[str] = None # override
-    connect_add_all_nodes: Optional[bool] = None # override
-
-    p_goal: float = 0.1
-    # p_terminal_goal: float = 0.1 
-
-    # Mode sampling
-    mode_sampling_type: str = "uniform" # "uniform" | "greedy" | "frontier"
+    # MODE SAMPLING
+    mode_sampling_type: str = "uniform"                 # "uniform" | "greedy" | "frontier"
     init_mode_sampling_type: str = "frontier"
     p_greedy: float = 0.98
     p_frontier: float = 0.98
+    with_mode_validation: bool = False                  # Geometric pre-check on mode (blacklist_modes) # TODO
     
-    distance_metric: str = "max_euclidean"
-    with_mode_validation: bool = False # Geometric pre-check on mode (blacklist_modes) # TODO
-    with_noise: bool = False
+    # -----------------------------------------------------------------
+    # EXTEND SKILL MODES PARAMETERS
+    # -----------------------------------------------------------------
+    
+    skill_expansion_strategy: str = "kinodynamic"       # "single_step" | "kinodynamic"
+    kinodynamic_steps: int = 5                          # Only for kinodynamic strategy 
+    inactive_steering_mode: str = "concurrent"          # "freeze" | "concurrent"
+    inactive_max_vel: float = 2.0                       # TODO define value, units,...
+    inactive_transition_source: str = "uniform_random"  # "uniform_random" | "random_tree"
 
-    # Skills
-    skill_expansion_strategy: str = "kinodynamic" # "single_step" | "kinodynamic"
-    kinodynamic_steps: int = 5 # Only for kinodynamic strategy 
-    inactive_steering_mode: str = "concurrent" # "freeze" | "concurrent"
-    inactive_max_vel: float = 2.0 # TODO define value, units,...
-    inactive_transition_source: str = "uniform_random" # "uniform_random" | "random_tree"
-
-    # RRT*
+    # -----------------------------------------------------------------
+    # RRT* OPTIMIZATION PARAMETERS
+    # -----------------------------------------------------------------
+    
+    # REWIRING
     use_rrt_star: bool = True
     rewire_after_first_solution: bool = True 
-    rewire_neighbor_strategy: str = "radius" # "radius" | "k_nearest"
+    rewire_neighbor_strategy: str = "radius"            # "radius" | "k_nearest"
     rewire_radius_max: float = 1.0
-    rewire_k_constant: Optional[float] = 10 # float | None uses the sufficient k-nearest RRT* paper constant
+    rewire_k_constant: Optional[float] = 10             # float | None uses the sufficient k-nearest RRT* paper constant
     gamma_rrtstar: float = 0.0
 
-    # Informed sampling
+    # INFORMED SAMPLING
     try_informed_sampling: bool = True
     locally_informed_sampling: bool = True
-    informed_batch_size: int = 300 # Irrelevant in "sampling_based" mode (one config per iter)
-    informed_transition_batch_size: int = 100 # Irrelevant in "sampling_based" mode (one config per iter)
+    informed_batch_size: int = 300                      # Used in batch-mode sampling
+    informed_transition_batch_size: int = 100
 
-    # Shortcutting (post-processing)
+    # PATH POST-PROCESSING (SHORTCUTTING)
     try_shortcutting: bool = True
     shortcutting_mode: str = "round_robin"
     periodic_shortcutting_iters: int = 500
     final_shortcutting_iters: int = 1000
     shortcutting_interpolation_resolution: float = 0.1
-    shortcut_period_iters: int = 500 #100 # 500
-
-    sync_shortcut_to_tree: bool = False # TODO!
-
-    # BRRT*
-    is_bidirectional: bool = False
+    shortcut_period_iters: int = 500
+    sync_shortcut_to_tree: bool = False # TODO!    
 
 @dataclass
 class SkillEdge:
@@ -295,6 +303,7 @@ class RRTSkills(BasePlanner):
     # =====================================================================
     # Initialization
     # =====================================================================
+    
     def __init__(self, env: BaseProblem, config: RRTSkillsConfig):
         self.env = env
         self.config = config
@@ -423,6 +432,7 @@ class RRTSkills(BasePlanner):
     # =====================================================================
     # Main Planning Loop
     # =====================================================================
+
     def plan(self, ptc: PlannerTerminationCondition, optimize: bool = False):
         """
         Main planning loop
@@ -629,6 +639,7 @@ class RRTSkills(BasePlanner):
     # =====================================================================
     # Sampling
     # =====================================================================
+
     def _sample_mode(self) -> Mode:
         """
         Selects which mode to expand next based on the selected strategy
@@ -851,6 +862,7 @@ class RRTSkills(BasePlanner):
     # =====================================================================
     # Tree Expansion & Steering
     # =====================================================================
+
     def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task, is_uniform: bool = True) -> List[Node]:
         """
         
@@ -1026,6 +1038,7 @@ class RRTSkills(BasePlanner):
     # =====================================================================
     # Skill Expansion
     # =====================================================================
+
     def _get_active_skill_task(self, mode: Mode):
         """
         Returns the task with a skill in this mode or None 
@@ -1204,6 +1217,7 @@ class RRTSkills(BasePlanner):
     # =====================================================================
     # Node Management & Transitions
     # =====================================================================
+
     def _validate(self, state_new: State, n_near: Node, is_skill: bool, is_uniform: bool = True) -> bool:
         """
         Collision checking for configurations and edges
@@ -1392,6 +1406,7 @@ class RRTSkills(BasePlanner):
     # =====================================================================
     # Path Extraction & Shortcutting
     # =====================================================================
+
     def _extract_path(self, node: Node) -> List[State]:
         """
         Traces back from the giben node to the root
@@ -1478,6 +1493,7 @@ class RRTSkills(BasePlanner):
     # =====================================================================
     # RRT* / Optimization (Rewiring)
     # =====================================================================
+
     def _set_gamma_rrt_star(self, mu_X_free: float = None):
         """
         RRT*: asymptotic optimality constant
