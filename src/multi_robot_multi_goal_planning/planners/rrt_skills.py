@@ -1,117 +1,3 @@
-"""
-Multi-modal RRT(*) with skills
-
-(OUTDATED NOTES..)
-# TODO update notes
-
---------------------------------------
-DATA STRUCTURES:
---------------------------------------
-Node: 
-- id
-- state State (q, mode)
-- parent Node, children list[Node]
-- cost (cumulative cost from root)
-- is_skill_waypoint, is_transition, skill_step, 
-
-MultiModalTree: 
-- root Node
-- subtrees (dict map between mode -> subtree)
-- batch configs (vectorized distance computation)
-- transition nodes, entry nodes, skill chain nodes
-
-KD-Trees (why not?):
-- Becomes less efficient -> curse of dimensionality
-- RRT* (rewiring) -> tree constantly changing -> rebuild KD-tree every iteration -> expensive
-- Vectorized NumPy -> very fast -> vectorized brute-force search faster than complex data structure? 
-
---------------------------------------
-PLANNER LOOP 
---------------------------------------
-A) Sample (mode, q_rand):
-    - sample mode from reached_modes
-    - sample config q_rand (uniform in C-spacem, goal bias, informed after first solution?)
-
-B) Find nearest:
-    - efficient search to get closest node in subtree
-    - RRT* shrinking radius?
-
-C) Steer:
-    - normal mode: standard linear interpolation from n_nearest towards q_rand by step_size -> q_new
-    - skill mode: calls skill' skill.step() -> q_new (naturally incorporate skill's dynamics and stochasticity into the tree) 
-
-D) Validate
-    - collision check q_new and edge n_nearest -> q_new
-    -- no lazy check like PRM as would break tree otherwise..
-
-E) Add
-    - add n_new to subtree[mode]
-    - check if n_new satisfies env.is_transition(q_new) or if skill.done(q_new) 
-    -- mark n_new as is_transition, compute valid next_modes, create successor node in next mode (n_new -> entry_node)
-
-F) Rewire (RRT*)
-    - check for each node (in radius) if going through q_new is cheaper -> change parent + update/propagate cost 
-    - no rewiring in skill chains
-
-G) Extract path
-    - no A*
-    - trace back (parent) from goal to start
-
-H) 
-
---------------------------------------
-CHALLENGES / OPEN QUESTIONS
---------------------------------------
-Mode transition logic:
-    - need to check for each new node if it satisifies (by chance) the transition conditions..
-    - no direct transition node sampling
-    - okay when using goal bias?
-    -- sample transition configs (like in PRM), upfront or in loop, and steer towards them with p_goal? 
-    -- probably even better with RRT connect? 
-
-Skill integration:
-    - skill chain of nodes -> sequence by forcing parents.. 
-    - 
-
-Collision checking:
-    - no way around, needs to be done every step
-    - config check before edge check  
-    - how come it's that faster than PRM with ?
-
-RRT* cost propagation:
-    - after rewiring, cost propagation with all the skill chains, crossing modes.. expensive
-    - shrinking radius -> fallback with k-nearest?
-
-Bidirectional tree:
-    - how to handle skill rollouts in backward tree.. stop at skill mode boundary?
-    - precompute skill and lookup?
-    - how to merge in multi-modal setting
-
-
---------------------------------------
-ROADMAP
---------------------------------------
-A) RRT basic (no skills): MultiModalTree, geometric transitions (normal mode -> normal mode), basic linear steering
-B) RRT basic (with skills): update steer to handle skill.step(), transition with skill.done()  
-C) RRT* (rewiring): with near() and rewire(), cost propagation
-D) BRRT*: 
-E) 
-F) 
-
---------------------------------------
-COMPARISON TO PRM
---------------------------------------
-- simpler: tree grows naturally, no graph connectivity "issues", no A* search, (no need to sample explicitly transitions?), path extraction trivial
-- harder: 
-
---------------------------------------
-REUSABLE?
---------------------------------------
-- Implement from scratch
-- 
-
-"""
-
 import numpy as np
 import random
 import math
@@ -139,6 +25,9 @@ from multi_robot_multi_goal_planning.problems.skills import (
     BaseDeterministicTimedSkill
 )
 
+# =====================================================================
+# Config and Data Structures
+# =====================================================================
 @dataclass
 class RRTSkillsConfig:
     """
@@ -176,7 +65,7 @@ class RRTSkillsConfig:
     with_noise: bool = False
 
     # Skills
-    skill_expansion_strategy: str = "kinodynamic" # "single_step" | "kinodynamic" | "full_rollout" 
+    skill_expansion_strategy: str = "kinodynamic" # "single_step" | "kinodynamic"
     kinodynamic_steps: int = 5 # Only for kinodynamic strategy 
     inactive_steering_mode: str = "concurrent" # "freeze" | "concurrent"
     inactive_max_vel: float = 2.0 # TODO define value, units,...
@@ -301,7 +190,9 @@ class MultiModalTree:
         if mode not in self.subtrees:
             self.subtrees[mode] = Subtree(mode, self.robot_dims)
 
+# =====================================================================
 # OLD TODOS
+# =====================================================================
 """
 OLD TODOS:
 # General 
@@ -343,7 +234,9 @@ OLD TODOS:
 
 """
 
+# =====================================================================
 # CURRENT TODOS
+# =====================================================================
 """
 CURRENT TODOS
 # RRT
@@ -394,13 +287,14 @@ CURRENT TODOS
 # TODO [ ] in subtree.get_near() should we limit to k_nearest?
 """
 
+# =====================================================================
+# Main Planner Class
+# =====================================================================
 class RRTSkills(BasePlanner):
-    """
-    RRT planner:
-    - Step-based skill rollouts
-    - RRT* rewiring (optional)
-    - Bidirectional search (optional)
-    """
+
+    # =====================================================================
+    # Initialization
+    # =====================================================================
     def __init__(self, env: BaseProblem, config: RRTSkillsConfig):
         self.env = env
         self.config = config
@@ -457,16 +351,78 @@ class RRTSkills(BasePlanner):
             else phase_connect_add_all_nodes
         )
 
-    def _set_solution_node(self, node: Node):
+    def _initialize_planner(self):
         """
-        Records a tree-backed solution and switches phase settings once
+        Setup start node and initial mode
         """
-        if self.solution_node is None:
-            self.solution_node = node
-            self._refresh_phase_params()
-        else:
-            self.solution_node = node
+        if self.tree.root is not None:
+            return # Already initialized
 
+        # Dynamic step size
+        if self.config.extension_strategy == "linear":
+            self.eta = self._compute_dynamic_eta()
+        elif self.config.extension_strategy == "connect":
+            self.eta = self.config.eta_step
+        else:
+            raise ValueError(f"Unknown extension_strategy: {self.config.extension_strategy}")
+
+        # Mode
+        start_mode = self.env.get_start_mode()
+        self.reached_modes.append(start_mode)
+        self.tree.add_subtree(start_mode)
+
+        # Node
+        start_node = Node(State(self.env.get_start_pos(), start_mode))
+        start_node.cost = 0.0
+        self.tree.root = start_node
+        self.tree.subtrees[start_mode].add_node(start_node)
+
+        # Registry of all discovered terminal candidates
+        self.terminal_nodes: List[Node] = [] # For _periodic_improve to re-extract from cheapest
+
+        # RRT* gamma
+        self.valid_samples = 0
+        self.total_samples = 0
+        if self.config.use_rrt_star:
+            self.mu_X_total = float(np.prod(self.env.limits[1] - self.env.limits[0]))
+            self._set_gamma_rrt_star(mu_X_free=self.mu_X_total) # Initial approximation (will get updated)
+
+        # Informed sampler (used after first solution)
+        if self.config.try_informed_sampling:
+            self.informed_sampler = InformedSampling(self.env, "sampling_based", self.config.locally_informed_sampling)
+
+    def _init_debug_counters(self):
+        """
+        # NOTE: GENERATED WITH GEMINI
+
+        Initializes all debug counters.
+        """
+        self._dbg_goal_bias_attempt = 0
+        self._dbg_goal_bias_success = 0
+        self._dbg_informed_attempt = 0
+        self._dbg_informed_success = 0
+        self._dbg_informed_trans_attempt = 0
+        self._dbg_informed_trans_success = 0
+        self._dbg_snap_events = 0
+        self._dbg_validate_fail = 0
+        self._dbg_is_trans_true = 0
+        self._dbg_get_next_empty = 0
+        self._dbg_seed_coll_fail = 0
+        self._dbg_seed_added = 0
+        self._dbg_min_nn_dist = float("inf")
+
+        self._dbg_w_rewires = 0
+        self._dbg_w_best_parent_swaps = 0
+        self._dbg_w_near_size_sum = 0
+        self._dbg_w_near_size_count = 0
+        self._dbg_w_shortcut_hits = 0
+        self._dbg_last_r_n = 0.0
+
+        self._dbg_kino_edges = 0
+
+    # =====================================================================
+    # Main Planning Loop
+    # =====================================================================
     def plan(self, ptc: PlannerTerminationCondition, optimize: bool = False):
         """
         Main planning loop
@@ -562,114 +518,117 @@ class RRTSkills(BasePlanner):
         }
         return path, info
 
-    def _get_terminal_node(self, n_new: Node, next_mode_seeds: List[Node]) -> Optional[Node]:
+    def _record_solution(self, costs: List[float], times: List[float], 
+                         path: List[State] = None, node: Node = None, cost: Optional[float] = None) -> bool:
         """
-        Registers newly-discovered terminal candidates in self.terminal_nodes and returns one
-        (if any) for immediate solution recording
+        Tracks best_cost and best_path from a candidate path or node
+        Returns True when best cost got updated
         """
-        found: Optional[Node] = None
+        if path is None and node is not None:
+            path = self._extract_path(node)
+        if path is None or len(path) < 2:
+            return False
 
-        if self.env.done(n_new.state.q, n_new.state.mode):
-            if n_new not in self.terminal_nodes:
-                self.terminal_nodes.append(n_new)
-                found = n_new
-        
-        for seed in next_mode_seeds:
-            if self.env.done(seed.state.q, seed.state.mode):
-                if seed not in self.terminal_nodes:
-                    self.terminal_nodes.append(seed)
-                if found is None:
-                    found = seed
-            
-        return found
+        new_cost = cost if cost is not None else path_cost(path, self.env.batch_config_cost)
+        if new_cost >= self.best_cost - 1e-8:
+            return False
 
-    def _get_best_terminal(self) -> Optional[Node]:
+        # Update tree pointer ONLY when improvement came from a tree node
+        if node is not None:
+            self._set_solution_node(node)
+
+        self.best_cost = new_cost
+        self.best_path = list(path)
+        self._update_informed_path()
+        costs.append(self.best_cost)
+        times.append(time.time() - self.start_time)
+        return True
+
+    def _periodic_improve(self, costs: List[float], times: List[float]):
         """
-        Returns the current lowest-cost terminal candidate (None if not discovered yet)
+        Periodic improvement:
+        1. Always re-extract the cheapest terminal tree path so rewiring-only
+            improvements are visible.
+        2. If shortcutting is enabled, shortcut that fresh tree path, not the
+            previous best_path.
         """
-        if not self.terminal_nodes:
-            return None
-        return min(self.terminal_nodes, key=lambda n: n.cost)
+        # 1. Re-extract from cheapest terminal
+        best_terminal = self._get_best_terminal()
+        if best_terminal is None:
+            return
 
-    def _initialize_planner(self):
+        tree_path = self._extract_path(best_terminal)
+        if self._record_solution(costs, times, path=tree_path, node=best_terminal):
+            print(f"[RRT TREE REWIRE] Improved cost to {self.best_cost:.3f}")
+
+        if not self.config.try_shortcutting or self.best_path is None or len(self.best_path) < 2:
+            return
+
+        # 2. Shortcut 
+        sc_path = self._shortcut(self.best_path, self.config.periodic_shortcutting_iters)
+
+        if self._record_solution(costs, times, path=sc_path):
+            self.improvement_count += 1
+            print(f"[RRT SHORTCUT #{self.improvement_count}] cost={self.best_cost:.3f}")
+
+            if self.config.sync_shortcut_to_tree:
+                self._sync_shortcut_to_tree(sc_path)
+                best_terminal = self._get_best_terminal()
+                if best_terminal is not None:
+                    self._record_solution(costs, times, node=best_terminal)
+
+    def _print_debug(self, iterations: int):
         """
-        Setup start node and initial mode
+        # NOTE: GENERATED WITH GEMINI
+
+        Prints periodic performance telemetry and resets window counters.
         """
-        if self.tree.root is not None:
-            return # Already initialized
-        
-        # Dynamic step size
-        if self.config.extension_strategy == "linear":
-            self.eta = self._compute_dynamic_eta()
-        elif self.config.extension_strategy == "connect":
-            self.eta = self.config.eta_step
-        else:
-            raise ValueError(f"Unknown extension_strategy: {self.config.extension_strategy}")
-        
-        # Mode
-        start_mode = self.env.get_start_mode()
-        self.reached_modes.append(start_mode)
-        self.tree.add_subtree(start_mode)
-        
-        # Node
-        start_node = Node(State(self.env.get_start_pos(), start_mode))
-        start_node.cost = 0.0
-        self.tree.root = start_node
-        self.tree.subtrees[start_mode].add_node(start_node)
+        nodes = sum(s.size for s in self.tree.subtrees.values())
+        tag = "RRT*" if self.config.use_rrt_star else "RRT"
+        sol_cost = self.solution_node.cost if self.solution_node is not None else float("inf")
+        near_avg = (self._dbg_w_near_size_sum / self._dbg_w_near_size_count 
+                    if self._dbg_w_near_size_count > 0 else 0.0)
 
-        # Registry of all discovered terminal candidates
-        self.terminal_nodes: List[Node] = [] # For _periodic_improve to re-extract from cheapest
+        rewire_status = "ON" if self._should_rewire() else "OFF"
+        informed_status = "ON" if (self.informed_path is not None and self.config.try_informed_sampling) else "OFF"
+        connect_policy = self._active_connect_target_policy
+        connect_add_all = self._active_connect_add_all_nodes
 
-        # RRT* gamma
-        self.valid_samples = 0
-        self.total_samples = 0
-        if self.config.use_rrt_star:
-            self.mu_X_total = float(np.prod(self.env.limits[1] - self.env.limits[0]))
-            self._set_gamma_rrt_star(mu_X_free=self.mu_X_total) # Initial approximation (will get updated)
+        print(
+            f"[{tag}] it={iterations} nodes={nodes} modes={len(self.reached_modes)} "
+            f"best={self.best_cost:.3f} sol={sol_cost:.3f} "
+            f"etaMacro={self.eta:.2f} etaStep={self.config.eta_step:.2f} "
+            f"rMax={self.config.rewire_radius_max:.2f} "
+            f"rewire={rewire_status} informed={informed_status}\n"
+            f"connect={connect_policy}/addAll={connect_add_all}\n"
+            f"       | w: rewires={self._dbg_w_rewires} "
+            f"r_n={self._dbg_last_r_n} "
+            f"bestP={self._dbg_w_best_parent_swaps} "
+            f"nearAvg={near_avg:.1f} "
+            f"sCut={self._dbg_w_shortcut_hits}\n"
+            f"       | c: snap={self._dbg_snap_events} "
+            f"vfail={self._dbg_validate_fail} "
+            f"gb={self._dbg_goal_bias_success}/{self._dbg_goal_bias_attempt} "
+            f"inf={self._dbg_informed_success}/{self._dbg_informed_attempt} "                        
+            f"infT={self._dbg_informed_trans_success}/{self._dbg_informed_trans_attempt} "  
+            f"isT={self._dbg_is_trans_true} "
+            f"nextE={self._dbg_get_next_empty} "
+            f"sCF={self._dbg_seed_coll_fail} sAdd={self._dbg_seed_added} "
+            f"kinoEdges={self._dbg_kino_edges} "
+            f"impr={self.improvement_count}"
+        )
+        # Reset window counters
+        self._dbg_w_rewires = 0
+        self._dbg_w_best_parent_swaps = 0
+        self._dbg_w_near_size_sum = 0
+        self._dbg_w_near_size_count = 0
+        self._dbg_w_rewire_extracts = 0
+        self._dbg_w_shortcut_hits = 0
+        self._dbg_kino_edges = 0
 
-        # Informed sampler (used after first solution)
-        if self.config.try_informed_sampling:
-            self.informed_sampler = InformedSampling(self.env, "sampling_based", self.config.locally_informed_sampling)
-    
-    def _compute_dynamic_eta(self):
-        """
-        Dynamically compute step size eta based based on environment boundaries and chosen strategy
-        """
-        strategy = self.config.step_size_strategy
-    
-        if strategy == "constant":
-            return self.config.step_size
-        
-        elif strategy == "sqrt_d":
-            d = sum(self.env.robot_dims.values())
-            return math.sqrt(d)
-        
-        elif strategy == "sqrt_d_robots":
-            d = sum(self.env.robot_dims.values())
-            num_robots = len(self.env.robots)
-            return math.sqrt(d / num_robots)
-
-        robot_diameters = []
-        offset = 0
-        for robot in self.env.robots:
-            dim = self.env.robot_dims[robot]
-            lo = self.env.limits[0, offset : offset + dim]
-            hi = self.env.limits[1, offset : offset + dim]
-            robot_diameters.append(np.linalg.norm(hi - lo))
-            offset += dim
-
-        workspace_diameter = max(robot_diameters)
-        
-        if strategy == "scaled":
-            return self.config.step_size_factor * workspace_diameter
-        
-        elif strategy == "sqrt_d_scaled":
-            d = sum(self.env.robot_dims.values())
-            return workspace_diameter / math.sqrt(d)
-        
-        else:
-            raise ValueError(f"Unknown step_size_strategy: {strategy}")
-
+    # =====================================================================
+    # Sampling
+    # =====================================================================
     def _sample_mode(self) -> Mode:
         """
         Selects which mode to expand next based on the selected strategy
@@ -832,9 +791,9 @@ class RRTSkills(BasePlanner):
             # Validate that the constrained config is collision-free in current mode
             if self.env.is_collision_free(q, mode):
                 return q
-            
+
         return None
-    
+
     def _select_inactive_source_node(
         self,
         mode: Mode,
@@ -889,6 +848,9 @@ class RRTSkills(BasePlanner):
         else:
             self.informed_path = None
 
+    # =====================================================================
+    # Tree Expansion & Steering
+    # =====================================================================
     def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task, is_uniform: bool = True) -> List[Node]:
         """
         
@@ -905,29 +867,23 @@ class RRTSkills(BasePlanner):
         strategy = self.config.skill_expansion_strategy
         if strategy == "single_step":
             return self._expand_single_step(n_near, q_target, mode, skill_task)
-        if strategy == "full_rollout":
-            return self._expand_full_rollout() # TODO remove (won't need it)
         if strategy == "kinodynamic":
             return self._expand_kinodynamic(n_near, q_target, mode, skill_task)
         
         raise ValueError(f"Unknown skill_explansion_strategy: {strategy}")
 
-    def _steer_inactive(self, q_full: np.ndarray, q_target_vec: np.ndarray, active_indices: np.ndarray, dt: float) -> np.ndarray:
+    def _expand_linear(self, n_near: Node, q_target: Configuration, mode: Mode, is_uniform: bool) -> List[Node]:
         """
-        Concurrent inactive robot steering, bounded by inactive_max_vel * dt
+        Standard one-step RRT expansion for non-skill modes.
         """
-        if self.config.inactive_steering_mode != "concurrent":
-            return q_full.copy()
-        
-        direction = q_target_vec - q_full
-        direction[active_indices] = 0.0
-        inactive_dist = np.linalg.norm(direction)
+        state_new = self._linear_steer(n_near, q_target, mode)
+        if state_new is None:
+            return []
 
-        if inactive_dist <= 1e-8:
-            return q_full.copy()
-        eta_inactive = min(self.config.inactive_max_vel * dt, inactive_dist)
+        if not self._validate(state_new, n_near, is_skill=False, is_uniform=is_uniform):
+            return []
 
-        return q_full + eta_inactive * (direction / inactive_dist)
+        return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
 
     def _linear_steer(self, n_near: Node, q_target: Configuration, mode: Mode):
         """
@@ -959,381 +915,117 @@ class RRTSkills(BasePlanner):
         # print(f"[DEBUG LINEAR STEER] dist = {dist:.4f}, eta = {self.eta:.4f}")
         return State(q_new, mode)
 
-    def _expand_linear(self, n_near: Node, q_target: Configuration, mode: Mode, is_uniform: bool) -> List[Node]:
+    def _steer_inactive(self, q_full: np.ndarray, q_target_vec: np.ndarray, active_indices: np.ndarray, dt: float) -> np.ndarray:
         """
-        Standard one-step RRT expansion for non-skill modes.
+        Concurrent inactive robot steering, bounded by inactive_max_vel * dt
         """
-        state_new = self._linear_steer(n_near, q_target, mode)
-        if state_new is None:
+        if self.config.inactive_steering_mode != "concurrent":
+            return q_full.copy()
+
+        direction = q_target_vec - q_full
+        direction[active_indices] = 0.0
+        inactive_dist = np.linalg.norm(direction)
+
+        if inactive_dist <= 1e-8:
+            return q_full.copy()
+        eta_inactive = min(self.config.inactive_max_vel * dt, inactive_dist)
+
+        return q_full + eta_inactive * (direction / inactive_dist)
+
+    def _expand_connect(self, n_near: Node, q_target: Configuration, mode: Mode, is_uniform: bool) -> List[Node]:
+        """
+        RRT-Connect-style extension: goes from n_near towards q_target in steps of eta_step
+
+        Node insertion is phase-specific:
+        1. add_all_nodes=False: only final node enters the tree
+        - Fast for finding initial solutions but breaks RRT*-rewiring (long edges + small rewire radius).
+
+        2. add_all_nodes=True: every intermediate step enters the tree
+        - Required for asymptotic optimality with use_rrt_star=True.
+        """
+        q_target_vec = q_target.state()
+        q_curr_vec = n_near.state.q.state().copy()
+        q_curr_cfg = n_near.state.q
+
+        eta_step = self.eta
+
+        target_policy = self._active_connect_target_policy
+        if target_policy == "transition":
+            is_transition_target = self.env.is_transition(q_target, mode)
+            max_steps = self.config.connect_max_steps if is_transition_target else 1
+        elif target_policy == "all":
+            max_steps = self.config.connect_max_steps
+        else:
+            raise ValueError(f"Unknown connect_target_policy: {target_policy}")
+
+        add_all = self._active_connect_add_all_nodes
+
+        new_nodes: List[Node] = []
+        n_parent = n_near # Parent for the next step (becomes previous step's node when add_all)
+        progress = False
+        reached_snap = False
+
+        # 
+        for _ in range(max_steps):
+            dist = batch_config_dist(q_curr_cfg, [q_target], self.config.distance_metric).item()
+            if dist < 1e-6:
+                reached_snap = True
+                break
+
+            # Steer
+            step = min(eta_step, dist)
+            snap = step >= dist - 1e-9
+            q_next_vec = q_target_vec.copy() if snap else q_curr_vec + step * (q_target_vec - q_curr_vec) / dist
+            q_next_cfg = self.env.get_start_pos().from_flat(q_next_vec)
+
+            # Validate
+            if not self.env.is_collision_free(q_next_cfg, mode):
+                if self.config.use_rrt_star:
+                    self._update_cfree_estimate(was_valid=False, was_uniform=is_uniform)
+                break
+
+            if not self.env.is_edge_collision_free(q_curr_cfg, q_next_cfg, mode):
+                break
+
+            # Step accepted
+            q_curr_vec = q_next_vec
+            q_curr_cfg = q_next_cfg
+            progress = True
+            if self.config.use_rrt_star:
+                self._update_cfree_estimate(was_valid=True, was_uniform=is_uniform)
+
+            if add_all:
+                # RRT*-connect: each step is a tree node with full ChooseParent treatment
+                # _rewire is then applied per node in plan()'s post-expand loop
+                state_step = State(q_curr_cfg, mode)
+                n_step = self._create_and_add_node(state_step, n_parent, mode, is_skill=False)
+                new_nodes.append(n_step)
+                n_parent = n_step
+
+            if snap:
+                reached_snap = True
+                break
+
+        if reached_snap:
+            self._dbg_snap_events += 1
+
+        if not progress:
             return []
 
-        if not self._validate(state_new, n_near, is_skill=False, is_uniform=is_uniform):
-            return []
+        if not add_all:
+            # Satisficing connect: single node at the end of the chain
+            state_new = State(q_curr_cfg, mode)
+            new_nodes = [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
 
-        return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
 
-    def _validate(self, state_new: State, n_near: Node, is_skill: bool, is_uniform: bool = True) -> bool:
-        """
-        Collision checking for configurations and edges
-        """
-        # 1. Config check
-        is_state_free = self.env.is_collision_free(state_new.q, state_new.mode)
+        # state_new = State(q_curr_cfg, mode)
+        # return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
 
-        # 2. Update c_free self._update_cfree_estimate
-        if self.config.use_rrt_star and not is_skill:
-            self._update_cfree_estimate(was_valid=is_state_free, was_uniform=is_uniform)
+        return new_nodes
 
-        # 3. Failure based on config check 
-        if not is_state_free:
-            self._dbg_validate_fail += 1
-            if is_skill and self._dbg_validate_fail % 100 == 0:  # Print every 100th fail to avoid spam
-                print(f"[DEBUG SKILL] State collision at t_norm = {n_near.skill_step/100:.2f} (approx)")
-            return False
-        
-        # 4. Edge check
-        if not self.env.is_edge_collision_free(state_new.q, n_near.state.q, state_new.mode):
-            self._dbg_validate_fail += 1
-            if is_skill and self._dbg_validate_fail % 100 == 0:
-                print(f"[DEBUG SKILL] Edge collision from step {n_near.skill_step} to {n_near.skill_step + 1}")
-            return False
-        
-        return True
-
-    def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode, is_skill: bool = False, edge_cost_override: Optional[float] = None) -> Node:
-        """
-        Handles node creation and addition, including RRT* parent optimization
-        Optional edge_cost_override for kinodynamic skilledge to pass the true cost
-        """
-        if is_skill or not self._should_rewire():
-            # Skill node or RRT* inactive -> always attach to n_near
-            parent = n_near
-            if edge_cost_override is not None:
-                cost_to_parent = edge_cost_override
-            else:
-                cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
-            cost = n_near.cost + cost_to_parent
-        else:
-            # Non-skill node + RRT* active -> run RRT* choose parent
-            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode)
-        
-        # Create
-        n_new = Node(state_new, parent=parent)
-        n_new.cost = cost
-        n_new.cost_to_parent = cost_to_parent
-
-        # Skill node bookkeeping
-        if is_skill:
-            n_new.is_skill_waypoint = True
-            n_new.state.is_skill_waypoint = True # TODO (for shortcutter.. change and only keep on node..?)
-            n_new.skill_step = n_near.skill_step + 1
-
-        # Add
-        self.tree.subtrees[mode].add_node(n_new)
-        n_new.parent.children.append(n_new)
-        return n_new
-
-    def _check_transitions(self, n_new: Node) -> List[Node]:
-        """
-        Checks if n_new triggers a mode switch (mode-boundary node) and seeds all valid successor
-        modes at the same configuration.
-        """
-        created_seeds: List[Node] = []
-
-        # Check if n_new is a transition
-        if not self._is_mode_transition(n_new):
-            return created_seeds
-
-        mode = n_new.state.mode
-        self._dbg_is_trans_true += 1
-
-        # Get valid next modes
-        next_modes = self.env.get_next_modes(n_new.state.q, mode)
-        valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
-
-        if not valid_next_modes:
-            self._dbg_get_next_empty += 1
-            return created_seeds
-
-        for next_mode in valid_next_modes:
-            # TODO really need to check if n_new in next_mode collision free, or always the case?
-            if not self.env.is_collision_free(n_new.state.q, next_mode):
-                self._dbg_seed_coll_fail += 1
-                continue
-            
-            # Create the successor subtree treating transition nodes as start nodes of the next mode
-            if next_mode not in self.reached_modes:
-                self.reached_modes.append(next_mode)
-                self.tree.add_subtree(next_mode)
-
-            seed_state = State(n_new.state.q, next_mode)
-            seed_node = Node(seed_state, parent=n_new)
-            seed_node.cost = n_new.cost
-            seed_node.cost_to_parent = 0.0
-
-            self.tree.subtrees[next_mode].add_node(seed_node)
-            n_new.children.append(seed_node)
-            created_seeds.append(seed_node)
-
-            if self._should_rewire() and not seed_node.is_skill_waypoint and self._get_active_skill_task(next_mode) is None:
-                self._rewire(seed_node, next_mode)
-
-            self._dbg_seed_added += 1
-
-        return created_seeds
-
-    def _is_mode_transition(self, node: Node) -> bool:
-        """
-        
-        """
-        mode = node.state.mode
-
-        if self.env.is_terminal_mode(mode):
-            return False
-
-        skill_task = self._get_active_skill_task(mode)
-
-        # Case 1: non-skill mode (geometric)
-        if skill_task is None:
-            goal_done = self.env.is_transition(node.state.q, mode)
-            return goal_done
-
-        # Case 2: skill mode (skill done)
-        skill = skill_task.skill
-        q_full = node.state.q.state()
-        active_indices = self._get_active_subspace_indices(skill_task)
-        q_subspace = q_full[active_indices]
-
-        if isinstance(skill, BaseDeterministicTimedSkill):
-            n_steps = max(1, round(skill.duration / skill.dt))
-            t_norm = min(node.skill_step / n_steps, 1.0)
-            skill_done = skill.done(t_norm, q_subspace, self.env)
-        else:
-            skill_done = skill.done(q_subspace, self.env)
-
-        return skill_done
-
-    def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
-        """
-        Post-processes a path with robot_mode_shortcut
-        Skill segments are protected
-        """
-        shortcut_path, _ = shortcutting.robot_mode_shortcut(
-            self.env, path, shortcutting_iters,
-            resolution=self.env.collision_resolution,
-            tolerance=self.env.collision_tolerance,
-            robot_choice=self.config.shortcutting_mode,
-            interpolation_resolution=self.config.shortcutting_interpolation_resolution
-        )
-
-        # Remove interpolated points used in shortcutting (collision check)
-        return shortcutting.remove_interpolated_nodes(shortcut_path)
-
-    def _sync_shortcut_to_tree(self, shortcut_path: List[State]) -> Optional[Node]:
-        """
-        Inserts a shortcutted path back into the tree as a fresh connected chain.
-        Near-duplicate snapping is intentionally disabled below until it is needed.
-        """
-        if not shortcut_path or len(shortcut_path) < 2:
-            return None
-
-        parent_node = self.tree.root
-        
-        for state in shortcut_path[1:]:
-            is_skill = getattr(state, "is_skill_waypoint", False)
-            cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
-            candidate_cost = parent_node.cost + cost_to_parent
-
-            # TODO Optional near-duplicate snapping, kept off for now:
-            # subtree = self.tree.subtrees[state.mode]
-            # nearest, dist = subtree.get_nearest(state.q, self.config.distance_metric)
-            # if nearest is not None and dist <= 1e-6 and nearest.cost <= candidate_cost + 1e-8:
-            #     parent_node = nearest
-            #     continue
-
-            new_node = Node(state, parent=parent_node)
-            new_node.cost_to_parent = cost_to_parent
-            new_node.cost = candidate_cost
-
-            if is_skill:
-                new_node.is_skill_waypoint = True
-                new_node.skill_step = parent_node.skill_step + 1
-
-            self.tree.subtrees[state.mode].add_node(new_node)
-            parent_node.children.append(new_node)
-
-            # if self._should_rewire() and not new_node.is_skill_waypoint and self._get_active_skill_task(state.mode) is None:
-            #     self._rewire(new_node, state.mode)
-
-            parent_node = new_node
-        
-        if self.env.done(parent_node.state.q, parent_node.state.mode): # TODO needed?
-            if parent_node not in self.terminal_nodes:
-                self.terminal_nodes.append(parent_node)
-            self._set_solution_node(parent_node)
-            return parent_node
-        return None
-
-    def _extract_path(self, node: Node) -> List[State]:
-        """
-        Traces back from the giben node to the root
-        """
-        nodes = []
-        curr = node
-        while curr: 
-            nodes.append(curr)
-            curr = curr.parent
-        nodes.reverse()
-
-        # Build path (inserting SkillEdge intermediates where present)
-        path = []
-        for n in nodes:
-            if n.skill_edge is not None:
-                for wp in n.skill_edge.waypoints[1:]:
-                    q_wp = self.env.get_start_pos().from_flat(wp)
-                    path.append(State(q_wp, n.state.mode, is_skill_waypoint=True))
-            else:
-                path.append(n.state)
-        return path
-
-    # TODO ADDITIONAL HELPER FUNCTIONS (plan)
-    def _init_debug_counters(self):
-        """
-        # NOTE: GENERATED WITH GEMINI
-
-        Initializes all debug counters.
-        """
-        self._dbg_goal_bias_attempt = 0
-        self._dbg_goal_bias_success = 0
-        self._dbg_informed_attempt = 0
-        self._dbg_informed_success = 0
-        self._dbg_informed_trans_attempt = 0
-        self._dbg_informed_trans_success = 0
-        self._dbg_snap_events = 0
-        self._dbg_validate_fail = 0
-        self._dbg_is_trans_true = 0
-        self._dbg_get_next_empty = 0
-        self._dbg_seed_coll_fail = 0
-        self._dbg_seed_added = 0
-        self._dbg_min_nn_dist = float("inf")
-
-        self._dbg_w_rewires = 0
-        self._dbg_w_best_parent_swaps = 0
-        self._dbg_w_near_size_sum = 0
-        self._dbg_w_near_size_count = 0
-        self._dbg_w_shortcut_hits = 0
-        self._dbg_last_r_n = 0.0
-
-        self._dbg_kino_edges = 0
-
-    def _print_debug(self, iterations: int):
-        """
-        # NOTE: GENERATED WITH GEMINI
-
-        Prints periodic performance telemetry and resets window counters.
-        """
-        nodes = sum(s.size for s in self.tree.subtrees.values())
-        tag = "RRT*" if self.config.use_rrt_star else "RRT"
-        sol_cost = self.solution_node.cost if self.solution_node is not None else float("inf")
-        near_avg = (self._dbg_w_near_size_sum / self._dbg_w_near_size_count 
-                    if self._dbg_w_near_size_count > 0 else 0.0)
-        
-        rewire_status = "ON" if self._should_rewire() else "OFF"
-        informed_status = "ON" if (self.informed_path is not None and self.config.try_informed_sampling) else "OFF"
-        connect_policy = self._active_connect_target_policy
-        connect_add_all = self._active_connect_add_all_nodes
-
-        print(
-            f"[{tag}] it={iterations} nodes={nodes} modes={len(self.reached_modes)} "
-            f"best={self.best_cost:.3f} sol={sol_cost:.3f} "
-            f"etaMacro={self.eta:.2f} etaStep={self.config.eta_step:.2f} "
-            f"rMax={self.config.rewire_radius_max:.2f} "
-            f"rewire={rewire_status} informed={informed_status}\n"
-            f"connect={connect_policy}/addAll={connect_add_all}\n"
-            f"       | w: rewires={self._dbg_w_rewires} "
-            f"r_n={self._dbg_last_r_n} "
-            f"bestP={self._dbg_w_best_parent_swaps} "
-            f"nearAvg={near_avg:.1f} "
-            f"sCut={self._dbg_w_shortcut_hits}\n"
-            f"       | c: snap={self._dbg_snap_events} "
-            f"vfail={self._dbg_validate_fail} "
-            f"gb={self._dbg_goal_bias_success}/{self._dbg_goal_bias_attempt} "
-            f"inf={self._dbg_informed_success}/{self._dbg_informed_attempt} "                        
-            f"infT={self._dbg_informed_trans_success}/{self._dbg_informed_trans_attempt} "  
-            f"isT={self._dbg_is_trans_true} "
-            f"nextE={self._dbg_get_next_empty} "
-            f"sCF={self._dbg_seed_coll_fail} sAdd={self._dbg_seed_added} "
-            f"kinoEdges={self._dbg_kino_edges} "
-            f"impr={self.improvement_count}"
-        )
-        # Reset window counters
-        self._dbg_w_rewires = 0
-        self._dbg_w_best_parent_swaps = 0
-        self._dbg_w_near_size_sum = 0
-        self._dbg_w_near_size_count = 0
-        self._dbg_w_rewire_extracts = 0
-        self._dbg_w_shortcut_hits = 0
-        self._dbg_kino_edges = 0
-
-    def _record_solution(self, costs: List[float], times: List[float], 
-                         path: List[State] = None, node: Node = None, cost: Optional[float] = None) -> bool:
-        """
-        Tracks best_cost and best_path from a candidate path or node
-        Returns True when best cost got updated
-        """
-        if path is None and node is not None:
-            path = self._extract_path(node)
-        if path is None or len(path) < 2:
-            return False
-        
-        new_cost = cost if cost is not None else path_cost(path, self.env.batch_config_cost)
-        if new_cost >= self.best_cost - 1e-8:
-            return False
-        
-        # Update tree pointer ONLY when improvement came from a tree node
-        if node is not None:
-            self._set_solution_node(node)
-        
-        self.best_cost = new_cost
-        self.best_path = list(path)
-        self._update_informed_path()
-        costs.append(self.best_cost)
-        times.append(time.time() - self.start_time)
-        return True
-
-    def _periodic_improve(self, costs: List[float], times: List[float]):
-        """
-        Periodic improvement:
-        1. Always re-extract the cheapest terminal tree path so rewiring-only
-            improvements are visible.
-        2. If shortcutting is enabled, shortcut that fresh tree path, not the
-            previous best_path.
-        """
-        # 1. Re-extract from cheapest terminal
-        best_terminal = self._get_best_terminal()
-        if best_terminal is None:
-            return
-
-        tree_path = self._extract_path(best_terminal)
-        if self._record_solution(costs, times, path=tree_path, node=best_terminal):
-            print(f"[RRT TREE REWIRE] Improved cost to {self.best_cost:.3f}")
-
-        if not self.config.try_shortcutting or self.best_path is None or len(self.best_path) < 2:
-            return
-
-        # 2. Shortcut 
-        sc_path = self._shortcut(self.best_path, self.config.periodic_shortcutting_iters)
-
-        if self._record_solution(costs, times, path=sc_path):
-            self.improvement_count += 1
-            print(f"[RRT SHORTCUT #{self.improvement_count}] cost={self.best_cost:.3f}")
-
-            if self.config.sync_shortcut_to_tree:
-                self._sync_shortcut_to_tree(sc_path)
-                best_terminal = self._get_best_terminal()
-                if best_terminal is not None:
-                    self._record_solution(costs, times, node=best_terminal)
-
-    # TODO SKILLS
+    # =====================================================================
+    # Skill Expansion
+    # =====================================================================
     def _get_active_skill_task(self, mode: Mode):
         """
         Returns the task with a skill in this mode or None 
@@ -1346,26 +1038,20 @@ class RRTSkills(BasePlanner):
         if hasattr(task, 'skill') and task.skill is not None:
             return task
         return None
-    
-    def _non_skill_reached_modes(self) -> List[Mode]:
-        """
-        Filter skill modes
-        """
-        return [m for m in self.reached_modes if self._get_active_skill_task(m) is None]
 
     def _get_active_subspace_indices(self, active_task) -> List[int]:
-      """
-      Returns indices for the robots involved in the active task
-      """
-      active_indices = []
-      end_idx = 0
-      for robot in self.env.robots:
-          dim = self.env.robot_dims[robot]
-          if robot in active_task.robots:
-              active_indices.extend(range(end_idx, end_idx + dim))
-          end_idx += dim
-      return active_indices
-    
+        """
+        Returns indices for the robots involved in the active task
+        """
+        active_indices = []
+        end_idx = 0
+        for robot in self.env.robots:
+            dim = self.env.robot_dims[robot]
+            if robot in active_task.robots:
+                active_indices.extend(range(end_idx, end_idx + dim))
+            end_idx += dim
+        return active_indices
+
     def _expand_single_step(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
         """
         Rolls the skill out by one step, with optional concurrent steering for the inactive robots.
@@ -1407,13 +1093,7 @@ class RRTSkills(BasePlanner):
             return []
         
         return [self._create_and_add_node(state_new, n_near, mode, is_skill=True)]
-    
-    def _expand_full_rollout(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]: # TODO
-        """
-        Full skill rollout from n_near
-        """
-        raise NotImplementedError
-    
+ 
     def _expand_kinodynamic(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
         """
         Rolls out skill steps as one skill edge
@@ -1510,97 +1190,6 @@ class RRTSkills(BasePlanner):
 
         return [n_new]
 
-    def _expand_connect(self, n_near: Node, q_target: Configuration, mode: Mode, is_uniform: bool) -> List[Node]:
-        """
-        RRT-Connect-style extension: goes from n_near towards q_target in steps of eta_step
-
-        Node insertion is phase-specific:
-        1. add_all_nodes=False: only final node enters the tree
-        - Fast for finding initial solutions but breaks RRT*-rewiring (long edges + small rewire radius).
-        
-        2. add_all_nodes=True: every intermediate step enters the tree
-        - Required for asymptotic optimality with use_rrt_star=True.
-        """
-        q_target_vec = q_target.state()
-        q_curr_vec = n_near.state.q.state().copy()
-        q_curr_cfg = n_near.state.q
-
-        eta_step = self.eta
-
-        target_policy = self._active_connect_target_policy
-        if target_policy == "transition":
-            is_transition_target = self.env.is_transition(q_target, mode)
-            max_steps = self.config.connect_max_steps if is_transition_target else 1
-        elif target_policy == "all":
-            max_steps = self.config.connect_max_steps
-        else:
-            raise ValueError(f"Unknown connect_target_policy: {target_policy}")
-        
-        add_all = self._active_connect_add_all_nodes
-        
-        new_nodes: List[Node] = []
-        n_parent = n_near # Parent for the next step (becomes previous step's node when add_all)
-        progress = False
-        reached_snap = False
-
-        # 
-        for _ in range(max_steps):
-            dist = batch_config_dist(q_curr_cfg, [q_target], self.config.distance_metric).item()
-            if dist < 1e-6:
-                reached_snap = True
-                break
-            
-            # Steer
-            step = min(eta_step, dist)
-            snap = step >= dist - 1e-9
-            q_next_vec = q_target_vec.copy() if snap else q_curr_vec + step * (q_target_vec - q_curr_vec) / dist
-            q_next_cfg = self.env.get_start_pos().from_flat(q_next_vec)
-
-            # Validate
-            if not self.env.is_collision_free(q_next_cfg, mode):
-                if self.config.use_rrt_star:
-                    self._update_cfree_estimate(was_valid=False, was_uniform=is_uniform)
-                break
-
-            if not self.env.is_edge_collision_free(q_curr_cfg, q_next_cfg, mode):
-                break
-            
-            # Step accepted
-            q_curr_vec = q_next_vec
-            q_curr_cfg = q_next_cfg
-            progress = True
-            if self.config.use_rrt_star:
-                self._update_cfree_estimate(was_valid=True, was_uniform=is_uniform)
-
-            if add_all:
-                # RRT*-connect: each step is a tree node with full ChooseParent treatment
-                # _rewire is then applied per node in plan()'s post-expand loop
-                state_step = State(q_curr_cfg, mode)
-                n_step = self._create_and_add_node(state_step, n_parent, mode, is_skill=False)
-                new_nodes.append(n_step)
-                n_parent = n_step
-
-            if snap:
-                reached_snap = True
-                break
-
-        if reached_snap:
-            self._dbg_snap_events += 1
-
-        if not progress:
-            return []
-        
-        if not add_all:
-            # Satisficing connect: single node at the end of the chain
-            state_new = State(q_curr_cfg, mode)
-            new_nodes = [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
-
-
-        # state_new = State(q_curr_cfg, mode)
-        # return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
-        
-        return new_nodes
-
     def _skill_edge_cost(self, waypoints: np.ndarray, mode: Mode) -> float:
         """
         Computes true cost for kinodynamic edges instead of using straight-line parent-to-end-costs
@@ -1611,8 +1200,284 @@ class RRTSkills(BasePlanner):
         q_from_flat = self.env.get_start_pos().from_flat
         configs = [q_from_flat(q) for q in waypoints]
         return float(np.sum(self.env.batch_config_cost(configs[:-1], configs[1:])))
-    
-    # TODO RRT*
+
+    # =====================================================================
+    # Node Management & Transitions
+    # =====================================================================
+    def _validate(self, state_new: State, n_near: Node, is_skill: bool, is_uniform: bool = True) -> bool:
+        """
+        Collision checking for configurations and edges
+        """
+        # 1. Config check
+        is_state_free = self.env.is_collision_free(state_new.q, state_new.mode)
+
+        # 2. Update c_free self._update_cfree_estimate
+        if self.config.use_rrt_star and not is_skill:
+            self._update_cfree_estimate(was_valid=is_state_free, was_uniform=is_uniform)
+
+        # 3. Failure based on config check 
+        if not is_state_free:
+            self._dbg_validate_fail += 1
+            if is_skill and self._dbg_validate_fail % 100 == 0:  # Print every 100th fail to avoid spam
+                print(f"[DEBUG SKILL] State collision at t_norm = {n_near.skill_step/100:.2f} (approx)")
+            return False
+
+        # 4. Edge check
+        if not self.env.is_edge_collision_free(state_new.q, n_near.state.q, state_new.mode):
+            self._dbg_validate_fail += 1
+            if is_skill and self._dbg_validate_fail % 100 == 0:
+                print(f"[DEBUG SKILL] Edge collision from step {n_near.skill_step} to {n_near.skill_step + 1}")
+            return False
+
+        return True
+
+    def _create_and_add_node(self, state_new: State, n_near: Node, mode: Mode, is_skill: bool = False, edge_cost_override: Optional[float] = None) -> Node:
+        """
+        Handles node creation and addition, including RRT* parent optimization
+        Optional edge_cost_override for kinodynamic skilledge to pass the true cost
+        """
+        if is_skill or not self._should_rewire():
+            # Skill node or RRT* inactive -> always attach to n_near
+            parent = n_near
+            if edge_cost_override is not None:
+                cost_to_parent = edge_cost_override
+            else:
+                cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
+            cost = n_near.cost + cost_to_parent
+        else:
+            # Non-skill node + RRT* active -> run RRT* choose parent
+            parent, cost, cost_to_parent = self._find_best_parent(n_near, state_new.q, mode)
+
+        # Create
+        n_new = Node(state_new, parent=parent)
+        n_new.cost = cost
+        n_new.cost_to_parent = cost_to_parent
+
+        # Skill node bookkeeping
+        if is_skill:
+            n_new.is_skill_waypoint = True
+            n_new.state.is_skill_waypoint = True # TODO (for shortcutter.. change and only keep on node..?)
+            n_new.skill_step = n_near.skill_step + 1
+
+        # Add
+        self.tree.subtrees[mode].add_node(n_new)
+        n_new.parent.children.append(n_new)
+        return n_new
+
+    def _check_transitions(self, n_new: Node) -> List[Node]:
+        """
+        Checks if n_new triggers a mode switch (mode-boundary node) and seeds all valid successor
+        modes at the same configuration.
+        """
+        created_seeds: List[Node] = []
+
+        # Check if n_new is a transition
+        if not self._is_mode_transition(n_new):
+            return created_seeds
+
+        mode = n_new.state.mode
+        self._dbg_is_trans_true += 1
+
+        # Get valid next modes
+        next_modes = self.env.get_next_modes(n_new.state.q, mode)
+        valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
+
+        if not valid_next_modes:
+            self._dbg_get_next_empty += 1
+            return created_seeds
+
+        for next_mode in valid_next_modes:
+            # TODO really need to check if n_new in next_mode collision free, or always the case?
+            if not self.env.is_collision_free(n_new.state.q, next_mode):
+                self._dbg_seed_coll_fail += 1
+                continue
+
+            # Create the successor subtree treating transition nodes as start nodes of the next mode
+            if next_mode not in self.reached_modes:
+                self.reached_modes.append(next_mode)
+                self.tree.add_subtree(next_mode)
+
+            seed_state = State(n_new.state.q, next_mode)
+            seed_node = Node(seed_state, parent=n_new)
+            seed_node.cost = n_new.cost
+            seed_node.cost_to_parent = 0.0
+
+            self.tree.subtrees[next_mode].add_node(seed_node)
+            n_new.children.append(seed_node)
+            created_seeds.append(seed_node)
+
+            if self._should_rewire() and not seed_node.is_skill_waypoint and self._get_active_skill_task(next_mode) is None:
+                self._rewire(seed_node, next_mode)
+
+            self._dbg_seed_added += 1
+
+        return created_seeds
+
+    def _is_mode_transition(self, node: Node) -> bool:
+        """
+
+        """
+        mode = node.state.mode
+
+        if self.env.is_terminal_mode(mode):
+            return False
+
+        skill_task = self._get_active_skill_task(mode)
+
+        # Case 1: non-skill mode (geometric)
+        if skill_task is None:
+            goal_done = self.env.is_transition(node.state.q, mode)
+            return goal_done
+
+        # Case 2: skill mode (skill done)
+        skill = skill_task.skill
+        q_full = node.state.q.state()
+        active_indices = self._get_active_subspace_indices(skill_task)
+        q_subspace = q_full[active_indices]
+
+        if isinstance(skill, BaseDeterministicTimedSkill):
+            n_steps = max(1, round(skill.duration / skill.dt))
+            t_norm = min(node.skill_step / n_steps, 1.0)
+            skill_done = skill.done(t_norm, q_subspace, self.env)
+        else:
+            skill_done = skill.done(q_subspace, self.env)
+
+        return skill_done
+
+    def _non_skill_reached_modes(self) -> List[Mode]:
+        """
+        Filter skill modes
+        """
+        return [m for m in self.reached_modes if self._get_active_skill_task(m) is None]
+
+    def _get_terminal_node(self, n_new: Node, next_mode_seeds: List[Node]) -> Optional[Node]:
+        """
+        Registers newly-discovered terminal candidates in self.terminal_nodes and returns one
+        (if any) for immediate solution recording
+        """
+        found: Optional[Node] = None
+
+        if self.env.done(n_new.state.q, n_new.state.mode):
+            if n_new not in self.terminal_nodes:
+                self.terminal_nodes.append(n_new)
+                found = n_new
+
+        for seed in next_mode_seeds:
+            if self.env.done(seed.state.q, seed.state.mode):
+                if seed not in self.terminal_nodes:
+                    self.terminal_nodes.append(seed)
+                if found is None:
+                    found = seed
+
+        return found
+
+    def _get_best_terminal(self) -> Optional[Node]:
+        """
+        Returns the current lowest-cost terminal candidate (None if not discovered yet)
+        """
+        if not self.terminal_nodes:
+            return None
+        return min(self.terminal_nodes, key=lambda n: n.cost)
+
+    def _set_solution_node(self, node: Node):
+        """
+        Records a tree-backed solution and switches phase settings once
+        """
+        if self.solution_node is None:
+            self.solution_node = node
+            self._refresh_phase_params()
+        else:
+            self.solution_node = node
+
+    # =====================================================================
+    # Path Extraction & Shortcutting
+    # =====================================================================
+    def _extract_path(self, node: Node) -> List[State]:
+        """
+        Traces back from the giben node to the root
+        """
+        nodes = []
+        curr = node
+        while curr: 
+            nodes.append(curr)
+            curr = curr.parent
+        nodes.reverse()
+
+        # Build path (inserting SkillEdge intermediates where present)
+        path = []
+        for n in nodes:
+            if n.skill_edge is not None:
+                for wp in n.skill_edge.waypoints[1:]:
+                    q_wp = self.env.get_start_pos().from_flat(wp)
+                    path.append(State(q_wp, n.state.mode, is_skill_waypoint=True))
+            else:
+                path.append(n.state)
+        return path
+
+    def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
+        """
+        Post-processes a path with robot_mode_shortcut
+        Skill segments are protected
+        """
+        shortcut_path, _ = shortcutting.robot_mode_shortcut(
+            self.env, path, shortcutting_iters,
+            resolution=self.env.collision_resolution,
+            tolerance=self.env.collision_tolerance,
+            robot_choice=self.config.shortcutting_mode,
+            interpolation_resolution=self.config.shortcutting_interpolation_resolution
+        )
+
+        # Remove interpolated points used in shortcutting (collision check)
+        return shortcutting.remove_interpolated_nodes(shortcut_path)
+
+    def _sync_shortcut_to_tree(self, shortcut_path: List[State]) -> Optional[Node]:
+        """
+        Inserts a shortcutted path back into the tree as a fresh connected chain.
+        Near-duplicate snapping is intentionally disabled below until it is needed.
+        """
+        if not shortcut_path or len(shortcut_path) < 2:
+            return None
+
+        parent_node = self.tree.root
+
+        for state in shortcut_path[1:]:
+            is_skill = getattr(state, "is_skill_waypoint", False)
+            cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
+            candidate_cost = parent_node.cost + cost_to_parent
+
+            # TODO Optional near-duplicate snapping, kept off for now:
+            # subtree = self.tree.subtrees[state.mode]
+            # nearest, dist = subtree.get_nearest(state.q, self.config.distance_metric)
+            # if nearest is not None and dist <= 1e-6 and nearest.cost <= candidate_cost + 1e-8:
+            #     parent_node = nearest
+            #     continue
+
+            new_node = Node(state, parent=parent_node)
+            new_node.cost_to_parent = cost_to_parent
+            new_node.cost = candidate_cost
+
+            if is_skill:
+                new_node.is_skill_waypoint = True
+                new_node.skill_step = parent_node.skill_step + 1
+
+            self.tree.subtrees[state.mode].add_node(new_node)
+            parent_node.children.append(new_node)
+
+            # if self._should_rewire() and not n_new.is_skill_waypoint and self._get_active_skill_task(state.mode) is None:
+            #     self._rewire(new_node, state.mode)
+
+            parent_node = new_node
+
+        if self.env.done(parent_node.state.q, parent_node.state.mode): # TODO needed?
+            if parent_node not in self.terminal_nodes:
+                self.terminal_nodes.append(parent_node)
+            self._set_solution_node(parent_node)
+            return parent_node
+        return None
+
+    # =====================================================================
+    # RRT* / Optimization (Rewiring)
+    # =====================================================================
     def _set_gamma_rrt_star(self, mu_X_free: float = None):
         """
         RRT*: asymptotic optimality constant
@@ -1625,6 +1490,45 @@ class RRTSkills(BasePlanner):
         self.d = sum(self.env.robot_dims.values())
         zeta_d = math.pi ** (self.d / 2) / (math.gamma(self.d / 2 + 1))
         self.gamma_rrt_star = (2 * (1 + 1 / self.d)) ** (1 / self.d) * (mu_X_free / zeta_d) ** (1 / self.d)
+
+    def _compute_dynamic_eta(self):
+        """
+        Dynamically compute step size eta based based on environment boundaries and chosen strategy
+        """
+        strategy = self.config.step_size_strategy
+
+        if strategy == "constant":
+            return self.config.step_size
+
+        elif strategy == "sqrt_d":
+            d = sum(self.env.robot_dims.values())
+            return math.sqrt(d)
+
+        elif strategy == "sqrt_d_robots":
+            d = sum(self.env.robot_dims.values())
+            num_robots = len(self.env.robots)
+            return math.sqrt(d / num_robots)
+
+        robot_diameters = []
+        offset = 0
+        for robot in self.env.robots:
+            dim = self.env.robot_dims[robot]
+            lo = self.env.limits[0, offset : offset + dim]
+            hi = self.env.limits[1, offset : offset + dim]
+            robot_diameters.append(np.linalg.norm(hi - lo))
+            offset += dim
+
+        workspace_diameter = max(robot_diameters)
+
+        if strategy == "scaled":
+            return self.config.step_size_factor * workspace_diameter
+
+        elif strategy == "sqrt_d_scaled":
+            d = sum(self.env.robot_dims.values())
+            return workspace_diameter / math.sqrt(d)
+
+        else:
+            raise ValueError(f"Unknown step_size_strategy: {strategy}")
 
     def _update_cfree_estimate(self, was_valid: bool, was_uniform: bool = True): # TODO (to be tested)
         """
@@ -1812,51 +1716,6 @@ class RRTSkills(BasePlanner):
                 self._propagate_cost_improvement(n_near)
                 self._dbg_w_rewires += 1
 
-    def _sync_shortcut_to_tree(self, shortcut_path: List[State]) -> Optional[Node]:
-        """
-        Inserts a shortcutted path back into the tree as a fresh connected chain.
-        Near-duplicate snapping is intentionally disabled below until it is needed.
-        """
-        if not shortcut_path or len(shortcut_path) < 2:
-            return None
-
-        parent_node = self.tree.root
-        
-        for state in shortcut_path[1:]:
-            is_skill = getattr(state, "is_skill_waypoint", False)
-            cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
-            candidate_cost = parent_node.cost + cost_to_parent
-
-            # TODO Optional near-duplicate snapping, kept off for now:
-            # subtree = self.tree.subtrees[state.mode]
-            # nearest, dist = subtree.get_nearest(state.q, self.config.distance_metric)
-            # if nearest is not None and dist <= 1e-6 and nearest.cost <= candidate_cost + 1e-8:
-            #     parent_node = nearest
-            #     continue
-
-            new_node = Node(state, parent=parent_node)
-            new_node.cost_to_parent = cost_to_parent
-            new_node.cost = candidate_cost
-
-            if is_skill:
-                new_node.is_skill_waypoint = True
-                new_node.skill_step = parent_node.skill_step + 1
-
-            self.tree.subtrees[state.mode].add_node(new_node)
-            parent_node.children.append(new_node)
-
-            # if self._should_rewire() and not n_new.is_skill_waypoint and self._get_active_skill_task(state.mode) is None:
-            #     self._rewire(new_node, state.mode)
-
-            parent_node = new_node
-        
-        if self.env.done(parent_node.state.q, parent_node.state.mode): # TODO needed?
-            if parent_node not in self.terminal_nodes:
-                self.terminal_nodes.append(parent_node)
-            self._set_solution_node(parent_node)
-            return parent_node
-        return None
-    
     def _should_rewire(self) -> bool:
         """
         Determines if RRT* should rewire or not:
