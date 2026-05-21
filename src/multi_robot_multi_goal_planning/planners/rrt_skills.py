@@ -1724,6 +1724,51 @@ class RRTSkills(BasePlanner):
                     n_near.cost = potential_cost
                     self._propagate_cost_improvement(n_near)
                     self._dbg_w_rewires += 1
+
+    def _sync_shortcut_to_tree(self, shortcut_path: List[State]) -> Optional[Node]:
+        """
+        Inserts a shortcutted path back into the tree as a fresh connected chain.
+        Near-duplicate snapping is intentionally disabled below until it is needed.
+        """
+        if not shortcut_path or len(shortcut_path) < 2:
+            return None
+
+        parent_node = self.tree.root
+        
+        for state in shortcut_path[1:]:
+            is_skill = getattr(state, "is_skill_waypoint", False)
+            cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
+            candidate_cost = parent_node.cost + cost_to_parent
+
+            # TODO Optional near-duplicate snapping, kept off for now:
+            # subtree = self.tree.subtrees[state.mode]
+            # nearest, dist = subtree.get_nearest(state.q, self.config.distance_metric)
+            # if nearest is not None and dist <= 1e-6 and nearest.cost <= candidate_cost + 1e-8:
+            #     parent_node = nearest
+            #     continue
+
+            new_node = Node(state, parent=parent_node)
+            new_node.cost_to_parent = cost_to_parent
+            new_node.cost = candidate_cost
+
+            if is_skill:
+                new_node.is_skill_waypoint = True
+                new_node.skill_step = parent_node.skill_step + 1
+
+            self.tree.subtrees[state.mode].add_node(new_node)
+            parent_node.children.append(new_node)
+
+            # if self._should_rewire() and not n_new.is_skill_waypoint and self._get_active_skill_task(state.mode) is None:
+            #     self._rewire(new_node, state.mode)
+
+            parent_node = new_node
+        
+        if self.env.done(parent_node.state.q, parent_node.state.mode): # TODO needed?
+            if parent_node not in self.terminal_nodes:
+                self.terminal_nodes.append(parent_node)
+            self._set_solution_node(parent_node)
+            return parent_node
+        return None
     
     def _should_rewire(self) -> bool:
         """
