@@ -185,7 +185,9 @@ class RRTSkillsConfig:
     # RRT*
     use_rrt_star: bool = True
     rewire_after_first_solution: bool = True 
+    rewire_neighbor_strategy: str = "radius" # "radius" | "k_nearest"
     rewire_radius_max: float = 1.0
+    rewire_k_constant: Optional[float] = 10 # float | None uses the sufficient k-nearest RRT* paper constant
     gamma_rrtstar: float = 0.0
 
     # Informed sampling
@@ -1657,6 +1659,38 @@ class RRTSkills(BasePlanner):
         r_n = self.gamma_rrt_star * (math.log(n) / n) ** (1.0 / self.d)
         return min(r_n, self.config.rewire_radius_max)
 
+    def _compute_rewiring_k(self, n: int) -> int:
+        """
+        k-nearest RRT*: k(n) = ceil(k_RRT* log(n))
+        If no constant is configured, use the sufficient bound from the paper
+        """
+        if n <= 1:
+            return 1
+
+        k_constant = self.config.rewire_k_constant
+        if k_constant is None:
+            k_constant = (2 ** (self.d + 1)) * math.e * (1.0 + 1.0 / self.d)
+
+        return max(1, min(n, int(math.ceil(k_constant * math.log(n)))))
+
+    def _near_indices(self, dists: np.ndarray, radius: float) -> np.ndarray:
+        """
+        Select RRT* neighbors either by radius or by k-nearest candidate count
+        """
+        strategy = self.config.rewire_neighbor_strategy
+        # Select neighbors based on radius
+        if strategy == "radius":
+            return np.nonzero(dists < radius)[0]
+
+        # Select neighbors based on k-nearest
+        if strategy == "k_nearest":
+            k = self._compute_rewiring_k(len(dists))
+            if k >= len(dists):
+                return np.arange(len(dists), dtype=np.int64)
+            return np.argpartition(dists, k - 1)[:k]
+
+        raise ValueError(f"Unknown rewire_neighbor_strategy: {strategy}")
+
     def _near_batch_costs(
         self,
         q: Configuration,
@@ -1672,7 +1706,7 @@ class RRTSkills(BasePlanner):
 
         # Compute distances to all nodes in subtree (vectorized) and get indices within radius
         dists = batch_config_dist(q, subtree.batch_q[:subtree.size], self.config.distance_metric)
-        near_indices = np.nonzero(dists < radius)[0]
+        near_indices = self._near_indices(dists, radius)
 
         # Ensure n_near is included
         if force_idx is not None and not np.any(near_indices == force_idx):
