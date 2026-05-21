@@ -104,7 +104,7 @@ class RRTSkillsConfig:
     final_shortcutting_iters: int = 1000
     shortcutting_interpolation_resolution: float = 0.1
     shortcut_period_iters: int = 500
-    sync_shortcut_to_tree: bool = False # TODO!    
+    sync_shortcut_to_tree: bool = True    
 
 @dataclass
 class SkillEdge:
@@ -218,6 +218,8 @@ OLD TODOS:
 # TODO [x] in _initialize_planner add early return if self.tree.root is not None (not duplicated start mode/node) if plan() called again?
 # TODO [x] global shortcutting
 # TODO [x] add debug prints in the planning loop
+# TODO [x] in _linear_steer fix the dist computation (accidentally used cost function..)
+# TODO [x] in _initialize_planner compare using eta=sqrt(d) and eta=sqrt(d/#robots)
 
 # Improvements
 # TODO [x] mode sampling strategy when doing informed sampling in optimize
@@ -225,6 +227,8 @@ OLD TODOS:
 # TODO [x] do rrt-connect in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached ()
 # TODO [x] clean up to have the possibility to select between stepsize (also rrt connect..) 
 # TODO [x] in rrt-connect, add also intermediate ndoes to graph as would the original rrt-connect do? -> NO
+# TODO [x] adaptive p_goal (0.3 till solution_node is not None -> then 0.1 e.g., to lower during the optimization phase)
+# TODO [x] add sc path back to tree
 
 # SKILLS
 # TODO [x] update _add_node to set skill flag
@@ -236,8 +240,14 @@ OLD TODOS:
 # TODO [x] implement kindodynamic with SkillEdge 
 
 # RRT*
+# TODO [x] add rewiring (RRT*)
+# TODO [x] rewire only in per-mode-subtree, does not change parents across mode boundaries (_propagate_cost_improvement does propagate cost values across modes)
 # TODO [x] compute gamma (RRT*) approximate mu(Xfree), then online updating 
 # TODO [x] dynamically define step size eta (use sqrt_d)
+# TODO [x] rewiring improvements invisible unless a newly added terminal node improves the best path?
+# TODO [x] how to do rrt* with rrt-connect when not adding all the intermediate nodes? Otherwise long edges (from connect) can't be rewired with the rewiring radius..
+# TODO [ ] old rrtstar is doing mode-boundary rewiring whereas ours doesn't
+# TODO [ ] old rrtstar keeps/scans transition or terminal candidates and regenerates the path from the current lowest-cost terminal cnadidate, whereas we only check the just-created node/seeds
 
 
 """
@@ -255,19 +265,15 @@ CURRENT TODOS
 # TODO [ ] in plan when creating/adding a new node, we only update parents, what about children? 
 # TODO [ ] in _sample_transition_config consider taking random node from tree for inactive instead of random sampling? (seems like tree struggles to grow with random sampling in certain envs -> yes, random sampling is the idea, but doesn't seem to be efficient -> maybe something else is the problem..)
 # TODO [ ] in _check_transitions, config check really needed or if config ok in modeA -> ok in modeB?
-# TODO [ ] in _sample_transition_config use a smarter approach than random config for inactive robots
-# TODO [x] in _linear_steer fix the dist computation (accidentally used cost function..)
-# TODO [x] in _initialize_planner compare using eta=sqrt(d) and eta=sqrt(d/#robots)
+# TODO! [ ] in _sample_transition_config use a smarter approach than random config for inactive robots
 
 # Improvements
 # TODO [ ] blacklisting
 # TODO [ ] exploit transition nodes already found, just like _sample_goal is doing
 # TODO [ ] informed sampling in skill modes (inactive-DOF-only sampler. otherwise sampler wastes effort computing and validating a FULL-config sample when only inactive part matters..)
-# TODO [x] add sc path back to tree
 # TODO [ ] detect cost improvement from rewiring without waiting for periodic check (I think that might be what makes planner_rrtstar good..)
 # TODO [ ] tune shortcutting_iters (too frequent -> tree small changes, waste of time / too infrequent -> misses improvements from rewiring)
 # TODO [ ] track best transition nodes (lowest cost) in some transition registry so cheaper terminal candidate can be found via another transition or rewiring
-# TODO [x] adaptive p_goal (0.3 till solution_node is not None -> then 0.1 e.g., to lower during the optimization phase)
 # TODO [ ] tune hyperparams
 # TODO [ ] shortcuts self.best_path but not a freshly extracted path from self.solution:node after rewiring..
 # TODO [ ] add every shortcutted path back to tree instead of wasting nodes from sc_path with lower cost..? (could be beneficial for rewiring..?) / what about duplicate nodes?
@@ -278,13 +284,7 @@ CURRENT TODOS
 # TODO [o] skill edge cost correct computation 
 
 # RRT*
-# TODO [x] add rewiring (RRT*)
-# TODO [x] rewire only in per-mode-subtree, does not change parents across mode boundaries (_propagate_cost_improvement does propagate cost values across modes)
 # TODO [ ] (later) rewiring in skill modes (inactive parts)
-# TODO [x] how to do rrt* with rrt-connect when not adding all the intermediate nodes? Otherwise long edges (from connect) can't be rewired with the rewiring radius..
-# TODO! [ ] old rrtstar is doing mode-boundary rewiring whereas ours doesn't
-# TODO! [ ] old rrtstar keeps/scans transition or terminal candidates and regenerates the path from the current lowest-cost terminal cnadidate, whereas we only check the just-created node/seeds
-# TODO [x] rewiring improvements invisible unless a newly added terminal node improves the best path?
 # TODO [ ] in _find_best_parent, seeding best_parent = n_near needs edge collision check? 
 # TODO [ ] add bidirectional (BRRT*) in non skill modes (check first if old BIRRT* really is faster)
 
@@ -348,6 +348,7 @@ class RRTSkills(BasePlanner):
         self._active_connect_add_all_nodes = c.connect_add_all_nodes if c.connect_add_all_nodes is not None else (
             c.init_connect_add_all_nodes if is_init else c.opt_connect_add_all_nodes
         )
+    
     def _initialize_planner(self):
         """
         Sets up the start node and initial mode. Computes dynamic step sizes, initializes
@@ -1271,7 +1272,7 @@ class RRTSkills(BasePlanner):
     def _check_transitions(self, n_new: Node) -> List[Node]:
         """
         Checks if n_new triggers a mode switch (mode-boundary node) and seeds all valid successor
-        modes at the same configuration.
+        modes at the same configuration
         """
         created_seeds: List[Node] = []
 
@@ -1439,43 +1440,62 @@ class RRTSkills(BasePlanner):
 
     def _sync_shortcut_to_tree(self, shortcut_path: List[State]) -> Optional[Node]:
         """
-        Inserts a shortcutted path back into the tree as a fresh connected chain.
-        Near-duplicate snapping is intentionally disabled below until it is needed.
+        NOTE (old): Inserts a shortcutted path back into the tree as a fresh connected chain.
+        Near-duplicate snapping to avoid exploding tree 
+        
+        NOTE (new): Inserts a shortcutted path as an RRT*-aware chain (like in rrtstar_base)
+        - Same mode steps: _find_best_parent + _rewire
+        - Mode transition steps: force natural parent + _check_transitions on parent + _rewire
+        - Skill waypoints / skill modes: force natural parent, no rewire 
         """
         if not shortcut_path or len(shortcut_path) < 2:
             return None
 
         parent_node = self.tree.root
+        rewire_on = self._should_rewire()
 
         for state in shortcut_path[1:]:
             is_skill = getattr(state, "is_skill_waypoint", False)
-            cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
-            candidate_cost = parent_node.cost + cost_to_parent
+            new_mode = state.mode
+            mode_changed = (new_mode != parent_node.state.mode)
+            is_skill_mode = (self._get_active_skill_task(new_mode) is not None)
 
-            # TODO Optional near-duplicate snapping, kept off for now:
-            # subtree = self.tree.subtrees[state.mode]
-            # nearest, dist = subtree.get_nearest(state.q, self.config.distance_metric)
-            # if nearest is not None and dist <= 1e-6 and nearest.cost <= candidate_cost + 1e-8:
-            #     parent_node = nearest
-            #     continue
+            # 1) Parent selection (only find_best_parent if not mode change, not skill mode, parent already in subtree)
+            subtree = self.tree.subtrees[new_mode]
+            can_use_rrt_star = (rewire_on and not mode_changed and not is_skill_mode and id(parent_node) in subtree.node_to_idx)
 
-            new_node = Node(state, parent=parent_node)
-            new_node.cost_to_parent = cost_to_parent
-            new_node.cost = candidate_cost
+            if can_use_rrt_star:
+                best_parent, best_cost, best_cost_to_parent = self._find_best_parent(parent_node, state.q, new_mode)
+            else:
+                best_parent = parent_node
+                best_cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
+                best_cost = parent_node.cost + best_cost_to_parent
 
-            if is_skill:
+            # 2) Create and attach
+            new_node = Node(state, parent=best_parent)
+            new_node.cost_to_parent = best_cost_to_parent
+            new_node.cost = best_cost
+            
+            # Preserve skill flags if this state was marked as one
+            if getattr(state, "is_skill_waypoint", False):
                 new_node.is_skill_waypoint = True
                 new_node.skill_step = parent_node.skill_step + 1
+   
+            best_parent.children.append(new_node)
+            subtree.add_node(new_node)
 
-            self.tree.subtrees[state.mode].add_node(new_node)
-            parent_node.children.append(new_node)
+            # 3) Mode-boundary logic
+            if mode_changed:
+                self._check_transitions(new_node)
 
-            # if self._should_rewire() and not n_new.is_skill_waypoint and self._get_active_skill_task(state.mode) is None:
-            #     self._rewire(new_node, state.mode)
+            # 4) Global improvement (rewire around new node)
+            if rewire_on and not is_skill_mode:
+                self._rewire(new_node, new_mode)
 
             parent_node = new_node
 
-        if self.env.done(parent_node.state.q, parent_node.state.mode): # TODO needed?
+        # Terminal handling 
+        if self.env.done(parent_node.state.q, parent_node.state.mode):
             if parent_node not in self.terminal_nodes:
                 self.terminal_nodes.append(parent_node)
             self._set_solution_node(parent_node)
@@ -1746,6 +1766,3 @@ class RRTSkills(BasePlanner):
             child = stack.pop()
             child.cost = child.parent.cost + child.cost_to_parent
             stack.extend(child.children)
-
-    # TODO BRRT*
-    # ...
