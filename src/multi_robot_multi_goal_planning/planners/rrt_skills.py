@@ -240,6 +240,7 @@ class Subtree:
     def __init__(self, mode: Mode, robot_dims: int, initial_capacity: int = 10000): 
         self.mode = mode
         self.nodes: List[Node] = []
+        self.node_to_idx: Dict[int, int] = {}
         self.batch_q: np.ndarray = np.zeros((initial_capacity, robot_dims))
         self.size = 0
 
@@ -254,6 +255,7 @@ class Subtree:
             self.batch_q = new_batch
 
         # Add node to batch
+        self.node_to_idx[id(node)] = self.size
         self.batch_q[self.size] = node.state.q.state()
         self.nodes.append(node)
         self.size += 1
@@ -368,7 +370,6 @@ CURRENT TODOS
 # TODO [ ] add every shortcutted path back to tree instead of wasting nodes from sc_path with lower cost..? (could be beneficial for rewiring..?) / what about duplicate nodes?
 # TODO [ ] add node pruning on sync sc-path to tree (e.g., snapping to existing node if distance < threshold?)
 # TODO [ ] add node pruning to rrt* in general (e.g., some cost-based branch pruning: once rrt* finds initial path, use c_best as upper bound, and prune node + children if c(stars->x)+h(x->goal) > c_best
-
 # SKILLS
 # TODO [ ] check deviation between actual skill x-steps and interpolation between ends of the SkillEdge
 # TODO [o] skill edge cost correct computation 
@@ -1656,6 +1657,41 @@ class RRTSkills(BasePlanner):
         r_n = self.gamma_rrt_star * (math.log(n) / n) ** (1.0 / self.d)
         return min(r_n, self.config.rewire_radius_max)
 
+    def _near_batch_costs(
+        self,
+        q: Configuration,
+        mode: Mode,
+        radius: float,
+        force_idx: Optional[int] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Returns near-set indices, costs from q to each near node, and current node costs
+        Cost computation is batched to avoid one config_cost() call per neighbor
+        """
+        subtree = self.tree.subtrees[mode] 
+
+        # Compute distances to all nodes in subtree (vectorized) and get indices within radius
+        dists = batch_config_dist(q, subtree.batch_q[:subtree.size], self.config.distance_metric)
+        near_indices = np.nonzero(dists < radius)[0]
+
+        # Ensure n_near is included
+        if force_idx is not None and not np.any(near_indices == force_idx):
+            near_indices = np.insert(near_indices, 0, force_idx)
+        if len(near_indices) == 0:
+            empty = np.empty(0, dtype=np.float64)
+            return near_indices, empty, empty
+
+        # Compute costs for all near edges in one batch
+        near_batch = subtree.batch_q[near_indices]
+        edge_costs = np.asarray(self.env.batch_config_cost(q, near_batch), dtype=np.float64)
+        
+        # Retrieve current costs of near nodes
+        near_costs = np.array(
+            [subtree.nodes[int(idx)].cost for idx in near_indices],
+            dtype=np.float64,
+        )
+        return near_indices, edge_costs, near_costs
+
     def _find_best_parent(self, n_near: Node, q_new: Configuration, mode: Mode):
         """
         RRT*: find the lowest-cost parent from the near set
@@ -1663,28 +1699,42 @@ class RRTSkills(BasePlanner):
         """
         subtree = self.tree.subtrees[mode]
         r_n = self._compute_rewiring_radius(subtree.size)
-        near_set = subtree.get_near(q_new, r_n, self.config.distance_metric)
+        n_near_idx = subtree.node_to_idx[id(n_near)]
+        
+        # Get candidates and batch costs
+        near_indices, edge_costs, near_costs = self._near_batch_costs(
+            q_new, mode, r_n, force_idx=n_near_idx,
+        )
 
         # DEBUG
         self._dbg_last_r_n = r_n
-        self._dbg_w_near_size_sum += len(near_set)
+        self._dbg_w_near_size_sum += len(near_indices)
         self._dbg_w_near_size_count += 1
 
+        # Initialize with n_near
         best_parent = n_near # TODO needs collision check?
-        best_cost_to_parent = self.env.config_cost(n_near.state.q, q_new)
+        fallback_pos = int(np.where(near_indices == n_near_idx)[0][0])
+        best_cost_to_parent = float(edge_costs[fallback_pos])
         best_cost = n_near.cost + best_cost_to_parent
 
-        for idx, _ in near_set:
-            candidate = subtree.nodes[idx]
-            if candidate is n_near or candidate.is_skill_waypoint:
-                continue
-            edge_cost = self.env.config_cost(candidate.state.q, q_new)
-            potential_cost = candidate.cost + edge_cost
-            if potential_cost < best_cost:
+        # Check if any neighbor provides a lower cost parent
+        potential_costs = near_costs + edge_costs
+        improvement_mask = potential_costs < best_cost # Vectorized filtering
+
+        if np.any(improvement_mask):
+            # Sort by cost for efficient search
+            sorted_positions = np.where(improvement_mask)[0][
+                np.argsort(potential_costs[improvement_mask])
+            ]
+            for pos in sorted_positions:
+                candidate = subtree.nodes[int(near_indices[pos])]
+                if candidate is n_near or candidate.is_skill_waypoint:
+                    continue
                 if self.env.is_edge_collision_free(candidate.state.q, q_new, mode):
                     best_parent = candidate
-                    best_cost_to_parent = edge_cost
-                    best_cost = potential_cost
+                    best_cost_to_parent = float(edge_costs[pos])
+                    best_cost = float(potential_costs[pos])
+                    break
 
         if best_parent is not n_near:
             self._dbg_w_best_parent_swaps += 1
@@ -1697,33 +1747,36 @@ class RRTSkills(BasePlanner):
         """
         subtree = self.tree.subtrees[mode]
         r_n = self._compute_rewiring_radius(subtree.size)
-        near_set = subtree.get_near(n_new.state.q, r_n, self.config.distance_metric)
+        # Get candidates for rewiring
+        near_indices, edge_costs, near_costs = self._near_batch_costs(n_new.state.q, mode, r_n)
 
         # DEBUG
         self._dbg_last_r_n = r_n
-        self._dbg_w_near_size_sum += len(near_set)
+        self._dbg_w_near_size_sum += len(near_indices)
         self._dbg_w_near_size_count += 1
 
-        for idx, _ in near_set:
-            n_near = subtree.nodes[idx]
+        # Check if n_new improves cost for any neighbor
+        potential_costs = n_new.cost + edge_costs
+        improvement_mask = potential_costs < near_costs
+
+        for pos in np.nonzero(improvement_mask)[0]:
+            n_near = subtree.nodes[int(near_indices[pos])]
             if n_near is n_new or n_near is n_new.parent or n_near.is_skill_waypoint:
                 continue
-            edge_cost = self.env.config_cost(n_new.state.q, n_near.state.q)
-            potential_cost = n_new.cost + edge_cost
-            if potential_cost < n_near.cost:
-                if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):
-                    # Detach old parent
-                    old_parent = n_near.parent
-                    if old_parent is not None:
-                        old_parent.children.remove(n_near)
+            # rewire if edge is collision free
+            if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):
+                # Detach from old parent
+                old_parent = n_near.parent
+                if old_parent is not None:
+                    old_parent.children.remove(n_near)
 
-                    # Rewire
-                    n_near.parent = n_new
-                    n_new.children.append(n_near)
-                    n_near.cost_to_parent = edge_cost
-                    n_near.cost = potential_cost
-                    self._propagate_cost_improvement(n_near)
-                    self._dbg_w_rewires += 1
+                # Connect to n_new
+                n_near.parent = n_new
+                n_new.children.append(n_near)
+                n_near.cost_to_parent = float(edge_costs[pos])
+                n_near.cost = float(potential_costs[pos])                
+                self._propagate_cost_improvement(n_near)
+                self._dbg_w_rewires += 1
 
     def _sync_shortcut_to_tree(self, shortcut_path: List[State]) -> Optional[Node]:
         """
