@@ -299,11 +299,17 @@ CURRENT TODOS
 # Main Planner Class
 # =====================================================================
 class RRTSkills(BasePlanner):
+    """
+    Core multi-modal RRT* planner supporting deterministic skill integration,
+    concurrent inactive robot steering, and optimization strategies. Expansion 
+    is handled via customizable strategies in both non-skill (e.g., connect, linear)
+    and skill modes (e.g., kinodynamic, single_step)
+    """
 
     # =====================================================================
     # Initialization
     # =====================================================================
-    
+
     def __init__(self, env: BaseProblem, config: RRTSkillsConfig):
         self.env = env
         self.config = config
@@ -327,42 +333,25 @@ class RRTSkills(BasePlanner):
 
     def _refresh_phase_params(self):
         """
-        Applies the active phase settings without mutating the config
+        Applies the active phase settings switching between initialization and
+        optimization phases once a solution is found
         """
-        # TODO can be written nicer (compact..)
-        in_initial_phase = self.solution_node is None
+        c = self.config
+        is_init = self.solution_node is None
 
-        self._active_mode_sampling_type = (
-            self.config.init_mode_sampling_type
-            if in_initial_phase
-            else self.config.mode_sampling_type
-        )
+        self._active_mode_sampling_type = c.init_mode_sampling_type if is_init else c.mode_sampling_type
 
-        phase_connect_target_policy = (
-            self.config.init_connect_target_policy
-            if in_initial_phase
-            else self.config.opt_connect_target_policy
-        )
-        phase_connect_add_all_nodes = (
-            self.config.init_connect_add_all_nodes
-            if in_initial_phase
-            else self.config.opt_connect_add_all_nodes
+        self._active_connect_target_policy = c.connect_target_policy if c.connect_target_policy is not None else (
+            c.init_connect_target_policy if is_init else c.opt_connect_target_policy
         )
 
-        self._active_connect_target_policy = (
-            self.config.connect_target_policy
-            if self.config.connect_target_policy is not None
-            else phase_connect_target_policy
+        self._active_connect_add_all_nodes = c.connect_add_all_nodes if c.connect_add_all_nodes is not None else (
+            c.init_connect_add_all_nodes if is_init else c.opt_connect_add_all_nodes
         )
-        self._active_connect_add_all_nodes = (
-            self.config.connect_add_all_nodes
-            if self.config.connect_add_all_nodes is not None
-            else phase_connect_add_all_nodes
-        )
-
     def _initialize_planner(self):
         """
-        Setup start node and initial mode
+        Sets up the start node and initial mode. Computes dynamic step sizes, initializes
+        RRT* volume estimates, prepares the informed sampler, and more..
         """
         if self.tree.root is not None:
             return # Already initialized
@@ -403,8 +392,7 @@ class RRTSkills(BasePlanner):
     def _init_debug_counters(self):
         """
         # NOTE: GENERATED WITH GEMINI
-
-        Initializes all debug counters.
+        Initializes all debug counters
         """
         self._dbg_goal_bias_attempt = 0
         self._dbg_goal_bias_success = 0
@@ -435,7 +423,8 @@ class RRTSkills(BasePlanner):
 
     def plan(self, ptc: PlannerTerminationCondition, optimize: bool = False):
         """
-        Main planning loop
+        Main planning loop that iteratively samples targets, extends the multi-modal tree, 
+        processes mode transitions, and applies RRT* rewiring and shortcutting optimizations
         """
         self.start_time = time.time()
         self._initialize_planner()
@@ -590,7 +579,6 @@ class RRTSkills(BasePlanner):
     def _print_debug(self, iterations: int):
         """
         # NOTE: GENERATED WITH GEMINI
-
         Prints periodic performance telemetry and resets window counters.
         """
         nodes = sum(s.size for s in self.tree.subtrees.values())
@@ -744,7 +732,8 @@ class RRTSkills(BasePlanner):
 
     def _sample_transition_config(self, mode: Mode) -> Configuration:
         """
-        Samples a configuration that satisfies the transition of the current mode 
+        Samples a configuration satisfying the current mode's transition requirements,
+        using either the informed transition sampler or a bounded rejection sampling approach
         """
         # Informed transition sampling (after first solution, non-skill mode, not terminal)
         if (self.config.try_informed_sampling
@@ -851,8 +840,8 @@ class RRTSkills(BasePlanner):
 
     def _update_informed_path(self):
         """
-        Builds the interpolated path that the informed sampled uses as reference
-        (focal points for the PHS ellipsoid). Called after every cost improvement
+        Builds the interpolated path that the informed sampler uses as reference
+        (focal points for the PHS ellipsoid). Called after every cost improvement.
         """
         if self.best_path is not None and len(self.best_path) > 1:
             self.informed_path = interpolate_path(self.best_path)
@@ -865,7 +854,8 @@ class RRTSkills(BasePlanner):
 
     def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task, is_uniform: bool = True) -> List[Node]:
         """
-        
+        Routes the expansion and steering logic based on the mode type (skill vs. non-skill) 
+        and the configured expansion strategy (e.g., linear, connect, kinodynamic)
         """
         # Strategy for expanding/steering in NON-skill-modes
         if skill_task is None:
@@ -1109,11 +1099,10 @@ class RRTSkills(BasePlanner):
  
     def _expand_kinodynamic(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
         """
-        Rolls out skill steps as one skill edge
+        Rolls out skill steps as one kinodynamic edge
         - All intermediate steps are collision checked during construction
-        - Only the end node enters the subtree (for NN sesarch)
+        - Only the end node enters the subtree (for NN search)
         - Intermediate waypoints are stored in a SkillEdge on the end node
-        - 
         """
         skill = skill_task.skill
         dt = skill.dt
@@ -1220,7 +1209,8 @@ class RRTSkills(BasePlanner):
 
     def _validate(self, state_new: State, n_near: Node, is_skill: bool, is_uniform: bool = True) -> bool:
         """
-        Collision checking for configurations and edges
+        Performs geometric collision checks for both the node configuration and the edge connecting 
+        it to its parent. Also updates the online c_free volume estimate for RRT*
         """
         # 1. Config check
         is_state_free = self.env.is_collision_free(state_new.q, state_new.mode)
@@ -1329,7 +1319,8 @@ class RRTSkills(BasePlanner):
 
     def _is_mode_transition(self, node: Node) -> bool:
         """
-
+        Determines if a node has successfully reached the transition criteria for its current mode, 
+        handling both geometric goals and skill completion
         """
         mode = node.state.mode
 
@@ -1360,7 +1351,7 @@ class RRTSkills(BasePlanner):
 
     def _non_skill_reached_modes(self) -> List[Mode]:
         """
-        Filter skill modes
+        Returns a list of all currently reached modes that do not involve an active skill task
         """
         return [m for m in self.reached_modes if self._get_active_skill_task(m) is None]
 
@@ -1409,7 +1400,8 @@ class RRTSkills(BasePlanner):
 
     def _extract_path(self, node: Node) -> List[State]:
         """
-        Traces back from the giben node to the root
+        Traces back from the given node to the root, resolving kinodynamic
+        skill edges into individual waypoints along the way
         """
         nodes = []
         curr = node

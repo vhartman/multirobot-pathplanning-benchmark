@@ -89,6 +89,10 @@ cache/
 # Ignore all markdown and pdf files
 *.md
 *.pdf
+*.txt
+
+# Ignore executables
+*.sh
 
 /build/
 /CMakeCache.txt
