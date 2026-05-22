@@ -6,7 +6,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     generate_binary_search_indices,
 )
 from multi_robot_multi_goal_planning.problems import get_env_by_name
-from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration
+from multi_robot_multi_goal_planning.problems.core.configuration import NpConfiguration
 from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     UnorderedButAssignedMixin,
@@ -15,7 +15,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseModeLogic,
     Mode,
 )
-from multi_robot_multi_goal_planning.problems.goals import (
+from multi_robot_multi_goal_planning.problems.core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,

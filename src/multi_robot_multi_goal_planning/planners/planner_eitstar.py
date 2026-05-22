@@ -10,7 +10,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     State,
     BaseProblem,
 )
-from multi_robot_multi_goal_planning.problems.configuration import (
+from multi_robot_multi_goal_planning.problems.core.configuration import (
     batch_config_dist,
 )
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
@@ -404,7 +404,7 @@ class EITstar(BaseITstar):
         self.reverse_closed_set.add(node.id)
         self.reverse_tree_set.add(node.id)
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def expand_node_reverse(
         self, nodes: List[Node], first_search: bool = False, skip_goal_ids = None
     ) -> None:

@@ -19,7 +19,7 @@ from multi_robot_multi_goal_planning.problems.util import interpolate_path, path
 from multi_robot_multi_goal_planning.planners.shortcutting import (
     robot_mode_shortcut,
 )
-from run_experiment import load_experiment_config
+from ..run_experiment import load_experiment_config
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 def get_infos_of_obstacles_and_table_2d(env):

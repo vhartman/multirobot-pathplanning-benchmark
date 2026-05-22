@@ -12,7 +12,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
     Configuration,
 )
-from multi_robot_multi_goal_planning.problems.goals import (
+from multi_robot_multi_goal_planning.problems.core.goals import (
     SingleGoal,
     GoalRegion,
     GoalSet,

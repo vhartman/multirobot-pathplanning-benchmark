@@ -257,7 +257,7 @@ class NpConfiguration(Configuration):
         self.q[s:e] = data
 
     @classmethod
-    # @profile # run with kernprof -l examples/run_planner.py [your environment]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment]
     def from_list(cls, q_list: Sequence[Union[List[float], NDArray]]) -> "NpConfiguration":
         if len(q_list) == 1:
             return cls(q_list[0], [(0, len(q_list[0]))])
@@ -292,13 +292,16 @@ class NpConfiguration(Configuration):
     def state(self) -> NDArray:
         return self.q
 
+    def as_list(self) -> List:
+        return [self.robot_state(i) for i in range(self._num_agents)]
+
     @classmethod
     def _dist(cls, pt, other, metric: str = "euclidean") -> float:
         return cls._batch_dist(pt, [other], metric)[0]
 
     # TODO: change into specific function for one against many and many against many
     @classmethod
-    # @profile # run with kernprof -l examples/run_planner.py [your environment]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment]
     def _batch_dist(
         cls, pt: "NpConfiguration", batch_other, metric: str = "euclidean"
     ) -> NDArray:

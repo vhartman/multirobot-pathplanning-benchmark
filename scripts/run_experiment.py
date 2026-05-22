@@ -27,7 +27,7 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
-from make_plots import make_cost_plots
+from analysis.make_plots import make_cost_plots
 # np.random.seed(100)
 
 from multi_robot_multi_goal_planning.planners import (
@@ -46,6 +46,7 @@ from multi_robot_multi_goal_planning.planners import (
     RRTSkills,
     RRTSkillsConfig
 )
+from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTstar
 
 def validate_config(config: Dict[str, Any]) -> None:
     pass
@@ -142,10 +143,13 @@ def setup_planner(
             setattr(config, k, v)
 
         def planner(env):
-            return RRTstar(env, config=config).plan(
+            p = RRTstar(env, config=config)
+            result = p.plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
+            planner.last_instance = p
+            return result
     elif planner_config["type"] == "birrtstar":
         options = planner_config["options"]
         config = BaseRRTConfig()
@@ -153,10 +157,13 @@ def setup_planner(
             setattr(config, k, v)
 
         def planner(env):
-            return BidirectionalRRTstar(env, config=config).plan(
+            p = BidirectionalRRTstar(env, config=config)
+            result = p.plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
+            planner.last_instance = p
+            return result
     elif planner_config["type"] == "aitstar":
         options = planner_config["options"]
         config = BaseITConfig()
@@ -290,6 +297,7 @@ def run_experiment(
                     if isinstance(env, rai_env):
                         del env_copy.C
 
+                    rrt_instance = getattr(planner, "last_instance", None)
                     del planner
                     gc.collect()
 
@@ -301,6 +309,22 @@ def run_experiment(
 
                     # export planner data
                     export_planner_data(planner_folder, run_id, res)
+
+                    # export RRT timing breakdown if available
+                    if isinstance(rrt_instance, BaseRRTstar):
+                        p = rrt_instance
+                        timing_file = planner_folder + "timing.csv"
+                        write_header = not os.path.exists(timing_file)
+                        with open(timing_file, "a") as tf:
+                            if write_header:
+                                tf.write("run_id,sampling_time,edge_success_time,edge_failure_time,coll_checking_time\n")
+                            tf.write(
+                                f"{run_id},"
+                                f"{p._sampling_time:.6f},"
+                                f"{p._edge_check_time_success:.6f},"
+                                f"{p._edge_check_time_failure:.6f},"
+                                f"{p._coll_checking_time:.6f}\n"
+                            )
                 except Exception as e:
                     print(f"Error in {planner_name} run {run_id}: {e}")
                     tb = traceback.format_exc()  # Get the full traceback
@@ -347,6 +371,8 @@ def run_planner_process(
 
                 if isinstance(env, rai_env):
                     del env.C
+
+                rrt_instance = getattr(planner, "last_instance", None)
                 del planner
                 gc.collect()
 
@@ -355,6 +381,21 @@ def run_planner_process(
 
                 export_planner_data(planner_folder, run_id, res)
                 results.append((planner_name, res))
+
+                if isinstance(rrt_instance, BaseRRTstar):
+                    p = rrt_instance
+                    timing_file = planner_folder + "timing.csv"
+                    write_header = not os.path.exists(timing_file)
+                    with open(timing_file, "a") as tf:
+                        if write_header:
+                            tf.write("run_id,sampling_time,edge_success_time,edge_failure_time,coll_checking_time\n")
+                        tf.write(
+                            f"{run_id},"
+                            f"{p._sampling_time:.6f},"
+                            f"{p._edge_check_time_success:.6f},"
+                            f"{p._edge_check_time_failure:.6f},"
+                            f"{p._coll_checking_time:.6f}\n"
+                        )
 
             except Exception as e:
                 print(f"Error in {planner_name} run {run_id}: {e}")

@@ -12,7 +12,7 @@ from .planning_env import (
     generate_binary_search_indices,
 )
 
-from .configuration import (
+from .core.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
@@ -37,7 +37,7 @@ from .planning_env import (
     DependencyType,
     SafePoseType,
 )
-from .goals import (
+from .core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -50,7 +50,7 @@ from pathlib import Path
 
 from pinocchio.visualize import MeshcatVisualizer
 
-from .registry import register
+from .core.registry import register
 
 
 @jit((float64[:, :], float64[:, :]), nopython=True)
@@ -71,6 +71,8 @@ class PinocchioEnvironment(BaseProblem):
     def __init__(
         self, model, collision_model, visual_model, start_pos, robots, root_name="table"
     ):
+        super().__init__()
+        
         self.limits = np.vstack([model.lowerPositionLimit, model.upperPositionLimit])
 
         self.model = model
@@ -216,7 +218,7 @@ class PinocchioEnvironment(BaseProblem):
     ):
         pass
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def _set_to_scenegraph(
         self, sg, update_visual: bool = False, update_collision_pairs=False
     ):
@@ -387,12 +389,6 @@ class PinocchioEnvironment(BaseProblem):
         if blocking:
             input("Press Enter to continue...")
 
-    def sample_config_uniform_in_limits(self):
-        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = self.start_pos.from_flat(rnd)
-
-        return q
-
     def config_cost(self, start: Configuration, end: Configuration) -> float:
         return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
@@ -410,7 +406,7 @@ class PinocchioEnvironment(BaseProblem):
             tmp_agent_slice=tmp_agent_slice,
         )
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
         if q is None:
             raise ValueError

@@ -13,7 +13,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from itertools import chain
 
-from multi_robot_multi_goal_planning.problems.configuration import (
+from multi_robot_multi_goal_planning.problems.core.configuration import (
+    Configuration,
     batch_config_dist,
 )
 from multi_robot_multi_goal_planning.problems.planning_env import (
@@ -31,6 +32,8 @@ from .termination_conditions import (
     PlannerTerminationCondition,
 )
 from .prm.prm_graph import MultimodalGraph, Node
+from .collision_free_sampler import make_collision_free_sampler
+
 
 @dataclass
 class CompositePRMConfig:
@@ -40,8 +43,8 @@ class CompositePRMConfig:
     frontier_mode_sampling_probability: float = 0.98
 
     # Sampling budget
-    uniform_batch_size: int = 200
-    uniform_transition_batch_size: int = 500
+    uniform_batch_size: int = 100
+    uniform_transition_batch_size: int = 100
     informed_batch_size: int = 500
     informed_transition_batch_size: int = 500
     init_uniform_batch_size: int = 150
@@ -64,6 +67,10 @@ class CompositePRMConfig:
     use_k_nearest: bool = False
     with_mode_validation: bool = False
     with_noise: bool = False
+    sampler: str = "joint"  # "joint" | "per_robot" | "gibbs" | "auto"
+    sampler_gibbs_sweeps: int = 1
+    sampler_auto_warmup: int = 20
+    max_per_robot_attempts: int = 100
 
     # TODO (Liam) new
     skill_phase: int = 3                    # 1 (frozen), 2 (lanes), 3 (incremental)
@@ -123,6 +130,29 @@ class CompositePRM(BasePlanner):
         self._skill_traj_cache: Dict[Mode, np.ndarray] = {}         # mode -> skill trajectory (rollout once, reuse)
         self._skill_valid_next_modes: Dict[Mode, List[Mode]] = {}   # mode -> valid next modes (computed once)
         self._skill_entry_node: Dict[Mode, Node] = {}               # mode -> entry node used for initial rollout
+
+        self.graph: MultimodalGraph | None = None
+        self.collision_free_sampler = make_collision_free_sampler(
+            self.env,
+            self.config,
+            seed_fn=self._get_seed_for_mode,
+        )
+
+    def _get_seed_for_mode(self, mode: Mode) -> Configuration:
+        if self.graph is None:
+            return self.env.get_start_pos()
+
+        candidates = []
+        if mode in self.graph.nodes:
+            candidates.extend(self.graph.nodes[mode])
+        if mode in self.graph.transition_nodes:
+            candidates.extend(self.graph.transition_nodes[mode])
+        if mode in self.graph.reverse_transition_nodes:
+            candidates.extend(self.graph.reverse_transition_nodes[mode])
+
+        if candidates:
+            return random.choice(candidates).state.q
+        return self.env.get_start_pos()
 
     def _sample_mode(
         self,
@@ -262,7 +292,9 @@ class CompositePRM(BasePlanner):
             )
 
             # Step 2: sample configuration (uniformly within joint limits)
-            q = self.env.sample_config_uniform_in_limits()
+            q = self.collision_free_sampler.sample(m)
+            if q is None:
+                continue
 
             # Step 3: rejection (ellipsoid) and collision check 
             if (
@@ -270,16 +302,15 @@ class CompositePRM(BasePlanner):
                 and sum(self.env.batch_config_cost(q, focal_points)) > cost # cost = length of current best path
             ):
                 continue
-            
-            if self.env.is_collision_free(q, m):
-                new_samples.append(State(q, m))
-                num_valid += 1
+
+            new_samples.append(State(q, m))
+            num_valid += 1
 
         print("Percentage of succ. attempts", num_valid / num_attempts)
 
         return new_samples, num_attempts
 
-    def _sample_uniform_transition_configuration(self, mode, reached_terminal_mode):
+    def _sample_uniform_transition_pins(self, mode, reached_terminal_mode):
         """
         Sample a single composite configuration that satisfies a mode transition constraint.
         Robots responsible for the active task are placed at a goal configuration, while
@@ -305,15 +336,14 @@ class CompositePRM(BasePlanner):
         constrained_robot = active_task.robots # Need to satisfy goal constraint for transition to happen
         goal = active_task.goal.sample(mode)
 
-        # Step 3: Efficiently build the configuration
-        q = self.env.sample_config_uniform_in_limits()
-
+        # Step 3: Define the constraints
+        pinned = {}
         end_idx = 0
-        for i, robot in enumerate(self.env.robots):
+        for robot in self.env.robots:
             if robot in constrained_robot:
                 # Overwrite the pre-sampled random config with the goal config
                 dim = self.env.robot_dims[robot]
-                q[i] = goal[end_idx : end_idx + dim] # Constrained to be at sampled goal config
+                pinned[robot] = goal[end_idx : end_idx + dim] # Constrained to be at sampled goal config
                 end_idx += dim
             else:
                 # Check if this robot's task in the current mode has a skill
@@ -323,8 +353,8 @@ class CompositePRM(BasePlanner):
                     # Robot has upcoming skill: sample from task goal
                     # (= skill initiation config, e.g. pre_pick pose)
                     if getattr(robot_task, 'skill', None) is not None:
-                        q[i] = robot_task.goal.sample(mode)
-        return q
+                        pinned[robot] = robot_task.goal.sample(mode)
+        return pinned
     
     # SKILL ROLLOUT
     def _skill_rollout(self, g, mode, active_task):
@@ -960,9 +990,13 @@ class CompositePRM(BasePlanner):
             # Step 2C: if no skill, sample a transition configuration in that mode
             # Generates config q with active robots constrained to goal positions & other robots free
             # Uses mode information (unlike _sample_valid_uniform_batch), because transition nodes need to satisfy specific goal/task constraints
-            q = self._sample_uniform_transition_configuration(
+            pinned = self._sample_uniform_transition_pins(
                 mode, reached_terminal_mode
             )
+            q = self.collision_free_sampler.sample(mode, pinned)
+            if q is None:
+                failed_attemps += 1
+                continue
 
             # Step 3: informed (cost-based) rejection if path already exists
             if (
@@ -972,51 +1006,50 @@ class CompositePRM(BasePlanner):
                 failed_attempts += 1 
                 continue # Reject samples outside the informed ellipsoid
 
-            # Step 4-5: collision check & compute valid next modes
-            if self.env.is_collision_free(q, mode):
-                # Current mode is a terminal mode
-                if self.env.is_terminal_mode(mode):
-                    valid_next_modes = None # No successors (all tasks for all robots completed)
-                else:
-                    # Current mode is not a terminal mode BUT we already know a path to the goal
-                    if reached_terminal_mode:
-                        if mode not in self.init_next_modes: # First encounter of mode
-                            # Compute and cache valid next modes on the successful path
-                            next_modes = self.env.get_next_modes(q, mode)
-                            valid_next_modes = self.mode_validation.get_valid_modes(
-                                mode, list(next_modes)
-                            )
-                            self.init_next_modes[mode] = valid_next_modes
-                        # Use cached init_next_modes instead of recomputing
-                        valid_next_modes = self.init_next_modes[mode]
-                    # Current mode is not a terminal mode AND we are still exploring
-                    else:
-                        # Compute next modes & validate them (no caching)
+            # Step 4: compute valid next modes
+            # Current mode is a terminal mode
+            if self.env.is_terminal_mode(mode):
+                valid_next_modes = None # No successors (all tasks for all robots completed)
+            else:
+                # Current mode is not a terminal mode BUT we already know a path to the goal
+                if reached_terminal_mode:
+                    if mode not in self.init_next_modes: # First encounter of mode
+                        # Compute and cache valid next modes only if they are on the mode path
                         next_modes = self.env.get_next_modes(q, mode)
                         valid_next_modes = self.mode_validation.get_valid_modes(
                             mode, list(next_modes)
                         )
+                        self.init_next_modes[mode] = valid_next_modes
+                    # Use cached init_next_modes instead of recomputing
+                    valid_next_modes = self.init_next_modes[mode]
+                # Current mode is not a terminal mode AND we are still exploring
+                else:
+                    # Compute next modes & validate them (no caching)
+                    next_modes = self.env.get_next_modes(q, mode)
+                    valid_next_modes = self.mode_validation.get_valid_modes(
+                        mode, list(next_modes)
+                    )
 
-                        assert not (
-                            set(valid_next_modes)
-                            & self.mode_validation.invalid_next_ids.get(mode, set())
-                        ), "There are invalid modes in the 'next_modes'."
+                    assert not (
+                        set(valid_next_modes)
+                        & self.mode_validation.invalid_next_ids.get(mode, set())
+                    ), "There are invalid modes in the 'next_modes'."
 
-                        # Current mode is DEAD end
-                        if valid_next_modes == []:
-                            # If no valid next modes exist, add this mode as invalid and remove from reached modes
-                            self.mode_validation.propagate_invalid(mode)
-                            reached_modes = self.mode_validation.remove_invalid_modes(reached_modes)
+                    # Current mode is DEAD end: if there are no valid next modes, we add this mode to the invalid modes (and remove them from the reached modes)
+                    if valid_next_modes == []:
+                        # If no valid next modes exist, add this mode as invalid and remove from reached modes
+                        self.mode_validation.propagate_invalid(mode)
+                        reached_modes = self.mode_validation.remove_invalid_modes(reached_modes)
 
-                # Step 6: handle pruned modes
-                # If mode validation removed this mode, skip adding the transition and update sampling set
-                if mode not in reached_modes:
-                    if not reached_terminal_mode:
-                        self.sorted_reached_modes = list(
-                            sorted(reached_modes, key=lambda m: m.id)
-                        )
-                        mode_subset_to_sample = self._get_valid_modes_to_sample()
-                    continue # Skip rest of loop as mode is no longer valid
+            # Step 6: handle pruned modes
+            # If mode validation removed this mode, skip adding the transition and update sampling set
+            if mode not in reached_modes:
+                if not reached_terminal_mode:
+                    self.sorted_reached_modes = list(
+                        sorted(reached_modes, key=lambda m: m.id)
+                    )
+                    mode_subset_to_sample = self._get_valid_modes_to_sample()
+                continue # Skip rest of loop as mode is no longer valid
 
                 # Step 7: add the transition config with its valid next modes to the graph
                 g.add_transition_nodes([(q, mode, valid_next_modes)])
@@ -1249,7 +1282,7 @@ class CompositePRM(BasePlanner):
 
         return approximate_space_extent
 
-    # @profile # run with kernprof -l examples/run_planner.py [your environment] [your flags]
+    # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def plan(
         self,
         ptc: PlannerTerminationCondition,
@@ -1295,6 +1328,7 @@ class CompositePRM(BasePlanner):
             lambda a, b: batch_config_dist(a, b, self.config.distance_metric),
             use_k_nearest=self.config.use_k_nearest,
         )
+        self.graph = graph
 
         # Tracking variables
         current_best_cost = None

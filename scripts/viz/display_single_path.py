@@ -19,7 +19,7 @@ from multi_robot_multi_goal_planning.problems.util import interpolate_path, path
 from multi_robot_multi_goal_planning.planners.shortcutting import (
     robot_mode_shortcut,
 )
-from run_experiment import load_experiment_config
+from ..run_experiment import load_experiment_config
 # from multi_robot_multi_goal_planning.problems.configuration import config_dist
 
 
@@ -178,7 +178,7 @@ def main():
     parser.add_argument(
         "--pause",
         action="store_true",
-        help="Stop at mode switches. (used for debugging. default: False)",
+        help="Pause after each state. (used for debugging. default: False)",
     )
     parser.add_argument(
         "--show_coll_config",

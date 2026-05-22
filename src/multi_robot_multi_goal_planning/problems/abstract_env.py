@@ -10,7 +10,7 @@ from .planning_env import (
     generate_binary_search_indices,
 )
 
-from .configuration import (
+from .core.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
@@ -27,7 +27,7 @@ from .planning_env import (
     Task,
     BaseProblem,
 )
-from .goals import (
+from .core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -35,7 +35,7 @@ from .goals import (
 )
 
 
-from .registry import register
+from .core.registry import register
 
 
 class Sphere:
@@ -115,6 +115,8 @@ class AbstractEnvironment(BaseProblem):
     """
 
     def __init__(self):
+        super().__init__()
+        
         self.limits = None
         self.agent_radii = None
         self.start_pos = None
@@ -155,12 +157,6 @@ class AbstractEnvironment(BaseProblem):
 
         if stop_at_end:
             self.show_config(path[-1].q, True)
-
-    def sample_config_uniform_in_limits(self):
-        rnd = np.random.uniform(low=self.limits[0, :], high=self.limits[1, :])
-        q = self.start_pos.from_flat(rnd)
-
-        return q
 
     def get_scenegraph_info_for_mode(self, mode: Mode, is_start_mode: bool = False):
         return {}

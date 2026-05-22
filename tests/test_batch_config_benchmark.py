@@ -1,5 +1,5 @@
 import numpy as np
-from multi_robot_multi_goal_planning.problems.configuration import (
+from multi_robot_multi_goal_planning.problems.core.configuration import (
     NpConfiguration,
     batch_config_cost,
 )

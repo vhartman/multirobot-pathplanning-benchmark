@@ -6,7 +6,7 @@ import time
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from ..dependency_graph import DependencyGraph
+from ..core.dependency_graph import DependencyGraph
 
 from .rai_config import *
 from ..planning_env import (
@@ -15,7 +15,7 @@ from ..planning_env import (
     State,
     Task,
 )
-from ..goals import (
+from ..core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -23,7 +23,7 @@ from ..goals import (
 )
 from ..rai_base_env import rai_env
 
-from ..registry import register
+from ..core.registry import register
 
 
 @register([
@@ -182,8 +182,6 @@ class rai_multi_panda_arm_single_goal_env(SequenceMixin, rai_env):
         self.robots = ["a0", "a1", "a2"]
         self.robots = self.robots[:num_robots]
 
-        print(self.robots)
-
         rai_env.__init__(self)
 
         self.tasks = [Task("terminal", self.robots, SingleGoal(keyframes[0]))]
@@ -216,8 +214,6 @@ class rai_single_panda_arm_single_goal_env(SequenceMixin, rai_env):
         self.C_coll = None
 
         self.robots = ["a0"]
-
-        print(self.robots)
 
         rai_env.__init__(self)
 

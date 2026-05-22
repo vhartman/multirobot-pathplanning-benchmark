@@ -141,7 +141,7 @@ class RRTstar(BaseRRTstar):
             # Mode selection
             active_mode = self.random_mode()
             # RRT* core
-            q_rand = self.sample_configuration(active_mode)
+            q_rand = self._sample_config_fn(active_mode)
             if not q_rand:
                 continue
 
@@ -152,9 +152,9 @@ class RRTstar(BaseRRTstar):
             if not state_new:
                 continue
             
-            if self.env.is_collision_free(
+            if self._check_config_cf(
                 state_new.q, active_mode
-            ) and self.env.is_edge_collision_free(
+            ) and self._check_edge_cf(
                 n_nearest.state.q, state_new.q, active_mode
             ):
                 n_new = Node(state_new, self.operation)

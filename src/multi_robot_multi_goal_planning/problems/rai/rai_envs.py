@@ -1,7 +1,7 @@
 import numpy as np
 import random
 
-from ..dependency_graph import DependencyGraph
+from ..core.dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai.rai_config as rai_config
 
@@ -19,7 +19,7 @@ from ..planning_env import (
     DependencyType,
     SafePoseType,
 )
-from ..goals import (
+from ..core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -27,7 +27,7 @@ from ..goals import (
 )
 from ..rai_base_env import rai_env
 
-from ..registry import register
+from ..core.registry import register
 
 # In the follwoing, we want to test planners on a variety of tings
 # In particular, we first want to establish a few simple problems
@@ -611,7 +611,6 @@ class rai_two_dim_handover_dependency_graph(DependencyGraphMixin, rai_two_dim_ha
         self.graph.add_dependency("a2_place", "handover")
         self.graph.add_dependency("terminal", "a2_place")
 
-        print(self.graph)
         # self.graph.visualize()
 
         BaseModeLogic.__init__(self)
@@ -648,8 +647,6 @@ class rai_random_two_dim(SequenceMixin, rai_env):
 
         self.tasks = []
         self.sequence = []
-
-        print(keyframes)
 
         cnt = 0
         for r in self.robots:
@@ -728,8 +725,6 @@ class rai_alternative_hallway_two_dim_dependency_graph(DependencyGraphMixin, rai
         self.graph = DependencyGraph()
         self.graph.add_dependency("terminal", "a1_goal_1")
         self.graph.add_dependency("terminal", "a2_goal_1")
-
-        print(self.graph)
 
         BaseModeLogic.__init__(self)
 
@@ -815,12 +810,7 @@ class rai_two_dim_three_agent_env_dependency_graph(DependencyGraphMixin, rai_two
         self.graph.add_dependency("terminal", "a2_goal_2")
         self.graph.add_dependency("terminal", "a3_goal_1")
 
-        print(self.graph)
-
         BaseModeLogic.__init__(self)
-
-        print(self.start_mode)
-        print(self._terminal_task_ids)
 
 
 ##############################
@@ -1123,28 +1113,6 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
-# moving objects from a rolling cage to a 'conveyor'
-class rai_ur10_box_sort_env:
-    pass
-
-
-# moving objects from a 'conveyor' to a rolling cage
-class rai_ur10_palletizing_env:
-    pass
-
-
-class rai_ur10_strut_env:
-    pass
-
-
-class rai_ur10_arm_shelf_env:
-    pass
-
-
-class rai_ur10_arm_conveyor_env:
-    pass
-
-
 # best max cost: 9.24
 @register("rai.handover")
 class rai_ur10_handover_env(SequenceMixin, rai_env):
@@ -1154,8 +1122,6 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         self.robots = ["a1", "a2"]
 
         rai_env.__init__(self)
-
-        print(self.start_pos.state())
 
         self.manipulating_env = True
 
@@ -1201,7 +1167,6 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
             self.safe_pose[r][3] = -2
 
@@ -1298,7 +1263,6 @@ class rai_ur10_arm_bottle_env_base(rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 @register([
@@ -1460,7 +1424,6 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
             location_is_free[k[-2:]] = False
 
         location_is_free[available_action_sequences[0][-2:]] = True
-        print(location_is_free)
 
         while True:
             # choose an action thingy from the available action sequences at random
@@ -1486,18 +1449,12 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
 
             next_task = action_names[obj].pop(0)
 
-            print(available_action_sequences)
-            print(robot_gripper_free)
-            print(next_task)
-
             if next_task[-1] == "0":
                 location_is_free[obj[-2:]] = True
                 if len(available_action_sequences) < len(actions):
                     available_action_sequences.append(
                         actions[len(available_action_sequences)][1]
                     )
-
-            print(location_is_free)
 
             named_sequence.append(next_task)
 
@@ -1515,8 +1472,6 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
 
         self.sequence = self._make_sequence_from_names(named_sequence)
 
-        print(self.sequence)
-
         BaseModeLogic.__init__(self)
 
         # buffer for faster collision checking
@@ -1529,7 +1484,6 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 @register([
@@ -1558,11 +1512,8 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         cnt = 0
         for primitive_type, robots, box_index, qs in keyframes:
             box_name = "obj" + str(box_index)
-            print(primitive_type)
             if primitive_type == "pick":
                 for t, k in zip(pick_task_names, qs[0]):
-                    print(robots)
-                    print(k)
                     if t == "pick":
                         ee_name = robots[0] + "ur_vacuum"
                         self.tasks.append(
@@ -1643,7 +1594,6 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
@@ -1679,15 +1629,10 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
         cnt = 0
         for primitive_type, robots, box_index, qs in keyframes:
             box_name = "obj" + str(box_index)
-            print(primitive_type)
             prev_task = None
-
-            print(last_robot_task)
 
             if primitive_type == "pick":
                 for t, k in zip(pick_task_names, qs[0]):
-                    print(robots)
-                    print(k)
                     task_name = robots[0] + t + "_" + box_name + "_" + str(cnt)
 
                     if (
@@ -1734,7 +1679,6 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
                             last_robot_task[robots[0]] != task_name
                             and last_robot_task[robots[0]] is not None
                         ):
-                            print("A")
                             self.graph.add_dependency(
                                 task_name, last_robot_task[robots[0]]
                             )
@@ -1821,7 +1765,6 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
@@ -1873,22 +1816,22 @@ class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
 
         self.safe_pose = {}
         for r in self.robots:
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 
 # best cost found (max): 21.45
 @register([
     ("rai.box_stacking", {}),
+    ("rai.ur5_box_stacking", {"robot_type": "ur5"}),
     ("rai.box_stacking_two_robots", {"num_robots": 2}),
     ("rai.box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
     ("rai.box_stacking_three_robots", {"num_robots": 3}),
     ("rai.box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
 ])
 class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
-    def __init__(self, num_robots=4, num_boxes: int = 8):
+    def __init__(self, num_robots=4, num_boxes: int = 8, robot_type="ur10"):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
-            num_robots, num_boxes
+            num_robots, num_boxes, robot_types=robot_type
         )
 
         rai_env.__init__(self)
@@ -1931,7 +1874,63 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
 
         self.safe_pose = {}
         for r in self.robots:
-            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
+
+# best cost found (max): 21.45
+@register([
+    ("rai.isolated_box_stacking", {}),
+    ("rai.isolated_ur5_box_stacking", {"robot_type": "ur5"}),
+    ("rai.isolated_box_stacking_two_robots", {"num_robots": 2}),
+    ("rai.isolated_box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
+    ("rai.isolated_box_stacking_three_robots", {"num_robots": 3}),
+    ("rai.isolated_box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
+])
+class rai_isolated_arm_box_stack_env(SequenceMixin, rai_env):
+    def __init__(self, num_robots=8, num_boxes: int = 4, robot_type="ur10"):
+        self.C, keyframes, self.robots, _ = rai_config.make_isolated_box_stacking_env(
+            num_robots, num_boxes, robot_types=robot_type
+        )
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for r, b, qs, g in keyframes:
+            cnt = 0
+            for t, k in zip(task_names, qs):
+                task_name = r + t + "_" + b + "_" + str(cnt)
+                if t == "pick":
+                    ee_name = r + "gripper_center"
+                    prefix = r[:9] # TODO: fix
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b]))
+                else:
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[prefix + "table", b]))
+
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.00
+        # self.collision_resolution = 0.005
+        self.collision_resolution = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 
@@ -2007,7 +2006,6 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
 
         self.safe_pose = {}
         for r in self.robots:
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 @register("rai.static_fr3_simple_sorting")
@@ -2131,7 +2129,6 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 @register([
@@ -2190,8 +2187,6 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
 
         # random.shuffle(self.tasks)
 
-        print(self.graph)
-
         # self.graph.visualize()
 
         # for t in self.tasks:
@@ -2211,7 +2206,70 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+
+
+# mobile manip
+@register([
+    ("rai.mobile_wall_small", {"num_robots": 6}),
+])
+class rai_mobile_manip_wall(SequenceMixin, rai_env):
+    def __init__(self, num_robots=4, wall_x = 4, wall_z = 3):
+        self.C, keyframes, sequenced_keyframes = rai_config.make_mobile_manip_with_small_stones_env(num_robots, wall_x, wall_z)
+
+        self.robots = [k for k in keyframes]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+        
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for robot_prefix, box, poses in sequenced_keyframes:
+            cnt = 0
+            for t, k in zip(task_names, poses):
+                task_name = robot_prefix + t + "_" + box + "_" + str(cnt)
+                if t == "pick":
+                    ee_name = robot_prefix + "gripper"
+                    self.tasks.append(
+                        Task(
+                            task_name,
+                            [robot_prefix], SingleGoal(k), t, frames=[ee_name, box]
+                        )
+                    )
+                else:
+                    self.tasks.append(
+                        Task(
+                            task_name,
+                            [robot_prefix], SingleGoal(k), t, frames=["table", box]
+                        )
+                    )
+
+                cnt += 1
+
+                # if b in action_names:
+                #     action_names[b].append(self.tasks[-1].name)
+                # else:
+                #     action_names[b] = [self.tasks[-1].name]
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.02
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
@@ -2260,7 +2318,6 @@ class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 7
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:dim])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 
@@ -2309,7 +2366,6 @@ class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 7
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:dim])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
 @register([
@@ -2363,15 +2419,128 @@ class rai_coop_tamp_architecture(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+@register("rai.dual_ur5")
+class rai_dual_ur5(SequenceMixin, rai_env):
+    def __init__(self, num_repetitions: int = 2):
+        self.C, [r1_pose, r2_pose] = rai_config.make_rai_dual_ur5_env()
+
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        p1 = r1_pose[0]
+        p2 = r2_pose[0]
+
+        goal_tasks = []
+        sequence_names = []
+        for rep in range(num_repetitions):
+            suffix = f"_{rep + 1}" if num_repetitions > 1 else ""
+            a1_name = f"a1_goal{suffix}"
+            a2_name = f"a2_goal{suffix}"
+            goal_tasks.append(Task(a1_name, ["a1"], SingleGoal(np.array(p1))))
+            goal_tasks.append(Task(a2_name, ["a2"], SingleGoal(np.array(p2))))
+            sequence_names += [a1_name, a2_name]
+
+        self.tasks = goal_tasks + [
+            Task("terminal", self.robots, SingleGoal(home_pose)),
+        ]
+
+        self.sequence = self._make_sequence_from_names(sequence_names + ["terminal"])
+
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+
+@register("rai.quad_ur5")
+class rai_quad_ur5(SequenceMixin, rai_env):
+    def __init__(self, num_repetitions: int = 2):
+        self.C, [r1_pose, r2_pose, r3_pose, r4_pose] = rai_config.make_rai_quad_ur5_env()
+
+        self.robots = ["a1", "a2", "a3", "a4"]
+        rai_env.__init__(self)
+
+        home_pose = self.C.getJointState()
+
+        p1 = r1_pose[0]
+        p2 = r2_pose[0]
+        p3 = r3_pose[0]
+        p4 = r4_pose[0]
+
+        goal_tasks = []
+        sequence_names = []
+        for rep in range(num_repetitions):
+            suffix = f"_{rep + 1}" if num_repetitions > 1 else ""
+            a1_name = f"a1_goal{suffix}"
+            a2_name = f"a2_goal{suffix}"
+            a3_name = f"a3_goal{suffix}"
+            a4_name = f"a4_goal{suffix}"
+            goal_tasks.append(Task(a1_name, ["a1"], SingleGoal(np.array(p1))))
+            goal_tasks.append(Task(a2_name, ["a2"], SingleGoal(np.array(p2))))
+            goal_tasks.append(Task(a3_name, ["a3"], SingleGoal(np.array(p3))))
+            goal_tasks.append(Task(a4_name, ["a4"], SingleGoal(np.array(p4))))
+            sequence_names += [a1_name, a2_name, a3_name, a4_name] 
+
+        self.tasks = goal_tasks + [
+            Task("terminal", self.robots, SingleGoal(home_pose)),
+        ]
+
+        self.sequence = self._make_sequence_from_names(sequence_names + ["terminal"])
+
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+
+# @register()
+class rai_tower_of_hanoi(SequenceMixin, rai_env):
+    def __init__(num_robots: int = 4):
+        self.C = rai_config.make_tower_of_hanoi_env()
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        # buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.005
+        self.collision_resolution = 0.005
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 7
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+
 
 
 def export_env(env: rai_env):
     # export scene
     rai_env.C.writeURDF()
 
-    # export dependendency graph/sequence
+    # export dependency graph/sequence
     ## export computed exact keyframes
     pass
 

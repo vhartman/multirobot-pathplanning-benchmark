@@ -5,10 +5,10 @@ import random
 from typing import List, Dict, Optional
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.dependency_graph import DependencyGraph
+from multi_robot_multi_goal_planning.problems.core.dependency_graph import DependencyGraph
 
 import multi_robot_multi_goal_planning.problems.rai.rai_config as rai_config
-from ..configuration import config_dist
+from ..core.configuration import config_dist
 
 # from multi_robot_multi_goal_planning.problems.rai_config import *
 from ..planning_env import (
@@ -38,11 +38,11 @@ from ..skills import (
     RelativePoseReaching
 )
 
-from ..constraints import (
+from ..core.constraints import (
     relative_pose
 )
 
-from ..goals import (
+from ..core.goals import (
     SingleGoal,
     GoalSet,
     GoalRegion,
@@ -50,7 +50,7 @@ from ..goals import (
 )
 from ..rai_base_env import rai_env
 
-from ..registry import register
+from ..core.registry import register
 
 ############
 # Debugging/testing envs: single agent
@@ -650,13 +650,14 @@ class rai_multi_agent_pick_and_place(SequenceMixin, rai_env):
 # multi agent stacking with skills
 @register([
     ("rai.skill_box_stacking", {}),
+    ("rai.skill_box_stacking_unordered_sequence", {"ordered_sequence": False}),
     ("rai.skill_box_stacking_two_robots", {"num_robots": 2}),
     ("rai.skill_box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
     ("rai.skill_box_stacking_three_robots", {"num_robots": 3}),
     ("rai.skill_box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
 ])
 class rai_multi_agent_stacking(SequenceMixin, rai_env):
-    def __init__(self, num_robots=4, num_boxes: int = 8):
+    def __init__(self, num_robots=4, num_boxes: int = 8, ordered_sequence=True):
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
             num_robots, num_boxes, skill_starts=True
         )
@@ -667,30 +668,37 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
 
         home_pose = self.C.getJointState()
 
+        self.robot_objs = {r: [] for r in self.robots}
+
         self.tasks = []
+        robot_chains: Dict[str, List[List[str]]] = {r: [] for r in self.robots}
+        place_tasks_in_order: List[str] = []
         task_names = ["pick", "place"]
         for r, b, qs, g in keyframes:
             cnt = 0
+            self.robot_objs[r].append(b)
+            chain = []
+
             for t, k in zip(task_names, qs):
                 task_name = r + t + "_" + b + "_" + str(cnt)
+                chain.extend(["pre_" + task_name, task_name])
                 if t == "pick":
                     ee_name = r + "gripper_center"
                     self.tasks.append(Task("pre_" + task_name, [r], SingleGoal(k)))
 
-                    print(r)
                     self.C.setJointState(k, self.robot_joints[r])
                     robot_ee_pose = self.C.getFrame(ee_name).getPose()
                     self.C.setJointState(home_pose)
                     obj_pose = self.C.getFrame(b).getPose()
 
-                    grasp_pose = np.concatenate([obj_pose[:3], robot_ee_pose[3:]]) + np.array([0, 0, 0.05, 0, 0, 0, 0])
+                    grasp_pose = np.concatenate([obj_pose[:3], robot_ee_pose[3:]])
                     self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b], 
                         skill=EEPoseGoalReaching(self.robot_joints[r], grasp_pose, ee_name)))
                 else:
                     self.tasks.append(Task("pre_" + task_name, [r], SingleGoal(k)))
 
                     place_pose = self.C.getFrame(g).getPose()
-                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b], 
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b],
                         skill=EEPoseGoalReaching(self.robot_joints[r], place_pose, b)))
 
                 cnt += 1
@@ -700,9 +708,20 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
                 # else:
                 #     action_names[b] = [self.tasks[-1].name]
 
+            robot_chains[r].append(chain)
+            place_tasks_in_order.append(chain[-1])  # place task is always last in chain
+
         self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
 
-        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+        if ordered_sequence:
+            self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+        else:
+            # Stacking requires place actions to stay in keyframe order (base before top).
+            place_constraints = list(zip(place_tasks_in_order, place_tasks_in_order[1:]))
+
+            task_name_sequence = make_task_sequence(robot_chains, constraints=place_constraints, pair_pre_tasks=True, seed=0)
+        
+            self.sequence = self._make_sequence_from_names(task_name_sequence + ["terminal"])
 
         BaseModeLogic.__init__(self)
 
@@ -717,7 +736,6 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
 
         self.safe_pose = {}
         for r in self.robots:
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
 
 # TODO unfinished
@@ -1099,10 +1117,176 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
+def make_task_sequence(
+    robot_chains: Dict[str, List[List[str]]],
+    constraints: Optional[List[tuple]] = None,
+    pair_pre_tasks: bool = False,
+    seed: Optional[int] = None,
+) -> List[str]:
+    """Generic random topological sort over task chains with robot serialization.
+
+    Args:
+        robot_chains: per-robot list of chains. Each chain is an ordered list of
+            task names that must be executed in that order.
+        constraints: optional list of (task_a, task_b) pairs meaning task_a must
+            appear before task_b in the sequence.
+        pair_pre_tasks: if True and chains have exactly 4 tasks, treat
+            (chain[0], chain[1]) and (chain[2], chain[3]) as atomic pairs — no
+            other task will be interleaved within a pair.
+        seed: optional random seed.
+
+    Constraints enforced automatically:
+    - Within each chain: tasks appear in the given order.
+    - For same-robot chains: last task of chain i precedes first task of chain j.
+      The ordering between chains is randomized, but respects any ordering already
+      implied by the explicit constraints (to avoid creating cycles).
+    """
+    rng = random.Random(seed)
+    all_chains = [chain for chains in robot_chains.values() for chain in chains]
+
+    # Build atomic units. Node key = first task in the unit.
+    unit_tasks: Dict[str, List[str]] = {}
+    task_to_unit: Dict[str, str] = {}
+    chain_unit_lists: List[List[str]] = []
+
+    for chain in all_chains:
+        if pair_pre_tasks and len(chain) == 4:
+            unit_keys = [chain[0], chain[2]]
+            unit_tasks[chain[0]] = [chain[0], chain[1]]
+            unit_tasks[chain[2]] = [chain[2], chain[3]]
+            for t in chain[:2]:
+                task_to_unit[t] = chain[0]
+            for t in chain[2:]:
+                task_to_unit[t] = chain[2]
+        else:
+            unit_keys = list(chain)
+            for t in chain:
+                unit_tasks[t] = [t]
+                task_to_unit[t] = t
+        chain_unit_lists.append(unit_keys)
+
+    # Unit → chain index
+    unit_to_chain_idx: Dict[str, int] = {}
+    for ci, unit_keys in enumerate(chain_unit_lists):
+        for uk in unit_keys:
+            unit_to_chain_idx[uk] = ci
+
+    # Build predecessor graph (chain ordering + explicit constraints)
+    predecessors: Dict[str, set] = {k: set() for k in unit_tasks}
+    for unit_keys in chain_unit_lists:
+        for j in range(1, len(unit_keys)):
+            predecessors[unit_keys[j]].add(unit_keys[j - 1])
+    for a, b in (constraints or []):
+        predecessors[task_to_unit[b]].add(task_to_unit[a])
+
+    # Compute forward reachability between chains so same-robot serialization
+    # never introduces a cycle with the explicit constraints.
+    # Forward adjacency: intra-chain unit edges + explicit constraint edges.
+    unit_forward: Dict[str, List[str]] = {k: [] for k in unit_tasks}
+    for unit_keys in chain_unit_lists:
+        for j in range(len(unit_keys) - 1):
+            unit_forward[unit_keys[j]].append(unit_keys[j + 1])
+    for a, b in (constraints or []):
+        unit_forward[task_to_unit[a]].append(task_to_unit[b])
+
+    # BFS from each chain to find all transitively reachable chains
+    chain_can_reach: List[set] = [set() for _ in range(len(all_chains))]
+    for ci, unit_keys in enumerate(chain_unit_lists):
+        visited: set = set()
+        queue = list(unit_keys)
+        while queue:
+            u = queue.pop()
+            if u in visited:
+                continue
+            visited.add(u)
+            cj = unit_to_chain_idx[u]
+            if cj != ci:
+                chain_can_reach[ci].add(cj)
+            queue.extend(unit_forward[u])
+
+    # Same-robot serialization: random topological sort of chains per robot,
+    # respecting the reachability-derived partial order to avoid cycles.
+    chain_idx_offset = 0
+    for chains in robot_chains.values():
+        n = len(chains)
+        my_unit_chains = chain_unit_lists[chain_idx_offset : chain_idx_offset + n]
+        global_idxs = list(range(chain_idx_offset, chain_idx_offset + n))
+
+        # local partial order: local_prec[j] = set of local indices that must precede j
+        local_prec: Dict[int, set] = {i: set() for i in range(n)}
+        for i in range(n):
+            for j in range(n):
+                if i != j and global_idxs[j] in chain_can_reach[global_idxs[i]]:
+                    local_prec[j].add(i)
+
+        in_deg = {i: len(local_prec[i]) for i in range(n)}
+        chain_ready = [i for i in range(n) if in_deg[i] == 0]
+        chain_order: List[int] = []
+        while chain_ready:
+            rng.shuffle(chain_ready)
+            chosen = chain_ready.pop()
+            chain_order.append(chosen)
+            for j in range(n):
+                if chosen in local_prec[j]:
+                    in_deg[j] -= 1
+                    if in_deg[j] == 0:
+                        chain_ready.append(j)
+
+        for k in range(len(chain_order) - 1):
+            i, j = chain_order[k], chain_order[k + 1]
+            predecessors[my_unit_chains[j][0]].add(my_unit_chains[i][-1])
+
+        chain_idx_offset += n
+
+    # Random topological sort of units (Kahn's algorithm)
+    in_degree = {t: len(preds) for t, preds in predecessors.items()}
+    ready = [t for t, d in in_degree.items() if d == 0]
+    result = []
+    while ready:
+        rng.shuffle(ready)
+        chosen = ready.pop()
+        result.extend(unit_tasks[chosen])
+        for t, preds in predecessors.items():
+            if chosen in preds:
+                in_degree[t] -= 1
+                if in_degree[t] == 0:
+                    ready.append(t)
+    return result
+
+
+def make_pick_place_sequence(
+    robot_objects: Dict[str, List[int]],
+    pick_order: Optional[List[tuple]] = None,
+    place_order: Optional[List[tuple]] = None,
+    pair_pre_tasks: bool = False,
+    seed: Optional[int] = None,
+) -> List[str]:
+    """Convenience wrapper around make_task_sequence for standard pick-place naming.
+
+    robot_objects: per-robot list of integer object indices.
+    pick_order:  list of (i, j) pairs meaning pick_i before pick_j.
+    place_order: list of (i, j) pairs meaning place_i before place_j
+                 (e.g. for stacking: base must be placed before the object on top).
+    pair_pre_tasks: see make_task_sequence.
+    """
+    robot_chains = {
+        r: [[f"pre_pick_{i}", f"pick_{i}", f"pre_place_{i}", f"place_{i}"] for i in objs]
+        for r, objs in robot_objects.items()
+    }
+    constraints = (
+        [(f"pick_{i}", f"pick_{j}") for i, j in (pick_order or [])]
+        + [(f"place_{i}", f"place_{j}") for i, j in (place_order or [])]
+    )
+    return make_task_sequence(robot_chains, constraints or None, pair_pre_tasks, seed)
+
+
 # TODO: more robots, more things -> ideally programmatically
-@register("rai.multi_agent_bin_packing")
+@register([
+    ("rai.multi_agent_bin_packing", {}),
+    ("rai.multi_agent_bin_packing_unordered_sequence", {'ordered_sequence': False}),
+])
 class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
-    def __init__(self):
+    def __init__(self, ordered_sequence=True):
         self.C, \
             [a1_pre_pick_type_1, a1_pre_pick_type_2, a1_pre_place], \
             [a2_pre_pick_type_1, a2_pre_pick_type_2, a2_pre_place] = rai_config.make_multi_agent_bin_packing_env()
@@ -1130,6 +1314,8 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
 
         ee_name = "ee_marker"
 
+        self.robot_objs = {"a1": [], "a2": []}
+
         for i in range(1,4):
             if i in [1,2]:
                 robot = "a1"
@@ -1142,17 +1328,9 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
                 pose = a2_pose
                 pre_place = a2_pre_place
             
-            obj_frame = self.C.getFrame(f"obj{i}")
-            obj_pose = obj_frame.getPose()
-            obj_size = obj_frame.getSize() 
-            half_height = obj_size[2] / 2.0
-            grasp_clearance = 0.06
 
-            grasp_pose = obj_pose.copy()
-            grasp_pose[2] = obj_pose[2] + half_height + grasp_clearance
-            grasp_pose[3:] = 1. * pose[3:]
-            # grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.15, 0, 0, 0, 0])
-            # grasp_pose[3:] = 1.*pose[3:]
+            grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.15, 0, 0, 0, 0])
+            grasp_pose[3:] = 1.*pose[3:]
 
             self.tasks.extend([
                 Task(
@@ -1191,11 +1369,15 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
                 SingleGoal(home_pose),
             ))
 
-        task_name_sequence = []
-        for i in [1,3,2]:
-            task_name_sequence.extend(
-                [f"pre_pick_{i}", f"pick_{i}", f"pre_place_{i}", f"place_{i}"]
-            )
+        if ordered_sequence:
+            task_name_sequence = []
+            for i in [1,3,2]:
+                task_name_sequence.extend(
+                    [f"pre_pick_{i}", f"pick_{i}", f"pre_place_{i}", f"place_{i}"]
+                )
+        else:
+            task_name_sequence = make_pick_place_sequence(self.robot_objs, pair_pre_tasks=True, seed=0)
+
 
         self.sequence = self._make_sequence_from_names(
             task_name_sequence +  ["terminal"]
@@ -1213,10 +1395,10 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 class rai_multi_agent_bin_picking_base(rai_env):
-    def __init__(self):
+    def __init__(self, num_objects=4):
         self.C, \
-            [a1_pre_pick, a1_pre_place_type_1, a1_pre_place_type_2, a1_pre_place_type_3, a1_pre_place_type_4], \
-            [a2_pre_pick, a2_pre_place_type_1, a2_pre_place_type_2, a2_pre_place_type_3, a2_pre_place_type_4] = \
+            [a1_pre_pick, a1_pre_place_type_1, a1_pre_place_type_2], \
+            [a2_pre_pick, a2_pre_place_type_1, a2_pre_place_type_2] = \
             rai_config.make_multi_agent_bin_picking()
         # self.C.view(True)
 
@@ -1244,19 +1426,21 @@ class rai_multi_agent_bin_picking_base(rai_env):
         a1_pre_places = [a1_pre_place_type_1, a1_pre_place_type_2, a1_pre_place_type_3, a1_pre_place_type_4]
         a2_pre_places = [a2_pre_place_type_1, a2_pre_place_type_2, a2_pre_place_type_3, a2_pre_place_type_4]
 
-        for i in range(1,5):
+        self.robot_objs = {"a1": [], "a2": []}
+
+        for i in range(1,num_objects+1):
             if i%2 == 1:
                 pre_pick = a1_pre_pick
-                place_pose = a1_pre_places[i-1]
+                place_pose = a1_pre_place_type_1
                 robot = "a1"
                 pose = pose_a1
 
             else:
                 pre_pick = a2_pre_pick
-                place_pose = a2_pre_places[i-1]
+                place_pose = a2_pre_place_type_2
                 robot = "a2"
                 pose = pose_a2
-                
+    
             grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.05, 0, 0, 0, 0])
             grasp_pose[3:] = pose[3:]
 
@@ -1302,19 +1486,27 @@ class rai_multi_agent_bin_picking_base(rai_env):
 # Stochastic skill
 # TODO: can a skill determine which frame will be linked??
 # possible solution: just add the object where the robot ends up
-@register("rai.multi_agent_bin_picking")
+@register([
+    ("rai.multi_agent_bin_picking", {}),
+    ("rai.multi_agent_bin_picking_four_objs", {"num_objs": 4}),
+    ("rai.multi_agent_bin_picking_unordered_sequence", {'ordered_sequence': False}),
+])
 class rai_multi_agent_bin_picking(SequenceMixin, rai_multi_agent_bin_picking_base):
-    def __init__(self):
-        rai_multi_agent_bin_picking_base.__init__(self)
+    def __init__(self, num_objs=9, ordered_sequence = True):
+        rai_multi_agent_bin_picking_base.__init__(self, num_objs)
 
-        task_name_sequence = []
-        for i in range(1,5):
-            task_name_sequence.extend(
-                [f"pre_pick_{i}", f"pick_{i}", f"pre_place_{i}", f"place_{i}"]
-            )
+        if ordered_sequence:
+            task_name_sequence = []
+            for i in range(1,num_objs+1):
+                task_name_sequence.extend(
+                    [f"pre_pick_{i}", f"pick_{i}", f"pre_place_{i}", f"place_{i}"]
+                )
+        else:
+            # a1 handles odd objects (1, 3), a2 handles even objects (2, 4)
+            task_name_sequence = make_pick_place_sequence(self.robot_objs, pair_pre_tasks=True, seed=2)
 
         self.sequence = self._make_sequence_from_names(
-            task_name_sequence +  ["terminal"]
+            task_name_sequence + ["terminal"]
         )
 
         self.collision_tolerance = 0.001
@@ -1532,7 +1724,6 @@ class rai_skill_handover(SequenceMixin, rai_env):
         self.safe_pose = {}
         dim = 6
         for i, r in enumerate(self.robots):
-            print(self.C.getJointState()[0:6])
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
             self.safe_pose[r][3] = -2
 

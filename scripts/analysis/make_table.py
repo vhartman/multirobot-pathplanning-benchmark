@@ -307,7 +307,7 @@ def get_subfolders_from_main_folder(folder):
 
 
 def main():
-    main_dir = "./out/exp_many_envs_11/"
+    main_dir = "./out/exp_many_envs_13/"
     folders = get_subfolders_from_main_folder(main_dir)
 
     group_envs_by = ["dep", "unordered", "unassigned"]
