@@ -79,13 +79,16 @@ def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> 
         q0 = path[i].q
         q1 = path[i + 1].q
 
-        # if path[i].mode != path[i + 1].mode:
-        #     new_path.append(State(config_type.from_list(q), path[i].mode))
-        #     continue
-
-        dist = config_dist(q0, q1, "euclidean")
-        N = int(dist / resolution)
-        N = max(1, N)
+        
+        is_skill = getattr(path[i], 'is_skill_waypoint', False)
+        
+        if is_skill:
+            new_path.append(State(q0.from_flat(q0.state()), path[i].mode, is_skill_waypoint=True))
+        else:
+            # Standard free space interpolation
+            dist = config_dist(q0, q1, kind)
+            N = int(dist / resolution)
+            N = max(1, N)
 
             q0_state = q0.state()
             q1_state = q1.state()
