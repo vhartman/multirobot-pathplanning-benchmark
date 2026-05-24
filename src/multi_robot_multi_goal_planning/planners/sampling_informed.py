@@ -872,30 +872,25 @@ class InformedSampling:
                         path[end_ind].mode,
                     ) not in in_between_mode_cache:
                         # 2. Generates a list of all modes that exist between the two randomly picked points
-                    in_between_modes = self.get_inbetween_modes(
+                        in_between_modes = self.get_inbetween_modes(
                             path[start_ind].mode, path[end_ind].mode
                         )
                         in_between_mode_cache[
                             (path[start_ind].mode, path[end_ind].mode)
                         ] = in_between_modes
 
-                # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
+                    # 3. Randomly picks a mode from newly generated list of modes (in_between_mode_cache) 
+                    # Completely IGNORES the reached_modes!!! Therefore, filter before sampling
+                    in_between_modes = in_between_mode_cache[
+                        (path[start_ind].mode, path[end_ind].mode)
+                    ]
+                    candidate_modes = [
+                        mode for mode in in_between_modes if mode in reached_modes
+                    ]
+                    if not candidate_modes:
+                        continue
 
-                # 3. Randomly picks a mode from newly generated list of modes (in_between_mode_cache) 
-                # Completely IGNORES the reached_modes!!! Therefore, filter before sampling
-                in_between_modes = in_between_mode_cache[
-                    (path[start_ind].mode, path[end_ind].mode)
-                ]
-                candidate_modes = [
-                    mode for mode in in_between_modes if mode in reached_modes
-                ]
-                if not candidate_modes:
-                    continue
-
-                mode = random.choice(candidate_modes) 
-
-                # k = random.randint(start_ind, end_ind)
-                # mode = path[k].mode
+                    mode = random.choice(candidate_modes) 
             else:
                 # 4. ONLY HERE the filtered non_skill_modes list is used (if locally_informed_sampling is False)
                 start_ind = 0
