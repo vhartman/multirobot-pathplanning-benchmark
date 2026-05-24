@@ -13,7 +13,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from itertools import chain
 
-from multi_robot_multi_goal_planning.problems.configuration import (
+from multi_robot_multi_goal_planning.problems.core.configuration import (
     batch_config_dist,
 )
 from multi_robot_multi_goal_planning.problems.planning_env import (

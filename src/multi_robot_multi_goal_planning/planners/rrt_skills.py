@@ -10,7 +10,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
     State
 )
-from multi_robot_multi_goal_planning.problems.configuration import (
+from multi_robot_multi_goal_planning.problems.core.configuration import (
     Configuration,
     batch_config_dist,
 )

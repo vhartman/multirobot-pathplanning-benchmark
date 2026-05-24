@@ -14,7 +14,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from numpy.typing import NDArray
 
-from multi_robot_multi_goal_planning.problems.configuration import (
+from multi_robot_multi_goal_planning.problems.core.configuration import (
     Configuration,
     batch_config_dist,
 )
