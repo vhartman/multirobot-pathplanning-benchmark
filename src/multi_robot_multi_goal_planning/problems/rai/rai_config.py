@@ -9288,8 +9288,8 @@ def make_multi_agent_bin_picking(num_objs=4):
         [1, 0.5, 1],
     ])
 
-    for i in range(9):
-        pos = positions[i] + np.array([0, 0.05, 0])
+    for i in range(num_objs):
+        pos = positions[i] #+ np.array([0, 0.05, 0]) # TODO test?
         col = colors[i]
 
         C.addFrame(f"obj{i+1}").setParent(table).setShape(
@@ -9315,7 +9315,7 @@ def make_multi_agent_bin_picking(num_objs=4):
     C.addFrame("bin_wall_l").setParent(C.getFrame("bin_floor")).setShape(
         ry.ST.box, size=[0.03, 0.4, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [-0.23, 0., wall_height/2+0.02]
+        [-0.23, 0., wall_height/2+0.02] # TODO (larger bin now, 0.23 instead of 0.2)
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("bin_wall_r").setParent(C.getFrame("bin_floor")).setShape(
@@ -9425,8 +9425,8 @@ def make_multi_agent_bin_picking(num_objs=4):
     a2_pre_pick, a2_pre_place_pose_left = compute_poses(C, "a2_ur_", "obj1", "goal1")
     _, a2_pre_place_pose_right = compute_poses(C, "a2_ur_", "obj2", "goal2")
     
-    left_objs = [i for i in range(len(goals)) if goals[i][0] > 0]
-    right_objs = [i for i in range(len(goals)) if goals[i][0] < 0]
+    left_objs = [i for i in range(num_objs) if goals[i][0] > 0]
+    right_objs = [i for i in range(num_objs) if goals[i][0] < 0]
 
     return C, [a1_pre_pick, a1_pre_place_pose_left, a1_pre_place_pose_right], [a2_pre_pick, a2_pre_place_pose_left, a2_pre_place_pose_right], left_objs, right_objs
 

@@ -1327,7 +1327,8 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
                 pre_pick = a2_pre_pick_type_2
                 pose = a2_pose
                 pre_place = a2_pre_place
-            
+
+            self.robot_objs[robot].append(i)
 
             grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.15, 0, 0, 0, 0])
             grasp_pose[3:] = 1.*pose[3:]
@@ -1397,9 +1398,10 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
 class rai_multi_agent_bin_picking_base(rai_env):
     def __init__(self, num_objects=4):
         self.C, \
-            [a1_pre_pick, a1_pre_place_type_1, a1_pre_place_type_2], \
-            [a2_pre_pick, a2_pre_place_type_1, a2_pre_place_type_2] = \
-            rai_config.make_multi_agent_bin_picking()
+            [a1_pre_pick, a1_pre_place_type_left, a1_pre_place_type_right],\
+            [a2_pre_pick, a2_pre_place_type_left, a2_pre_place_type_right],\
+            left_objs, right_objs = \
+            rai_config.make_multi_agent_bin_picking(num_objects)
         # self.C.view(True)
 
         self.robots = ["a1", "a2"]
@@ -1422,24 +1424,28 @@ class rai_multi_agent_bin_picking_base(rai_env):
         self.C.setJointState(a2_pre_pick, self.robot_joints["a2"])
         pose_a2 = self.C.getFrame("a2_ur_gripper_center").getPose()
         self.C.setJointState(home_pose)
-        
-        a1_pre_places = [a1_pre_place_type_1, a1_pre_place_type_2, a1_pre_place_type_3, a1_pre_place_type_4]
-        a2_pre_places = [a2_pre_place_type_1, a2_pre_place_type_2, a2_pre_place_type_3, a2_pre_place_type_4]
 
         self.robot_objs = {"a1": [], "a2": []}
 
         for i in range(1,num_objects+1):
             if i%2 == 1:
                 pre_pick = a1_pre_pick
-                place_pose = a1_pre_place_type_1
+                if i-1 in left_objs:
+                    place_pose = a1_pre_place_type_left
+                else:
+                    place_pose = a1_pre_place_type_right
                 robot = "a1"
                 pose = pose_a1
-
             else:
                 pre_pick = a2_pre_pick
-                place_pose = a2_pre_place_type_2
+                if i-1 in left_objs:
+                    place_pose = a2_pre_place_type_left
+                else:
+                    place_pose = a2_pre_place_type_right
                 robot = "a2"
                 pose = pose_a2
+
+            self.robot_objs[robot].append(i)
     
             grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.05, 0, 0, 0, 0])
             grasp_pose[3:] = pose[3:]
@@ -1492,7 +1498,7 @@ class rai_multi_agent_bin_picking_base(rai_env):
     ("rai.multi_agent_bin_picking_unordered_sequence", {'ordered_sequence': False}),
 ])
 class rai_multi_agent_bin_picking(SequenceMixin, rai_multi_agent_bin_picking_base):
-    def __init__(self, num_objs=9, ordered_sequence = True):
+    def __init__(self, num_objs=4, ordered_sequence = True):
         rai_multi_agent_bin_picking_base.__init__(self, num_objs)
 
         if ordered_sequence:
