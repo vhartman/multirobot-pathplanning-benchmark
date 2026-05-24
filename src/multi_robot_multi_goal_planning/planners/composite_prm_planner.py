@@ -339,7 +339,7 @@ class CompositePRM(BasePlanner):
         # Step 3: Define the constraints
         pinned = {}
         end_idx = 0
-        for robot in self.env.robots:
+        for i, robot in enumerate(self.env.robots):
             if robot in constrained_robot:
                 # Overwrite the pre-sampled random config with the goal config
                 dim = self.env.robot_dims[robot]
@@ -995,7 +995,7 @@ class CompositePRM(BasePlanner):
             )
             q = self.collision_free_sampler.sample(mode, pinned)
             if q is None:
-                failed_attemps += 1
+                failed_attempts += 1
                 continue
 
             # Step 3: informed (cost-based) rejection if path already exists
@@ -1051,33 +1051,33 @@ class CompositePRM(BasePlanner):
                     mode_subset_to_sample = self._get_valid_modes_to_sample()
                 continue # Skip rest of loop as mode is no longer valid
 
-                # Step 7: add the transition config with its valid next modes to the graph
-                g.add_transition_nodes([(q, mode, valid_next_modes)])
+            # Step 7: add the transition config with its valid next modes to the graph
+            g.add_transition_nodes([(q, mode, valid_next_modes)])
 
-                # Step 8: verify it was actually added?
-                # This seems to be a very strange way of checking if the transition was added? (Valentin)
-                # but this seems wrong (Valentin)
+            # Step 8: verify it was actually added?
+            # This seems to be a very strange way of checking if the transition was added? (Valentin)
+            # but this seems wrong (Valentin)
+            if (
+                len(list(chain.from_iterable(g.transition_nodes.values()))) # Total transition nodes across all modes
+                > transitions
+            ):
+                transitions += 1
+
+                # If the mode that we added is the root mode with the state being equal to the root state, do not add it
                 if (
-                    len(list(chain.from_iterable(g.transition_nodes.values()))) # Total transition nodes across all modes
-                    > transitions
+                    mode == g.root.state.mode
+                    and np.equal(q.state(), g.root.state.q.state()).all()
                 ):
-                    transitions += 1
+                    reached_modes.discard(mode)
+                    self.dummy_start_mode = True
 
-                    # If the mode that we added is the root mode with the state being equal to the root state, do not add it
-                    if (
-                        mode == g.root.state.mode
-                        and np.equal(q.state(), g.root.state.q.state()).all()
-                    ):
-                        reached_modes.discard(mode)
-                        self.dummy_start_mode = True
-
-                else: # Graph rejected transition node (duplicate)
-                    failed_attempts += 1
-                    continue
-            else: # Graph rejected transition node (collision)
-                # self.env.C.view(True)
+            else: # Graph rejected transition node (duplicate)
                 failed_attempts += 1
                 continue
+            # else: # Graph rejected transition node (collision)
+            #     # self.env.C.view(True)
+            #     failed_attempts += 1
+            #     continue
             
             # Step 9: Update reached modes with valid new successor modes (grow set of modes we can sample in)
             if valid_next_modes is not None and len(valid_next_modes) > 0:
