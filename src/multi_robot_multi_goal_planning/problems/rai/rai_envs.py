@@ -124,17 +124,9 @@ class rai_two_dim_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.spec.manipulation = ManipulationType.STATIC
 
-        self.safe_pose = {}
-        dim = 2
-        if agents_can_rotate:
-            dim = 3
-        else:
-            dim = 2
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 # very simple task:
@@ -181,16 +173,8 @@ class rai_two_dim_env_no_obs_base(rai_env):
         self.collision_tolerance = 0.001
 
         self.spec.manipulation = ManipulationType.STATIC
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
-        self.safe_pose = {}
-        dim = 2
-        if agents_can_rotate:
-            dim = 3
-        else:
-            dim = 2
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 # Optimal cost is be: 5.1 (no matter if rotationis enabled or not)
@@ -371,11 +355,7 @@ class rai_two_dim_single_agent_neighbourhood(SequenceMixin, rai_env):
         self.prev_mode = self.start_mode
         self.spec.manipulation = ManipulationType.STATIC
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {
-            "a1": self.C.getJointState()
-        }
+        self._set_default_safe_pose()
 
 
 class rai_two_dim_simple_manip_base(rai_env):
@@ -565,12 +545,7 @@ class rai_two_dim_handover_base(rai_env):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 3
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 # best cost found for max-cost is 17.64
@@ -770,12 +745,7 @@ class rai_two_dim_three_agent_env_base(rai_env):
         self.spec.dependency = DependencyType.UNORDERED
         self.spec.manipulation = ManipulationType.STATIC
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 3
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 # best sum-cost: 12.9
@@ -907,14 +877,7 @@ class rai_multi_panda_arm_waypoint_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
 
         self.spec.manipulation = ManipulationType.STATIC
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        offset = 0
-        for i, r in enumerate(self.robots):
-            dim = len(self.robot_idx[r])
-            self.safe_pose[r] = np.array(self.C.getJointState()[offset:offset + dim])
-            offset += dim
+        self._set_default_safe_pose()
 
 
 # goals are poses
@@ -964,12 +927,7 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
 
         self.spec.manipulation = ManipulationType.STATIC
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 # goals are poses
 @register([
@@ -1018,12 +976,7 @@ class rai_ur10_arm_multi_spot_welding_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 # goals are poses
 @register([
@@ -1081,12 +1034,7 @@ class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register([
     ("rai.eggcartons", {}),
@@ -1154,12 +1102,7 @@ class rai_ur10_arm_egg_carton_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register("rai.box_sorting")
 class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
@@ -1222,12 +1165,7 @@ class rai_ur10_arm_pick_and_place_env(rai_dual_ur10_arm_env):
         # buffer for faster collision checking
         self.prev_mode = self.start_mode
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 # best max cost: 9.24
@@ -1279,12 +1217,7 @@ class rai_ur10_handover_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.05
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 class rai_ur10_arm_bottle_env_base(rai_env):
     def __init__(self, num_bottles=2):
@@ -1374,12 +1307,7 @@ class rai_ur10_arm_bottle_env_base(rai_env):
         self.collision_tolerance = 0.0000
         self.collision_resolution = 0.001
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register([
     ("rai.bottles", {}),
@@ -1595,12 +1523,7 @@ class rai_ur10_arm_box_rearrangement_env(SequenceMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register([
     ("rai.box_reorientation", {}),
@@ -1705,12 +1628,7 @@ class rai_ur10_box_pile_cleanup_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.02
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 @register([
@@ -1876,12 +1794,7 @@ class rai_ur10_box_pile_cleanup_env_dep(DependencyGraphMixin, rai_env):
         # self.collision_resolution = 0.1
 
         self.spec.dependency = DependencyType.UNORDERED
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 @register("rai.pyramid")
@@ -1928,11 +1841,7 @@ class rai_ur10_arm_box_pyramid_appearing_parts(SequenceMixin, rai_env):
         # self.collision_resolution = 0.005
         self.collision_resolution = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
+        self._set_default_safe_pose()
 
 
 # best cost found (max): 21.45
@@ -1986,11 +1895,7 @@ class rai_ur10_arm_box_stack_env(SequenceMixin, rai_env):
         # self.collision_resolution = 0.005
         self.collision_resolution = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
+        self._set_default_safe_pose()
 
 # best cost found (max): 21.45
 @register([
@@ -2043,11 +1948,7 @@ class rai_isolated_arm_box_stack_env(SequenceMixin, rai_env):
         # self.collision_resolution = 0.005
         self.collision_resolution = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
+        self._set_default_safe_pose()
 
 
 @register([
@@ -2118,11 +2019,7 @@ class rai_ur10_arm_box_stack_env_dep(DependencyGraphMixin, rai_env):
         self.collision_resolution = 0.01
 
         self.spec.dependency = DependencyType.UNORDERED
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
+        self._set_default_safe_pose()
 
 @register("rai.static_fr3_simple_sorting")
 class rai_static_fr3_env(SequenceMixin, rai_env):
@@ -2175,11 +2072,7 @@ class rai_static_fr3_env(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 
 # mobile manip
@@ -2240,12 +2133,7 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.02
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register([
     ("rai.dep_mobile_wall_five", {"num_robots": 5}),
@@ -2317,12 +2205,7 @@ class rai_mobile_manip_wall_dep(DependencyGraphMixin, rai_env):
         self.collision_resolution = 0.02
 
         self.spec.dependency = DependencyType.UNORDERED
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 
@@ -2381,12 +2264,7 @@ class rai_mobile_manip_wall(SequenceMixin, rai_env):
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.02
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 @register("rai.mobile_strut")
@@ -2429,12 +2307,7 @@ class rai_mobile_strut_assembly_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.005
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 7
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 @register("rai.strut_assembly")
@@ -2477,12 +2350,7 @@ class rai_abb_arm_strut_assembly_env(SequenceMixin, rai_env):
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.005
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 7
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register([
     ("rai.three_robot_truss", {"assembly_name": "three_robot_truss"}),
@@ -2530,12 +2398,7 @@ class rai_coop_tamp_architecture(SequenceMixin, rai_env):
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.005
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register("rai.dual_ur5")
 class rai_dual_ur5(SequenceMixin, rai_env):
@@ -2572,7 +2435,7 @@ class rai_dual_ur5(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
 @register("rai.quad_ur5")
@@ -2616,7 +2479,7 @@ class rai_quad_ur5(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
 # @register()
@@ -2642,12 +2505,7 @@ class rai_tower_of_hanoi(SequenceMixin, rai_env):
         self.collision_tolerance = 0.005
         self.collision_resolution = 0.005
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 7
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 
 
