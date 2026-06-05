@@ -971,6 +971,123 @@ class rai_quadruple_ur10_arm_spot_welding_env(SequenceMixin, rai_env):
         for i, r in enumerate(self.robots):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
 
+# goals are poses
+@register([
+    ("rai.multi_welding", {}),
+])
+class rai_ur10_arm_multi_spot_welding_env(SequenceMixin, rai_env):
+    def __init__(self, num_pts: int = 3):
+        self.C, keyframes = rai_config.make_multi_welding_env(
+            view=False, num_pts_per_robot=num_pts
+        )
+
+        self.robots = ["a1", "a2", "a3"]
+
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        self.tasks = []
+        self.sequence = []
+        
+        for i, (robots, pose) in enumerate(keyframes):
+            if i == 0:
+                self.tasks.append(
+                    Task("pick", robots, SingleGoal(pose), 
+                    type="pick",
+                    frames=[robots[0] + "_ur_vacuum", "obj"])
+                )
+            elif i == len(keyframes) - 1:
+                self.tasks.append(
+                    Task("place", robots, SingleGoal(pose),
+                    type="place",
+                    frames=["table", "obj"])
+                )
+            else:
+                self.tasks.append(
+                    Task("", robots, SingleGoal(pose))
+                )
+
+            self.sequence.append(i)
+
+        q_home = self.C.getJointState()
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(q_home)))
+
+        self.sequence.append(len(self.tasks) - 1)
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
+# goals are poses
+@register([
+    ("rai.flex_assembly", {}),
+])
+class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
+    def __init__(self, num_pts: int = 3):
+        self.C, keyframes = rai_config.make_flex_assembly(
+            view=False
+        )
+
+        self.robots = ["a1", "a2", "a3"]
+
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        self.tasks = []
+        self.sequence = []
+
+        for i, (task, obj, robots, pose) in enumerate(keyframes):
+            if i == 0:
+                self.tasks.append(
+                    Task("pick", robots, SingleGoal(pose), 
+                    type="pick",
+                    frames=[robots[0] + "_ur_vacuum", "obj_1"])
+                )
+            elif i == len(keyframes) - 1:
+                self.tasks.append(
+                    Task("place", robots, SingleGoal(pose),
+                    type="place",
+                    frames=["table", "obj_1"])
+                )
+            else:
+                if task == "pick":
+                    self.tasks.append(
+                        Task("", [robots[0]], SingleGoal(pose[:6]),
+                        type="pick",
+                        frames=[robots[0] + "_ur_vacuum", obj])
+                    )
+                else:
+                    self.tasks.append(
+                        Task("", robots, SingleGoal(pose),
+                        type="place",
+                        frames=["obj_1", obj])
+                    )
+
+            self.sequence.append(i)
+
+        q_home = self.C.getJointState()
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(q_home)))
+
+        self.sequence.append(len(self.tasks) - 1)
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        dim = 6
+        for i, r in enumerate(self.robots):
+            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+
 @register([
     ("rai.eggcartons", {}),
     ("rai.eggcartons_five", {"num_boxes": 5}),

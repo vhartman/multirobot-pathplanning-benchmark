@@ -4835,6 +4835,502 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
 
     return C, keyframes
 
+def make_flex_assembly(view=False):
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/ur10/ur10_vacuum.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        table
+    ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-5)
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        table
+    ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFile(robot_path, namePrefix="a3_").setParent(
+        table
+    ).setRelativePosition([+0.0, -0.6, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, 0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_1").setParent(table).setShape(
+        ry.ST.box, [0.6, 0.1, 0.1]
+    ).setPosition([0.0, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_2").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.2, 0.3, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_3").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([0.2, -0.2, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_4").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.4, 0.2, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj_5").setParent(table).setShape(
+        ry.ST.box, [0.1, 0.1, 0.1]
+    ).setPosition([-0.6, -0.2, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("weld_pose_1").setParent(C.getFrame("obj_1")).setShape(
+        ry.ST.marker, [0.1]
+    ).setRelativePosition([0.2, -0.1, 0.0]).setQuaternion([1, 0, 0, 0])
+
+    C.addFrame("weld_pose_2").setParent(C.getFrame("obj_1")).setShape(
+        ry.ST.marker, [0.1]
+    ).setRelativePosition([0.2, 0.1, 0.0]).setQuaternion([0, 0, 0, 1])
+
+    C.addFrame("weld_pose_3").setParent(C.getFrame("obj_1")).setShape(
+        ry.ST.marker, [0.1]
+    ).setRelativePosition([-0.2, -0.1, 0.0]).setQuaternion([1, 0, 0, 0])
+
+    C.addFrame("weld_pose_4").setParent(C.getFrame("obj_1")).setShape(
+        ry.ST.marker, [0.1]
+    ).setRelativePosition([-0.2, 0.1, 0.0]).setQuaternion([0, 0, 0, 1])
+
+    C.addFrame("goal").setParent(table).setShape(
+        ry.ST.box, [0.6, 0.1, 0.1]
+    ).setPosition([0.0, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C_org = ry.Config()
+    C_org.addConfigurationCopy(C)
+
+    def compute_grasp_and_place(robot_prefix="a3_"):
+        goal = "goal"
+        obj = "obj_1"
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e0)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", obj])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_vacuum", obj],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "ur_vacuum", obj],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [0, 0, 0.05]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [robot_prefix + "ur_ee_marker", obj],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [robot_prefix + "ur_ee_marker", obj],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+
+        # for pick and place directly
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", obj])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, obj], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
+
+    def compute_pick_and_place(r, obj, marker):
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        c_tmp.selectJoints(robot_joint_names[r] + robot_joint_names["a3_"])
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp,
+            phases=2,
+            slicesPerPhase=1,
+            kOrder=1,
+            enableCollisions=True,
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [5e1], [0.01]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        robot_ee = r + "ur_vacuum"
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_ee, obj])
+
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [r + "ur_vacuum", obj],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [0, 0, 0.05]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [r + "ur_ee_marker", obj],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [r + "ur_ee_marker", obj],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+
+        komo.addObjective(
+            [2],
+            ry.FS.poseDiff,
+            [obj, marker_name],
+            ry.OT.eq,
+            [1e1],
+        )
+
+        komo.addObjective(
+            times=[],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e-1],
+            target=q_home,
+        )
+
+        keyframes = solve_komo_problem(komo, 100, c_tmp, False, 3, -1.5)
+        return keyframes
+
+    keyframes = []
+
+    grasp_and_place = compute_grasp_and_place()
+    keyframes.append(("pick", "obj_1", ["a3"], grasp_and_place[0]))
+
+    # set C to obj being grasped
+    C.selectJointsBySubtree(C.getFrame("a3_ur_base"))
+    C.setJointState(grasp_and_place[0])
+    C.attach("a3_ur_vacuum", "obj_1")
+
+    C.selectJointsBySubtree(C.getFrame("table"))
+
+    joint_names = C.getJointNames()
+
+    robot_joint_names = {}
+    for r in ["a1_", "a2_", "a3_"]:
+        robot_joint_names[r] = []
+        for name in joint_names:
+            if r in name:
+                robot_joint_names[r].append(name)
+
+    cnt = 0
+    for r, obj in [("a1_", "obj_2"), ("a2_", "obj_3"), ("a2_", "obj_4"), ("a1_", "obj_5")]:
+        marker_name = f"weld_pose_{cnt+1}"
+        pose = compute_pick_and_place(r, obj, marker_name)
+        keyframes.append(("pick", obj, [r[:2], "a3"], pose[0]))
+        keyframes.append(("place", obj, [r[:2], "a3"], pose[1]))
+
+        cnt += 1
+
+    keyframes.append(("place", "obj_1", ["a3"], grasp_and_place[1]))
+
+    return C_org, keyframes
+
+def make_multi_welding_env(view=False, num_pts_per_robot=4):
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/ur10/ur10_vacuum.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(
+        table
+    ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    # C.getFrame('a1_ur_coll0').setContact(-5)
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(
+        table
+    ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, -0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFile(robot_path, namePrefix="a3_").setParent(
+        table
+    ).setRelativePosition([+0.0, -0.6, 0]).setRelativeQuaternion(
+        [0.7071, 0, 0, 0.7071]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("obj").setParent(table).setShape(
+        ry.ST.box, [0.6, 0.1, 0.1]
+    ).setPosition([0.0, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+        1
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("weld_pose_1").setParent(C.getFrame("obj")).setShape(
+        ry.ST.marker, [0.1]
+    ).setRelativePosition([0.2, -0.1, 0.0]).setQuaternion([1, 0, 0, 0])
+
+    C.addFrame("weld_pose_2").setParent(C.getFrame("obj")).setShape(
+        ry.ST.marker, [0.1]
+    ).setRelativePosition([0.2, 0.1, 0.0]).setQuaternion([0, 0, 0, 1])
+
+    C.addFrame("weld_pose_3").setParent(C.getFrame("obj")).setShape(
+        ry.ST.marker, [0.1]
+    ).setRelativePosition([-0.2, -0.1, 0.0]).setQuaternion([1, 0, 0, 0])
+
+    C.addFrame("weld_pose_4").setParent(C.getFrame("obj")).setShape(
+        ry.ST.marker, [0.1]
+    ).setRelativePosition([-0.2, 0.1, 0.0]).setQuaternion([0, 0, 0, 1])
+
+    C.addFrame("goal").setParent(table).setShape(
+        ry.ST.box, [0.6, 0.1, 0.1]
+    ).setPosition([0.0, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+        0
+    ).setJoint(ry.JT.rigid)
+
+    C_org = ry.Config()
+    C_org.addConfigurationCopy(C)
+
+    def compute_grasp_and_place(robot_prefix="a3_"):
+        goal = "goal"
+        obj = "obj"
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        komo.addControlObjective([], 1, 1e0)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_prefix + "ur_vacuum", obj])
+        # komo.addObjective(
+        #     [1, 2],
+        #     ry.FS.distance,
+        #     [robot_prefix + "ur_vacuum", obj],
+        #     ry.OT.ineq,
+        #     [-1e0],
+        #     [0.02],
+        # )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.positionDiff,
+            [robot_prefix + "ur_vacuum", obj],
+            ry.OT.eq,
+            [1e1, 1e1, 1e1],
+            [0, 0, 0.05]
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductYZ,
+            [robot_prefix + "ur_ee_marker", obj],
+            ry.OT.sos,
+            [1e1],
+        )
+        komo.addObjective(
+            [1, 2],
+            ry.FS.scalarProductXZ,
+            [robot_prefix + "ur_ee_marker", obj],
+            ry.OT.eq,
+            [1e1],
+            [-1]
+        )
+
+        # for pick and place directly
+        komo.addModeSwitch([2, -1], ry.SY.stable, ["table", obj])
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, obj], ry.OT.eq, [1e1])
+
+        komo.addObjective(
+            times=[3, -1],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.eq,
+            scale=[1e0],
+            target=q_home,
+        )
+
+        keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
+        return keyframes
+
+    def compute_welding_pose_for_robot(robot_prefix, marker_name):
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+
+        c_tmp.selectJoints(robot_joint_names[robot_prefix] + robot_joint_names["a3_"])
+
+        q_home = c_tmp.getJointState()
+
+        komo = ry.KOMO(
+            c_tmp,
+            phases=1,
+            slicesPerPhase=1,
+            kOrder=1,
+            enableCollisions=True,
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [5e1], [0.01]
+        )
+
+        komo.addControlObjective([], 0, 1e-1)
+        # komo.addControlObjective([], 1, 1e-1)
+        # komo.addControlObjective([], 2, 1e-1)
+
+        robot_ee = robot_prefix + "ur_vacuum"
+
+        komo.addObjective(
+            [1],
+            ry.FS.positionDiff,
+            [robot_ee, marker_name],
+            ry.OT.eq,
+            [1e1],
+        )
+
+        komo.addObjective(
+            [1],
+            ry.FS.scalarProductXX,
+            [robot_prefix + "ur_ee_marker", marker_name],
+            ry.OT.sos,
+            [1e1],
+            [-1]
+        )
+
+        komo.addObjective(
+            times=[],
+            feature=ry.FS.jointState,
+            frames=[],
+            type=ry.OT.sos,
+            scale=[1e-1],
+            target=q_home,
+        )
+
+        keyframes = solve_komo_problem(komo, 100, c_tmp, False, 3, -1.5)
+        return keyframes
+
+    keyframes = []
+
+    grasp_and_place = compute_grasp_and_place()
+    keyframes.append((["a3"], grasp_and_place[0]))
+
+    # set C to obj being grasped
+    C.selectJointsBySubtree(C.getFrame("a3_ur_base"))
+    C.setJointState(grasp_and_place[0])
+    C.attach("a3_ur_vacuum", "obj")
+
+    C.selectJointsBySubtree(C.getFrame("table"))
+
+    joint_names = C.getJointNames()
+
+    robot_joint_names = {}
+    for r in ["a1_", "a2_", "a3_"]:
+        robot_joint_names[r] = []
+        for name in joint_names:
+            if r in name:
+                robot_joint_names[r].append(name)
+
+    cnt = 0
+    for r in ["a1_", "a2_"]:
+        for _ in range(2):
+            marker_name = f"weld_pose_{cnt+1}"
+            pose = compute_welding_pose_for_robot(r, marker_name)
+            keyframes.append(([r[:2], "a3"], pose[0]))
+
+            cnt += 1
+
+
+    keyframes.append((["a3"], grasp_and_place[1]))
+
+    return C_org, keyframes
+
 
 def make_shelf_env(view: bool = False):
     pass
