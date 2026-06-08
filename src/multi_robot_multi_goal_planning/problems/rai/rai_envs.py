@@ -978,7 +978,6 @@ class rai_ur10_arm_multi_spot_welding_env(SequenceMixin, rai_env):
 
         self._set_default_safe_pose()
 
-# goals are poses
 @register([
     ("rai.flex_assembly", {}),
 ])
@@ -1033,6 +1032,72 @@ class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.collision_tolerance = 0.01
+
+        self._set_default_safe_pose()
+
+@register([
+    ("rai.dep_flex_assembly", {}),
+])
+class rai_ur10_arm_flex_assembly_env(DependencyGraphMixin, rai_env):
+    def __init__(self, num_pts: int = 3):
+        self.C, keyframes = rai_config.make_flex_assembly(
+            view=False
+        )
+
+        self.robots = ["a1", "a2", "a3"]
+
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        self.tasks = []
+        
+        self.graph = DependencyGraph()
+
+        for i, (task, obj, robots, pose) in enumerate(keyframes):
+            if i == 0:
+                self.tasks.append(
+                    Task(f"pick_{i}", robots, SingleGoal(pose), 
+                    type="pick",
+                    frames=[robots[0] + "_ur_vacuum", "obj_1"])
+                )
+            elif i == len(keyframes) - 1:
+                self.tasks.append(
+                    Task(f"place_{i}", robots, SingleGoal(pose),
+                    type="place",
+                    frames=["table", "obj_1"])
+                )
+                self.graph.add_dependency(f"place_{i}", self.tasks[-2].name)
+            else:
+                if task == "pick":
+                    self.tasks.append(
+                        Task(f"pick_{i}", [robots[0]], SingleGoal(pose[:6]),
+                        type="pick",
+                        frames=[robots[0] + "_ur_vacuum", obj])
+                    )
+                else:
+                    self.tasks.append(
+                        Task(f"place_{i}", robots, SingleGoal(pose),
+                        type="place",
+                        frames=["obj_1", obj])
+                    )
+                    self.graph.add_dependency(f"place_{i}", f"pick_{i-1}")
+
+                    if i == 2:
+                        self.graph.add_dependency(f"place_{i}", f"pick_{0}")
+
+                    if i > 3:
+                        self.graph.add_dependency(f"place_{i}", f"place_{i-2}")
+
+
+        q_home = self.C.getJointState()
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(q_home)))
+        self.graph.add_dependency("terminal", self.tasks[-2].name)
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+
+        # self.graph.visualize()
 
         self._set_default_safe_pose()
 
