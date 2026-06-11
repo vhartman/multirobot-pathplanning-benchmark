@@ -987,7 +987,7 @@ class rai_ur10_arm_multi_spot_welding_env(SequenceMixin, rai_env):
 class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
     def __init__(self, floating_ee=False, bottom=False):
         self.C, keyframes = rai_config.make_flex_assembly(
-            floating_ee=floating_ee, bottom_cubes=bottom, view=False
+            floating_ee=floating_ee, bottom_cubes=bottom, align_cube_z_with_marker_x = True, view=False
         )
 
         self.robots = ["a1", "a2", "a3"]
