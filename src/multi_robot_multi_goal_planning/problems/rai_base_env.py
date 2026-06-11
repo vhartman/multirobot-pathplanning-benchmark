@@ -327,6 +327,13 @@ class rai_env(BaseProblem):
             home_pose=SafePoseType.HAS_NO_SAFE_HOME_POSE,
         )
 
+    def _set_default_safe_pose(self):
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        q = self.C.getJointState()
+        self.safe_pose = {
+            r: np.array(q[self.robot_idx[r]]) for r in self.robots
+        }
+
     def __deepcopy__(self, memo):
         # Save the C attribute
         C = self.C

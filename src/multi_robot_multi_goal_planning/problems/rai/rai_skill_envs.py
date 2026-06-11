@@ -113,10 +113,7 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE  
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 @register([
     ("rai.hallway_counterexample", {}),
@@ -185,10 +182,7 @@ class rai_skill_hallway(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE  
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 # Debugging for single agent timed skill
 @register([
@@ -251,10 +245,7 @@ class rai_single_agent_drawing(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 # TODO unfinished
 @register("rai.single_agent_lego")
@@ -311,11 +302,7 @@ class rai_single_agent_lego(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 # TODO: enable mode to only plan for a subset of dofs
 @register("rai.single_agent_pick_and_place")
@@ -379,11 +366,7 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 # TODO unfinished
 @register([
@@ -478,11 +461,7 @@ class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 class rai_multi_agent_scripted_insert_base(rai_env):
     def __init__(self):
@@ -576,11 +555,7 @@ class rai_multi_agent_scripted_insert(SequenceMixin, rai_multi_agent_scripted_in
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 # TODO: add holding
 @register("rai.dep_multi_agent_scripted_insert")
@@ -605,11 +580,7 @@ class rai_dep_multi_agent_scripted_insert(DependencyGraphMixin, rai_multi_agent_
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 
 # TODO unfinished
@@ -708,11 +679,7 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
         # self.collision_resolution = 0.005
         self.collision_resolution = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[0:6])
+        self._set_default_safe_pose()
 
 # TODO unfinished
 # multi agent rearrangement with skills
@@ -747,7 +714,7 @@ class rai_multi_agent_drawing(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 # TODO unfinished
 # four robot, same welding env as before
@@ -776,7 +743,7 @@ class rai_multi_agent_weld(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 # TODO unfinished
 @register("rai.multi_agent_pcb")
@@ -864,10 +831,7 @@ class rai_dual_arm_transport(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 # TODO: figure out how we randomize stuff -> could be stored in mode?
 # would then be made into a stochastic version of the bin picking problem
@@ -957,11 +921,7 @@ class rai_single_agent_bin_picking(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 
 # TODO unfinished
@@ -1067,11 +1027,7 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 
 def make_task_sequence(
@@ -1346,11 +1302,7 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 class rai_multi_agent_bin_picking_base(rai_env):
     def __init__(self, num_objects=4):
@@ -1478,11 +1430,7 @@ class rai_multi_agent_bin_picking(SequenceMixin, rai_multi_agent_bin_picking_bas
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 @register("rai.dep_multi_agent_bin_picking")
 class rai_dep_multi_agent_bin_picking(DependencyGraphMixin, rai_multi_agent_bin_picking_base):
@@ -1510,11 +1458,7 @@ class rai_dep_multi_agent_bin_picking(DependencyGraphMixin, rai_multi_agent_bin_
         self.prev_mode = self.start_mode
 
         self.spec.dependency = DependencyType.UNORDERED
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 # TODO unfinished
 # skills: 
@@ -1612,11 +1556,7 @@ class rai_bimanual_sorting(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+        self._set_default_safe_pose()
 
 @register("rai.skill_handover")
 class rai_skill_handover(SequenceMixin, rai_env):
@@ -1690,6 +1630,76 @@ class rai_skill_handover(SequenceMixin, rai_env):
         for i, r in enumerate(self.robots):
             self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
             self.safe_pose[r][3] = -2
+
+@register([
+    ("rai.skill_flex_assembly", {}),
+    ("rai.skill_flex_assembly_bottom", {"bottom": True}),
+    ("rai.skill_flex_assembly_float", {"floating_ee": True}),
+    ("rai.skill_flex_assembly_bottom_float", {"floating_ee": True, "bottom": True}),
+])
+class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
+    def __init__(self, floating_ee=False, bottom=False):
+        self.C, keyframes = rai_config.make_flex_assembly(
+            floating_ee=floating_ee, bottom_cubes=bottom, placement_offset = 0.1, view=False
+        )
+
+        self.robots = ["a1", "a2", "a3"]
+
+        rai_env.__init__(self)
+        self.manipulating_env = True
+
+        self.tasks = []
+        self.sequence = []
+
+        for i, (task, obj, robots, pose) in enumerate(keyframes):
+            if i == 0:
+                self.tasks.append(
+                    Task("pick", robots, SingleGoal(pose), 
+                    type="pick",
+                    frames=[robots[0] + "_ur_vacuum", "obj_1"])
+                )
+            elif i == len(keyframes) - 1:
+                self.tasks.append(
+                    Task("place", robots, SingleGoal(pose),
+                    type="place",
+                    frames=["table", "obj_1"])
+                )
+            else:
+                if task == "pick":
+                    self.tasks.append(
+                        Task("", [robots[0]], SingleGoal(pose[:6]),
+                        type="pick",
+                        frames=[robots[0] + "_ur_vacuum", obj])
+                    )
+                else:
+                    self.tasks.append(
+                        Task("", robots, SingleGoal(pose),
+                        type="place",
+                        frames=["obj_1", obj])
+                    )
+                    self.tasks.append(
+                        Task(
+                            "placement",
+                            robots,
+                            SingleGoal(keyframes[2]),
+                            type="place",
+                            frames=["obj_1", obj],
+                            skill = RelativePoseReaching(self.robot_joints[robots[0]] + self.robot_joints[robots[1]], obj, f"weld_pose_{int(obj[-1])-1}", np.zeros(7))
+                        )
+                    )
+
+            self.sequence.append(i)
+
+        q_home = self.C.getJointState()
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(q_home)))
+
+        self.sequence.append(len(self.tasks) - 1)
+
+        BaseModeLogic.__init__(self)
+
+        self.collision_tolerance = 0.01
+
+        self._set_default_safe_pose()
 
 # TODO unfinished
 # inspiration: https://arxiv.org/pdf/2511.04758

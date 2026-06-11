@@ -336,9 +336,4 @@ class rai_unordered_ur10_box_pile_cleanup_env(UnorderedButAssignedMixin, rai_env
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
