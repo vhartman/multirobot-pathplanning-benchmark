@@ -980,11 +980,14 @@ class rai_ur10_arm_multi_spot_welding_env(SequenceMixin, rai_env):
 
 @register([
     ("rai.flex_assembly", {}),
+    ("rai.flex_assembly_bottom", {"bottom": True}),
+    ("rai.flex_assembly_float", {"floating_ee": True}),
+    ("rai.flex_assembly_bottom_float", {"floating_ee": True, "bottom": True}),
 ])
 class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
-    def __init__(self, num_pts: int = 3):
+    def __init__(self, floating_ee=False, bottom=False):
         self.C, keyframes = rai_config.make_flex_assembly(
-            view=False
+            floating_ee=floating_ee, bottom_cubes=bottom, view=False
         )
 
         self.robots = ["a1", "a2", "a3"]

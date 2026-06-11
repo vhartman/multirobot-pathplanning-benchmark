@@ -4835,7 +4835,12 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
 
     return C, keyframes
 
-def make_flex_assembly(view=False):
+def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offset = 0.0, view=False):
+    # When `placement_offset` is nonzero, each weld marker gets a child
+    # "pre-placement" marker offset by `placement_offset` along the marker's
+    # local z-axis. The planner then optimizes the welded object onto the
+    # pre-placement pose instead of the final weld pose, leaving the final
+    # seating to a downstream skill.
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -4850,11 +4855,14 @@ def make_flex_assembly(view=False):
         .setContact(1)
     )
 
-    robot_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/ur10/ur10_vacuum.g")
+    if floating_ee:
+        robot_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/ur10/ur10_vacuum_floating.g")
+    else:
+        robot_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/ur10/ur10_vacuum.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         table
-    ).setRelativePosition([-0.5, 0.5, 0]).setRelativeQuaternion(
+    ).setRelativePosition([-0.5, 0.5, 0.05]).setRelativeQuaternion(
         [0.7071, 0, 0, -0.7071]
     ).setJoint(ry.JT.rigid)
 
@@ -4862,13 +4870,13 @@ def make_flex_assembly(view=False):
 
     C.addFile(robot_path, namePrefix="a2_").setParent(
         table
-    ).setRelativePosition([+0.5, 0.5, 0]).setRelativeQuaternion(
+    ).setRelativePosition([+0.5, 0.5, 0.05]).setRelativeQuaternion(
         [0.7071, 0, 0, -0.7071]
     ).setJoint(ry.JT.rigid)
 
     C.addFile(robot_path, namePrefix="a3_").setParent(
         table
-    ).setRelativePosition([+0.0, -0.6, 0]).setRelativeQuaternion(
+    ).setRelativePosition([+0.0, -0.6, 0.05]).setRelativeQuaternion(
         [0.7071, 0, 0, 0.7071]
     ).setJoint(ry.JT.rigid)
 
@@ -4918,9 +4926,47 @@ def make_flex_assembly(view=False):
         ry.ST.marker, [0.1]
     ).setRelativePosition([-0.2, 0.1, 0.0]).setQuaternion([0, 0, 0, 1])
 
+    if bottom_cubes:
+        C.addFrame("obj_6").setParent(table).setShape(
+            ry.ST.box, [0.1, 0.1, 0.1]
+        ).setPosition([-0.7, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+            1
+        ).setJoint(ry.JT.rigid)
+
+        C.addFrame("obj_7").setParent(table).setShape(
+            ry.ST.box, [0.1, 0.1, 0.1]
+        ).setPosition([0.7, 0., 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+            1
+        ).setJoint(ry.JT.rigid)
+
+        # Bottom welds: markers face downward (180° flip about obj_1's local x → z-axis points world -z),
+        # so the cubes attach under the bar and rest on the table once obj_1 is placed at the goal.
+        C.addFrame("weld_pose_5").setParent(C.getFrame("obj_1")).setShape(
+            ry.ST.marker, [0.1]
+        ).setRelativePosition([0.2, 0.0, -0.1]).setQuaternion([0, 1, 0, 0])
+
+        C.addFrame("weld_pose_6").setParent(C.getFrame("obj_1")).setShape(
+            ry.ST.marker, [0.1]
+        ).setRelativePosition([-0.2, 0.0, -0.1]).setQuaternion([0, 1, 0, 0])
+
+    weld_marker_names = ["weld_pose_1", "weld_pose_2", "weld_pose_3", "weld_pose_4"]
+    if bottom_cubes:
+        weld_marker_names += ["weld_pose_5", "weld_pose_6"]
+
+    # Pre-placement markers: same pose as the weld marker but shifted along the
+    # marker's local z-axis, so optimizing to them leaves a standoff gap.
+    if placement_offset != 0.0:
+        for name in weld_marker_names:
+            C.addFrame(name + "_pre").setParent(C.getFrame(name)).setShape(
+                ry.ST.marker, [0.1]
+            ).setRelativePosition([0.0, 0.0, placement_offset]).setQuaternion([1, 0, 0, 0])
+
+    # Raise the goal so the under-bar cubes (height 0.1) rest on the table top (z = 0.23).
+    goal_z = 0.38 if bottom_cubes else 0.3
+
     C.addFrame("goal").setParent(table).setShape(
         ry.ST.box, [0.6, 0.1, 0.1]
-    ).setPosition([0.0, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
+    ).setPosition([0.0, 0, goal_z]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 0.1)).setContact(
         0
     ).setJoint(ry.JT.rigid)
 
@@ -5052,7 +5098,7 @@ def make_flex_assembly(view=False):
         komo.addObjective(
             [2],
             ry.FS.poseDiff,
-            [obj, marker_name],
+            [obj, marker],
             ry.OT.eq,
             [1e1],
         )
@@ -5090,10 +5136,15 @@ def make_flex_assembly(view=False):
             if r in name:
                 robot_joint_names[r].append(name)
 
+    weld_assignments = [("a1_", "obj_2"), ("a2_", "obj_3"), ("a2_", "obj_4"), ("a1_", "obj_5")]
+    if bottom_cubes:
+        weld_assignments += [("a1_", "obj_6"), ("a2_", "obj_7")]
+
     cnt = 0
-    for r, obj in [("a1_", "obj_2"), ("a2_", "obj_3"), ("a2_", "obj_4"), ("a1_", "obj_5")]:
+    for r, obj in weld_assignments:
         marker_name = f"weld_pose_{cnt+1}"
-        pose = compute_pick_and_place(r, obj, marker_name)
+        target_marker = marker_name + "_pre" if placement_offset != 0.0 else marker_name
+        pose = compute_pick_and_place(r, obj, target_marker)
         keyframes.append(("pick", obj, [r[:2], "a3"], pose[0]))
         keyframes.append(("place", obj, [r[:2], "a3"], pose[1]))
 
