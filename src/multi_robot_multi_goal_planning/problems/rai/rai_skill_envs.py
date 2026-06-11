@@ -1640,16 +1640,22 @@ class rai_skill_handover(SequenceMixin, rai_env):
 class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
     def __init__(self, floating_ee=False, bottom=False):
         self.C, keyframes = rai_config.make_flex_assembly(
-            floating_ee=floating_ee, bottom_cubes=bottom, placement_offset = 0.1, view=False
+            floating_ee=floating_ee, bottom_cubes=bottom, placement_offset = 0.1, align_cube_z_with_marker_x = True, view=False
         )
 
         self.robots = ["a1", "a2", "a3"]
+
+        home = self.C.getJointState()
+        home[3] = -np.pi/2
+        home[9] = -np.pi/2
+        home[15] = -np.pi/2
+
+        self.C.setJointState(home)
 
         rai_env.__init__(self)
         self.manipulating_env = True
 
         self.tasks = []
-        self.sequence = []
 
         for i, (task, obj, robots, pose) in enumerate(keyframes):
             if i == 0:
@@ -1667,28 +1673,26 @@ class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
             else:
                 if task == "pick":
                     self.tasks.append(
-                        Task("", [robots[0]], SingleGoal(pose[:6]),
+                        Task(f"pick_{obj}", [robots[0]], SingleGoal(pose[:6]),
                         type="pick",
                         frames=[robots[0] + "_ur_vacuum", obj])
                     )
                 else:
                     self.tasks.append(
-                        Task("", robots, SingleGoal(pose),
-                        type="place",
-                        frames=["obj_1", obj])
+                        Task(f"pre_place_{obj}", robots, SingleGoal(pose))
                     )
                     self.tasks.append(
                         Task(
-                            "placement",
+                            f"placement_{obj}",
                             robots,
-                            SingleGoal(keyframes[2]),
+                            SingleGoal(pose),
                             type="place",
                             frames=["obj_1", obj],
-                            skill = RelativePoseReaching(self.robot_joints[robots[0]] + self.robot_joints[robots[1]], obj, f"weld_pose_{int(obj[-1])-1}", np.zeros(7))
+                            skill = RelativePoseReaching(self.robot_joints[robots[0]] + self.robot_joints[robots[1]], obj, f"weld_pose_{int(obj[-1])-1}", np.array([0, 0, 0, 0, 0, 0, 0]))
                         )
                     )
 
-            self.sequence.append(i)
+        self.sequence = [i for i in range(len(self.tasks))]
 
         q_home = self.C.getJointState()
         self.tasks.append(Task("terminal", self.robots, SingleGoal(q_home)))

@@ -4975,12 +4975,33 @@ def make_welding_env(num_robots=4, num_pts=4, view: bool = False):
 
     return C, keyframes
 
-def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offset = 0.0, view=False):
+def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offset = 0.0, align_cube_z_with_marker_x = False, view=False):
     # When `placement_offset` is nonzero, each weld marker gets a child
     # "pre-placement" marker offset by `placement_offset` along the marker's
     # local z-axis. The planner then optimizes the welded object onto the
     # pre-placement pose instead of the final weld pose, leaving the final
     # seating to a downstream skill.
+    #
+    # When `align_cube_z_with_marker_x` is True, each weld marker is rotated 90°
+    # about its local y-axis. Since the cube is matched to the full marker pose,
+    # this aligns the cube's z-axis with the marker's original x-axis.
+    def _quat_mul(a, b):
+        aw, ax, ay, az = a
+        bw, bx, by, bz = b
+        return [
+            aw * bw - ax * bx - ay * by - az * bz,
+            aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw,
+        ]
+
+    def align(q):
+        # Optionally post-multiply a 90°-about-local-y rotation onto the marker
+        # quaternion (rai normalizes on set, so unnormalized values are fine).
+        if not align_cube_z_with_marker_x:
+            return q
+        return _quat_mul(q, [1, 0, 1, 0])
+
     C = ry.Config()
 
     C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
@@ -5022,9 +5043,11 @@ def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offs
 
     C.addFrame("obj_1").setParent(table).setShape(
         ry.ST.box, [0.6, 0.1, 0.1]
-    ).setPosition([0.0, 0, 0.3]).setQuaternion([1, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
+    ).setPosition([0.0, 0, 0.3]).setQuaternion([0, 0, 0, 1]).setMass(0.1).setColor((1, 0.1, 0.2, 1)).setContact(
         1
     ).setJoint(ry.JT.rigid)
+
+    # C.view(True)
 
     C.addFrame("obj_2").setParent(table).setShape(
         ry.ST.box, [0.1, 0.1, 0.1]
@@ -5050,21 +5073,22 @@ def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offs
         1
     ).setJoint(ry.JT.rigid)
 
+    # Marker orientations are relative to obj_1 so the base can be rotated freely.
     C.addFrame("weld_pose_1").setParent(C.getFrame("obj_1")).setShape(
         ry.ST.marker, [0.1]
-    ).setRelativePosition([0.2, -0.1, 0.0]).setQuaternion([1, 0, 0, 0])
+    ).setRelativePosition([0.2, -0.1, 0.0]).setRelativeQuaternion(align([1, 0, 0, -1]))
 
     C.addFrame("weld_pose_2").setParent(C.getFrame("obj_1")).setShape(
         ry.ST.marker, [0.1]
-    ).setRelativePosition([0.2, 0.1, 0.0]).setQuaternion([0, 0, 0, 1])
+    ).setRelativePosition([0.2, 0.1, 0.0]).setRelativeQuaternion(align([1, 0, 0, 1]))
 
     C.addFrame("weld_pose_3").setParent(C.getFrame("obj_1")).setShape(
         ry.ST.marker, [0.1]
-    ).setRelativePosition([-0.2, -0.1, 0.0]).setQuaternion([1, 0, 0, 0])
+    ).setRelativePosition([-0.2, -0.1, 0.0]).setRelativeQuaternion(align([1, 0, 0, -1]))
 
     C.addFrame("weld_pose_4").setParent(C.getFrame("obj_1")).setShape(
         ry.ST.marker, [0.1]
-    ).setRelativePosition([-0.2, 0.1, 0.0]).setQuaternion([0, 0, 0, 1])
+    ).setRelativePosition([-0.2, 0.1, 0.0]).setRelativeQuaternion(align([1, 0, 0, 1]))
 
     if bottom_cubes:
         C.addFrame("obj_6").setParent(table).setShape(
@@ -5079,27 +5103,37 @@ def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offs
             1
         ).setJoint(ry.JT.rigid)
 
-        # Bottom welds: markers face downward (180° flip about obj_1's local x → z-axis points world -z),
+        # Bottom welds: markers face downward (z-axis points to obj_1's -z, under the bar),
         # so the cubes attach under the bar and rest on the table once obj_1 is placed at the goal.
+        # Relative to obj_1 so the base can be rotated freely.
         C.addFrame("weld_pose_5").setParent(C.getFrame("obj_1")).setShape(
             ry.ST.marker, [0.1]
-        ).setRelativePosition([0.2, 0.0, -0.1]).setQuaternion([0, 1, 0, 0])
+        ).setRelativePosition([0.2, 0.0, -0.1]).setRelativeQuaternion(_quat_mul(align([0, 1, -1, 0]), [1, 0, -1, 0]))
 
         C.addFrame("weld_pose_6").setParent(C.getFrame("obj_1")).setShape(
             ry.ST.marker, [0.1]
-        ).setRelativePosition([-0.2, 0.0, -0.1]).setQuaternion([0, 1, 0, 0])
+        ).setRelativePosition([-0.2, 0.0, -0.1]).setRelativeQuaternion(_quat_mul(align([0, 1, -1, 0]), [1, 0, -1, 0]))
 
     weld_marker_names = ["weld_pose_1", "weld_pose_2", "weld_pose_3", "weld_pose_4"]
     if bottom_cubes:
         weld_marker_names += ["weld_pose_5", "weld_pose_6"]
 
-    # Pre-placement markers: same pose as the weld marker but shifted along the
-    # marker's local z-axis, so optimizing to them leaves a standoff gap.
+    # Pre-placement markers: same orientation as the weld marker (identity
+    # relative to it) but shifted to leave a standoff gap. Relative pose so the
+    # base can be rotated freely. When the marker was rotated 90° about its local
+    # y (align_cube_z_with_marker_x), offsetting along the marker's local z keeps
+    # the pre-marker in the same physical spot as the un-rotated case
+    # (Ry(90)·[0,0,p] == [p,0,0]).
     if placement_offset != 0.0:
+        pre_offset = (
+            [0.0, 0.0, placement_offset]
+            if align_cube_z_with_marker_x
+            else [placement_offset, 0.0, 0.0]
+        )
         for name in weld_marker_names:
             C.addFrame(name + "_pre").setParent(C.getFrame(name)).setShape(
                 ry.ST.marker, [0.1]
-            ).setRelativePosition([0.0, 0.0, placement_offset]).setQuaternion([1, 0, 0, 0])
+            ).setRelativePosition(pre_offset).setRelativeQuaternion([1, 0, 0, 0])
 
     # Raise the goal so the under-bar cubes (height 0.1) rest on the table top (z = 0.23).
     goal_z = 0.38 if bottom_cubes else 0.3
@@ -5184,7 +5218,12 @@ def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offs
         keyframes = solve_komo_problem(komo, 50, c_tmp, False, 3, -1.5)
         return keyframes
 
-    def compute_pick_and_place(r, obj, marker):
+    def compute_pick_and_place(r, obj, marker, final_marker=None):
+        # `marker` is the pose the object is placed at (the pre-placement pose
+        # when an offset is used, otherwise the weld pose). `final_marker`, if
+        # given, is the actual weld pose: we add a final phase constraining the
+        # still-grasped object onto it so the optimizer only accepts
+        # pre-placement keyframes from which the final seating is feasible.
         c_tmp = ry.Config()
         c_tmp.addConfigurationCopy(C)
 
@@ -5192,9 +5231,11 @@ def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offs
 
         q_home = c_tmp.getJointState()
 
+        num_phases = 3 if final_marker is not None else 2
+
         komo = ry.KOMO(
             c_tmp,
-            phases=2,
+            phases=num_phases,
             slicesPerPhase=1,
             kOrder=1,
             enableCollisions=True,
@@ -5209,7 +5250,9 @@ def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offs
 
         robot_ee = r + "ur_vacuum"
 
-        komo.addModeSwitch([1, 2], ry.SY.stable, [robot_ee, obj])
+        # Keep the grasp stable through the whole horizon so the final-placement
+        # phase is evaluated with the object rigidly held by the robot.
+        komo.addModeSwitch([1, -1], ry.SY.stable, [robot_ee, obj])
 
         komo.addObjective(
             [1, 2],
@@ -5242,6 +5285,37 @@ def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offs
             ry.OT.eq,
             [1e1],
         )
+
+        if final_marker is not None:
+            # Feasibility of the final weld pose: grasped object seated on the
+            # actual weld marker, collisions still enforced.
+            komo.addObjective(
+                [3],
+                ry.FS.poseDiff,
+                [obj, final_marker],
+                ry.OT.eq,
+                [1e1],
+            )
+            # Keep the object's orientation constant between the pre-placement
+            # (phase 2) and the final weld pose (phase 3), so the skill only has
+            # to translate it into place.
+            komo.addObjective(
+                [2, 3],
+                ry.FS.quaternion,
+                [obj],
+                ry.OT.eq,
+                [1e1],
+                order=1,
+            )
+
+            komo.addObjective(
+                times=[],
+                feature=ry.FS.position,
+                frames=[obj],
+                type=ry.OT.sos,
+                scale=[1e-1, 1e-1, 0],
+                target=[0, 0, 0],
+            )
 
         komo.addObjective(
             times=[],
@@ -5283,8 +5357,11 @@ def make_flex_assembly(floating_ee = False, bottom_cubes = False, placement_offs
     cnt = 0
     for r, obj in weld_assignments:
         marker_name = f"weld_pose_{cnt+1}"
-        target_marker = marker_name + "_pre" if placement_offset != 0.0 else marker_name
-        pose = compute_pick_and_place(r, obj, target_marker)
+        if placement_offset != 0.0:
+            # Plan to the pre-placement pose, but require the final weld pose to be feasible.
+            pose = compute_pick_and_place(r, obj, marker_name + "_pre", final_marker=marker_name)
+        else:
+            pose = compute_pick_and_place(r, obj, marker_name)
         keyframes.append(("pick", obj, [r[:2], "a3"], pose[0]))
         keyframes.append(("place", obj, [r[:2], "a3"], pose[1]))
 

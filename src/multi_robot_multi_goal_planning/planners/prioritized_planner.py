@@ -1942,12 +1942,12 @@ class PrioritizedPlannerConfig:
     # gamma: float = 0.7
     # distance_metric: str = "euclidean"
     use_bidirectional_planner: bool = True
-    shortcut_iters: int = 100
+    shortcut_iters: int = 300
     multirobot_shortcut_iters: int = 100
 
     stepsize:int=10
 
-    max_start_to_earliest_end_diff: int = 50
+    max_start_to_earliest_end_diff: int = 10
     remove_escapes_based_on_diff: bool = True
 
 
