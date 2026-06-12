@@ -424,7 +424,7 @@ class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
                     SingleGoal(home_pose),
                     frames=["a1_ur_ee_marker", f"obj{i+1}"],
                     type="pick",
-                    skill = EEPoseGoalReaching(self.robot_joints["a1"], pick_pose, "a1_ur_ee_marker")
+                    skill = EEPoseGoalReaching(self.robot_joints["a1"], pick_pose, "a1_ur_ee_marker", control_law="saturated")
                 ),
                 Task(
                     f"pre_place_{i}",
@@ -436,7 +436,7 @@ class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
                     ["a1"],
                     SingleGoal(home_pose),
                     # skill = EEPoseGoalReaching(place_pose, f"obj{i+1}"),
-                    skill = ModelBasedInsertion(self.robot_joints["a1"], place_pose, f"obj{i+1}"),
+                    skill = ModelBasedInsertion(self.robot_joints["a1"], place_pose, f"obj{i+1}", control_law="saturated"),
                     type="place",
                     frames=["table", f"obj{i+1}"]
                 )
@@ -1258,7 +1258,7 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
                     SingleGoal(pre_pick),
                     frames=[robot + "_ur_" + ee_name, f"obj{i}"],
                     type="pick",
-                    skill = EEPoseGoalReaching(self.robot_joints[robot], grasp_pose, robot + "_ur_" + ee_name)
+                    skill = EEPoseGoalReaching(self.robot_joints[robot], grasp_pose, robot + "_ur_" + ee_name, control_law="saturated")
                 ),
                 Task(
                     f"pre_place_{i}",
@@ -1270,7 +1270,7 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
                     [robot],
                     SingleGoal(pre_place),
                     # skill = EEPoseGoalReaching(self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
-                    skill = ModelBasedInsertion(self.robot_joints[robot], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
+                    skill = ModelBasedInsertion(self.robot_joints[robot], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}", control_law="saturated"),
                     type="place",
                     frames=["table", f"obj{i}"]
                 )
@@ -1688,7 +1688,7 @@ class rai_ur10_arm_flex_assembly_env(SequenceMixin, rai_env):
                             SingleGoal(pose),
                             type="place",
                             frames=["obj_1", obj],
-                            skill = RelativePoseReaching(self.robot_joints[robots[0]] + self.robot_joints[robots[1]], obj, f"weld_pose_{int(obj[-1])-1}", np.array([0, 0, 0, 0, 0, 0, 0]))
+                            skill = RelativePoseReaching(self.robot_joints[robots[0]] + self.robot_joints[robots[1]], obj, f"weld_pose_{int(obj[-1])-1}", np.array([0, 0, 0, 0, 0, 0, 0]), control_law="saturated")
                         )
                     )
 

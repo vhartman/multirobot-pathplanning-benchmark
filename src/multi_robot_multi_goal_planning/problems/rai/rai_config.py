@@ -10575,7 +10575,7 @@ def make_single_robot_insert(view: bool = False):
         0
     ).setJoint(ry.JT.rigid)
 
-    C.view(True)
+    # C.view(True)
 
     def compute_poses(C, robot_prefix, box, goal):
         # set everything but the current box to non-contact

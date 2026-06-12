@@ -16,6 +16,35 @@ import time
 # might also be more interesting planning wise.
 ##########
 
+def task_space_qdot(err, jac, dt, law="proportional", k=1.0, v_min=0.02, v_max=0.3):
+  """Map a task-space error to a joint velocity for the resolved-rate controllers.
+
+  The caller integrates with ``q_new = q - dt * q_dot``.
+
+  law="proportional":
+      Classic resolved-rate law ``q_dot = pinv(J) @ (k * err)``. The commanded
+      speed is proportional to the remaining error, so it decays to zero as the
+      goal is approached (exponential approach -> very slow crawl near the goal).
+  law="saturated":
+      Command a bounded task-space speed ``clip(k*||err||, v_min, v_max)`` along
+      the error direction. The ``v_min`` floor turns the exponential tail into a
+      finite-time approach (and doubles as a deliberate, tunable contact-approach
+      speed); ``v_max`` keeps it from being aggressive. A per-step clamp avoids
+      overshooting the goal. ``v_min``/``v_max`` are task-space speeds (m/s, and
+      for pose features mixed with rad/s), so tune them per skill.
+  """
+  if law == "proportional":
+    return np.linalg.pinv(jac) @ (k * err)
+  elif law == "saturated":
+    e = np.linalg.norm(err)
+    if e < 1e-12:
+      return np.zeros(jac.shape[1])
+    speed = np.clip(k * e, v_min, v_max)
+    speed = min(speed, e / dt)  # don't overshoot the goal in a single step
+    return np.linalg.pinv(jac) @ (speed * err / e)
+  else:
+    raise ValueError(f"unknown control law: {law!r}")
+
 # TODO:
 # - enable choosing only subset of joints to plan for -> enables planning for e.g. grippers/dex hands
 # - unify interface -> merge (t,q) into 'state' or somethign like that to make life easier
@@ -132,21 +161,21 @@ class BaseStochasticTimedSkill(ABC):
     pass
 
 class EEPositionGoalReaching(DeterministicBaseSkill):
-  def __init__(self, joints, goal, ee_name):
+  def __init__(self, joints, goal, ee_name, control_law="proportional", k=1.0, v_min=0.02, v_max=0.3):
     super().__init__(joints)
 
     self.goal_position = goal
     self.ee_name = ee_name
 
-    self.qdot_clip = 0.2
+    self.control_kwargs = dict(law=control_law, k=k, v_min=v_min, v_max=v_max)
 
   def step(self, q, env, dt=0.1):
     # get jacobian
     env.C.setJointState(q, self.joints)
     [err, jac] = env.C.eval(robotic.FS.position, [self.ee_name], 1, self.goal_position)
-    
-    # compute pid law
-    q_dot = np.linalg.pinv(jac) @ err
+
+    # compute control law
+    q_dot = task_space_qdot(err, jac, dt, **self.control_kwargs)
 
     # integrate to get next pos
     q_new = q - dt * q_dot
@@ -163,13 +192,14 @@ class EEPositionGoalReaching(DeterministicBaseSkill):
 
 # simple pid controller
 class EEPoseGoalReaching(DeterministicBaseSkill):
-  def __init__(self, joints, goal, ee_name):
+  def __init__(self, joints, goal, ee_name, control_law="proportional", k=1.0, v_min=0.02, v_max=0.3):
     super().__init__(joints)
-    
+
     self.goal_pose = goal
     self.ee_name = ee_name
 
     self.scale_stepsize = False
+    self.control_kwargs = dict(law=control_law, k=k, v_min=v_min, v_max=v_max)
 
   def step(self, q, env, dt=1.):
     # get jacobian
@@ -183,8 +213,8 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
 
     [err, jac] = env.C.eval(robotic.FS.pose, [self.ee_name], 1, mod_goal_pose)
 
-    # compute pid law
-    q_dot = np.linalg.pinv(jac) @ err
+    # compute control law
+    q_dot = task_space_qdot(err, jac, dt, **self.control_kwargs)
 
     if self.scale_stepsize:
       max_step = 0.5
@@ -224,9 +254,9 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
 # Should probably do this for all the other pose reaching things as well
 # This can for example be used for a handover
 class RelativePoseReaching(DeterministicBaseSkill):
-  def __init__(self, joints, frame_1_name, frame_2_name, transformation):
+  def __init__(self, joints, frame_1_name, frame_2_name, transformation, control_law="proportional", k=2.0, v_min=0.2, v_max=1):
     super().__init__(joints)
-    
+
     self.frame_1_name = frame_1_name
     self.frame_2_name = frame_2_name
     self.relative_transformation = transformation
@@ -235,6 +265,8 @@ class RelativePoseReaching(DeterministicBaseSkill):
     self.mod_rel_transformation = 1. * self.relative_transformation
     self.mod_rel_transformation[3:] = -self.mod_rel_transformation[3:]
 
+    self.control_kwargs = dict(law=control_law, k=k, v_min=v_min, v_max=v_max)
+
   def step(self, q, env, dt=0.1):
     env.C.setJointState(q, self.joints)
 
@@ -242,14 +274,15 @@ class RelativePoseReaching(DeterministicBaseSkill):
     [err_1, jac_1] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.relative_transformation)
     [err_2, jac_2] = env.C.eval(robotic.FS.poseRel, [self.frame_1_name, self.frame_2_name], 1, self.mod_rel_transformation)
 
+    # pick the quaternion branch with the smaller error, then apply the control law
     if np.linalg.norm(err_1) < np.linalg.norm(err_2):
-      q_dot = np.linalg.pinv(jac_1) @ err_1
+      q_dot = task_space_qdot(err_1, jac_1, dt, **self.control_kwargs)
     else:
-      q_dot = np.linalg.pinv(jac_2) @ err_2
+      q_dot = task_space_qdot(err_2, jac_2, dt, **self.control_kwargs)
 
     # integrate to get next pos
     q_new = q - dt * q_dot
-    
+
     return q_new
 
   def done(self, q, env):
@@ -494,13 +527,13 @@ class DualRobotGrasping(BaseDeterministicTimedSkill):
 
 # basically the same thing as pose reaching, but with obstacle avoidance
 class ModelBasedInsertion(DeterministicBaseSkill):
-  def __init__(self, joints, goal, ee_name):
+  def __init__(self, joints, goal, ee_name, control_law="proportional", k=1.0, v_min=0.05, v_max=0.5):
     super().__init__(joints)
-    
+
     self.goal_pose = goal
     self.ee_name = ee_name
 
-    self.qdot_clip = 0.2
+    self.control_kwargs = dict(law=control_law, k=k, v_min=v_min, v_max=v_max)
 
   def step(self, q, env, dt=0.1):
     # get jacobian
@@ -514,8 +547,8 @@ class ModelBasedInsertion(DeterministicBaseSkill):
 
     [pose_err, pose_jac] = env.C.eval(robotic.FS.pose, [self.ee_name], 1, mod_goal_pose)
 
-    # compute pid law
-    pose_q_dot = np.linalg.pinv(pose_jac) @ pose_err
+    # compute control law
+    pose_q_dot = task_space_qdot(pose_err, pose_jac, dt, **self.control_kwargs)
 
     # integrate to get next pos
     q_new = q - dt * pose_q_dot
