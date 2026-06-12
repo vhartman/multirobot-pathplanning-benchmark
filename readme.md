@@ -191,43 +191,6 @@ Alternatively, `kernprof` provides line-by-line profiling, by simply adding `@pr
 kernprof -l  scripts/run_planner.py [env] [options]
 ```
 
-# Extension & Future work
-
-#### Kinodynamic motion planning
-Similarly as above, the formulation we propose here allows for kinodynamic motion planning, but we do not have a scene at the moment that tests this.
-
-#### C++ implementations of planners
-We noted that the more complex planners (EIT/AIT/sometimes PRM) spend much time in python operations.
-Ideally those types of operations should not be the bottleneck of the planner.
-Thus, we feel like it makes sense to port much of this benchmark to cpp.
-
-#### More backends
-This should be somewhat self explanatory: I want to have parallelized (faster) backends for collision checking. 
-Warp seems promising, Mujoco MJX, or Genesis also seem fun.
-I assume tht much of the python bottleneck would become worse in those settings, if the collision checking is not the bottleneck anymore.
-
-#### More scenarios
-We are currently covering many aspects in multi-arm manipulation/planning, but less so in mobile manipulation.
-Further, more long horizon scenarios would be fun.
-
-#### More planners
-Long horizon tasks and large robot teams are currenly difficult for the planners for the reason that we do plan in composite space over the full horizon.
-While that gives us optimality, and completeness, this makes the planner slow in those settings.
-The prioritized planner already shows what might be possible for a suboptimal planner.
-Some e.g. receding horizon planner that plans in the composite space might be a nice compromise.
-
-### More concrete TODOs
-Some of these could be PRs:
-
-- [ ] Document implementation of the own planner better.
-- [ ] Document implementation of an own environment/problem better.
-- [ ] Planner cleanup: Many of the planners have a mix of historic experimentation still in them. Much of that can and should be removed.
-- [ ] Extend abstract environment
-  - [ ] Parallel collision checking
-  - [ ] More complex (3D/robot) scenarios (using JAX?)
-- [ ] Implement support for Genesis/Isaac(?) as backend
-- [ ] More cost functions (such as clearance) to minimize
-
 # Citation
 If you use this codebase in your research, please cite
  
