@@ -195,11 +195,12 @@ kernprof -l  scripts/run_planner.py [env] [options]
 If you use this codebase in your research, please cite
  
 ```
-@article{hartmann2025benchmark,
+@inproceedings{hartmann2025benchmark,
   title={Sampling-Based Multi-Modal Multi-Robot Multi-Goal Path Planning},
   author={Hartmann, Valentin N and Heinle, Tirza and Huang, Yijiang and Coros, Stelian},
-  journal={arXiv preprint arXiv:2503.03509},
-  year={2025}
+  booktitle = {World Symposium on the Algorithmic Foundations of Robotics (WAFR)},
+  year = {2026},
+  date = {2026-06-15},
 }
 ```
 
