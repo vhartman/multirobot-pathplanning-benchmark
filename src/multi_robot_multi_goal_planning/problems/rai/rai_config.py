@@ -164,11 +164,6 @@ def make_2d_rai_env_no_obs(view: bool = False, agents_can_rotate=True):
     return C
 
 def make_stochastic_switch_env(agents_can_rotate=None, view=False):
-    # if not isinstance(agents_can_rotate, list):
-    #     agents_can_rotate = [agents_can_rotate] * 2
-    # else:
-    #     assert len(agents_can_rotate) == 2
-
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
 
@@ -182,13 +177,6 @@ def make_stochastic_switch_env(agents_can_rotate=None, view=False):
         .setJoint(ry.JT.rigid)
     )
 
-    # if agents_can_rotate[0]:
-    #     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
-    #         ry.ST.cylinder, size=[0.06, 0.15]
-    #     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
-    #         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
-    #     ).setJointState([-1.0, 0.0, 0])
-    # else:
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
@@ -205,13 +193,6 @@ def make_stochastic_switch_env(agents_can_rotate=None, view=False):
         .setJoint(ry.JT.rigid)
     )
 
-    # if agents_can_rotate[1]:
-    #     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
-    #         ry.ST.cylinder, size=[0.06, 0.15]
-    #     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
-    #         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
-    #     ).setJointState([1.0, 0.0, 0])
-    # else:
     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(

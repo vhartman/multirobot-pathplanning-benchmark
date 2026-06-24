@@ -650,6 +650,18 @@ class MultimodalGraph:
         # Stack chosen regular and transition nodes
         arr = np.vstack([best_nodes_arr, best_transitions_arr], dtype=np.float64)
 
+        # Skill waypoints past the entry (step 0) are reachable ONLY through the skill
+        # chain (lazy step-to-step discovery), never via a spatial edge. The exit is a
+        # transition node and would otherwise be visible to spatial search -> drop it
+        if best_nodes:
+            keep = [
+                i for i, n in enumerate(best_nodes)
+                if not (n.state.is_skill_waypoint and n.skill_step > 0)
+            ]
+            if len(keep) != len(best_nodes):
+                best_nodes = [best_nodes[i] for i in keep]
+                arr = arr[keep]
+
         # SPECIAL CASE: if queried node itself is a transition node, it has explicit neighbors in other modes
         if node.is_transition:
             tmp = np.vstack([n.state.q.state() for n in node.neighbors])
@@ -830,16 +842,6 @@ class MultimodalGraph:
                 if n.id in n1.blacklist:
                     continue
 
-                # TODO (Liam) new
-                # Avoid A* jumping to skill transition node (end of skill traj) and bypass skill chain
-                is_n1_skill = getattr(n1.state, 'is_skill_waypoint', False)
-                is_n_skill = getattr(n.state, 'is_skill_waypoint', False)
-
-                if is_n_skill and not is_n1_skill:
-                    # Normal nodes can only connect to start (step-0) of a skill chain
-                    # The end of a skill is ALWAYS a transition node
-                    if n.is_transition: 
-                        continue
                 
                 # TODO (Liam) rest unchanged           
                 # edge_cost = edge_costs[i]
