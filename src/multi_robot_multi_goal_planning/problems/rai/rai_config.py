@@ -163,6 +163,72 @@ def make_2d_rai_env_no_obs(view: bool = False, agents_can_rotate=True):
 
     return C
 
+def make_stochastic_switch_env(agents_can_rotate=None, view=False):
+    # if not isinstance(agents_can_rotate, list):
+    #     agents_can_rotate = [agents_can_rotate] * 2
+    # else:
+    #     assert len(agents_can_rotate) == 2
+
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    # if agents_can_rotate[0]:
+    #     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+    #         ry.ST.cylinder, size=[0.06, 0.15]
+    #     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+    #         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+    #     ).setJointState([-1.0, 0.0, 0])
+    # else:
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([-1.0, 0.0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    # if agents_can_rotate[1]:
+    #     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+    #         ry.ST.cylinder, size=[0.06, 0.15]
+    #     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+    #         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+    #     ).setJointState([1.0, 0.0, 0])
+    # else:
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([1.0, 0.0])
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([1.0, 0.0, 0.07])
+
+    C.addFrame("goal2").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([-1.0, 0.0, 0.07])
+
+    return C
+
+
 
 def make_2d_rai_env_no_obs_three_agents(view: bool = False, agents_can_rotate=True):
     if not isinstance(agents_can_rotate, list):

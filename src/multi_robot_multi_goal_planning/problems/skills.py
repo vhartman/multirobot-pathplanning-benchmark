@@ -700,3 +700,36 @@ class StochasticBinPick(StochasticBaseSkill):
 
   def done(self, q, env):
     raise NotImplementedError
+
+class DummyStochasticSkill(BaseDeterministicTimedSkill):
+  def __init__(self, joints, goal_state, dt=0.01, noise_bound=0.2, is_deterministic=False):
+    super().__init__(joints, dt=dt)
+    self.goal_state = np.array(goal_state)
+    self.duration = 1.0
+    self.noise_bound = noise_bound
+    self.is_deterministic = is_deterministic
+
+  def step(self, t, q, env):
+    time_left = 1.0 - t + self.dt
+    if time_left <= 1e-5:
+      return self.goal_state.copy()
+      
+    step_direction = (self.goal_state - q) / time_left * self.dt
+    
+    if not self.is_deterministic:
+        noise_std = self.noise_bound * np.sqrt(self.dt)
+        noise = np.random.normal(0, noise_std, size=len(q))
+    else:
+        noise = 0.0
+        
+    q_new = q + step_direction + noise
+    
+    if t >= 1.0:
+      q_new = self.goal_state.copy()
+      
+    return q_new
+
+  def done(self, t, q, env):
+    if t >= 1.0:
+      return True
+    return False

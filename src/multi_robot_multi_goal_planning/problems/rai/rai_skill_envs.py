@@ -35,7 +35,8 @@ from ..skills import (
     StochasticBinPick,
     DualRobotGrasping,
     ModelBasedInsertion,
-    RelativePoseReaching
+    RelativePoseReaching,
+    DummyStochasticSkill
 )
 
 from ..core.constraints import (
@@ -117,6 +118,72 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
         self.safe_pose = {}
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+@register([("rai.stochastic_switch", {})])
+class rai_stochastic_switch(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_stochastic_switch_env()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        dim = 2
+        self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
+
+        r1_state = self.C.getJointState()[self.robot_idx["a1"]]
+        r2_state = self.C.getJointState()[self.robot_idx["a2"]]
+
+        r1_goal = r1_state * 1.0
+        r1_goal[:2] = [1.0, 0.0]
+
+        r2_goal = r2_state * 1.0
+        r2_goal[:2] = [-1.0, 0.001] # TODO check why when perfectly aligned robots pass through each other
+
+        # Active robot 1 uses the dummy skill
+        dummy_skill = DummyStochasticSkill(
+            joints=self.robot_joints["a1"],
+            goal_state=r1_goal,
+            dt=0.05,
+            noise_bound=0.5,
+            is_deterministic=False # True to test deterministic planner first
+        )
+
+        self.tasks = [
+            Task(
+                "a1_skill_switch",
+                ["a1"],
+                SingleGoal(r1_goal),
+                skill=dummy_skill
+            ),
+            Task(
+                "a2_switch",
+                ["a2"],
+                SingleGoal(r2_goal)
+            ),
+            Task(
+                "terminal",
+                ["a1", "a2"],
+                SingleGoal(np.concatenate([r1_state, r2_state]))
+            )
+        ]
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_skill_switch", "a2_switch", "terminal"]
+        )
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
 
 @register([
     ("rai.hallway_counterexample", {}),
