@@ -334,7 +334,7 @@ def main():
 
     if args.viser:
         env.display_path_viser(
-            paths=info["paths"] + [interpolated_path, single_mode_shortcut_path, shortcut_path],
+            paths=info["paths"] + [interpolated_path, single_mode_shortcut_path, shortcut_discretized_path],
             primitives_only = True
         )
 
