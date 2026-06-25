@@ -86,7 +86,7 @@ class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.spec.manipulation = ManipulationType.STATIC
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
 @register([
@@ -94,7 +94,7 @@ class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
     ("rai.constrained_relative_pose_with_obstacle", {'obstacle': True}),
 ])
 class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
-    def __init__(self, obstacle):
+    def __init__(self, obstacle=False):
         self.C = rai_config.make_2d_rai_env_no_obs(agents_can_rotate=True)
         # self.C.view(True)
 
@@ -105,7 +105,7 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
                 1
             ).setColor([0, 0, 0]).setJoint(ry.JT.rigid)
 
-        self.C.view(True)
+        # self.C.view(True)
 
         self.robots = ["a1", "a2"]
 
@@ -162,7 +162,7 @@ class rai_two_dim_env_relative_pose_constraint(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.spec.manipulation = ManipulationType.STATIC
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
 @register([
@@ -236,7 +236,7 @@ class rai_two_arm_grasping(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.spec.manipulation = ManipulationType.STATIC
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
         # for _ in range(1000):
@@ -345,7 +345,55 @@ class rai_four_arm_stacking(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.spec.manipulation = ManipulationType.STATIC
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
+
+
+# best cost found (max): 21.45
+@register([
+    ("rai.constrained_box_stacking", {}),
+    ("rai.constrained_box_stacking_two_robots", {"num_robots": 2}),
+    ("rai.constrained_box_stacking_two_robots_four_obj", {"num_robots": 2, "num_boxes": 4}),
+    ("rai.constrained_box_stacking_three_robots", {"num_robots": 3}),
+    ("rai.constrained_box_stacking_three_robots_four_obj", {"num_robots": 3, "num_boxes": 4}),
+    ("rai.constrained_box_stacking_one_robot", {"num_robots": 1, "num_boxes": 2}),
+])
+class rai_ur10_arm_box_stack_constrained_env(SequenceMixin, rai_env):
+    def __init__(self, num_robots=4, num_boxes: int = 8):
+        self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
+            num_robots, num_boxes
+        )
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.tasks = []
+        task_names = ["pick", "place"]
+        for r, b, qs, g in keyframes:
+            cnt = 0
+            for t, k in zip(task_names, qs):
+                task_name = r + t + "_" + b + "_" + str(cnt)
+                if t == "pick":
+                    ee_name = r + "gripper_center"
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b]))
+                else:
+                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b], constraints=[AffineFrameOrientationConstraint(b, "z", np.array([0, 0, 1]), np.array([1e-2]))]))
+
+                cnt += 1
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.collision_tolerance = 0.00
+        self.collision_resolution = 0.01
+
+        self._set_default_safe_pose()
+
 
 @register("rai.husky_reach")
 class rai_husky_reach(SequenceMixin, rai_env):
@@ -396,7 +444,7 @@ class rai_husky_reach(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
         # for _ in range(100):
         #     q = self.sample_config_uniform_in_limits()
@@ -504,7 +552,7 @@ class rai_single_arm_husky_stacking(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
 @register("rai.husky_bimanual_stacking")
@@ -628,7 +676,7 @@ class rai_bimanual_husky_stacking(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
 @register("rai.constrained_2d_puzzle")
@@ -677,7 +725,7 @@ class rai_linked_2d_puzzle(SequenceMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.spec.manipulation = ManipulationType.STATIC
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 @register("rai.half_rfl")
 class rai_rfl_two_only(SequenceMixin, rai_env):
@@ -776,14 +824,15 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 @register([
     ("rai.rfl", {}),
     ("rai.rfl_upright", {"orientation_constraint": True}),
+    ("rai.rfl_upright_two_obj", {"orientation_constraint": True, "num_objs": 2}),
 ])
 class rai_rfl(SequenceMixin, rai_env):
-    def __init__(self, orientation_constraint = False):
+    def __init__(self, orientation_constraint = False, num_objs=4):
         self.C, [k1, k2, k3, k4] = rai_config.make_four_arms_on_a_gantry()
 
         self.robots = ["a1", "a2", "a3", "a4"]
@@ -836,7 +885,6 @@ class rai_rfl(SequenceMixin, rai_env):
                 return []
 
         self.tasks = [
-            # joint
             Task(
                 "r1_pick_0",
                 ["a1"],
@@ -852,69 +900,96 @@ class rai_rfl(SequenceMixin, rai_env):
                 frames=["table", "obj0"],
                 constraints = get_additional_constraints("obj0")
             ),
-            Task(
-                "r1_pick_1",
-                ["a2"],
-                SingleGoal(k2[0]),
-                "pick",
-                frames=["a2_ur_vacuum", "obj1"],
-            ),
-            Task(
-                "r1_place_1",
-                ["a2"],
-                SingleGoal(k2[1]),
-                "place",
-                frames=["table", "obj1"],
-                constraints = get_additional_constraints("obj1")
-            ),
-            Task(
-                "r2_pick_0",
-                ["a3"],
-                SingleGoal(k3[0]),
-                "pick",
-                frames=["a3_ur_vacuum", "obj2"],
-            ),
-            Task(
-                "r2_place_0",
-                ["a3"],
-                SingleGoal(k3[1]),
-                "place",
-                frames=["table", "obj2"],
-                constraints = get_additional_constraints("obj2")
-            ),
-            Task(
-                "r2_pick_1",
-                ["a4"],
-                SingleGoal(k4[0]),
-                "pick",
-                frames=["a4_ur_vacuum", "obj3"],
-            ),
-            Task(
-                "r2_place_1",
-                ["a4"],
-                SingleGoal(k4[1]),
-                "place",
-                frames=["table", "obj3"],
-                constraints = get_additional_constraints("obj3")
-            ),
-            # terminal mode
+        ]
+
+        if num_objs > 1:
+            self.tasks.extend([
+                Task(
+                    "r1_pick_1",
+                    ["a2"],
+                    SingleGoal(k2[0]),
+                    "pick",
+                    frames=["a2_ur_vacuum", "obj1"],
+                ),
+                Task(
+                    "r1_place_1",
+                    ["a2"],
+                    SingleGoal(k2[1]),
+                    "place",
+                    frames=["table", "obj1"],
+                    constraints = get_additional_constraints("obj1")
+                ),
+            ])
+
+        if num_objs > 2:
+            self.tasks.extend([
+                Task(
+                    "r2_pick_0",
+                    ["a3"],
+                    SingleGoal(k3[0]),
+                    "pick",
+                    frames=["a3_ur_vacuum", "obj2"],
+                ),
+                Task(
+                    "r2_place_0",
+                    ["a3"],
+                    SingleGoal(k3[1]),
+                    "place",
+                    frames=["table", "obj2"],
+                    constraints = get_additional_constraints("obj2")
+                ),
+            ])
+
+        if num_objs > 3:
+            self.tasks.extend([
+                Task(
+                    "r2_pick_1",
+                    ["a4"],
+                    SingleGoal(k4[0]),
+                    "pick",
+                    frames=["a4_ur_vacuum", "obj3"],
+                ),
+                Task(
+                    "r2_place_1",
+                    ["a4"],
+                    SingleGoal(k4[1]),
+                    "place",
+                    frames=["table", "obj3"],
+                    constraints = get_additional_constraints("obj3")
+                ),
+            ])
+
+        self.tasks.append(
             Task(
                 "terminal",
                 self.robots,
                 SingleGoal(home_pose),
-            ),
-        ]
-        
-        self.sequence = self._make_sequence_from_names(
-            ["r1_pick_0", "r1_place_0", "r1_pick_1", "r2_pick_0", "r1_place_1", "r2_place_0", "r2_pick_1", "r2_place_1", "terminal"]
+            )
         )
+
+        if num_objs == 1:
+            self.sequence = self._make_sequence_from_names(
+                ["r1_pick_0", "r1_place_0", "terminal"]
+            )
+        elif num_objs == 2:
+            self.sequence = self._make_sequence_from_names(
+                ["r1_pick_0", "r1_place_0", "r1_pick_1", "r1_place_1", "terminal"]
+            )
+        elif num_objs == 3:
+            self.sequence = self._make_sequence_from_names(
+                ["r1_pick_0", "r1_place_0", "r1_pick_1", "r2_pick_0", "r1_place_1", "r2_place_0", "terminal"]
+            )
+        elif num_objs == 4:
+            self.sequence = self._make_sequence_from_names(
+                ["r1_pick_0", "r1_place_0", "r1_pick_1", "r2_pick_0", "r1_place_1", "r2_place_0", "r2_pick_1", "r2_place_1", "terminal"]
+            )
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.005
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
         # for _ in range(1000):
         #     q = self.sample_config_uniform_in_limits()
@@ -984,7 +1059,7 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
 @register([
@@ -1044,7 +1119,7 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 @register([
     ("rai.dual_stick_upright", {}),
@@ -1121,7 +1196,7 @@ class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 # assembly with predetermined assembly 'insertion directions'
 # effectively an orientation constraint
@@ -1210,7 +1285,7 @@ class rai_stacking_with_holding(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self._set_default_safe_pose()
 
 
 # @register("rai.assembly_with_insertion")

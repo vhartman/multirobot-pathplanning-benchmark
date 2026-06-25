@@ -95,6 +95,10 @@ class VampEnv(BaseProblem):
             home_pose=SafePoseType.HAS_NO_SAFE_HOME_POSE,
         )
 
+    def _set_zero_safe_pose(self, dim: int):
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.safe_pose = {r: np.zeros(dim) for r in self.robots}
+
     def __deepcopy__(self, memo):
         # Save the C attribute
         env = self.env
@@ -869,11 +873,7 @@ class vamp_quad_panda_env(SequenceMixin, VampEnv):
         self.collision_resolution = 0.01
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array([0] * panda_dim)
+        self._set_zero_safe_pose(panda_dim)
 
 @register("vampmr.hex_panda")
 class vamp_hex_panda_env(SequenceMixin, VampEnv):
@@ -935,11 +935,7 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         self.collision_resolution = 0.01
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array([0] * panda_dim)
+        self._set_zero_safe_pose(panda_dim)
 
 
 @register("vampmr.dual_ur5")
@@ -1035,11 +1031,7 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         self.collision_resolution = 0.01
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array([0] * ur_dim)
+        self._set_zero_safe_pose(ur_dim)
 
 
 @register("vampmr.dual_ur5_with_box")
@@ -1154,11 +1146,7 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         self.collision_resolution = 0.01
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array([0] * ur_dim)
+        self._set_zero_safe_pose(ur_dim)
 
 @register("vampmr.quad_ur5")
 class vamp_hex_panda_env(SequenceMixin, VampEnv):
@@ -1262,11 +1250,7 @@ class vamp_hex_panda_env(SequenceMixin, VampEnv):
         self.collision_resolution = 0.01
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        for r in self.robots:
-            self.safe_pose[r] = np.array([0] * ur_dim)
+        self._set_zero_safe_pose(ur_dim)
 
 
 @register("vampmr.ur5_box_stacking")
@@ -1412,5 +1396,4 @@ class vamp_ur5_box_stacking_env(SequenceMixin, VampEnv):
         self.collision_resolution = 0.01
         self.collision_tolerance = 0.00
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        self.safe_pose = {f"a{i+1}": np.array([0] * ur_dim) for i in range(num_robots)}
+        self._set_zero_safe_pose(ur_dim)

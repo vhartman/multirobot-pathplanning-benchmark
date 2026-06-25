@@ -787,8 +787,8 @@ class pinocchio_other_hallway(SequenceMixin, PinocchioEnvironment):
         self.spec.manipulation = ManipulationType.STATIC
 
         self.safe_pose = {
-            "a1": np.array(np.array([-1.5, 1, np.pi / 2])),
-            "a2": np.array(np.array([1.5, 1, 0])),
+            "a1": np.array([-1.5, 1, np.pi / 2]),
+            "a2": np.array([1.5, 1, 0]),
         }
 
 
