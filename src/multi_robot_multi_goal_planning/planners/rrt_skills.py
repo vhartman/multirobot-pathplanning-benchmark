@@ -1032,15 +1032,20 @@ class RRTSkills(BasePlanner):
 
     def _get_active_skill_task(self, mode: Mode):
         """
-        Returns the task with a skill in this mode or None 
+        Returns a task with a skill that is currently active in this mode or None
+        # TODO Limitation: if two robots each carry a skill in the same mode..
         """
-        next_ids = self.mode_validation.get_valid_next_ids(mode)
-        if not next_ids:
+        if self.env.is_terminal_mode(mode):
             return None
-        
-        task = self.env.get_active_task(mode, next_ids)
-        if hasattr(task, 'skill') and task.skill is not None:
-            return task
+
+        seen = set()
+        for task_id in mode.task_ids:
+            if task_id in seen:
+                continue
+            seen.add(task_id)
+            task = self.env.tasks[task_id]
+            if getattr(task, "skill", None) is not None:
+                return task
         return None
 
     def _get_active_subspace_indices(self, active_task) -> List[int]:
