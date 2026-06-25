@@ -163,52 +163,6 @@ def make_2d_rai_env_no_obs(view: bool = False, agents_can_rotate=True):
 
     return C
 
-def make_stochastic_switch_env(agents_can_rotate=None, view=False):
-    C = make_table_with_walls(4, 4)
-    table = C.getFrame("table")
-
-    pre_agent_1_frame = (
-        C.addFrame("pre_agent_1_frame")
-        .setParent(table)
-        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
-        .setShape(ry.ST.marker, size=[0.05])
-        .setColor([1, 0.5, 0])
-        .setContact(0)
-        .setJoint(ry.JT.rigid)
-    )
-
-    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
-        ry.ST.cylinder, size=[0.06, 0.15]
-    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
-        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
-    ).setJointState([-1.0, 0.0])
-
-    pre_agent_2_frame = (
-        C.addFrame("pre_agent_2_frame")
-        .setParent(table)
-        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
-        .setShape(ry.ST.marker, size=[0.05])
-        .setColor([1, 0.5, 0])
-        .setContact(0)
-        .setJoint(ry.JT.rigid)
-    )
-
-    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
-        ry.ST.cylinder, size=[0.06, 0.15]
-    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
-        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
-    ).setJointState([1.0, 0.0])
-
-    C.addFrame("goal1").setParent(table).setShape(
-        ry.ST.cylinder, size=[0.06, 0.16]
-    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([1.0, 0.0, 0.07])
-
-    C.addFrame("goal2").setParent(table).setShape(
-        ry.ST.cylinder, size=[0.06, 0.16]
-    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([-1.0, 0.0, 0.07])
-
-    return C
-
 
 
 def make_2d_rai_env_no_obs_three_agents(view: bool = False, agents_can_rotate=True):
@@ -10583,3 +10537,133 @@ def make_rai_quad_ur5_env():
     # print(r2_pose)
 
     return C, [r1_pose, r2_pose, r3_pose, r4_pose]
+
+
+def make_stochastic_switch_env(agents_can_rotate=None, view=False):
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([-1.0, 0.0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([1.0, 0.0])
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([1.0, 0.0, 0.07])
+
+    C.addFrame("goal2").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([-1.0, 0.0, 0.07])
+
+    return C
+
+
+def make_stochastic_switch_pick_place_env(view: bool = False):
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+    ).setJointState([-1.0, 0.0, 0.0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
+    ).setJointState([0.0, -1.0, 0.0])
+
+    C.addFrame("obj1").setParent(table).setShape(
+        ry.ST.box, size=[0.1, 0.1, 0.06, 0.005]
+    ).setColor([0.2, 0.8, 0.2, 1]).setContact(1).setRelativePosition(
+        [0.0, 1.0, 0.07]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([1.0, 0.0, 0.07])
+
+    C.addFrame("goal1_return").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([1, 0.5, 0, 0.15]).setContact(0).setRelativePosition([-1.0, 0.0, 0.07])
+
+    C.addFrame("goal_obj1").setParent(table).setShape(
+        ry.ST.box, size=[0.1, 0.1, 0.06, 0.005]
+    ).setColor([0.2, 0.8, 0.2, 0.3]).setContact(0).setRelativePosition([0.0, -1.0, 0.07])
+
+    if view:
+        C.view(True)
+
+    komo = ry.KOMO(C, phases=4, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+    komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [0.1])
+    komo.addControlObjective([], 0, 1e-1)
+
+    # Phase 1: a2 picks obj1
+    komo.addModeSwitch([1, 2], ry.SY.stable, ["a2", "obj1"])
+    komo.addObjective([1, 2], ry.FS.distance, ["a2", "obj1"], ry.OT.eq, [1e1])
+
+    # Phase 2: a2 places obj1 at goal_obj1
+    komo.addModeSwitch([2, -1], ry.SY.stable, ["table", "obj1"])
+    komo.addObjective([2, -1], ry.FS.poseDiff, ["obj1", "goal_obj1"], ry.OT.eq, [1e1])
+
+    # Phase 3: a1 is at goal1
+    komo.addObjective([3], ry.FS.positionDiff, ["a1", "goal1"], ry.OT.eq, [1e1])
+
+    # Phase 4: a1 returns to goal1_return
+    komo.addObjective([4], ry.FS.positionDiff, ["a1", "goal1_return"], ry.OT.eq, [1e1])
+    
+    keyframes = solve_komo_problem(komo, 100, C, view, 4, -2.0, 0.01, 0.001)
+
+    if view:
+        komo.view(True, "IK solution")
+
+    return C, keyframes
