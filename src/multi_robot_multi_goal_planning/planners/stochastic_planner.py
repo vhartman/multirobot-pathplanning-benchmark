@@ -48,6 +48,7 @@ class Config:
     """
     Planner parameters
     """
+
     # n_rollouts
     # 
     # params for grid and bin (discretization active and inactive continuous configuration space)
@@ -55,9 +56,37 @@ class Config:
     # idle_cost
     # fail_cost 
     # 
+    # mc_trials
     # rng_seed
     #  
     pass
+
+
+# =====================================================================
+# Policy Object
+# =====================================================================
+
+class StochasticPolicy:
+    """
+    # TODO check (maybe easier to have this class..)
+    Encapsulates a computed policy. Used by global planner to do fast continuous-to-discrete
+    state mapping and retrieve the next collision-free action for the inactive robot at each step
+    """
+
+    def __init__(self):
+        """
+        
+        """
+        pass
+
+    def get_next_state(self):
+        """
+        Calculates the next target joint configuration for the inactive robot
+        Could be useful?
+        """
+        #
+        # return q_inactive_next 
+        raise NotImplementedError
 
 
 # =====================================================================
@@ -182,11 +211,51 @@ class StochasticSkillPlanner:
         # return path and info (metrics..)  
         raise NotImplementedError
     
+    def get_policy(self):
+        """
+        Computes and returns the feedback control policy (StochasticPolicy) object. Used by 
+        global planners to query local steering actions
+        """
+        # Setup
+        # Run backward induction to obtain policy table
+        # Instatiate and return a StochasticPolicy object using policy, grid, ...
+        # 
+        # 
+        #  
+        raise NotImplementedError
+
     # TODO add more methods while coding..
+
+    def _rollout(self):
+        """
+        Runs a forward simulation (rollout) of the active robot's skill 
+        """
+        # Get active robot start configuration
+        # Init trajectory sequence list with start config
+        # Loop step index from 0 to n_steps-1
+        # - Run, record
+        # - If skill done -> break
+        
+        # return full trajectory array
+        raise NotImplementedError
+
+    def _execute_once(self):
+        """
+        Executes the policy control loop once on a new active rollout
+        """
+        #
+        # 
+        # 
+        # 
+        # 
+        # 
+
+        # return ?
+        raise NotImplementedError 
 
     def _reconstruct(self):
         """
-        
+        Builds shortest path from ?? to the goal once the skill finishes 
         """
         #
         # 
@@ -200,11 +269,13 @@ class StochasticSkillPlanner:
         Evaluates policy metrics (expected control cost, collision rates, goal-reaching rates) 
         across multiple randomized simulation runs
         """
-        #
+        # Loop for mc_trials simulation runs:
+        # - Run policy execution 
+        # - Accumulate outcomes
+        # Compute means, other metrics
         # 
-        # 
-        # 
-        #  
+
+        # Return dictionary summarizing metrics 
         raise NotImplementedError
     
     def _representative_path(self):
@@ -212,9 +283,9 @@ class StochasticSkillPlanner:
         Executes the policy once and returns the sequence of state objects. Used to generate the 
         final path for visualization / execution..
         """
+        # Execute policy once
+        # Iterate through active and inactive trajectory configurations
+        # Merge to get state object
         # 
-        # 
-        # 
-        # 
-        #  
+        #  Return list of state objects 
         raise NotImplementedError
