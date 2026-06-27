@@ -44,12 +44,11 @@ class Config:
     """
 
     # n_rollouts
-    # 
-    # params for grid and bin (discretization active and inactive continuous configuration space)
-    #
+    # bin_resolution
+    # n_roadmap_nodes
+    # roadmap_k
     # idle_cost
     # fail_cost 
-    # 
     # mc_trials
     # rng_seed
     #  
@@ -76,7 +75,8 @@ class StochasticPolicy:
     def get_next_state(self):
         """
         Calculates the next target joint configuration for the inactive robot
-        Could be useful?
+        Maps the continuous active config to its nearest bin and the continuous inactive
+        config to its nearest roadmap node, then looks up the policy
         """
         #
         # return q_inactive_next 
@@ -225,12 +225,59 @@ class StochasticSkillPlanner:
     # TODO add more methods while coding..
 
     # Build grid for inactive robot config discretization: 
-    # 
+    
+    def _build_roadmap(self):
+        """
+        Discretization for inactive robot configurations. Constructs a sampling-based roadmap over the 
+        full inactive C-space
+        """
+        #
+        # 
+        # 
+        # 
+
+        #
+        raise NotImplementedError  
 
     # Collision checking: expensive in backward indution, collision checking on the fly would probably be computationally expensive..
     # We could precompute in setup() a blocked[phase][bin_idx][grid_node_idx] that is True if the active robot in its representation bin a at phase k is in collision with the inactive robot at grid node u..
     # During backward induction, checking becomes O(1) -> super fast
 
+    def _build_collision_mask(self):
+        """
+        Precomputes a boolean mask to indicate whether an active bin at phase k collisdes with an inactive
+        node. Used to avoid expensive collision checks during the backward induction
+        """
+        # for k, a, u
+        # - blocked[k][a][u] = not state_free(..,..,k)
+        # 
+
+        # return nothing
+        raise NotImplementedError
+    
+    def _state_free(self):
+        """
+        Verifies if a combined configuration (active, inactive) is free of collisions with the environment
+        and other robots. Used to determine the validity of a given state 
+        """
+        # Get config (compose)
+        # Call is_collision_free()
+
+        # return bool
+        raise NotImplementedError  
+    
+    def _edge_free(self):
+        """
+        Verifies if the edge between two configurations is collision-free. Used to ensure safe motion during
+        execution steps
+        """
+        # Get config 1 (compose)
+        # Get config 2 (compose)
+        # Call is_edge_collision_free()
+
+        # return bool
+        raise NotImplementedError
+    
     def _rollout(self):
         """
         Runs a forward simulation (rollout) of the active robot's skill 
