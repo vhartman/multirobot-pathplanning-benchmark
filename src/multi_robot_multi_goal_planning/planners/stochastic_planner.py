@@ -1,8 +1,21 @@
 """
-Stochastic path planning
+Stochastic local skill planner
 
 1. CL reactive planner (MDP solved via DP)
 2. OL conservative planner (worst-case envelope avoidance)
+
+NOTE: This is not a global planner (will maybe go that direction later..). For now it is a 
+local policy generator called by global planners (like PRM or RRT) when a mode contains a 
+stochastic skill. It coordinates the inactive robot to steer sagely around the active robot's 
+stochastic trajectory during skill execution 
+
+Assumptions:
+- Bounded terminal variance: stochastic noise affects the robot's trajectory during the execution
+  of the skill, but a "CL controller" guarantees that the active robot converges tot he target goal 
+  configuration by the final phase K. Crucial for global sequential planning 
+- Markov property: the transition probability Pk(b|a) depends solely on the current bin a and phase 
+  k, independant of the history of previous states 
+- Static background: environment is stationary during the execution
 
 Flowchart: 
 1. Collect active robot rollouts, simulating the stochastic skill
@@ -11,27 +24,8 @@ Flowchart:
 4. (TBD) collision check between active bins and inactive grid nodes
 5. Run Backward Induction to compute optimal value and policy tables
 6. Execute CL or OL policies on fresh rollouts
-
-
-IMPLEMENTATION:
-
-Imports
-Configuration (dataclass)
-
-Core part / algorithms (ipad notes)
-- bin_rollouts
-- transition_probs
-- build_grid
-- dijkstra
-- 
-- backward_induction
-
-Stochastic planner class
-- init
-- setup?
-- plan (reactive vs. conservatice)
-- evaluate
 """
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -101,7 +95,7 @@ def bin_rollouts():
     # Init lists
     # Loop phase k from 0 to K 
     # - Extract configs of all rollouts at phase k   
-    # - Discretize -> cell coordinates
+    # - Discretize -> cell coordinates cell=round(q/delta)
     # - Map each continuous config to unique cell ID
     # - For each unique cell ID compute mean of all continuous configs mapped to it 
     # - Append means to respective lists
@@ -121,7 +115,7 @@ def transition_probs():
     # -- Get bin index of the rollout at phase k (a) and phase k+1 (b)
     # -- Increment transition count from bin a to bin b
     # - Convert counts into probability distributions
-    # -- For each bin a divide transition counts to b by the total transitions out of a
+    # -- For each bin a divide transition counts to b by the total transitions out of a (normalization)
     # -- Store in dict
     # - Append list of dicts for phase k to main transition list 
     #
@@ -130,29 +124,32 @@ def transition_probs():
     # return transition probability list 
     raise NotImplementedError
 
-def build_grid():
-    """
-    Generates dense coordinates covering the inactive robot's workspace to define search node 
-    positions. Used to bound and structure the discrete grid space
-    """
-    # Not sure how, not sure if actually needed..
-    # 
-    # 
+# def build_grid():
+#     """
+#     Generates dense coordinates covering the inactive robot's workspace to define search node 
+#     positions. Used to bound and structure the discrete grid space
+#     """
+#     # Not sure how, not sure if actually needed..
+#     # 
+#     # 
 
-    # return grid array 
-    raise NotImplementedError
+#     # return grid array 
+#     raise NotImplementedError
 
 def backward_induction():
     """
     Runs DP backwards from the terminal goal state to the start state. Used to find the optimal
     expected cost-to-go value function and compile the optimal feedback control policy 
     """
-    # Check iPad notes for implementation details
-    # 
-    # 
-    # 
-    # 
-    # 
+    # Define value[K][a] = ?
+    # for k = K-1 ... 0
+    # - for each active bin a
+    #   - for each node u not blocked at (k,a)
+    #     - for v in neighbors[u] + [u]
+    #       move = idle cost if v==u else norm(u-v)
+    #       exp = sum_b P[k][a][b] * (fail cost if blocked[k+1][b][v] else value[k+1][b][v])
+    #       keep = argmin..  
+    #     value[k][a][u], policy[k][a][u]=best
 
     # return value table and policy table 
     raise NotImplementedError
@@ -201,7 +198,8 @@ class StochasticSkillPlanner:
         # Run setup
         # Select strategy (reactive, conservative)
         # - If reactive: use all bins and transition probabilities directly
-        # - If conservative: collapse all active bins into sindle worst-case envelope and transition deterministically
+        # - If conservative: collapse all active bins into sindle worst-case envelope and 
+        #   transition deterministically
         # Run backward induction to compute optimal policy table 
         # Run policy evaluation -> cost, other metrics
         # Reconstruct path
@@ -225,6 +223,13 @@ class StochasticSkillPlanner:
         raise NotImplementedError
 
     # TODO add more methods while coding..
+
+    # Build grid for inactive robot config discretization: 
+    # 
+
+    # Collision checking: expensive in backward indution, collision checking on the fly would probably be computationally expensive..
+    # We could precompute in setup() a blocked[phase][bin_idx][grid_node_idx] that is True if the active robot in its representation bin a at phase k is in collision with the inactive robot at grid node u..
+    # During backward induction, checking becomes O(1) -> super fast
 
     def _rollout(self):
         """
