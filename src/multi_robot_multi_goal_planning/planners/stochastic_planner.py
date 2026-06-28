@@ -45,10 +45,12 @@ class Config:
 
     # n_rollouts
     # bin_resolution
+    # edge_check_resolution
+    # roadmap_margin 
     # n_roadmap_nodes
     # roadmap_k
     # idle_cost
-    # fail_cost 
+    # fail_cost (not too high otherwise if because of noise there's a 1% chance of collision the DP will avoid it and the reactive planner will resemble the worst-case planner..)
     # mc_trials
     # rng_seed
     #  
@@ -136,6 +138,25 @@ def transition_probs():
 #     # return grid array 
 #     raise NotImplementedError
 
+def dijkstra_to_goal():
+    """
+    Computes shortest paths from all nodes to the goal ignoring the moving active robot.
+    Used to initialize the terminal cost-to-go values at the end of the skill duration
+    """
+    # Initialize cost array with infinity for all nodes
+    # If the goal node itself is blocked by the final stationary active robot, return costs as is
+    # Set goal node cost to 0.0
+    # Initialize a priority queue with (0.0, goal_idx)
+    # While priority queue is not empty:
+    # - Pop node with smallest cost
+    # - For each neighbor of the popped node:
+    #   - If neighbor is blocked by final active robot, skip
+    #   - Calculate new cost to reach neighbor
+    #   - If new cost is smaller, update cost and push to priority queue
+    
+    # return cost array
+    raise NotImplementedError
+
 def backward_induction():
     """
     Runs DP backwards from the terminal goal state to the start state. Used to find the optimal
@@ -158,6 +179,9 @@ def backward_induction():
 # =====================================================================
 # Planner
 # =====================================================================
+
+# TODO [ ] add more methods while coding..
+# TODO [ ] deal with shortcutter (will shortcut inactive robot trajectory in skill modes -> we don't want that..)
 
 class StochasticSkillPlanner:
     """
@@ -221,27 +245,32 @@ class StochasticSkillPlanner:
         # 
         #  
         raise NotImplementedError
-
-    # TODO add more methods while coding..
-
-    # Build grid for inactive robot config discretization: 
     
+    def _compose(self):
+        """
+        Merges active and inactive configurations into a full robot joint vector.
+        Used to build complete state configurations for environment collision checking
+        """
+        # Copy the base full configuration
+        # Inject the active robot joint values at the active indices
+        # Inject the inactive robot joint values at the inactive indices
+        
+        # return full configuration array
+        raise NotImplementedError
+
     def _build_roadmap(self):
         """
         Discretization for inactive robot configurations. Constructs a sampling-based roadmap over the 
         full inactive C-space
         """
-        #
-        # 
-        # 
-        # 
+        # Define box around inactive start and goal config for local sampling (could do informed sampling ith PHS..?)
+        # Sample q uniform
+        # Collision check
+        # Add to self.grid array 
+        # Tree with k-nearest-neighbors? and store in self.neighbors
 
-        #
+        # return nothing (grid and neighbors defined)
         raise NotImplementedError  
-
-    # Collision checking: expensive in backward indution, collision checking on the fly would probably be computationally expensive..
-    # We could precompute in setup() a blocked[phase][bin_idx][grid_node_idx] that is True if the active robot in its representation bin a at phase k is in collision with the inactive robot at grid node u..
-    # During backward induction, checking becomes O(1) -> super fast
 
     def _build_collision_mask(self):
         """
@@ -250,7 +279,11 @@ class StochasticSkillPlanner:
         """
         # for k, a, u
         # - blocked[k][a][u] = not state_free(..,..,k)
-        # 
+        
+        # TODO
+        # Could still be computationally expensive (DP nested loops and collision check..)
+        # Probably the inactive robot won't even get close to most of the checked grid nodes during DP
+        # -> Do lazy collision checking only check on demand, when DP actually explores that cell
 
         # return nothing
         raise NotImplementedError
@@ -293,27 +326,32 @@ class StochasticSkillPlanner:
 
     def _execute_once(self):
         """
-        Executes the policy control loop once on a new active rollout
+        Executes the policy control loop once on a new active rollout. Used to gather simulation 
+        metrics like path cost...
         """
-        #
-        # 
-        # 
-        # 
-        # 
-        # 
+        # Get rollout
+        # Setups and initialize
+        # For each phase k  
+        # - Map active robot's state to a discrete bin
+        # - Look up next target node from policy
+        # - Collision check (transition edges)
+        # - Add distance to total cost + move to next node
+        # After skill finishes, if goal reachable:
+        # - Reconstruct 
 
         # return ?
         raise NotImplementedError 
 
     def _reconstruct(self):
         """
-        Builds shortest path from ?? to the goal once the skill finishes 
+        Finds shortest path to the goal for the inactive robot after skill finishes 
         """
-        #
-        # 
-        # 
-        # 
-        #  
+        # Init distance to inf, start node to 0, priority queue
+        # - Calculate distance to neighbor
+        # - If shorter update distance/parent and push to queue 
+        # Backtrack from goal using parents to build path
+        
+        # Reverse and return path
         raise NotImplementedError
 
     def _evaluate(self):
