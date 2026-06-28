@@ -126,22 +126,11 @@ def transition_probs():
     # return transition probability list 
     raise NotImplementedError
 
-# def build_grid():
-#     """
-#     Generates dense coordinates covering the inactive robot's workspace to define search node 
-#     positions. Used to bound and structure the discrete grid space
-#     """
-#     # Not sure how, not sure if actually needed..
-#     # 
-#     # 
-
-#     # return grid array 
-#     raise NotImplementedError
-
-def dijkstra_to_goal():
+def compute_roadmap_cost_to_go():
     """
-    Computes shortest paths from all nodes to the goal ignoring the moving active robot.
-    Used to initialize the terminal cost-to-go values at the end of the skill duration
+    Computes the deteministic cost-to-go from every roadmap node to the goal. Used primarily
+    to initialize the terminal value function at the end of the skill, ensuring the MDP solver
+    accounts for the remaining distance after the skill completes
     """
     # Initialize cost array with infinity for all nodes
     # If the goal node itself is blocked by the final stationary active robot, return costs as is
@@ -149,10 +138,10 @@ def dijkstra_to_goal():
     # Initialize a priority queue with (0.0, goal_idx)
     # While priority queue is not empty:
     # - Pop node with smallest cost
-    # - For each neighbor of the popped node:
-    #   - If neighbor is blocked by final active robot, skip
-    #   - Calculate new cost to reach neighbor
-    #   - If new cost is smaller, update cost and push to priority queue
+    # - For each neighbor v of the popped node u:
+    #   - If neighbor v is blocked by final active robot, skip
+    #   - Calculate new cost to reach neighbor v
+    #   - If new cost is smaller, update cost[v] and push to priority queue
     
     # return cost array
     raise NotImplementedError
@@ -324,31 +313,46 @@ class StochasticSkillPlanner:
         # return full trajectory array
         raise NotImplementedError
 
-    def _execute_once(self):
+    def _simulate_policy_rollout(self):
         """
-        Executes the policy control loop once on a new active rollout. Used to gather simulation 
-        metrics like path cost...
+        Executes the policy control loop once on a new active rollout. This function Plays out 
+        the precomputed policy for the exact duration of the skill (N phases). Because the inactive
+        robot might not reach its goal within those N phases, it appenda the remaining post-skill 
+        trajectory using a static (active robot not moving anymore) shortest-path search
         """
-        # Get rollout
-        # Setups and initialize
+        # Get new stochastic active rollout trajectory
+        # Setup for tracking variables
         # For each phase k  
         # - Map active robot's state to a discrete bin
         # - Look up next target node from policy
         # - Collision check (transition edges)
-        # - Add distance to total cost + move to next node
+        # - Add edge distance to total cost + move inactive robot to next node
+        # - Append current states to the current active and inactive path sequences 
         # After skill finishes, if goal reachable:
-        # - Reconstruct 
+        # - If reachable and not already at goal
+        # -- Call _plan_post_skill_path to reconstruct the remaining path
+        # -- Add remaining path distances to total cost
+        # -- Append final post-skill states to the path sequences 
 
-        # return ?
+        # return trajectory, cost, collision flags... (maybe a dict with all those infos)
         raise NotImplementedError 
 
-    def _reconstruct(self):
+    def _plan_post_skill_path(self):
         """
-        Finds shortest path to the goal for the inactive robot after skill finishes 
+        Computes the remaining deterministic shortest path to the goal for the inactive robot 
+        after the skill ends. Because the active robot's movement is stochastic, the inactive 
+        robot's dodging movements will lead it to unpredictable locations at the end of the 
+        skill. This function dynamically plans the rest of the path from wherever the inactive
+        robot ended up at step N, avoiding the active robot's final static position
         """
         # Init distance to inf, start node to 0, priority queue
-        # - Calculate distance to neighbor
-        # - If shorter update distance/parent and push to queue 
+        # While priority queue not empty
+        # - Pop node u with smallest distance
+        # - If node u is the goal, break early
+        # - For each neighbor v from popped node u
+        # -- If neighbor v blocked by final active robot position, skip 
+        # -- Calculate new distance to reach neighbor v
+        # -- If shorter, update distance, set parent[v]=u and push to queue 
         # Backtrack from goal using parents to build path
         
         # Reverse and return path
