@@ -200,7 +200,7 @@ def backward_induction(
 
         # Iterate through every possible bin 'a' the active robot could be in now
         for a in range(n_bins):
-            possible_next_bins = trans_phases[k][a] if trans_phases[k][a] else {0: 1.0} # Conservative: 1 super-bin
+            possible_next_bins = trans_phases[k][a]
 
             # Iterate through every possible node 'u' the inactive robot could be and node 'v' it can go to
             for u in np.where(~blocked_phases[k][a])[0]:
