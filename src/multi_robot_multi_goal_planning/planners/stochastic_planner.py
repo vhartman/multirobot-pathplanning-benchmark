@@ -200,12 +200,12 @@ def backward_induction(
 
         # Iterate through every possible bin 'a' the active robot could be in now
         for a in range(n_bins):
-            possible_next_bins = trans_phases[k][a]
+            possible_next_bins = trans_phases[k][a] if trans_phases[k][a] else {0: 1.0} # Conservative: 1 super-bin
 
             # Iterate through every possible node 'u' the inactive robot could be and node 'v' it can go to
             for u in np.where(~blocked_phases[k][a])[0]:
                 for v in neighbors[u] + [u]:
-                    immediate_cost = idle_cost if v == u else float(np.linalg.norm(u - v))
+                    immediate_cost = idle_cost if v == u else float(np.linalg.norm(nodes[u] - nodes[v]))
                     expected_future_cost = sum(
                         p * (fail_cost if (blocked_phases[k+1][b][v] or blocked_phases[k][a][v])
                              else value[k+1][b][v]) for b, p in possible_next_bins.items()
