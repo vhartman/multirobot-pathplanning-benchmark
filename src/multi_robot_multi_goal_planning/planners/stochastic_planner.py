@@ -134,10 +134,10 @@ def transition_probs(labels: list[np.ndarray], n_bins: list[int]) -> list[list[d
     return probs
 
 def compute_roadmap_cost_to_go(
-        nodes: np.ndarray,
-        neighbors: list[list[int]],
-        goal_idx: int, 
-        blocked: np.ndarray
+    nodes: np.ndarray,
+    neighbors: list[list[int]],
+    goal_idx: int, 
+    blocked: np.ndarray
 ) -> np.ndarray:
     """
     Computes the deteministic cost-to-go from every roadmap node to the goal. Used primarily
@@ -166,23 +166,58 @@ def compute_roadmap_cost_to_go(
 
     return cost
 
-def backward_induction():
+def backward_induction(
+    nodes: np.ndarray,
+    neighbors: list[list[int]],
+    goal_idx: int,
+    blocked_phases: list[np.ndarray],
+    trans_phases: list[list[dict[int, float]]],
+    idle_cost: float,
+    fail_cost: float,
+) -> tuple[list[list[np.ndarray]], list[list[np.ndarray]]]:
     """
-    Runs DP backwards from the terminal goal state to the start state. Used to find the optimal
-    expected cost-to-go value function and compile the optimal feedback control policy 
+    Runs DP backwards from the terminal goal state to the start state. Used to find the optimal expected 
+    cost-to-go value function and compile the optimal feedback control policy (which neighbor node 'v' to
+    move to at time k if the active robot is in bin 'a', inactive robot at node 'u', so that the total cost
+    to the goal is minimized?)
     """
-    # Define value[K][a] = ?
-    # for k = K-1 ... 0
-    # - for each active bin a
-    #   - for each node u not blocked at (k,a)
-    #     - for v in neighbors[u] + [u]
-    #       move = idle cost if v==u else norm(u-v)
-    #       exp = sum_b P[k][a][b] * (fail cost if blocked[k+1][b][v] else value[k+1][b][v])
-    #       keep = argmin..  
-    #     value[k][a][u], policy[k][a][u]=best
+    K = len(blocked_phases) - 1
+    n_nodes = len(nodes)
 
-    # return value table and policy table 
-    raise NotImplementedError
+    value = [None] * (K+1)
+    policy = [None] * K
+
+    # 1. BASE CASE (k = K): solve shortest path to goal
+    value[K] = [compute_roadmap_cost_to_go(nodes, neighbors, goal_idx, blocked) for blocked in blocked_phases[K]]
+    
+    # 2. BACKWARDS LOOP (k = K-1...0)
+    for k in range(K - 1, -1, -1):
+        n_bins = blocked_phases[k].shape[0]
+
+        # Initialize the value and policy arrays for this specific phase
+        value[k] = [np.full(n_nodes, np.inf) for _ in range(n_bins)]
+        policy[k] = [np.full(n_nodes, -1) for _ in range(n_bins)]
+
+        # Iterate through every possible bin 'a' the active robot could be in now
+        for a in range(n_bins):
+            possible_next_bins = trans_phases[k][a]
+
+            # Iterate through every possible node 'u' the inactive robot could be and node 'v' it can go to
+            for u in np.where(~blocked_phases[k][a])[0]:
+                for v in neighbors[u] + [u]:
+                    immediate_cost = idle_cost if v == u else float(np.linalg.norm(u - v))
+                    expected_future_cost = sum(
+                        p * (fail_cost if (blocked_phases[k+1][b][v] or blocked_phases[k][a][v])
+                             else value[k+1][b][v]) for b, p in possible_next_bins.items()
+                    )
+                    
+                    # Bellman equation and minimization
+                    total_cost = immediate_cost + expected_future_cost
+                    if total_cost < value[k][a][u]:
+                        value[k][a][u] = total_cost
+                        policy[k][a][u] = v
+
+    return value, policy
 
 
 # =====================================================================
