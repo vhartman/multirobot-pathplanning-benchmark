@@ -117,20 +117,21 @@ def transition_probs(labels: list[np.ndarray], n_bins: list[int]) -> list[list[d
     Estimates the transition probabilities between active robot bins from phase k to k+1. Used
     to construct the stochastic propagation model of the active robot's noisy skill
     """
-    # Init list (of dict for each phase k)
-    # For each phase k:
-    # - Loop through each rollout index
-    # -- Get bin index of the rollout at phase k (a) and phase k+1 (b)
-    # -- Increment transition count from bin a to bin b
-    # - Convert counts into probability distributions
-    # -- For each bin a divide transition counts to b by the total transitions out of a (normalization)
-    # -- Store in dict
-    # - Append list of dicts for phase k to main transition list 
-    #
-    #  
+    probs = []
+    
+    for k in range(len(labels) - 1):
+        # Create empty dictionary for each bin at phase k (to track destinations from bin)
+        counts = [dict() for _ in range(n_bins[k])]
 
-    # return transition probability list 
-    raise NotImplementedError
+        # Count transitions from bin 'a' at phase k to bin 'b' at phase k+1
+        for a, b in zip(labels[k], labels[k+1]):
+            counts[a][b] = counts[a].get(b, 0) + 1
+
+        # Convert raw counts to probabilities (normalization)
+        phase_probs = [{b: count / sum(row.values()) for b, count in row.items()} for row in counts]
+        probs.append(phase_probs)
+
+    return probs
 
 def compute_roadmap_cost_to_go():
     """
