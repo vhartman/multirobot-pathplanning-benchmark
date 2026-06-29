@@ -28,9 +28,9 @@ Flowchart:
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
+import heapq
 
 import numpy as np
-from numpy.typing import NDArray
 
 
 # =====================================================================
@@ -133,25 +133,38 @@ def transition_probs(labels: list[np.ndarray], n_bins: list[int]) -> list[list[d
 
     return probs
 
-def compute_roadmap_cost_to_go():
+def compute_roadmap_cost_to_go(
+        nodes: np.ndarray,
+        neighbors: list[list[int]],
+        goal_idx: int, 
+        blocked: np.ndarray
+) -> np.ndarray:
     """
     Computes the deteministic cost-to-go from every roadmap node to the goal. Used primarily
     to initialize the terminal value function at the end of the skill, ensuring the MDP solver
     accounts for the remaining distance after the skill completes
     """
     # Initialize cost array with infinity for all nodes
-    # If the goal node itself is blocked by the final stationary active robot, return costs as is
-    # Set goal node cost to 0.0
-    # Initialize a priority queue with (0.0, goal_idx)
-    # While priority queue is not empty:
-    # - Pop node with smallest cost
-    # - For each neighbor v of the popped node u:
-    #   - If neighbor v is blocked by final active robot, skip
-    #   - Calculate new cost to reach neighbor v
-    #   - If new cost is smaller, update cost[v] and push to priority queue
-    
-    # return cost array
-    raise NotImplementedError
+    cost = np.full(len(nodes), np.inf, dtype=np.float64)
+    cost[goal_idx] = 0.0
+    pq = [(0.0, goal_idx)] # Priority queue (distance, node_index)
+
+    while pq:
+        d, u = heapq.heappop(pq)
+        
+        if d > cost[u]:
+            continue # Skip if shorter path to u found previously
+
+        for v in neighbors[u]:
+            if blocked[v]: 
+                continue 
+
+            nd = d + float(np.linalg.norm(nodes[u] - nodes[v]))
+            if nd < cost[v]:
+                cost[v] = nd
+                heapq.heappush(pq, (nd, v)) # Update if faster way to reach v is found
+
+    return cost
 
 def backward_induction():
     """
