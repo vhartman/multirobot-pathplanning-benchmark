@@ -224,6 +224,7 @@ def backward_induction(
 # Planner
 # =====================================================================
 
+# TODO [ ] rename all the "phase" to "step" to not confuse with the phases (strategies) used in the PRM 
 # TODO [ ] check if "bracketing collision checking" is enough or too conservative (is fast, and that's important in DP loop.. but has to be correct), maybe consider this as lazy CC and do heavy "continuous" CC at the very end when evaluating/executing final path..?
 # TODO [ ] deal with shortcutter (will shortcut inactive robot trajectory in skill modes -> we don't want that..)
 
@@ -366,6 +367,15 @@ class StochasticSkillPlanner:
         # - If skill done -> break
         
         # return full trajectory array
+        raise NotImplementedError
+
+    def _nearest_bin(self, k: int, q_active: np.ndarray):
+        """
+        Finds the closest discretized active bin index for a continuous configuration. Used to 
+        map the simulator observations to policy indices during the execution
+        """
+        # return np.argmin(np.linalg.norm(...))
+        # where ... is the representative active config at phase k - q_active
         raise NotImplementedError
 
     def _simulate_policy_rollout(self):
