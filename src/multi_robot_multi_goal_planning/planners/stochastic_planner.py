@@ -207,7 +207,7 @@ def backward_induction(
                 for v in neighbors[u] + [u]:
                     immediate_cost = idle_cost if v == u else float(np.linalg.norm(nodes[u] - nodes[v]))
                     expected_future_cost = sum(
-                        p * (fail_cost if (blocked_phases[k+1][b][v] or blocked_phases[k][a][v])
+                        p * (fail_cost if (blocked_phases[k][a][v] or blocked_phases[k+1][b][v])
                              else value[k+1][b][v]) for b, p in possible_next_bins.items()
                     )
                     
@@ -224,7 +224,7 @@ def backward_induction(
 # Planner
 # =====================================================================
 
-# TODO [ ] add more methods while coding..
+# TODO [ ] check if "bracketing collision checking" is enough or too conservative (is fast, and that's important in DP loop.. but has to be correct), maybe consider this as lazy CC and do heavy "continuous" CC at the very end when evaluating/executing final path..?
 # TODO [ ] deal with shortcutter (will shortcut inactive robot trajectory in skill modes -> we don't want that..)
 
 class StochasticSkillPlanner:
