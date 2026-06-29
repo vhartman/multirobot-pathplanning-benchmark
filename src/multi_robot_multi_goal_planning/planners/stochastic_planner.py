@@ -42,19 +42,16 @@ class Config:
     """
     Planner parameters
     """
-
-    # n_rollouts
-    # bin_resolution
-    # edge_check_resolution
-    # roadmap_margin 
-    # n_roadmap_nodes
-    # roadmap_k
-    # idle_cost
-    # fail_cost (not too high otherwise if because of noise there's a 1% chance of collision the DP will avoid it and the reactive planner will resemble the worst-case planner..)
-    # mc_trials
-    # rng_seed
-    #  
-    pass
+    n_rollouts: int = 300                   # MC rollouts of active skill
+    bin_resolution: float = 0.2             # Grid size foor binning the active reachable set       
+    edge_check_resolution: float = 0.15     # Edge collision checking resolution
+    roadmap_margin: float = 1.0             # Margin around inactive start/goal for roadmap bounding box
+    n_roadmap_nodes: int = 500              # Number of inactive-robot roadmap samples
+    roadmap_k: int = 10                     # k-nearest-neighbour connectivity for the roadmap
+    idle_cost: float = 0.02                 # Cost for a "wait" action (idling is never free) # TODO
+    fail_cost: float = 10.0                 # Penalty for a collision outcome
+    mc_trials: int = 200                    # Fresh rollouts used to evaluate a policy
+    rng_seed: Optional[int] = 0             # Seed for reproducibility
 
 
 # =====================================================================
@@ -89,24 +86,33 @@ class StochasticPolicy:
 # Core algorithm
 # =====================================================================
 
-def bin_rollouts():
+def bin_rollouts(rollouts: np.ndarray, resolution: float) -> Tuple[list[np.ndarray], list[np.ndarray]]:
     """
     Groups continuous active robot trajectories into discrete representative bins at each
     phase. Used to discretize the continuous C-space into a finite state space for MDP planning
     """
-    # Init lists
-    # Loop phase k from 0 to K 
-    # - Extract configs of all rollouts at phase k   
-    # - Discretize -> cell coordinates cell=round(q/delta)
-    # - Map each continuous config to unique cell ID
-    # - For each unique cell ID compute mean of all continuous configs mapped to it 
-    # - Append means to respective lists
-    #
+    reps = []       # Representative mean configurations for each bin
+    labels =  []    # Array mapping each rollout to its bin index at phase k
 
-    # return   
-    raise NotImplementedError
+    for k in range(rollouts.shape[1]):
+        # Extract continuous configs for all M rollouts
+        configs = rollouts[:, k, :]
 
-def transition_probs():
+        # Discretize continuous configs into cell coordinates
+        cells = np.round(configs / resolution)
+
+        # Find unique cells (bins) and the bin index (inverse) for each rollout config at phase k
+        unique, inverse = np.unique(cells, axis=0, return_inverse=True)
+
+        # Calculate the mean continuous configuration for each bin (used for CC later)
+        means = np.array([configs[inverse == i].mean(axis=0) for i in range(len(unique))])
+
+        reps.append(means)
+        labels.append(inverse)
+    
+    return reps, labels
+
+def transition_probs(labels: list[np.ndarray], n_bins: list[int]) -> list[list[dict[int, float]]]:
     """
     Estimates the transition probabilities between active robot bins from phase k to k+1. Used
     to construct the stochastic propagation model of the active robot's noisy skill
