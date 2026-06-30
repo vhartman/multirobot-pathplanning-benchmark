@@ -22,7 +22,8 @@ from .sampling_informed import InformedSampling
 from .termination_conditions import PlannerTerminationCondition
 
 from multi_robot_multi_goal_planning.problems.skills import (
-    BaseDeterministicTimedSkill
+    BaseDeterministicTimedSkill,
+    BaseStochasticTimedSkill
 )
 
 # =====================================================================
@@ -1077,7 +1078,7 @@ class RRTSkills(BasePlanner):
         all_joints = self.env.get_joint_names()
         self.env.C.selectJoints(skill.joints)
 
-        if isinstance(skill, BaseDeterministicTimedSkill):
+        if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
             n_steps = max(1, round(skill.duration / dt))
             if n_near.skill_step >= n_steps: # Avoid step past horizon
                 self.env.C.selectJoints(all_joints)
@@ -1115,7 +1116,7 @@ class RRTSkills(BasePlanner):
         n_kino = self.config.kinodynamic_steps
         active_indices = self._get_active_subspace_indices(skill_task)
 
-        is_timed = isinstance(skill, BaseDeterministicTimedSkill)
+        is_timed = isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill))
         n_total_steps = max(1, round(skill.duration / dt)) if is_timed else None
 
         base_step = n_near.skill_step
@@ -1346,7 +1347,7 @@ class RRTSkills(BasePlanner):
         active_indices = self._get_active_subspace_indices(skill_task)
         q_subspace = q_full[active_indices]
 
-        if isinstance(skill, BaseDeterministicTimedSkill):
+        if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
             n_steps = max(1, round(skill.duration / skill.dt))
             t_norm = min(node.skill_step / n_steps, 1.0)
             skill_done = skill.done(t_norm, q_subspace, self.env)

@@ -121,17 +121,43 @@ class BaseDeterministicTimedSkill(ABC):
 
 # abstract class for stochastic timed skills.
 class BaseStochasticTimedSkill(ABC):
-  def __init__(self, joints):
+  def __init__(self, joints, dt=0.01):
     self.joints = joints
+    self.dt = dt
 
   @abstractmethod
-  def step(self, q, t, env):
+  def step(self, t, q, env):
     raise NotImplementedError
 
   @abstractmethod
-  def done(self, q, t, env):
+  def done(self, t, q, env):
     pass
 
+  def rollout(self, q_init, task, all_joints, env, t0):
+    """
+    Rollout stochastic timed skill for fixed duration
+    """
+    env.C.selectJoints(task.skill.joints) 
+    n_steps = max(1, round(self.duration / self.dt))
+    q = q_init.copy()
+    trajectory = [q]
+    times = [t0]
+
+    for i in range(n_steps):
+        t_norm = (i + 1) / n_steps
+        q = self.step(t_norm, q, env)
+        times.append(times[-1] + self.dt)
+        trajectory.append(q)
+        
+        if self.done(t_norm, q, env):
+            break
+    
+    env.C.selectJoints(all_joints) 
+    return SkillRolloutResult(
+        trajectory=np.array(trajectory),
+        times=np.array(times),
+        is_deterministic=False # Flagged correctly!
+    )
 class EEPositionGoalReaching(DeterministicBaseSkill):
   def __init__(self, joints, goal, ee_name, dt=0.1, ik_gain=1.0):
     super().__init__(joints, dt=dt)
@@ -701,7 +727,7 @@ class StochasticBinPick(StochasticBaseSkill):
   def done(self, q, env):
     raise NotImplementedError
 
-class DummyStochasticSkill(BaseDeterministicTimedSkill):
+class DummyStochasticSkill(BaseStochasticTimedSkill):
   def __init__(self, joints, goal_state, dt=0.01, noise_bound=0.2, is_deterministic=False):
     super().__init__(joints, dt=dt)
     self.goal_state = np.array(goal_state)
