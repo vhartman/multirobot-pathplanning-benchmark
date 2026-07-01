@@ -271,7 +271,7 @@ class BaseModeLogic(ABC):
         pass
 
     @abstractmethod
-    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
+    def get_next_modes(self, q: Configuration, mode: Mode, completed_task_ids: Optional[List[int]] = None) -> List[Mode]:
         pass
 
     @abstractmethod
@@ -447,7 +447,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
         return False
 
-    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
+    def get_next_modes(self, q: Configuration, mode: Mode, completed_task_ids: Optional[List[int]] = None) -> List[Mode]:
         # needs to be changed to get next modes
         valid_next_combinations = self.get_valid_next_task_combinations(mode)
 
@@ -469,9 +469,13 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(
-                        q_concat, mode=mode, tolerance=1e-8
-                    ):
+                    is_satisfied = False
+                    if completed_task_ids is not None:
+                        is_satisfied = mode.task_ids[i] in completed_task_ids
+                    else:
+                        is_satisfied = task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=1e-8)
+                    
+                    if is_satisfied:
                         possible_next_mode_ids.append(next_mode_ids)
 
         next_modes = []
@@ -585,6 +589,10 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                 if next_mode[i] != m.task_ids[i]:
                     # need to check if the goal conditions for this task are fulfilled in the current state
                     task = self.tasks[m.task_ids[i]]
+                    # Skill tasks use `goal` as an initiation pose, their completion is decided
+                    # by skill.done()/rollout, not geometry, so they are never a geometric transition
+                    if getattr(task, "skill", None) is not None:
+                        continue
                     q_concat = []
                     for r in task.robots:
                         r_idx = self.robots.index(r)
@@ -948,7 +956,7 @@ class FreeMixin(BaseModeLogic):
         return False
 
     @cache
-    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
+    def get_next_modes(self, q: Configuration, mode: Mode, completed_task_ids: Optional[List[int]] = None) -> List[Mode]:
         # needs to be changed to get next modes
         # print(q.state(), mode)
         valid_next_combinations = self.get_valid_next_task_combinations(mode)
@@ -973,9 +981,13 @@ class FreeMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(
-                        q_concat, mode=mode, tolerance=1e-8
-                    ):
+                    is_satisfied = False
+                    if completed_task_ids is not None:
+                        is_satisfied = mode.task_ids[i] in completed_task_ids
+                    else:
+                        is_satisfied = task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=1e-8)
+                    
+                    if is_satisfied:
                         possible_next_mode_ids.append(next_mode_ids)
 
         next_modes = []
@@ -1021,6 +1033,10 @@ class FreeMixin(BaseModeLogic):
                 if next_mode[i] != m.task_ids[i]:
                     # need to check if the goal conditions for this task are fulfilled in the current state
                     task = self.tasks[m.task_ids[i]]
+                    # Skill tasks use `goal` as an initiation pose, their completion is decided
+                    # by skill.done()/rollout, not geometry, so they are never a geometric transition
+                    if getattr(task, "skill", None) is not None:
+                        continue
                     q_concat = []
                     for r in task.robots:
                         r_idx = self.robots.index(r)
@@ -1175,6 +1191,11 @@ class SequenceMixin(BaseModeLogic):
 
         task = self.get_active_task(m, None)
 
+        # Skill tasks use `goal` as an initiation pose, their completion is decided by
+        # skill.done()/rollout, not geometry, so they are never a geometric transition
+        if getattr(task, "skill", None) is not None:
+            return False
+
         q_concat = []
         for r in task.robots:
             r_idx = self.robots.index(r)
@@ -1209,7 +1230,7 @@ class SequenceMixin(BaseModeLogic):
 
         return [next_task_ids]
 
-    def get_next_modes(self, q: Optional[Configuration], mode: Mode) -> List[Mode]:
+    def get_next_modes(self, q: Optional[Configuration], mode: Mode, completed_task_ids: Optional[List[int]] = None) -> List[Mode]:
         next_task_ids = self.get_valid_next_task_combinations(mode)[0]
 
         next_mode = Mode(task_list=next_task_ids, entry_configuration=q)
@@ -1373,7 +1394,7 @@ class DependencyGraphMixin(BaseModeLogic):
             if robot in involved_robots:
                 return name
 
-    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
+    def get_next_modes(self, q: Configuration, mode: Mode, completed_task_ids: Optional[List[int]] = None) -> List[Mode]:
         next_mode_ids = self.get_valid_next_task_combinations(mode)
 
         # all of this is duplicated with the method below
@@ -1392,9 +1413,13 @@ class DependencyGraphMixin(BaseModeLogic):
                     q_concat = np.concatenate(q_concat)
 
                     # Skill completion is detected via the geometric goal check, no need to check skill.done()
-                    if task.goal.satisfies_constraints(
-                        q_concat, mode=mode, tolerance=1e-8
-                    ):
+                    is_satisfied = False
+                    if completed_task_ids is not None:
+                        is_satisfied = mode.task_ids[i] in completed_task_ids
+                    else:
+                        is_satisfied = task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=1e-8)
+                    
+                    if is_satisfied:
                         tmp = Mode(task_list=next_mode.copy(), entry_configuration=q)
                         tmp.prev_mode = mode
 
@@ -1425,6 +1450,10 @@ class DependencyGraphMixin(BaseModeLogic):
                 if next_mode[i] != m.task_ids[i]:
                     # need to check if the goal conditions for this task are fulfilled in the current state
                     task = self.tasks[m.task_ids[i]]
+                    # Skill tasks use `goal` as an initiation pose, their completion is decided
+                    # by skill.done()/rollout, not geometry, so they are never a geometric transition
+                    if getattr(task, "skill", None) is not None:
+                        continue
                     q_concat = []
                     for r in task.robots:
                         r_idx = self.robots.index(r)
@@ -1691,7 +1720,7 @@ class BaseProblem(ABC):
         pass
 
     @abstractmethod
-    def get_next_modes(self, q: Configuration, mode: Mode) -> List[Mode]:
+    def get_next_modes(self, q: Configuration, mode: Mode, completed_task_ids: Optional[List[int]] = None) -> List[Mode]:
         """
         Get the modes that can be reached from the current mode and configuration.
         Assumes that the current configuration fulfills is_transition(..)
