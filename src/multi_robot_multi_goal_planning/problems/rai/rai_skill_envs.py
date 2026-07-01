@@ -368,7 +368,8 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
             Task(
                 "pick",
                 ["a1"],
-                SingleGoal(home_pose),
+                # For skills, goal = skill initiation config (the pre_pick pose), completion is via skill.done()
+                SingleGoal(pre_pick),
                 frames=["a1_ur_gripper_center", "obj1"],
                 type="pick",
                 skill = EEPoseGoalReaching(self.robot_joints["a1"], pick_pose, "a1_ur_gripper_center") #"a1_ur_ee_marker")
@@ -381,7 +382,8 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
             Task(
                 "place",
                 ["a1"],
-                SingleGoal(home_pose),
+                # For skills, goal = skill initiation config (the pre_place pose), completion is via skill.done()
+                SingleGoal(pre_place),
                 skill = EEPoseGoalReaching(self.robot_joints["a1"], place_pose, "obj1"),
                 type="place",
                 frames=["table", "obj1"]
@@ -462,7 +464,8 @@ class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
                 Task(
                     f"pick_{i}",
                     ["a1"],
-                    SingleGoal(home_pose),
+                    # For skills, goal = skill initiation config (the pre_pick pose), completion is via skill.done()
+                    pre_pick_goal,
                     frames=["a1_ur_ee_marker", f"obj{i+1}"],
                     type="pick",
                     skill = EEPoseGoalReaching(self.robot_joints["a1"], pick_pose, "a1_ur_ee_marker")
@@ -470,12 +473,13 @@ class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
                 Task(
                     f"pre_place_{i}",
                     ["a1"],
-                    SingleGoal(pre_place + np.random.rand(6) * 0.1),
+                    pre_place_goal,
                 ),
                 Task(
                     f"place_{i}",
                     ["a1"],
-                    SingleGoal(home_pose),
+                    # For skills, goal = skill initiation config (the pre_place pose), completion is via skill.done()
+                    pre_place_goal,
                     # skill = EEPoseGoalReaching(place_pose, f"obj{i+1}"),
                     skill = ModelBasedInsertion(self.robot_joints["a1"], place_pose, f"obj{i+1}"),
                     type="place",
