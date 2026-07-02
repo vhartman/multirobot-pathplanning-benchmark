@@ -728,10 +728,10 @@ class StochasticBinPick(StochasticBaseSkill):
     raise NotImplementedError
 
 class DummyStochasticSkill(BaseStochasticTimedSkill):
-  def __init__(self, joints, goal_state, dt=0.01, noise_bound=0.2, is_deterministic=False):
+  def __init__(self, joints, goal_state, dt=0.01, noise_bound=0.2, is_deterministic=False, duration=1.0):
     super().__init__(joints, dt=dt)
     self.goal_state = np.array(goal_state)
-    self.duration = 1.0
+    self.duration = duration
     self.noise_bound = noise_bound
     self.is_deterministic = is_deterministic
 
