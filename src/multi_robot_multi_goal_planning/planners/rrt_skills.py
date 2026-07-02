@@ -1301,6 +1301,7 @@ class RRTSkills(BasePlanner):
         skill_task = self._get_active_skill_task(mode)
 
         # Step 1: Identigy exactly which tasks have completed (who triggered the transition)
+        # We loop through every robot's current task to figure out exactly what finished at this timestep
         for i, task_id in enumerate(mode.task_ids):
             task = self.env.tasks[task_id]
             q_concat = np.concatenate([n_new.state.q.robot_state(self.env.robots.index(r)) for r in task.robots])
@@ -1316,6 +1317,7 @@ class RRTSkills(BasePlanner):
 
         # Step 2: Request the valid next modes from the environment
         try:
+            # Pass completed_task_ids since skills lack geometric goal
             next_modes = self.env.get_next_modes(n_new.state.q, mode, completed_task_ids=completed_task_ids)
         except ValueError:
             return created_seeds
@@ -1340,24 +1342,29 @@ class RRTSkills(BasePlanner):
 
             seed_state = State(n_new.state.q, next_mode)
             seed_node = Node(seed_state, parent=n_new)
+
+            # Costs inherited as they are, across the mode boundary
             seed_node.cost = n_new.cost
             seed_node.cost_to_parent = 0.0
 
-            # Pass skill state if skill continues
+            # Pass skill state if skill continues (mid-skill swtich)
             current_active_task = self._get_active_skill_task(mode)
             next_active_task = self._get_active_skill_task(next_mode)
+
             if (current_active_task is not None and
                 next_active_task is not None and
                 current_active_task == next_active_task):
 
-                # The active skill is continuing in the next mode
+                # The active skill is continuing in the next mode!
+                # Copy the skill's timing/progress state to resume from there 
                 seed_node.is_skill_waypoint = True
                 seed_node.skill_step = n_new.skill_step
 
             self.tree.subtrees[next_mode].add_node(seed_node)
             n_new.children.append(seed_node)
             created_seeds.append(seed_node)
-
+            
+            # RRT* optimization
             if self._should_rewire() and not seed_node.is_skill_waypoint and self._get_active_skill_task(next_mode) is None:
                 self._rewire(seed_node, next_mode)
 
