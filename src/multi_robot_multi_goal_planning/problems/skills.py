@@ -736,14 +736,15 @@ class DummyStochasticSkill(BaseStochasticTimedSkill):
     self.is_deterministic = is_deterministic
 
   def step(self, t, q, env):
-    time_left = 1.0 - t + self.dt
+    dt_norm = self.dt / self.duration
+    time_left = 1.0 - t + dt_norm
     if time_left <= 1e-5:
       return self.goal_state.copy()
       
     step_direction = (self.goal_state - q) / time_left * self.dt
     
     if not self.is_deterministic:
-        noise_std = self.noise_bound * np.sqrt(self.dt)
+        noise_std = self.noise_bound * np.sqrt(dt_norm)
         noise = np.random.normal(0, noise_std, size=len(q))
     else:
         noise = 0.0
