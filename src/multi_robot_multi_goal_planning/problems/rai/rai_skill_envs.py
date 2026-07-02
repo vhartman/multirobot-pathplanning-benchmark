@@ -93,7 +93,7 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
             Task(
                 "screw",
                 [self.robots[0]],
-                SingleGoal(post_screw_pose),
+                initiation_goal=SingleGoal(pre_screw_pose),
                 frames=["table", "obj1"],
                 type="place",
                 skill = JogJoint(joints=self.robot_joints[self.robots[0]], speed=np.pi/2., idx=5, duration=2.) # just moving the final joint for a fixed time
@@ -174,7 +174,7 @@ class rai_skill_hallway(SequenceMixin, rai_env):
             ),
             Task("a1_tunnel_passage",
                 ["a1"],
-                SingleGoal(np.array([-1.5, 0.])),
+                initiation_goal=SingleGoal(np.array([-1.5, 0.])),
                 skill = passage_skill
             ),
             Task(
@@ -251,7 +251,7 @@ class rai_single_agent_drawing(SequenceMixin, rai_env):
             Task(
                 "draw",
                 ["a1"],
-                SingleGoal(poses[-1]),
+                initiation_goal=SingleGoal(poses[0]),
                 skill = EndEffectorPositionFollowing(self.robot_joints["a1"], "a1_stick_ee", pts)
             ),
             Task(
@@ -309,7 +309,7 @@ class rai_single_agent_lego(SequenceMixin, rai_env):
             Task(
                 "place",
                 ["a1"],
-                SingleGoal(np.array([0.5, 0.5, 0])),
+                initiation_goal=SingleGoal(lego_placement_path[0]),
                 skill = EndEffectorPositionFollowing(lego_placement_path),
                 type="place",
                 frames=["table", "obj1"]
@@ -369,7 +369,7 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
                 "pick",
                 ["a1"],
                 # For skills, goal = skill initiation config (the pre_pick pose), completion is via skill.done()
-                SingleGoal(pre_pick),
+                initiation_goal=SingleGoal(pre_pick),
                 frames=["a1_ur_gripper_center", "obj1"],
                 type="pick",
                 skill = EEPoseGoalReaching(self.robot_joints["a1"], pick_pose, "a1_ur_gripper_center") #"a1_ur_ee_marker")
@@ -383,7 +383,7 @@ class rai_single_agent_pick_and_place(SequenceMixin, rai_env):
                 "place",
                 ["a1"],
                 # For skills, goal = skill initiation config (the pre_place pose), completion is via skill.done()
-                SingleGoal(pre_place),
+                initiation_goal=SingleGoal(pre_place),
                 skill = EEPoseGoalReaching(self.robot_joints["a1"], place_pose, "obj1"),
                 type="place",
                 frames=["table", "obj1"]
@@ -465,7 +465,7 @@ class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
                     f"pick_{i}",
                     ["a1"],
                     # For skills, goal = skill initiation config (the pre_pick pose), completion is via skill.done()
-                    pre_pick_goal,
+                    initiation_goal=pre_pick_goal,
                     frames=["a1_ur_ee_marker", f"obj{i+1}"],
                     type="pick",
                     skill = EEPoseGoalReaching(self.robot_joints["a1"], pick_pose, "a1_ur_ee_marker")
@@ -479,7 +479,7 @@ class rai_single_agent_scripted_insert(SequenceMixin, rai_env):
                     f"place_{i}",
                     ["a1"],
                     # For skills, goal = skill initiation config (the pre_place pose), completion is via skill.done()
-                    pre_place_goal,
+                    initiation_goal=pre_place_goal,
                     # skill = EEPoseGoalReaching(place_pose, f"obj{i+1}"),
                     skill = ModelBasedInsertion(self.robot_joints["a1"], place_pose, f"obj{i+1}"),
                     type="place",
@@ -558,7 +558,7 @@ class rai_multi_agent_scripted_insert_base(rai_env):
                 Task(
                     f"pick_{i}",
                     [robot],
-                    SingleGoal(pre_pick),
+                    initiation_goal=SingleGoal(pre_pick),
                     frames=[f"{robot}_ur_ee_marker", f"obj{i+1}"],
                     type="pick",
                     skill = EEPoseGoalReaching(self.robot_joints[robot], pick_pose, f"{robot}_ur_ee_marker")
@@ -571,7 +571,7 @@ class rai_multi_agent_scripted_insert_base(rai_env):
                 Task(
                     f"place_{i}",
                     [robot],
-                    SingleGoal(pre_place),
+                    initiation_goal=SingleGoal(pre_place),
                     # skill = EEPoseGoalReaching(place_pose, f"obj{i+1}"),
                     skill = ModelBasedInsertion(self.robot_joints[robot], place_pose, f"obj{i+1}"),
                     type="place",
@@ -697,13 +697,13 @@ class rai_multi_agent_stacking(SequenceMixin, rai_env):
                     obj_pose = self.C.getFrame(b).getPose()
 
                     grasp_pose = np.concatenate([obj_pose[:3], robot_ee_pose[3:]])
-                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=[ee_name, b], 
+                    self.tasks.append(Task(task_name, [r], initiation_goal=SingleGoal(k), type=t, frames=[ee_name, b], 
                         skill=EEPoseGoalReaching(self.robot_joints[r], grasp_pose, ee_name)))
                 else:
                     self.tasks.append(Task("pre_" + task_name, [r], SingleGoal(k)))
 
                     place_pose = self.C.getFrame(g).getPose()
-                    self.tasks.append(Task(task_name, [r], SingleGoal(k), t, frames=["table", b],
+                    self.tasks.append(Task(task_name, [r], initiation_goal=SingleGoal(k), type=t, frames=["table", b],
                         skill=EEPoseGoalReaching(self.robot_joints[r], place_pose, b)))
 
                 cnt += 1
@@ -880,7 +880,7 @@ class rai_dual_arm_transport(SequenceMixin, rai_env):
             Task(
                 "move",
                 ["a1", "a2"],
-                SingleGoal(self.pick_pose),
+                initiation_goal=SingleGoal(self.pick_pose),
                 skill = DualRobotGrasping(self.robot_joints["a1"] + self.robot_joints["a2"], ee_names, [a1_transformation, a2_transformation], poses),
                 type="place",
                 frames=["table", "obj1"]
@@ -954,7 +954,7 @@ class rai_single_agent_bin_picking(SequenceMixin, rai_env):
                 Task(
                     f"pick_{i}",
                     ["a1"],
-                    SingleGoal(pre_pick),
+                    initiation_goal=SingleGoal(pre_pick),
                     frames=["a1_ur_gripper_center", f"obj{i}"],
                     type="pick",
                     skill = EEPoseGoalReaching(self.robot_joints["a1"], grasp_pose, "a1_ur_gripper_center")
@@ -967,8 +967,8 @@ class rai_single_agent_bin_picking(SequenceMixin, rai_env):
                 Task(
                     f"place_{i}",
                     ["a1"],
-                    SingleGoal(place_pose),
-                    skill = EEPoseGoalReaching(self.robot_joints["a1"], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
+                    initiation_goal=SingleGoal(place_pose),
+                    skill = EEPoseGoalReaching(self.robot_joints["a1"], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}", scale_stepsize=True, max_step=0.1),
                     type="place",
                     frames=["table", f"obj{i}"]
                 )
@@ -1072,7 +1072,7 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
                 Task(
                     f"pick_{i}",
                     ["a1"],
-                    SingleGoal(pre_pick),
+                    initiation_goal=SingleGoal(pre_pick),
                     frames=["a1_ur_" + ee_name, f"obj{i}"],
                     type="pick",
                     skill = EEPoseGoalReaching(self.robot_joints["a1"], grasp_pose, "a1_ur_" + ee_name)
@@ -1085,7 +1085,7 @@ class rai_single_agent_bin_packing(SequenceMixin, rai_env):
                 Task(
                     f"place_{i}",
                     ["a1"],
-                    SingleGoal(pre_place),
+                    initiation_goal=SingleGoal(pre_place),
                     skill = ModelBasedInsertion(self.robot_joints["a1"], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
                     # skill = EEPoseGoalReaching(self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
                     type="place",
@@ -1347,7 +1347,7 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
                 Task(
                     f"pick_{i}",
                     [robot],
-                    SingleGoal(pre_pick),
+                    initiation_goal=SingleGoal(pre_pick),
                     frames=[robot + "_ur_" + ee_name, f"obj{i}"],
                     type="pick",
                     skill = EEPoseGoalReaching(self.robot_joints[robot], grasp_pose, robot + "_ur_" + ee_name)
@@ -1360,7 +1360,7 @@ class rai_multi_agent_bin_packing(SequenceMixin, rai_env):
                 Task(
                     f"place_{i}",
                     [robot],
-                    SingleGoal(pre_place),
+                    initiation_goal=SingleGoal(pre_place),
                     # skill = EEPoseGoalReaching(self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
                     skill = ModelBasedInsertion(self.robot_joints[robot], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
                     type="place",
@@ -1436,17 +1436,17 @@ class rai_multi_agent_bin_picking_base(rai_env):
             if i%2 == 1:
                 pre_pick = a1_pre_pick
                 if i-1 in left_objs:
-                    place_pose = a1_pre_place_type_left
+                    pre_place = a1_pre_place_type_left
                 else:
-                    place_pose = a1_pre_place_type_right
+                    pre_place = a1_pre_place_type_right
                 robot = "a1"
                 pose = pose_a1
             else:
                 pre_pick = a2_pre_pick
                 if i-1 in left_objs:
-                    place_pose = a2_pre_place_type_left
+                    pre_place = a2_pre_place_type_left
                 else:
-                    place_pose = a2_pre_place_type_right
+                    pre_place = a2_pre_place_type_right
                 robot = "a2"
                 pose = pose_a2
 
@@ -1464,7 +1464,7 @@ class rai_multi_agent_bin_picking_base(rai_env):
                 Task(
                     f"pick_{i}",
                     [robot],
-                    SingleGoal(pre_pick),
+                    initiation_goal=SingleGoal(pre_pick),
                     frames=[f"{robot}_ur_gripper_center", f"obj{i}"],
                     type="pick",
                     skill = EEPoseGoalReaching(self.robot_joints[robot], grasp_pose, f"{robot}_ur_gripper_center")
@@ -1472,12 +1472,12 @@ class rai_multi_agent_bin_picking_base(rai_env):
                 Task(
                     f"pre_place_{i}",
                     [robot],
-                    SingleGoal(place_pose),
+                    SingleGoal(pre_place),
                 ),
                 Task(
                     f"place_{i}",
                     [robot],
-                    SingleGoal(place_pose),
+                    initiation_goal=SingleGoal(pre_place),
                     skill = EEPoseGoalReaching(self.robot_joints[robot], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
                     type="place",
                     frames=["table", f"obj{i}"]
@@ -1616,7 +1616,7 @@ class rai_bimanual_sorting(SequenceMixin, rai_env):
                 Task(
                     robot_name + "_pick",
                     [robot_name],
-                    SingleGoal(pre_pick),
+                    initiation_goal=SingleGoal(pre_pick),
                     frames=[robot_name + "_ur_gripper_center", obj_name],
                     type="pick",
                     skill = EEPoseGoalReaching(self.robot_joints[robot_name], pick_position, robot_name + "_ur_gripper_center")
@@ -1629,7 +1629,7 @@ class rai_bimanual_sorting(SequenceMixin, rai_env):
                 Task(
                     robot_name + "_place",
                     [robot_name],
-                    SingleGoal(pre_place),
+                    initiation_goal=SingleGoal(pre_place),
                     skill = EEPoseGoalReaching(self.robot_joints[robot_name], place_position, obj_name),
                     type="place",
                     frames=["table", obj_name]
@@ -1703,7 +1703,7 @@ class rai_skill_handover(SequenceMixin, rai_env):
             Task(
                 "handover",
                 ["a1", "a2"],
-                SingleGoal(keyframes[2]),
+                initiation_goal=SingleGoal(keyframes[1]),
                 type="handover",
                 frames=["a2_ur_vacuum", "obj1"],
                 skill = RelativePoseReaching(self.robot_joints["a1"] + self.robot_joints["a2"], "a1_ur_vacuum", "a2_ur_vacuum", offset)
@@ -1813,7 +1813,7 @@ class rai_stochastic_switch(SequenceMixin, rai_env):
             Task(
                 "a1_skill_switch",
                 ["a1"],
-                SingleGoal(r1_goal),
+                initiation_goal=SingleGoal(r1_goal),
                 skill=dummy_skill
             ),
             Task(
@@ -1858,7 +1858,7 @@ class rai_stochastic_switch_pick_place_base(rai_env):
             Task(
                 "a1_move",
                 ["a1"],
-                SingleGoal(keyframes[2][self.robot_idx["a1"]]),
+                initiation_goal=SingleGoal(keyframes[2][self.robot_idx["a1"]]),
                 skill=DummyStochasticSkill(
                     joints=self.robot_joints["a1"],
                     goal_state=keyframes[2][self.robot_idx["a1"]],
