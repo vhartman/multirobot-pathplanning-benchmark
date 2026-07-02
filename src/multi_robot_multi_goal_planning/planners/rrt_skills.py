@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
-    State
+    State, 
+    Task
 )
 from multi_robot_multi_goal_planning.problems.core.configuration import (
     Configuration,
@@ -76,6 +77,8 @@ class RRTSkillsConfig:
     
     skill_expansion_strategy: str = "kinodynamic"       # "single_step" | "kinodynamic"
     kinodynamic_steps: int = 5                          # Only for kinodynamic strategy 
+    # skill_frontier_bias: float = 0.5                    # Prob. of expanding the deepest skill node (frontier) instead of NN
+    # p_inactive_goal: float = 0.75                       # In skill modes, prob. of goal-directed (transition) sampling so inactive robots head to their valid-transition goals concurrently
     inactive_steering_mode: str = "concurrent"          # "freeze" | "concurrent"
     inactive_max_vel: float = 2.0                       # TODO define value, units,...
     inactive_transition_source: str = "uniform_random"  # "uniform_random" | "random_tree"
@@ -766,6 +769,11 @@ class RRTSkills(BasePlanner):
 
             # Sample the goal for the robots finishing their task
             active_task = self.env.get_active_task(mode, next_task_ids)
+            
+            # We cannot geometrically sample the end state of a skill or a task without a goal
+            if getattr(active_task, "skill", None) is not None or active_task.goal is None:
+                continue
+
             constrained_robots = active_task.robots
             goal = active_task.goal.sample(mode)
 
@@ -1277,28 +1285,50 @@ class RRTSkills(BasePlanner):
 
     def _check_transitions(self, n_new: Node) -> List[Node]:
         """
-        Checks if n_new triggers a mode switch (mode-boundary node) and seeds all valid successor
-        modes at the same configuration
+        Generates the successor mode nodes (seeds) when a transition is detected. While "_is_mode_transition()"
+        just checks if something finished, this function identifies exactly which tasks finished. It then asks
+        the environment for the valid next modes and creates the starting nodes (seeds) for those modes
         """
         created_seeds: List[Node] = []
 
-        # Check if n_new is a transition
+        # Broad check, if anything finished
         if not self._is_mode_transition(n_new):
             return created_seeds
 
         mode = n_new.state.mode
         self._dbg_is_trans_true += 1
+        completed_task_ids = []
+        skill_task = self._get_active_skill_task(mode)
 
-        # Get valid next modes
-        next_modes = self.env.get_next_modes(n_new.state.q, mode)
+        # Step 1: Identigy exactly which tasks have completed (who triggered the transition)
+        for i, task_id in enumerate(mode.task_ids):
+            task = self.env.tasks[task_id]
+            q_concat = np.concatenate([n_new.state.q.robot_state(self.env.robots.index(r)) for r in task.robots])
+            
+            # Evaluate completion based on the task type (skill vs. geometric)
+            if task == skill_task:
+                # Skills don't have geometric goals, we rely on skill.done()
+                if self._is_skill_done(n_new, task):
+                    completed_task_ids.append(task_id)
+            # Geometric tasks have goals (check if goal reached)
+            elif task.goal is not None and task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=1e-8):
+                completed_task_ids.append(task_id)
+
+        # Step 2: Request the valid next modes from the environment
+        try:
+            next_modes = self.env.get_next_modes(n_new.state.q, mode, completed_task_ids=completed_task_ids)
+        except ValueError:
+            return created_seeds
+        
+        # Filter to allowed modes
         valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
-
         if not valid_next_modes:
             self._dbg_get_next_empty += 1
             return created_seeds
 
+        # Step 3: Create the seed nodes for the newly reached modes
         for next_mode in valid_next_modes:
-            # TODO really need to check if n_new in next_mode collision free, or always the case?
+            # Check if configuration is actually collision-free in new mode's context
             if not self.env.is_collision_free(n_new.state.q, next_mode):
                 self._dbg_seed_coll_fail += 1
                 continue
@@ -1313,6 +1343,17 @@ class RRTSkills(BasePlanner):
             seed_node.cost = n_new.cost
             seed_node.cost_to_parent = 0.0
 
+            # Pass skill state if skill continues
+            current_active_task = self._get_active_skill_task(mode)
+            next_active_task = self._get_active_skill_task(next_mode)
+            if (current_active_task is not None and
+                next_active_task is not None and
+                current_active_task == next_active_task):
+
+                # The active skill is continuing in the next mode
+                seed_node.is_skill_waypoint = True
+                seed_node.skill_step = n_new.skill_step
+
             self.tree.subtrees[next_mode].add_node(seed_node)
             n_new.children.append(seed_node)
             created_seeds.append(seed_node)
@@ -1326,35 +1367,37 @@ class RRTSkills(BasePlanner):
 
     def _is_mode_transition(self, node: Node) -> bool:
         """
-        Determines if a node has successfully reached the transition criteria for its current mode, 
-        handling both geometric goals and skill completion
+        Determines if a node has successfully reached the transition criteria for its current mode.
+        It verifies if either the active robot has finished its skill, or if any inactive robot has 
+        reached its geometric goal
         """
         mode = node.state.mode
 
         if self.env.is_terminal_mode(mode):
             return False
-
+        
         skill_task = self._get_active_skill_task(mode)
 
-        # Case 1: non-skill mode (geometric)
-        if skill_task is None:
-            goal_done = self.env.is_transition(node.state.q, mode)
-            return goal_done
+        # 1. Did the active skill finish executing?
+        if skill_task and self._is_skill_done(node, skill_task):
+            return True
+        
+        # 2. Did any inactive robot geometrically reach its goal?
+        return self.env.is_transition(node.state.q, mode)
 
-        # Case 2: skill mode (skill done)
-        skill = skill_task.skill
-        q_full = node.state.q.state()
-        active_indices = self._get_active_subspace_indices(skill_task)
-        q_subspace = q_full[active_indices]
+    def _is_skill_done(self, node: Node, task: Task) -> bool:
+        """
+        Evaluates if an active skill has finished its execution
+        """
+        skill = task.skill
+        q_subspace = node.state.q.state()[self._get_active_subspace_indices(task)]
 
+        # Check if the skill is timed vs. untimed
         if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
             n_steps = max(1, round(skill.duration / skill.dt))
             t_norm = min(node.skill_step / n_steps, 1.0)
-            skill_done = skill.done(t_norm, q_subspace, self.env)
-        else:
-            skill_done = skill.done(q_subspace, self.env)
-
-        return skill_done
+            return skill.done(t_norm, q_subspace, self.env)
+        return skill.done(q_subspace, self.env)
 
     def _non_skill_reached_modes(self) -> List[Mode]:
         """
