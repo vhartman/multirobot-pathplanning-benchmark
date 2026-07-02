@@ -96,7 +96,7 @@ class rai_single_agent_screw(SequenceMixin, rai_env):
                 initiation_goal=SingleGoal(pre_screw_pose),
                 frames=["table", "obj1"],
                 type="place",
-                skill = JogJoint(joints=self.robot_joints[self.robots[0]], speed=np.pi/2., idx=5, duration=2.) # just moving the final joint for a fixed time
+                skill = JogJoint(joints=self.robot_joints[self.robots[0]], speed=np.pi/2., idx=5, duration=2., dt=0.1) # just moving the final joint for a fixed time
             ),
             Task(
                 "terminal",
@@ -957,7 +957,7 @@ class rai_single_agent_bin_picking(SequenceMixin, rai_env):
                     initiation_goal=SingleGoal(pre_pick),
                     frames=["a1_ur_gripper_center", f"obj{i}"],
                     type="pick",
-                    skill = EEPoseGoalReaching(self.robot_joints["a1"], grasp_pose, "a1_ur_gripper_center")
+                    skill = EEPoseGoalReaching(self.robot_joints["a1"], grasp_pose, "a1_ur_gripper_center", scale_stepsize=True, max_step=0.1)
                 ),
                 Task(
                     f"pre_place_{i}",
@@ -1467,7 +1467,7 @@ class rai_multi_agent_bin_picking_base(rai_env):
                     initiation_goal=SingleGoal(pre_pick),
                     frames=[f"{robot}_ur_gripper_center", f"obj{i}"],
                     type="pick",
-                    skill = EEPoseGoalReaching(self.robot_joints[robot], grasp_pose, f"{robot}_ur_gripper_center")
+                    skill = EEPoseGoalReaching(self.robot_joints[robot], grasp_pose, f"{robot}_ur_gripper_center", scale_stepsize=True, max_step=0.1)
                 ),
                 Task(
                     f"pre_place_{i}",
@@ -1478,7 +1478,7 @@ class rai_multi_agent_bin_picking_base(rai_env):
                     f"place_{i}",
                     [robot],
                     initiation_goal=SingleGoal(pre_place),
-                    skill = EEPoseGoalReaching(self.robot_joints[robot], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}"),
+                    skill = EEPoseGoalReaching(self.robot_joints[robot], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}", scale_stepsize=True, max_step=0.1),
                     type="place",
                     frames=["table", f"obj{i}"]
                 )

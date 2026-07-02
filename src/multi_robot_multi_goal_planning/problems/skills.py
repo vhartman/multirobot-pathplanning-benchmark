@@ -191,14 +191,15 @@ class EEPositionGoalReaching(DeterministicBaseSkill):
 
 # simple pid controller
 class EEPoseGoalReaching(DeterministicBaseSkill):
-  def __init__(self, joints, goal, ee_name, dt=0.1, ik_gain=1.0):
+  def __init__(self, joints, goal, ee_name, dt=0.1, ik_gain=1.0, scale_stepsize=False, max_step=0.5):
     super().__init__(joints, dt=dt)
     
     self.goal_pose = goal
     self.ee_name = ee_name
     self.ik_gain = ik_gain
 
-    self.scale_stepsize = False
+    self.scale_stepsize = scale_stepsize
+    self.max_step = max_step
 
   def step(self, q, env):
     # get jacobian
@@ -216,10 +217,9 @@ class EEPoseGoalReaching(DeterministicBaseSkill):
     q_dot = np.linalg.pinv(jac) @ err
 
     if self.scale_stepsize:
-      max_step = 0.5
       current_speed = np.linalg.norm(q_dot)
-      if current_speed > max_step:
-          q_dot = (q_dot / current_speed) * max_step
+      if current_speed > self.max_step:
+          q_dot = (q_dot / current_speed) * self.max_step
 
     # integrate to get next pos
     q_new = q - self.ik_gain * q_dot
