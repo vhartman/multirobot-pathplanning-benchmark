@@ -310,29 +310,19 @@ class CompositePRM(BasePlanner):
 
         return new_samples, num_attempts
 
-    def _sample_uniform_transition_pins(self, mode, reached_terminal_mode):
+    def _sample_uniform_transition_pins(self, mode, active_task):
         """
         Sample a single composite configuration that satisfies a mode transition constraint.
         Robots responsible for the active task are placed at a goal configuration, while
         other robots are placed randomly. 
 
         These nodes enable switching between modes. 
-        
-        Example: Mode A: task_ids=[0,1,2] -> Mode B: task_ids=[3,1,2]
-                 Robot 0 completed task 0
-            For this transition to be geometrically valid, robot 0 must be at a configuration
-            that satisfies task 0's goal! 
-        """
-        # Step 1: Choose which transition to attempt
-        if reached_terminal_mode:
-            # If path to goal already exists, looks at cached sequence leading to goal (exploits good known transitions)
-            next_ids = self.init_next_ids[mode]
-        else:
-            # Planner still is exploring, get from oravle any lofically valid task that could be completed next 
-            next_ids = self.mode_validation.get_valid_next_ids(mode)
 
-        # Step 2: Identify the active task (being completed) and its constraints
-        active_task = self.env.get_active_task(mode, next_ids) # By comparing elementwise which task ID changed -> finished task
+        NOTE (changes): This function nowreceives 'active_task' directly from the caller rather than 
+        internally calling 'get_valid_next_ids()'. It explicitly guarantees that the geometric task 
+        we sample here is the exact same task that the main loop pre-validated in Step 2A/2B 
+        (verifying it is not a skill task)
+        """
         constrained_robot = active_task.robots # Need to satisfy goal constraint for transition to happen
         goal = active_task.goal.sample(mode)
 
@@ -350,10 +340,11 @@ class CompositePRM(BasePlanner):
                 robot_task_id = mode.task_ids[i]
                 if robot_task_id is not None:
                     robot_task = self.env.tasks[robot_task_id]
-                    # Robot has upcoming skill: sample from task goal
+                    # Robot has upcoming skill: sample from task initiation goal
                     # (= skill initiation config, e.g. pre_pick pose)
                     if getattr(robot_task, 'skill', None) is not None:
-                        pinned[robot] = robot_task.goal.sample(mode)
+                        if robot_task.initiation_goal is not None:
+                            pinned[robot] = robot_task.initiation_goal.sample(mode)
         return pinned
     
     # SKILL ROLLOUT
@@ -456,7 +447,7 @@ class CompositePRM(BasePlanner):
         # 5. Compute valid next modes (active robots final position affects mode transition)
         composite_q_final = self._compose_config(q_entry, skill_traj[-1], active_task)
         q_final = self.env.start_pos.from_flat(composite_q_final)
-        valid_next_modes = self._compute_skill_next_modes(mode, q_final, entry_node)
+        valid_next_modes = self._compute_skill_next_modes(mode, q_final, entry_node, active_task)
         if valid_next_modes is None:
             return False, None
 
@@ -795,14 +786,24 @@ class CompositePRM(BasePlanner):
             full_offset += dim
         return full_q
 
-    def _compute_skill_next_modes(self, mode, q_final, entry_node):
+    def _compute_skill_next_modes(self, mode, q_final, entry_node, active_task):
         """
-        Compute valid next modes after skill completion
+        Compute valid next modes after skill completion.
+
+        NOTE: Since skill tasks now have 'goal=None' (because they do not have a static geometric finish 
+        line), the environment's standard geometric constraint check inside 'get_next_modes()' will 
+        automatically ignore them. However, as at this point the skill is done, we pass the 'active_task_id' 
+        into 'completed_task_ids', which tells the environment to bypass the geometric checks and instantly 
+        transition the mode graph
         """
         if self.env.is_terminal_mode(mode):
             return []
 
-        next_modes = self.env.get_next_modes(q_final, mode)
+        # The skill rollout finished
+        active_task_id = self.env.tasks.index(active_task)
+        next_modes = self.env.get_next_modes(
+            q_final, mode, completed_task_ids=[active_task_id]
+        )
         valid_next_modes = self.mode_validation.get_valid_modes(mode, list(next_modes))
 
         if not valid_next_modes:
@@ -991,7 +992,7 @@ class CompositePRM(BasePlanner):
             # Generates config q with active robots constrained to goal positions & other robots free
             # Uses mode information (unlike _sample_valid_uniform_batch), because transition nodes need to satisfy specific goal/task constraints
             pinned = self._sample_uniform_transition_pins(
-                mode, reached_terminal_mode
+                mode, active_task
             )
             q = self.collision_free_sampler.sample(mode, pinned)
             if q is None:

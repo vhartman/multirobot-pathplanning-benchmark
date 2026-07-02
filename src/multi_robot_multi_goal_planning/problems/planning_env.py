@@ -87,17 +87,22 @@ class Task:
         self,
         name,
         robots: List[str],
-        goal: Goal,
+        goal: Optional[Goal] = None,
         type=None,
         frames=None,
         side_effect=None,
         side_effect_data=None,
         constraints=[],
-        skill=None
+        skill=None,
+        initiation_goal: Optional[Goal] = None
     ):
         self.robots = robots
         self.goal = goal
+        self.initiation_goal = initiation_goal
         self.name = name
+
+        if skill is not None:
+            assert initiation_goal is not None, f"Skill task {name} must define an initiation_goal"
 
         assert isinstance(name, str)
 
@@ -471,8 +476,10 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
                     is_satisfied = False
                     if completed_task_ids is not None:
+                        # Skill completion: accept transition because skill is done
                         is_satisfied = mode.task_ids[i] in completed_task_ids
-                    else:
+                    elif task.goal is not None:
+                        # Geometric task: accept if geometric constraints are satisfied
                         is_satisfied = task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=1e-8)
                     
                     if is_satisfied:
@@ -525,6 +532,8 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
                 for rnd_next_task_combination in possible_task_combinations:
                     active_task = self.get_active_task(m, rnd_next_task_combination)
+                    if active_task.goal is None:
+                        continue
                     q_goal = active_task.goal.sample(m)
 
                     q = []
@@ -589,9 +598,8 @@ class UnorderedButAssignedMixin(BaseModeLogic):
                 if next_mode[i] != m.task_ids[i]:
                     # need to check if the goal conditions for this task are fulfilled in the current state
                     task = self.tasks[m.task_ids[i]]
-                    # Skill tasks use `goal` as an initiation pose, their completion is decided
-                    # by skill.done()/rollout, not geometry, so they are never a geometric transition
-                    if getattr(task, "skill", None) is not None:
+                    # Tasks without geometric completion goals (like skills) are never a geometric transition
+                    if task.goal is None:
                         continue
                     q_concat = []
                     for r in task.robots:
@@ -600,7 +608,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(
+                    if task.goal is not None and task.goal.satisfies_constraints(
                         q_concat, mode=m, tolerance=1e-8
                     ):
                         return True
@@ -688,6 +696,8 @@ class FreeMixin(BaseModeLogic):
 
                 for rnd_next_task_combination in possible_task_combinations:
                     active_task = self.get_active_task(m, rnd_next_task_combination)
+                    if active_task.goal is None:
+                        continue
                     q_goal = active_task.goal.sample(m)
 
                     q = []
@@ -983,8 +993,10 @@ class FreeMixin(BaseModeLogic):
 
                     is_satisfied = False
                     if completed_task_ids is not None:
+                        # Skill completion: accept transition because skill is done
                         is_satisfied = mode.task_ids[i] in completed_task_ids
-                    else:
+                    elif task.goal is not None:
+                        # Geometric task: accept if geometric constraints are satisfied
                         is_satisfied = task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=1e-8)
                     
                     if is_satisfied:
@@ -1033,9 +1045,8 @@ class FreeMixin(BaseModeLogic):
                 if next_mode[i] != m.task_ids[i]:
                     # need to check if the goal conditions for this task are fulfilled in the current state
                     task = self.tasks[m.task_ids[i]]
-                    # Skill tasks use `goal` as an initiation pose, their completion is decided
-                    # by skill.done()/rollout, not geometry, so they are never a geometric transition
-                    if getattr(task, "skill", None) is not None:
+                    # Tasks without geometric completion goals (like skills) are never a geometric transition
+                    if task.goal is None:
                         continue
                     q_concat = []
                     for r in task.robots:
@@ -1044,7 +1055,7 @@ class FreeMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(
+                    if task.goal is not None and task.goal.satisfies_constraints(
                         q_concat, mode=m, tolerance=1e-8
                     ):
                         return True
@@ -1191,9 +1202,8 @@ class SequenceMixin(BaseModeLogic):
 
         task = self.get_active_task(m, None)
 
-        # Skill tasks use `goal` as an initiation pose, their completion is decided by
-        # skill.done()/rollout, not geometry, so they are never a geometric transition
-        if getattr(task, "skill", None) is not None:
+        # Tasks without geometric completion goals (like skills) are never a geometric transition
+        if task.goal is None:
             return False
 
         q_concat = []
@@ -1203,7 +1213,7 @@ class SequenceMixin(BaseModeLogic):
 
         q_concat = np.concatenate(q_concat)
 
-        if task.goal.satisfies_constraints(q_concat, mode=m, tolerance=1e-8):
+        if task.goal is not None and task.goal.satisfies_constraints(q_concat, mode=m, tolerance=1e-8):
             return True
 
         return False
@@ -1412,11 +1422,12 @@ class DependencyGraphMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    # Skill completion is detected via the geometric goal check, no need to check skill.done()
                     is_satisfied = False
                     if completed_task_ids is not None:
+                        # Skill completion: accept transition because skill is done
                         is_satisfied = mode.task_ids[i] in completed_task_ids
-                    else:
+                    elif task.goal is not None:
+                        # Geometric task: accept if geometric constraints are satisfied
                         is_satisfied = task.goal.satisfies_constraints(q_concat, mode=mode, tolerance=1e-8)
                     
                     if is_satisfied:
@@ -1450,9 +1461,8 @@ class DependencyGraphMixin(BaseModeLogic):
                 if next_mode[i] != m.task_ids[i]:
                     # need to check if the goal conditions for this task are fulfilled in the current state
                     task = self.tasks[m.task_ids[i]]
-                    # Skill tasks use `goal` as an initiation pose, their completion is decided
-                    # by skill.done()/rollout, not geometry, so they are never a geometric transition
-                    if getattr(task, "skill", None) is not None:
+                    # Tasks without geometric completion goals (like skills) are never a geometric transition
+                    if task.goal is None:
                         continue
                     q_concat = []
                     for r in task.robots:
@@ -1461,7 +1471,7 @@ class DependencyGraphMixin(BaseModeLogic):
 
                     q_concat = np.concatenate(q_concat)
 
-                    if task.goal.satisfies_constraints(
+                    if task.goal is not None and task.goal.satisfies_constraints(
                         q_concat, mode=m, tolerance=1e-8
                     ):
                         return True
