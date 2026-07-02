@@ -10574,6 +10574,7 @@ def make_stochastic_switch_env(agents_can_rotate=None, view=False):
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
     ).setJointState([1.0, 0.0])
+    # ).setJointState([0.0, 1.0]) # TODO (made inactive robot distance shorter..)
 
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.cylinder, size=[0.06, 0.16]

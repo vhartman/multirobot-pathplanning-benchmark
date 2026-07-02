@@ -1777,6 +1777,101 @@ class rai_polising(SequenceMixin, rai_env):
   pass
 
 
+# TODO unfinished (NEW DETERMINISTIC SKILLS 2D ENVS) to show mid-skill mode switching
+
+@register([("rai.deterministic_switch_seq", {})])
+class rai_deterministic_switch_seq(SequenceMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_stochastic_switch_env()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        dim = 2
+        self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
+
+        r1_state = self.C.getJointState()[self.robot_idx["a1"]]
+        r2_state = self.C.getJointState()[self.robot_idx["a2"]]
+
+        r1_goal = r1_state * 1.0
+        r1_goal[:2] = [1.0, 0.0]
+
+        r2_goal = r2_state * 1.0
+        r2_goal[:2] = [-1.0, 0.001]
+
+        # Active robot 1 uses a very slow deterministic skill
+        dummy_skill = DummyStochasticSkill(
+            joints=self.robot_joints["a1"],
+            goal_state=r1_goal,
+            dt=0.05,
+            noise_bound=0.5,
+            is_deterministic=True,
+            duration=10.0 # Slow rollout
+        )
+
+        self.tasks = [
+            Task("a1_skill_switch", ["a1"], initiation_goal=SingleGoal(r1_goal), skill=dummy_skill),
+            Task("a2_switch", ["a2"], SingleGoal(r2_goal)),
+            Task("terminal", ["a1", "a2"], SingleGoal(np.concatenate([r1_state, r2_state])))
+        ]
+
+        self.sequence = self._make_sequence_from_names(["a1_skill_switch", "a2_switch", "terminal"])
+
+        BaseModeLogic.__init__(self)
+        self.prev_mode = self.start_mode
+
+@register([("rai.dep_deterministic_switch", {})])
+class rai_dep_deterministic_switch(DependencyGraphMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_stochastic_switch_env()
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        dim = 2
+        self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
+
+        r1_state = self.C.getJointState()[self.robot_idx["a1"]]
+        r2_state = self.C.getJointState()[self.robot_idx["a2"]]
+
+        r1_goal = r1_state * 1.0
+        r1_goal[:2] = [1.0, 0.0]
+
+        r2_goal = r2_state * 1.0
+        r2_goal[:2] = [-1.0, 0.001]
+
+        # Active robot 1 uses a very slow deterministic skill
+        dummy_skill = DummyStochasticSkill(
+            joints=self.robot_joints["a1"],
+            goal_state=r1_goal,
+            dt=0.05,
+            noise_bound=0.5,
+            is_deterministic=True,
+            duration=10.0 # Slow rollout
+        )
+
+        self.tasks = [
+            Task("a1_skill_switch", ["a1"], initiation_goal=SingleGoal(r1_goal), skill=dummy_skill),
+            Task("a2_switch", ["a2"], SingleGoal(r2_goal)),
+            Task("terminal", ["a1", "a2"], SingleGoal(np.concatenate([r1_state, r2_state])))
+        ]
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("terminal", "a1_skill_switch")
+        self.graph.add_dependency("terminal", "a2_switch")
+
+        BaseModeLogic.__init__(self)
+        self.prev_mode = self.start_mode
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+
 # TODO unfinished (NEW STOCHASTIC SKILLS 2D ENVS)
 @register([("rai.stochastic_switch", {})])
 class rai_stochastic_switch(SequenceMixin, rai_env):
