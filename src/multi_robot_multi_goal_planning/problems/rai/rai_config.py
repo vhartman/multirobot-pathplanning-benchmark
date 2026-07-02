@@ -4530,6 +4530,11 @@ def make_bimanual_grasping_env(obstacle, rotate=True, view: bool = False):
         target=qHome,
     )
 
+    # NOTE: Adding small sum of squares constraint to lightly pull the joints towards their initial starting
+    # position during grasping phase, so it naturally guides the solver into "elbows out" variant. Otherwise,
+    # "half of the time" the random init will lead to "elbows inward" and this leads to collision  
+    komo.addObjective([1, 2], ry.FS.jointState, [], ry.OT.sos, [1e-2], qHome)
+
     keyframes = solve_komo_problem(komo, 100, C, view, 3, -1.5)
     keyframes = keyframes[:-1, :]
 
