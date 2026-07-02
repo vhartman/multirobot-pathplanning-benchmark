@@ -52,7 +52,11 @@ def convert_to_path(env, path_data):
                 # print(q)
                 # try:
                 # print(prev_config.state(), modes[-1])
-                next_modes = env.get_next_modes(prev_config, modes[-1])
+
+                # Skill completions have no geometric goal (goal=None), reconstruct it from the saved mode change
+                completed = [modes[-1].task_ids[i] for i in range(len(env.robots))
+                             if a["mode"][i] != modes[-1].task_ids[i]]
+                next_modes = env.get_next_modes(prev_config, modes[-1], completed_task_ids=completed)
                 if len(next_modes) == 1:
                     next_mode = next_modes[0]
                 else:

@@ -741,7 +741,7 @@ class DummyStochasticSkill(BaseStochasticTimedSkill):
     if time_left <= 1e-5:
       return self.goal_state.copy()
       
-    step_direction = (self.goal_state - q) / time_left * self.dt
+    step_direction = (self.goal_state - q) / time_left * dt_norm
     
     if not self.is_deterministic:
         noise_std = self.noise_bound * np.sqrt(dt_norm)
