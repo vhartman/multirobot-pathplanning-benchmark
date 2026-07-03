@@ -32,13 +32,21 @@ import heapq
 
 import numpy as np
 
+from multi_robot_multi_goal_planning.problems.skills import (
+    BaseStochasticTimedSkill,
+)
+
+from multi_robot_multi_goal_planning.problems.planning_env import (
+    Mode, BaseProblem
+)
+
 
 # =====================================================================
 # Configuration
 # =====================================================================
 
 @dataclass
-class Config:
+class StochasticConfig:
     """
     Planner parameters
     """
@@ -234,16 +242,12 @@ class StochasticSkillPlanner:
     Used as high-level "wrapper" to setup the pipeline and plan paths/policies 
     """
 
-    def __init__(self):
+    def __init__(self, env: BaseProblem, config: StochasticConfig) -> None:
         """
         Initializes the planner wrapper
         """
-        #
-        # 
-        # 
-        # 
-        #  
-        pass
+        self.env = env
+        self.cfg = config
 
     def setup(self):
         """
@@ -291,6 +295,43 @@ class StochasticSkillPlanner:
         #  
         raise NotImplementedError
     
+    def _get_context(self, mode: Mode) -> None:
+        """
+        Get task and joint indices, active/inactive robot information, start/goal joint states from the environment 
+        """
+        self.mode = mode
+        
+        # Identify skill task
+        skill_task = None
+        for t_id in self.mode.task_ids:
+            task = self.env.tasks[t_id]
+            if task.skill is not None:
+                skill_task = task
+                break
+        if skill_task is None:
+            raise NotImplementedError("No skill active in the start mode")
+        self.skill = skill_task.skill
+
+        # Separate active vs inactive robots
+        active = skill_task.robots[0]
+        inactive = [r for r in self.env.robots if r != active][0]
+        self.active_idx = np.array(self.env.robot_idx[active])
+        self.inactive_idx = np.array(self.env.robot_idx[inactive])
+        self.inactive_name = inactive
+
+        # TODO what if we have single agent env? 
+        if len(self.inactive_idx) < 1:
+            raise NotImplementedError(f"Inactive robot '{inactive}' must have at least 1 DOF")
+        
+        # Extract configurations (start/goal)
+        self.base_q = np.asarray(self.env.get_start_pos().state())
+        self.active_start = self.base_q[self.active_idx].copy()
+        self.inactive_start = self.base_q[self.inactive_idx].copy()
+        self.inactive_goal = ... # TODO
+
+        # Skill steps
+        self.n_steps = ... # TODO
+
     def _compose(self):
         """
         Merges active and inactive configurations into a full robot joint vector.
@@ -306,13 +347,31 @@ class StochasticSkillPlanner:
     def _build_roadmap(self):
         """
         Discretization for inactive robot configurations. Constructs a sampling-based roadmap over the 
-        full inactive C-space
+        full inactive C-space with k-NN
         """
-        # Define box around inactive start and goal config for local sampling (could do informed sampling ith PHS..?)
-        # Sample q uniform
-        # Collision check
-        # Add to self.grid array 
-        # Tree with k-nearest-neighbors? and store in self.neighbors
+        # TODO decide if we want to use KDTree (more efficient for static roadmaps) or numpy array + vectorized distance function like composite prm planner?
+        # TODO bounding box or PHS? BB maybe better as PHS could be restricting "too much" (usually used for informed sampling -> be close around path)
+ 
+        # Define bounding box around inactive start and goal config for local sampling 
+        ...
+
+        # Initialize roadmap with start and goal index
+        ...
+
+        # Sample uniformly to build the nodes
+        ...
+        
+        # Create grid (array) or tree (KDTree)
+        ...
+
+        # Build k-NN edges
+        ...
+
+        # Vectorized distance from node u to all other nodes in grid + find indices of the k smallest distances
+        ...
+
+        # Edge collision check before adding to graph
+        ...
 
         # return nothing (grid and neighbors defined)
         raise NotImplementedError  
@@ -360,14 +419,26 @@ class StochasticSkillPlanner:
         """
         Runs a forward simulation (rollout) of the active robot's skill 
         """
-        # Get active robot start configuration
-        # Init trajectory sequence list with start config
-        # Loop step index from 0 to n_steps-1
-        # - Run, record
-        # - If skill done -> break
-        
-        # return full trajectory array
-        raise NotImplementedError
+        q = self.active_start.copy()
+        traj = [q.copy()]
+
+        is_timed = isinstance(self.skill, BaseStochasticTimedSkill)
+
+        for i in range(self.n_steps):
+            t = (i + 1) / self.n_steps
+            
+            if is_timed:
+                q = np.asarray(self.skill.step(t, q, self.env))
+                done = self.skill.done(t, q, self.env)
+            else:
+                q = np.asarray(self.skill.step(q, self.env))
+                done = self.skill.done(q, self.env)
+            traj.append(q.copy())
+            if done:
+                traj.extend(...) # TODO pad the remainder of the traj s.t. all rollouts have exact same number of time steps?
+                break
+
+        return np.asarray(traj)
 
     def _nearest_bin(self, k: int, q_active: np.ndarray):
         """
