@@ -2032,3 +2032,94 @@ class rai_dep_stochastic_switch_pick_place(DependencyGraphMixin, rai_stochastic_
 
         self.prev_mode = self.start_mode
         self.spec.dependency = DependencyType.UNORDERED
+
+@register([
+    ("rai.skill_mid_switch_chain", {}),
+    ("rai.skill_mid_switch_chain_stochastic", {"stochastic": True}),
+])
+class rai_skill_mid_switch_chain(DependencyGraphMixin, rai_env):
+    def __init__(self, stochastic=False):
+        self.C = rai_config.make_skill_mid_switch_chain_env()
+
+        self.robots = ["a1", "a2", "a3"]
+
+        rai_env.__init__(self)
+
+        dim = 2
+        self.limits = np.array([[-2.] * (len(self.robots) * dim), [2.] * (len(self.robots) * dim)])
+
+        a1_start = np.array(self.C.getJointState()[self.robot_idx["a1"]])
+        a2_start = np.array(self.C.getJointState()[self.robot_idx["a2"]])
+
+        a1_goal = np.array([1.5, 0.0])
+        a2_pre = np.array([0.0, 0.8])
+        a2_goal = np.array([0.0, -1.2])
+        a3_goal = np.array([-1.2, -1.2])
+
+        skill_a1 = DummyStochasticSkill(
+            joints=self.robot_joints["a1"],
+            goal_state=a1_goal,
+            dt=0.1,
+            noise_bound=0.2,
+            is_deterministic=not stochastic,
+            duration=10.0
+        )
+
+        skill_a2 = DummyStochasticSkill(
+            joints=self.robot_joints["a2"],
+            goal_state=a2_goal,
+            dt=0.1,
+            noise_bound=0.2,
+            is_deterministic=not stochastic,
+            duration=5.0
+        )
+
+        self.tasks = [
+            Task(
+                "a1_skill",
+                ["a1"],
+                initiation_goal=SingleGoal(a1_start),
+                skill=skill_a1
+            ),
+            Task(
+                "a2_approach",
+                ["a2"],
+                SingleGoal(a2_pre)
+            ),
+            Task(
+                "a2_skill",
+                ["a2"],
+                initiation_goal=SingleGoal(a2_pre),
+                skill=skill_a2
+            ),
+            Task(
+                "a3_go",
+                ["a3"],
+                SingleGoal(a3_goal)
+            ),
+            Task(
+                "terminal",
+                self.robots,
+                SingleGoal(np.concatenate([a1_goal, a2_goal, a3_goal])),
+            ),
+        ]
+
+        self.graph = DependencyGraph()
+
+        self.graph.add_dependency("a2_skill", "a2_approach")
+
+        self.graph.add_dependency("terminal", "a1_skill")
+        self.graph.add_dependency("terminal", "a2_skill")
+        self.graph.add_dependency("terminal", "a3_go")
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])

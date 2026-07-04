@@ -10673,3 +10673,62 @@ def make_stochastic_switch_pick_place_env(view: bool = False):
         komo.view(True, "IK solution")
 
     return C, keyframes
+
+
+def make_skill_mid_switch_chain_env(view: bool = False):
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    agent_names = ["a1", "a2", "a3"]
+    colors = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    starts = [
+        [-1.5, 0.0], # a1 (skill corridor y=0)
+        [0.0, 1.5], # a2 (skill corridor x=0)
+        [1.5, 1.5], # a3 (geometric dodger)
+    ]
+
+    for i, name in enumerate(agent_names):
+        pre_frame = (
+            C.addFrame(f"pre_{name}_frame")
+            .setParent(table)
+            .setPosition(table.getPosition() + [0, 0, 0.07])
+            .setShape(ry.ST.marker, size=[0.05])
+            .setContact(0)
+            .setJoint(ry.JT.rigid)
+        )
+        C.addFrame(name).setParent(pre_frame).setShape(
+            ry.ST.cylinder, size=[0.06, 0.15]
+        ).setColor(colors[i]).setContact(1).setJoint(
+            ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+        ).setJointState(starts[i])
+
+    goals = {
+        "goal_a1": [1.5, 0.0], # a1 skill end
+        "goal_a2_pre": [0.0, 0.8], # a2 approach / skill initiation
+        "goal_a2": [0.0, -1.2], # a2 skill end
+        "goal_a3": [-1.2, -1.2], # a3 geometric goal
+    }
+    goal_colors = {
+        "goal_a1": [1, 0, 0, 0.3],
+        "goal_a2_pre": [0, 1, 0, 0.15],
+        "goal_a2": [0, 1, 0, 0.3],
+        "goal_a3": [0, 0, 1, 0.3],
+    }
+    for name, pos in goals.items():
+        C.addFrame(name).setParent(table).setShape(
+            ry.ST.cylinder, size=[0.06, 0.16]
+        ).setColor(goal_colors[name]).setContact(0).setRelativePosition(
+            [pos[0], pos[1], 0.07]
+        )
+
+    # Static obstacle on a3's diagonal, >0.5 clearance to both skill corridors
+    C.addFrame("obs1").setParent(table).setPosition(
+        table.getPosition() + [-0.9, 0.9, 0.07]
+    ).setShape(ry.ST.box, size=[0.4, 0.4, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    if view:
+        C.view(True)
+
+    return C
