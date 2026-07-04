@@ -80,7 +80,7 @@ class RRTSkillsConfig:
     # skill_frontier_bias: float = 0.5                    # Prob. of expanding the deepest skill node (frontier) instead of NN
     # p_inactive_goal: float = 0.75                       # In skill modes, prob. of goal-directed (transition) sampling so inactive robots head to their valid-transition goals concurrently
     inactive_steering_mode: str = "concurrent"          # "freeze" | "concurrent"
-    inactive_max_vel: float = 2.0                       # TODO define value, units,...
+    inactive_max_vel: float = 1.0                       # TODO define value, units,...
     inactive_transition_source: str = "uniform_random"  # "uniform_random" | "random_tree"
 
     # -----------------------------------------------------------------
@@ -133,7 +133,7 @@ class Node:
 
         # Flags for skills and transitions
         self.is_skill_waypoint: bool = False
-        self.skill_step: int = 0
+        self.skill_steps: Dict[str, int] = {}
         self.skill_edge: Optional['SkillEdge'] = None # Kinodynamic only
 
 class Subtree:
@@ -460,8 +460,8 @@ class RRTSkills(BasePlanner):
                   self._dbg_min_nn_dist = dist
 
             # 4. Steer (linear or skill based)
-            skill_task = self._get_active_skill_task(mode)
-            new_nodes = self._expand(n_near, q_target, mode, skill_task, is_uniform)
+            skill_tasks = self._get_active_skill_tasks(mode)
+            new_nodes = self._expand(n_near, q_target, mode, skill_tasks, is_uniform)
             
             if not new_nodes:
                 continue
@@ -472,7 +472,7 @@ class RRTSkills(BasePlanner):
                 next_mode_seeds = self._check_transitions(n_new)
 
                 # RRT* rewire
-                if self._should_rewire() and not n_new.is_skill_waypoint and skill_task is None:
+                if self._should_rewire() and not n_new.is_skill_waypoint and not skill_tasks:
                     self._rewire(n_new, mode)
 
                 terminal_node = self._get_terminal_node(n_new, next_mode_seeds)
@@ -744,7 +744,7 @@ class RRTSkills(BasePlanner):
         if (self.config.try_informed_sampling
             and self.informed_sampler is not None
             and self.informed_path is not None
-            and self._get_active_skill_task(mode) is None
+            and not self._get_active_skill_tasks(mode)
             and not self.env.is_terminal_mode(mode)):
             self._dbg_informed_trans_attempt += 1
             q = self.informed_sampler.generate_transitions(
@@ -789,7 +789,7 @@ class RRTSkills(BasePlanner):
                     q[i] = goal[end_idx : end_idx + dim]
                     end_idx += dim
 
-            active_indices = np.array(self._get_active_subspace_indices(active_task), dtype=int)
+            active_indices = np.array(self._get_active_subspace_indices([active_task]), dtype=int)
             source_node = self._select_inactive_source_node(mode, q, active_indices)
             if source_node is not None:
                 constrained_set = set(constrained_robots)
@@ -862,13 +862,13 @@ class RRTSkills(BasePlanner):
     # Tree Expansion & Steering
     # =====================================================================
 
-    def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task, is_uniform: bool = True) -> List[Node]:
+    def _expand(self, n_near: Node, q_target: Configuration, mode: Mode, skill_tasks, is_uniform: bool = True) -> List[Node]:
         """
         Routes the expansion and steering logic based on the mode type (skill vs. non-skill) 
         and the configured expansion strategy (e.g., linear, connect, kinodynamic)
         """
         # Strategy for expanding/steering in NON-skill-modes
-        if skill_task is None:
+        if not skill_tasks:
             if self.config.extension_strategy == "linear":
                 return self._expand_linear(n_near, q_target, mode, is_uniform)
             if self.config.extension_strategy == "connect":
@@ -878,9 +878,9 @@ class RRTSkills(BasePlanner):
         # Strategies for expanding/steering in skill-modes
         strategy = self.config.skill_expansion_strategy
         if strategy == "single_step":
-            return self._expand_single_step(n_near, q_target, mode, skill_task)
+            return self._expand_single_step(n_near, q_target, mode, skill_tasks)
         if strategy == "kinodynamic":
-            return self._expand_kinodynamic(n_near, q_target, mode, skill_task)
+            return self._expand_kinodynamic(n_near, q_target, mode, skill_tasks)
         
         raise ValueError(f"Unknown skill_explansion_strategy: {strategy}")
 
@@ -929,20 +929,34 @@ class RRTSkills(BasePlanner):
 
     def _steer_inactive(self, q_full: np.ndarray, q_target_vec: np.ndarray, active_indices: np.ndarray, dt: float) -> np.ndarray:
         """
-        Concurrent inactive robot steering, bounded by inactive_max_vel * dt
+        Concurrent inactive robot steering, bounded by inactive_max_vel * dt per robot.
+        Maintains a straight-line path in the full C-space by scaling the entire direction
+        vector based on the bottleneck robot
         """
         if self.config.inactive_steering_mode != "concurrent":
             return q_full.copy()
 
         direction = q_target_vec - q_full
         direction[active_indices] = 0.0
-        inactive_dist = np.linalg.norm(direction)
 
-        if inactive_dist <= 1e-8:
+        # Find the maximum velocity required by any single robot
+        max_robot_vel = 0.0
+        end_idx = 0
+        for robot in self.env.robots:
+            dim = self.env.robot_dims[robot]
+            robot_dir = direction[end_idx : end_idx + dim]
+            robot_vel = np.linalg.norm(robot_dir) / dt
+            if robot_vel > max_robot_vel:
+                max_robot_vel = robot_vel
+            end_idx += dim
+
+        if max_robot_vel <= 1e-8:
             return q_full.copy()
-        eta_inactive = min(self.config.inactive_max_vel * dt, inactive_dist)
 
-        return q_full + eta_inactive * (direction / inactive_dist)
+        # Scale the full vector so the fastest robot moves exactly at inactive_max_vel
+        scale = min(1.0, self.config.inactive_max_vel / max_robot_vel)
+        
+        return q_full + scale * direction
 
     def _expand_connect(self, n_near: Node, q_target: Configuration, mode: Mode, is_uniform: bool) -> List[Node]:
         """
@@ -955,7 +969,7 @@ class RRTSkills(BasePlanner):
         2. add_all_nodes=True: every intermediate step enters the tree
         - Required for asymptotic optimality with use_rrt_star=True.
         """
-        q_target_vec = q_target.state()
+        q_target_vec = q_target.state().copy()
         q_curr_vec = n_near.state.q.state().copy()
         q_curr_cfg = n_near.state.q
 
@@ -1039,14 +1053,14 @@ class RRTSkills(BasePlanner):
     # Skill Expansion
     # =====================================================================
 
-    def _get_active_skill_task(self, mode: Mode):
+    def _get_active_skill_tasks(self, mode: Mode):
         """
-        Returns a task with a skill that is currently active in this mode or None
-        # TODO Limitation: if two robots each carry a skill in the same mode..
+        Returns a list of all tasks with a skill that are currently active in this mode
         """
         if self.env.is_terminal_mode(mode):
-            return None
+            return []
 
+        active_tasks = []
         seen = set()
         for task_id in mode.task_ids:
             if task_id in seen:
@@ -1054,156 +1068,180 @@ class RRTSkills(BasePlanner):
             seen.add(task_id)
             task = self.env.tasks[task_id]
             if getattr(task, "skill", None) is not None:
-                return task
-        return None
+                active_tasks.append(task)
+        return active_tasks
 
-    def _get_active_subspace_indices(self, active_task) -> List[int]:
+    def _get_active_subspace_indices(self, active_tasks) -> List[int]:
         """
-        Returns indices for the robots involved in the active task
+        Returns indices for the robots involved in the active tasks
         """
         active_indices = []
         end_idx = 0
+        active_robots = set()
+        for task in active_tasks:
+            active_robots.update(task.robots)
+            
         for robot in self.env.robots:
             dim = self.env.robot_dims[robot]
-            if robot in active_task.robots:
+            if robot in active_robots:
                 active_indices.extend(range(end_idx, end_idx + dim))
             end_idx += dim
         return active_indices
 
-    def _expand_single_step(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
+    def _expand_single_step(self, n_near: Node, q_target: Configuration, mode: Mode, skill_tasks: List) -> List[Node]:
         """
-        Rolls the skill out by one step, with optional concurrent steering for the inactive robots.
+        Rolls out multiple concurrent skills by one step, with optional concurrent steering for the inactive robots.
         Inactive robots motions are bounded by max_vel*dt
         """
-        skill = skill_task.skill
-        dt = skill.dt
+        if not skill_tasks:
+            return []
+        dt = skill_tasks[0].skill.dt # TODO Assume same dt for all skills
 
         q_full = n_near.state.q.state().copy()
-        active_indices = self._get_active_subspace_indices(skill_task)
-        q_subspace = q_full[active_indices]
+        q_target_vec = q_target.state().copy()
 
-        # 1. Skill step for active robots
+
+        active_indices = self._get_active_subspace_indices(skill_tasks)
+        q_base = self._steer_inactive(q_full, q_target_vec, active_indices, dt)
+        
         all_joints = self.env.get_joint_names()
-        self.env.C.selectJoints(skill.joints)
+        
+        for skill_task in skill_tasks:
+            skill = skill_task.skill
+            task_name = skill_task.name
+            task_indices = self._get_active_subspace_indices([skill_task])
+            q_subspace = q_full[task_indices]
 
-        if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
-            n_steps = max(1, round(skill.duration / dt))
-            if n_near.skill_step >= n_steps: # Avoid step past horizon
-                self.env.C.selectJoints(all_joints)
-                return []
-            t_norm = min((n_near.skill_step + 1) / n_steps, 1.0)
-            q_subspace_new = skill.step(t_norm, q_subspace, self.env)
-        else: 
-            q_subspace_new = skill.step(q_subspace, self.env)
+            self.env.C.selectJoints(skill.joints)
+
+            base_step = n_near.skill_steps.get(task_name, 0)
+            if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
+                n_steps = max(1, round(skill.duration / dt))
+                if base_step >= n_steps: # Avoid step past horizon
+                    self.env.C.selectJoints(all_joints)
+                    return []
+                t_norm = min((base_step + 1) / n_steps, 1.0)
+                q_subspace_new = skill.step(t_norm, q_subspace, self.env)
+            else: 
+                q_subspace_new = skill.step(q_subspace, self.env)
+
+            q_base[task_indices] = q_subspace_new
 
         self.env.C.selectJoints(all_joints)
 
-        # 2. Steer inactive robots with bounded step 
-        q_base = self._steer_inactive(q_full, q_target.state(), active_indices, dt)
-
-        # 3. Overwrite the active subspace in the base configuration with the skill result
-        q_base[active_indices] = q_subspace_new
         q_new = self.env.get_start_pos().from_flat(q_base)
         state_new = State(q_new, mode, is_skill_waypoint=True)
      
-        # 4. Validate and add node
         if not self._validate(state_new, n_near, is_skill=True):
             return []
         
-        return [self._create_and_add_node(state_new, n_near, mode, is_skill=True)]
+        n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=True)
+
+        # Update skill steps
+        n_new.skill_steps = dict(n_near.skill_steps)
+        for skill_task in skill_tasks:
+            n_new.skill_steps[skill_task.name] = n_new.skill_steps.get(skill_task.name, 0) + 1
+            
+        return [n_new]
  
-    def _expand_kinodynamic(self, n_near: Node, q_target: Configuration, mode: Mode, skill_task) -> List[Node]:
+    def _expand_kinodynamic(self, n_near: Node, q_target: Configuration, mode: Mode, skill_tasks: List) -> List[Node]:
         """
-        Rolls out skill steps as one kinodynamic edge
+        Rolls out multiple concurrent skills as one kinodynamic edge
         - All intermediate steps are collision checked during construction
         - Only the end node enters the subtree (for NN search)
         - Intermediate waypoints are stored in a SkillEdge on the end node
         """
-        skill = skill_task.skill
-        dt = skill.dt
-        n_kino = self.config.kinodynamic_steps
-        active_indices = self._get_active_subspace_indices(skill_task)
+        if not skill_tasks:
+            return []
+            
+        dt = skill_tasks[0].skill.dt
+        active_indices = self._get_active_subspace_indices(skill_tasks)
 
-        is_timed = isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill))
-        n_total_steps = max(1, round(skill.duration / dt)) if is_timed else None
-
-        base_step = n_near.skill_step
         q_curr = n_near.state.q.state().copy()
-        q_target_vec = q_target.state()
+        q_target_vec = q_target.state().copy()
+        waypoints = [q_curr.copy()]
+        t_norms_list = [0.0]
 
-        waypoints = [q_curr.copy()] # waypoints[0] = parent config
-        if is_timed:
-            remaining_steps = n_total_steps - base_step
-            if remaining_steps <= 0:
-                return []
-            rollout_steps = min(n_kino, remaining_steps)
-            t_norms_list = [base_step / n_total_steps]
-        else: 
-            rollout_steps = n_kino
-            t_norms_list = [0.0]
+        # Precompute static skill information and maximum rollout steps
+        rollout_steps = self.config.kinodynamic_steps
+        skill_infos = []
+        
+        for task in skill_tasks:
+            skill = task.skill
+            base_step = n_near.skill_steps.get(task.name, 0)
+            is_timed = isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill))
+            n_total = max(1, round(skill.duration / dt)) if is_timed else 0
+            
+            if is_timed:
+                if n_total - base_step <= 0: return []
+                rollout_steps = min(rollout_steps, n_total - base_step)
+                
+            skill_infos.append({
+                'skill': skill,
+                'indices': self._get_active_subspace_indices([task]),
+                'base_step': base_step,
+                'is_timed': is_timed,
+                'n_total': n_total
+            })
 
         skill_done = False
-        for i in range(1, rollout_steps + 1):
-            q_subspace = q_curr[active_indices]
+        actual_steps = 0
+        all_joints = self.env.get_joint_names()
 
-            all_joints = self.env.get_joint_names()
-            self.env.C.selectJoints(skill.joints)
+        for i in range(1, rollout_steps + 1):
+            q_next = self._steer_inactive(q_curr, q_target_vec, active_indices, dt)
             
-            # Skill step
-            if is_timed:
-                t_norm = min((base_step + i) / n_total_steps, 1.0)
-                q_subspace_new = skill.step(t_norm, q_subspace, self.env)
-            else:
-                q_subspace_new = skill.step(q_subspace, self.env)
+            # Advance all active skills
+            for info in skill_infos:
+                skill = info['skill']
+                q_sub = q_curr[info['indices']]
+                self.env.C.selectJoints(skill.joints)
+                
+                if info['is_timed']:
+                    t_norm = min((info['base_step'] + i) / info['n_total'], 1.0)
+                    q_sub_new = skill.step(t_norm, q_sub, self.env)
+                    if skill.done(t_norm, q_sub_new, self.env): skill_done = True
+                else:
+                    q_sub_new = skill.step(q_sub, self.env)
+                    if skill.done(q_sub_new, self.env): skill_done = True
+                
+                q_next[info['indices']] = q_sub_new
+            
             self.env.C.selectJoints(all_joints)
 
-            # Inactive steering (same bounded logic as single_step)
-            q_next = self._steer_inactive(q_curr, q_target_vec, active_indices, dt)
-            q_next[active_indices] = q_subspace_new
-
-            # Collision check this step
+            # Collision check this tiny step
             q_next_cfg = self.env.get_start_pos().from_flat(q_next)
             q_curr_cfg = self.env.get_start_pos().from_flat(q_curr)
+            
             prev_node = Node(State(q_curr_cfg, mode, is_skill_waypoint=True))
-            prev_node.skill_step = base_step + i - 1
+            prev_node.skill_steps = n_near.skill_steps # Shallow ref for debug prints
             state_next = State(q_next_cfg, mode, is_skill_waypoint=True)
 
             if not self._validate(state_next, prev_node, is_skill=True):
                 break
 
+            actual_steps = i
             waypoints.append(q_next.copy())
-            t_norms_list.append(t_norm if is_timed else float(i))
-
-            # Check skill completion
-            if is_timed:
-                skill_done = skill.done(t_norm, q_subspace_new, self.env)
-            else:
-                skill_done = skill.done(q_subspace_new, self.env)
-
+            t_norms_list.append(float(i))
             q_curr = q_next
 
             if skill_done:
                 break
 
         if len(waypoints) < 2:
-            return [] # No valid steps at all
+            return [] 
 
-        # Create end node (only this enters the subtree)
-        actual_steps = len(waypoints) - 1
-        q_end_cfg = self.env.get_start_pos().from_flat(waypoints[-1])
-        state_new = State(q_end_cfg, mode, is_skill_waypoint=True)
-
-        skill_edge = SkillEdge(
-            waypoints=np.array(waypoints),
-            t_norms=np.array(t_norms_list)
-        )
-
-        # Calculate exact cost before node creation (sum of segments)
+        # Create end node for the subtree
+        state_new = State(self.env.get_start_pos().from_flat(waypoints[-1]), mode, is_skill_waypoint=True)
         edge_cost = self._skill_edge_cost(np.asarray(waypoints), mode)
-
         n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=True, edge_cost_override=edge_cost)
-        n_new.skill_step = base_step + actual_steps
-        n_new.skill_edge = skill_edge
+        
+        # Bookkeeping
+        n_new.skill_steps = dict(n_near.skill_steps)
+        for task in skill_tasks:
+            n_new.skill_steps[task.name] = n_new.skill_steps.get(task.name, 0) + actual_steps
+            
+        n_new.skill_edge = SkillEdge(np.array(waypoints), np.array(t_norms_list))
 
         return [n_new]
 
@@ -1238,14 +1276,14 @@ class RRTSkills(BasePlanner):
         if not is_state_free:
             self._dbg_validate_fail += 1
             if is_skill and self._dbg_validate_fail % 100 == 0:  # Print every 100th fail to avoid spam
-                print(f"[DEBUG SKILL] State collision at t_norm = {n_near.skill_step/100:.2f} (approx)")
+                print(f"[DEBUG SKILL] State collision around skill_steps = {n_near.skill_steps}")
             return False
 
         # 4. Edge check
         if not self.env.is_edge_collision_free(state_new.q, n_near.state.q, state_new.mode):
             self._dbg_validate_fail += 1
             if is_skill and self._dbg_validate_fail % 100 == 0:
-                print(f"[DEBUG SKILL] Edge collision from step {n_near.skill_step} to {n_near.skill_step + 1}")
+                print(f"[DEBUG SKILL] Edge collision around skill_steps = {n_near.skill_steps}")
             return False
 
         return True
@@ -1276,7 +1314,6 @@ class RRTSkills(BasePlanner):
         if is_skill:
             n_new.is_skill_waypoint = True
             n_new.state.is_skill_waypoint = True # TODO (for shortcutter.. change and only keep on node..?)
-            n_new.skill_step = n_near.skill_step + 1
 
         # Add
         self.tree.subtrees[mode].add_node(n_new)
@@ -1298,7 +1335,7 @@ class RRTSkills(BasePlanner):
         mode = n_new.state.mode
         self._dbg_is_trans_true += 1
         completed_task_ids = []
-        skill_task = self._get_active_skill_task(mode)
+        skill_tasks = self._get_active_skill_tasks(mode)
 
         # Step 1: Identigy exactly which tasks have completed (who triggered the transition)
         # We loop through every robot's current task to figure out exactly what finished at this timestep
@@ -1307,7 +1344,7 @@ class RRTSkills(BasePlanner):
             q_concat = np.concatenate([n_new.state.q.robot_state(self.env.robots.index(r)) for r in task.robots])
             
             # Evaluate completion based on the task type (skill vs. geometric)
-            if task == skill_task:
+            if task in skill_tasks:
                 # Skills don't have geometric goals, we rely on skill.done()
                 if self._is_skill_done(n_new, task):
                     completed_task_ids.append(task_id)
@@ -1347,25 +1384,27 @@ class RRTSkills(BasePlanner):
             seed_node.cost = n_new.cost
             seed_node.cost_to_parent = 0.0
 
-            # Pass skill state if skill continues (mid-skill swtich)
-            current_active_task = self._get_active_skill_task(mode)
-            next_active_task = self._get_active_skill_task(next_mode)
-
-            if (current_active_task is not None and
-                next_active_task is not None and
-                current_active_task == next_active_task):
-
-                # The active skill is continuing in the next mode!
-                # Copy the skill's timing/progress state to resume from there 
+            # Pass skill states if skills continue (mid-skill switch)
+            current_active_tasks = self._get_active_skill_tasks(mode)
+            next_active_tasks = self._get_active_skill_tasks(next_mode)
+            
+            next_task_names = set(t.name for t in next_active_tasks)
+            
+            continuing_skills = False
+            for task in current_active_tasks:
+                if task.name in next_task_names:
+                    seed_node.skill_steps[task.name] = n_new.skill_steps.get(task.name, 0)
+                    continuing_skills = True
+            
+            if continuing_skills:
                 seed_node.is_skill_waypoint = True
-                seed_node.skill_step = n_new.skill_step
 
             self.tree.subtrees[next_mode].add_node(seed_node)
             n_new.children.append(seed_node)
             created_seeds.append(seed_node)
             
             # RRT* optimization
-            if self._should_rewire() and not seed_node.is_skill_waypoint and self._get_active_skill_task(next_mode) is None:
+            if self._should_rewire() and not seed_node.is_skill_waypoint and not next_active_tasks:
                 self._rewire(seed_node, next_mode)
 
             self._dbg_seed_added += 1
@@ -1375,7 +1414,7 @@ class RRTSkills(BasePlanner):
     def _is_mode_transition(self, node: Node) -> bool:
         """
         Determines if a node has successfully reached the transition criteria for its current mode.
-        It verifies if either the active robot has finished its skill, or if any inactive robot has 
+        It verifies if ANY active robot has finished its skill, or if any inactive robot has 
         reached its geometric goal
         """
         mode = node.state.mode
@@ -1383,11 +1422,12 @@ class RRTSkills(BasePlanner):
         if self.env.is_terminal_mode(mode):
             return False
         
-        skill_task = self._get_active_skill_task(mode)
+        skill_tasks = self._get_active_skill_tasks(mode)
 
-        # 1. Did the active skill finish executing?
-        if skill_task and self._is_skill_done(node, skill_task):
-            return True
+        # 1. Did ANY active skill finish executing?
+        for skill_task in skill_tasks:
+            if self._is_skill_done(node, skill_task):
+                return True
         
         # 2. Did any inactive robot geometrically reach its goal?
         return self.env.is_transition(node.state.q, mode)
@@ -1397,12 +1437,13 @@ class RRTSkills(BasePlanner):
         Evaluates if an active skill has finished its execution
         """
         skill = task.skill
-        q_subspace = node.state.q.state()[self._get_active_subspace_indices(task)]
+        q_subspace = node.state.q.state()[self._get_active_subspace_indices([task])]
 
         # Check if the skill is timed vs. untimed
         if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
             n_steps = max(1, round(skill.duration / skill.dt))
-            t_norm = min(node.skill_step / n_steps, 1.0)
+            base_step = node.skill_steps.get(task.name, 0)
+            t_norm = min(base_step / n_steps, 1.0)
             return skill.done(t_norm, q_subspace, self.env)
         return skill.done(q_subspace, self.env)
 
@@ -1410,7 +1451,7 @@ class RRTSkills(BasePlanner):
         """
         Returns a list of all currently reached modes that do not involve an active skill task
         """
-        return [m for m in self.reached_modes if self._get_active_skill_task(m) is None]
+        return [m for m in self.reached_modes if not self._get_active_skill_tasks(m)]
 
     def _get_terminal_node(self, n_new: Node, next_mode_seeds: List[Node]) -> Optional[Node]:
         """
@@ -1514,7 +1555,7 @@ class RRTSkills(BasePlanner):
             is_skill = getattr(state, "is_skill_waypoint", False)
             new_mode = state.mode
             mode_changed = (new_mode != parent_node.state.mode)
-            is_skill_mode = (self._get_active_skill_task(new_mode) is not None)
+            is_skill_mode = bool(self._get_active_skill_tasks(new_mode))
 
             # 1) Parent selection (only find_best_parent if not mode change, not skill mode, parent already in subtree)
             subtree = self.tree.subtrees[new_mode]
@@ -1535,7 +1576,6 @@ class RRTSkills(BasePlanner):
             # Preserve skill flags if this state was marked as one
             if getattr(state, "is_skill_waypoint", False):
                 new_node.is_skill_waypoint = True
-                new_node.skill_step = parent_node.skill_step + 1
    
             best_parent.children.append(new_node)
             subtree.add_node(new_node)
