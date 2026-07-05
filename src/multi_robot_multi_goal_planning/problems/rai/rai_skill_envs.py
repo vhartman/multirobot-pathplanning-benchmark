@@ -1812,7 +1812,7 @@ class rai_deterministic_switch_seq(SequenceMixin, rai_env):
         )
 
         self.tasks = [
-            Task("a1_skill_switch", ["a1"], initiation_goal=SingleGoal(r1_goal), skill=dummy_skill),
+            Task("a1_skill_switch", ["a1"], initiation_goal=SingleGoal(r1_state), skill=dummy_skill),
             Task("a2_switch", ["a2"], SingleGoal(r2_goal)),
             Task("terminal", ["a1", "a2"], SingleGoal(np.concatenate([r1_state, r2_state])))
         ]
@@ -1854,7 +1854,7 @@ class rai_dep_deterministic_switch(DependencyGraphMixin, rai_env):
         )
 
         self.tasks = [
-            Task("a1_skill_switch", ["a1"], initiation_goal=SingleGoal(r1_goal), skill=dummy_skill),
+            Task("a1_skill_switch", ["a1"], initiation_goal=SingleGoal(r1_state), skill=dummy_skill),
             Task("a2_switch", ["a2"], SingleGoal(r2_goal)),
             Task("terminal", ["a1", "a2"], SingleGoal(np.concatenate([r1_state, r2_state])))
         ]
@@ -1908,7 +1908,7 @@ class rai_stochastic_switch(SequenceMixin, rai_env):
             Task(
                 "a1_skill_switch",
                 ["a1"],
-                initiation_goal=SingleGoal(r1_goal),
+                initiation_goal=SingleGoal(r1_state),
                 skill=dummy_skill
             ),
             Task(
@@ -2054,7 +2054,7 @@ class rai_skill_mid_switch_chain(DependencyGraphMixin, rai_env):
         a1_goal = np.array([1.5, 0.0])
         a2_pre = np.array([0.0, 0.8])
         a2_goal = np.array([0.0, -1.2])
-        a3_goal = np.array([-1.2, -1.2])
+        a3_goal = np.array([1.0, 0.0])
 
         skill_a1 = DummyStochasticSkill(
             joints=self.robot_joints["a1"],
@@ -2071,7 +2071,7 @@ class rai_skill_mid_switch_chain(DependencyGraphMixin, rai_env):
             dt=0.1,
             noise_bound=0.2,
             is_deterministic=not stochastic,
-            duration=5.0
+            duration=3.0
         )
 
         self.tasks = [
