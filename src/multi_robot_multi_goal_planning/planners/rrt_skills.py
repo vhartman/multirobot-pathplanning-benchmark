@@ -77,8 +77,6 @@ class RRTSkillsConfig:
     
     skill_expansion_strategy: str = "kinodynamic"       # "single_step" | "kinodynamic"
     kinodynamic_steps: int = 5                          # Only for kinodynamic strategy 
-    # skill_frontier_bias: float = 0.5                    # Prob. of expanding the deepest skill node (frontier) instead of NN
-    # p_inactive_goal: float = 0.75                       # In skill modes, prob. of goal-directed (transition) sampling so inactive robots head to their valid-transition goals concurrently
     inactive_steering_mode: str = "concurrent"          # "freeze" | "concurrent"
     inactive_max_vel: float = 1.0                       # TODO define value, units,...
     inactive_transition_source: str = "uniform_random"  # "uniform_random" | "random_tree"
@@ -132,8 +130,8 @@ class Node:
         self.cost_to_parent: float = 0.0
 
         # Flags for skills and transitions
-        self.is_skill_waypoint: bool = False
-        self.skill_steps: Dict[str, int] = {}
+        self.is_skill_waypoint: bool = getattr(state, "is_skill_waypoint", False)
+        self.skill_steps: Dict[str, int] = dict(getattr(state, "skill_steps", {}))
         self.skill_edge: Optional['SkillEdge'] = None # Kinodynamic only
 
 class Subtree:
@@ -892,7 +890,7 @@ class RRTSkills(BasePlanner):
         if state_new is None:
             return []
 
-        if not self._validate(state_new, n_near, is_skill=False, is_uniform=is_uniform):
+        if not self._validate(state_new, n_near.state.q, is_skill=False, is_uniform=is_uniform):
             return []
 
         return [self._create_and_add_node(state_new, n_near, mode, is_skill=False)]
@@ -1130,18 +1128,18 @@ class RRTSkills(BasePlanner):
         self.env.C.selectJoints(all_joints)
 
         q_new = self.env.get_start_pos().from_flat(q_base)
-        state_new = State(q_new, mode, is_skill_waypoint=True)
+        
+        new_skill_steps = dict(n_near.skill_steps)
+        for skill_task in skill_tasks:
+            new_skill_steps[skill_task.name] = new_skill_steps.get(skill_task.name, 0) + 1
+            
+        state_new = State(q_new, mode, is_skill_waypoint=True, skill_steps=new_skill_steps)
      
-        if not self._validate(state_new, n_near, is_skill=True):
+        if not self._validate(state_new, n_near.state.q, is_skill=True):
             return []
         
         n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=True)
 
-        # Update skill steps
-        n_new.skill_steps = dict(n_near.skill_steps)
-        for skill_task in skill_tasks:
-            n_new.skill_steps[skill_task.name] = n_new.skill_steps.get(skill_task.name, 0) + 1
-            
         return [n_new]
  
     def _expand_kinodynamic(self, n_near: Node, q_target: Configuration, mode: Mode, skill_tasks: List) -> List[Node]:
@@ -1213,11 +1211,9 @@ class RRTSkills(BasePlanner):
             q_next_cfg = self.env.get_start_pos().from_flat(q_next)
             q_curr_cfg = self.env.get_start_pos().from_flat(q_curr)
             
-            prev_node = Node(State(q_curr_cfg, mode, is_skill_waypoint=True))
-            prev_node.skill_steps = n_near.skill_steps # Shallow ref for debug prints
             state_next = State(q_next_cfg, mode, is_skill_waypoint=True)
 
-            if not self._validate(state_next, prev_node, is_skill=True):
+            if not self._validate(state_next, q_curr_cfg, is_skill=True):
                 break
 
             actual_steps = i
@@ -1232,15 +1228,12 @@ class RRTSkills(BasePlanner):
             return [] 
 
         # Create end node for the subtree
-        state_new = State(self.env.get_start_pos().from_flat(waypoints[-1]), mode, is_skill_waypoint=True)
+        end_step_dict = dict(n_near.skill_steps)
+        for task in skill_tasks:
+            end_step_dict[task.name] = end_step_dict.get(task.name, 0) + actual_steps
+        state_new = State(self.env.get_start_pos().from_flat(waypoints[-1]), mode, is_skill_waypoint=True, skill_steps=end_step_dict)
         edge_cost = self._skill_edge_cost(np.asarray(waypoints), mode)
         n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=True, edge_cost_override=edge_cost)
-        
-        # Bookkeeping
-        n_new.skill_steps = dict(n_near.skill_steps)
-        for task in skill_tasks:
-            n_new.skill_steps[task.name] = n_new.skill_steps.get(task.name, 0) + actual_steps
-            
         n_new.skill_edge = SkillEdge(np.array(waypoints), np.array(t_norms_list))
 
         return [n_new]
@@ -1260,7 +1253,7 @@ class RRTSkills(BasePlanner):
     # Node Management & Transitions
     # =====================================================================
 
-    def _validate(self, state_new: State, n_near: Node, is_skill: bool, is_uniform: bool = True) -> bool:
+    def _validate(self, state_new: State, q_near: Configuration, is_skill: bool, is_uniform: bool = True) -> bool:
         """
         Performs geometric collision checks for both the node configuration and the edge connecting 
         it to its parent. Also updates the online c_free volume estimate for RRT*
@@ -1275,15 +1268,11 @@ class RRTSkills(BasePlanner):
         # 3. Failure based on config check 
         if not is_state_free:
             self._dbg_validate_fail += 1
-            if is_skill and self._dbg_validate_fail % 100 == 0:  # Print every 100th fail to avoid spam
-                print(f"[DEBUG SKILL] State collision around skill_steps = {n_near.skill_steps}")
             return False
 
         # 4. Edge check
-        if not self.env.is_edge_collision_free(state_new.q, n_near.state.q, state_new.mode):
+        if not self.env.is_edge_collision_free(state_new.q, q_near, state_new.mode):
             self._dbg_validate_fail += 1
-            if is_skill and self._dbg_validate_fail % 100 == 0:
-                print(f"[DEBUG SKILL] Edge collision around skill_steps = {n_near.skill_steps}")
             return False
 
         return True
@@ -1512,9 +1501,12 @@ class RRTSkills(BasePlanner):
         path = []
         for n in nodes:
             if n.skill_edge is not None:
-                for wp in n.skill_edge.waypoints[1:]:
+                for idx, wp in enumerate(n.skill_edge.waypoints[1:]):
                     q_wp = self.env.get_start_pos().from_flat(wp)
-                    path.append(State(q_wp, n.state.mode, is_skill_waypoint=True))
+                    wp_skill_steps = dict(n.parent.skill_steps) if n.parent else {}
+                    for skill_task_name in n.skill_steps:
+                        wp_skill_steps[skill_task_name] = wp_skill_steps.get(skill_task_name, 0) + idx + 1
+                    path.append(State(q_wp, n.state.mode, is_skill_waypoint=True, skill_steps=wp_skill_steps))
             else:
                 path.append(n.state)
         return path
