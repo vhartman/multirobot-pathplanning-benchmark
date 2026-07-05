@@ -19,7 +19,7 @@ class IterationTerminationCondition(PlannerTerminationCondition):
     def should_terminate(
         self, current_iterations: int | None = None, current_time: float | None = None
     ) -> bool:
-        assert current_iterations
+        assert current_iterations is not None
         
         if self.max_iterations < current_iterations:
             return True

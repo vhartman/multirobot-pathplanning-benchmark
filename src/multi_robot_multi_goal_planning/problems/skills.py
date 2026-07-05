@@ -156,7 +156,7 @@ class BaseStochasticTimedSkill(ABC):
     return SkillRolloutResult(
         trajectory=np.array(trajectory),
         times=np.array(times),
-        is_deterministic=False # Flagged correctly!
+        is_deterministic=False
     )
 class EEPositionGoalReaching(DeterministicBaseSkill):
   def __init__(self, joints, goal, ee_name, dt=0.1, ik_gain=1.0):
@@ -744,11 +744,11 @@ class DummyStochasticSkill(BaseStochasticTimedSkill):
     step_direction = (self.goal_state - q) / time_left * dt_norm
     
     if not self.is_deterministic:
-        noise_std = self.noise_bound * np.sqrt(dt_norm)
-        noise = np.random.normal(0, noise_std, size=len(q))
+      noise_std = self.noise_bound * np.sqrt(dt_norm)
+      noise = np.random.normal(0, noise_std, size=len(q))
     else:
-        noise = 0.0
-        
+      noise = 0.0
+      
     q_new = q + step_direction + noise
     
     if t >= 1.0:
