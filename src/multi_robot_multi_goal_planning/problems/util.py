@@ -81,9 +81,10 @@ def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> 
 
         
         is_skill = getattr(path[i], 'is_skill_waypoint', False)
+        skill_steps = dict(getattr(path[i], 'skill_steps', {}))
         
         if is_skill:
-            new_path.append(State(q0.from_flat(q0.state()), path[i].mode, is_skill_waypoint=True))
+            new_path.append(State(q0.from_flat(q0.state()), path[i].mode, is_skill_waypoint=True, skill_steps=skill_steps))
         else:
             # Standard free space interpolation
             dist = config_dist(q0, q1, kind)
@@ -100,8 +101,9 @@ def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> 
 
     # Add the final state (which is not added in the interpolation before)
     final_is_skill = getattr(path[-1], 'is_skill_waypoint', False)
+    final_skill_steps = dict(getattr(path[-1], 'skill_steps', {}))
     final_q = path[-1].q.from_flat(path[-1].q.state())
-    new_path.append(State(final_q, path[-1].mode, final_is_skill))
+    new_path.append(State(final_q, path[-1].mode, final_is_skill, skill_steps=final_skill_steps))
     
     # TODO DBUG (remove)
     counter = sum(1 for s in new_path if getattr(s, 'is_skill_waypoint', False))
