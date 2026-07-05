@@ -10706,7 +10706,7 @@ def make_skill_mid_switch_chain_env(view: bool = False):
         "goal_a1": [1.5, 0.0], # a1 skill end
         "goal_a2_pre": [0.0, 0.8], # a2 approach / skill initiation
         "goal_a2": [0.0, -1.2], # a2 skill end
-        "goal_a3": [-1.2, -1.2], # a3 geometric goal
+        "goal_a3": [1.0, 0.0], # a3 geometric goal
     }
     goal_colors = {
         "goal_a1": [1, 0, 0, 0.3],
