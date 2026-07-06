@@ -31,7 +31,7 @@ from multi_robot_multi_goal_planning.problems.skills import (
 # Config and Data Structures
 # =====================================================================
 @dataclass
-class RRTSkillsConfig:
+class RRTStochasticSkillsConfig:
     """
     Hyperparameters for the multi-modal RRT with skills
     """
@@ -80,6 +80,14 @@ class RRTSkillsConfig:
     inactive_steering_mode: str = "concurrent"          # "freeze" | "concurrent"
     inactive_max_vel: float = 2.0                       # TODO define value, units,...
     inactive_transition_source: str = "uniform_random"  # "uniform_random" | "random_tree"
+
+    # -----------------------------------------------------------------
+    # STOCHASTIC SKILL PARAMETERS (conservative nominal + inflated tube)
+    # -----------------------------------------------------------------
+
+    tube_rollouts: int = 200                            # MC rollouts to estimate the uncertainty tube
+    tube_quantile: float = 0.95                         # Per-step deviation quantile for the tube radius (1.0 = worst case)
+    tube_margin_scale: float = 1.0                      # Scales the tube radii (0.0 disables inflation)
 
     # -----------------------------------------------------------------
     # RRT* OPTIMIZATION PARAMETERS
@@ -236,7 +244,7 @@ CURRENT TODOS
 # =====================================================================
 # Main Planner Class
 # =====================================================================
-class RRTSkills(BasePlanner):
+class RRTStochasticSkills(BasePlanner):
     """
     Core multi-modal RRT* planner supporting deterministic skill integration,
     concurrent inactive robot steering, and optimization strategies. Expansion 
@@ -248,7 +256,7 @@ class RRTSkills(BasePlanner):
     # Initialization
     # =====================================================================
 
-    def __init__(self, env: BaseProblem, config: RRTSkillsConfig):
+    def __init__(self, env: BaseProblem, config: RRTStochasticSkillsConfig):
         self.env = env
         self.config = config
         self.tree = MultiModalTree(env)
@@ -268,6 +276,9 @@ class RRTSkills(BasePlanner):
         self.informed_path: List[State] = None 
         self.improvement_count: int = 0 # For periodic shortcutting
         self._refresh_phase_params()
+
+        # Uncertainty tubes for stochastic skills (task name -> (nominal traj, per-step radii))
+        self._skill_tubes: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
 
     def _refresh_phase_params(self):
         """
@@ -452,7 +463,8 @@ class RRTSkills(BasePlanner):
         info = {
             "costs": costs, 
             "times": times, 
-            "paths": [path] if path else []
+            "paths": [path] if path else [],
+            "skill_tubes": self._skill_tubes
         }
         return path, info
 
@@ -1021,11 +1033,56 @@ class RRTSkills(BasePlanner):
             end_idx += dim
         return active_indices
 
+    def _use_nominal_tube(self):
+        """
+        Determines if a skill should be executed using the robust Tube-RRT strategy
+        """
+        #
+        # 
+        # 
+        # return bool if skill is stochastic & self.config.tube_margin_scale > 0.0
+        raise NotImplementedError
+    
+    def _get_skill_tube(self):
+        """
+        Per-step tube radii for a stochastic skill
+        Evaluates the nominal skill execution starting at q_init and estimates an uncertainty tube 
+        that is inflating (radially) the nominal trajectory based on Monte Carlo rollouts
+        """
+        # Cached in self._skill_tubes?
+        # Run N MC rollouts with noise
+        # Compute nominal_traj (mean of rollouts)
+        # For each step compute deviation (max) from nominal path -> radii=...
+        # Cache in self._skill_tubes
+        # Return nominal_traj and radii
+        raise NotImplementedError
+    
+    def _tube_margins_free(self):
+        """
+        Collision checker, ensuring the inactive robots don't pass through this active robot's 
+        inflated tube. Checks it for one composite skill waypoint
+        """
+        # Get nominal position of the active robot
+        # Inflate it (C.setMargin?)
+        # Collision check -> need a new function to do CC with margins? # TODO
+        # Return collision check result
+        raise NotImplementedError
+
     def _expand_single_step(self, n_near: Node, q_target: Configuration, mode: Mode, skill_tasks: List) -> List[Node]:
         """
         Rolls out multiple concurrent skills by one step, with optional concurrent steering for the inactive robots.
         Inactive robots motions are bounded by max_vel*dt
         """
+        # TODO (new) for stochastic 
+        # Identify which active skills need robust tubes
+        # Grab their cached tubes
+        # Advance the active robot (big change) 
+        # - Not calling skill.step() -> would add random noise
+        # - Instead get exact coordinates from cached nominal trajectory
+        # - Planner only ever plans the active robot perfectly along that baseline
+        # Validate the inactive robots against the inflated active robot
+        #  
+
         if not skill_tasks:
             return []
         dt = skill_tasks[0].skill.dt # TODO Assume same dt for all skills
@@ -1084,6 +1141,11 @@ class RRTSkills(BasePlanner):
         - Only the end node enters the subtree (for NN search)
         - Intermediate waypoints are stored in a SkillEdge on the end node
         """
+        # TODO (new) for stochastic 
+        # Exact same thing as __expand_single_step but loops i times internally to generate
+        # the SkillEdge
+        #  
+
         if not skill_tasks:
             return []
             
@@ -1446,11 +1508,26 @@ class RRTSkills(BasePlanner):
                 path.append(n.state)
         return path
 
+    def _tube_state_validator(self, state: State) -> bool:
+        """
+        Tube clearance check for shortcutting: inactive robots may be moved by the shortcutter 
+        through skill modes, but must stay outside the stochastic skills uncertainty tubes
+        """
+        # NOTE: changed in shortcutting.py to have skill_steps as State attribute
+        # Figure out which active skills need tube validation in this mode (tube_tasks)
+        # Extract radii and steps from tube_tasks
+        # We can tehn collision check the inactive robots against the inflated rubes by calling tube_margins_free
+        raise NotImplementedError
+
     def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
         """
         Post-processes a path with robot_mode_shortcut
         Skill segments are protected
         """
+        # TODO (stochastic) changes for shortcutting
+        # Add state validator (or callable) to arguments
+        # In shortcutting.py make sure proposed_shortcut has skill_steps + when doing CC for path, 
+        # check that new shortcut states are not in tube (call state_validator)
         shortcut_path, _ = shortcutting.robot_mode_shortcut(
             self.env, path, shortcutting_iters,
             resolution=self.env.collision_resolution,
