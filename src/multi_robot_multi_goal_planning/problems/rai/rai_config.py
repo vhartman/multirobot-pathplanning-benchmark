@@ -10591,7 +10591,6 @@ def make_stochastic_switch_env(agents_can_rotate=None, view=False):
 
     return C
 
-
 def make_stochastic_switch_pick_place_env(view: bool = False):
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
@@ -10626,12 +10625,12 @@ def make_stochastic_switch_pick_place_env(view: bool = False):
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXYPhi, limits=np.array([-2, 2, -2, 2, -3.14, 3.14])
-    ).setJointState([0.0, -1.0, 0.0])
+    ).setJointState([1.0, 1.0, 0.0])
 
     C.addFrame("obj1").setParent(table).setShape(
         ry.ST.box, size=[0.1, 0.1, 0.06, 0.005]
     ).setColor([0.2, 0.8, 0.2, 1]).setContact(1).setRelativePosition(
-        [0.0, 1.0, 0.07]
+        [-1.0, -1.0, 0.07]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("goal1").setParent(table).setShape(
@@ -10644,7 +10643,7 @@ def make_stochastic_switch_pick_place_env(view: bool = False):
 
     C.addFrame("goal_obj1").setParent(table).setShape(
         ry.ST.box, size=[0.1, 0.1, 0.06, 0.005]
-    ).setColor([0.2, 0.8, 0.2, 0.3]).setContact(0).setRelativePosition([0.0, -1.0, 0.07])
+    ).setColor([0.2, 0.8, 0.2, 0.3]).setContact(0).setRelativePosition([1.0, 1.0, 0.07])
 
     if view:
         C.view(True)
@@ -10673,7 +10672,6 @@ def make_stochastic_switch_pick_place_env(view: bool = False):
         komo.view(True, "IK solution")
 
     return C, keyframes
-
 
 def make_dep_skill_mid_switch_env(view: bool = False):
     C = make_table_with_walls(4, 4)
