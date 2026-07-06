@@ -740,12 +740,17 @@ class DummyStochasticSkill(BaseStochasticTimedSkill):
     time_left = 1.0 - t + dt_norm
     if time_left <= 1e-5:
       return self.goal_state.copy()
-      
+    
+    # Ideal deterministic step towards goal 
     step_direction = (self.goal_state - q) / time_left * dt_norm
     
     if not self.is_deterministic:
-      noise_std = self.noise_bound * np.sqrt(dt_norm)
-      noise = np.random.normal(0, noise_std, size=len(q))
+      # Scale noise with environemnt dimension
+      sigma = self.noise_bound / np.sqrt(len(q))
+
+      # Shrinking variance as skill approaches end ("Brownian-bridge variance")
+      noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / time_left
+      noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
     else:
       noise = 0.0
       
