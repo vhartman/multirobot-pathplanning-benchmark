@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import List, Tuple, Union, Any, Optional, Sequence
 from numpy.typing import NDArray
-from numba import jit, float64, int64 # ty: ignore[possibly-unbound-import]
+from numba import jit, float64, int64, types # ty: ignore[possibly-unbound-import]
 
 from abc import ABC, abstractmethod
 
@@ -99,7 +99,10 @@ class ListConfiguration(Configuration):
 
 
 @jit(
-    (float64[:, :], int64[:, :]),
+    # slices is typed readonly because NpConfiguration._array_slice is frozen
+    # (writeable=False) so the slice metadata can be safely shared across from_flat
+    # lineages; a readonly parameter also accepts writable arrays, the reverse doesn't
+    (float64[:, :], types.Array(int64, 2, "C", readonly=True)),
     nopython=True,
     fastmath=True,
     boundscheck=False,
@@ -232,6 +235,7 @@ class NpConfiguration(Configuration):
         "q",
         "_num_agents",
         "_robot_state_optimized",
+        "_slices",
     )  # , "robot_views"
 
     _array_slice: NDArray
@@ -240,9 +244,17 @@ class NpConfiguration(Configuration):
 
     def __init__(self, q: NDArray, _slice: List[Tuple[int, int]] | NDArray):
         self._array_slice = np.array(_slice)
+        # the slice metadata is SHARED across all configs derived via from_flat (it
+        # describes the env's fixed robot layout and never changes), so freeze it:
+        # any accidental in-place write raises immediately instead of silently
+        # corrupting every config in the lineage.
+        self._array_slice.flags.writeable = False
         self.q = q.astype(np.float64)
 
         self._num_agents = len(self._array_slice)
+        # plain-int slice tuples: robot_state (a hot accessor) avoids numpy row-indexing;
+        # a tuple-of-tuples for the same immutability reason as _array_slice above
+        self._slices = tuple((int(a), int(b)) for a, b in self._array_slice)
 
         if self._num_agents == 1:
             self._robot_state_optimized = self._robot_state_single
@@ -272,8 +284,24 @@ class NpConfiguration(Configuration):
         return cls(np.concatenate(q_list), slices)
 
     def from_flat(self, q: NDArray) -> "NpConfiguration":
+        """Build a configuration with this config's (shared, frozen) slice layout around `q`.
+
+        OWNERSHIP: `q` is NOT copied when it is already float64 -- the new configuration
+        aliases it. Callers hand over ownership and must not mutate `q` afterwards
+        (mutate first, then call from_flat; see tests/test_configuration.py).
+        """
         assert q.shape == self.q.shape, "Shape mismatch"
-        return NpConfiguration(q, self._array_slice.copy())
+        # hot path (one per trajectory state): reuse the parent's immutable slices instead of
+        # re-copying / re-building the slice array, and skip the astype copy when already f64.
+        new = NpConfiguration.__new__(NpConfiguration)
+        new.q = q if q.dtype == np.float64 else q.astype(np.float64)
+        new._array_slice = self._array_slice
+        new._slices = self._slices
+        new._num_agents = self._num_agents
+        new._robot_state_optimized = (
+            new._robot_state_single if self._num_agents == 1 else new._robot_state_multi
+        )
+        return new
 
     @classmethod
     def from_numpy(cls, arr: NDArray) -> "NpConfiguration":
@@ -283,7 +311,7 @@ class NpConfiguration(Configuration):
         return self.q
 
     def _robot_state_multi(self, ind: int) -> NDArray:
-        start, end = self._array_slice[ind]
+        start, end = self._slices[ind]
         return self.q[start:end]
 
     def robot_state(self, ind: int) -> NDArray:
