@@ -69,6 +69,18 @@ class KinodynamicPlanningProblem(BaseProblem, ABC):
             traj.append(x_curr)
         return traj
 
+    def steer(
+        self, x0: NDArray, x1: NDArray, max_steps: Optional[int] = None
+    ) -> Optional[List[NDArray]]:
+        """Return a dynamically-feasible trajectory (list of full states, excluding x0,
+        with the last element being the reached state) that connects x0 towards x1, or
+        None if this problem has no steering function.
+
+        A concrete env with a "nice" steering function (analytic connection, feedback
+        controller, ...) overrides this. If it returns None, a kinodynamic planner must
+        fall back to random control propagation (see propagate())."""
+        return None
+
     def is_trajectory_collision_free(
         self, traj: List[NDArray], mode: Mode
     ) -> bool:
