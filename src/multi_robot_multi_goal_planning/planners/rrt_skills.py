@@ -78,7 +78,7 @@ class RRTSkillsConfig:
     skill_expansion_strategy: str = "kinodynamic"       # "single_step" | "kinodynamic"
     kinodynamic_steps: int = 5                          # Only for kinodynamic strategy 
     inactive_steering_mode: str = "concurrent"          # "freeze" | "concurrent"
-    inactive_max_vel: float = 1.0                       # TODO define value, units,...
+    inactive_max_vel: float = 2.0                       # TODO define value, units,...
     inactive_transition_source: str = "uniform_random"  # "uniform_random" | "random_tree"
 
     # -----------------------------------------------------------------
@@ -116,7 +116,6 @@ class SkillEdge:
     """
     waypoints: np.ndarray
     t_norms: np.ndarray
-    # TODO
 
 class Node:
     """
@@ -200,59 +199,6 @@ class MultiModalTree:
         if mode not in self.subtrees:
             self.subtrees[mode] = Subtree(mode, self.robot_dims)
 
-# =====================================================================
-# OLD TODOS
-# =====================================================================
-"""
-OLD TODOS:
-# General 
-# TODO [x] init the multi modal tree
-# TODO [x] vectorized batch_q for fast nearest-neighbor lookups
-# TODO [x] pre-allocate so append(node) -> O(1) instead of O(N)
-# TODO [x] add all relevant hyperparams to RRTSkillsConfig
-
-# # RRT
-# TODO [x] add root to multi modal tree? optional?
-# TODO [x] import batch_config_cost batch_config_dist or access with self.env?
-# TODO [x] check in PRM transition cost=0.0?
-# TODO [x] in _steer use config_cost(), restpecting distance_metric 
-# TODO [x] in _check_transitions always create and insert seed node (even if mode already reached)
-# TODO [x] in _initialize_planner add early return if self.tree.root is not None (not duplicated start mode/node) if plan() called again?
-# TODO [x] global shortcutting
-# TODO [x] add debug prints in the planning loop
-# TODO [x] in _linear_steer fix the dist computation (accidentally used cost function..)
-# TODO [x] in _initialize_planner compare using eta=sqrt(d) and eta=sqrt(d/#robots)
-
-# Improvements
-# TODO [x] mode sampling strategy when doing informed sampling in optimize
-# TODO [x] add informed sampling
-# TODO [x] do rrt-connect in _steer instead of taking single step towards target, use "connect" approach by taking multiple steps until collision or target reached ()
-# TODO [x] clean up to have the possibility to select between stepsize (also rrt connect..) 
-# TODO [x] in rrt-connect, add also intermediate ndoes to graph as would the original rrt-connect do? -> NO
-# TODO [x] adaptive p_goal (0.3 till solution_node is not None -> then 0.1 e.g., to lower during the optimization phase)
-# TODO [x] add sc path back to tree
-
-# SKILLS
-# TODO [x] update _add_node to set skill flag
-# TODO [x] update _check_transitions when skill is done
-# TODO [x] differentiate between linear steer and skill steer
-# TODO [x] in _steer add skills -> call skill.step()
-# TODO [x] check self.dt with chosen dt in skills..
-# TODO [x] add unified structure with 3 expansion modes for skill rollouts (full, single, kino) -> No full
-# TODO [x] implement kindodynamic with SkillEdge 
-
-# RRT*
-# TODO [x] add rewiring (RRT*)
-# TODO [x] rewire only in per-mode-subtree, does not change parents across mode boundaries (_propagate_cost_improvement does propagate cost values across modes)
-# TODO [x] compute gamma (RRT*) approximate mu(Xfree), then online updating 
-# TODO [x] dynamically define step size eta (use sqrt_d)
-# TODO [x] rewiring improvements invisible unless a newly added terminal node improves the best path?
-# TODO [x] how to do rrt* with rrt-connect when not adding all the intermediate nodes? Otherwise long edges (from connect) can't be rewired with the rewiring radius..
-# TODO [ ] old rrtstar is doing mode-boundary rewiring whereas ours doesn't
-# TODO [ ] old rrtstar keeps/scans transition or terminal candidates and regenerates the path from the current lowest-cost terminal cnadidate, whereas we only check the just-created node/seeds
-
-
-"""
 
 # =====================================================================
 # CURRENT TODOS
@@ -263,11 +209,7 @@ CURRENT TODOS
 # TODO [o] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
 # TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
 # TODO [ ] differentiate between goal bias and transition bias?
-# TODO [ ] in _steer add clippling of q_new to self.env.limits?
-# TODO [ ] in plan when creating/adding a new node, we only update parents, what about children? 
-# TODO [ ] in _sample_transition_config consider taking random node from tree for inactive instead of random sampling? (seems like tree struggles to grow with random sampling in certain envs -> yes, random sampling is the idea, but doesn't seem to be efficient -> maybe something else is the problem..)
-# TODO [ ] in _check_transitions, config check really needed or if config ok in modeA -> ok in modeB?
-# TODO! [ ] in _sample_transition_config use a smarter approach than random config for inactive robots
+# TODO [ ] in _sample_transition_config use a smarter approach than random config sampling for inactive robots
 
 # Improvements
 # TODO [ ] blacklisting
@@ -278,12 +220,8 @@ CURRENT TODOS
 # TODO [ ] track best transition nodes (lowest cost) in some transition registry so cheaper terminal candidate can be found via another transition or rewiring
 # TODO [ ] tune hyperparams
 # TODO [ ] shortcuts self.best_path but not a freshly extracted path from self.solution:node after rewiring..
-# TODO [ ] add every shortcutted path back to tree instead of wasting nodes from sc_path with lower cost..? (could be beneficial for rewiring..?) / what about duplicate nodes?
 # TODO [ ] add node pruning on sync sc-path to tree (e.g., snapping to existing node if distance < threshold?)
 # TODO [ ] add node pruning to rrt* in general (e.g., some cost-based branch pruning: once rrt* finds initial path, use c_best as upper bound, and prune node + children if c(stars->x)+h(x->goal) > c_best
-# SKILLS
-# TODO [ ] check deviation between actual skill x-steps and interpolation between ends of the SkillEdge
-# TODO [o] skill edge cost correct computation 
 
 # RRT*
 # TODO [ ] (later) rewiring in skill modes (inactive parts)
@@ -291,8 +229,6 @@ CURRENT TODOS
 # TODO [ ] add bidirectional (BRRT*) in non skill modes (check first if old BIRRT* really is faster)
 
 # GENERAL
-# TODO [o] how to do preallocation? allocate and then double?
-# TODO [o] figure out how to add a new subtree and transition seeding at mode boundary
 # TODO [ ] p_transition for mode specific goal AND p_goal for terminal goal?
 # TODO [ ] in subtree.get_near() should we limit to k_nearest?
 """
@@ -652,7 +588,7 @@ class RRTSkills(BasePlanner):
                 return self.reached_modes[-1]
             return random.choice(self.reached_modes)
             
-        # Frontier strategy (from prm implementation) # TODO check
+        # Frontier strategy (from prm implementation)
         if strategy == "frontier":
             total_nodes = sum(self.tree.subtrees[m].size for m in self.reached_modes)
             p_frontier = self.config.p_frontier
@@ -718,10 +654,9 @@ class RRTSkills(BasePlanner):
                 self._dbg_goal_bias_success += 1
                 return q_target, False # Not uniform
         
-        # Informed sampling (after first solution, non-skill modes only) # TODO non skill modes only, correct reasoning?
+        # Informed sampling (after first solution, for non-skill AND skill-modes)
         if (self.config.try_informed_sampling
             and self.informed_path is not None):
-            # and not is_skill_mode): # TODO remove (now informed sampling in skill mode)
             q_informed = self._sample_informed(mode)
             if q_informed is not None:
                 self._dbg_informed_success += 1
