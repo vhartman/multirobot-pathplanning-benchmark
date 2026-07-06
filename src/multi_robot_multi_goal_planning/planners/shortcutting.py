@@ -99,7 +99,8 @@ def robot_mode_shortcut(
     resolution=0.001,
     tolerance=0.01,
     robot_choice = "round_robin",
-    interpolation_resolution: float=0.5
+    interpolation_resolution: float=0.5,
+    state_validator=None,
 ):
     """
     Shortcutting the composite path one robot at a time, but allowing shortcutting over the modes as well if the
@@ -107,6 +108,9 @@ def robot_mode_shortcut(
 
     Works by randomly sampling indices, then randomly choosing a robot, and then checking if the direct interpolation is
     collision free.
+
+    state_validator: optional Callable[[State], bool] that every state of a proposed shortcut must additionally satisfy 
+    (inflated tube clearance around stochastic skills)
     """
 
     # TODO test (remove)
@@ -223,8 +227,14 @@ def robot_mode_shortcut(
 
                 r_cnt += dim
 
+            old_state = working_path[start_idx + k]
             proposed_shortcut.append(
-                State(start_q.from_flat(q_flat), working_path[start_idx + k].mode)
+                State(
+                    start_q.from_flat(q_flat), 
+                    old_state.mode,
+                    is_skill_waypoint=old_state.is_skill_waypoint,
+                    skill_steps=dict(old_state.skill_steps)
+                )
             )
 
         current_segment = working_path[start_idx : end_idx + 1]
@@ -251,6 +261,9 @@ def robot_mode_shortcut(
         # needs to be fixed.
         if env.is_path_collision_free(
             proposed_shortcut, resolution=resolution, tolerance=tolerance, check_start_and_end=False
+        ) and (
+            state_validator is None
+            or all(state_validator(s) for s in proposed_shortcut)
         ):
             # Apply the successful shortcut to the working trajectory
             for k in range(end_idx - start_idx + 1):
