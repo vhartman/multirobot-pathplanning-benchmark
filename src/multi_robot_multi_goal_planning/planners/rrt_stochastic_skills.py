@@ -1062,7 +1062,7 @@ class RRTStochasticSkills(BasePlanner):
             # If first request not at skill start (e.g., resumed mid-skill across a mode 
             # boundary before any step-0 expansion) -> use initiation config to compute full 
             # tube from step 0
-            q_init = np.asarray(skill_task.initation_goal.sample(None))
+            q_init = np.asarray(skill_task.initiation_goal.sample(None))
 
         all_joints = self.env.get_joint_names()
 
@@ -1177,7 +1177,7 @@ class RRTStochasticSkills(BasePlanner):
                 # Instead force robot to follow center of uncertainty tube
                 if self._use_nominal_tube(skill):
                     nominal_traj, _ = self._skill_tubes[task_name]
-                    q_subspace = nominal_traj[min(base_step + 1, len(nominal_traj) - 1)].copy()
+                    q_subspace_new = nominal_traj[min(base_step + 1, len(nominal_traj) - 1)].copy()
                 else:
                     # Deterministic skills just step normally
                     q_subspace_new = skill.step(t_norm, q_subspace, self.env)
@@ -1249,6 +1249,7 @@ class RRTStochasticSkills(BasePlanner):
                 
             skill_infos.append({
                 'skill': skill,
+                'name': task.name,
                 'indices': self._get_active_subspace_indices([task]),
                 'base_step': base_step,
                 'is_timed': is_timed,
