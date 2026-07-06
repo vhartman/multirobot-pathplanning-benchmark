@@ -1624,27 +1624,45 @@ class RRTStochasticSkills(BasePlanner):
         Tube clearance check for shortcutting: inactive robots may be moved by the shortcutter 
         through skill modes, but must stay outside the stochastic skills uncertainty tubes
         """
-        # NOTE: changed in shortcutting.py to have skill_steps as State attribute
-        # Figure out which active skills need tube validation in this mode (tube_tasks)
-        # Extract radii and steps from tube_tasks
-        # We can tehn collision check the inactive robots against the inflated rubes by calling tube_margins_free
-        raise NotImplementedError
+        mode = state.mode
+        tube_tasks = []
+
+        # 1. Identify which active tasks have stochastic tubes
+        for t_id in dict.fromkeys(mode.task_ids):
+            task = self.env.tasks[t_id]
+            if (getattr(task, "skill", None) is not None 
+                    and self._use_nominal_tube(task.skill) 
+                    and task.name in self._skill_tubes):
+                tube_tasks.append(task)
+
+        # If no stochastic skills are active, that stat is valid (trivial)
+        if not tube_tasks:
+            return True
+
+        q = state.q.state()
+        tube_radii = {}
+        steps = {}
+
+        # 2. Extract the current timestep for each active skill
+        for t in tube_tasks:
+            steps[t.name] = state.skill_steps[t.name]    
+            tube_radii[t.name] = self._skill_tubes[t.name][1]
+
+        # 3. Ensure the newly shortcutted state doesn't violate the inflated margins
+        return self._tube_margins_free(tube_tasks, tube_radii, steps, np.asarray(q), mode)
 
     def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
         """
         Post-processes a path with robot_mode_shortcut
         Skill segments are protected
         """
-        # TODO (stochastic) changes for shortcutting
-        # Add state validator (or callable) to arguments
-        # In shortcutting.py make sure proposed_shortcut has skill_steps + when doing CC for path, 
-        # check that new shortcut states are not in tube (call state_validator)
         shortcut_path, _ = shortcutting.robot_mode_shortcut(
             self.env, path, shortcutting_iters,
             resolution=self.env.collision_resolution,
             tolerance=self.env.collision_tolerance,
             robot_choice=self.config.shortcutting_mode,
-            interpolation_resolution=self.config.shortcutting_interpolation_resolution
+            interpolation_resolution=self.config.shortcutting_interpolation_resolution,
+            state_validator=self._tube_state_validator,
         )
 
         # Remove interpolated points used in shortcutting (collision check)
