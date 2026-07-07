@@ -44,6 +44,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.problems.core.goals import SingleGoal
 from .termination_conditions import PlannerTerminationCondition
+from .sampling_informed import compute_PHS_matrices, sample_phs_with_given_matrices
 
 
 from functools import lru_cache
@@ -109,6 +110,24 @@ class KinodynamicRRTConfig:
     healthy in-loop budget speeds convergence."""
     loop_shortcut_stride: int = 5
     """Node spacing used when re-injecting the shortcut path into the tree (avoids bloat)."""
+    loop_shortcut_dnc: bool = True
+    """Run the deterministic divide-and-conquer per-robot shortcut before the random-pair
+    polish on every in-loop call. D&C attacks whole task spans directly (where the big cost
+    reductions live), which random pairs almost never sample."""
+    loop_shortcut_stall: Optional[int] = 100
+    """Early-stop the random-pair polish after this many consecutive attempts without an
+    accept (None disables). Reclaims time for tree growth once the path is locally tight."""
+    informed_bias: float = 0.4
+    """After the first solution: probability of drawing the extension target from the
+    LOCALLY-INFORMED sampler instead of the goal/uniform machinery. A random same-mode span
+    [i, j] of the best path is chosen and each robot's position is sampled inside the
+    prolate hyperspheroid with foci at its span endpoints and transverse diameter equal to
+    its CURRENT span length -- i.e. exactly the set of positions through which that robot's
+    span could get shorter (per-robot analogue of the geometric locally-informed sampling).
+    Robots that are parked over the span have a degenerate PHS (a point) and stay parked."""
+    informed_vel_zero_prob: float = 0.5
+    """Probability that an informed sample gets zero velocity (good rest anchors); otherwise
+    velocities are drawn uniformly from the velocity bounds."""
 
 
 class _Node:
@@ -155,6 +174,7 @@ class KinodynamicRRT:
         self.costs: List[float] = []
         self.times: List[float] = []
         self.all_paths: List[List[State]] = []
+        self._informed: Optional[Dict[str, Any]] = None  # locally-informed sampling cache
 
     # ------------------------------------------------------------------ helpers
     def _robot_positions(self, x: NDArray) -> NDArray:
@@ -551,6 +571,94 @@ class KinodynamicRRT:
         self.costs.append(cost)
         self.times.append(time.time() - self.start_time)
         self.all_paths.append(path)
+        self._update_informed_cache(path)
+
+    # --------------------------------------------------------- locally-informed sampling
+    def _update_informed_cache(self, path: List[State]) -> None:
+        """Cache the best path's per-robot positions, cumulative lengths, and same-mode
+        runs, so _sample_locally_informed can build per-robot span PHS targets cheaply."""
+        if self.config.informed_bias <= 0.0:
+            return
+        n = len(path)
+        n_r = self.env.start_pos.num_agents()
+        d = self.env.position_dim_per_robot
+        slices = [tuple(self.env.start_pos._array_slice[r]) for r in range(n_r)]
+        pos = np.empty((n_r, n, d))
+        for k, st in enumerate(path):
+            xk = st.q.state()
+            for r in range(n_r):
+                s, _e = slices[r]
+                pos[r, k] = xk[s : s + d]
+        same_mode = np.array(
+            [path[k].mode == path[k + 1].mode for k in range(n - 1)], dtype=bool
+        )
+        edge_len = np.linalg.norm(np.diff(pos, axis=1), axis=2)
+        edge_len[:, ~same_mode] = 0.0
+        cum = np.concatenate([np.zeros((n_r, 1)), np.cumsum(edge_len, axis=1)], axis=1)
+        # maximal same-mode index runs (sampling spans never cross a mode switch: samples
+        # are extension targets for a specific mode's tree)
+        runs = []
+        a = 0
+        for k in range(n - 1):
+            if not same_mode[k]:
+                if k - a >= 2:
+                    runs.append((a, k))
+                a = k + 1
+        if n - 1 - a >= 2:
+            runs.append((a, n - 1))
+        self._informed = {"path": path, "pos": pos, "cum": cum, "runs": runs,
+                          "slices": slices}
+
+    def _sample_locally_informed(self) -> Optional[Tuple[Mode, NDArray]]:
+        """Draw an extension target from a random same-mode span [i, j] of the best path:
+        each robot's position is sampled inside the prolate hyperspheroid with foci at its
+        span endpoints and transverse diameter equal to its CURRENT span length (the set of
+        positions that can shorten that robot's span). Parked robots degenerate to their
+        parked point; already-tight robots to their straight segment. Velocities are zero
+        with prob informed_vel_zero_prob, else uniform in the velocity bounds."""
+        cache = getattr(self, "_informed", None)
+        if cache is None or not cache["runs"]:
+            return None
+        pos, cum, runs, slices = cache["pos"], cache["cum"], cache["runs"], cache["slices"]
+        path = cache["path"]
+        d = self.env.position_dim_per_robot
+        lo, hi = self.state_bounds[0], self.state_bounds[1]
+        n_r = pos.shape[0]
+
+        for _ in range(6):  # few attempts: span choice / bounds / collision can all fail
+            a, b = runs[np.random.randint(len(runs))]
+            i = np.random.randint(a, b - 1)
+            j = np.random.randint(i + 2, b + 1)
+            x = np.asarray(path[i].q.state(), dtype=float).copy()
+            ok = True
+            for r in range(n_r):
+                s, _e = slices[r]
+                p_i, p_j = pos[r, i], pos[r, j]
+                span_len = float(cum[r, j] - cum[r, i])
+                c_min = float(np.linalg.norm(p_j - p_i))
+                if span_len < 1e-9:
+                    p = p_i  # parked robot: degenerate PHS, stays parked
+                elif span_len - c_min < 1e-6:
+                    # already tight: PHS degenerates to the straight segment
+                    p = p_i + np.random.rand() * (p_j - p_i)
+                else:
+                    rot, center = compute_PHS_matrices(p_i, p_j, span_len)
+                    p = sample_phs_with_given_matrices(rot, center)[:, 0]
+                if np.any(p < lo[s : s + d] - 1e-9) or np.any(p > hi[s : s + d] + 1e-9):
+                    ok = False
+                    break
+                x[s : s + d] = p
+                # velocity block: zero (rest anchor) or uniform within bounds
+                if np.random.rand() < self.config.informed_vel_zero_prob:
+                    x[s + d : _e] = 0.0
+                else:
+                    x[s + d : _e] = np.random.uniform(lo[s + d : _e], hi[s + d : _e])
+            if not ok:
+                continue
+            mode = path[i].mode
+            if self.env.is_collision_free(self.env.start_pos.from_flat(x), mode):
+                return mode, x
+        return None
 
     # ------------------------------------------------------------------ main loop
     def plan(
@@ -575,8 +683,23 @@ class KinodynamicRRT:
             if ptc.should_terminate(i, time.time() - self.start_time):
                 break
 
-            mode = self._select_mode()
-            target, reach_goal, n_near = self._sample_move(mode)
+            # after the first solution, bias extensions toward the locally-informed set
+            # (per-robot span PHS around the best path) so rewiring gets material that can
+            # actually shorten the incumbent
+            informed = None
+            if (
+                first_solution_seen
+                and do_rewire
+                and np.random.rand() < self.config.informed_bias
+            ):
+                informed = self._sample_locally_informed()
+            if informed is not None:
+                mode, target = informed
+                reach_goal = False
+                n_near = self._nearest(mode, target)
+            else:
+                mode = self._select_mode()
+                target, reach_goal, n_near = self._sample_move(mode)
 
             traj = self._expand(n_near.x, target, reach_goal)
             if traj is None:
@@ -703,8 +826,13 @@ class KinodynamicRRT:
         individual robots, so re-injecting it gives rewiring better-placed nodes to reconnect;
         the time-cost reductions then come from the subsequent min-time rewiring. Returns the
         (possibly lower) best cost."""
+        # deterministic divide-and-conquer first (whole task spans -> big wins fast),
+        # then a stall-bounded random-pair polish
+        if self.config.loop_shortcut_dnc:
+            path, _ = kinodynamic_robot_shortcut_dnc(self.env, path, rounds=2, verbose=False)
         sc_path, _ = kinodynamic_robot_shortcut(
-            self.env, path, max_iter=self.config.loop_shortcut_iters, verbose=False
+            self.env, path, max_iter=self.config.loop_shortcut_iters,
+            stall_iters=self.config.loop_shortcut_stall, verbose=False,
         )
         # only bother re-injecting if the per-robot pass actually straightened something
         if _path_pos_length(self.env, sc_path) >= _path_pos_length(self.env, path) - 1e-9:
@@ -885,12 +1013,168 @@ def _path_pos_length(env, path: List[State]) -> float:
     return sum(_robot_seg_pos_length(env, path, r) for r in range(len(env.robots)))
 
 
+class _RobotShortcutCore:
+    """Shared machinery for the per-robot shortcut variants (random-pair and
+    divide-and-conquer): the edited path, the per-robot position/length caches, and the
+    single-span re-steer attempt.
+
+    Cache layout (built once, updated incrementally on the rare ACCEPT -- recomputing the
+    original span length per ATTEMPT used to dominate the whole-planner profile):
+      pos[r, k]      robot r's position at path state k (position-first slice layout,
+                     guaranteed for every exact-steering env: robot_position == q[r][:d])
+      edge_len[r, k] robot r's length of edge (k, k+1); 0 across doubled mode switches
+      cum[r]         prefix sums, so span length over [i, j] is cum[r, j] - cum[r, i]
+    A shortcut replaces states strictly inside [i, j], so n and all indices are stable."""
+
+    ACCEPTED = 0        # span replaced by the fixed-time re-steer (now optimal for its time)
+    ALREADY_TIGHT = 1   # straight-line lower bound says no improvement exists -> don't recurse
+    FAILED = 2          # steering infeasible / not shorter / collision -> subdividing may help
+
+    def __init__(self, env: BaseProblem, path: List[State]):
+        self.env = env
+        self.d = env.position_dim_per_robot
+        self.u_max = env.u_max
+        self.n_robots = len(env.robots)
+        self.path = list(path)
+        n = self.n = len(self.path)
+
+        self.slices = [tuple(env.start_pos._array_slice[r]) for r in range(self.n_robots)]
+        pos = np.empty((self.n_robots, n, self.d))
+        for k, st in enumerate(self.path):
+            xk = st.q.state()
+            for r in range(self.n_robots):
+                s, _e = self.slices[r]
+                pos[r, k] = xk[s : s + self.d]
+        self.pos = pos
+        same_mode = np.array(
+            [self.path[k].mode == self.path[k + 1].mode for k in range(n - 1)], dtype=bool
+        )
+        self.edge_len = np.linalg.norm(np.diff(pos, axis=1), axis=2)  # (n_robots, n-1)
+        self.edge_len[:, ~same_mode] = 0.0
+        self.cum = np.concatenate(
+            [np.zeros((self.n_robots, 1)), np.cumsum(self.edge_len, axis=1)], axis=1
+        )
+        self.total_len = float(self.cum[:, -1].sum())
+        self.lo, self.hi = env.state_bounds()[0], env.state_bounds()[1]
+        self.accepts = 0
+
+    def task_spans(self, r: int) -> List[Tuple[int, int]]:
+        """Maximal index spans over which robot r's task id is constant (>= 2 edges)."""
+        spans = []
+        a = 0
+        tid_a = self.path[0].mode.task_ids[r]
+        for k in range(1, self.n):
+            tid = self.path[k].mode.task_ids[r]
+            if tid != tid_a:
+                if k - 1 - a >= 2:
+                    spans.append((a, k - 1))
+                a, tid_a = k, tid
+        if self.n - 1 - a >= 2:
+            spans.append((a, self.n - 1))
+        return spans
+
+    def try_span(self, r: int, i: int, j: int) -> int:
+        """Attempt to re-steer robot r over path span [i, j] with a fixed-time connection.
+        Returns ACCEPTED / ALREADY_TIGHT / FAILED (see class constants)."""
+        env, d = self.env, self.d
+        path = self.path
+
+        # cheap lower bound BEFORE any steering/collision work: no re-steered segment can
+        # be shorter than the straight line between its endpoints, so if even that does
+        # not beat the current span length the attempt is hopeless. On mostly-converged
+        # paths this rejects the vast majority of attempts at O(1) cost.
+        orig_len = float(self.cum[r, j] - self.cum[r, i])
+        if float(np.linalg.norm(self.pos[r, j] - self.pos[r, i])) >= orig_len - 1e-9:
+            return self.ALREADY_TIGHT
+
+        # the chosen robot must be doing the same task across the whole span, so its own
+        # zero-velocity mode switch is never inside the re-steered segment
+        task_r = path[i].mode.task_ids[r]
+        if any(path[i + k].mode.task_ids[r] != task_r for k in range(j - i + 1)):
+            return self.FAILED
+
+        # map each path index to a real integration-step index (doubled switches take 0 time)
+        t_index = [0]
+        for k in range(1, j - i + 1):
+            step = 0 if path[i + k - 1].mode != path[i + k].mode else 1
+            t_index.append(t_index[-1] + step)
+        num_real_steps = t_index[-1]
+        if num_real_steps < 1:
+            return self.FAILED
+
+        x_i = np.asarray(path[i].q.state(), dtype=float)
+        x_j = np.asarray(path[j].q.state(), dtype=float)
+
+        sub_states, peak = env.steer_fixed_time(x_i, x_j, num_real_steps)
+        # feasibility only for the chosen robot's control block
+        if np.any(peak[r * d : (r + 1) * d] > self.u_max + 1e-6):
+            return self.FAILED
+
+        s, e = self.slices[r]
+
+        # candidate robot-r positions straight from the raw steered states -- the State
+        # segment (from_flat + copies) is only built AFTER the improvement test passes
+        ti = np.asarray(t_index)
+        sub_arr = np.asarray(sub_states)
+        cand = np.empty((ti.size, d))
+        zm = ti == 0  # doubled-switch prefix keeps the original (identical) configs
+        if zm.any():
+            cand[zm] = self.pos[r, i + np.flatnonzero(zm)]
+        cand[~zm] = sub_arr[ti[~zm] - 1, s : s + d]
+        # doubled switches inside the span repeat the same steered state => diff 0, so no
+        # mode-boundary masking is needed here
+        cand_edges = np.linalg.norm(np.diff(cand, axis=0), axis=1)
+        cand_len = float(cand_edges.sum())
+        if cand_len >= orig_len - 1e-9:
+            return self.FAILED
+
+        # bounds: only robot r's slice changed (the rest of each state is already on the
+        # valid path), and the steered states are stacked -> one vectorized check
+        block = sub_arr[:, s:e]
+        if not (
+            np.all(block >= self.lo[s:e] - 1e-9) and np.all(block <= self.hi[s:e] + 1e-9)
+        ):
+            return self.FAILED
+
+        seg = []
+        for k in range(j - i + 1):
+            base = path[i + k]
+            q = base.q.state().copy()
+            tk = t_index[k]
+            if tk > 0:
+                q[s:e] = sub_states[tk - 1][s:e]
+            # tk == 0 keeps x_i's slice (already in q)
+            seg.append(State(env.start_pos.from_flat(q), base.mode))
+
+        # collision-check only the states we actually changed (interior points),
+        # midpoint-first for early reject (bounds already vectorized above)
+        for off in _binary_indices(max(j - i - 1, 0)):
+            k = 1 + off
+            if not env.is_collision_free(seg[k].q, seg[k].mode):
+                return self.FAILED
+
+        path[i : j + 1] = seg
+        # incremental cache update: only robot r's positions inside (i, j) changed, so
+        # only its edges i..j-1 changed; endpoints (hence edges i-1 and j) are untouched
+        self.pos[r, i : j + 1] = cand
+        self.edge_len[r, i:j] = cand_edges
+        self.cum[r, 1:] = np.cumsum(self.edge_len[r])
+        self.total_len += cand_len - orig_len
+        self.accepts += 1
+        return self.ACCEPTED
+
+
+def _robot_shortcut_supported(env: BaseProblem) -> bool:
+    return getattr(env, "has_exact_steering", False) and hasattr(env, "steer_fixed_time")
+
+
 def kinodynamic_robot_shortcut(
     env: BaseProblem,
     path: List[State],
     max_iter: int = 2000,
     time_budget: Optional[float] = None,
     verbose: bool = True,
+    stall_iters: Optional[int] = None,
 ):
     """Partial (per-robot) exact-steering shortcutting -- the kinodynamic analogue of
     planners/shortcutting.py::robot_mode_shortcut.
@@ -906,50 +1190,27 @@ def kinodynamic_robot_shortcut(
 
     Doubled mode-switch states (same configuration, adjacent modes, zero elapsed time) are
     handled by mapping path indices to real integration-step indices, so both halves of a
-    doubled state receive the same re-steered slice and the invariant is preserved."""
-    if not getattr(env, "has_exact_steering", False) or not hasattr(env, "steer_fixed_time"):
+    doubled state receive the same re-steered slice and the invariant is preserved.
+
+    `stall_iters`: optional early stop after this many consecutive attempts without an
+    accept (adaptive budget for in-loop use)."""
+    if not _robot_shortcut_supported(env):
         if verbose:
             print("[kino-robot-shortcut] env has no fixed-time exact steering; skipping")
         return path, [[_path_pos_length(env, path)], [0.0]]
 
-    d = env.position_dim_per_robot
-    u_max = env.u_max
-    n_robots = len(env.robots)
-    new_path = list(path)
-    n = len(new_path)
-
-    # ---- per-robot position / length cache (built once, updated on the rare ACCEPT) ----
-    # This function dominated the whole-planner profile because every ATTEMPT recomputed
-    # the original span length (O(span) robot_position calls + norms) and built the full
-    # State segment before knowing whether it improved anything. Instead:
-    #   pos[r, k]      robot r's position at path state k (position-first slice layout,
-    #                  guaranteed for every exact-steering env: robot_position == q[r][:d])
-    #   edge_len[r, k] robot r's length of edge (k, k+1); 0 across doubled mode switches
-    #   cum[r]         prefix sums, so span length over [i, j] is cum[r, j] - cum[r, i]
-    # A shortcut replaces states strictly inside [i, j], so n and all indices are stable.
-    slices = [tuple(env.start_pos._array_slice[r]) for r in range(n_robots)]
-    pos = np.empty((n_robots, n, d))
-    for k, st in enumerate(new_path):
-        xk = st.q.state()
-        for r in range(n_robots):
-            s, _e = slices[r]
-            pos[r, k] = xk[s : s + d]
-    same_mode = np.array(
-        [new_path[k].mode == new_path[k + 1].mode for k in range(n - 1)], dtype=bool
-    )
-    edge_len = np.linalg.norm(np.diff(pos, axis=1), axis=2)  # (n_robots, n-1)
-    edge_len[:, ~same_mode] = 0.0
-    cum = np.concatenate([np.zeros((n_robots, 1)), np.cumsum(edge_len, axis=1)], axis=1)
-    total_len = float(cum[:, -1].sum())
-
-    costs = [total_len]
+    core = _RobotShortcutCore(env, path)
+    n = core.n
+    costs = [core.total_len]
     times = [0.0]
     start_time = time.time()
-    cnt = 0
     rr = 0
+    since_accept = 0
 
     for _ in range(max_iter):
         if time_budget is not None and time.time() - start_time > time_budget:
+            break
+        if stall_iters is not None and since_accept >= stall_iters:
             break
         if n < 4:
             break
@@ -961,100 +1222,74 @@ def kinodynamic_robot_shortcut(
         if j - i < 2:
             continue
 
-        r = rr % n_robots
+        r = rr % core.n_robots
         rr += 1
 
-        # cheap lower bound BEFORE any steering/collision work: no re-steered segment can
-        # be shorter than the straight line between its endpoints, so if even that does
-        # not beat the current span length the attempt is hopeless. On mostly-converged
-        # paths this rejects the vast majority of attempts at O(1) cost.
-        orig_len = float(cum[r, j] - cum[r, i])
-        if float(np.linalg.norm(pos[r, j] - pos[r, i])) >= orig_len - 1e-9:
-            continue
-
-        # the chosen robot must be doing the same task across the whole span, so its own
-        # zero-velocity mode switch is never inside the re-steered segment
-        task_r = new_path[i].mode.task_ids[r]
-        if any(new_path[i + k].mode.task_ids[r] != task_r for k in range(j - i + 1)):
-            continue
-
-        # map each path index to a real integration-step index (doubled switches take 0 time)
-        t_index = [0]
-        for k in range(1, j - i + 1):
-            step = 0 if new_path[i + k - 1].mode != new_path[i + k].mode else 1
-            t_index.append(t_index[-1] + step)
-        num_real_steps = t_index[-1]
-        if num_real_steps < 1:
-            continue
-
-        x_i = np.asarray(new_path[i].q.state(), dtype=float)
-        x_j = np.asarray(new_path[j].q.state(), dtype=float)
-
-        sub_states, peak = env.steer_fixed_time(x_i, x_j, num_real_steps)
-        # feasibility only for the chosen robot's control block
-        if np.any(peak[r * d : (r + 1) * d] > u_max + 1e-6):
-            continue
-
-        s, e = slices[r]
-
-        # candidate robot-r positions straight from the raw steered states -- the State
-        # segment (from_flat + copies) is only built AFTER the improvement test passes
-        ti = np.asarray(t_index)
-        sub_arr = np.asarray(sub_states)
-        cand = np.empty((ti.size, d))
-        zm = ti == 0  # doubled-switch prefix keeps the original (identical) configs
-        if zm.any():
-            cand[zm] = pos[r, i + np.flatnonzero(zm)]
-        cand[~zm] = sub_arr[ti[~zm] - 1, s : s + d]
-        # doubled switches inside the span repeat the same steered state => diff 0, so no
-        # mode-boundary masking is needed here
-        cand_edges = np.linalg.norm(np.diff(cand, axis=0), axis=1)
-        cand_len = float(cand_edges.sum())
-        if cand_len >= orig_len - 1e-9:
-            continue
-
-        # bounds: only robot r's slice changed (the rest of each state is already on the
-        # valid path), and the steered states are stacked -> one vectorized check
-        lo, hi = env.state_bounds()[0], env.state_bounds()[1]
-        block = sub_arr[:, s:e]
-        if not (np.all(block >= lo[s:e] - 1e-9) and np.all(block <= hi[s:e] + 1e-9)):
-            continue
-
-        seg = []
-        for k in range(j - i + 1):
-            base = new_path[i + k]
-            q = base.q.state().copy()
-            tk = t_index[k]
-            if tk > 0:
-                q[s:e] = sub_states[tk - 1][s:e]
-            # tk == 0 keeps x_i's slice (already in q)
-            seg.append(State(env.start_pos.from_flat(q), base.mode))
-
-        # collision-check only the states we actually changed (interior points),
-        # midpoint-first for early reject (bounds already vectorized above)
-        ok = True
-        for off in _binary_indices(max(j - i - 1, 0)):
-            k = 1 + off
-            if not env.is_collision_free(seg[k].q, seg[k].mode):
-                ok = False
-                break
-        if not ok:
-            continue
-
-        new_path[i : j + 1] = seg
-        # incremental cache update: only robot r's positions inside (i, j) changed, so
-        # only its edges i..j-1 changed; endpoints (hence edges i-1 and j) are untouched
-        pos[r, i : j + 1] = cand
-        edge_len[r, i:j] = cand_edges
-        cum[r, 1:] = np.cumsum(edge_len[r])
-        total_len += cand_len - orig_len
-        cnt += 1
-        costs.append(total_len)
-        times.append(time.time() - start_time)
+        since_accept += 1
+        if core.try_span(r, i, j) == core.ACCEPTED:
+            since_accept = 0
+            costs.append(core.total_len)
+            times.append(time.time() - start_time)
 
     if verbose:
         print(
-            f"[kino-robot-shortcut] accepted {cnt} shortcuts, "
+            f"[kino-robot-shortcut] accepted {core.accepts} shortcuts, "
             f"pos-length {costs[0]:.3f} -> {costs[-1]:.3f}"
         )
-    return new_path, [costs, times]
+    return core.path, [costs, times]
+
+
+def kinodynamic_robot_shortcut_dnc(
+    env: BaseProblem,
+    path: List[State],
+    rounds: int = 1,
+    verbose: bool = True,
+):
+    """Divide-and-conquer per-robot shortcutting.
+
+    Random-pair shortcutting rarely samples LONG spans, but long spans hold the big wins
+    (a robot's whole task collapsing to one direct steer). This variant is deterministic:
+    for each robot, try to re-steer each maximal same-task span DIRECTLY; on failure split
+    at the midpoint and recurse. An accepted span is the min-effort fixed-time connection
+    for its endpoints, i.e. optimal for that time allocation -- no need to recurse into it;
+    an ALREADY_TIGHT span (straight-line lower bound met) cannot be improved either, which
+    prunes the recursion on converged paths to almost nothing. Complements (and typically
+    precedes) the random-pair polish."""
+    if not _robot_shortcut_supported(env):
+        if verbose:
+            print("[kino-robot-shortcut-dnc] env has no fixed-time exact steering; skipping")
+        return path, [[_path_pos_length(env, path)], [0.0]]
+
+    core = _RobotShortcutCore(env, path)
+    costs = [core.total_len]
+    times = [0.0]
+    start_time = time.time()
+
+    def rec(r: int, i: int, j: int) -> None:
+        if j - i < 2:
+            return
+        status = core.try_span(r, i, j)
+        if status == core.ACCEPTED:
+            costs.append(core.total_len)
+            times.append(time.time() - start_time)
+            return
+        if status == core.ALREADY_TIGHT:
+            return
+        m = (i + j) // 2
+        rec(r, i, m)
+        rec(r, m, j)
+
+    for _ in range(max(1, rounds)):
+        before = core.accepts
+        for r in range(core.n_robots):
+            for a, b in core.task_spans(r):
+                rec(r, a, b)
+        if core.accepts == before:  # a full pass without progress -> converged
+            break
+
+    if verbose:
+        print(
+            f"[kino-robot-shortcut-dnc] accepted {core.accepts} shortcuts, "
+            f"pos-length {costs[0]:.3f} -> {costs[-1]:.3f}"
+        )
+    return core.path, [costs, times]
