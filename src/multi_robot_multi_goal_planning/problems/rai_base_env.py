@@ -621,6 +621,87 @@ class rai_env(BaseProblem):
 
         return True
 
+    def is_collision_free_with_margin(
+        self,
+        q: NDArray,
+        m: Mode | None,
+        robots: List[str] | str,
+        margin: float,
+        exclude_frames: tuple = ("table",),
+        only_against: List[str] | None = None,
+    ) -> bool:
+        """
+        Requires a clearance of at least 'margin' between the given robots frames and everything else. 
+        Used for conservative planning with inflated collision geometry (uncertainty tubes around 
+        stochastic skill trajectories). Checks ONLY the margin condition; callers combine it with the 
+        standard is_collision_free check        
+        NOTE: generated with claude (AI)
+        """
+        if margin <= 0.0:
+            return True
+
+        if isinstance(robots, str):
+            robots = [robots] # Working with list
+
+        # Ensure the kinematic tree and collision states match the requested mode before fetching 
+        # collidable pairs or setting joint states
+        if m is not None:
+            self.set_to_mode(m)
+        self.C.setJointState(q)
+
+        # Frames moving with the robots (e.g. grasped objects) are not inflated against them
+        held_frames: List[str] = []
+        if m is not None:
+            for robot in robots:
+                task = self.tasks[m.task_ids[self.robots.index(robot)]]
+                if task.frames is not None: # Tasks that involve manipulating objects
+                    held_frames.extend(task.frames)
+
+        # Static collidable pair list, filtered to (robot frame) vs (rest) pairs
+        cache_key = (
+            tuple(robots),
+            tuple(sorted(held_frames)),
+            exclude_frames,
+            tuple(only_against) if only_against is not None else None,
+        )
+        if not hasattr(self, "_margin_pair_cache"):
+            self._margin_pair_cache = {} # Create cache dict
+            
+        if cache_key not in self._margin_pair_cache:
+            flat = self.C.getCollidablePairs()
+            pairs = []
+            for f1, f2 in zip(flat[0::2], flat[1::2]):
+                f1_ours = any(r in f1 for r in robots)
+                f2_ours = any(r in f2 for r in robots)
+                
+                # Skip if both frames belong to the active robots (self-collision)
+                # or neither belongs to the active robots (irrelevant environmental pair)
+                if f1_ours == f2_ours:
+                    continue
+                
+                other = f2 if f1_ours else f1 # Frame that doesn't belog to the robot
+                
+                # Skip if the other frame is excluded (like the table) or is currently held by the robot
+                if other in exclude_frames or other in held_frames:
+                    continue
+                    
+                # If only checking against specific entities, skip if it doesn't match
+                if only_against is not None and not any(name in other for name in only_against):
+                    continue
+                    
+                pairs.append((f1, f2))
+            self._margin_pair_cache[cache_key] = pairs # Cache save
+
+        # Iterate through our filtered list of relevant pairs
+        for f1, f2 in self._margin_pair_cache[cache_key]:
+            # negDistance = -distance (e.g. separated by 0.5m -> neg_dist = -0.5).
+            # We want separation >= margin, which means neg_dist <= -margin.
+            neg_dist, _ = self.C.eval(ry.FS.negDistance, [f1, f2])
+            if neg_dist[0] > -margin:
+                return False
+
+        return True
+
     # @silence_function
     def is_edge_collision_free(
         self,
