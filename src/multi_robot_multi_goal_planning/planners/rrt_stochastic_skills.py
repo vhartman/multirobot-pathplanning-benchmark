@@ -2,6 +2,7 @@ import numpy as np
 import random
 import math
 import time
+import copy
 from typing import Tuple, List, Dict, Optional, Any
 from dataclasses import dataclass
 
@@ -1148,7 +1149,7 @@ class RRTStochasticSkills(BasePlanner):
         tube_radii = {
             t.name: self._get_skill_tube(
                 t, q_full[self._get_active_subspace_indices([t])],
-                n_near.skill_steps.get(t.name, 0), q_full_flat=q_full, mode=mode,
+                n_near.skill_steps.get(t.name, 0)
             ) for t in tube_tasks
         }
 
@@ -1263,7 +1264,7 @@ class RRTStochasticSkills(BasePlanner):
         tube_radii = {
             t.name: self._get_skill_tube(
                 t, q_curr[self._get_active_subspace_indices([t])],
-                n_near.skill_steps.get(t.name, 0), q_full_flat=q_curr, mode=mode,
+                n_near.skill_steps.get(t.name, 0)
             ) for t in tube_tasks
         }
 
@@ -1646,7 +1647,7 @@ class RRTStochasticSkills(BasePlanner):
 
         # 2. Extract the current timestep for each active skill
         for t in tube_tasks:
-            steps[t.name] = state.skill_steps[t.name]    
+            steps[t.name] = getattr(state, "skill_steps", {}).get(t.name, 0)
             tube_radii[t.name] = self._skill_tubes[t.name][1]
 
         # 3. Ensure the newly shortcutted state doesn't violate the inflated margins
