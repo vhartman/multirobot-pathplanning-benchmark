@@ -1115,6 +1115,11 @@ class RRTStochasticSkills(BasePlanner):
                 float(tube_radii[o.name][min(steps[o.name], len(tube_radii[o.name]) - 1)])
                 for o in tube_tasks if o is not t
             )
+
+            # TODO: global margin is overly conservative for inactive robots
+            # If Robot A is active and Robot B is active, checking Robot A against an inactive robot 
+            # shouldn't include Robot B's uncertainty radius (r_other). We need pair-specific margins 
+            # in is_collision_free_with_margin to fix this..
             
             # 3. Scale by config parameter
             margin = (r + r_other) * self.config.tube_margin_scale
