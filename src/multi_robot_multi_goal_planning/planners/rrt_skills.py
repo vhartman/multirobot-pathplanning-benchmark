@@ -128,9 +128,6 @@ class Node:
         self.cost: float = 0.0
         self.cost_to_parent: float = 0.0
 
-        # Flags for skills and transitions
-        self.is_skill_waypoint: bool = getattr(state, "is_skill_waypoint", False)
-        self.skill_steps: Dict[str, int] = dict(getattr(state, "skill_steps", {}))
         self.skill_edge: Optional['SkillEdge'] = None # Kinodynamic only
 
 class Subtree:
@@ -406,7 +403,7 @@ class RRTSkills(BasePlanner):
                 next_mode_seeds = self._check_transitions(n_new)
 
                 # RRT* rewire
-                if self._should_rewire() and not n_new.is_skill_waypoint and not skill_tasks:
+                if self._should_rewire() and not n_new.state.is_skill_waypoint and not skill_tasks:
                     self._rewire(n_new, mode)
 
                 terminal_node = self._get_terminal_node(n_new, next_mode_seeds)
@@ -1047,7 +1044,7 @@ class RRTSkills(BasePlanner):
 
             self.env.C.selectJoints(skill.joints)
 
-            base_step = n_near.skill_steps.get(task_name, 0)
+            base_step = n_near.state.skill_steps.get(task_name, 0)
             if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
                 n_steps = max(1, round(skill.duration / dt))
                 if base_step >= n_steps: # Avoid step past horizon
@@ -1064,7 +1061,7 @@ class RRTSkills(BasePlanner):
 
         q_new = self.env.get_start_pos().from_flat(q_base)
         
-        new_skill_steps = dict(n_near.skill_steps)
+        new_skill_steps = dict(n_near.state.skill_steps)
         for skill_task in skill_tasks:
             new_skill_steps[skill_task.name] = new_skill_steps.get(skill_task.name, 0) + 1
             
@@ -1101,7 +1098,7 @@ class RRTSkills(BasePlanner):
         
         for task in skill_tasks:
             skill = task.skill
-            base_step = n_near.skill_steps.get(task.name, 0)
+            base_step = n_near.state.skill_steps.get(task.name, 0)
             is_timed = isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill))
             n_total = max(1, round(skill.duration / dt)) if is_timed else 0
             
@@ -1163,7 +1160,7 @@ class RRTSkills(BasePlanner):
             return [] 
 
         # Create end node for the subtree
-        end_step_dict = dict(n_near.skill_steps)
+        end_step_dict = dict(n_near.state.skill_steps)
         for task in skill_tasks:
             end_step_dict[task.name] = end_step_dict.get(task.name, 0) + actual_steps
         state_new = State(self.env.get_start_pos().from_flat(waypoints[-1]), mode, is_skill_waypoint=True, skill_steps=end_step_dict)
@@ -1236,8 +1233,7 @@ class RRTSkills(BasePlanner):
 
         # Skill node bookkeeping
         if is_skill:
-            n_new.is_skill_waypoint = True
-            n_new.state.is_skill_waypoint = True # TODO (for shortcutter.. change and only keep on node..?)
+            n_new.state.is_skill_waypoint = True
 
         # Add
         self.tree.subtrees[mode].add_node(n_new)
@@ -1317,18 +1313,18 @@ class RRTSkills(BasePlanner):
             continuing_skills = False
             for task in current_active_tasks:
                 if task.name in next_task_names:
-                    seed_node.skill_steps[task.name] = n_new.skill_steps.get(task.name, 0)
+                    seed_node.state.skill_steps[task.name] = n_new.state.skill_steps.get(task.name, 0)
                     continuing_skills = True
             
             if continuing_skills:
-                seed_node.is_skill_waypoint = True
+                seed_node.state.is_skill_waypoint = True
 
             self.tree.subtrees[next_mode].add_node(seed_node)
             n_new.children.append(seed_node)
             created_seeds.append(seed_node)
             
             # RRT* optimization
-            if self._should_rewire() and not seed_node.is_skill_waypoint and not next_active_tasks:
+            if self._should_rewire() and not seed_node.state.is_skill_waypoint and not next_active_tasks:
                 self._rewire(seed_node, next_mode)
 
             self._dbg_seed_added += 1
@@ -1366,7 +1362,7 @@ class RRTSkills(BasePlanner):
         # Check if the skill is timed vs. untimed
         if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
             n_steps = max(1, round(skill.duration / skill.dt))
-            base_step = node.skill_steps.get(task.name, 0)
+            base_step = node.state.skill_steps.get(task.name, 0)
             t_norm = min(base_step / n_steps, 1.0)
             return skill.done(t_norm, q_subspace, self.env)
         return skill.done(q_subspace, self.env)
@@ -1438,8 +1434,8 @@ class RRTSkills(BasePlanner):
             if n.skill_edge is not None:
                 for idx, wp in enumerate(n.skill_edge.waypoints[1:]):
                     q_wp = self.env.get_start_pos().from_flat(wp)
-                    wp_skill_steps = dict(n.parent.skill_steps) if n.parent else {}
-                    for skill_task_name in n.skill_steps:
+                    wp_skill_steps = dict(n.parent.state.skill_steps) if n.parent else {}
+                    for skill_task_name in n.state.skill_steps:
                         wp_skill_steps[skill_task_name] = wp_skill_steps.get(skill_task_name, 0) + idx + 1
                     path.append(State(q_wp, n.state.mode, is_skill_waypoint=True, skill_steps=wp_skill_steps))
             else:
@@ -1502,7 +1498,7 @@ class RRTSkills(BasePlanner):
             
             # Preserve skill flags if this state was marked as one
             if getattr(state, "is_skill_waypoint", False):
-                new_node.is_skill_waypoint = True
+                new_node.state.is_skill_waypoint = True
    
             best_parent.children.append(new_node)
             subtree.add_node(new_node)
@@ -1717,7 +1713,7 @@ class RRTSkills(BasePlanner):
             ]
             for pos in sorted_positions:
                 candidate = subtree.nodes[int(near_indices[pos])]
-                if candidate is n_near or candidate.is_skill_waypoint:
+                if candidate is n_near or candidate.state.is_skill_waypoint:
                     continue
                 if self.env.is_edge_collision_free(candidate.state.q, q_new, mode):
                     best_parent = candidate
@@ -1750,7 +1746,7 @@ class RRTSkills(BasePlanner):
 
         for pos in np.nonzero(improvement_mask)[0]:
             n_near = subtree.nodes[int(near_indices[pos])]
-            if n_near is n_new or n_near is n_new.parent or n_near.is_skill_waypoint:
+            if n_near is n_new or n_near is n_new.parent or n_near.state.is_skill_waypoint:
                 continue
             # rewire if edge is collision free
             if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):

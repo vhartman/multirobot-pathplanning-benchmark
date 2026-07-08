@@ -39,8 +39,6 @@ class Node:
         "whitelist",
         "blacklist",
         "id",
-        # TODO (Liam) NEW
-        "skill_step"
     ]
 
     # Class attribute
@@ -70,9 +68,6 @@ class Node:
 
         self.id = Node.id_counter
         Node.id_counter += 1
-
-        # TODO (Liam) NEW 
-        self.skill_step = -1
 
     def __lt__(self, other: "Node") -> bool:
         return self.id < other.id
@@ -438,7 +433,7 @@ class MultimodalGraph:
                     n = Node(state)
                     self.skill_chain_nodes[mode].append(n)
 
-                n.skill_step = k
+                n.state.skill_steps["composite"] = k # TODO current limitation of prm, tracking single time-step as it plans jointly
                 new_nodes_per_step[k].append(n)
 
             # Register in step index (enables cross-batch connectivity)
@@ -479,7 +474,7 @@ class MultimodalGraph:
             # Lazy discovery -> return ALL candidates at step k+1.
             # Avoids expensive cross-batch pre-wiring, A* validates candidate edges lazily
             mode = node.state.mode
-            k = node.skill_step
+            k = node.state.skill_steps.get("composite", -1)
             next_step = k + 1
             if mode in self.skill_step_nodes and next_step in self.skill_step_nodes[mode]:
                 candidates = self.skill_step_nodes[mode][next_step]
@@ -656,7 +651,7 @@ class MultimodalGraph:
         if best_nodes:
             keep = [
                 i for i, n in enumerate(best_nodes)
-                if not (n.state.is_skill_waypoint and n.skill_step > 0)
+                if not (n.state.is_skill_waypoint and n.state.skill_steps.get("composite", -1) > 0)
             ]
             if len(keep) != len(best_nodes):
                 best_nodes = [best_nodes[i] for i in keep]
