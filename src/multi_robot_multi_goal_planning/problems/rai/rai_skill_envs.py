@@ -1820,7 +1820,14 @@ class rai_deterministic_switch_seq(SequenceMixin, rai_env):
         self.sequence = self._make_sequence_from_names(["a1_skill_switch", "a2_switch", "terminal"])
 
         BaseModeLogic.__init__(self)
+
         self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 @register([("rai.dep_deterministic_switch", {})])
 class rai_dep_deterministic_switch(DependencyGraphMixin, rai_env):
@@ -1864,9 +1871,12 @@ class rai_dep_deterministic_switch(DependencyGraphMixin, rai_env):
         self.graph.add_dependency("terminal", "a2_switch")
 
         BaseModeLogic.__init__(self)
+
         self.prev_mode = self.start_mode
+
         self.spec.dependency = DependencyType.UNORDERED
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
         self.safe_pose = {}
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
@@ -1956,8 +1966,10 @@ class rai_dep_skill_mid_switch(DependencyGraphMixin, rai_env):
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
+
         self.spec.dependency = DependencyType.UNORDERED
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
         self.safe_pose = {}
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
@@ -2027,6 +2039,8 @@ class rai_stochastic_switch(SequenceMixin, rai_stochastic_switch_base):
 
         BaseModeLogic.__init__(self)
 
+        self.prev_mode = self.start_mode
+
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {}
@@ -2045,8 +2059,8 @@ class rai_dep_stochastic_switch(DependencyGraphMixin, rai_stochastic_switch_base
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
-        self.spec.dependency = DependencyType.UNORDERED
 
+        self.spec.dependency = DependencyType.UNORDERED
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {}
@@ -2113,11 +2127,6 @@ class rai_stochastic_switch_pick_place_base(rai_env):
         ]
 
         self.collision_tolerance = 0.01
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        self.safe_pose = {
-            "a1": np.array(self.start_pos.robot_state(self.robots.index("a1"))),
-            "a2": np.array(self.start_pos.robot_state(self.robots.index("a2")))
-        }
 
 @register([("rai.stochastic_switch_pick_place", {})])
 class rai_stochastic_switch_pick_place(SequenceMixin, rai_stochastic_switch_pick_place_base):
@@ -2131,6 +2140,12 @@ class rai_stochastic_switch_pick_place(SequenceMixin, rai_stochastic_switch_pick
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 @register([("rai.dep_stochastic_switch_pick_place", {})])
 class rai_dep_stochastic_switch_pick_place(DependencyGraphMixin, rai_stochastic_switch_pick_place_base):
@@ -2148,5 +2163,11 @@ class rai_dep_stochastic_switch_pick_place(DependencyGraphMixin, rai_stochastic_
         BaseModeLogic.__init__(self)
 
         self.prev_mode = self.start_mode
+
         self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
