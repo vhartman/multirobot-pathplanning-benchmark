@@ -2283,7 +2283,7 @@ class PrioritizedPlanner(BasePlanner):
 
                     # Get next modes that can be reached from current mode and config
                     next_modes = env.get_next_modes(
-                        env.start_pos.from_list(q), curr_mode
+                        env.start_pos.from_list(q), curr_mode, completed_task_ids=[task_index]
                     )
                     # If ambiguity -> use precomputed task_id_sequence
                     if len(next_modes) > 1:
@@ -2385,7 +2385,14 @@ class PrioritizedPlanner(BasePlanner):
                     config = conf_type.from_list(q)
                     mode = robot_paths.get_mode_at_time(t)
 
-                    state = State(config, mode) # Pack information into State
+                    is_skill_wp = False
+                    for i, r in enumerate(env.robots):
+                        task_id = mode.task_ids[i]
+                        if task_id is not None and getattr(env.tasks[task_id], "skill", None) is not None:
+                            is_skill_wp = True
+                            break
+
+                    state = State(config, mode, is_skill_waypoint=is_skill_wp) # Pack information into State
                     path.append(state)
 
                 end_time = time.time()
