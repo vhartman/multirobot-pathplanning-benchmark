@@ -83,7 +83,7 @@ def visualize_modes(env: rai_env, export_images: bool = False, use_viser: bool =
             print("Active Task name:", task.name)
         print("Involved robots: ", task.robots)
 
-        if task.is_skill:
+        if task.skill is not None:
             task.skill.joints = []
             for r in task.robots:
                 task.skill.joints.extend(env.robot_joints[r])
@@ -167,7 +167,9 @@ def visualize_modes(env: rai_env, export_images: bool = False, use_viser: bool =
         if env.is_terminal_mode(m):
             break
 
-        ms = env.get_next_modes(q_config, m)
+        # For skills (which don't have geometric goals), we explicitly tell the environment the active task has completed
+        completed_task_ids = [env.tasks.index(task)] if task else None
+        ms = env.get_next_modes(q_config, m, completed_task_ids=completed_task_ids)
         assert len(ms) == 1
         m = ms[0]
 

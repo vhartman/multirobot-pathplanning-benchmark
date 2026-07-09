@@ -75,6 +75,9 @@ class ModeValidation:
                 if all(elem in whitelist_robots for elem in constrained_robots):
                     continue
 
+                if active_task.goal is None:
+                    continue
+
                 goal = active_task.goal.sample(mode)
 
                 for robot in self.env.robots:

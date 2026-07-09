@@ -69,7 +69,9 @@ class Task:
 
     name: str | None
     robots: List[str]
-    goal: Goal
+    goal: Optional[Goal]
+    initiation_goal: Optional[Goal]
+    skill: Any | None
 
     # things for manipulation
     type: str | None
@@ -79,9 +81,6 @@ class Task:
 
     # things for the future:
     constraints = List[Constraint]
-
-    is_skill = False # redundant? should just check if a skill is given
-    skill = None # skill should be a function taking the config and the current env as arg, and returns a new config.
 
     def __init__(
         self,
@@ -113,10 +112,7 @@ class Task:
         self.side_effect_data = side_effect_data
 
         self.constraints = constraints
-
-        if skill is not None:
-            self.is_skill = True
-            self.skill = skill
+        self.skill = skill
 
 
 class Mode:
@@ -1642,8 +1638,8 @@ class BaseProblem(ABC):
             task_data = {
                 "name": t.name,
                 "robots": t.robots,
-                "goal_type": type(t.goal).__name__,
-                "goal": t.goal.serialize(),
+                "goal_type": type(t.goal).__name__ if t.goal is not None else None,
+                "goal": t.goal.serialize() if t.goal is not None else None,
                 "type": t.type,
                 "frames": t.frames,
                 "side_effect": t.side_effect,

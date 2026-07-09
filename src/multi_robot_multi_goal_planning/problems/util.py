@@ -24,7 +24,25 @@ def compute_reachable_modes(env: BaseProblem, max_iter: int = 500) -> tuple[Mode
             else:
                 active_task = env.get_active_task(mode, None)
 
-            goal_sample = active_task.goal.sample(mode)
+            if getattr(active_task, "skill", None) is not None:
+                q_init = active_task.initiation_goal.sample(mode)
+                
+                active_task.skill.joints = []
+                for r in active_task.robots:
+                    active_task.skill.joints.extend(env.robot_joints[r])
+                all_joints = []
+                for r in env.robots:
+                    all_joints.extend(env.robot_joints[r])
+                    
+                env.C.selectJoints(active_task.skill.joints)
+                skill_result = active_task.skill.rollout(q_init, active_task, all_joints, env, 0)
+                env.C.selectJoints(all_joints)
+                goal_sample = skill_result.trajectory[-1]
+                completed_task_ids = [env.tasks.index(active_task)]
+            else:
+                goal_sample = active_task.goal.sample(mode)
+                completed_task_ids = None
+
             q = env.sample_config_uniform_in_limits()
 
             for i, r in enumerate(env.robots):
@@ -37,7 +55,7 @@ def compute_reachable_modes(env: BaseProblem, max_iter: int = 500) -> tuple[Mode
                         offset += env.robot_dims[task_robot]
 
             if env.is_collision_free(q, mode):
-                return env.get_next_modes(q, mode)
+                return env.get_next_modes(q, mode, completed_task_ids=completed_task_ids)
             failed += 1
 
     reachable = {env.get_start_mode()}
