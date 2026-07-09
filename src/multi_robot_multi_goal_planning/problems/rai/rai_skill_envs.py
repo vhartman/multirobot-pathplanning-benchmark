@@ -916,7 +916,19 @@ class rai_dual_arm_transport(SequenceMixin, rai_env):
 @register("rai.single_agent_bin_picking")
 class rai_single_agent_bin_picking(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, [pre_pick, pre_place_type_1, pre_place_type_2] = rai_config.make_single_agent_bin_picking_env()
+        self.C, [
+            pre_pick,
+            pre_place_pose_obj1,
+            pre_place_pose_obj2,
+            pre_place_pose_obj3,
+            pre_place_pose_obj4,
+        ] = rai_config.make_single_agent_bin_picking_env()
+        pre_place_poses = {
+            1: pre_place_pose_obj1,
+            2: pre_place_pose_obj2,
+            3: pre_place_pose_obj3,
+            4: pre_place_pose_obj4,
+        }
         # self.C.view(True)
 
         self.robots = ["a1"]
@@ -937,10 +949,7 @@ class rai_single_agent_bin_picking(SequenceMixin, rai_env):
         self.C.setJointState(home_pose)
 
         for i in range(1,5):
-            if i%2 == 1:
-                place_pose = pre_place_type_1
-            else:
-                place_pose = pre_place_type_2
+            place_pose = pre_place_poses[i]
 
             grasp_pose = self.C.getFrame(f"obj{i}").getPose() + np.array([0, 0, 0.05, 0, 0, 0, 0])
             grasp_pose[3:] = pose[3:]
@@ -968,9 +977,9 @@ class rai_single_agent_bin_picking(SequenceMixin, rai_env):
                     f"place_{i}",
                     ["a1"],
                     initiation_goal=SingleGoal(place_pose),
-                    skill = EEPoseGoalReaching(self.robot_joints["a1"], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}", scale_stepsize=True, max_step=0.1),
+                    frames=["table", f"obj{i}"],
                     type="place",
-                    frames=["table", f"obj{i}"]
+                    skill = EEPoseGoalReaching(self.robot_joints["a1"], self.C.getFrame(f"goal{i}").getPose(), f"obj{i}", scale_stepsize=True, max_step=0.1),
                 )
             ])
 

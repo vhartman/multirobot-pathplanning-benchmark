@@ -9055,7 +9055,7 @@ def make_single_agent_bin_picking_env(view: bool = False):
 
     C.addFile(robot_path, namePrefix="a1_").setParent(
         C.getFrame("table")
-    ).setRelativePosition([-0., 0.5, 0]).setRelativeQuaternion(
+    ).setRelativePosition([-0., 0.6, 0]).setRelativeQuaternion(
         [0.7071, 0, 0, -0.7071]
     ).setJoint(ry.JT.rigid)
 
@@ -9199,7 +9199,9 @@ def make_single_agent_bin_picking_env(view: bool = False):
             [1],
         )
 
-        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+        target_offset = np.array([0, 0, 0, 0, 0, 0, 0], dtype=float)
+        target_offset[2] = -0.15
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1], target=target_offset)
 
         # komo.addObjective(
         #     times=[0, -1],
@@ -9224,10 +9226,10 @@ def make_single_agent_bin_picking_env(view: bool = False):
     
     pre_pick, pre_place_pose_obj1 = compute_poses(C, "a1_ur_", "obj1", "goal1")
     _, pre_place_pose_obj2 = compute_poses(C, "a1_ur_", "obj2", "goal2")
-    # _, _ = compute_poses(C, "a1_ur_", "obj3", "goal3")
-    # _, _ = compute_poses(C, "a1_ur_", "obj4", "goal4")
+    _, pre_place_pose_obj3 = compute_poses(C, "a1_ur_", "obj3", "goal3")
+    _, pre_place_pose_obj4 = compute_poses(C, "a1_ur_", "obj4", "goal4")
 
-    return C, [pre_pick, pre_place_pose_obj1, pre_place_pose_obj2]
+    return C, [pre_pick, pre_place_pose_obj1, pre_place_pose_obj2, pre_place_pose_obj3, pre_place_pose_obj4]
 
 def make_multi_agent_bin_picking(num_objs=4):
     C = ry.Config()
@@ -9321,25 +9323,25 @@ def make_multi_agent_bin_picking(num_objs=4):
     C.addFrame("bin_wall_l").setParent(C.getFrame("bin_floor")).setShape(
         ry.ST.box, size=[0.03, 0.4, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [-0.23, 0., wall_height/2+0.02] # TODO (larger bin now, 0.23 instead of 0.2)
+        [-0.2, 0., wall_height/2+0.02]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("bin_wall_r").setParent(C.getFrame("bin_floor")).setShape(
         ry.ST.box, size=[0.03, 0.4, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [0.23, 0., wall_height/2+0.02]
+        [0.2, 0., wall_height/2+0.02]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("bin_wall_t").setParent(C.getFrame("bin_floor")).setShape(
         ry.ST.box, size=[0.37, 0.03, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [0.0, 0.23, wall_height/2+0.02]
+        [0.0, 0.2, wall_height/2+0.02]
     ).setJoint(ry.JT.rigid)
 
     C.addFrame("bin_wall_b").setParent(C.getFrame("bin_floor")).setShape(
         ry.ST.box, size=[0.37, 0.03, wall_height, 0.005]
     ).setContact(1).setRelativePosition(
-        [0.0, -0.23, wall_height/2+0.02]
+        [0.0, -0.2, wall_height/2+0.02]
     ).setJoint(ry.JT.rigid)
 
     # C.view(True)
@@ -9402,7 +9404,9 @@ def make_multi_agent_bin_picking(num_objs=4):
             [1],
         )
 
-        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1])
+        target_offset = np.array([0, 0, 0, 0, 0, 0, 0], dtype=float)
+        target_offset[2] = -0.15
+        komo.addObjective([2, -1], ry.FS.poseDiff, [goal, box], ry.OT.eq, [1e1], target=target_offset)
 
         # komo.addObjective(
         #     times=[0, -1],
