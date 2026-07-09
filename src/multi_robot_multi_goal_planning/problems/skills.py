@@ -44,6 +44,32 @@ class DeterministicBaseSkill(ABC):
 
   def rollout(self, q_init, task, all_joints, env, t0, max_steps=1000):
     """
+    Rollout stochastic untimed skill till convergence
+    """
+    import numpy as np
+    from multi_robot_multi_goal_planning.problems.skills import SkillRolloutResult
+    env.C.selectJoints(task.skill.joints)
+    q = q_init.copy()
+    trajectory = [q]
+    times = [t0]
+    
+    for _ in range(max_steps):
+        q = self.step(q, env)
+        times.append(times[-1] + self.dt)
+        trajectory.append(q)
+        
+        if self.done(q, env):
+            break
+        
+    env.C.selectJoints(all_joints)
+    return SkillRolloutResult(
+        trajectory=np.array(trajectory),
+        times=np.array(times),
+        is_deterministic=False
+    )
+
+  def rollout(self, q_init, task, all_joints, env, t0, max_steps=1000):
+    """
     Rollout deterministic untimed skill till convergence
     """
     env.C.selectJoints(task.skill.joints) # Restrict to subspace
@@ -78,6 +104,29 @@ class StochasticBaseSkill(ABC):
   @abstractmethod
   def done(self, q, env):
     pass
+
+  def rollout(self, q_init, task, all_joints, env, t0, max_steps=1000):
+    """
+    Rollout stochastic untimed skill till convergence or max_steps.
+    """
+    env.C.selectJoints(task.skill.joints)
+    q = q_init.copy()
+    trajectory = [q]
+    times = [t0]
+    
+    for _ in range(max_steps):
+        q = self.step(q, env)
+        times.append(times[-1] + self.dt)
+        trajectory.append(q)
+        
+        if self.done(q, env):
+            break
+            
+    env.C.selectJoints(all_joints)
+    return SkillRolloutResult(
+        trajectory=np.array(trajectory),
+        times=np.array(times),
+    )
 
 # abstract class for deterministic timed skills.
 class BaseDeterministicTimedSkill(ABC):
@@ -727,7 +776,8 @@ class StochasticBinPick(StochasticBaseSkill):
   def done(self, q, env):
     raise NotImplementedError
 
-class DummyStochasticSkill(BaseStochasticTimedSkill):
+# Dummy stochastic timed & untimed skills for demonstration purposes
+class DummyStochasticTimedSkill(BaseStochasticTimedSkill):
   def __init__(self, joints, goal_state, dt=0.01, noise_bound=0.2, is_deterministic=False, duration=1.0):
     super().__init__(joints, dt=dt)
     self.goal_state = np.array(goal_state)
@@ -763,5 +813,47 @@ class DummyStochasticSkill(BaseStochasticTimedSkill):
 
   def done(self, t, q, env):
     if t >= 1.0:
+      return True
+    return False
+  
+class DummyStochasticUntimedSkill(StochasticBaseSkill):
+  """
+  Untimed version of DummyStochasticSkill
+  Moves towards goal_state with fixed step size and noise
+  """
+  def __init__(self, joints, goal_state, step_size=0.1, noise_bound=0.02, is_deterministic=False, dt=0.01):
+    super().__init__(joints, dt=dt)
+    import numpy as np
+    self.goal_state = np.array(goal_state)
+    self.step_size = step_size
+    self.noise_bound = noise_bound
+    self.is_deterministic = is_deterministic
+
+  def step(self, q, env):
+    import numpy as np
+    dist = np.linalg.norm(self.goal_state - q)
+    if dist <= self.step_size:
+      return self.goal_state.copy()
+    
+    step_direction = (self.goal_state - q) / dist * self.step_size
+    
+    if not self.is_deterministic:
+      sigma = self.noise_bound / np.sqrt(len(q))
+      
+      # Shrinking variance as skill approaches end ("Brownian-bridge variance" equivalent for distance)
+      # We scale by self.step_size to ensure the total accumulated variance scales linearly with distance (like dt_norm)
+      noise_var = sigma**2 * self.step_size * max(dist - self.step_size, 0.0) / max(dist, 1e-5)
+      
+      noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
+    else:
+      noise = 0.0
+      
+    q_new = q + step_direction + noise
+    return q_new
+
+  def done(self, q, env):
+    import numpy as np
+    dist = np.linalg.norm(self.goal_state - q)
+    if dist <= 1e-3:
       return True
     return False

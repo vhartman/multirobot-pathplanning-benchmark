@@ -36,7 +36,7 @@ from ..skills import (
     DualRobotGrasping,
     ModelBasedInsertion,
     RelativePoseReaching,
-    DummyStochasticSkill
+    DummyStochasticTimedSkill
 )
 
 from ..core.constraints import (
@@ -1811,7 +1811,7 @@ class rai_deterministic_switch_seq(SequenceMixin, rai_env):
         r2_goal[:2] = [-1.0, 0.001]
 
         # Active robot 1 uses a very slow deterministic skill
-        dummy_skill = DummyStochasticSkill(
+        dummy_skill = DummyStochasticTimedSkill(
             joints=self.robot_joints["a1"],
             goal_state=r1_goal,
             dt=0.05,
@@ -1860,7 +1860,7 @@ class rai_dep_deterministic_switch(DependencyGraphMixin, rai_env):
         r2_goal[:2] = [-1.0, 0.001]
 
         # Active robot 1 uses a very slow deterministic skill
-        dummy_skill = DummyStochasticSkill(
+        dummy_skill = DummyStochasticTimedSkill(
             joints=self.robot_joints["a1"],
             goal_state=r1_goal,
             dt=0.05,
@@ -1913,7 +1913,7 @@ class rai_dep_skill_mid_switch(DependencyGraphMixin, rai_env):
         a2_goal = np.array([0.0, -1.2])
         a3_goal = np.array([1.0, -0.2])
 
-        skill_a1 = DummyStochasticSkill(
+        skill_a1 = DummyStochasticTimedSkill(
             joints=self.robot_joints["a1"],
             goal_state=a1_goal,
             dt=0.1,
@@ -1922,7 +1922,7 @@ class rai_dep_skill_mid_switch(DependencyGraphMixin, rai_env):
             duration=10.0
         )
 
-        skill_a2 = DummyStochasticSkill(
+        skill_a2 = DummyStochasticTimedSkill(
             joints=self.robot_joints["a2"],
             goal_state=a2_goal,
             dt=0.1,
@@ -2007,12 +2007,13 @@ class rai_stochastic_switch_base(rai_env):
         r2_goal[:2] = [-1.0, 0.001]
 
         # Active robot 1 uses the dummy skill
-        dummy_skill = DummyStochasticSkill(
+        dummy_skill = DummyStochasticTimedSkill(
             joints=self.robot_joints["a1"],
             goal_state=r1_goal,
-            dt=0.01,
+            dt=0.05,
             noise_bound=0.3,
-            is_deterministic=False # True to test deterministic planner first
+            is_deterministic=False,
+            duration=10
         )
 
         self.tasks = [
@@ -2094,12 +2095,13 @@ class rai_stochastic_switch_pick_place_base(rai_env):
                 "a1_move",
                 ["a1"],
                 initiation_goal=SingleGoal(keyframes[2][self.robot_idx["a1"]]),
-                skill=DummyStochasticSkill(
+                skill=DummyStochasticTimedSkill(
                     joints=self.robot_joints["a1"],
                     goal_state=keyframes[2][self.robot_idx["a1"]],
                     dt=0.05,
                     noise_bound=0.2,
-                    is_deterministic=False
+                    is_deterministic=False,
+                    duration=10
                 )
             ),
             Task(
