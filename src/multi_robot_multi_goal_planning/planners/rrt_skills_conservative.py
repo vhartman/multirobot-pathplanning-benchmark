@@ -25,7 +25,8 @@ from .termination_conditions import PlannerTerminationCondition
 
 from multi_robot_multi_goal_planning.problems.skills import (
     BaseDeterministicTimedSkill,
-    BaseStochasticTimedSkill
+    BaseStochasticTimedSkill,
+    StochasticBaseSkill
 )
 
 # =====================================================================
@@ -917,7 +918,7 @@ class RRTStochasticSkills(BasePlanner):
         q_curr_vec = n_near.state.q.state().copy()
         q_curr_cfg = n_near.state.q
 
-        eta_step = self.eta
+        eta_step = self.config.eta_step
 
         target_policy = self._active_connect_target_policy
         if target_policy == "transition":
@@ -1038,7 +1039,7 @@ class RRTStochasticSkills(BasePlanner):
         """
         return (
             self.config.tube_margin_scale > 0.0
-            and isinstance(skill, BaseStochasticTimedSkill)
+            and isinstance(skill, (BaseStochasticTimedSkill, StochasticBaseSkill))
         )
         
     def _get_skill_tube(self, skill_task, q_subspace: np.ndarray, skill_step: int):
@@ -1065,24 +1066,24 @@ class RRTStochasticSkills(BasePlanner):
 
         all_joints = self.env.get_joint_names()
 
-        # Calculate exactly how many steps this skill takes
-        n_steps = max(1, round(skill.duration / skill.dt))
+        # 3. Monte Carlo rollouts: run N noisy executions
+        raw_rollouts = [
+            skill.rollout(q_init, skill_task, all_joints, self.env, t0=0.0).trajectory
+            for _ in range(self.config.tube_rollouts)
+        ]
+
+        max_steps = max(len(traj) for traj in raw_rollouts)
 
         def _pad(traj: np.ndarray) -> np.ndarray:
             """
-            If skill terminates early, pad trajectory repearing last config, so all rollouts have 
+            If skill terminates early, pad trajectory repeating last config, so all rollouts have 
             same length for stacking and numpy operations
-            # TODO: suggested by claude -> double check
             """
-            if len(traj) < n_steps + 1:
-                traj = np.vstack([traj, np.repeat(traj[-1:], n_steps + 1 - len(traj), axis=0)])
+            if len(traj) < max_steps:
+                traj = np.vstack([traj, np.repeat(traj[-1:], max_steps - len(traj), axis=0)])
             return traj
 
-        # 3. Monte Carlo rollouts: run N noisy executions
-        rollouts = np.stack([
-            _pad(skill.rollout(q_init, skill_task, all_joints, self.env, t0=0.0).trajectory)
-            for _ in range(self.config.tube_rollouts)
-        ], axis=0)
+        rollouts = np.stack([_pad(traj) for traj in raw_rollouts], axis=0)
 
         # 4. Tube
         nominal = np.mean(rollouts, axis=0)
