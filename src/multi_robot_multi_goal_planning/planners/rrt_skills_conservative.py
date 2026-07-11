@@ -33,7 +33,7 @@ from multi_robot_multi_goal_planning.problems.skills import (
 # Config and Data Structures
 # =====================================================================
 @dataclass
-class RRTStochasticSkillsConfig:
+class RRTSkillsConservativeConfig:
     """
     Hyperparameters for the multi-modal RRT with skills
     """
@@ -244,7 +244,7 @@ CURRENT TODOS
 # =====================================================================
 # Main Planner Class
 # =====================================================================
-class RRTStochasticSkills(BasePlanner):
+class RRTSkillsConservative(BasePlanner):
     """
     Core multi-modal RRT* planner supporting deterministic skill integration,
     concurrent inactive robot steering, and optimization strategies. Expansion 
@@ -256,7 +256,7 @@ class RRTStochasticSkills(BasePlanner):
     # Initialization
     # =====================================================================
 
-    def __init__(self, env: BaseProblem, config: RRTStochasticSkillsConfig):
+    def __init__(self, env: BaseProblem, config: RRTSkillsConservativeConfig):
         self.env = env
         self.config = config
         self.tree = MultiModalTree(env)
@@ -1042,16 +1042,18 @@ class RRTStochasticSkills(BasePlanner):
             and isinstance(skill, (BaseStochasticTimedSkill, StochasticBaseSkill))
         )
         
-    def _get_skill_tube(self, skill_task, q_subspace: np.ndarray, skill_step: int):
+    def _get_skill_tubes(self, skill_task, q_subspace: np.ndarray, skill_step: int):
         """
         Evaluates the skill execution starting at q_init and estimates an uncertainty tube 
-        that is inflating (radially) the nominal trajectory based on Monte Carlo rollouts
+        that is inflating (radially) the nominal trajectory based on Monte Carlo rollouts. It
+        groups the N rollouts by their branch_idx (TODO: later pipeline would need e.g. K-means),
+        computes separate tubes and returns a dictionary of distinct tubes
         """
         key = skill_task.name
 
         # 1. Check cache if tube already calculated for this task
         if key in self._skill_tubes:
-            return self._skill_tubes[key][1]
+            return self._skill_tubes[key]
         
         skill = skill_task.skill
 
@@ -1067,10 +1069,16 @@ class RRTStochasticSkills(BasePlanner):
         all_joints = self.env.get_joint_names()
 
         # 3. Monte Carlo rollouts: run N noisy executions
-        raw_rollouts = [
-            skill.rollout(q_init, skill_task, all_joints, self.env, t0=0.0).trajectory
-            for _ in range(self.config.tube_rollouts)
+        results = [
+            skill.rollout(q_init, skill_task, all_joints, self.env, t0=0.0)
+            for _ in range (self.config.tube_rollouts)
         ]
+
+        if not results:
+            return {}
+
+        raw_rollouts = [r.trajectory for r in results]
+        labels = np.array([r.branch_idx if r.branch_idx is not None else 0 for r in results])
 
         max_steps = max(len(traj) for traj in raw_rollouts)
 
@@ -1085,47 +1093,61 @@ class RRTStochasticSkills(BasePlanner):
 
         rollouts = np.stack([_pad(traj) for traj in raw_rollouts], axis=0)
 
-        # 4. Tube
-        nominal = np.mean(rollouts, axis=0)
-        deviations = np.linalg.norm(rollouts - nominal, axis=2)
-        radii = np.quantile(deviations, self.config.tube_quantile, axis=0)
+        # 4. Tubes
+        tubes = {}
+        for branch_idx in np.unique(labels):
+            mask = labels == branch_idx
+            branch_rollouts = rollouts[mask]
+            nominal = np.mean(branch_rollouts, axis=0)
+            deviations = np.linalg.norm(branch_rollouts - nominal, axis=2)
+            radii = np.quantile(deviations, self.config.tube_quantile, axis=0)
+            tubes[int(branch_idx)] = {
+                        "nominal": nominal,
+                        "radii": radii,
+                        "weight": float(mask.sum()) / len(labels),
+                        "raw_rollouts": branch_rollouts,
+                    }
+            # DEBUG
+            print(f"[TUBE] task '{key}' branch {int(branch_idx)}: {mask.sum()} rollouts, radii min/max = {radii.min():.3f}/{radii.max():.3f}")
 
-        # DEBUG
-        print(f"[TUBE] task '{key}': {self.config.tube_rollouts} rollouts, radii min/max = {radii.min():.3f}/{radii.max():.3f}")
-        
         # 5. Cache it
-        self._skill_tubes[key] = (nominal, radii)
-
-        return radii
+        self._skill_tubes[key] = tubes
+        return tubes
     
-    def _tube_margins_free(self, tube_tasks: List, tube_radii: Dict[str, np.ndarray], steps: Dict[str, int],
+    def _tube_margins_free(self, tube_tasks: List, tubes_by_task: Dict[str, Dict[int, Dict[str, Any]]], steps: Dict[str, int],
                            q_flat: np.ndarray, mode: Mode) -> bool:
         """
-        Checks the inflated clearance for one composite skill waypoint, ensuring the inactive 
-        robots don't pass through this active robot's inflated tube
+        For each branc, it moves the active robot to that branch's nominal configuration, inflates
+        the robot's collision geometry by that specific branch's radius, and runs collision check
         """
         for t in tube_tasks:
-            # 1. Get pre calculated radius for this skill at current step
-            radii = tube_radii[t.name]
-            r = float(radii[min(steps[t.name], len(radii) - 1)])
-
-            # 2. Add uncertainty from other concurrently active stochastic skills for each step
-            r_other = sum(
-                float(tube_radii[o.name][min(steps[o.name], len(tube_radii[o.name]) - 1)])
-                for o in tube_tasks if o is not t
-            )
-
-            # TODO: global margin is overly conservative for inactive robots
-            # If Robot A is active and Robot B is active, checking Robot A against an inactive robot 
-            # shouldn't include Robot B's uncertainty radius (r_other). We need pair-specific margins 
-            # in is_collision_free_with_margin to fix this..
+            active_indices = self._get_active_subspace_indices([t])
+            # Save original joint positions of the active robot
+            q_orig = q_flat[active_indices].copy()
             
-            # 3. Scale by config parameter
-            margin = (r + r_other) * self.config.tube_margin_scale
-            
-            # 4. Collision check with inflated geometry
-            if not self.env.is_collision_free_with_margin(q_flat, mode, t.robots, margin):
-                return False
+            for branch_idx, branch_data in tubes_by_task[t.name].items():
+                nominal_traj = branch_data["nominal"]
+                radii = branch_data["radii"]
+                step_idx = min(steps[t.name], len(radii) - 1)
+                
+                # Temporarily move active robot to this branch's nominal configuration
+                q_flat[active_indices] = nominal_traj[step_idx]
+                r = float(radii[step_idx])
+                
+                margin = r * self.config.tube_margin_scale
+                
+                # TODO: We currently assume only ONE robot is executing a stochastic skill at a time
+                # If multiple robots run stochastic skills concurrently, checking this active robot 
+                # against ALL other robots (including other active ones) with this global margin 
+                # will be overly conservative. To support multi-active stochastic skills properly, 
+                # this check should be filtered to only check against inactive robots
+                if not self.env.is_collision_free_with_margin(q_flat, mode, t.robots, margin):
+                    # Restore original before returning
+                    q_flat[active_indices] = q_orig
+                    return False
+                    
+            # Restore original after checking all branches
+            q_flat[active_indices] = q_orig
 
         return True
 
@@ -1133,6 +1155,12 @@ class RRTStochasticSkills(BasePlanner):
         """
         Rolls out multiple concurrent skills by one step, with optional concurrent steering for the inactive robots.
         Inactive robots motions are bounded by max_vel*dt
+
+        NOTE: limitation (OL multimodal expansion)
+        Blindly commits the tree to follow the nominal trajectory of the first branch it encounters, while
+        collision checking the safety of the entire union-tube across all stochastic branches. If the physical
+        execution later diverges down a different branch, the OL trajectory fails to connect to the correct 
+        terminal state (TODO: needs reactive planner)
         """
         if not skill_tasks:
             return []
@@ -1150,14 +1178,15 @@ class RRTStochasticSkills(BasePlanner):
 
         # 3. Stochastic tube preparation 
         tube_tasks = [t for t in skill_tasks if self._use_nominal_tube(t.skill)]
-        tube_radii = {
-            t.name: self._get_skill_tube(
+        tubes_by_task = {
+            t.name: self._get_skill_tubes(
                 t, q_full[self._get_active_subspace_indices([t])],
                 n_near.state.skill_steps.get(t.name, 0)
             ) for t in tube_tasks
         }
 
-        # 4. Active robots
+        # 3. Apply skills (using a single representative nominal path for active robots)
+        q_base_choice = q_base.copy()
         for skill_task in skill_tasks:
             skill = skill_task.skill
             task_name = skill_task.name
@@ -1175,43 +1204,41 @@ class RRTStochasticSkills(BasePlanner):
                 # Avoid step past horizon
                 if base_step >= n_steps:
                     self.env.C.selectJoints(all_joints)
-                    return []
-                t_norm = min((base_step + 1) / n_steps, 1.0)
-
+                    continue
                 # Stochastic: don't call skill.step() -> adds random noise
                 # Instead force robot to follow center of uncertainty tube
                 if self._use_nominal_tube(skill):
-                    nominal_traj, _ = self._skill_tubes[task_name]
+                    branch_idx = next(iter(tubes_by_task[task_name]))
+                    nominal_traj = tubes_by_task[task_name][branch_idx]["nominal"]
                     q_subspace_new = nominal_traj[min(base_step + 1, len(nominal_traj) - 1)].copy()
                 else:
                     # Deterministic skills just step normally
+                    t_norm = min((base_step + 1) / n_steps, 1.0)
                     q_subspace_new = skill.step(t_norm, q_subspace, self.env)
             else: 
                 q_subspace_new = skill.step(q_subspace, self.env)
-
-            # Insert the active robot's new position back into the main array
-            q_base[task_indices] = q_subspace_new
-
+            q_base_choice[task_indices] = q_subspace_new
         self.env.C.selectJoints(all_joints)
 
         # 5. Assemble the new state
-        q_new = self.env.get_start_pos().from_flat(q_base)
+        q_new = self.env.get_start_pos().from_flat(q_base_choice)
         
         # Keep track of how many steps each skill has taken so far
         new_skill_steps = dict(n_near.state.skill_steps)
         for skill_task in skill_tasks:
             new_skill_steps[skill_task.name] = new_skill_steps.get(skill_task.name, 0) + 1
-            
-        state_new = State(q_new, mode, is_skill_waypoint=True, skill_steps=new_skill_steps)
+
+        state_new = State(q_new, mode, is_skill_waypoint=True,
+                        skill_steps=new_skill_steps)
      
         # 6. Collision checking (checking if nominal center path hit anything)
         if not self._validate(state_new, n_near.state.q, is_skill=True):
             return []
         
-        # If nominal safe, check inflated path
+        # If nominal safe, check inflated path against the union of all branches
         if tube_tasks:
             steps = {t.name: n_near.state.skill_steps.get(t.name, 0) + 1 for t in tube_tasks}
-            if not self._tube_margins_free(tube_tasks, tube_radii, steps, q_base, mode):
+            if not self._tube_margins_free(tube_tasks, tubes_by_task, steps, q_base_choice, mode):
                 return []
 
         # 7. Add to tree
@@ -1222,10 +1249,12 @@ class RRTStochasticSkills(BasePlanner):
  
     def _expand_kinodynamic(self, n_near: Node, q_target: Configuration, mode: Mode, skill_tasks: List) -> List[Node]:
         """
-        Rolls out multiple concurrent skills as one kinodynamic edge
-        - All intermediate steps are collision checked during construction
-        - Only the end node enters the subtree (for NN search)
-        - Intermediate waypoints are stored in a SkillEdge on the end node
+        Unrolls a skill execution for N stepy, constructing intermediate waypoints (stored in SkillEdge), 
+        and evaluating collisions before appending the final state (only the end node enters the subtree 
+        for NN search) to the RRT tree. 
+        
+        NOTE: limitation (OL multimodal expansion)
+        Similar to _expand_single_step()
         """
         if not skill_tasks:
             return []
@@ -1234,10 +1263,8 @@ class RRTStochasticSkills(BasePlanner):
         n_kino = self.config.kinodynamic_steps
         active_indices = self._get_active_subspace_indices(skill_tasks)
 
-        q_curr = n_near.state.q.state().copy()
         q_target_vec = q_target.state().copy()
 
-        waypoints = [q_curr.copy()]
         rollout_steps = n_kino
         skill_infos = []
         
@@ -1261,20 +1288,22 @@ class RRTStochasticSkills(BasePlanner):
                 'n_total': n_total
             })
 
-        t_norms_list = [0.0]
+        all_joints = self.env.get_joint_names()
 
         # Fetch stochastic tubes for all active stochastic tasks
         tube_tasks = [t for t in skill_tasks if self._use_nominal_tube(t.skill)]
-        tube_radii = {
-            t.name: self._get_skill_tube(
-                t, q_curr[self._get_active_subspace_indices([t])],
+        tubes_by_task = {
+            t.name: self._get_skill_tubes(
+                t, n_near.state.q.state()[self._get_active_subspace_indices([t])],
                 n_near.state.skill_steps.get(t.name, 0)
             ) for t in tube_tasks
         }
 
+        q_curr = n_near.state.q.state().copy()
+        waypoints = [q_curr.copy()]
+        t_norms_list = [0.0]
         skill_done = False
         actual_steps = 0
-        all_joints = self.env.get_joint_names()
 
         # 2. The unrolling loop
         for i in range(1, rollout_steps + 1):
@@ -1293,7 +1322,8 @@ class RRTStochasticSkills(BasePlanner):
                     
                     # Force stochastic skill to follow nominal baseline
                     if self._use_nominal_tube(skill):
-                        nominal_traj, _ = self._skill_tubes[info['name']]
+                        branch_idx = next(iter(tubes_by_task[info['name']]))
+                        nominal_traj = tubes_by_task[info['name']][branch_idx]["nominal"]
                         q_sub_new = nominal_traj[min(info['base_step'] + i, len(nominal_traj) - 1)].copy()
                     else:
                         q_sub_new = skill.step(t_norm, q_sub, self.env)
@@ -1314,10 +1344,10 @@ class RRTStochasticSkills(BasePlanner):
             if not self._validate(state_next, q_curr_cfg, is_skill=True):
                 break
 
-            # Inflated stochastic collision check
+            # Inflated stochastic collision check (union over all branches)
             if tube_tasks:
                 steps = {t.name: n_near.state.skill_steps.get(t.name, 0) + i for t in tube_tasks}
-                if not self._tube_margins_free(tube_tasks, tube_radii, steps, q_next, mode):
+                if not self._tube_margins_free(tube_tasks, tubes_by_task, steps, q_next, mode):
                     break
             
             # Passed collision check -> record waypoint
@@ -1619,7 +1649,9 @@ class RRTStochasticSkills(BasePlanner):
                     wp_skill_steps = dict(n.parent.state.skill_steps) if n.parent else {}
                     for skill_task_name in n.state.skill_steps:
                         wp_skill_steps[skill_task_name] = wp_skill_steps.get(skill_task_name, 0) + idx + 1
-                    path.append(State(q_wp, n.state.mode, is_skill_waypoint=True, skill_steps=wp_skill_steps))
+                    # Commitments don't change within a single kinodynamic edge -> just copy the end node's
+                    path.append(State(q_wp, n.state.mode, is_skill_waypoint=True, skill_steps=wp_skill_steps,
+                                       skill_branch_commitments=dict(n.state.skill_branch_commitments)))
             else:
                 path.append(n.state)
         return path
@@ -1645,16 +1677,15 @@ class RRTStochasticSkills(BasePlanner):
             return True
 
         q = state.q.state()
-        tube_radii = {}
         steps = {}
 
         # 2. Extract the current timestep for each active skill
         for t in tube_tasks:
             steps[t.name] = getattr(state, "skill_steps", {}).get(t.name, 0)
-            tube_radii[t.name] = self._skill_tubes[t.name][1]
 
         # 3. Ensure the newly shortcutted state doesn't violate the inflated margins
-        return self._tube_margins_free(tube_tasks, tube_radii, steps, np.asarray(q), mode)
+        # (using the union check over all branches)
+        return self._tube_margins_free(tube_tasks, self._skill_tubes, steps, np.asarray(q), mode)
 
     def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
         """
