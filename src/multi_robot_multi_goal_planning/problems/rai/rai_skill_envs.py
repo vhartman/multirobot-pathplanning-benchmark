@@ -37,7 +37,10 @@ from ..skills import (
     ModelBasedInsertion,
     RelativePoseReaching,
     BaseStochasticTimedSkill,
+    ReconvergingBimodalStochasticSkill,
     DummyStochasticTimedSkill,
+    BimodalStochasticSkill,
+    BimodalEEPoseReaching,
     DummyStochasticUntimedSkill
 )
 
@@ -1788,7 +1791,7 @@ class rai_polising(SequenceMixin, rai_env):
   pass
 
 
-# TODO unfinished (NEW DETERMINISTIC SKILLS 2D ENVS) to show mid-skill mode switching
+# TODO NEW DETERMINISTIC SKILLS 2D ENVS (to show mid-skill mode switching)
 @register([("rai.deterministic_switch_seq", {})])
 class rai_deterministic_switch_seq(SequenceMixin, rai_env):
     def __init__(self):
@@ -1985,7 +1988,7 @@ class rai_dep_deterministic_skill_mid_switch(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO NEW STOCHASTIC SKILLS 2D ENVS
+# TODO NEW STOCHASTIC SKILLS 2D ENVS (to show conservative stochastic planner)
 class rai_stochastic_switch_base(rai_env):
     def __init__(self):
         self.C = rai_config.make_stochastic_switch_env()
@@ -2079,7 +2082,7 @@ class rai_dep_stochastic_switch(DependencyGraphMixin, rai_stochastic_switch_base
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO NEW STOCHASTIC UNTIMED SKILLS 2D ENVS
+# TODO NEW STOCHASTIC UNTIMED SKILLS 2D ENVS (to show it working with untimed skills)
 class rai_untimed_stochastic_switch_base(rai_env):
     def __init__(self):
         self.C = rai_config.make_stochastic_switch_env()
@@ -2172,7 +2175,7 @@ class rai_dep_untimed_stochastic_switch(DependencyGraphMixin, rai_untimed_stocha
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO unfinished (NEW STOCHASTIC SKILLS 2D ENVS)
+# TODO unfinished (NEW STOCHASTIC SKILLS 2D ENVS) ()
 class rai_stochastic_switch_pick_place_base(rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_stochastic_switch_pick_place_env()
@@ -2275,4 +2278,280 @@ class rai_dep_stochastic_switch_pick_place(DependencyGraphMixin, rai_stochastic_
         self.safe_pose = {}
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+
+# TODO unfinished (NEW STOCHASTIC BIMODAL SKILLS 2D ENVS) (to show conservative stochastic planner's limitations)
+class rai_stochastic_bimodal_switch_base(rai_env):
+    def __init__(self):
+        self.C = rai_config.make_stochastic_bimodal_switch_env()
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        dim = 2
+        self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
+
+        r1_state = np.array(self.C.getJointState()[self.robot_idx["a1"]])
+        r2_state = np.array(self.C.getJointState()[self.robot_idx["a2"]])
+
+        r1_goal_up = np.array([1.0, 0.5])
+        r1_goal_down = np.array([1.0, -0.5])
+
+        r2_goal = r2_state * 1.0
+        r2_goal[:2] = [-1.0, 0.0]
+
+        # Active robot 1 steers towards x=1.0, but noise breaks the tie on y (branch_dim=1)
+        # once it clears the obstacle -> commits to +0.5 or -0.5, never the shared y=0 line
+        bimodal_skill = BimodalStochasticSkill(
+            joints=self.robot_joints["a1"],
+            branches=[
+                {"target": r1_goal_up, "arrival_frac": 1.0},
+                {"target": r1_goal_down, "arrival_frac": 1.0},
+            ],
+            branch_dim=1,
+            commit_eps=1e-3,
+            dt=0.01,
+            noise_bound=0.3,
+            is_deterministic=False,
+        )
+
+        self.tasks = [
+            Task(
+                "a1_skill_switch",
+                ["a1"],
+                initiation_goal=SingleGoal(r1_state),
+                skill=bimodal_skill
+            ),
+            Task(
+                "a2_switch",
+                ["a2"],
+                SingleGoal(r2_goal)
+            ),
+            Task(
+                "terminal",
+                ["a1", "a2"],
+                GoalSet([
+                    np.concatenate([r1_goal_up, r2_goal]),
+                    np.concatenate([r1_goal_down, r2_goal]),
+                ])
+            )
+        ]
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+@register([("rai.stochastic_bimodal_switch", {})])
+class rai_stochastic_bimodal_switch(SequenceMixin, rai_stochastic_bimodal_switch_base):
+    def __init__(self):
+        rai_stochastic_bimodal_switch_base.__init__(self)
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_skill_switch", "a2_switch", "terminal"]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+@register([("rai.dep_stochastic_bimodal_switch", {})])
+class rai_dep_stochastic_bimodal_switch(DependencyGraphMixin, rai_stochastic_bimodal_switch_base):
+    def __init__(self):
+        rai_stochastic_bimodal_switch_base.__init__(self)
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("terminal", "a1_skill_switch")
+        self.graph.add_dependency("terminal", "a2_switch")
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+
+# TODO unfinished (NEW STOCHASTIC RECONVERGING BIMODAL SKILLS 2D ENVS) (to show when it can work for conservative stochastic planner)
+class rai_reconverging_bimodal_switch_base(rai_env):
+    def __init__(self):
+        self.C = rai_config.make_stochastic_bimodal_switch_env(is_reconverging=True)
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
+
+        dim = 2
+        self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
+
+        r1_state = np.array(self.C.getJointState()[self.robot_idx["a1"]])
+        r2_state = np.array(self.C.getJointState()[self.robot_idx["a2"]])
+
+        r1_via_up = np.array([0.0, 0.8])
+        r1_via_down = np.array([0.0, -0.8])
+        r1_target = np.array([1.0, 0.0]) # Re-converges back to center!
+
+        r2_goal = r2_state * 1.0
+        r2_goal[:2] = [-1.0, 0.0]
+
+        # Use the new reconverging skill
+        reconverging_skill = ReconvergingBimodalStochasticSkill(
+            joints=self.robot_joints["a1"],
+            via_branches=[
+                {"target": r1_via_up, "arrival_frac": 1.0},
+                {"target": r1_via_down, "arrival_frac": 1.0},
+            ],
+            target=r1_target,
+            branch_dim=1,
+            commit_eps=1e-3,
+            dt=0.01,
+            noise_bound=0.3,
+            is_deterministic=False,
+            reconverge_frac=0.5
+        )
+
+        self.tasks = [
+            Task(
+                "a1_skill_switch",
+                ["a1"],
+                initiation_goal=SingleGoal(r1_state),
+                skill=reconverging_skill
+            ),
+            Task(
+                "a2_switch",
+                ["a2"],
+                SingleGoal(r2_goal)
+            ),
+            Task(
+                "terminal",
+                ["a1", "a2"],
+                SingleGoal(np.concatenate([r1_target, r2_goal]))
+            )
+        ]
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+@register([("rai.reconverging_bimodal_switch", {})])
+class rai_reconverging_bimodal_switch(SequenceMixin, rai_reconverging_bimodal_switch_base):
+    def __init__(self):
+        rai_reconverging_bimodal_switch_base.__init__(self)
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_skill_switch", "a2_switch", "terminal"]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+@register([("rai.dep_reconverging_bimodal_switch", {})])
+class rai_dep_reconverging_bimodal_switch(DependencyGraphMixin, rai_reconverging_bimodal_switch_base):
+    def __init__(self):
+        rai_reconverging_bimodal_switch_base.__init__(self)
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("terminal", "a1_skill_switch")
+        self.graph.add_dependency("terminal", "a2_switch")
+
+        BaseModeLogic.__init__(self)
+
+
+# TODO unfinished (NEW STOCHASTIC BIMODAL MULTI AGENT SKILLS 2D ENVS) ()
+@register([("rai.dep_stochastic_timed_skill_switch", {})])
+class rai_dep_stochastic_timed_skill_switch(DependencyGraphMixin, rai_env):
+    def __init__(self):
+        # Same layout as rai_dep_deterministic_skill_mid_switch buy a1's skill is bimodal in 
+        # finishing time rather than end configuration 
+        raise NotImplementedError
+
+
+# TODO unfinished (NEW STOCHASTIC XXX SKILLS 2D ENVS) ()
+@register([("rai.stochastic_bimodal_arm_reach", {})])
+class rai_stochastic_bimodal_arm_reach(SequenceMixin, rai_env):
+    """
+    Idea: stochastic env with 6DOF robot
+    e.g. stochastic reaching skill that detours left/right around a workspace obstacle to get 
+    a bimodal end effector position. Returns to a shared home_pose afterwards, so the terminal 
+    task's completion check doesn't depend on which config the skill converge to for either branch
+    """
+    def __init__(self):
+        self.C, home_pose, q_pre_reach = rai_config.make_bimodal_arm_env()
+
+        self.robots = ["a1"]
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+
+        self.C.setJointState(q_pre_reach, self.robot_joints["a1"])
+        start_ee_pos = self.C.getFrame("a1_ur_gripper_center").getPosition()
+        self.C.setJointState(home_pose)
+
+        target_a_pos = self.C.getFrame("target_a").getPosition()
+        target_b_pos = self.C.getFrame("target_b").getPosition()
+
+        bimodal_skill = BimodalEEPoseReaching(
+            joints=self.robot_joints["a1"],
+            ee_name="a1_ur_gripper_center",
+            target_a=target_a_pos,
+            target_b=target_b_pos,
+            start_ee_pos=start_ee_pos,
+            branch_axis=0,
+            commit_eps=0.01,
+            dt=0.05,
+            noise_bound=0.02,
+            is_deterministic=False,
+            duration=1.0,
+        )
+
+        self.tasks = [
+            Task(
+                "pre_reach",
+                ["a1"],
+                SingleGoal(q_pre_reach),
+            ),
+            Task(
+                "a1_reach_skill",
+                ["a1"],
+                initiation_goal=SingleGoal(q_pre_reach),
+                skill=bimodal_skill,
+            ),
+            Task(
+                "terminal",
+                ["a1"],
+                SingleGoal(home_pose),
+            ),
+        ]
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+        self.sequence = self._make_sequence_from_names(
+            ["pre_reach", "a1_reach_skill", "terminal"]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
 
