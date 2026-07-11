@@ -36,7 +36,9 @@ from ..skills import (
     DualRobotGrasping,
     ModelBasedInsertion,
     RelativePoseReaching,
-    DummyStochasticTimedSkill
+    BaseStochasticTimedSkill,
+    DummyStochasticTimedSkill,
+    DummyStochasticUntimedSkill
 )
 
 from ..core.constraints import (
@@ -1787,7 +1789,6 @@ class rai_polising(SequenceMixin, rai_env):
 
 
 # TODO unfinished (NEW DETERMINISTIC SKILLS 2D ENVS) to show mid-skill mode switching
-
 @register([("rai.deterministic_switch_seq", {})])
 class rai_deterministic_switch_seq(SequenceMixin, rai_env):
     def __init__(self):
@@ -1891,12 +1892,12 @@ class rai_dep_deterministic_switch(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 @register([
-    ("rai.dep_skill_mid_switch", {}),
-    ("rai.dep_skill_mid_switch_stochastic", {"stochastic": True}),
+    ("rai.dep_deterministic_skill_mid_switch", {}),
+    ("rai.dep_stochastic_skill_mid_switch", {"stochastic": True}),
 ])
-class rai_dep_skill_mid_switch(DependencyGraphMixin, rai_env):
+class rai_dep_deterministic_skill_mid_switch(DependencyGraphMixin, rai_env):
     def __init__(self, stochastic=False):
-        self.C = rai_config.make_dep_skill_mid_switch_env()
+        self.C = rai_config.make_dep_deterministic_skill_mid_switch_env()
 
         self.robots = ["a1", "a2", "a3"]
 
@@ -1984,7 +1985,7 @@ class rai_dep_skill_mid_switch(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO unfinished (NEW STOCHASTIC SKILLS 2D ENVS)
+# TODO NEW STOCHASTIC SKILLS 2D ENVS
 class rai_stochastic_switch_base(rai_env):
     def __init__(self):
         self.C = rai_config.make_stochastic_switch_env()
@@ -2061,6 +2062,99 @@ class rai_stochastic_switch(SequenceMixin, rai_stochastic_switch_base):
 class rai_dep_stochastic_switch(DependencyGraphMixin, rai_stochastic_switch_base):
     def __init__(self):
         rai_stochastic_switch_base.__init__(self)
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("terminal", "a1_skill_switch")
+        self.graph.add_dependency("terminal", "a2_switch")
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+
+# TODO NEW STOCHASTIC UNTIMED SKILLS 2D ENVS
+class rai_untimed_stochastic_switch_base(rai_env):
+    def __init__(self):
+        self.C = rai_config.make_stochastic_switch_env()
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        dim = 2
+        self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
+
+        r1_state = self.C.getJointState()[self.robot_idx["a1"]]
+        r2_state = self.C.getJointState()[self.robot_idx["a2"]]
+
+        r1_goal = r1_state * 1.0
+        r1_goal[:2] = [1.0, 0.0]
+
+        r2_goal = r2_state * 1.0
+        r2_goal[:2] = [-1.0, 0.001]
+
+        # Active robot 1 uses the untimed dummy skill
+        dummy_skill = DummyStochasticUntimedSkill(
+            joints=self.robot_joints["a1"],
+            goal_state=r1_goal,
+            dt=0.05,
+            noise_bound=0.3,
+            is_deterministic=False,
+            step_size=0.05
+        )
+
+        self.tasks = [
+            Task(
+                "a1_skill_switch",
+                ["a1"],
+                initiation_goal=SingleGoal(r1_state),
+                skill=dummy_skill
+            ),
+            Task(
+                "a2_switch",
+                ["a2"],
+                SingleGoal(r2_goal)
+            ),
+            Task(
+                "terminal",
+                ["a1", "a2"],
+                SingleGoal(np.concatenate([r1_state, r2_state]))
+            )
+        ]
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+@register([("rai.untimed_stochastic_switch", {})])
+class rai_untimed_stochastic_switch(SequenceMixin, rai_untimed_stochastic_switch_base):
+    def __init__(self):
+        rai_untimed_stochastic_switch_base.__init__(self)
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_skill_switch", "a2_switch", "terminal"]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+@register([("rai.dep_untimed_stochastic_switch", {})])
+class rai_dep_untimed_stochastic_switch(DependencyGraphMixin, rai_untimed_stochastic_switch_base):
+    def __init__(self):
+        rai_untimed_stochastic_switch_base.__init__(self)
 
         self.graph = DependencyGraph()
         self.graph.add_dependency("terminal", "a1_skill_switch")
