@@ -10,8 +10,8 @@ from .prioritized_planner import PrioritizedPlanner, PrioritizedPlannerConfig
 from .shortcutting import single_mode_shortcut, robot_mode_shortcut
 from .rrt_skills import RRTSkills, RRTSkillsConfig
 from .rrt_skills_conservative import (
-    RRTStochasticSkills,
-    RRTStochasticSkillsConfig,
+    RRTSkillsConservative,
+    RRTSkillsConservativeConfig,
 )
 
 __all__ = [
@@ -31,6 +31,6 @@ __all__ = [
     "robot_mode_shortcut",
     "RRTSkills",
     "RRTSkillsConfig",
-    "RRTStochasticSkills",
-    "RRTStochasticSkillsConfig",
+    "RRTSkillsConservative",
+    "RRTSkillsConservativeConfig",
 ]

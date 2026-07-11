@@ -50,7 +50,7 @@ class RRTSkillsConfig:
     # -----------------------------------------------------------------
     
     # LINEAR
-    step_size_strategy: str = "sqrt_d"                  # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots"
+    step_size_strategy: str = "sqrt_d_max_robot"         # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots" | "sqrt_d_max_robot"
     step_size: float = 1                                # Constant
     step_size_factor: float = 0.1                       # Dynamic step size tuning factor
 
@@ -903,7 +903,7 @@ class RRTSkills(BasePlanner):
         q_curr_vec = n_near.state.q.state().copy()
         q_curr_cfg = n_near.state.q
 
-        eta_step = self.eta
+        eta_step = self.config.eta_step
 
         target_policy = self._active_connect_target_policy
         if target_policy == "transition":
@@ -1166,6 +1166,7 @@ class RRTSkills(BasePlanner):
         state_new = State(self.env.get_start_pos().from_flat(waypoints[-1]), mode, is_skill_waypoint=True, skill_steps=end_step_dict)
         edge_cost = self._skill_edge_cost(np.asarray(waypoints), mode)
         n_new = self._create_and_add_node(state_new, n_near, mode, is_skill=True, edge_cost_override=edge_cost)
+        self._dbg_kino_edges += 1
         n_new.skill_edge = SkillEdge(np.array(waypoints), np.array(t_norms_list))
 
         return [n_new]
@@ -1555,6 +1556,9 @@ class RRTSkills(BasePlanner):
             d = sum(self.env.robot_dims.values())
             num_robots = len(self.env.robots)
             return math.sqrt(d / num_robots)
+
+        elif strategy == "sqrt_d_max_robot":
+            return math.sqrt(max(self.env.robot_dims.values()))
 
         robot_diameters = []
         offset = 0
