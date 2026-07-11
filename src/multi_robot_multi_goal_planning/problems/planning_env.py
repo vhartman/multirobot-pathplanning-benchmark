@@ -201,19 +201,27 @@ class State:
     mode: Mode
     is_skill_waypoint: bool
     skill_steps: Dict[str, int]
+    skill_branch_commitments: Dict[str, int]
 
-    def __init__(self, q: Configuration, m: Mode, is_skill_waypoint: bool = False, skill_steps: Optional[Dict[str, int]] = None):
+    def __init__(self, 
+                 q: Configuration, 
+                 mode: Mode, 
+                 is_skill_waypoint: bool = False, 
+                 skill_steps: Optional[Dict[str, int]] = None, 
+                 skill_branch_commitments: Optional[Dict[str, int]] = None):
         self.q = q
-        self.mode = m
+        self.mode = mode
         self.is_skill_waypoint = is_skill_waypoint
         self.skill_steps = skill_steps if skill_steps is not None else {}
+        self.skill_branch_commitments = skill_branch_commitments if skill_branch_commitments is not None else {}
 
     def to_dict(self):
         return {
             "q": self.q.state().tolist(), 
             "mode": self.mode.task_ids,
             "is_skill_waypoint": self.is_skill_waypoint,
-            "skill_steps": self.skill_steps
+            "skill_steps": self.skill_steps,
+            "skill_branch_commitments": self.skill_branch_commitments
         }
 
 
