@@ -856,3 +856,135 @@ class DummyStochasticUntimedSkill(StochasticBaseSkill):
     if dist <= 1e-3:
       return True
     return False
+
+# TODO bimodal stochastic timed skills for demonstration purposes
+class BimodalStochasticSkill(BaseStochasticTimedSkill):
+  def __init__(self, joints, branches, dt=0.01, noise_bound=0.2, is_deterministic=False,
+               duration=1.0, branch_dim=0, commit_eps=1e-3):
+    super().__init__(joints, dt=dt)
+    self.branches = [
+      {"target": np.array(m["target"], dtype=np.float64), "arrival_frac": m["arrival_frac"]}
+      for m in branches
+    ]
+    self.duration = duration
+    self.noise_bound = noise_bound
+    self.is_deterministic = is_deterministic
+    self.branch_dim = branch_dim
+    self.commit_eps = commit_eps
+
+  def _active_branch(self, q):
+    v = q[self.branch_dim]
+    if abs(v) < self.commit_eps:
+      return None
+    return self.branches[0] if v >= 0 else self.branches[1]
+
+  def step(self, t, q, env):
+    branch = self._active_branch(q)
+    pull_mask = np.ones_like(q)
+    if branch is None:
+      # undecided: no attractor pull yet on branch_dim, only noise can break the tie
+      branch = self.branches[0]
+      pull_mask[self.branch_dim] = 0.0
+
+    target = branch["target"]
+    arrival = branch["arrival_frac"]
+
+    dt_norm = self.dt / self.duration
+    time_left = arrival - t + dt_norm
+    if time_left <= 1e-5:
+      return target.copy()
+
+    step_direction = pull_mask * (target - q) / time_left * dt_norm
+
+    if not self.is_deterministic:
+      sigma = self.noise_bound / np.sqrt(len(q))
+      noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / time_left
+      noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
+    else:
+      noise = 0.0
+
+    q_new = q + step_direction + noise
+
+    if t >= arrival:
+      q_new = target.copy()
+
+    return q_new
+
+  def done(self, t, q, env):
+    # The distance/time left logic expects to be driven by a specific branch 
+    # If uncommitted, default to branch 0's target for distance computation
+    branch = self._active_branch(q) or self.branches[0]
+    return t >= branch["arrival_frac"]
+  
+  def rollout(self, q_init, task, all_joints, env, t0):
+    result = super().rollout(q_init, task, all_joints, env, t0)
+    final_q = result.trajectory[-1]
+    result.branch_idx = 0 if final_q[self.branch_dim] >= 0 else 1
+    return result
+
+
+
+class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
+  """
+  Similar to BimodalStochasticSkill, but it diverges to intermediate via-points and then 
+  re-converges to a single deterministic goal state at the end
+  """
+  def __init__(self, joints, via_branches, target, dt=0.01, noise_bound=0.2, is_deterministic=False,
+               duration=1.0, branch_dim=0, commit_eps=1e-3, reconverge_frac=0.5):
+    super().__init__(joints, dt=dt)
+    self.via_branches = [
+      {"target": np.array(m["target"], dtype=np.float64), "arrival_frac": m["arrival_frac"]}
+      for m in via_branches
+    ]
+    self.target = np.array(target, dtype=np.float64)
+    self.duration = duration
+    self.noise_bound = noise_bound
+    self.is_deterministic = is_deterministic
+    self.branch_dim = branch_dim
+    self.commit_eps = commit_eps
+    self.reconverge_frac = reconverge_frac
+
+  def _active_branch(self, q):
+    v = q[self.branch_dim]
+    if abs(v) < self.commit_eps:
+      return None
+    return self.via_branches[0] if v >= 0 else self.via_branches[1]
+
+  def step(self, t, q, env):
+    branch = self._active_branch(q)
+    pull_mask = np.ones_like(q)
+    if branch is None:
+      branch = self.via_branches[0]
+      pull_mask[self.branch_dim] = 0.0
+
+    if t < self.reconverge_frac:
+        current_target = branch["target"]
+        arrival = branch["arrival_frac"] * self.reconverge_frac
+        time_left = max(arrival - t, 1e-5)
+    else:
+        current_target = self.target
+        pull_mask = np.ones_like(q)
+        time_left = max(1.0 - t, 1e-5)
+
+    dt_norm = self.dt / self.duration
+    step_direction = (current_target - q) / time_left * dt_norm * pull_mask
+    
+    if not self.is_deterministic:
+      sigma = self.noise_bound / np.sqrt(len(q))
+      noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / time_left
+      noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
+    else:
+      noise = 0.0
+      
+    q_new = q + step_direction + noise
+    
+    if t >= 1.0:
+      q_new = self.target.copy()
+      
+    return q_new
+
+  def done(self, t, q, env):
+    if t >= 1.0:
+      return True
+    return False
+
