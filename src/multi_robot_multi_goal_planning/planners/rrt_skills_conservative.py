@@ -1090,25 +1090,20 @@ class RRTSkillsConservative(BasePlanner):
         rollouts = np.stack([_pad(traj) for traj in raw_rollouts], axis=0)
 
         # 4. Tubes
-        tubes = {}
-        for branch_idx in np.unique(labels):
-            mask = labels == branch_idx
-            branch_rollouts = rollouts[mask]
-            nominal = np.mean(branch_rollouts, axis=0)
-            
-            tubes[int(branch_idx)] = {
-                        "nominal": nominal,
-                        "weight": float(mask.sum()) / len(labels),
-                        "raw_rollouts": branch_rollouts,
-                    }
-            # DEBUG
-            print(f"[TUBE] task '{key}' branch {int(branch_idx)}: {mask.sum()} rollouts")
+        nominal = np.mean(rollouts, axis=0)
+        
+        tubes = {
+            "nominal": nominal,
+            "raw_rollouts": rollouts,
+        }
+        # DEBUG
+        print(f"[TUBE] task '{key}': {rollouts.shape[0]} rollouts")
 
         # 5. Cache it
         self._skill_tubes[key] = tubes
         return tubes
     
-    def _tube_margins_free(self, tube_tasks: List, tubes_by_task: Dict[str, Dict[int, Dict[str, Any]]], steps: Dict[str, int],
+    def _tube_margins_free(self, tube_tasks: List, tubes_by_task: Dict[str, Dict[str, Any]], steps: Dict[str, int],
                            q_flat: np.ndarray, mode: Mode) -> bool:
         """
         Evaluates collisions using the Monte Carlo realizations of the stochastic skill.
@@ -1119,12 +1114,11 @@ class RRTSkillsConservative(BasePlanner):
             # Save original joint positions of the active robot
             q_orig = q_flat[active_indices].copy()
             
-            for branch_idx, branch_data in tubes_by_task[t.name].items():
-                raw_rollouts = branch_data["raw_rollouts"] # shape (N_rollouts, N_steps, N_joints)
-                step_idx = min(steps[t.name], raw_rollouts.shape[1] - 1)
-                
-                # Check each realization
-                for rollout_idx in range(raw_rollouts.shape[0]):
+            raw_rollouts = tubes_by_task[t.name]["raw_rollouts"] # shape (N_rollouts, N_steps, N_joints)
+            step_idx = min(steps[t.name], raw_rollouts.shape[1] - 1)
+            
+            # Check each realization
+            for rollout_idx in range(raw_rollouts.shape[0]):
                     q_flat[active_indices] = raw_rollouts[rollout_idx, step_idx]
                     
                     q_cfg = self.env.get_start_pos().from_flat(q_flat)
@@ -1309,8 +1303,7 @@ class RRTSkillsConservative(BasePlanner):
                     
                     # Force stochastic skill to follow nominal baseline
                     if self.config.collision_checking_strategy in ["monte_carlo", "sigma_points", "convex_hull"]:
-                        branch_idx = next(iter(tubes_by_task[info['name']]))
-                        nominal_traj = tubes_by_task[info['name']][branch_idx]["nominal"]
+                        nominal_traj = tubes_by_task[info['name']]["nominal"]
                         q_sub_new = nominal_traj[min(info['base_step'] + i, len(nominal_traj) - 1)].copy()
                     else:
                         q_sub_new = skill.step(t_norm, q_sub, self.env)

@@ -24,8 +24,7 @@ class SkillRolloutResult:
   trajectory: np.ndarray
   times: np.ndarray
   is_deterministic: bool = True
-  distributions: Optional[List] = None # Later with stochastic skills?
-  # ...
+  branch_idx: Optional[int] = None # Which branch this rollout commits to (None=unimodal)
 
 # abstract class for skills. 
 class DeterministicBaseSkill(ABC):
@@ -776,7 +775,7 @@ class StochasticBinPick(StochasticBaseSkill):
   def done(self, q, env):
     raise NotImplementedError
 
-# Dummy stochastic timed & untimed skills for demonstration purposes
+# TODO dummy stochastic timed & untimed skills for demonstration purposes
 class DummyStochasticTimedSkill(BaseStochasticTimedSkill):
   def __init__(self, joints, goal_state, dt=0.01, noise_bound=0.2, is_deterministic=False, duration=1.0):
     super().__init__(joints, dt=dt)
