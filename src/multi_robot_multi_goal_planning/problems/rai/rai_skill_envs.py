@@ -40,7 +40,6 @@ from ..skills import (
     ReconvergingBimodalStochasticSkill,
     DummyStochasticTimedSkill,
     BimodalStochasticSkill,
-    BimodalEEPoseReaching,
     DummyStochasticUntimedSkill
 )
 

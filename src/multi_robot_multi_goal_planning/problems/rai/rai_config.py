@@ -10809,12 +10809,6 @@ def make_stochastic_bimodal_switch_env(view: bool = False, is_reconverging: bool
         ry.ST.cylinder, size=[0.06, 0.16]
     ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([-1.0, 0.0, 0.07])
 
-    # Static obstacle centered on a1's straight-line path, forcing an up/down detour
-    C.addFrame("obs1").setParent(table).setPosition(
-        table.getPosition() + [0.0, 0.0, 0.07]
-    ).setShape(ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]).setContact(1).setColor(
-        [0, 0, 0]
-    ).setJoint(ry.JT.rigid)
 
     if view:
         C.view(True)
