@@ -25,6 +25,7 @@ def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
 
     return links
 
+
 def solve_komo_problem(komo, max_attempts, C, view, mult=3, offset=-1.5, damping=None, wolfe=None):
     for num_attempt in range(max_attempts):
         # komo.initRandom()
@@ -162,7 +163,6 @@ def make_2d_rai_env_no_obs(view: bool = False, agents_can_rotate=True):
         ).setJointState([0.5, 0.5])
 
     return C
-
 
 
 def make_2d_rai_env_no_obs_three_agents(view: bool = False, agents_can_rotate=True):
@@ -1179,7 +1179,6 @@ def make_piano_mover_env(view: bool = False):
 
     return C, keyframes
 
-
 # environment to test informed sampling
 def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
     if not isinstance(agents_can_rotate, list):
@@ -1299,7 +1298,6 @@ def make_two_dim_tunnel_env(view: bool = False, agents_can_rotate=True):
 
     return C, keyframes
 
-
 # environment to test informed sampling
 def make_two_dim_short_tunnel_env(view: bool = False, agents_can_rotate=True):
     if not isinstance(agents_can_rotate, list):
@@ -1418,6 +1416,7 @@ def make_two_dim_short_tunnel_env(view: bool = False, agents_can_rotate=True):
     # print(komo.nlp().getBounds())
 
     return C, keyframes
+
 
 def make_only_short_tunnel(view: bool = False):
     C = make_table_with_walls(4, 4)
@@ -2267,6 +2266,7 @@ def make_single_arm_stick_env(clutter = False):
 
     return C, [start_pose, goal_pose]
 
+
 def make_dual_arm_stick_env(clutter=False):
     C = ry.Config()
 
@@ -2449,6 +2449,7 @@ def make_dual_arm_stick_env(clutter=False):
     r2_goal_pose = compute_pose_from_pos("a2_", r2_xy_goal_pos)
 
     return C, [r1_start_pose, r1_goal_pose], [r2_start_pose, r2_goal_pose]
+
 
 def make_egg_carton_env(num_boxes=9, view: bool = False):
     C = ry.Config()
@@ -3752,6 +3753,7 @@ def make_box_stacking_env(
 
         return C, keyframes, all_robots
     
+
 def make_isolated_box_stacking_env(num_robots=2, num_boxes_per_robot=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False):
     C = ry.Config()
 
@@ -3808,6 +3810,7 @@ def make_isolated_box_stacking_env(num_robots=2, num_boxes_per_robot=9, robot_ty
                 sequenced_keyframes.append(all_keyframes[r][i])
 
     return C, sequenced_keyframes, all_robots, all_keyframes
+
 
 def make_pyramid_env(
     num_robots=2, num_boxes=6, mixed_robots: bool = False, view: bool = False
@@ -5634,6 +5637,7 @@ def make_four_arms_on_a_gantry():
 
     return C, [k1, k2, k3, k4]
 
+
 def make_husky_base_config():
     C = ry.Config()
 
@@ -5704,6 +5708,7 @@ def make_husky_base_config():
     C.getFrame("a2_ur_coll0").setContact(0)
 
     return C
+
 
 def make_static_fr3_duo_config():
     C = ry.Config()
@@ -6201,6 +6206,7 @@ def make_four_arm_stacking():
 
     return C, robots, sequence, keyframes
 
+
 def make_goto_husky_env():
     C = make_husky_base_config()
     table = C.getFrame("table")
@@ -6472,6 +6478,7 @@ def make_husky_single_arm_box_stacking_env():
 
     return C, [k1, k2, k3, k4]
 
+
 def make_husky_bimanual_box_stacking_env():
     C = make_husky_base_config()
     floor = C.getFrame("table")
@@ -6687,6 +6694,7 @@ def make_husky_bimanual_box_stacking_env():
     k4 = compute_rearrangment("obj3", "goal3")
 
     return C, [k1, k2, k3, k4]
+
 
 def make_box_pile_env(
     num_boxes=6,
@@ -7126,6 +7134,7 @@ def make_box_pile_env(
 
     return C, keyframes
 
+
 def make_mobile_manip_with_small_stones_env(num_robots, wall_x=5, wall_z=5):
     C = ry.Config()
 
@@ -7331,6 +7340,7 @@ def make_mobile_manip_with_small_stones_env(num_robots, wall_x=5, wall_z=5):
         print(height)
 
     return C, keyframes, sequenced_keyframes
+
 
 def make_mobile_manip_env(num_robots=5, view: bool = False):
     C = ry.Config()
@@ -7909,6 +7919,7 @@ def make_strut_assembly_problem():
         C.getFrame(obj).setPosition([0, 0, -2])
 
     return C, robots, keyframes
+
 
 def make_strut_nccr_env():
     from scipy.spatial.transform import Rotation as R
@@ -8531,6 +8542,7 @@ def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="t
         )
 
     return C, robots, keyframes
+
 
 def make_ur10_screwing_env(view: bool = False):
     C = ry.Config()
@@ -9231,6 +9243,7 @@ def make_single_agent_bin_picking_env(view: bool = False):
 
     return C, [pre_pick, pre_place_pose_obj1, pre_place_pose_obj2, pre_place_pose_obj3, pre_place_pose_obj4]
 
+
 def make_multi_agent_bin_picking(num_objs=4):
     C = ry.Config()
 
@@ -9669,6 +9682,7 @@ def make_single_agent_bin_packing_env(compute_multiple_pre_place: bool = False, 
 
     return C, [pre_pick_type_1, pre_pick_type_2, pre_place]
 
+
 def make_multi_agent_bin_packing_env(num_objs=3, view: bool = False):
     C = ry.Config()
 
@@ -9901,6 +9915,7 @@ def make_multi_agent_bin_packing_env(num_objs=3, view: bool = False):
     # _, _ = compute_poses(C, "a1_ur_", "obj4", "goal4")
 
     return C, [a1_pre_pick_type_1, a1_pre_pick_type_2, a1_pre_place], [a2_pre_pick_type_1, a2_pre_pick_type_2, a2_pre_place]
+
 
 def make_single_robot_insert(view: bool = False):
     C = ry.Config()
@@ -10384,12 +10399,14 @@ def make_multi_robot_insert(view: bool = False):
 
     return C, keyframes
 
+
 def make_multi_agent_pick_and_place(view: bool = False):
     pass
 
 
 def make_multi_agent_skill_welding_env(num_robots=4, num_pts=4, view: bool = False):
     pass
+
 
 def make_rai_dual_ur5_env():
     C = ry.Config()
@@ -10462,6 +10479,7 @@ def make_rai_dual_ur5_env():
     # print(r2_pose)
 
     return C, [r1_pose, r2_pose]
+
 
 def make_rai_quad_ur5_env():
     C = ry.Config()
@@ -10595,6 +10613,7 @@ def make_stochastic_switch_env(agents_can_rotate=None, view=False):
 
     return C
 
+
 def make_stochastic_switch_pick_place_env(view: bool = False):
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
@@ -10677,7 +10696,8 @@ def make_stochastic_switch_pick_place_env(view: bool = False):
 
     return C, keyframes
 
-def make_dep_skill_mid_switch_env(view: bool = False):
+
+def make_dep_deterministic_skill_mid_switch_env(view: bool = False):
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
 
@@ -10732,5 +10752,73 @@ def make_dep_skill_mid_switch_env(view: bool = False):
 
     if view:
         C.view(True)
+
+    return C
+
+
+def make_stochastic_bimodal_switch_env(view: bool = False, is_reconverging: bool = False):
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([-1.0, 0.0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([1.0, 0.0])
+
+    if is_reconverging:
+        C.addFrame("goal1").setParent(table).setShape(
+            ry.ST.cylinder, size=[0.06, 0.16]
+        ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([1.0, 0.0, 0.07])
+    else:
+        C.addFrame("goal1_up").setParent(table).setShape(
+            ry.ST.cylinder, size=[0.06, 0.16]
+        ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([1.0, 0.5, 0.07])
+
+        C.addFrame("goal1_down").setParent(table).setShape(
+            ry.ST.cylinder, size=[0.06, 0.16]
+        ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([1.0, -0.5, 0.07])
+
+    C.addFrame("goal2").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([-1.0, 0.0, 0.07])
+
+    # Static obstacle centered on a1's straight-line path, forcing an up/down detour
+    C.addFrame("obs1").setParent(table).setPosition(
+        table.getPosition() + [0.0, 0.0, 0.07]
+    ).setShape(ry.ST.box, size=[0.2, 0.2, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    if view:
+        C.view(True)
+
+    C.view(True)
 
     return C

@@ -922,8 +922,6 @@ class BimodalStochasticSkill(BaseStochasticTimedSkill):
     result.branch_idx = 0 if final_q[self.branch_dim] >= 0 else 1
     return result
 
-
-
 class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
   """
   Similar to BimodalStochasticSkill, but it diverges to intermediate via-points and then 
