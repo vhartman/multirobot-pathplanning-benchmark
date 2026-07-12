@@ -986,3 +986,34 @@ class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
       return True
     return False
 
+# TODO stochastic timed skills for 3D env 
+
+class StochasticHorizontalTransport(BaseStochasticTimedSkill):
+  def __init__(self, joints, target_q, dt=0.01, duration=5.0, noise_bound=0.1):
+    super().__init__(joints, dt=dt)
+    self.target_q = np.array(target_q, dtype=np.float64)
+    self.duration = duration
+    self.noise_bound = noise_bound
+
+  def step(self, t, q, env):
+    time_left = max(1.0 - t, 1e-5)
+    dt_norm = self.dt / self.duration
+    
+    # Deterministic step towards target
+    step_direction = (self.target_q - q) / time_left * dt_norm
+    
+    # Simple joint-space noise approximation for the wobble
+    # Adding noise proportional to dt_norm, scaled down near the goal so it converges
+    sigma = self.noise_bound / np.sqrt(len(q))
+    noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / time_left
+    noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
+      
+    q_new = q + step_direction + noise
+    
+    if t >= 1.0:
+      q_new = self.target_q.copy()
+      
+    return q_new
+
+  def done(self, t, q, env):
+    return t >= 1.0

@@ -10822,3 +10822,74 @@ def make_stochastic_bimodal_switch_env(view: bool = False, is_reconverging: bool
     C.view(True)
 
     return C
+
+
+def make_stochastic_horizontal_transport_env(view: bool = False):
+    C = ry.Config()
+
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0, 0.2])
+        .setShape(ry.ST.box, size=[2, 3, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(
+        os.path.dirname(__file__), "../../assets/models/rai/ur10/ur10_vacuum.g"
+    )
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(table).setRelativePosition(
+        [-0.75, 0, 0.03]
+    ).setRelativeQuaternion([1, 0, 0, 0]).setJoint(ry.JT.rigid)
+
+    C.addFile(robot_path, namePrefix="a2_").setParent(table).setRelativePosition(
+        [+0.75, 0, 0.03]
+    ).setRelativeQuaternion([0, 0, 0, 1]).setJoint(ry.JT.rigid)
+
+    # Attach parcel to a1's EE
+    C.addFrame("parcel").setParent(C.getFrame("a1_ur_vacuum")).setShape(
+        ry.ST.box, size=[0.2, 0.4, 0.2, 0.005]
+    ).setColor([1, 0.5, 0, 1]).setContact(1).setRelativePosition(
+        [0.1, 0.0, 0.0]
+    ).setJoint(ry.JT.rigid)
+
+    C.addFrame("r1_start").setPosition([-0.4, -0.6, 0.6]).setShape(ry.ST.marker, [0.1]).setColor([1,0,0]).setContact(0)
+    C.addFrame("r1_target").setPosition([-0.4, 0.6, 0.6]).setShape(ry.ST.marker, [0.1]).setColor([1,0,0]).setContact(0)
+    
+    C.addFrame("r2_start").setPosition([0.4, 0.6, 0.4]).setShape(ry.ST.marker, [0.1]).setColor([0,1,0]).setContact(0)
+    C.addFrame("r2_target").setPosition([0.4, -0.6, 0.4]).setShape(ry.ST.marker, [0.1]).setColor([0,1,0]).setContact(0)
+
+    def compute_ik(robot_prefix, target_frame):
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+        robot_base = robot_prefix + "ur_base"
+        c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot_base))
+        
+        komo = ry.KOMO(c_tmp, phases=1, slicesPerPhase=1, kOrder=0, enableCollisions=False)
+        komo.addObjective([], ry.FS.positionDiff, [robot_prefix + "ur_vacuum", target_frame], ry.OT.eq, [1e1])
+        komo.addObjective([], ry.FS.vectorX, [robot_prefix + "ur_vacuum"], ry.OT.eq, [1e1], [0, 0, -1])
+        
+        nlp = ry.NLP_Solver(komo.nlp(), 0)
+        nlp.solve()
+        return komo.getPath()[0]
+
+    try:
+        r1_q = compute_ik("a1_", "r1_start")
+        r2_q = compute_ik("a2_", "r2_start")
+        C.setJointState(np.concatenate([r1_q, r2_q]))
+        
+        r1_t = compute_ik("a1_", "r1_target")
+        r2_t = compute_ik("a2_", "r2_target")
+    except Exception as e:
+        print(f"IK failed: {e}")
+        r1_t, r2_t = None, None
+
+    if view:
+        C.view(True)
+
+    return C, r1_t, r2_t

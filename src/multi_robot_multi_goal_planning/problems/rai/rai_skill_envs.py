@@ -2479,79 +2479,58 @@ class rai_dep_stochastic_timed_skill_switch(DependencyGraphMixin, rai_env):
         raise NotImplementedError
 
 
-# TODO unfinished (NEW STOCHASTIC XXX SKILLS 2D ENVS) ()
-@register([("rai.stochastic_bimodal_arm_reach", {})])
-class rai_stochastic_bimodal_arm_reach(SequenceMixin, rai_env):
-    """
-    Idea: stochastic env with 6DOF robot
-    e.g. stochastic reaching skill that detours left/right around a workspace obstacle to get 
-    a bimodal end effector position. Returns to a shared home_pose afterwards, so the terminal 
-    task's completion check doesn't depend on which config the skill converge to for either branch
-    """
+# TODO unfinished (NEW STOCHASTIC SKILLS 3D ENVS) ()
+@register([("rai.stochastic_horizontal_transport", {})])
+class rai_stochastic_horizontal_transport(SequenceMixin, rai_env):
     def __init__(self):
-        self.C, home_pose, q_pre_reach = rai_config.make_bimodal_arm_env()
+        self.C, r1_target_q, r2_target_q = rai_config.make_stochastic_horizontal_transport_env()
 
-        self.robots = ["a1"]
-
+        self.robots = ["a1", "a2"]
         rai_env.__init__(self)
+        self.manipulating_env = False
 
-        self.manipulating_env = True
-
-        self.C.setJointState(q_pre_reach, self.robot_joints["a1"])
-        start_ee_pos = self.C.getFrame("a1_ur_gripper_center").getPosition()
-        self.C.setJointState(home_pose)
-
-        target_a_pos = self.C.getFrame("target_a").getPosition()
-        target_b_pos = self.C.getFrame("target_b").getPosition()
-
-        bimodal_skill = BimodalEEPoseReaching(
+        from multi_robot_multi_goal_planning.problems.skills import StochasticHorizontalTransport
+        
+        start_q = self.C.getJointState()[self.robot_idx["a1"]]
+        
+        transport_skill = StochasticHorizontalTransport(
             joints=self.robot_joints["a1"],
-            ee_name="a1_ur_gripper_center",
-            target_a=target_a_pos,
-            target_b=target_b_pos,
-            start_ee_pos=start_ee_pos,
-            branch_axis=0,
-            commit_eps=0.01,
+            target_q=r1_target_q,
             dt=0.05,
-            noise_bound=0.02,
-            is_deterministic=False,
-            duration=1.0,
+            duration=5.0,
+            noise_bound=0.2
         )
 
         self.tasks = [
             Task(
-                "pre_reach",
+                "a1_transport",
                 ["a1"],
-                SingleGoal(q_pre_reach),
+                initiation_goal=SingleGoal(np.array(start_q)),
+                skill=transport_skill
             ),
             Task(
-                "a1_reach_skill",
-                ["a1"],
-                initiation_goal=SingleGoal(q_pre_reach),
-                skill=bimodal_skill,
+                "a2_cross",
+                ["a2"],
+                SingleGoal(np.array(r2_target_q)),
             ),
             Task(
                 "terminal",
-                ["a1"],
-                SingleGoal(home_pose),
-            ),
+                ["a1", "a2"],
+                SingleGoal(np.concatenate([r1_target_q, r2_target_q]))
+            )
         ]
 
         self.collision_tolerance = 0.001
         self.collision_resolution = 0.005
 
         self.sequence = self._make_sequence_from_names(
-            ["pre_reach", "a1_reach_skill", "terminal"]
+            ["a1_transport", "a2_cross", "terminal"]
         )
-
-        BaseModeLogic.__init__(self)
-
-        self.prev_mode = self.start_mode
+        self.start_mode = self.make_start_mode()
+        self._terminal_task_ids = self.make_symbolic_end()
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
 
         self.safe_pose = {}
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
-
-
