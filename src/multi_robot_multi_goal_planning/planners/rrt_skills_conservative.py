@@ -88,8 +88,7 @@ class RRTSkillsConservativeConfig:
     # -----------------------------------------------------------------
 
     tube_rollouts: int = 200                            # MC rollouts to estimate the uncertainty tube
-    tube_quantile: float = 0.95                         # Per-step deviation quantile for the tube radius (1.0 = worst case)
-    tube_margin_scale: float = 1.0                      # Scales the tube radii (0.0 disables inflation)
+    collision_checking_strategy: str = "monte_carlo"    # "monte_carlo" | TODO add other strategies
 
     # -----------------------------------------------------------------
     # RRT* OPTIMIZATION PARAMETERS
@@ -1037,10 +1036,7 @@ class RRTSkillsConservative(BasePlanner):
         """
         Determines if a skill should be executed using the robust Tube-RRT strategy
         """
-        return (
-            self.config.tube_margin_scale > 0.0
-            and isinstance(skill, (BaseStochasticTimedSkill, StochasticBaseSkill))
-        )
+        return isinstance(skill, (BaseStochasticTimedSkill, StochasticBaseSkill))
         
     def _get_skill_tubes(self, skill_task, q_subspace: np.ndarray, skill_step: int):
         """
@@ -1099,16 +1095,14 @@ class RRTSkillsConservative(BasePlanner):
             mask = labels == branch_idx
             branch_rollouts = rollouts[mask]
             nominal = np.mean(branch_rollouts, axis=0)
-            deviations = np.linalg.norm(branch_rollouts - nominal, axis=2)
-            radii = np.quantile(deviations, self.config.tube_quantile, axis=0)
+            
             tubes[int(branch_idx)] = {
                         "nominal": nominal,
-                        "radii": radii,
                         "weight": float(mask.sum()) / len(labels),
                         "raw_rollouts": branch_rollouts,
                     }
             # DEBUG
-            print(f"[TUBE] task '{key}' branch {int(branch_idx)}: {mask.sum()} rollouts, radii min/max = {radii.min():.3f}/{radii.max():.3f}")
+            print(f"[TUBE] task '{key}' branch {int(branch_idx)}: {mask.sum()} rollouts")
 
         # 5. Cache it
         self._skill_tubes[key] = tubes
@@ -1117,8 +1111,8 @@ class RRTSkillsConservative(BasePlanner):
     def _tube_margins_free(self, tube_tasks: List, tubes_by_task: Dict[str, Dict[int, Dict[str, Any]]], steps: Dict[str, int],
                            q_flat: np.ndarray, mode: Mode) -> bool:
         """
-        For each branc, it moves the active robot to that branch's nominal configuration, inflates
-        the robot's collision geometry by that specific branch's radius, and runs collision check
+        Evaluates collisions using the Monte Carlo realizations of the stochastic skill.
+        Instead of a Cartesian margin, we directly check the cached rollouts at the current timestep
         """
         for t in tube_tasks:
             active_indices = self._get_active_subspace_indices([t])
@@ -1126,29 +1120,22 @@ class RRTSkillsConservative(BasePlanner):
             q_orig = q_flat[active_indices].copy()
             
             for branch_idx, branch_data in tubes_by_task[t.name].items():
-                nominal_traj = branch_data["nominal"]
-                radii = branch_data["radii"]
-                step_idx = min(steps[t.name], len(radii) - 1)
+                raw_rollouts = branch_data["raw_rollouts"] # shape (N_rollouts, N_steps, N_joints)
+                step_idx = min(steps[t.name], raw_rollouts.shape[1] - 1)
                 
-                # Temporarily move active robot to this branch's nominal configuration
-                q_flat[active_indices] = nominal_traj[step_idx]
-                r = float(radii[step_idx])
-                
-                margin = r * self.config.tube_margin_scale
-                
-                # TODO: We currently assume only ONE robot is executing a stochastic skill at a time
-                # If multiple robots run stochastic skills concurrently, checking this active robot 
-                # against ALL other robots (including other active ones) with this global margin 
-                # will be overly conservative. To support multi-active stochastic skills properly, 
-                # this check should be filtered to only check against inactive robots
-                if not self.env.is_collision_free_with_margin(q_flat, mode, t.robots, margin):
-                    # Restore original before returning
-                    q_flat[active_indices] = q_orig
-                    return False
+                # Check each realization
+                for rollout_idx in range(raw_rollouts.shape[0]):
+                    q_flat[active_indices] = raw_rollouts[rollout_idx, step_idx]
                     
+                    q_cfg = self.env.get_start_pos().from_flat(q_flat)
+                    if not self.env.is_collision_free(q_cfg, mode):
+                        # Restore original before returning
+                        q_flat[active_indices] = q_orig
+                        return False
+                        
             # Restore original after checking all branches
             q_flat[active_indices] = q_orig
-
+            
         return True
 
     def _expand_single_step(self, n_near: Node, q_target: Configuration, mode: Mode, skill_tasks: List) -> List[Node]:
@@ -1321,7 +1308,7 @@ class RRTSkillsConservative(BasePlanner):
                     t_norm = min((info['base_step'] + i) / info['n_total'], 1.0)
                     
                     # Force stochastic skill to follow nominal baseline
-                    if self._use_nominal_tube(skill):
+                    if self.config.collision_checking_strategy in ["monte_carlo", "sigma_points", "convex_hull"]:
                         branch_idx = next(iter(tubes_by_task[info['name']]))
                         nominal_traj = tubes_by_task[info['name']][branch_idx]["nominal"]
                         q_sub_new = nominal_traj[min(info['base_step'] + i, len(nominal_traj) - 1)].copy()
