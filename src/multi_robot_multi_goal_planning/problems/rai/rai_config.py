@@ -10813,7 +10813,74 @@ def make_stochastic_bimodal_switch_env(view: bool = False, is_reconverging: bool
     if view:
         C.view(True)
 
-    C.view(True)
+    return C
+
+
+def make_square_island_env(view: bool = False):
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    # Central massive square obstacle
+    C.addFrame("island").setParent(table).setPosition(
+        table.getPosition() + [0.0, 0.0, 0.07]
+    ).setShape(ry.ST.box, size=[2.0, 2.0, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    # a1 starts on the Right (X = 1.5)
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([1.5, 0.0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    # a2 starts on the Left (X = -1.5)
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([-1.5, 0.0])
+
+    # Goals
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-1.5, 0.0, 0.07])
+
+    C.addFrame("goal2").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([1.5, 0.0, 0.07])
+
+    # Start poses for the return trips
+    C.addFrame("goal1_return").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([1, 0.5, 0, 0.15]).setContact(0).setRelativePosition([1.5, 0.0, 0.07])
+
+    C.addFrame("goal2_return").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([0.5, 0.5, 0, 0.1]).setContact(0).setRelativePosition([-1.5, 0.0, 0.07])
+
+    if view:
+        C.view(True)
 
     return C
 
@@ -10876,7 +10943,7 @@ def make_stochastic_horizontal_transport_env(view: bool = False):
         r1_q = compute_ik("a1_", "r1_start")
         r2_q = compute_ik("a2_", "r2_start")
         C.setJointState(np.concatenate([r1_q, r2_q]))
-        
+
         r1_t = compute_ik("a1_", "r1_target")
         r2_t = compute_ik("a2_", "r2_target")
     except Exception as e:
@@ -10887,3 +10954,141 @@ def make_stochastic_horizontal_transport_env(view: bool = False):
         C.view(True)
 
     return C, r1_t, r2_t
+
+
+def make_stochastic_bin_picking_env(view: bool = False):
+    import math
+    from scipy.spatial.transform import Rotation as R
+    import numpy as np
+    import robotic as ry
+    import os
+
+    def get_quat(z_vec, x_vec):
+        z_vec = np.array(z_vec)
+        x_vec = np.array(x_vec)
+        y_vec = np.cross(z_vec, x_vec)
+        rot_mat = np.column_stack((x_vec, y_vec, z_vec))
+        quat = R.from_matrix(rot_mat).as_quat()
+        return [quat[3], quat[0], quat[1], quat[2]]
+
+    C = ry.Config()
+    C.addFrame("floor").setPosition([0, 0, 0.0]).setShape(
+        ry.ST.box, size=[20, 20, 0.02, 0.005]
+    ).setColor([0.9, 0.9, 0.9]).setContact(0)
+
+    table = (
+        C.addFrame("table")
+        .setPosition([0, 0.0, 0.2])
+        .setShape(ry.ST.box, size=[3.0, 3.0, 0.06, 0.005])
+        .setColor([0.6, 0.6, 0.6])
+        .setContact(1)
+    )
+
+    robot_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/ur10/ur10_two_finger.g")
+
+    C.addFile(robot_path, namePrefix="a1_").setParent(table).setRelativePosition(
+        [0.0, 0.6, 0]
+    ).setRelativeQuaternion([0.7071, 0, 0, -0.7071]).setJoint(ry.JT.rigid)
+
+    # Object
+    obj = C.addFrame("obj1").setParent(table).setRelativePosition(
+        [0.0, 0.0, 0.15]
+    ).setShape(ry.ST.box, size=[0.05, 0.05, 0.05, 0.01]).setColor([1, 0, 0]).setContact(1).setJoint(ry.JT.rigid)
+
+    # Bin
+    bin_floor = C.addFrame("bin_floor").setParent(table).setShape(
+        ry.ST.box, size=[0.4, 0.4, 0.03]
+    ).setContact(1).setRelativePosition(
+        [0.6, 0.6, 0.05]
+    ).setJoint(ry.JT.rigid)
+    C.addFrame("bin_wall_l").setParent(bin_floor).setShape(ry.ST.box, size=[0.03, 0.4, 0.2, 0.005]).setContact(1).setRelativePosition([-0.2, 0., 0.12]).setJoint(ry.JT.rigid)
+    C.addFrame("bin_wall_r").setParent(bin_floor).setShape(ry.ST.box, size=[0.03, 0.4, 0.2, 0.005]).setContact(1).setRelativePosition([0.2, 0., 0.12]).setJoint(ry.JT.rigid)
+    C.addFrame("bin_wall_t").setParent(bin_floor).setShape(ry.ST.box, size=[0.37, 0.03, 0.2, 0.005]).setContact(1).setRelativePosition([0.0, 0.2, 0.12]).setJoint(ry.JT.rigid)
+    C.addFrame("bin_wall_b").setParent(bin_floor).setShape(ry.ST.box, size=[0.37, 0.03, 0.2, 0.005]).setContact(1).setRelativePosition([0.0, -0.2, 0.12]).setJoint(ry.JT.rigid)
+
+    C.addFrame("goal_preplace").setParent(bin_floor).setRelativePosition(
+        [0.0, 0.0, 0.4]
+    ).setShape(ry.ST.marker, size=[0.1]).setColor([0, 1, 0, 0.5]).setContact(0)
+    C.addFrame("goal_place").setParent(bin_floor).setRelativePosition(
+        [0.0, 0.0, 0.05]
+    ).setShape(ry.ST.marker, size=[0.1]).setColor([0, 0, 1, 0.5]).setContact(0)
+
+    def solve_ik_for_grasp(rel_pos, rel_rot, target_frame="grasp_target", holding_obj=False):
+        for _ in range(20):
+            c_tmp = ry.Config()
+            c_tmp.addConfigurationCopy(C)
+            q_init = np.random.uniform(-math.pi, math.pi, size=6)
+            q_init[1] = -1.5 
+            q_init[2] = 1.5
+            c_tmp.setJointState(q_init)
+
+            if target_frame == "grasp_target":
+                gt = c_tmp.addFrame("grasp_target").setParent(c_tmp.getFrame("obj1"))
+                gt.setRelativePosition(rel_pos)
+                gt.setRelativeQuaternion(rel_rot)
+
+            if holding_obj:
+                c_tmp.attach("a1_ur_gripper_center", "obj1")
+
+            komo = ry.KOMO(c_tmp, phases=1, slicesPerPhase=1, kOrder=0, enableCollisions=False)
+            if target_frame == "grasp_target":
+                komo.addObjective([], ry.FS.poseDiff, ["a1_ur_gripper_center", target_frame], ry.OT.eq, [1e1])
+            else:
+                # Placing: align object to the goal place frame
+                komo.addObjective([], ry.FS.positionDiff, ["obj1", target_frame], ry.OT.eq, [1e1])
+                # Relaxed orientation constraint for placing (e.g. keeping object upright)
+                komo.addObjective([], ry.FS.vectorZDiff, ["obj1", target_frame], ry.OT.eq, [1e1])
+
+            komo.addObjective([], ry.FS.jointState, [], ry.OT.sos, [1e-2], q_init)
+            
+            nlp = ry.NLP_Solver(komo.nlp(), 0)
+            ret = nlp.solve()
+            
+            if ret.feasible:
+                q = komo.getPath()[0]
+                c_tmp.setJointState(q)
+                col = c_tmp.getCollisions()
+                bad_col = []
+                for c in col:
+                    if c[2] < 0:
+                        f1, f2 = c[0], c[1]
+                        if "obj1" in [f1, f2]:
+                            other = f1 if f2 == "obj1" else f2
+                            if "palm" in other or "finger" in other or "robotiq" in other or "ee" in other or "coll8" in other:
+                                continue
+                        if "a1_ur_" in f1 and "a1_ur_" in f2:
+                            continue
+                        if "bin" in f1 and "bin" in f2:
+                            continue
+                        bad_col.append(c)
+                if len(bad_col) == 0:
+                    return q
+                else:
+                    print("Collision rejection:", [(c[0], c[1]) for c in bad_col])
+            else:
+                pass
+                # print("Infeasible")
+        return None
+
+    grasps = []
+    r_top1 = get_quat([0, 0, -1], [1, 0, 0])
+    grasps.append(solve_ik_for_grasp([0, 0, 0.05], r_top1))
+    valid_grasps = [g for g in grasps if g is not None]
+
+    q_prepick = solve_ik_for_grasp([0, 0, 0.25], r_top1)
+    
+    # We pass target_frame for place IKs
+    q_preplace = solve_ik_for_grasp(None, None, target_frame="goal_preplace", holding_obj=True)
+    q_place = solve_ik_for_grasp(None, None, target_frame="goal_place", holding_obj=True)
+
+    if view:
+        C.view(True)
+
+    keyframes = {
+        "prepick": q_prepick,
+        "carry_outcomes": valid_grasps,
+        "preplace": q_preplace,
+        "place": q_place
+    }
+    
+    return C, keyframes
