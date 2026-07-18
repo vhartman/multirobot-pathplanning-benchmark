@@ -10823,7 +10823,7 @@ def make_square_island_env(view: bool = False):
     # Central massive square obstacle
     C.addFrame("island").setParent(table).setPosition(
         table.getPosition() + [0.0, 0.0, 0.07]
-    ).setShape(ry.ST.box, size=[2.0, 2.0, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.box, size=[2.4, 2.4, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
@@ -10842,7 +10842,7 @@ def make_square_island_env(view: bool = False):
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
-    ).setJointState([1.5, 0.0])
+    ).setJointState([1.6, 0.0])
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
@@ -10859,25 +10859,85 @@ def make_square_island_env(view: bool = False):
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
-    ).setJointState([-1.5, 0.0])
+    ).setJointState([-1.6, 0.0])
 
     # Goals
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.cylinder, size=[0.06, 0.16]
-    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-1.5, 0.0, 0.07])
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-1.6, 0.0, 0.07])
 
     C.addFrame("goal2").setParent(table).setShape(
         ry.ST.cylinder, size=[0.06, 0.16]
-    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([1.5, 0.0, 0.07])
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([1.6, 0.0, 0.07])
+
+    if view:
+        C.view(True)
+
+    return C
+
+
+def make_rectangle_island_env(view: bool = False):
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    # Central massive rectangular obstacle
+    C.addFrame("island").setParent(table).setPosition(
+        table.getPosition() + [0.0, 0.3, 0.07]
+    ).setShape(ry.ST.box, size=[2.4, 1.8, 0.06, 0.005]).setContact(1).setColor(
+        [0, 0, 0]
+    ).setJoint(ry.JT.rigid)
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    # a1 starts on the Right (X = 1.5)
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([1.6, 0.0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    # a2 starts on the Left (X = -1.5)
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([-1.6, 0.0])
+
+    # Goals
+    C.addFrame("goal1").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-1.6, 0.0, 0.07])
+
+    C.addFrame("goal2").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([1.6, 0.0, 0.07])
 
     # Start poses for the return trips
     C.addFrame("goal1_return").setParent(table).setShape(
         ry.ST.cylinder, size=[0.06, 0.16]
-    ).setColor([1, 0.5, 0, 0.15]).setContact(0).setRelativePosition([1.5, 0.0, 0.07])
+    ).setColor([1, 0.5, 0, 0.15]).setContact(0).setRelativePosition([1.6, 0.0, 0.07])
 
     C.addFrame("goal2_return").setParent(table).setShape(
         ry.ST.cylinder, size=[0.06, 0.16]
-    ).setColor([0.5, 0.5, 0, 0.1]).setContact(0).setRelativePosition([-1.5, 0.0, 0.07])
+    ).setColor([0.5, 0.5, 0, 0.1]).setContact(0).setRelativePosition([-1.6, 0.0, 0.07])
 
     if view:
         C.view(True)
@@ -10956,12 +11016,8 @@ def make_stochastic_horizontal_transport_env(view: bool = False):
     return C, r1_t, r2_t
 
 
-def make_stochastic_bin_picking_env(view: bool = False):
-    import math
+def make_stochastic_grasping_env(view: bool = False):
     from scipy.spatial.transform import Rotation as R
-    import numpy as np
-    import robotic as ry
-    import os
 
     def get_quat(z_vec, x_vec):
         z_vec = np.array(z_vec)
@@ -10991,8 +11047,8 @@ def make_stochastic_bin_picking_env(view: bool = False):
     ).setRelativeQuaternion([0.7071, 0, 0, -0.7071]).setJoint(ry.JT.rigid)
 
     # Object
-    obj = C.addFrame("obj1").setParent(table).setRelativePosition(
-        [0.0, 0.0, 0.15]
+    C.addFrame("obj1").setParent(table).setRelativePosition(
+        [-0.2, -0.1, 0.4]
     ).setShape(ry.ST.box, size=[0.05, 0.05, 0.05, 0.01]).setColor([1, 0, 0]).setContact(1).setJoint(ry.JT.rigid)
 
     # Bin
@@ -11001,10 +11057,15 @@ def make_stochastic_bin_picking_env(view: bool = False):
     ).setContact(1).setRelativePosition(
         [0.6, 0.6, 0.05]
     ).setJoint(ry.JT.rigid)
-    C.addFrame("bin_wall_l").setParent(bin_floor).setShape(ry.ST.box, size=[0.03, 0.4, 0.2, 0.005]).setContact(1).setRelativePosition([-0.2, 0., 0.12]).setJoint(ry.JT.rigid)
-    C.addFrame("bin_wall_r").setParent(bin_floor).setShape(ry.ST.box, size=[0.03, 0.4, 0.2, 0.005]).setContact(1).setRelativePosition([0.2, 0., 0.12]).setJoint(ry.JT.rigid)
-    C.addFrame("bin_wall_t").setParent(bin_floor).setShape(ry.ST.box, size=[0.37, 0.03, 0.2, 0.005]).setContact(1).setRelativePosition([0.0, 0.2, 0.12]).setJoint(ry.JT.rigid)
-    C.addFrame("bin_wall_b").setParent(bin_floor).setShape(ry.ST.box, size=[0.37, 0.03, 0.2, 0.005]).setContact(1).setRelativePosition([0.0, -0.2, 0.12]).setJoint(ry.JT.rigid)
+    for name, size, rel_pos in [
+        ("bin_wall_l", [0.03, 0.4, 0.2, 0.005], [-0.2, 0.0, 0.12]),
+        ("bin_wall_r", [0.03, 0.4, 0.2, 0.005], [0.2, 0.0, 0.12]),
+        ("bin_wall_t", [0.37, 0.03, 0.2, 0.005], [0.0, 0.2, 0.12]),
+        ("bin_wall_b", [0.37, 0.03, 0.2, 0.005], [0.0, -0.2, 0.12]),
+    ]:
+        C.addFrame(name).setParent(bin_floor).setShape(
+            ry.ST.box, size=size
+        ).setContact(1).setRelativePosition(rel_pos).setJoint(ry.JT.rigid)
 
     C.addFrame("goal_preplace").setParent(bin_floor).setRelativePosition(
         [0.0, 0.0, 0.4]
@@ -11013,82 +11074,101 @@ def make_stochastic_bin_picking_env(view: bool = False):
         [0.0, 0.0, 0.05]
     ).setShape(ry.ST.marker, size=[0.1]).setColor([0, 0, 1, 0.5]).setContact(0)
 
-    def solve_ik_for_grasp(rel_pos, rel_rot, target_frame="grasp_target", holding_obj=False):
-        for _ in range(20):
-            c_tmp = ry.Config()
-            c_tmp.addConfigurationCopy(C)
-            q_init = np.random.uniform(-math.pi, math.pi, size=6)
-            q_init[1] = -1.5 
-            q_init[2] = 1.5
-            c_tmp.setJointState(q_init)
+    # Markers on obj1
+    C.addFrame("prepick_target").setParent(C.getFrame("obj1")).setRelativePosition(
+        [0, 0, 0.25]
+    ).setRelativeQuaternion(get_quat([0, 0, -1], [1, 0, 0])).setShape(
+        ry.ST.marker, size=[0.1]
+    ).setContact(0)
+    C.addFrame("grasp_target").setParent(C.getFrame("obj1")).setShape(
+        ry.ST.marker, size=[0.1]
+    ).setContact(0)
 
-            if target_frame == "grasp_target":
-                gt = c_tmp.addFrame("grasp_target").setParent(c_tmp.getFrame("obj1"))
-                gt.setRelativePosition(rel_pos)
-                gt.setRelativeQuaternion(rel_rot)
+    def compute_pick_and_place(C, rel_pos, rel_quat):
+        c_tmp = ry.Config()
+        c_tmp.addConfigurationCopy(C)
+        c_tmp.getFrame("grasp_target").setRelativePosition(rel_pos)
+        c_tmp.getFrame("grasp_target").setRelativeQuaternion(rel_quat)
+        # the obj1-gripper contact IS the grasp: exclude obj1 from the collision objective
+        c_tmp.getFrame("obj1").setContact(0)
 
-            if holding_obj:
-                c_tmp.attach("a1_ur_gripper_center", "obj1")
+        komo = ry.KOMO(
+            c_tmp, phases=3, slicesPerPhase=1, kOrder=1, enableCollisions=True
+        )
+        komo.addObjective(
+            [], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [1e1], [-0.0]
+        )
+        komo.addObjective([], ry.FS.jointLimits, [], ry.OT.ineq, [1e1], [-0.0])
+        komo.addControlObjective([], 0, 1e-1)
 
-            komo = ry.KOMO(c_tmp, phases=1, slicesPerPhase=1, kOrder=0, enableCollisions=False)
-            if target_frame == "grasp_target":
-                komo.addObjective([], ry.FS.poseDiff, ["a1_ur_gripper_center", target_frame], ry.OT.eq, [1e1])
-            else:
-                # Placing: align object to the goal place frame
-                komo.addObjective([], ry.FS.positionDiff, ["obj1", target_frame], ry.OT.eq, [1e1])
-                # Relaxed orientation constraint for placing (e.g. keeping object upright)
-                komo.addObjective([], ry.FS.vectorZDiff, ["obj1", target_frame], ry.OT.eq, [1e1])
+        # Phase 1: shared top-down pre-pick hover above the object
+        komo.addObjective(
+            [1], ry.FS.poseDiff, ["a1_ur_gripper_center", "prepick_target"], ry.OT.eq, [1e1]
+        )
+        # Phase 2: gripper at the grasp pose; obj1 then moves with the gripper
+        komo.addModeSwitch([2, 3], ry.SY.stable, ["a1_ur_gripper_center", "obj1"])
+        komo.addObjective(
+            [2], ry.FS.poseDiff, ["a1_ur_gripper_center", "grasp_target"], ry.OT.eq, [1e1]
+        )
+        # Phase 3: fixed pre-place EE pose above the bin, identical for every
+        # grasp outcome: gripper pointing down and aligned with the bin
+        komo.addObjective(
+            [3, -1], ry.FS.positionDiff, ["a1_ur_gripper_center", "goal_preplace"], ry.OT.eq, [1e1]
+        )
+        komo.addObjective(
+            [3, -1], ry.FS.scalarProductZZ, ["a1_ur_gripper_center", "goal_preplace"], ry.OT.eq, [1e1], [-1]
+        )
+        komo.addObjective(
+            [3, -1], ry.FS.scalarProductXX, ["a1_ur_gripper_center", "goal_preplace"], ry.OT.eq, [1e1], [1]
+        )
 
-            komo.addObjective([], ry.FS.jointState, [], ry.OT.sos, [1e-2], q_init)
-            
-            nlp = ry.NLP_Solver(komo.nlp(), 0)
-            ret = nlp.solve()
-            
-            if ret.feasible:
-                q = komo.getPath()[0]
-                c_tmp.setJointState(q)
-                col = c_tmp.getCollisions()
-                bad_col = []
-                for c in col:
-                    if c[2] < 0:
-                        f1, f2 = c[0], c[1]
-                        if "obj1" in [f1, f2]:
-                            other = f1 if f2 == "obj1" else f2
-                            if "palm" in other or "finger" in other or "robotiq" in other or "ee" in other or "coll8" in other:
-                                continue
-                        if "a1_ur_" in f1 and "a1_ur_" in f2:
-                            continue
-                        if "bin" in f1 and "bin" in f2:
-                            continue
-                        bad_col.append(c)
-                if len(bad_col) == 0:
-                    return q
-                else:
-                    print("Collision rejection:", [(c[0], c[1]) for c in bad_col])
-            else:
-                pass
-                # print("Infeasible")
-        return None
+        # 30 attempts
+        return solve_komo_problem(komo, 30, c_tmp, False)
 
-    grasps = []
-    r_top1 = get_quat([0, 0, -1], [1, 0, 0])
-    grasps.append(solve_ik_for_grasp([0, 0, 0.05], r_top1))
-    valid_grasps = [g for g in grasps if g is not None]
+    # Idea: a learned pick policy could snap the object into any of these grasp poses
+    grasp_poses = [
+        ([0, 0, 0.05], get_quat([0, 0, -1], [1, 0, 0])),  # top
+        ([0, 0, 0.05], get_quat([0, 0, -1], [0, 1, 0])),  # top, wrist +90deg
+        ([-0.05, 0, 0], get_quat([1, 0, 0], [0, 0, 1])),  # side -x
+        ([0.05, 0, 0], get_quat([-1, 0, 0], [0, 0, 1])),  # side +x
+        ([0, -0.05, 0], get_quat([0, 1, 0], [0, 0, 1])),  # side -y
+        ([0, 0.05, 0], get_quat([0, -1, 0], [0, 0, 1])),  # side +y
+    ]
 
-    q_prepick = solve_ik_for_grasp([0, 0, 0.25], r_top1)
-    
-    # We pass target_frame for place IKs
-    q_preplace = solve_ik_for_grasp(None, None, target_frame="goal_preplace", holding_obj=True)
-    q_place = solve_ik_for_grasp(None, None, target_frame="goal_place", holding_obj=True)
+    outcomes = [compute_pick_and_place(C, pos, quat) for pos, quat in grasp_poses]
+    valid = [k for k in outcomes if k is not None]
+
+    if len(valid) == 0:
+        raise RuntimeError("make_stochastic_grasping_env: keyframe KOMO failed")
+    if len(valid) < len(grasp_poses):
+        print(
+            f"[make_stochastic_grasping_env] only {len(valid)}/{len(grasp_poses)} grasp outcomes feasible"
+        )
 
     if view:
         C.view(True)
 
+    gt = C.getFrame("grasp_target")
+    grasp_pose_outcomes = []
+    standoff_pose_outcomes = []
+    for (rel_pos, rel_quat), k in zip(grasp_poses, outcomes):
+        if k is None:
+            continue
+        gt.setRelativePosition(rel_pos)
+        gt.setRelativeQuaternion(rel_quat)
+        pose = np.array(gt.getPose())  # (7,) world [x y z, qw qx qy qz]
+        z_axis = R.from_quat([pose[4], pose[5], pose[6], pose[3]]).as_matrix()[:, 2]
+        standoff = pose.copy()
+        standoff[:3] -= 0.05 * z_axis
+        grasp_pose_outcomes.append(pose)
+        standoff_pose_outcomes.append(standoff)
+
     keyframes = {
-        "prepick": q_prepick,
-        "carry_outcomes": valid_grasps,
-        "preplace": q_preplace,
-        "place": q_place
+        "prepick": valid[0][0],
+        "carry_outcomes": [k[1] for k in valid],
+        "grasp_pose_outcomes": grasp_pose_outcomes,
+        "standoff_pose_outcomes": standoff_pose_outcomes,
+        "preplace": valid[0][2],
     }
-    
+
     return C, keyframes
