@@ -41,31 +41,6 @@ class DeterministicBaseSkill(ABC):
   def done(self, q, env):
     pass
 
-  def rollout(self, q_init, task, all_joints, env, t0, max_steps=1000):
-    """
-    Rollout stochastic untimed skill till convergence
-    """
-    import numpy as np
-    from multi_robot_multi_goal_planning.problems.skills import SkillRolloutResult
-    env.C.selectJoints(task.skill.joints)
-    q = q_init.copy()
-    trajectory = [q]
-    times = [t0]
-    
-    for _ in range(max_steps):
-        q = self.step(q, env)
-        times.append(times[-1] + self.dt)
-        trajectory.append(q)
-        
-        if self.done(q, env):
-            break
-        
-    env.C.selectJoints(all_joints)
-    return SkillRolloutResult(
-        trajectory=np.array(trajectory),
-        times=np.array(times),
-        is_deterministic=False
-    )
 
   def rollout(self, q_init, task, all_joints, env, t0, max_steps=1000):
     """
@@ -95,6 +70,11 @@ class StochasticBaseSkill(ABC):
   def __init__(self, joints, dt=0.1):
     self.joints = joints
     self.dt = dt
+
+  def _bridge_noise(self, n, dt_norm, time_left, noise_bound):
+    sigma = noise_bound / np.sqrt(n)
+    noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / max(time_left, 1e-5)
+    return np.random.normal(0, np.sqrt(noise_var), size=n)
 
   @abstractmethod
   def step(self, q, env):
@@ -172,6 +152,11 @@ class BaseStochasticTimedSkill(ABC):
   def __init__(self, joints, dt=0.01):
     self.joints = joints
     self.dt = dt
+
+  def _bridge_noise(self, n, dt_norm, time_left, noise_bound):
+    sigma = noise_bound / np.sqrt(n)
+    noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / max(time_left, 1e-5)
+    return np.random.normal(0, np.sqrt(noise_var), size=n)
 
   @abstractmethod
   def step(self, t, q, env):
@@ -775,7 +760,7 @@ class StochasticBinPick(StochasticBaseSkill):
   def done(self, q, env):
     raise NotImplementedError
 
-# TODO dummy stochastic timed & untimed skills for demonstration purposes
+# TODO stochastic skills
 class DummyStochasticTimedSkill(BaseStochasticTimedSkill):
   def __init__(self, joints, goal_state, dt=0.01, noise_bound=0.2, is_deterministic=False, duration=1.0):
     super().__init__(joints, dt=dt)
@@ -794,12 +779,7 @@ class DummyStochasticTimedSkill(BaseStochasticTimedSkill):
     step_direction = (self.goal_state - q) / time_left * dt_norm
     
     if not self.is_deterministic:
-      # Scale noise with environemnt dimension
-      sigma = self.noise_bound / np.sqrt(len(q))
-
-      # Shrinking variance as skill approaches end ("Brownian-bridge variance")
-      noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / time_left
-      noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
+      noise = self._bridge_noise(len(q), dt_norm, time_left, self.noise_bound)
     else:
       noise = 0.0
       
@@ -811,9 +791,7 @@ class DummyStochasticTimedSkill(BaseStochasticTimedSkill):
     return q_new
 
   def done(self, t, q, env):
-    if t >= 1.0:
-      return True
-    return False
+    return t >= 1.0
   
 class DummyStochasticUntimedSkill(StochasticBaseSkill):
   """
@@ -822,14 +800,12 @@ class DummyStochasticUntimedSkill(StochasticBaseSkill):
   """
   def __init__(self, joints, goal_state, step_size=0.1, noise_bound=0.02, is_deterministic=False, dt=0.01):
     super().__init__(joints, dt=dt)
-    import numpy as np
     self.goal_state = np.array(goal_state)
     self.step_size = step_size
     self.noise_bound = noise_bound
     self.is_deterministic = is_deterministic
 
   def step(self, q, env):
-    import numpy as np
     dist = np.linalg.norm(self.goal_state - q)
     if dist <= self.step_size:
       return self.goal_state.copy()
@@ -837,13 +813,7 @@ class DummyStochasticUntimedSkill(StochasticBaseSkill):
     step_direction = (self.goal_state - q) / dist * self.step_size
     
     if not self.is_deterministic:
-      sigma = self.noise_bound / np.sqrt(len(q))
-      
-      # Shrinking variance as skill approaches end ("Brownian-bridge variance" equivalent for distance)
-      # We scale by self.step_size to ensure the total accumulated variance scales linearly with distance (like dt_norm)
-      noise_var = sigma**2 * self.step_size * max(dist - self.step_size, 0.0) / max(dist, 1e-5)
-      
-      noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
+      noise = self._bridge_noise(len(q), self.step_size, dist, self.noise_bound)
     else:
       noise = 0.0
       
@@ -851,16 +821,12 @@ class DummyStochasticUntimedSkill(StochasticBaseSkill):
     return q_new
 
   def done(self, q, env):
-    import numpy as np
     dist = np.linalg.norm(self.goal_state - q)
-    if dist <= 1e-3:
-      return True
-    return False
+    return dist <= 1e-3
 
-# TODO bimodal stochastic timed skills for demonstration purposes
 class BimodalStochasticSkill(BaseStochasticTimedSkill):
   def __init__(self, joints, branches, dt=0.01, noise_bound=0.2, is_deterministic=False,
-               duration=1.0, branch_dim=0, commit_eps=1e-3):
+               duration=1.0, branch_dim=0, commit_eps=1e-3, branch_bias=0.5):
     super().__init__(joints, dt=dt)
     self.branches = [
       {"target": np.array(m["target"], dtype=np.float64), "arrival_frac": m["arrival_frac"]}
@@ -871,20 +837,11 @@ class BimodalStochasticSkill(BaseStochasticTimedSkill):
     self.is_deterministic = is_deterministic
     self.branch_dim = branch_dim
     self.commit_eps = commit_eps
-
-  def _active_branch(self, q):
-    v = q[self.branch_dim]
-    if abs(v) < self.commit_eps:
-      return None
-    return self.branches[0] if v >= 0 else self.branches[1]
+    self.branch_bias = branch_bias
+    self.branch_idx = 0
 
   def step(self, t, q, env):
-    branch = self._active_branch(q)
-    pull_mask = np.ones_like(q)
-    if branch is None:
-      # undecided: no attractor pull yet on branch_dim, only noise can break the tie
-      branch = self.branches[0]
-      pull_mask[self.branch_dim] = 0.0
+    branch = self.branches[self.branch_idx]
 
     target = branch["target"]
     arrival = branch["arrival_frac"]
@@ -894,12 +851,10 @@ class BimodalStochasticSkill(BaseStochasticTimedSkill):
     if time_left <= 1e-5:
       return target.copy()
 
-    step_direction = pull_mask * (target - q) / time_left * dt_norm
+    step_direction = (target - q) / time_left * dt_norm
 
     if not self.is_deterministic:
-      sigma = self.noise_bound / np.sqrt(len(q))
-      noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / time_left
-      noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
+      noise = self._bridge_noise(len(q), dt_norm, time_left, self.noise_bound)
     else:
       noise = 0.0
 
@@ -911,28 +866,34 @@ class BimodalStochasticSkill(BaseStochasticTimedSkill):
     return q_new
 
   def done(self, t, q, env):
-    # The distance/time left logic expects to be driven by a specific branch 
-    # If uncommitted, default to branch 0's target for distance computation
-    branch = self._active_branch(q) or self.branches[0]
+    branch = self.branches[self.branch_idx]
     return t >= branch["arrival_frac"]
   
   def rollout(self, q_init, task, all_joints, env, t0):
+    v = q_init[self.branch_dim]
+    if abs(v) < self.commit_eps:
+      idx = 0 if np.random.uniform() < self.branch_bias else 1
+    else:
+      idx = 0 if v >= 0 else 1
+    self.branch_idx = idx
+
     result = super().rollout(q_init, task, all_joints, env, t0)
-    final_q = result.trajectory[-1]
-    result.branch_idx = 0 if final_q[self.branch_dim] >= 0 else 1
+    result.branch_idx = idx
+    self.branch_idx = 0
     return result
 
 class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
   """
-  Similar to BimodalStochasticSkill, but it diverges to intermediate via-points and then 
-  re-converges to a single deterministic goal state at the end
+  Branches lead through 0..N waypoints and then re-converge onto one shared target.
+  Covers both "reconverge with no intermediate waypoint" (branches=[{"waypoints": []}, ...])
+  and "reconverge via a corridor of waypoints" (branches=[{"waypoints": [v1, v2]}, ...])
   """
-  def __init__(self, joints, via_branches, target, dt=0.01, noise_bound=0.2, is_deterministic=False,
-               duration=1.0, branch_dim=0, commit_eps=1e-3, reconverge_frac=0.5):
+  def __init__(self, joints, branches, target, dt=0.01, noise_bound=0.2, is_deterministic=False,
+               duration=1.0, branch_dim=0, commit_eps=1e-3, branch_bias=0.5, checkpoint_times=None):
     super().__init__(joints, dt=dt)
-    self.via_branches = [
-      {"target": np.array(m["target"], dtype=np.float64), "arrival_frac": m["arrival_frac"]}
-      for m in via_branches
+    self.branches = [
+      {"waypoints": [np.array(w, dtype=np.float64) for w in b["waypoints"]]}
+      for b in branches
     ]
     self.target = np.array(target, dtype=np.float64)
     self.duration = duration
@@ -940,37 +901,29 @@ class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
     self.is_deterministic = is_deterministic
     self.branch_dim = branch_dim
     self.commit_eps = commit_eps
-    self.reconverge_frac = reconverge_frac
-
-  def _active_branch(self, q):
-    v = q[self.branch_dim]
-    if abs(v) < self.commit_eps:
-      return None
-    return self.via_branches[0] if v >= 0 else self.via_branches[1]
+    self.branch_bias = branch_bias
+    self.branch_idx = 0
+    
+    n_checkpoints = len(self.branches[0]["waypoints"]) + 1 # + final target
+    self.checkpoint_times = (
+      np.asarray(checkpoint_times, dtype=np.float64) if checkpoint_times is not None
+      else np.linspace(1.0 / n_checkpoints, 1.0, n_checkpoints)
+    )
 
   def step(self, t, q, env):
-    branch = self._active_branch(q)
-    pull_mask = np.ones_like(q)
-    if branch is None:
-      branch = self.via_branches[0]
-      pull_mask[self.branch_dim] = 0.0
-
-    if t < self.reconverge_frac:
-        current_target = branch["target"]
-        arrival = branch["arrival_frac"] * self.reconverge_frac
-        time_left = max(arrival - t, 1e-5)
-    else:
-        current_target = self.target
-        pull_mask = np.ones_like(q)
-        time_left = max(1.0 - t, 1e-5)
-
     dt_norm = self.dt / self.duration
-    step_direction = (current_target - q) / time_left * dt_norm * pull_mask
-    
+
+    checkpoints = self.branches[self.branch_idx]["waypoints"] + [self.target]
+
+    seg = min(int(np.searchsorted(self.checkpoint_times, t, side="right")), len(checkpoints) - 1)
+    current_target = checkpoints[seg]
+    t_next = self.checkpoint_times[seg]
+
+    time_left = max(t_next - t + dt_norm, 1e-5)
+    step_direction = (current_target - q) / time_left * dt_norm
+
     if not self.is_deterministic:
-      sigma = self.noise_bound / np.sqrt(len(q))
-      noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / time_left
-      noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
+      noise = self._bridge_noise(len(q), dt_norm, time_left, self.noise_bound)
     else:
       noise = 0.0
       
@@ -982,38 +935,145 @@ class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
     return q_new
 
   def done(self, t, q, env):
-    if t >= 1.0:
-      return True
-    return False
-
-# TODO stochastic timed skills for 3D env 
-
-class StochasticHorizontalTransport(BaseStochasticTimedSkill):
-  def __init__(self, joints, target_q, dt=0.01, duration=5.0, noise_bound=0.1):
-    super().__init__(joints, dt=dt)
-    self.target_q = np.array(target_q, dtype=np.float64)
-    self.duration = duration
-    self.noise_bound = noise_bound
-
-  def step(self, t, q, env):
-    time_left = max(1.0 - t, 1e-5)
-    dt_norm = self.dt / self.duration
-    
-    # Deterministic step towards target
-    step_direction = (self.target_q - q) / time_left * dt_norm
-    
-    # Simple joint-space noise approximation for the wobble
-    # Adding noise proportional to dt_norm, scaled down near the goal so it converges
-    sigma = self.noise_bound / np.sqrt(len(q))
-    noise_var = sigma**2 * dt_norm * max(time_left - dt_norm, 0.0) / time_left
-    noise = np.random.normal(0, np.sqrt(noise_var), size=len(q))
-      
-    q_new = q + step_direction + noise
-    
-    if t >= 1.0:
-      q_new = self.target_q.copy()
-      
-    return q_new
-
-  def done(self, t, q, env):
     return t >= 1.0
+
+  def rollout(self, q_init, task, all_joints, env, t0):
+    v = q_init[self.branch_dim]
+    if abs(v) < self.commit_eps:
+      idx = 0 if np.random.uniform() < self.branch_bias else 1
+    else:
+      idx = 0 if v >= 0 else 1
+    self.branch_idx = idx
+    
+    result = super().rollout(q_init, task, all_joints, env, t0)
+    result.branch_idx = idx
+    self.branch_idx = 0
+    return result
+
+class ReconvergingBimodalStochasticUntimedSkill(StochasticBaseSkill):
+  """
+  Untimed version of ReconvergingBimodalStochasticSkill: same branch/waypoint/target and the 
+  same up-front branch draw, but driven by distance/step_size instead of a fixed duration
+  """
+  def __init__(self, joints, branches, target, dt=0.01, noise_bound=0.2, is_deterministic=False,
+               step_size=0.02, branch_dim=0, commit_eps=1e-3, branch_bias=0.5, via_dist=0.2):
+    super().__init__(joints, dt=dt)
+    self.branches = [
+      {"waypoints": [np.array(w, dtype=np.float64) for w in b["waypoints"]]}
+      for b in branches
+    ]
+    self.target = np.array(target, dtype=np.float64)
+    self.step_size = step_size
+    self.noise_bound = noise_bound
+    self.is_deterministic = is_deterministic
+    self.branch_dim = branch_dim
+    self.commit_eps = commit_eps
+    self.branch_bias = branch_bias
+    self.via_dist = via_dist
+    self.branch_idx = 0
+    self._current_wp = 0
+
+  def step(self, q, env):
+    checkpoints = self.branches[self.branch_idx]["waypoints"] + [self.target]
+
+    current_target = checkpoints[self._current_wp]
+    if np.linalg.norm(current_target - q) <= self.via_dist and self._current_wp < len(checkpoints) - 1:
+        self._current_wp += 1
+        current_target = checkpoints[self._current_wp]
+
+    direction = current_target - q
+    dist = np.linalg.norm(direction)
+    if dist > 1e-5:
+        direction = direction / dist
+
+    step_direction = direction * min(self.step_size, dist)
+
+    if not self.is_deterministic:
+      noise = self._bridge_noise(len(q), self.step_size, dist, self.noise_bound)
+    else:
+      noise = np.zeros_like(q)
+
+    return q + step_direction + noise
+
+  def done(self, q, env):
+    return np.linalg.norm(self.target - q) < 0.1
+
+  def rollout(self, q_init, task, all_joints, env, t0, max_steps=1000):
+    v = q_init[self.branch_dim]
+    if abs(v) < self.commit_eps:
+      idx = 0 if np.random.uniform() < self.branch_bias else 1
+    else:
+      idx = 0 if v >= 0 else 1
+    self.branch_idx = idx
+    self._current_wp = 0
+
+    result = super().rollout(q_init, task, all_joints, env, t0, max_steps=max_steps)
+    result.branch_idx = idx
+    self.branch_idx = 0
+    self._current_wp = 0
+    return result
+
+class StochasticEEGraspSkill(BaseStochasticTimedSkill):
+    def __init__(
+        self,
+        joints,
+        ee_name,
+        grasp_pose_outcomes,
+        standoff_pose_outcomes,
+        outcome_probs=None,
+        dt=0.05,
+        duration=1.5,
+        ik_gain=1.0,
+        max_step=0.1,
+    ):
+        super().__init__(joints, dt=dt)
+
+        def servo(pose):
+            return EEPoseGoalReaching(
+                joints,
+                np.asarray(pose, dtype=np.float64),
+                ee_name,
+                dt=dt,
+                ik_gain=ik_gain,
+                scale_stepsize=True,
+                max_step=max_step,
+            )
+
+        self.grasp_servos = [servo(p) for p in grasp_pose_outcomes]
+        self.standoff_servos = [servo(p) for p in standoff_pose_outcomes]
+
+        if outcome_probs is None:
+            self.outcome_probs = np.ones(len(self.grasp_servos)) / len(
+                self.grasp_servos
+            )
+        else:
+            p = np.asarray(outcome_probs, dtype=np.float64)
+            self.outcome_probs = p / p.sum()
+
+        self.duration = duration
+        self.branch_idx = 0
+        self._reached_standoff = False
+
+    def step(self, t, q, env):
+        i = self.branch_idx
+        if not self._reached_standoff:
+            if self.standoff_servos[i].done(q, env):
+                self._reached_standoff = True
+                
+        servo = self.grasp_servos[i] if self._reached_standoff else self.standoff_servos[i]
+        return servo.step(q, env)
+
+    def done(self, t, q, env):
+        if t >= 1.0:
+            return True
+        return self.grasp_servos[self.branch_idx].done(q, env)
+
+    def rollout(self, q_init, task, all_joints, env, t0):
+        self.branch_idx = int(
+            np.random.choice(len(self.outcome_probs), p=self.outcome_probs)
+        )
+        self._reached_standoff = False
+        result = super().rollout(q_init, task, all_joints, env, t0)
+        result.branch_idx = self.branch_idx
+        self.branch_idx = 0
+        return result
