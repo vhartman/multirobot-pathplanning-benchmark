@@ -956,7 +956,7 @@ class ReconvergingBimodalStochasticUntimedSkill(StochasticBaseSkill):
   same up-front branch draw, but driven by distance/step_size instead of a fixed duration
   """
   def __init__(self, joints, branches, target, dt=0.01, noise_bound=0.2, is_deterministic=False,
-               step_size=0.02, branch_dim=0, commit_eps=1e-3, branch_bias=0.5, via_dist=0.2):
+               step_size=0.02, branch_dim=0, commit_eps=1e-3, branch_bias=0.5):
     super().__init__(joints, dt=dt)
     self.branches = [
       {"waypoints": [np.array(w, dtype=np.float64) for w in b["waypoints"]]}
@@ -969,24 +969,22 @@ class ReconvergingBimodalStochasticUntimedSkill(StochasticBaseSkill):
     self.branch_dim = branch_dim
     self.commit_eps = commit_eps
     self.branch_bias = branch_bias
-    self.via_dist = via_dist
     self.branch_idx = 0
     self._current_wp = 0
 
   def step(self, q, env):
     checkpoints = self.branches[self.branch_idx]["waypoints"] + [self.target]
-
     current_target = checkpoints[self._current_wp]
-    if np.linalg.norm(current_target - q) <= self.via_dist and self._current_wp < len(checkpoints) - 1:
+
+    dist = np.linalg.norm(current_target - q)
+
+    # Ensures we have (like in timed env) a snap to reach exact config of the final target
+    if dist <= self.step_size:
+      if self._current_wp < len(checkpoints) - 1:
         self._current_wp += 1
-        current_target = checkpoints[self._current_wp]
+      return current_target.copy()
 
-    direction = current_target - q
-    dist = np.linalg.norm(direction)
-    if dist > 1e-5:
-        direction = direction / dist
-
-    step_direction = direction * min(self.step_size, dist)
+    step_direction = (current_target - q) / dist * self.step_size
 
     if not self.is_deterministic:
       noise = self._bridge_noise(len(q), self.step_size, dist, self.noise_bound)
@@ -996,7 +994,7 @@ class ReconvergingBimodalStochasticUntimedSkill(StochasticBaseSkill):
     return q + step_direction + noise
 
   def done(self, q, env):
-    return np.linalg.norm(self.target - q) < 0.1
+    return np.linalg.norm(self.target - q) <= 1e-9 # Small as snaps are exact
 
   def rollout(self, q_init, task, all_joints, env, t0, max_steps=1000):
     v = q_init[self.branch_dim]
