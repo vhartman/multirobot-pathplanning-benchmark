@@ -503,6 +503,7 @@ class rai_env(BaseProblem):
 
         # self.C.view()
 
+        # TODO (Liam) this shouldn't be commented out..?
         # self.C.computeCollisions()
 
         binary_collision_free = self.C.getCollisionFree()

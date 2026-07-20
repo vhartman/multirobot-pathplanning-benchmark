@@ -2527,9 +2527,9 @@ class rai_stochastic_square_island(SequenceMixin, rai_env):
             branch_dim=1,
             commit_eps=1e-3,
             dt=0.05,
-            noise_bound=0.3,
+            noise_bound=0.2,
             is_deterministic=False, #True,
-            duration=5.0,
+            duration=8.0,
             checkpoint_times=[0.25, 0.75, 1.0],
         )
 
@@ -2613,9 +2613,9 @@ class rai_dep_stochastic_square_island(DependencyGraphMixin, rai_env):
             branch_dim=1,
             commit_eps=1e-3,
             dt=0.05,
-            noise_bound=0.3,
+            noise_bound=0.2,
             is_deterministic=False,
-            duration=5.0,
+            duration=8.0,
             checkpoint_times=[0.25, 0.75, 1.0],
         )
 

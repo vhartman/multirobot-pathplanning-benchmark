@@ -11043,7 +11043,7 @@ def make_stochastic_grasping_env(view: bool = False):
     robot_path = os.path.join(os.path.dirname(__file__), "../../assets/models/rai/ur10/ur10_two_finger.g")
 
     C.addFile(robot_path, namePrefix="a1_").setParent(table).setRelativePosition(
-        [0.0, 0.6, 0]
+        [0.0, 0.6, 0.05]
     ).setRelativeQuaternion([0.7071, 0, 0, -0.7071]).setJoint(ry.JT.rigid)
 
     # Object
