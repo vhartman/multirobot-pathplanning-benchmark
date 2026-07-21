@@ -255,6 +255,33 @@ def delete_visual_only_frames(C):
     return C_coll
 
 
+# def delete_visual_only_frames(C):
+#     C_coll = ry.Config()
+#     C_coll.addConfigurationCopy(C)
+
+#     def visual_only(f):
+#         info = f.info()
+#         return info.get("shape") == "mesh" and not info.get("contact")
+
+#     # delFrame ORPHANS children (parent=None), so a mesh may be removed only if nothing that
+#     # survives hangs off it. Keep every non-(visual-only) frame -- collision shapes incl.
+#     # collision MESHES, joints, markers -- and all of their ancestors; delete the rest of the
+#     # pure-visual mesh subtrees.
+#     keep = set()
+#     for f in C_coll.getFrames():
+#         if not visual_only(f):
+#             g = f
+#             while g is not None and g.name not in keep:
+#                 keep.add(g.name)
+#                 g = g.getParent()
+
+#     for f in list(C_coll.getFrames()):
+#         if visual_only(f) and f.name not in keep:
+#             C_coll.delFrame(f.name)
+
+#     return C_coll
+
+
 # def set_robot_active(C: ry.Config, robot_prefix: str) -> None:
 #     robot_joints = get_robot_joints(C, robot_prefix)
 #     C.selectJoints(robot_joints)
@@ -274,7 +301,7 @@ class rai_env(BaseProblem):
     collision_tolerance: float
     collision_resolution: float
 
-    def __init__(self):
+    def __init__(self, delete_visual_only=True):
         super().__init__()
 
         self.robot_idx = {}
@@ -308,11 +335,12 @@ class rai_env(BaseProblem):
 
         self.C_orig = ry.Config()
         self.C_orig.addConfigurationCopy(self.C)
+    
+        if delete_visual_only:
+            C_coll = delete_visual_only_frames(self.C)
 
-        C_coll = delete_visual_only_frames(self.C)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(C_coll)
+            self.C.clear()
+            self.C.addConfigurationCopy(C_coll)
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -802,7 +830,10 @@ class rai_env(BaseProblem):
                         self.tasks[prev_mode_index].frames[0],
                         self.tasks[prev_mode_index].frames[1],
                     )
-                    tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
+                    frame = tmp.getFrame(self.tasks[prev_mode_index].frames[1])
+                    info = frame.info()
+                    if frame.getShapeType() != ry.ST.none and info.get("contact"):
+                        tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
 
                 # postcondition
                 if self.tasks[prev_mode_index].side_effect == "remove":
