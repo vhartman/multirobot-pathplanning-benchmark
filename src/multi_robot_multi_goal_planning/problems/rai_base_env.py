@@ -231,55 +231,55 @@ def get_robot_state(C: ry.Config, robot_prefix: str) -> NDArray:
     return q
 
 
-def delete_visual_only_frames(C):
-    C_coll = ry.Config()
-    C_coll.addConfigurationCopy(C)
-
-    collidable_pairs = C_coll.getCollidablePairs()
-    collidable_objects = set()
-    for pair in collidable_pairs:
-        collidable_objects.add(pair)
-
-    # go through all frames, and delete the ones that are only visual
-    # that is, the frames that do not have a child, and are not
-    # contact frames
-    for f in C_coll.getFrames():
-        if hasattr(f, 'info'):
-            info = f.info()
-            if "shape" in info and info["shape"] == "mesh":
-                C_coll.delFrame(f.name)
-        # else:
-        #     if f.name not in collidable_objects:
-        #         C_coll.delFrame(f.name)
-
-    return C_coll
-
-
 # def delete_visual_only_frames(C):
 #     C_coll = ry.Config()
 #     C_coll.addConfigurationCopy(C)
 
-#     def visual_only(f):
-#         info = f.info()
-#         return info.get("shape") == "mesh" and not info.get("contact")
+#     collidable_pairs = C_coll.getCollidablePairs()
+#     collidable_objects = set()
+#     for pair in collidable_pairs:
+#         collidable_objects.add(pair)
 
-#     # delFrame ORPHANS children (parent=None), so a mesh may be removed only if nothing that
-#     # survives hangs off it. Keep every non-(visual-only) frame -- collision shapes incl.
-#     # collision MESHES, joints, markers -- and all of their ancestors; delete the rest of the
-#     # pure-visual mesh subtrees.
-#     keep = set()
+#     # go through all frames, and delete the ones that are only visual
+#     # that is, the frames that do not have a child, and are not
+#     # contact frames
 #     for f in C_coll.getFrames():
-#         if not visual_only(f):
-#             g = f
-#             while g is not None and g.name not in keep:
-#                 keep.add(g.name)
-#                 g = g.getParent()
-
-#     for f in list(C_coll.getFrames()):
-#         if visual_only(f) and f.name not in keep:
-#             C_coll.delFrame(f.name)
+#         if hasattr(f, 'info'):
+#             info = f.info()
+#             if "shape" in info and info["shape"] == "mesh":
+#                 C_coll.delFrame(f.name)
+#         # else:
+#         #     if f.name not in collidable_objects:
+#         #         C_coll.delFrame(f.name)
 
 #     return C_coll
+
+
+def delete_visual_only_frames(C):
+    C_coll = ry.Config()
+    C_coll.addConfigurationCopy(C)
+
+    def visual_only(f):
+        info = f.info()
+        return info.get("shape") == "mesh" and not info.get("contact")
+
+    # delFrame ORPHANS children (parent=None), so a mesh may be removed only if nothing that
+    # survives hangs off it. Keep every non-(visual-only) frame -- collision shapes incl.
+    # collision MESHES, joints, markers -- and all of their ancestors; delete the rest of the
+    # pure-visual mesh subtrees.
+    keep = set()
+    for f in C_coll.getFrames():
+        if not visual_only(f):
+            g = f
+            while g is not None and g.name not in keep:
+                keep.add(g.name)
+                g = g.getParent()
+
+    for f in list(C_coll.getFrames()):
+        if visual_only(f) and f.name not in keep:
+            C_coll.delFrame(f.name)
+
+    return C_coll
 
 
 # def set_robot_active(C: ry.Config, robot_prefix: str) -> None:

@@ -86,6 +86,8 @@ class Node:
 
         Returns:
             None: This method does not return any value."""
+        if isinstance(value, np.ndarray):
+            value = value.item() if value.size == 1 else value
         self.operation.costs[self.id] = value
 
     def __repr__(self):
@@ -1328,7 +1330,7 @@ class BaseRRTstar(BasePlanner):
             self.gamma_rrtstar * (np.log(vertices) / vertices) ** (1 / self.d), self.eta
         )
         indices = find_nearest_indices(set_dists, r)  # indices of batch_subtree
-        if n_nearest_idx not in indices:
+        if np.size(n_nearest_idx) and n_nearest_idx not in indices:
             indices = np.insert(indices, 0, n_nearest_idx)
 
         node_indices = self.trees[mode].get_node_ids_subtree(tree)[indices]
