@@ -42,6 +42,7 @@ from ..skills import (
     BimodalStochasticSkill,
     DummyStochasticTimedSkill,
     DummyStochasticUntimedSkill,
+    VariableDurationTimedSkill,
     StochasticEEGraspSkill
 )
 
@@ -1791,8 +1792,9 @@ class rai_mesh(SequenceMixin, rai_env):
 class rai_polising(SequenceMixin, rai_env):
   pass
 
+# TODO NEW SKILLS FOR STOCHASTIC PLANNERS
 
-# TODO NEW DETERMINISTIC SKILLS 2D ENVS (to show mid-skill mode switching)
+# Deterministic skills 2D envs (to show mid-skill mode switch)
 @register([("rai.deterministic_switch_seq", {})])
 class rai_deterministic_switch_seq(SequenceMixin, rai_env):
     def __init__(self):
@@ -1989,7 +1991,7 @@ class rai_dep_deterministic_skill_mid_switch(DependencyGraphMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO NEW STOCHASTIC SKILLS 2D ENVS (to show conservative stochastic planner)
+# Stochastic skills 2D envs (simple switch with noisy motion)
 class rai_stochastic_switch_base(rai_env):
     def __init__(self):
         self.C = rai_config.make_stochastic_switch_env()
@@ -2083,7 +2085,100 @@ class rai_dep_stochastic_switch(DependencyGraphMixin, rai_stochastic_switch_base
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO NEW STOCHASTIC SKILLS 2D ENVS) (not needed anymore)
+# TODO NEW "STOCHASTIC" SKILLS 2D ENVS
+class rai_shared_point_base(rai_env):
+    def __init__(self):
+        self.C = rai_config.make_shared_point_env()
+        # self.C.view(True)
+
+        self.robots = ["a1", "a2"]
+
+        rai_env.__init__(self)
+
+        dim = 2
+        self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
+
+        r1_start = self.C.getJointState()[self.robot_idx["a1"]]
+        r2_start = self.C.getJointState()[self.robot_idx["a2"]]
+
+        # Shared point both robots must visit (table centre).
+        shared_point = r1_start * 1.0
+        shared_point[:2] = [0.0, 0.0]
+
+        # Active robot 1 reaches the shared point via a timing-stochastic, deterministic-motion skill
+        skill = VariableDurationTimedSkill(
+            joints=self.robot_joints["a1"],
+            goal_state=shared_point,
+            duration_min=1.0,
+            duration_max=5.0,
+            dt=0.05,
+        )
+
+        self.tasks = [
+            Task(
+                "a1_skill",
+                ["a1"],
+                initiation_goal=SingleGoal(r1_start),
+                skill=skill,
+            ),
+            Task("a1_return", ["a1"], SingleGoal(r1_start)),
+            Task("a2_visit", ["a2"], SingleGoal(shared_point)),
+            Task("a2_return", ["a2"], SingleGoal(r2_start)),
+            Task(
+                "terminal",
+                ["a1", "a2"],
+                SingleGoal(np.concatenate([r1_start, r2_start])),
+            ),
+        ]
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+@register([("rai.shared_point", {})])
+class rai_shared_point(SequenceMixin, rai_shared_point_base):
+    def __init__(self):
+        rai_shared_point_base.__init__(self)
+
+        self.sequence = self._make_sequence_from_names(
+            ["a1_skill", "a2_visit", "a1_return", "a2_return", "terminal"]
+        )
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+@register([("rai.dep_shared_point", {})])
+class rai_dep_shared_point(DependencyGraphMixin, rai_shared_point_base):
+    def __init__(self):
+        rai_shared_point_base.__init__(self)
+
+        # a1_skill and a2_visit are intentionally left UNORDERED (what reactive has to "figure out")
+        # only the returns and the terminal are constrained
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("a1_return", "a1_skill")
+        self.graph.add_dependency("a2_return", "a2_visit")
+        self.graph.add_dependency("terminal", "a1_return")
+        self.graph.add_dependency("terminal", "a2_return")
+
+        BaseModeLogic.__init__(self)
+
+        self.prev_mode = self.start_mode
+
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+
+# Stochastic skills 2D envs (not needed anymore)
 class rai_stochastic_switch_pick_place_base(rai_env):
     def __init__(self):
         self.C, keyframes = rai_config.make_stochastic_switch_pick_place_env()
@@ -2188,7 +2283,7 @@ class rai_dep_stochastic_switch_pick_place(DependencyGraphMixin, rai_stochastic_
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO NEW STOCHASTIC UNTIMED SKILLS 2D ENVS (to show conservative stochastic planner's limitations)
+# Stochastic untimed skills 2D envs (to show conservative stochastic planner's limitations)
 class rai_untimed_stochastic_switch_base(rai_env):
     def __init__(self):
         self.C = rai_config.make_stochastic_switch_env()
@@ -2281,7 +2376,7 @@ class rai_dep_untimed_stochastic_switch(DependencyGraphMixin, rai_untimed_stocha
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO NEW STOCHASTIC BIMODAL (config) SKILLS 2D ENVS (to show conservative stochastic planner's limitations)
+# Stochastic bimodal (config) skills 2D envs (to show conservative stochastic planner's limitations)
 class rai_stochastic_bimodal_switch_base(rai_env):
     def __init__(self):
         self.C = rai_config.make_stochastic_bimodal_switch_env()
@@ -2392,7 +2487,7 @@ class rai_dep_stochastic_bimodal_switch(DependencyGraphMixin, rai_stochastic_bim
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO NEW STOCHASTIC RECONVERGING BIMODAL (config) SKILLS 2D ENVS (to show conservative stochastic planner's limitations)
+# Stochastic bimodal (config) skills 2D envs (to show conservative stochastic planner's limitations)
 class rai_reconverging_bimodal_switch_base(rai_env):
     def __init__(self):
         self.C = rai_config.make_stochastic_bimodal_switch_env(is_reconverging=True)
@@ -2492,7 +2587,7 @@ class rai_dep_reconverging_bimodal_switch(DependencyGraphMixin, rai_reconverging
         BaseModeLogic.__init__(self)
 
 
-# TODO NEW STOCHASTIC BIMODAL (config, time) MULTI AGENT SKILLS 2D ENVS ()
+# Stochastic bimodal (config, time) skills 2D envs (to show conservative stochastic planner's limitations)
 @register([("rai.stochastic_square_island", {})])
 class rai_stochastic_square_island(SequenceMixin, rai_env):
     def __init__(self):
@@ -2739,8 +2834,82 @@ class rai_stochastic_rectangle_island(SequenceMixin, rai_env):
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
+@register([
+    ("rai.dep_stochastic_rectangle_island", {})
+])
+class rai_dep_stochastic_rectangle_island(DependencyGraphMixin, rai_env):
+    def __init__(self):
+        self.C = rai_config.make_rectangle_island_env()
+        self.robots = ["a1", "a2"]
+        rai_env.__init__(self)
 
-# TODO unfinished NEW STOCHASTIC SKILLS 3D ENVS ()
+        dim = 2
+        self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
+
+        r1_start = np.array(self.C.getJointState()[self.robot_idx["a1"]])
+        r2_start = np.array(self.C.getJointState()[self.robot_idx["a2"]])
+
+        r1_goal = np.array([-1.6, 0.0])
+        r2_goal = np.array([1.6, 0.0])
+        
+        r1_return = r1_start * 1.0
+        r2_return = r2_start * 1.0
+
+        r1_via_up1 = np.array([1.6, 1.6])
+        r1_via_up2 = np.array([-1.6, 1.6])
+        r1_via_down1 = np.array([1.6, -1.])
+        r1_via_down2 = np.array([-1.6, -1.])
+
+        bimodal_corridor_skill = ReconvergingBimodalStochasticUntimedSkill(
+            joints=self.robot_joints["a1"],
+            branches=[
+                {"waypoints": [r1_via_up1, r1_via_up2]},
+                {"waypoints": [r1_via_down1, r1_via_down2]},
+            ],
+            target=r1_goal,
+            branch_dim=1,
+            commit_eps=1e-3,
+            dt=0.05,
+            noise_bound=0.1,
+            is_deterministic=False, #True,
+            step_size=0.02
+        )
+
+        self.tasks = [
+            Task(
+                "a1_crossing",
+                ["a1"],
+                initiation_goal=SingleGoal(np.array([1.6, 0.0])),
+                skill=bimodal_corridor_skill
+            ),
+            Task(
+                "a2_crossing",
+                ["a2"],
+                SingleGoal(r2_goal)
+            ),
+            Task(
+                "terminal",
+                ["a1", "a2"],
+                SingleGoal(np.concatenate([r1_return, r2_return]))
+            )
+        ]
+
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+
+        self.graph = DependencyGraph()
+        self.graph.add_dependency("terminal", "a1_crossing")
+        self.graph.add_dependency("terminal", "a2_crossing")
+
+        BaseModeLogic.__init__(self)
+
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.safe_pose = {}
+        for r in self.robots:
+            self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
+
+
+# Stochastic skills 3D envs
 @register([("rai.stochastic_horizontal_transport", {})])
 class rai_stochastic_horizontal_transport(SequenceMixin, rai_env):
     def __init__(self):
