@@ -10614,6 +10614,62 @@ def make_stochastic_switch_env(agents_can_rotate=None, view=False):
     return C
 
 
+def make_shared_point_env(view: bool = False):
+    C = make_table_with_walls(4, 4)
+    table = C.getFrame("table")
+
+    pre_agent_1_frame = (
+        C.addFrame("pre_agent_1_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([1, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([1, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([-1.0, 0.0])
+
+    pre_agent_2_frame = (
+        C.addFrame("pre_agent_2_frame")
+        .setParent(table)
+        .setPosition(table.getPosition() + [0.0, 0.0, 0.07])
+        .setShape(ry.ST.marker, size=[0.05])
+        .setColor([0.5, 0.5, 0])
+        .setContact(0)
+        .setJoint(ry.JT.rigid)
+    )
+
+    C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
+        ry.ST.cylinder, size=[0.06, 0.15]
+    ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
+        ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
+    ).setJointState([1.0, 0.0])
+
+    # The single shared point both robots must visit (table center).
+    C.addFrame("shared_point").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([0.2, 0.6, 1.0, 0.3]).setContact(0).setRelativePosition([0.0, 0.0, 0.07])
+
+    # Transparent cylinders to mark the initial positions
+    C.addFrame("a1_start").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-1.0, 0.0, 0.07])
+
+    C.addFrame("a2_start").setParent(table).setShape(
+        ry.ST.cylinder, size=[0.06, 0.16]
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([1.0, 0.0, 0.07])
+
+    if view:
+        C.view(True)
+
+    return C
+
+
 def make_stochastic_switch_pick_place_env(view: bool = False):
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
