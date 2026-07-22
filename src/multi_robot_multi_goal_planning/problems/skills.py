@@ -793,6 +793,40 @@ class DummyStochasticTimedSkill(BaseStochasticTimedSkill):
   def done(self, t, q, env):
     return t >= 1.0
   
+class VariableDurationTimedSkill(BaseStochasticTimedSkill):
+  def __init__(self, joints, goal_state, duration_min, duration_max, dt=0.05):
+    super().__init__(joints, dt=dt)
+    self.goal_state = np.array(goal_state)
+    self.duration_min = duration_min
+    self.duration_max = duration_max
+    self.duration = duration_max
+    self.is_deterministic = True # Motion is noise-free, only the timing is random
+
+  def step(self, t, q, env):
+    dt_norm = self.dt / self.duration
+    time_left = 1.0 - t + dt_norm
+    if time_left <= 1e-5:
+      return self.goal_state.copy()
+
+    # Ideal deterministic step toward the goal (no bridge noise)
+    step_direction = (self.goal_state - q) / time_left * dt_norm
+    q_new = q + step_direction
+
+    if t >= 1.0:
+      q_new = self.goal_state.copy()
+
+    return q_new
+
+  def done(self, t, q, env):
+    return t >= 1.0
+
+  def rollout(self, q_init, task, all_joints, env, t0):
+    # Sample the completion time up front, then delegate to the fixed-duration base loop
+    self.duration = float(np.random.uniform(self.duration_min, self.duration_max))
+    result = super().rollout(q_init, task, all_joints, env, t0)
+    self.duration = self.duration_max  # restore default
+    return result
+
 class DummyStochasticUntimedSkill(StochasticBaseSkill):
   """
   Untimed version of DummyStochasticSkill
