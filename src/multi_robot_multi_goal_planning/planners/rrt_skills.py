@@ -1440,6 +1440,10 @@ class RRTSkills(BasePlanner):
                         wp_skill_steps[skill_task_name] = wp_skill_steps.get(skill_task_name, 0) + idx + 1
                     path.append(State(q_wp, n.state.mode, is_skill_waypoint=True, skill_steps=wp_skill_steps))
             else:
+                # Skip duplicate mode transition nodes, but keep the new mode
+                if len(path) > 0 and np.allclose(path[-1].q.state(), n.state.q.state(), atol=1e-6):
+                    path[-1].mode = n.state.mode
+                    continue
                 path.append(n.state)
         return path
 
