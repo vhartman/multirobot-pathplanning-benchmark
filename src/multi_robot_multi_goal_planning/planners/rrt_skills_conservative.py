@@ -88,7 +88,6 @@ class RRTSkillsConservativeConfig:
     # -----------------------------------------------------------------
 
     tube_rollouts: int = 200                            # MC rollouts to estimate the uncertainty tube
-    collision_checking_strategy: str = "monte_carlo"    # "monte_carlo" | TODO add other strategies
 
     # -----------------------------------------------------------------
     # RRT* OPTIMIZATION PARAMETERS
@@ -276,8 +275,8 @@ class RRTSkillsConservative(BasePlanner):
         self.improvement_count: int = 0 # For periodic shortcutting
         self._refresh_phase_params()
 
-        # Uncertainty tubes for stochastic skills (task name -> (nominal traj, per-step radii))
-        self._skill_tubes: Dict[str, Tuple[np.ndarray, np.ndarray]] = {} # TODO part of Node or State?
+        # Uncertainty tubes for stochastic skills, grouping rollouts by their branch_idx
+        self._skill_tubes: Dict[str, Dict[int, Dict[str, Any]]] = {}
 
     def _refresh_phase_params(self):
         """
@@ -313,13 +312,20 @@ class RRTSkillsConservative(BasePlanner):
         else:
             raise ValueError(f"Unknown extension_strategy: {self.config.extension_strategy}")
 
-        # Mode
+        # Mode + start configuration
         start_mode = self.env.get_start_mode()
+        start_q = self.env.get_start_pos()
         self.reached_modes.append(start_mode)
         self.tree.add_subtree(start_mode)
 
+        # In case env starts directly with skill mode
+        start_state = State(start_q, start_mode)
+        for task in self._get_active_skill_tasks(start_mode):
+            start_state.skill_steps.setdefault(task.name, 0)
+            start_state.is_skill_waypoint = True
+
         # Node
-        start_node = Node(State(self.env.get_start_pos(), start_mode))
+        start_node = Node(start_state)
         start_node.cost = 0.0
         self.tree.root = start_node
         self.tree.subtrees[start_mode].add_node(start_node)
@@ -460,10 +466,14 @@ class RRTSkillsConservative(BasePlanner):
         # Return
         path = self.best_path
         info = {
-            "costs": costs, 
-            "times": times, 
+            "costs": costs,
+            "times": times,
             "paths": [path] if path else [],
-            "skill_tubes": self._skill_tubes
+            "skill_tubes": self._skill_tubes,
+            "skill_branch_commitments": { # Branch planner committed to for each skill
+                name: self._committed_branch(name, tubes)
+                for name, tubes in self._skill_tubes.items() if tubes
+            },
         }
         return path, info
 
@@ -1037,13 +1047,18 @@ class RRTSkillsConservative(BasePlanner):
         Determines if a skill should be executed using the robust Tube-RRT strategy
         """
         return isinstance(skill, (BaseStochasticTimedSkill, StochasticBaseSkill))
+
+    def _committed_branch(self, task_name: str, tubes: Dict) -> int:
+        """
+        The tube branch the tree commits to (open-loop): the first available branch
+        """
+        return next(iter(tubes))
         
     def _get_skill_tubes(self, skill_task, q_subspace: np.ndarray, skill_step: int):
         """
-        Evaluates the skill execution starting at q_init and estimates an uncertainty tube 
-        that is inflating (radially) the nominal trajectory based on Monte Carlo rollouts. It
-        groups the N rollouts by their branch_idx (TODO: later pipeline would need e.g. K-means),
-        computes separate tubes and returns a dictionary of distinct tubes
+        Runs tube_rollouts Monte Carlo executions of the stochastic skill and groups them by their 
+        branch_idx. Per branch we keep the raw (collision checked) rollouts and their mean as the 
+        nominal trajectory the tree follows. Rollouts are padded only within a branch
         """
         key = skill_task.name
 
@@ -1062,48 +1077,40 @@ class RRTSkillsConservative(BasePlanner):
             # tube from step 0
             q_init = np.asarray(skill_task.initiation_goal.sample(None))
 
-        all_joints = self.env.get_joint_names()
+        # We only need the joints belonging to this specific skill task
+        task_joints = skill_task.skill.joints
 
         # 3. Monte Carlo rollouts: run N noisy executions
         results = [
-            skill.rollout(q_init, skill_task, all_joints, self.env, t0=0.0)
+            skill.rollout(q_init, skill_task, task_joints, self.env, t0=0.0)
             for _ in range (self.config.tube_rollouts)
         ]
 
-        if not results:
-            return {}
-
-        raw_rollouts = [r.trajectory for r in results]
         labels = np.array([r.branch_idx if r.branch_idx is not None else 0 for r in results])
 
-        max_steps = max(len(traj) for traj in raw_rollouts)
-
-        def _pad(traj: np.ndarray) -> np.ndarray:
-            """
-            If skill terminates early, pad trajectory repeating last config, so all rollouts have 
-            same length for stacking and numpy operations
-            """
-            if len(traj) < max_steps:
-                traj = np.vstack([traj, np.repeat(traj[-1:], max_steps - len(traj), axis=0)])
-            return traj
-
-        rollouts = np.stack([_pad(traj) for traj in raw_rollouts], axis=0)
-
-        # 4. Tubes
-        nominal = np.mean(rollouts, axis=0)
-        
-        tubes = {
-            "nominal": nominal,
-            "raw_rollouts": rollouts,
-        }
-        # DEBUG
-        print(f"[TUBE] task '{key}': {rollouts.shape[0]} rollouts")
+        # 4. Group by branch first, then pad within the branch only
+        tubes = {}
+        for b in np.unique(labels):
+            b_trajs = [r.trajectory for r, lab in zip(results, labels) if lab == b]
+            
+            # Find the maximum length in this branch
+            b_max = max(len(traj) for traj in b_trajs)
+            # Pad every trajectory up to b_max
+            b_rollouts = np.stack([
+                traj if len(traj) == b_max
+                else np.vstack([traj, np.repeat(traj[-1:], b_max - len(traj), axis=0)])
+                for traj in b_trajs
+            ])
+            tubes[b] = {
+                "nominal": np.mean(b_rollouts, axis=0),
+                "raw_rollouts": b_rollouts,
+            }
 
         # 5. Cache it
         self._skill_tubes[key] = tubes
         return tubes
     
-    def _tube_margins_free(self, tube_tasks: List, tubes_by_task: Dict[str, Dict[str, Any]], steps: Dict[str, int],
+    def _is_safe_against_tube(self, tube_tasks: List, tubes_by_task: Dict[str, Dict[str, Any]], steps: Dict[str, int],
                            q_flat: np.ndarray, mode: Mode) -> bool:
         """
         Evaluates collisions using the Monte Carlo realizations of the stochastic skill.
@@ -1114,11 +1121,11 @@ class RRTSkillsConservative(BasePlanner):
             # Save original joint positions of the active robot
             q_orig = q_flat[active_indices].copy()
             
-            raw_rollouts = tubes_by_task[t.name]["raw_rollouts"] # shape (N_rollouts, N_steps, N_joints)
-            step_idx = min(steps[t.name], raw_rollouts.shape[1] - 1)
-            
-            # Check each realization
-            for rollout_idx in range(raw_rollouts.shape[0]):
+            # Check inactive robot against each realization at step k across all branches 
+            for b in tubes_by_task[t.name].values():
+                raw_rollouts = b["raw_rollouts"] # shape (N_rollouts, N_steps, N_joints)
+                step_idx = min(steps[t.name], raw_rollouts.shape[1] - 1)
+                for rollout_idx in range(raw_rollouts.shape[0]):
                     q_flat[active_indices] = raw_rollouts[rollout_idx, step_idx]
                     
                     q_cfg = self.env.get_start_pos().from_flat(q_flat)
@@ -1189,7 +1196,7 @@ class RRTSkillsConservative(BasePlanner):
                 # Stochastic: don't call skill.step() -> adds random noise
                 # Instead force robot to follow center of uncertainty tube
                 if self._use_nominal_tube(skill):
-                    branch_idx = next(iter(tubes_by_task[task_name]))
+                    branch_idx = self._committed_branch(task_name, tubes_by_task[task_name])
                     nominal_traj = tubes_by_task[task_name][branch_idx]["nominal"]
                     q_subspace_new = nominal_traj[min(base_step + 1, len(nominal_traj) - 1)].copy()
                 else:
@@ -1219,7 +1226,7 @@ class RRTSkillsConservative(BasePlanner):
         # If nominal safe, check inflated path against the union of all branches
         if tube_tasks:
             steps = {t.name: n_near.state.skill_steps.get(t.name, 0) + 1 for t in tube_tasks}
-            if not self._tube_margins_free(tube_tasks, tubes_by_task, steps, q_base_choice, mode):
+            if not self._is_safe_against_tube(tube_tasks, tubes_by_task, steps, q_base_choice, mode):
                 return []
 
         # 7. Add to tree
@@ -1302,8 +1309,9 @@ class RRTSkillsConservative(BasePlanner):
                     t_norm = min((info['base_step'] + i) / info['n_total'], 1.0)
                     
                     # Force stochastic skill to follow nominal baseline
-                    if self.config.collision_checking_strategy in ["monte_carlo", "sigma_points", "convex_hull"]:
-                        nominal_traj = tubes_by_task[info['name']]["nominal"]
+                    if self._use_nominal_tube(skill):
+                        branch_idx = self._committed_branch(info['name'], tubes_by_task[info['name']])
+                        nominal_traj = tubes_by_task[info['name']][branch_idx]["nominal"]
                         q_sub_new = nominal_traj[min(info['base_step'] + i, len(nominal_traj) - 1)].copy()
                     else:
                         q_sub_new = skill.step(t_norm, q_sub, self.env)
@@ -1327,7 +1335,7 @@ class RRTSkillsConservative(BasePlanner):
             # Inflated stochastic collision check (union over all branches)
             if tube_tasks:
                 steps = {t.name: n_near.state.skill_steps.get(t.name, 0) + i for t in tube_tasks}
-                if not self._tube_margins_free(tube_tasks, tubes_by_task, steps, q_next, mode):
+                if not self._is_safe_against_tube(tube_tasks, tubes_by_task, steps, q_next, mode):
                     break
             
             # Passed collision check -> record waypoint
@@ -1500,16 +1508,12 @@ class RRTSkillsConservative(BasePlanner):
             current_active_tasks = self._get_active_skill_tasks(mode)
             next_active_tasks = self._get_active_skill_tasks(next_mode)
             
-            next_task_names = set(t.name for t in next_active_tasks)
-            
-            continuing_skills = False
-            for task in current_active_tasks:
-                if task.name in next_task_names:
-                    seed_node.state.skill_steps[task.name] = n_new.state.skill_steps.get(task.name, 0)
-                    continuing_skills = True
-            
-            if continuing_skills:
+            # If any skills are active in the next mode, this seed node is a skill waypoint. Skills continuing 
+            # from the previous mode keep their progress and newly starting skills begin fresh at step 0
+            if next_active_tasks:
                 seed_node.state.is_skill_waypoint = True
+                for task in next_active_tasks:
+                    seed_node.state.skill_steps[task.name] = n_new.state.skill_steps.get(task.name, 0)
 
             self.tree.subtrees[next_mode].add_node(seed_node)
             n_new.children.append(seed_node)
@@ -1665,7 +1669,7 @@ class RRTSkillsConservative(BasePlanner):
 
         # 3. Ensure the newly shortcutted state doesn't violate the inflated margins
         # (using the union check over all branches)
-        return self._tube_margins_free(tube_tasks, self._skill_tubes, steps, np.asarray(q), mode)
+        return self._is_safe_against_tube(tube_tasks, self._skill_tubes, steps, np.asarray(q), mode)
 
     def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
         """
