@@ -145,12 +145,15 @@ class DependencyGraph:
         
         while available:
             # Randomly select from available nodes
+            # Sort available before shuffling -> reproducibility
+            available.sort()
             random.shuffle(available)
             current = available.pop()
             result.append(current)
             
             # Update in-degrees for nodes that depended on current node
-            for dependent in self.reverse_deps[current]:
+            # Sort the set before iterating to guarantee deterministic order
+            for dependent in sorted(list(self.reverse_deps[current])):
                 in_degree[dependent] -= 1
                 if in_degree[dependent] == 0:
                     available.append(dependent)
