@@ -2,6 +2,7 @@ import numpy as np
 import random
 import math
 import time
+import heapq
 from typing import Tuple, List, Dict, Optional, Any
 from dataclasses import dataclass
 
@@ -44,13 +45,14 @@ class RRTSkillsConfig:
     is_bidirectional: bool = False
     distance_metric: str = "max_euclidean"
     with_noise: bool = False
+    build_mode: str = "rrt"                              # "rrt" | "rrg" (roadmap: radius-connect non-skill nodes)
 
     # -----------------------------------------------------------------
     # EXTEND NON-SKILL MODES PARAMETERS
     # -----------------------------------------------------------------
     
     # LINEAR
-    step_size_strategy: str = "sqrt_d_max_robot"         # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots" | "sqrt_d_max_robot"
+    step_size_strategy: str = "sqrt_d_max_robot"        # "constant" | "scaled" | "sqrt_d_scaled" | "sqrt_d" | "sqrt_d_robots" | "sqrt_d_max_robot"
     step_size: float = 1                                # Constant
     step_size_factor: float = 0.1                       # Dynamic step size tuning factor
 
@@ -127,6 +129,11 @@ class Node:
         self.children: List['Node'] = []
         self.cost: float = 0.0
         self.cost_to_parent: float = 0.0
+
+        # RRG roadmap adjacency: (neighbour, edge_cost, kind), kind in {"geometric","transition","skill"}. 
+        # Geometric edges span a single non-skill mode's roadmap; transition/skill edges stitch adjacent modes
+        # Empty in "rrt" mode. Additive to the tree parent/children (untouched)
+        self.edges: List[Tuple['Node', float, str]] = []
 
         self.skill_edge: Optional['SkillEdge'] = None # Kinodynamic only
 
@@ -447,10 +454,17 @@ class RRTSkills(BasePlanner):
         # Return
         path = self.best_path
         info = {
-            "costs": costs, 
-            "times": times, 
+            "costs": costs,
+            "times": times,
             "paths": [path] if path else []
         }
+
+        # RRG: query + report the roadmap so it is actually used and verifiable
+        if self.config.build_mode == "rrg":
+            roadmap_cost, _ = self._roadmap_solution()
+            info["roadmap_cost"] = roadmap_cost
+            self._print_roadmap_debug(roadmap_cost)
+
         return path, info
 
     def _record_solution(self, costs: List[float], times: List[float], 
@@ -1239,7 +1253,179 @@ class RRTSkills(BasePlanner):
         # Add
         self.tree.subtrees[mode].add_node(n_new)
         n_new.parent.children.append(n_new)
+
+        # RRG: fold this node into the roadmap (additive, tree untouched)
+        self._roadmap_add_node(n_new, mode, is_skill)
+
         return n_new
+
+    # =====================================================================
+    # RRG roadmap (build_mode == "rrg")
+    # =====================================================================
+
+    def _add_roadmap_edge(self, a: Node, b: Node, cost: float, kind: str = "geometric"):
+        """
+        Adds an undirected roadmap edge a<->b once (idempotent per neighbour pair)
+        """
+        if any(nb is b for nb, _, _ in a.edges):
+            return
+        a.edges.append((b, cost, kind))
+        b.edges.append((a, cost, kind))
+
+    def _roadmap_add_node(self, n_new: Node, mode: Mode, is_skill: bool):
+        """
+        Folds a freshly-added node into the roadmap (RRG mode only). Called from EVERY node-insertion path 
+        (tree expansion AND shortcut sync) so the roadmap stays a connected superset of the tree. Adds the 
+        tree edge (geometric within a non-skill mode, "skill" for a skill segment, "transition" across a
+        mode boundary) plus radius links for non-skill nodes
+        """
+        if self.config.build_mode != "rrg":
+            return
+
+        parent = n_new.parent
+        if parent is not None and parent is not n_new:
+            if parent.state.mode == mode:
+                kind = "skill" if is_skill else "geometric"
+            else:
+                kind = "transition"
+            self._add_roadmap_edge(n_new, parent, n_new.cost_to_parent, kind=kind)
+
+        if not is_skill:
+            self._roadmap_connect(n_new, mode)
+
+    def _roadmap_connect(self, n_new: Node, mode: Mode):
+        """
+        Adds the geometric radius links of a non-skill node into the mode's roadmap: every collision-free 
+        neighbour within the shrinking-ball radius. Reuses the RRT* radius machinery. (The tree parent edge 
+        is added by _create_and_add_node)
+        """
+        subtree = self.tree.subtrees[mode]
+
+        # Radius neighbours (vectorized query + batch edge costs)
+        r_n = self._compute_rewiring_radius(subtree.size)
+        self_idx = subtree.node_to_idx[id(n_new)]
+        near_indices, edge_costs, _ = self._near_batch_costs(n_new.state.q, mode, r_n)
+
+        k_max = int(self.config.rewire_k_constant) if self.config.rewire_k_constant else 10
+        if len(near_indices) > k_max:
+            sorted_idx = np.argsort(edge_costs)
+            near_indices = near_indices[sorted_idx][:k_max]
+            edge_costs = edge_costs[sorted_idx][:k_max]
+
+        for pos, idx in enumerate(near_indices):
+            idx = int(idx)
+            if idx == self_idx:
+                continue
+            neighbour = subtree.nodes[idx]
+            if neighbour.state.is_skill_waypoint:
+                continue
+            if self.env.is_edge_collision_free(n_new.state.q, neighbour.state.q, mode):
+                self._add_roadmap_edge(n_new, neighbour, float(edge_costs[pos]), kind="geometric")
+
+    def _roadmap_shortest_path(self, src: Node, dst: Node) -> Tuple[float, List[Node]]:
+        """
+        Dijkstra over the roadmap adjacency (Node.edges) from src to dst. With transition/skill stitch 
+        edges present this is a GLOBAL query that crosses modes. Returns (cost, [nodes]); (inf, []) if unreachable
+        """
+        if src is dst:
+            return 0.0, [src]
+
+        dist: Dict[int, float] = {id(src): 0.0}
+        prev: Dict[int, Node] = {}
+        pq: List[Tuple[float, int, Node]] = [(0.0, id(src), src)]
+
+        while pq:
+            d, node_id, node = heapq.heappop(pq)
+            if d > dist.get(node_id, float("inf")):
+                continue
+            if node is dst:
+                break
+            for nb, w, _kind in node.edges:
+                nd = d + w
+                if nd < dist.get(id(nb), float("inf")):
+                    dist[id(nb)] = nd
+                    prev[id(nb)] = node
+                    heapq.heappush(pq, (nd, id(nb), nb))
+
+        if id(dst) not in dist:
+            return float("inf"), []
+
+        # Reconstruct
+        path = [dst]
+        while path[-1] is not src:
+            path.append(prev[id(path[-1])])
+        path.reverse()
+        return dist[id(dst)], path
+
+    def _roadmap_solution(self) -> Tuple[float, List[Node]]:
+        """
+        Global roadmap query: shortest path from the root to the best terminal over the roadmap (geometric + 
+        transition + skill edges). Proves the roadmap spans start->goal and is the query primitive the MDP 
+        will build on
+        """
+        terminal = self._get_best_terminal()
+        if terminal is None or self.tree.root is None:
+            return float("inf"), []
+        return self._roadmap_shortest_path(self.tree.root, terminal)
+
+    def _geometric_components(self, nodes: List[Node]) -> int:
+        """
+        Number of connected components of a mode's nodes using only geometric (intra-mode) roadmap edges
+        1 == a single connected roadmap over the mode
+        """
+        node_ids = set(id(n) for n in nodes)
+        seen: set = set()
+        comps = 0
+        for start in nodes:
+            if id(start) in seen:
+                continue
+            comps += 1
+            stack = [start]
+            seen.add(id(start))
+            while stack:
+                n = stack.pop()
+                for nb, _, kind in n.edges:
+                    if kind == "geometric" and id(nb) in node_ids and id(nb) not in seen:
+                        seen.add(id(nb))
+                        stack.append(nb)
+        return comps
+
+    def _print_roadmap_debug(self, roadmap_cost: float):
+        """
+        After a run, report whether a real roadmap was built: per non-skill mode connectivity, the 
+        transition/skill stitch edges between modes, and whether root->terminal is reachable over the roadmap
+        """
+        geo = trans = skill = 0
+        for sub in self.tree.subtrees.values():
+            for n in sub.nodes[: sub.size]:
+                for _, _, kind in n.edges:
+                    if kind == "geometric":
+                        geo += 1
+                    elif kind == "transition":
+                        trans += 1
+                    elif kind == "skill":
+                        skill += 1
+        geo //= 2; trans //= 2; skill //= 2   # undirected
+
+        print("[RRG ROADMAP] non-skill mode roadmaps (geo-nodes | geo-edges | avg-deg | components):")
+        for mode in self._non_skill_reached_modes():
+            all_nodes = self.tree.subtrees[mode].nodes[: self.tree.subtrees[mode].size]
+            # The geometric roadmap is over the non-skill-waypoint nodes only.
+            nodes = [n for n in all_nodes if not n.state.is_skill_waypoint]
+            node_ids = set(id(n) for n in nodes)
+            e = sum(1 for n in nodes for nb, _, k in n.edges
+                    if k == "geometric" and id(nb) in node_ids) // 2
+            comps = self._geometric_components(nodes)
+            deg = (2.0 * e / len(nodes)) if nodes else 0.0
+            flag = "" if comps <= 1 else "  <-- DISCONNECTED"
+            print(f"   mode {str(mode)[:24]:24s} n={len(nodes):5d} geo={e:6d} deg={deg:4.1f} comp={comps}{flag}")
+
+        terminal = self._get_best_terminal()
+        connected = roadmap_cost < float("inf")
+        tree_cost = terminal.cost if terminal is not None else float("inf")
+        print(f"[RRG ROADMAP] stitch edges: transition={trans} skill={skill} | "
+              f"root->terminal connected={connected} "
+              f"roadmap_cost={roadmap_cost:.3f} tree_cost={tree_cost:.3f}")
 
     def _check_transitions(self, n_new: Node) -> List[Node]:
         """
@@ -1323,6 +1509,15 @@ class RRTSkills(BasePlanner):
             self.tree.subtrees[next_mode].add_node(seed_node)
             n_new.children.append(seed_node)
             created_seeds.append(seed_node)
+
+            # RRG: stitch this mode's roadmap to the next mode's via the transition edge 
+            # "skill" if a skill task completed here (a chance transition), else a geometric "transition"
+            if self.config.build_mode == "rrg":
+                completed_a_skill = any(self.env.tasks[tid] in skill_tasks for tid in completed_task_ids)
+                self._add_roadmap_edge(
+                    n_new, seed_node, seed_node.cost_to_parent,
+                    kind="skill" if completed_a_skill else "transition",
+                )
             
             # RRT* optimization
             if self._should_rewire() and not seed_node.state.is_skill_waypoint and not next_active_tasks:
@@ -1507,6 +1702,9 @@ class RRTSkills(BasePlanner):
    
             best_parent.children.append(new_node)
             subtree.add_node(new_node)
+
+            # RRG: shortcut-injected nodes must be roadmap-connected too
+            self._roadmap_add_node(new_node, new_mode, is_skill)
 
             # 3) Mode-boundary logic
             if mode_changed:
