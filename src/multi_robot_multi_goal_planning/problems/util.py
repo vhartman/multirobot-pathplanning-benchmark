@@ -99,12 +99,14 @@ def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> 
 
         
         is_skill = getattr(path[i], 'is_skill_waypoint', False)
+        next_is_skill = getattr(path[i + 1], 'is_skill_waypoint', False)
         skill_steps = dict(getattr(path[i], 'skill_steps', {}))
-        
-        if is_skill:
+
+        # Edge inside skill mode -> keep the waypoint as is, no interpolation
+        if is_skill and next_is_skill:
             new_path.append(State(q0.from_flat(q0.state()), path[i].mode, is_skill_waypoint=True, skill_steps=skill_steps))
         else:
-            # Standard free space interpolation
+            # Edge outside skill mode (free-space AND skill-exit) -> must interpolate
             dist = config_dist(q0, q1, kind)
             N = int(dist / resolution)
             N = max(1, N)
@@ -115,7 +117,11 @@ def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> 
 
             for j in range(N):
                 q = q0_state + dir * j
-                new_path.append(State(q0.from_flat(q), path[i].mode, is_skill_waypoint=False))
+                # Mark exit config (j==0) as skill-waypoint, but not the interpolated points
+                first_is_skill = is_skill and j == 0
+                new_path.append(State(q0.from_flat(q), path[i].mode,
+                                      is_skill_waypoint=first_is_skill,
+                                      skill_steps=(skill_steps if first_is_skill else {})))
 
     # Add the final state (which is not added in the interpolation before)
     final_is_skill = getattr(path[-1], 'is_skill_waypoint', False)
@@ -123,8 +129,8 @@ def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> 
     final_q = path[-1].q.from_flat(path[-1].q.state())
     new_path.append(State(final_q, path[-1].mode, final_is_skill, skill_steps=final_skill_steps))
     
-    # TODO DBUG (remove)
+    # TODO DEBUG (remove)
     counter = sum(1 for s in new_path if getattr(s, 'is_skill_waypoint', False))
-    print(f"[DEBUG SKILLS - interpolate_path] There are {counter} skill points in the new_path")
+    print(f"[DEBUG INTERPOLATE] There are {counter} skill points in the new_path")
 
     return new_path
