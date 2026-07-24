@@ -260,6 +260,9 @@ class RRTSkills(BasePlanner):
         self.mode_validation = ModeValidation(self.env, self.config.with_mode_validation, self.config.with_noise)
         self.reached_modes: List[Mode] = []
 
+        # RRG lazy-CC cache: adding edges without CC -> validate during roadmap query
+        self._roadmap_validated: set = set()
+
         self.start_time = 0.0
         self.solution_node: Node = None
 
@@ -429,13 +432,23 @@ class RRTSkills(BasePlanner):
             if optimize and self.solution_node is not None and iterations % self.config.shortcut_period_iters == 0:
                 self._periodic_improve(costs, times)
 
-        # Final rescan first to capture any unrecorded rewiring gains
+        # Extract the final path (RRG roadmap query OR RRT* tree extraction)
+        roadmap_cost = float("inf")
         if optimize and self.solution_node is not None:
-            best_term = self._get_best_terminal()
-            if best_term is not None:
-                tree_path = self._extract_path(best_term)
-                tree_cost = path_cost(tree_path, self.env.batch_config_cost)
-                self._record_solution(costs, times, path=tree_path, node=best_term, cost=tree_cost)
+            # RRG: the roadmap Dijkstra path is the solution (not the tree path)
+            if self.config.build_mode == "rrg":
+                if self.tree.root is not None and self.terminal_nodes:
+                    roadmap_cost, roadmap_node_path = self._roadmap_query(self.tree.root, list(self.terminal_nodes))
+                    if roadmap_node_path:
+                        roadmap_states = self._states_from_nodes(roadmap_node_path)
+                        if self._record_solution(costs, times, path=roadmap_states):
+                            print(f"[RRG ROADMAP] routed Dijkstra path as solution (cost {self.best_cost:.3f})")
+            else:
+                best_term = self._get_best_terminal()
+                if best_term is not None:
+                    tree_path = self._extract_path(best_term)
+                    tree_cost = path_cost(tree_path, self.env.batch_config_cost)
+                    self._record_solution(costs, times, path=tree_path, node=best_term, cost=tree_cost)
 
         # Final shortcut
         if self.config.try_shortcutting and self.best_path is not None:
@@ -459,9 +472,8 @@ class RRTSkills(BasePlanner):
             "paths": [path] if path else []
         }
 
-        # RRG: query + report the roadmap so it is actually used and verifiable
+        # RRG: report the roadmap (the query already ran above and routed its path into best_path)
         if self.config.build_mode == "rrg":
-            roadmap_cost, _ = self._roadmap_solution()
             info["roadmap_cost"] = roadmap_cost
             self._print_roadmap_debug(roadmap_cost)
 
@@ -1265,7 +1277,7 @@ class RRTSkills(BasePlanner):
 
     def _add_roadmap_edge(self, a: Node, b: Node, cost: float, kind: str = "geometric"):
         """
-        Adds an undirected roadmap edge a<->b once (idempotent per neighbour pair)
+        Adds an undirected roadmap edge a<->b once between two nodes in the roadmap
         """
         if any(nb is b for nb, _, _ in a.edges):
             return
@@ -1319,26 +1331,58 @@ class RRTSkills(BasePlanner):
             neighbour = subtree.nodes[idx]
             if neighbour.state.is_skill_waypoint:
                 continue
-            if self.env.is_edge_collision_free(n_new.state.q, neighbour.state.q, mode):
-                self._add_roadmap_edge(n_new, neighbour, float(edge_costs[pos]), kind="geometric")
+            # TODO (removed) -> lazy CC
+            # if self.env.is_edge_collision_free(n_new.state.q, neighbour.state.q, mode):
+            self._add_roadmap_edge(n_new, neighbour, float(edge_costs[pos]), kind="geometric")
 
-    def _roadmap_shortest_path(self, src: Node, dst: Node) -> Tuple[float, List[Node]]:
+    def _edge_kind(self, a: Node, b: Node) -> Optional[str]:
         """
-        Dijkstra over the roadmap adjacency (Node.edges) from src to dst. With transition/skill stitch 
-        edges present this is a GLOBAL query that crosses modes. Returns (cost, [nodes]); (inf, []) if unreachable
+        Kind of the roadmap edge a<->b ("geometric" | "transition" | "skill"), or None if absent
         """
-        if src is dst:
-            return 0.0, [src]
+        for nb, _, kind in a.edges:
+            if nb is b:
+                return kind
+        return None
 
+    def _remove_roadmap_edge(self, a: Node, b: Node):
+        """
+        Permanently drops the undirected roadmap edge a<->b (both directions). Used by lazy CC to
+        prune an in-collision edge
+        """
+        a.edges = [e for e in a.edges if e[0] is not b]
+        b.edges = [e for e in b.edges if e[0] is not a]
+
+    def _validate_roadmap_edge(self, a: Node, b: Node) -> bool:
+        """
+        Lazy collision check for a geometric roadmap edge, memoized in self._roadmap_validated so a
+        proven-free edge is never re-checked (geometric edges are intra-mode, so a.mode == b.mode)
+        """
+        key = (id(a), id(b)) if id(a) < id(b) else (id(b), id(a))
+        if key in self._roadmap_validated:
+            return True
+        if self.env.is_edge_collision_free(a.state.q, b.state.q, a.state.mode):
+            self._roadmap_validated.add(key)
+            return True
+        return False
+
+    def _roadmap_dijkstra(self, src: Node, targets: List[Node]) -> Tuple[Optional[Node], float, List[Node]]:
+        """
+        Finds the shortest path from the start node to the first reached target node. This search is 
+        optimistic: it ignores collisions and assumes all edges are valid. Actual collision checking 
+        is handled later by _roadmap_query. Returns a tuple of (reached_target_node, total_cost, path_of_nodes)
+        """
+        target_ids = {id(t) for t in targets}
         dist: Dict[int, float] = {id(src): 0.0}
         prev: Dict[int, Node] = {}
         pq: List[Tuple[float, int, Node]] = [(0.0, id(src), src)]
 
+        reached: Optional[Node] = None
         while pq:
             d, node_id, node = heapq.heappop(pq)
             if d > dist.get(node_id, float("inf")):
                 continue
-            if node is dst:
+            if node_id in target_ids:
+                reached = node
                 break
             for nb, w, _kind in node.edges:
                 nd = d + w
@@ -1347,26 +1391,40 @@ class RRTSkills(BasePlanner):
                     prev[id(nb)] = node
                     heapq.heappush(pq, (nd, id(nb), nb))
 
-        if id(dst) not in dist:
-            return float("inf"), []
+        if reached is None:
+            return None, float("inf"), []
 
-        # Reconstruct
-        path = [dst]
+        path = [reached]
         while path[-1] is not src:
             path.append(prev[id(path[-1])])
         path.reverse()
-        return dist[id(dst)], path
+        return reached, dist[id(reached)], path
 
-    def _roadmap_solution(self) -> Tuple[float, List[Node]]:
+    def _roadmap_query(self, src: Node, targets: List[Node]) -> Tuple[float, List[Node]]:
         """
-        Global roadmap query: shortest path from the root to the best terminal over the roadmap (geometric + 
-        transition + skill edges). Proves the roadmap spans start->goal and is the query primitive the MDP 
-        will build on
+        Lazy-CC shortest path from src to the cheapest reachable target (Lazy-PRM style): run the
+        optimistic Dijkstra, validate ONLY the returned path's geometric edges, and on the first
+        in-collision edge prune it and re-query. Skill/transition edges are tree-derived, already
+        collision-free, so they are trusted. Validating just the candidate path (not the whole
+        Dijkstra frontier) keeps expensive edge checks to a minimum. Returns (cost, [nodes])
         """
-        terminal = self._get_best_terminal()
-        if terminal is None or self.tree.root is None:
+        if not targets:
             return float("inf"), []
-        return self._roadmap_shortest_path(self.tree.root, terminal)
+
+        while True:
+            reached, cost, path = self._roadmap_dijkstra(src, targets)
+            if reached is None:
+                return float("inf"), []
+
+            bad_edge = None
+            for a, b in zip(path[:-1], path[1:]):
+                if self._edge_kind(a, b) == "geometric" and not self._validate_roadmap_edge(a, b):
+                    bad_edge = (a, b)
+                    break
+
+            if bad_edge is None:
+                return cost, path
+            self._remove_roadmap_edge(*bad_edge)
 
     def _geometric_components(self, nodes: List[Node]) -> int:
         """
@@ -1623,8 +1681,16 @@ class RRTSkills(BasePlanner):
             nodes.append(curr)
             curr = curr.parent
         nodes.reverse()
+        return self._states_from_nodes(nodes)
 
-        # Build path (inserting SkillEdge intermediates where present)
+    def _states_from_nodes(self, nodes: List[Node]) -> List[State]:
+        """
+        Builds an executable State path from an ORDERED (root-first) node sequence, inserting
+        kinodynamic SkillEdge intermediates and de-duplicating mode-transition nodes. Shared by the
+        tree extraction (_extract_path) and the RRG roadmap reconstruction (_roadmap_path_states).
+        Each skill node keeps its own tree parent, so skill segments are reproduced exactly and are
+        never shortcut or modified here
+        """
         path = []
         for n in nodes:
             if n.skill_edge is not None:
@@ -1641,6 +1707,7 @@ class RRTSkills(BasePlanner):
                     continue
                 path.append(n.state)
         return path
+
 
     def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
         """
@@ -1972,10 +2039,13 @@ class RRTSkills(BasePlanner):
     def _should_rewire(self) -> bool:
         """
         Determines if RRT* should rewire or not:
+        - If RRG: solution is Dijkstra path, rewiring is waste
         - If use_rrt_star = False: never rewire
         - If rewire_after_first_solution = True: only rewire after first solution found
         - Otherwise: always rewire when use_rrt_star = True
         """
+        if self.config.build_mode == "rrg":
+            return False
         if not self.config.use_rrt_star:
             return False
         if self.config.rewire_after_first_solution:
