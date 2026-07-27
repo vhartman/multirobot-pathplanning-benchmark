@@ -2087,7 +2087,7 @@ class rai_dep_stochastic_switch(DependencyGraphMixin, rai_stochastic_switch_base
 
 # TODO NEW "STOCHASTIC" SKILLS 2D ENVS
 class rai_shared_point_base(rai_env):
-    def __init__(self):
+    def __init__(self, distribution="uniform"):
         self.C = rai_config.make_shared_point_env()
         # self.C.view(True)
 
@@ -2109,9 +2109,10 @@ class rai_shared_point_base(rai_env):
         skill = VariableDurationTimedSkill(
             joints=self.robot_joints["a1"],
             goal_state=shared_point,
-            duration_min=1.0,
-            duration_max=5.0,
+            duration_min=0.5,
+            duration_max=3.0,
             dt=0.05,
+            distribution=distribution,
         )
 
         self.tasks = [
@@ -2134,10 +2135,14 @@ class rai_shared_point_base(rai_env):
         self.collision_tolerance = 0.001
         self.collision_resolution = 0.005
 
-@register([("rai.shared_point", {})])
+@register([
+    ("rai.shared_point", {}),
+    ("rai.uniform_shared_point", {}),
+    ("rai.bimodal_shared_point", {'distribution': 'bimodal'})
+])
 class rai_shared_point(SequenceMixin, rai_shared_point_base):
-    def __init__(self):
-        rai_shared_point_base.__init__(self)
+    def __init__(self, distribution="uniform"):
+        rai_shared_point_base.__init__(self, distribution=distribution)
 
         self.sequence = self._make_sequence_from_names(
             ["a1_skill", "a2_visit", "a1_return", "a2_return", "terminal"]
@@ -2153,10 +2158,14 @@ class rai_shared_point(SequenceMixin, rai_shared_point_base):
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
-@register([("rai.dep_shared_point", {})])
+@register([
+    ("rai.dep_shared_point", {}),
+    ("rai.dep_uniform_shared_point", {}),
+    ("rai.dep_bimodal_shared_point", {'distribution': 'bimodal'})
+])
 class rai_dep_shared_point(DependencyGraphMixin, rai_shared_point_base):
-    def __init__(self):
-        rai_shared_point_base.__init__(self)
+    def __init__(self, distribution="uniform"):
+        rai_shared_point_base.__init__(self, distribution=distribution)
 
         # a1_skill and a2_visit are intentionally left UNORDERED (what reactive has to "figure out")
         # only the returns and the terminal are constrained

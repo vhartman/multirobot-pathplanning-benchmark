@@ -794,12 +794,13 @@ class DummyStochasticTimedSkill(BaseStochasticTimedSkill):
     return t >= 1.0
   
 class VariableDurationTimedSkill(BaseStochasticTimedSkill):
-  def __init__(self, joints, goal_state, duration_min, duration_max, dt=0.05):
+  def __init__(self, joints, goal_state, duration_min, duration_max, dt=0.05, distribution="uniform"):
     super().__init__(joints, dt=dt)
     self.goal_state = np.array(goal_state)
     self.duration_min = duration_min
     self.duration_max = duration_max
     self.duration = duration_max
+    self.distribution = distribution
     self.is_deterministic = True # Motion is noise-free, only the timing is random
 
   def step(self, t, q, env):
@@ -822,7 +823,10 @@ class VariableDurationTimedSkill(BaseStochasticTimedSkill):
 
   def rollout(self, q_init, task, all_joints, env, t0):
     # Sample the completion time up front, then delegate to the fixed-duration base loop
-    self.duration = float(np.random.uniform(self.duration_min, self.duration_max))
+    if self.distribution == "bimodal":
+      self.duration = float(np.random.choice([self.duration_min, self.duration_max]))
+    else:
+      self.duration = float(np.random.uniform(self.duration_min, self.duration_max))
     result = super().rollout(q_init, task, all_joints, env, t0)
     self.duration = self.duration_max  # restore default
     return result
