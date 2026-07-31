@@ -271,7 +271,10 @@ def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]
 
         # If A and C are almost the same, skip B.
         if np.linalg.norm(AC) < tolerance:
-            continue
+            if A.mode == B.mode == C.mode:
+                continue
+            simplified_path.append(B)
+            continue    
         lam = np.dot(AB, AC) / np.dot(AC, AC)
 
         # Check if AB is collinear to AC (AB = lambda * AC)
