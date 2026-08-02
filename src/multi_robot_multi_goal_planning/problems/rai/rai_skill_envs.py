@@ -2110,7 +2110,7 @@ class rai_shared_point_base(rai_env):
             joints=self.robot_joints["a1"],
             goal_state=shared_point,
             duration_min=0.5,
-            duration_max=3.0,
+            duration_max=6.0,
             dt=0.05,
             distribution=distribution,
         )
@@ -2122,8 +2122,8 @@ class rai_shared_point_base(rai_env):
                 initiation_goal=SingleGoal(r1_start),
                 skill=skill,
             ),
-            Task("a1_return", ["a1"], SingleGoal(r1_start)),
             Task("a2_visit", ["a2"], SingleGoal(shared_point)),
+            Task("a1_return", ["a1"], SingleGoal(r1_start)),
             Task("a2_return", ["a2"], SingleGoal(r2_start)),
             Task(
                 "terminal",
