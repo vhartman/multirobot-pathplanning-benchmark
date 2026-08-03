@@ -1047,8 +1047,9 @@ class RRTSkills(BasePlanner):
     def _get_skill_horizon(self, task: Task, q_subspace: np.ndarray, base_step: int) -> Tuple[int, bool]:
         """
         Returns (n_total_steps, is_bounded) for an active skill.
-        For timed skills, n_total_steps = round(duration / dt).
-        For untimed skills, returns (0, False).
+        - For timed skills, n_total_steps = round(duration / dt)
+        - For untimed skills, returns (0, False), no fixed endpoint
+        Overridden by the conservative planner to use the precomputed nominal tube length instead
         """
         skill = task.skill
         if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
@@ -1057,19 +1058,25 @@ class RRTSkills(BasePlanner):
 
     def _step_active_skill(self, task: Task, q_subspace: np.ndarray, step_idx: int, n_total: int) -> Tuple[np.ndarray, bool]:
         """
-        Advances one active skill by 1 step. Returns (q_subspace_new, is_done).
+        Advances one active skill by 1 step. Returns (q_subspace_new, is_done)
+        - For timed skills, maps step_idx to a normalised time t_norm in [0, 1] and queries the skill
+        - For untimed skills, calls step() directly (no time argument)
+        Overridden by the conservative planner to follow the precomputed nominal trajectory instead
         """
         skill = task.skill
         if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
             t_norm = min(step_idx / max(1, n_total), 1.0)
             q_new = skill.step(t_norm, q_subspace, self.env)
             return q_new, skill.done(t_norm, q_new, self.env)
+        # Untimed skill
         q_new = skill.step(q_subspace, self.env)
         return q_new, skill.done(q_new, self.env)
 
     def _validate_skill_step(self, state_next: State, q_prev_cfg: Configuration, skill_tasks: List[Task], steps: Dict[str, int]) -> bool:
         """
-        Validates intermediate or single-step skill transitions.
+        Validates an intermediate or single-step skill transition against static obstacles
+        Called after every step in both _expand_single_step and _expand_kinodynamic
+        Overridden by the conservative planner to additionally check against the MC rollout tube
         """
         return self._validate(state_next, q_prev_cfg, is_skill=True)
 
@@ -1096,6 +1103,7 @@ class RRTSkills(BasePlanner):
         all_joints = self.env.get_joint_names()
         new_skill_steps = dict(n_near.state.skill_steps)
 
+        # Advance each concurrent skill by exactly one step
         for skill_task in skill_tasks:
             task_indices = self._get_active_subspace_indices([skill_task])
             q_subspace = q_full[task_indices]
@@ -1103,7 +1111,7 @@ class RRTSkills(BasePlanner):
             
             n_total, is_bounded = self._get_skill_horizon(skill_task, q_subspace, base_step)
             if is_bounded and base_step >= n_total:
-                return []
+                return [] # Skill already finished at this node
 
             self.env.C.selectJoints(skill_task.skill.joints)
             q_subspace_new, _ = self._step_active_skill(skill_task, q_subspace, base_step + 1, n_total)
@@ -1114,7 +1122,8 @@ class RRTSkills(BasePlanner):
 
         q_new = self.env.get_start_pos().from_flat(q_base)
         state_new = State(q_new, mode, is_skill_waypoint=True, skill_steps=new_skill_steps)
-     
+
+        # Collision check (overridable: conservative planner also checks the MC tube here)
         if not self._validate_skill_step(state_new, n_near.state.q, skill_tasks, new_skill_steps):
             return []
         
@@ -1145,7 +1154,7 @@ class RRTSkills(BasePlanner):
         waypoints = [q_curr.copy()]
         t_norms_list = [0.0]
 
-        # Precompute static skill information and maximum rollout steps
+        # 1. Precompute per-skill info and cap rollout_steps to not exceed any skill's remaining budget
         rollout_steps = self.config.kinodynamic_steps
         skill_infos = []
         
@@ -1157,7 +1166,7 @@ class RRTSkills(BasePlanner):
             
             if is_bounded:
                 if n_total - base_step <= 0:
-                    return []
+                    return [] # Skill already finished at this node
                 rollout_steps = min(rollout_steps, n_total - base_step)
                 
             skill_infos.append({
@@ -1172,10 +1181,12 @@ class RRTSkills(BasePlanner):
         actual_steps = 0
         all_joints = self.env.get_joint_names()
 
+        # 2. Unrolling loop: advance all skills one step at a time, collision-check each
         for i in range(1, rollout_steps + 1):
+            # Steer inactive robots toward q_target
             q_next = self._steer_inactive(q_curr, q_target_vec, active_indices, dt)
             
-            # Advance all active skills
+            # Advance all active skills by one step
             for info in skill_infos:
                 task = info['task']
                 q_sub = q_curr[info['indices']]
@@ -1190,7 +1201,7 @@ class RRTSkills(BasePlanner):
             
             self.env.C.selectJoints(all_joints)
 
-            # Collision check this tiny step
+            # Collision check this sub-step (overridable: conservative planner also checks the MC tube)
             q_next_cfg = self.env.get_start_pos().from_flat(q_next)
             q_curr_cfg = self.env.get_start_pos().from_flat(q_curr)
             
@@ -1198,7 +1209,7 @@ class RRTSkills(BasePlanner):
             state_next = State(q_next_cfg, mode, is_skill_waypoint=True, skill_steps=current_steps)
 
             if not self._validate_skill_step(state_next, q_curr_cfg, skill_tasks, current_steps):
-                break
+                break # Collision at step i -> truncate kino-edge here
 
             actual_steps = i
             waypoints.append(q_next.copy())
@@ -1206,7 +1217,7 @@ class RRTSkills(BasePlanner):
             q_curr = q_next
 
             if skill_done:
-                break
+                break # Skill naturally finished
 
         if len(waypoints) < 2:
             return [] 

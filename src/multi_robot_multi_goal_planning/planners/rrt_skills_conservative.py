@@ -66,7 +66,7 @@ class RRTSkillsConservative(RRTSkills):
         Evaluates if an active skill has finished its execution.
         - For stochastic skills using nominal tubes, it finishes when base_step reaches
           the nominal tube length - 1 (the global_max - 1 budgeted steps)
-        - For deterministic skills, delegates to RRTSkills
+        - For deterministic skills, fallback to base class RRTSkills
         """
         skill = task.skill
         if self._use_nominal_tube(skill) and task.name in self._skill_tubes:
@@ -137,9 +137,10 @@ class RRTSkillsConservative(RRTSkills):
         """
         Returns (n_total_steps, is_bounded) for an active skill
         - For stochastic skills using nominal tubes, returns (len(nominal_traj) - 1, True)
-        - For deterministic skills, delegates to RRTSkills
+        - For deterministic skills, fallback to base class RRTSkills
         """
         if self._use_nominal_tube(task.skill):
+            # Tubes are precomputed on the first call and cached
             tubes = self._get_skill_tubes(task, q_subspace, base_step)
             branch_idx = self._committed_branch(task.name, tubes)
             nominal = tubes[branch_idx]["nominal"]
@@ -150,10 +151,10 @@ class RRTSkillsConservative(RRTSkills):
         """
         Advances one active skill by 1 step
         - For stochastic skills, follows the precomputed nominal trajectory of the committed branch
-        - For deterministic skills, delegates to RRTSkills
+        - For deterministic skills, fallback to base class RRTSkills
         """
         if self._use_nominal_tube(task.skill):
-            tubes = self._skill_tubes[task.name]
+            tubes = self._skill_tubes[task.name] # Already cached by _get_skill_horizon
             branch_idx = self._committed_branch(task.name, tubes)
             nominal = tubes[branch_idx]["nominal"]
             q_new = nominal[min(step_idx, len(nominal) - 1)].copy()
@@ -197,12 +198,15 @@ class RRTSkillsConservative(RRTSkills):
 
     def _validate_skill_step(self, state_next: State, q_prev_cfg: Configuration, skill_tasks: List[Task], steps: Dict[str, int]) -> bool:
         """
-        Validates intermediate or single-step skill transitions.
-        Checks nominal static obstacle collision, and if safe, checks safety against the union tube.
+        Stochastic override: first runs the base static-obstacle check, then additionally
+        checks whether the inactive robots are safe against every MC rollout realization
+        across all stochastic branches at the current step
         """
+        # 1. Standard static-obstacle collision check
         if not super()._validate_skill_step(state_next, q_prev_cfg, skill_tasks, steps):
             return False
 
+        # 2. MC tube check: inactive robot must be clear of all stochastic branches
         tube_tasks = [t for t in skill_tasks if self._use_nominal_tube(t.skill)]
         if tube_tasks:
             if not self._is_safe_against_tube(tube_tasks, self._skill_tubes, steps, state_next.q.state().copy(), state_next.mode):
