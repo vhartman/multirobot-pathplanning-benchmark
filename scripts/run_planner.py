@@ -195,12 +195,21 @@ def main():
         config.distance_metric = args.distance_metric
         planner = RRTSkills(env, config)
 
+    # Stochastic planners have their own runner scripts, not a --planner choice here:
+    # - rrt_skills_conservative (scripts/run_conservative_planner.py)
+    # - rrt_skills_reactive (scripts/run_reactive_roadmap.py, run_reactive_policy.py) # TODO
+
     np.random.seed(args.seed + args.run_id)
     random.seed(args.seed + args.run_id)
 
 
     path, info = planner.plan(ptc=termination_condition, optimize=args.optimize)
-    
+
+    paths = []
+    if path is not None:
+        paths.append(path)
+
+    info["paths"] = paths
 
     if args.save:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
