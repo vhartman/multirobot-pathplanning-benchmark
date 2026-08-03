@@ -234,7 +234,6 @@ def robot_mode_shortcut(
                     old_state.mode,
                     is_skill_waypoint=old_state.is_skill_waypoint,
                     skill_steps=dict(old_state.skill_steps),
-                    skill_branch_commitments=dict(old_state.skill_branch_commitments) 
                 )
             )
 
