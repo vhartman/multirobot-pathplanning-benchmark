@@ -10872,14 +10872,21 @@ def make_stochastic_bimodal_switch_env(view: bool = False, is_reconverging: bool
     return C
 
 
-def make_square_island_env(view: bool = False):
+def make_square_island_env(corridor_width: float = 0.8, view: bool = True):
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
+
+    # Make passage width adjustable
+    table_half_width = 2.0
+    obstacle_half_width = table_half_width - corridor_width
+    obstacle_size = 2.0 * obstacle_half_width
+    corridor_center = table_half_width - corridor_width / 2.0
+    
 
     # Central massive square obstacle
     C.addFrame("island").setParent(table).setPosition(
         table.getPosition() + [0.0, 0.0, 0.07]
-    ).setShape(ry.ST.box, size=[2.4, 2.4, 0.06, 0.005]).setContact(1).setColor(
+    ).setShape(ry.ST.box, size=[obstacle_size, obstacle_size, 0.06, 0.005]).setContact(1).setColor(
         [0, 0, 0]
     ).setJoint(ry.JT.rigid)
 
@@ -10893,12 +10900,12 @@ def make_square_island_env(view: bool = False):
         .setJoint(ry.JT.rigid)
     )
 
-    # a1 starts on the Right (X = 1.5)
+    # a1 starts on the Right (X = corridor_center)
     C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([1, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
-    ).setJointState([1.6, 0.0])
+    ).setJointState([corridor_center, 0.0])
 
     pre_agent_2_frame = (
         C.addFrame("pre_agent_2_frame")
@@ -10910,21 +10917,21 @@ def make_square_island_env(view: bool = False):
         .setJoint(ry.JT.rigid)
     )
 
-    # a2 starts on the Left (X = -1.5)
+    # a2 starts on the Left (X = -corridor_center)
     C.addFrame("a2").setParent(pre_agent_2_frame).setShape(
         ry.ST.cylinder, size=[0.06, 0.15]
     ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
         ry.JT.transXY, limits=np.array([-2, 2, -2, 2])
-    ).setJointState([-1.6, 0.0])
+    ).setJointState([-corridor_center, 0.0])
 
     # Goals
     C.addFrame("goal1").setParent(table).setShape(
         ry.ST.cylinder, size=[0.06, 0.16]
-    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-1.6, 0.0, 0.07])
+    ).setColor([1, 0.5, 0, 0.3]).setContact(0).setRelativePosition([-corridor_center, 0.0, 0.07])
 
     C.addFrame("goal2").setParent(table).setShape(
         ry.ST.cylinder, size=[0.06, 0.16]
-    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([1.6, 0.0, 0.07])
+    ).setColor([0.5, 0.5, 0, 0.2]).setContact(0).setRelativePosition([corridor_center, 0.0, 0.07])
 
     if view:
         C.view(True)

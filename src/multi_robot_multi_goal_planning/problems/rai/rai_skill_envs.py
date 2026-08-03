@@ -2597,10 +2597,13 @@ class rai_dep_reconverging_bimodal_switch(DependencyGraphMixin, rai_reconverging
 
 
 # Stochastic bimodal (config, time) skills 2D envs (to show conservative stochastic planner's limitations)
-@register([("rai.stochastic_square_island", {})])
+@register([
+    ("rai.stochastic_square_island", {"corridor_width": 0.8}),
+    ("rai.stochastic_square_island_narrow", {"corridor_width": 0.6}),
+])
 class rai_stochastic_square_island(SequenceMixin, rai_env):
-    def __init__(self):
-        self.C = rai_config.make_square_island_env()
+    def __init__(self, corridor_width: float = 0.8):
+        self.C = rai_config.make_square_island_env(corridor_width=corridor_width)
         self.robots = ["a1", "a2"]
         rai_env.__init__(self)
 
@@ -2610,16 +2613,19 @@ class rai_stochastic_square_island(SequenceMixin, rai_env):
         r1_start = np.array(self.C.getJointState()[self.robot_idx["a1"]])
         r2_start = np.array(self.C.getJointState()[self.robot_idx["a2"]])
 
-        r1_goal = np.array([-1.6, 0.0])
-        r2_goal = np.array([1.6, 0.0])
+        table_half_width = 2.0
+        d = table_half_width - corridor_width / 2.0
+
+        r1_goal = np.array([-d, 0.0])
+        r2_goal = np.array([d, 0.0])
         
         r1_return = r1_start * 1.0
         r2_return = r2_start * 1.0
 
-        r1_via_up1 = np.array([1.6, 1.6])
-        r1_via_up2 = np.array([-1.6, 1.6])
-        r1_via_down1 = np.array([1.6, -1.6])
-        r1_via_down2 = np.array([-1.6, -1.6])
+        r1_via_up1 = np.array([d, d])
+        r1_via_up2 = np.array([-d, d])
+        r1_via_down1 = np.array([d, -d])
+        r1_via_down2 = np.array([-d, -d])
 
         bimodal_corridor_skill = ReconvergingBimodalStochasticSkill(
             joints=self.robot_joints["a1"],
@@ -2683,10 +2689,13 @@ class rai_stochastic_square_island(SequenceMixin, rai_env):
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
-@register([("rai.dep_stochastic_square_island", {})])
+@register([
+    ("rai.dep_stochastic_square_island", {"corridor_width": 0.8}),
+    ("rai.dep_stochastic_square_island_narrow", {"corridor_width": 0.6}),
+])
 class rai_dep_stochastic_square_island(DependencyGraphMixin, rai_env):
-    def __init__(self):
-        self.C = rai_config.make_square_island_env()
+    def __init__(self, corridor_width: float = 0.8):
+        self.C = rai_config.make_square_island_env(corridor_width=corridor_width)
         self.robots = ["a1", "a2"]
         rai_env.__init__(self)
 
@@ -2696,16 +2705,19 @@ class rai_dep_stochastic_square_island(DependencyGraphMixin, rai_env):
         r1_start = np.array(self.C.getJointState()[self.robot_idx["a1"]])
         r2_start = np.array(self.C.getJointState()[self.robot_idx["a2"]])
 
-        r1_goal = np.array([-1.6, 0.0])
-        r2_goal = np.array([1.6, 0.0])
+        table_half_width = 2.0
+        d = table_half_width - corridor_width / 2.0
+
+        r1_goal = np.array([-d, 0.0])
+        r2_goal = np.array([d, 0.0])
         
         r1_return = r1_start * 1.0
         r2_return = r2_start * 1.0
 
-        r1_via_up1 = np.array([1.6, 1.6])
-        r1_via_up2 = np.array([-1.6, 1.6])
-        r1_via_down1 = np.array([1.6, -1.6])
-        r1_via_down2 = np.array([-1.6, -1.6])
+        r1_via_up1 = np.array([d, d])
+        r1_via_up2 = np.array([-d, d])
+        r1_via_down1 = np.array([d, -d])
+        r1_via_down2 = np.array([-d, -d])
 
         bimodal_corridor_skill = ReconvergingBimodalStochasticSkill(
             joints=self.robot_joints["a1"],
