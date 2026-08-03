@@ -2889,7 +2889,7 @@ class rai_dep_stochastic_rectangle_island(DependencyGraphMixin, rai_env):
             ],
             target=r1_goal,
             branch_dim=1,
-            commit_eps=1e-3,
+            commit_eps=0.05, #1e-3,
             dt=0.05,
             noise_bound=0.1,
             is_deterministic=False, #True,
