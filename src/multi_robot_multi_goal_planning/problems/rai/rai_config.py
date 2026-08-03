@@ -10872,7 +10872,7 @@ def make_stochastic_bimodal_switch_env(view: bool = False, is_reconverging: bool
     return C
 
 
-def make_square_island_env(corridor_width: float = 0.8, view: bool = True):
+def make_square_island_env(corridor_width: float = 0.8, view: bool = False):
     C = make_table_with_walls(4, 4)
     table = C.getFrame("table")
 

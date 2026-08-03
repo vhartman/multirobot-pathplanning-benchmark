@@ -2145,7 +2145,7 @@ class rai_shared_point(SequenceMixin, rai_shared_point_base):
         rai_shared_point_base.__init__(self, distribution=distribution)
 
         self.sequence = self._make_sequence_from_names(
-            ["a1_skill", "a2_visit", "a1_return", "a2_return", "terminal"]
+            ["a1_skill", "a1_return", "a2_visit", "a2_return", "terminal"]
         )
 
         BaseModeLogic.__init__(self)
