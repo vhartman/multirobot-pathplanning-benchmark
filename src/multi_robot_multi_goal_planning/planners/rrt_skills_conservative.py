@@ -266,8 +266,4 @@ class RRTSkillsConservative(RRTSkills):
         """
         path, info = super().plan(ptc, optimize=optimize)
         info["skill_tubes"] = self._skill_tubes
-        info["skill_branch_commitments"] = {
-            name: self._committed_branch(name, tubes)
-            for name, tubes in self._skill_tubes.items() if tubes
-        }
         return path, info
