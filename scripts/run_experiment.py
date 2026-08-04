@@ -44,7 +44,9 @@ from multi_robot_multi_goal_planning.planners import (
     RecedingHorizonConfig,
     RecedingHorizonPlanner,
     RRTSkills,
-    RRTSkillsConfig
+    RRTSkillsConfig,
+    RRTSkillsConservative,
+    RRTSkillsConservativeConfig
 )
 from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTstar
 
@@ -223,7 +225,21 @@ def setup_planner(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
+    elif planner_config["type"] == "rrt_skills_conservative":
+        options = planner_config["options"]
+        config = RRTSkillsConservativeConfig()
+        for k, v in options.items():
+            setattr(config, k, v)
 
+        def planner(env):
+            rrt_config = RRTSkillsConservativeConfig()
+            for k, v in options.items():
+                setattr(rrt_config, k, v)
+
+            return RRTSkillsConservative(env, config=rrt_config).plan(
+                ptc=RuntimeTerminationCondition(runtime),
+                optimize=optimize,
+            )
 
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
