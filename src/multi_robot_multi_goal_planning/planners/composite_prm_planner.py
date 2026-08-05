@@ -73,11 +73,18 @@ class CompositePRMConfig:
     max_per_robot_attempts: int = 100
 
     # TODO (Liam) new
-    skill_phase: int = 3                    # 1 (frozen), 2 (lanes), 3 (incremental)
+    # skill_lane_strategy: how inactive-robot configs are sampled 
+    #   Phase 1 - single_frozen_lane:        1 exact lane, deterministic, incl. edge CC
+    #   Phase 2 - multi_frozen_lane:         M fixed lanes, built once
+    #   Phase 3 - incremental_stepwise_lane: fresh config resampled every step, pool grows over time
+    #   Phase 4 - incremental_frozen_lane:   lanes persist across the skill, pool grows over time
+    skill_lane_strategy: str = "incremental_frozen_lane"
     skill_max_rollouts: int | None = None   # 1 (single), None (unlimited), N (capped)
-    skill_corridor_width: int = 100         # phase 2
-    skill_batch_size: int = 100             # phase 3
-    skill_batch_strategy: str = "outside"    # phase 3 (inside: NxB, outside: B lanes)
+    skill_corridor_width: int = 100         # multi_frozen_lane
+    skill_batch_size: int = 100             # incremental_* strategies
+
+
+_INCREMENTAL_LANE_STRATEGIES = ("incremental_frozen_lane", "incremental_stepwise_lane")
 
 """
 NOTES (Liam):
@@ -352,21 +359,22 @@ class CompositePRM(BasePlanner):
         """
         Rollout skill from an entry node and integrate the result to the PRM graph
 
-        PHASE 1: frozen inactive configs 
-        PHASE 2: M-lane inactive configs (multiple skill chains for multiple rollouts)
-        PHASE 3: B-lane inactive configs (single skill rollout with increasing lanes for multiple rollouts)
+        single_frozen_lane: frozen inactive configs 
+        multi_frozen_lane: M-lane inactive configs (multiple skill chains for multiple rollouts)
+        incremental_frozen_lane / incremental_stepwise_lane: B-lane inactive configs
+            (single skill rollout with increasing lanes for multiple rollouts)
 
-        Flow: 
-        - Phase 3 cache intercept (skip rollout if traj already cached)
-        - Entry node selection 
+        Flow:
+        - Incremental cache intercept (skip rollout if traj already cached)
+        - Entry node selection
         - Skill rollout
         - Compute valid next modes
-        - Build batch_states (phase dependent)
+        - Build batch_states (strategy dependent)
         - Inject in graph
         """
-        # Phase 3: on subsequent call for cached more, skip rollout and just add a new batch
-        if self.config.skill_phase == 3 and mode in self._skill_traj_cache:
-            batch_states = self._build_phase3_batch(mode, active_task)
+        # Incremental strategies: on subsequent call for cached mode, skip rollout and just add a new batch
+        if self.config.skill_lane_strategy in _INCREMENTAL_LANE_STRATEGIES and mode in self._skill_traj_cache:
+            batch_states = self._build_incremental_batch(mode, active_task)
             
             if batch_states:
                 valid_next_modes = self._skill_valid_next_modes[mode]
@@ -388,22 +396,22 @@ class CompositePRM(BasePlanner):
             print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | No entry nodes yet")
             return False, None # No entry nodes yet, wait
 
-        # 2. Filter out failed entry nodes (both phases) + used entries (phase 1 only)
+        # 2. Filter out failed entry nodes (all strategies) + used entries (single_frozen_lane only)
         failed_ids = self._failed_skill_entry_ids.get(mode, set())
         used_ids = self._used_skill_entry_ids.get(mode, set())
         candidate_entry_nodes = [n for n in candidate_entry_nodes if n.id not in failed_ids]
         unused_candidates = [n for n in candidate_entry_nodes if n.id not in used_ids]
 
         # 3. Select entry node from candidates
-        if self.config.skill_phase == 1:
-            # Phase 1: deterministic skill + frozen -> identical rollout, must be new entry
+        if self.config.skill_lane_strategy == "single_frozen_lane":
+            # single_frozen_lane: deterministic skill + frozen -> identical rollout, must be new entry
             if not unused_candidates:
                 self._exhausted_skill_modes.add(mode) # All entry nodes tried
                 print(f"[DEBUG ROLLOUT SKILL] Mode: {mode.id} | All entry nodes tried (added mode {mode.id} to exhausted)")
                 return False, None
             entry_node = random.choice(unused_candidates)
         else:
-            # Phases 2&3: prefer unused, but allow reuse (different inactive configs each time)
+            # multi_frozen_lane / incremental_*: prefer unused, but allow reuse (different inactive configs each time)
             if unused_candidates:
                 entry_node = random.choice(unused_candidates)
             elif candidate_entry_nodes:
@@ -412,8 +420,8 @@ class CompositePRM(BasePlanner):
                 self._exhausted_skill_modes.add(mode) # All entry nodes tried
                 print(f"[DEBUG ROLLOUT SKILL] Mode: {mode.id} | All entry nodes tried (added mode {mode.id} to exhausted)")
                 return False, None
-            
-        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Phase: {self.config.skill_phase} | Candidates: {len(candidate_entry_nodes)}")        
+
+        print(f"[DEBUG SKILL ENTRY] Mode: {mode.id} | Strategy: {self.config.skill_lane_strategy} | Candidates: {len(candidate_entry_nodes)}")
         q_entry = entry_node.state.q.state()
 
         # Reset env before rollout begins # TODO (check, but solved multi_agent_scripted_insert problem)
@@ -451,28 +459,28 @@ class CompositePRM(BasePlanner):
         if valid_next_modes is None:
             return False, None
 
-        # 6. Build batch_states (phase specific, each helper returns List[List[State]] or None)
-        # PHASE 1: inactive robots (frozen)
-        if self.config.skill_phase == 1:
-            batch_states = self._build_phase1_batch(q_entry, skill_traj, active_task, mode)
-        
-        # PHASE 2: inactive robots (build roadmap: pool of same M inactive configs x N skill steps)
-        elif self.config.skill_phase == 2:
-            batch_states = self._build_phase2_batch(q_entry, skill_traj, active_task, mode)
-        
-        # PHASE 3: inactive robots (random and incremental)
-        elif self.config.skill_phase == 3:
+        # 6. Build batch_states (strategy specific, each helper returns List[List[State]] or None)
+        # single_frozen_lane: inactive robots (frozen)
+        if self.config.skill_lane_strategy == "single_frozen_lane":
+            batch_states = self._build_single_frozen_lane_batch(q_entry, skill_traj, active_task, mode)
+
+        # multi_frozen_lane: inactive robots (build roadmap: pool of same M inactive configs x N skill steps)
+        elif self.config.skill_lane_strategy == "multi_frozen_lane":
+            batch_states = self._build_multi_frozen_lane_batch(q_entry, skill_traj, active_task, mode)
+
+        # incremental_frozen_lane / incremental_stepwise_lane: inactive robots (random and incremental)
+        elif self.config.skill_lane_strategy in _INCREMENTAL_LANE_STRATEGIES:
             # First-time: cache trajectory for future incremental batches
             self._skill_traj_cache[mode] = skill_traj
             self._skill_valid_next_modes[mode] = valid_next_modes
             self._skill_entry_node[mode] = entry_node
-            batch_states = self._build_phase3_batch(mode, active_task)
-        
+            batch_states = self._build_incremental_batch(mode, active_task)
+
         # 7. Graph injection and bookkeeping
         if not batch_states:
             self._log_entry_to_dict(mode, entry_node.id, self._failed_skill_entry_ids)
-            # Phase 3: clean up cache on failure
-            if self.config.skill_phase == 3:
+            # Incremental strategies: clean up cache on failure
+            if self.config.skill_lane_strategy in _INCREMENTAL_LANE_STRATEGIES:
                 del self._skill_traj_cache[mode]
                 del self._skill_valid_next_modes[mode]
                 del self._skill_entry_node[mode]
@@ -482,11 +490,10 @@ class CompositePRM(BasePlanner):
         self._log_entry_to_dict(mode, entry_node.id, self._used_skill_entry_ids)
         return True, valid_next_modes
 
-    # PHASE 1
-    def _build_phase1_batch(self, q_entry, skill_traj, active_task, mode):
+    def _build_single_frozen_lane_batch(self, q_entry, skill_traj, active_task, mode):
         """
-        Phase 1: single frozen chain. Active robots follow skill_traj, inactive frozen at q_entry
-        Includes config + edge collision checking (cheap)
+        single_frozen_lane: single frozen chain. Active robots follow skill_traj, inactive frozen
+        at q_entry. Includes config + edge collision checking (cheap)
         """
         batch_states = []
         prev_q_check = None
@@ -501,7 +508,7 @@ class CompositePRM(BasePlanner):
                 return None
 
             # Collision check (edges)
-            # TODO usually not done during graph build.. can be removed (but in phase 1 won't be computationally important: single chain vs. roadmap)
+            # TODO usually not done during graph build.. can be removed (but in single_frozen_lane won't be computationally important: single chain vs. roadmap)
             if prev_q_check is not None:
                 if not self.env.is_edge_collision_free(
                     prev_q_check, q_check, mode,
@@ -516,11 +523,10 @@ class CompositePRM(BasePlanner):
 
         return batch_states
     
-    # PHASE 2
-    def _build_phase2_batch(self, q_entry, skill_traj, active_task, mode):
+    def _build_multi_frozen_lane_batch(self, q_entry, skill_traj, active_task, mode):
         """
-        Phase 2: M frozen lanes. Active robots follow skill_traj, inactive robots get M candidate
-        configs (forming frozen lanes), each collision-checked at every skill step
+        multi_frozen_lane: M frozen lanes. Active robots follow skill_traj, inactive robots get
+        M candidate configs (forming frozen lanes), each collision-checked at every skill step
  
         Pool[0] = entry node's inactive config (anchor lane).
         Pool[1..M-1] = random inactive configs (unless freeze guard is active).
@@ -569,13 +575,12 @@ class CompositePRM(BasePlanner):
  
         return batch_states
 
-    # PHASE 3
-    def _build_phase3_batch(self, mode, active_task):
+    def _build_incremental_batch(self, mode, active_task):
         """
-        Phase 3: Samples a batch of inactive configs incrementally using the cached trajectory
-        Based on chosen config, uses: 
-        - Inside: goes through N step-k and for each samples B random inactive configs
-        - Outside: samples B random inactive configs and uses them for each N step-k
+        incremental_frozen_lane / incremental_stepwise_lane: samples a batch of inactive configs
+        incrementally using the cached trajectory. Based on chosen strategy, uses:
+        - incremental_stepwise_lane: goes through N step-k and for each samples B random inactive configs
+        - incremental_frozen_lane: samples B random inactive configs and uses them for each N step-k
         """
         skill_traj = self._skill_traj_cache[mode]
         entry_node = self._skill_entry_node[mode]
@@ -588,12 +593,12 @@ class CompositePRM(BasePlanner):
  
         if not inactive_robots:
             self._saturated_skill_modes.add(mode)
-            print(f"[DEBUG P3 BATCH] Single-agent detected. Saturating mode {mode.id} after 1 batch")
+            print(f"[DEBUG INCREMENTAL BATCH] Single-agent detected. Saturating mode {mode.id} after 1 batch")
             B = 1
         elif self._inactive_robot_has_skill(mode, active_task):
             self._saturated_skill_modes.add(mode)
             freeze_inactive = True
-            print(f"[DEBUG P3 BATCH] Freeze Guard active. Saturating mode {mode.id} after 1 batch")
+            print(f"[DEBUG INCREMENTAL BATCH] Freeze Guard active. Saturating mode {mode.id} after 1 batch")
             B = 1
  
         # Get the entry inactive config (anchor / freeze value)
@@ -601,13 +606,13 @@ class CompositePRM(BasePlanner):
         entry_inactive_q = self._extract_inactive_q(q_entry, active_task)
  
         # Build batch_states[k] = list of valid States at step k
-        if self.config.skill_batch_strategy == "outside":
-            batch_states = self._sample_skill_batch_outside(
+        if self.config.skill_lane_strategy == "incremental_frozen_lane":
+            batch_states = self._sample_incremental_frozen_lane_batch(
                 skill_traj, entry_inactive_q, active_task, mode,
                 inactive_robots, freeze_inactive, B, N,
             )
-        elif self.config.skill_batch_strategy == "inside":
-            batch_states = self._sample_skill_batch_inside(
+        elif self.config.skill_lane_strategy == "incremental_stepwise_lane":
+            batch_states = self._sample_incremental_stepwise_lane_batch(
                 skill_traj, entry_inactive_q, active_task, mode,
                 inactive_robots, freeze_inactive, B, N,
             )
@@ -616,19 +621,19 @@ class CompositePRM(BasePlanner):
         total_valid = sum(len(s) for s in batch_states)
         for k in range(N):
             if not batch_states[k]:
-                print(f"[DEBUG P3 BATCH] Mode {mode.id} | Step {k}/{N} empty (valid={total_valid}) — aborting")
+                print(f"[DEBUG INCREMENTAL BATCH] Mode {mode.id} | Step {k}/{N} empty (valid={total_valid}) — aborting")
                 return None
 
         return batch_states
 
-    def _sample_skill_batch_outside(
+    def _sample_incremental_frozen_lane_batch(
         self, skill_traj, entry_inactive_q, active_task, mode,
         inactive_robots, freeze_inactive, B, N,
     ):
         """
-        Phase 3 OUTSIDE strategy: 
-        Pre-sample B inactive configs and apply to every step k. Creates B frozen lanes (same 
-        inactive config across all steps). Like phase 2's _build_skill_roadmap, but incremental
+        incremental_frozen_lane strategy:
+        Pre-sample B inactive configs and apply to every step k. Creates B frozen lanes (same
+        inactive config across all steps). Like multi_frozen_lane's _build_skill_roadmap, but incremental
         """
         # 1. Build pool (sampling outside)
         pool = [entry_inactive_q] # Anchor
@@ -651,19 +656,19 @@ class CompositePRM(BasePlanner):
                 if self.env.is_collision_free(q_check, mode):
                     step_valid.append(State(q_check, mode, is_skill_waypoint=True))
 
-            # No "if not step_valid:" check like in the _build_phase2_batch because here we are incrementally
-            # adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
+            # No "if not step_valid:" check like in _build_multi_frozen_lane_batch because here we are
+            # incrementally adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
 
             batch_states.append(step_valid)
  
         return batch_states
 
-    def _sample_skill_batch_inside(
+    def _sample_incremental_stepwise_lane_batch(
         self, skill_traj, entry_inactive_q, active_task, mode,
         inactive_robots, freeze_inactive, B, N,
     ):
         """
-        Phase 3 INSIDE strategy: 
+        incremental_stepwise_lane strategy:
         At each step k, sample B fresh random inactive configs. Every node is fully independent,
         more diverse but larger jumps between steps.
         """
@@ -693,9 +698,9 @@ class CompositePRM(BasePlanner):
                 if self.env.is_collision_free(q_check, mode):
                     step_valid.append(State(q_check, mode, is_skill_waypoint=True))
 
-            # No "if not step_valid:" check like in the _build_phase2_batch because here we are incrementally
-            # adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
- 
+            # No "if not step_valid:" check like in _build_multi_frozen_lane_batch because here we are
+            # incrementally adding new batches, we don't care if in one batch there is a trench (no valid samples for step-k)
+
             batch_states.append(step_valid)
  
         return batch_states
@@ -825,7 +830,7 @@ class CompositePRM(BasePlanner):
         """
         Generalized logger:
         - Updates the failed dict if an entry node fails to do a skill rollout.
-        - Updates the used dict if an entry node has already been used (phase 1 only)
+        - Updates the used dict if an entry node has already been used (single_frozen_lane only)
         """
         if mode not in target_dict:
             target_dict[mode] = set()
@@ -918,7 +923,7 @@ class CompositePRM(BasePlanner):
                 total_candidates = len(g.reverse_transition_nodes.get(mode, []))
                 failed_count = len(self._failed_skill_entry_ids.get(mode, set()))
 
-                if self.config.skill_phase == 1:
+                if self.config.skill_lane_strategy == "single_frozen_lane":
                     # Un-exhaust if there are more candidates than (failed + used) combined
                     used_count = len(self._used_skill_entry_ids.get(mode, set()))
                     if total_candidates > (failed_count + used_count):
