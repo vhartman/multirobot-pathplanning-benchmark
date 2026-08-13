@@ -1,7 +1,8 @@
-import numpy as np
-
+import heapq
 import time
 import random
+
+import numpy as np
 
 from typing import List, Optional
 
@@ -168,13 +169,25 @@ def robot_mode_shortcut(
     touched by an accepted shortcut. "span" picks the robot round-robin (or at random, see `robot_choice`) and
     the run by its length. Measured on assembly scenes at a 1000-shortcut budget, "gain" reaches a given cost
     with roughly half the wall time of "span" and is never worse at matched budgets.
+    "tree" starts with a structural prefix: every maximal constant-task run is proposed
+    broadest-first, and a colliding run is split at the first failing edge the checker reports
+    (dropped only when no edge is reported). The exact cost gate is unchanged, and once the
+    prefix is exhausted the "gain" selector takes over for the remaining budget. Measured on
+    assembly scenes at a 1000-shortcut budget, "tree" matches or beats "gain" in final cost
+    everywhere and spends less wall time on long, detour-heavy paths.
 
+    "tree_random" is the same structural prefix with the plain "span" fallback (round-robin
+    robot, longest-run divisor, uniform pair inside the run) instead of the gain selector.
+    Measured on the assembly scenes the span fallback finishes a few percent above the gain
+    selector at matched budgets; this variant is kept as the smaller-diff option.
     `max_attempts` bounds the draws, as opposed to `max_iter`, which bounds the shortcuts that are actually
     checked. It defaults to five times `max_iter`, but at least the 2500 that used to be hardcoded, so
     callers with a small `max_iter` keep the attempt budget they had.
     """
-    non_redundant_path = remove_interpolated_nodes(path)
-    new_path = interpolate_path(non_redundant_path, interpolation_resolution)
+    # Keep the original edge partition. The input edges have already been
+    # collision checked, while joining collinear edges changes the collision
+    # checker's discretization and can turn a certified path into an invalid one.
+    new_path = interpolate_path(path, interpolation_resolution)
     
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
@@ -200,6 +213,10 @@ def robot_mode_shortcut(
     if not any(runs):
         return new_path, [costs, times]
 
+    gains = runs_prop = runs_acc = None
+    tree_heap = []
+    tree_serial = 0
+
     if run_choice == "gain":
         # remaining gain per (robot, run), and a floor so converged runs keep a small
         # exploration share instead of never being drawn again
@@ -218,6 +235,15 @@ def robot_mode_shortcut(
         # rise. No tuned constant.
         runs_prop = [[0] * len(rs) for rs in runs]
         runs_acc = [[0] * len(rs) for rs in runs]
+    elif run_choice in ("tree", "tree_random"):
+        # The structural prefix: each maximal constant-task run enters the frontier as one
+        # broad work item. A broader interval is always proposed before every interval it
+        # contains (random tie-breaking only among equal spans). On collision the interval
+        # splits at the first failing edge the checker reports; every other outcome drops it.
+        for r, rs in enumerate(runs):
+            for lo, hi in rs:
+                heapq.heappush(tree_heap, (-(hi - lo), random.random(), tree_serial, r, lo, hi))
+                tree_serial += 1
 
     while True:
         iter += 1
@@ -229,57 +255,76 @@ def robot_mode_shortcut(
         # # num_robots = np.random.randint(0, len(robots_to_shortcut))
         # num_robots = 1
         # robots_to_shortcut = robots_to_shortcut[:num_robots]
-        if run_choice == "gain":
-            # pick the (robot, run) with the most remaining REALIZABLE gain per draw already
-            # spent on it: the gain times the Beta-posterior acceptance estimate. The robot
-            # falls out of the choice, so robot_choice does not apply here.
-            r, run = max(
-                ((rr, k) for rr in range(len(env.robots)) for k in range(len(runs[rr]))),
-                key=lambda arm: (
-                    gains[arm[0]][arm[1]]
-                    * (1.0 + runs_acc[arm[0]][arm[1]])
-                    / (2.0 + runs_prop[arm[0]][arm[1]])
-                    + gain_floor
-                )
-                / (runs_used[arm[0]][arm[1]] + 1),
-            )
+        from_tree = False
+        if run_choice in ("tree", "tree_random") and tree_heap:
+            # structural prefix: broadest interval first, robot and interval from the frontier
+            from_tree = True
+            _, _, _, r, i, j = heapq.heappop(tree_heap)
             robots_to_shortcut = [r]
+            tree_last = (r, i, j)
         else:
-            if robot_choice == "round_robin":
-                robots_to_shortcut = [rr_robot % len(env.robots)]
-                rr_robot += 1
+            if run_choice == "tree" and gains is None:
+                # prefix exhausted: initialize the landed gain selector for the rest of the budget
+                gains = [
+                    [max(0.0, full_run_gain(env, new_path, r, lo, hi)) for lo, hi in runs[r]]
+                    for r in range(len(env.robots))
+                ]
+                all_gains = [g for per_robot in gains for g in per_robot]
+                mean_gain = sum(all_gains) / len(all_gains)
+                gain_floor = 0.05 * mean_gain if mean_gain > 0 else 1.0
+                runs_prop = [[0] * len(rs) for rs in runs]
+                runs_acc = [[0] * len(rs) for rs in runs]
+            if run_choice in ("gain", "tree"):
+                # pick the (robot, run) with the most remaining REALIZABLE gain per draw already
+                # spent on it: the gain times the Beta-posterior acceptance estimate. The robot
+                # falls out of the choice, so robot_choice does not apply here.
+                r, run = max(
+                    ((rr, k) for rr in range(len(env.robots)) for k in range(len(runs[rr]))),
+                    key=lambda arm: (
+                        gains[arm[0]][arm[1]]
+                        * (1.0 + runs_acc[arm[0]][arm[1]])
+                        / (2.0 + runs_prop[arm[0]][arm[1]])
+                        + gain_floor
+                    )
+                    / (runs_used[arm[0]][arm[1]] + 1),
+                )
+                robots_to_shortcut = [r]
             else:
-                robots_to_shortcut = [np.random.randint(0, len(env.robots))]
+                if robot_choice == "round_robin":
+                    robots_to_shortcut = [rr_robot % len(env.robots)]
+                    rr_robot += 1
+                else:
+                    robots_to_shortcut = [np.random.randint(0, len(env.robots))]
 
-            # pick one of the ranges of the robot we shortcut, and draw the pair from it. Longer
-            # ranges get proportionally more draws (the divisor rule; drawing from the whole path
-            # favoured them even more, quadratically).
-            r = robots_to_shortcut[0]
-            if not runs[r]:
+                # pick one of the ranges of the robot we shortcut, and draw the pair from it. Longer
+                # ranges get proportionally more draws (the divisor rule; drawing from the whole path
+                # favoured them even more, quadratically).
+                r = robots_to_shortcut[0]
+                if not runs[r]:
+                    continue
+
+                run = max(
+                    range(len(runs[r])),
+                    key=lambda k: (runs[r][k][1] - runs[r][k][0]) / (runs_used[r][k] + 1),
+                )
+            runs_used[r][run] += 1
+            lo, hi = runs[r][run]
+
+            i = np.random.randint(lo, hi + 1)
+            j = np.random.randint(lo, hi + 1)
+
+            if i > j:
+                q = i
+                i = j
+                j = q
+
+            if abs(j - i) < 2:
                 continue
 
-            run = max(
-                range(len(runs[r])),
-                key=lambda k: (runs[r][k][1] - runs[r][k][0]) / (runs_used[r][k] + 1),
-            )
-        runs_used[r][run] += 1
-        lo, hi = runs[r][run]
-
-        i = np.random.randint(lo, hi + 1)
-        j = np.random.randint(lo, hi + 1)
-
-        if i > j:
-            q = i
-            i = j
-            j = q
-
-        if abs(j - i) < 2:
-            continue
-
-        if run_choice == "gain":
-            # keep the picked pair: the loops below reuse `r` as their loop variable
-            sel_r, sel_run = r, run
-            runs_prop[sel_r][sel_run] += 1
+            if gains is not None:
+                # keep the picked pair: the loops below reuse `r` as their loop variable
+                sel_r, sel_run = r, run
+                runs_prop[sel_r][sel_run] += 1
 
         # holds by construction now, since i and j come from a range over which the task of the
         # robot does not change, but the shortcut is only valid if it does
@@ -352,16 +397,53 @@ def robot_mode_shortcut(
         # TODO: is path colision free makes this horrible, since the edges are the interpolated nodes
         # Therefore, many edges have length 2. Possibly remove interpolated things here before checking?
         # needs to be fixed.
-        if env.is_path_collision_free(
-            path_element, resolution=resolution, tolerance=tolerance, check_start_and_end=False
-        ):
+        #
+        # "tree" observes the failing edge endpoint during the check (no extra collision
+        # queries) so a colliding interval can split at the FIRST failing edge instead of
+        # being discarded whole.
+        fail_q = [None]
+        if from_tree:
+            original_edge_check = env.is_edge_collision_free
+            original_config_check = env.is_collision_free
+
+            def _edge_observe(q_a, *args, **kwargs):
+                result = original_edge_check(q_a, *args, **kwargs)
+                if not result:
+                    fail_q[0] = q_a
+                return result
+
+            def _config_observe(q, *args, **kwargs):
+                result = original_config_check(q, *args, **kwargs)
+                if not result:
+                    fail_q[0] = q
+                return result
+
+            env.is_edge_collision_free = _edge_observe
+            env.is_collision_free = _config_observe
+        try:
+            free = env.is_path_collision_free(
+                path_element, resolution=resolution, tolerance=tolerance, check_start_and_end=False
+            )
+        finally:
+            if from_tree:
+                env.is_edge_collision_free = original_edge_check
+                env.is_collision_free = original_config_check
+
+        fail_k = None
+        if not free and fail_q[0] is not None:
+            for k in range(j - i + 1):
+                if path_element[k].q is fail_q[0]:
+                    fail_k = i + k
+                    break
+
+        if free:
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
 
                 # if not np.array_equal(new_path[i+k].mode, path_element[k].mode):
                 # print('fucked up')
 
-            if run_choice == "gain":
+            if gains is not None and not from_tree:
                 runs_acc[sel_r][sel_run] += 1
                 # the composite cost takes a max over the robots, so an accepted shortcut on one
                 # robot changes the remaining gain of EVERY run that overlaps it
@@ -371,6 +453,16 @@ def robot_mode_shortcut(
                             gains[rr][k] = max(
                                 0.0, full_run_gain(env, new_path, rr, lo_k, hi_k)
                             )
+        elif from_tree:
+            # split the colliding interval at the located failing edge; both sides remain
+            # eligible because the observed collision lies between them. Without a located
+            # edge the interval is dropped -- no midpoint refinement.
+            tr, ti, tj = tree_last
+            if fail_k is not None and ti < fail_k < tj:
+                for lo, hi in ((ti, fail_k), (fail_k, tj)):
+                    if hi - lo >= 2:
+                        heapq.heappush(tree_heap, (-(hi - lo), random.random(), tree_serial, tr, lo, hi))
+                        tree_serial += 1
         # else:
         #     print("in colllision")
         # env.show(True)
@@ -394,41 +486,22 @@ def robot_mode_shortcut(
 
 def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]:
     """
-    Removes interpolated points from a given path, retaining only key nodes where direction changes or new mode begins.
+    Preserve a path's certified edge partition.
+
+    This compatibility wrapper intentionally no longer joins collinear edges.
+    A joined edge follows the same geometry, but the finite collision checker
+    samples it at different configurations, so it must be recertified before it
+    can safely replace the original edges.
 
     Args:
         path (List[Object]): Sequence of states representing original path.
-        tolerance (float, optional): Threshold for detecting collinearity between segments.
+        tolerance (float, optional): Retained for API compatibility.
 
     Returns:
-        List[Object]: Sequence of states representing a path without redundant nodes.
+        List[Object]: A shallow copy of the input path.
     """
 
-    if len(path) < 3:
-        return path
-
-    simplified_path = [path[0]]
-
-    for i in range(1, len(path) - 1):
-        A = simplified_path[-1]
-        B = path[i]
-        C = path[i + 1]
-
-        AB = B.q.state() - A.q.state()
-        AC = C.q.state() - A.q.state()
-
-        # If A and C are almost the same, skip B.
-        if np.linalg.norm(AC) < tolerance:
-            if A.mode == B.mode == C.mode:
-                continue
-            simplified_path.append(B)
-            continue    
-        lam = np.dot(AB, AC) / np.dot(AC, AC)
-
-        # Check if AB is collinear to AC (AB = lambda * AC)
-        if np.linalg.norm(AB - lam * AC) > tolerance or A.mode != C.mode:
-            simplified_path.append(B)
-
-    simplified_path.append(path[-1])
-
-    return simplified_path
+    # Joining collinear edges changes the finite collision-check sampling grid.
+    # Without recertifying the merged edge, preserving all checked edges is the
+    # only correctness-preserving behavior.
+    return list(path)
