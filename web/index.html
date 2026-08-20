@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MRMG Planning — Path Viewer</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --bg2: #1b1e24;
+    --bg3: #22262e;
+    --fg: #e8eaed;
+    --fg2: #9aa3ad;
+    --line: #2d323b;
+    --accent: #4da3ff;
+    --pick: #3fa46a;
+    --place: #e08b3d;
+    --goto: #4d79c4;
+    --terminal: #8a8f98;
+    --other: #b7a44b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 14px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    background: var(--bg2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .chip { font-size: 12px; color: var(--fg2); background: var(--bg3);
+    padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); }
+  .chip b { color: var(--fg); font-weight: 600; }
+  main { display: flex; flex: 1 1 0%; min-height: 240px; }
+  #viewport { flex: 1; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  #viewport canvas { display: block; }
+  #hint { position: absolute; left: 14px; top: 12px; color: var(--fg2); font-size: 12px;
+    pointer-events: none; opacity: .85; }
+  #status { position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--fg2); background: var(--bg); }
+  #status.hidden { display: none; }
+  #overlay { position: absolute; top: 10px; right: 10px; width: 264px;
+    max-height: calc(100% - 20px); overflow-y: auto; z-index: 10;
+    background: rgba(27, 30, 36, 0.92); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px; display: flex; flex-direction: column;
+    gap: 10px; backdrop-filter: blur(4px); }
+  #viewport.locked canvas { filter: grayscale(.55) brightness(.5); }
+  #app.locked #timelineWrap { filter: grayscale(.55) brightness(.5); pointer-events: none; }
+  #app.locked #overlay { opacity: .45; pointer-events: none; }
+  #loadOverlay { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center;
+    background: rgba(10, 12, 16, 0.55); }
+  #loadOverlay.hidden { display: none; }
+  #loadCard { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 24px; max-width: 380px; text-align: center; display: flex;
+    flex-direction: column; gap: 8px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+  #loadTitle { font-size: 15px; font-weight: 600; }
+  #loadSceneName { font-weight: 600; font-size: 13px; color: var(--accent); }
+  #loadNote { color: var(--fg2); font-size: 12px; }
+  #loadBtn { width: auto; margin: 6px auto 0; min-width: 160px; }
+  .group { background: var(--bg3); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .group h2 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--fg2); }
+  select, button, input[type=range] { width: 100%; }
+  select { background: var(--bg); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row button { flex: none; width: 40px; height: 34px; }
+  button { background: var(--bg); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 14px; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #06203f; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.1); }
+  #fullscreenBtn { width: auto; padding: 4px 10px; font-size: 13px; }
+  input[type=range] { accent-color: var(--accent); }
+  .dim { color: var(--fg2); font-size: 12px; }
+  #stepLabel { font-variant-numeric: tabular-nums; }
+  ul#taskList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  ul#taskList li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .badge { font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+    padding: 1px 6px; border-radius: 8px; border: 1px solid; margin-left: auto; }
+  #timelineWrap { flex: none; height: 96px; background: var(--bg2);
+    border-top: 1px solid var(--line); display: flex; }
+  #timelineBox { flex: 1 1 0%; min-width: 0; position: relative; }
+  #timeline { display: block; width: 100%; height: 100%; cursor: pointer; }
+  #legendBox { flex: none; width: 220px; border-left: 1px solid var(--line);
+    padding: 8px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  #legend { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg2); }
+  #legend span { display: flex; align-items: center; gap: 6px; }
+  #legend span i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  a { color: var(--accent); text-decoration: none; }
+  @media (max-width: 560px) {
+    #overlay { width: 210px; }
+    #legendBox { display: none; }
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Multi-Robot Multi-Goal Planning</h1>
+    <span class="chip">scene <select id="sceneSelect" style="width:auto; display:inline-block; min-width:0;"></select></span>
+    <span style="flex:1"></span>
+    <button id="fullscreenBtn" title="enter fullscreen">⛶</button>
+  </header>
+
+  <main>
+    <div id="viewport">
+      <div id="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
+      <div id="status">Loading scene…</div>
+
+      <div id="overlay">
+        <div class="group">
+          <h2>Path</h2>
+          <select id="pathSelect"></select>
+          <div class="dim" style="margin-top:6px">cost <span id="pathCost"></span> · <span id="pathSteps"></span> steps</div>
+        </div>
+
+        <div class="group">
+          <h2>Playback</h2>
+          <div class="row">
+            <button id="btnPrev" title="previous step">⏮</button>
+            <button id="btnPlay" class="primary">▶</button>
+            <button id="btnNext" title="next step">⏭</button>
+          <select id="speedSelect" title="playback speed" style="flex:1; width:auto; min-width:0;">
+            <option value="4">0.25×</option>
+            <option value="8">0.5×</option>
+            <option value="15" selected>1×</option>
+            <option value="30">2×</option>
+            <option value="60">4×</option>
+          </select>
+          </div>
+          <input type="range" id="stepSlider" min="0" max="0" value="0" step="1"
+                 style="margin-top:8px" />
+          <div class="dim" style="margin-top:4px; text-align:center">step <span id="stepLabel">0 / 0</span></div>
+        </div>
+
+        <div class="group">
+          <h2>Mode &amp; Tasks</h2>
+          <ul id="taskList"></ul>
+        </div>
+      </div>
+
+      <div id="loadOverlay" class="hidden">
+        <div id="loadCard">
+          <div id="loadTitle">Load assets to view this scenario</div>
+          <div id="loadSceneName"></div>
+          <div id="loadNote">This downloads the 3D scene and the recorded robot paths.</div>
+          <button id="loadBtn" class="primary">Load assets</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="timelineWrap">
+    <div id="timelineBox">
+      <canvas id="timeline"></canvas>
+    </div>
+    <div id="legendBox">
+      <div class="dim" style="font-size:10px; text-transform:uppercase; letter-spacing:.08em">Legend</div>
+      <div id="legend"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = (id) => document.getElementById(id);
+const status = $('status');
+
+const TASK_COLORS = {
+  pick: '#3fa46a', place: '#e08b3d', goto: '#4d79c4',
+  terminal: '#8a8f98', other: '#b7a44b',
+};
+const TASK_BADGE = { pick: 'pick', place: 'place', goto: 'goto', terminal: 'terminal' };
+
+const params = new URLSearchParams(location.search);
+
+// ---- mutable app state ----
+let renderer, scene3, camera, controls;
+let meshes = [];
+let manifest = null, posesBuf = null;
+let tctx = null;
+const state = { pathIdx: 0, step: 0, playing: false, last: 0 };
+
+function taskColor(type) { return TASK_COLORS[type] || TASK_COLORS.other; }
+function rec() { return manifest.paths[state.pathIdx]; }
+
+async function fetchData(folder) {
+  const opts = { cache: 'no-store' };
+  const [m, sb, pb] = await Promise.all([
+    fetch(`${folder}/data.json`, opts).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); }),
+    fetch(`${folder}/scene.bin`, opts).then(r => { if (!r.ok) throw new Error(r.statusText); return r.arrayBuffer(); }),
+    fetch(`${folder}/poses.bin`, opts).then(r => { if (!r.ok) throw new Error(r.statusText); return r.arrayBuffer(); }),
+  ]);
+  return { manifest: m, sceneBuf: sb, posesBuf: pb };
+}
+
+// ---------- three.js setup ----------
+function createRenderer() {
+  const container = $('viewport');
+  const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  r.setSize(container.clientWidth, container.clientHeight);
+  container.appendChild(r.domElement);
+
+  const s = new THREE.Scene();
+  s.background = new THREE.Color(0xf7f6f3);
+  s.up.set(0, 0, 1);
+
+  const cam = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.01, 200);
+  cam.up.set(0, 0, 1);
+
+  s.add(new THREE.HemisphereLight(0xffffff, 0x2a2f3a, 1.1));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.6);
+  dir.position.set(3, -4, 7);
+  s.add(dir);
+  const dir2 = new THREE.DirectionalLight(0xffffff, 0.35);
+  dir2.position.set(-4, 3, -2);
+  s.add(dir2);
+
+  const ct = new OrbitControls(cam, r.domElement);
+  ct.enableDamping = true;
+
+  function resizeRenderer() {
+    const w = container.clientWidth, h = container.clientHeight;
+    if (w <= 0 || h <= 0) return;
+    r.setSize(w, h);
+    cam.aspect = w / h;
+    cam.updateProjectionMatrix();
+  }
+  resizeRenderer();
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(resizeRenderer).observe(container);
+  }
+  window.addEventListener('resize', resizeRenderer);
+
+  return { renderer: r, scene: s, camera: cam, controls: ct };
+}
+
+function buildMeshes(m, sb) {
+  const built = [];
+  for (const f of m.frames) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(
+      new Float32Array(sb, f.vOffset, f.vCount * 3), 3));
+    geo.setIndex(new THREE.BufferAttribute(
+      new Uint32Array(sb, f.tOffset, f.tCount * 3), 1));
+
+    // colors stored as RGBA u8; three wants RGB
+    const rgba = new Uint8Array(sb, f.cOffset, f.vCount * 4);
+    const rgb = new Uint8Array(f.vCount * 3);
+    for (let i = 0; i < f.vCount; i++) {
+      rgb[i * 3] = rgba[i * 4];
+      rgb[i * 3 + 1] = rgba[i * 4 + 1];
+      rgb[i * 3 + 2] = rgba[i * 4 + 2];
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(rgb, 3, true));
+    if (f.nOffset >= 0) {
+      geo.setAttribute('normal', new THREE.BufferAttribute(
+        new Float32Array(sb, f.nOffset, f.vCount * 3), 3));
+    } else {
+      geo.computeVertexNormals();
+    }
+
+    const alpha = f.color[3] / 255;
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.82,
+      metalness: 0.06,
+      side: THREE.DoubleSide,
+      flatShading: f.tCount <= 48,
+      transparent: alpha < 0.995,
+      opacity: alpha,
+      depthWrite: alpha > 0.99,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.matrixAutoUpdate = true;
+    scene3.add(mesh);
+    built.push(mesh);
+  }
+  return built;
+}
+
+// ---------- playback state ----------
+function applyStatic(r) {
+  for (const [fi, pose] of Object.entries(r.static)) {
+    meshes[+fi].position.set(pose[0], pose[1], pose[2]);
+    // data quaternions are (w, x, y, z); three.js Quaternion.set takes (x, y, z, w)
+    meshes[+fi].quaternion.set(pose[4], pose[5], pose[6], pose[3]);
+  }
+}
+
+function applyStep(r, s) {
+  const ndyn = r.dynFrames.length;
+  if (!ndyn) return;
+  const P = new Float32Array(posesBuf, r.poseOffset, r.poseCount);
+  for (let d = 0; d < ndyn; d++) {
+    const o = (s * ndyn + d) * 7;
+    const mesh = meshes[r.dynFrames[d]];
+    mesh.position.set(P[o], P[o + 1], P[o + 2]);
+    // data quaternions are (w, x, y, z); three.js Quaternion.set takes (x, y, z, w)
+    mesh.quaternion.set(P[o + 4], P[o + 5], P[o + 6], P[o + 3]);
+  }
+}
+
+// ---------- UI ----------
+const slider = $('stepSlider');
+const stepLabel = $('stepLabel');
+const playBtn = $('btnPlay');
+const pathSelect = $('pathSelect');
+
+function stepsPerSec() { return parseInt($('speedSelect').value, 10); }
+
+function rebuildPathSelect() {
+  pathSelect.innerHTML = '';
+  for (const p of manifest.paths) {
+    const opt = document.createElement('option');
+    opt.value = p.label;
+    opt.textContent = p.label;
+    pathSelect.appendChild(opt);
+  }
+}
+
+function rebuildLegend() {
+  const legend = $('legend');
+  legend.innerHTML = '';
+  const seen = new Set();
+  for (const t of manifest.taskInfo) {
+    const type = t.type in TASK_BADGE ? t.type : 'other';
+    if (seen.has(type)) continue;
+    seen.add(type);
+    const span = document.createElement('span');
+    span.innerHTML = `<i style="background:${taskColor(type)}"></i>${type}`;
+    legend.appendChild(span);
+  }
+}
+
+function setPath(i, s = 0) {
+  if (!manifest) return;
+  state.pathIdx = i;
+  pathSelect.selectedIndex = i;
+  const r = rec();
+  state.step = Math.min(Math.max(s, 0), r.steps - 1);
+  applyStatic(r);
+  slider.max = r.steps - 1;
+  $('pathCost').textContent = manifest.pathCosts[r.label].toFixed(3);
+  $('pathSteps').textContent = r.steps;
+  setStep(state.step);
+}
+
+function setStep(s) {
+  if (!manifest) return;
+  const r = rec();
+  state.step = Math.min(Math.max(s, 0), r.steps - 1);
+  applyStep(r, state.step);
+  slider.value = state.step;
+  stepLabel.textContent = `${state.step} / ${r.steps - 1}`;
+  updateTaskList(r);
+  drawTimeline(r);
+}
+
+function updateTaskList(r) {
+  const ul = $('taskList');
+  ul.innerHTML = '';
+  const nRobots = manifest.meta.num_robots;
+  const transition = r.transition[state.step];
+  for (let rb = 0; rb < nRobots; rb++) {
+    const tid = r.modeIds[state.step * nRobots + rb];
+    const t = manifest.taskInfo[tid];
+    const type = t.type in TASK_BADGE ? t.type : 'other';
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="dot" style="background:${taskColor(type)}"></span>
+      <span><b>${manifest.robots[rb]}</b> · ${t.name}</span>
+      <span class="badge" style="color:${taskColor(type)};border-color:${taskColor(type)}">${type}</span>`;
+    ul.appendChild(li);
+  }
+  if (transition) {
+    const li = document.createElement('li');
+    li.className = 'dim';
+    li.textContent = '⇄ mode transition at this step';
+    ul.appendChild(li);
+  }
+}
+
+// ---------- timeline ----------
+const tl = $('timeline');
+tctx = tl.getContext('2d');
+
+function resizeTimeline() {
+  const box = $('timelineBox');
+  const dpr = window.devicePixelRatio || 1;
+  tl.width = box.clientWidth * dpr;
+  tl.height = box.clientHeight * dpr;
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawTimeline(r) {
+  if (!manifest || !tctx) return;
+  const W = tl.clientWidth, H = tl.clientHeight;
+  tctx.clearRect(0, 0, W, H);
+  const nRobots = manifest.meta.num_robots;
+  const top = 18, bot = H - 8;
+  const rowH = (bot - top) / nRobots;
+  const S = r.steps;
+  const px = (s) => 54 + (s / Math.max(S - 1, 1)) * (W - 58);
+
+  tctx.font = '10px sans-serif';
+  tctx.fillStyle = '#9aa3ad';
+  for (let rb = 0; rb < nRobots; rb++) {
+    tctx.fillText(manifest.robots[rb], 6, top + rowH * rb + rowH / 2 + 3);
+  }
+
+  for (let rb = 0; rb < nRobots; rb++) {
+    let prev = null, start = 0;
+    const y = top + rowH * rb;
+    const h = rowH - 6;
+    for (let s = 0; s <= S; s++) {
+      const tid = s < S ? r.modeIds[s * nRobots + rb] : null;
+      if (tid !== prev) {
+        if (prev !== null) {
+          const t = manifest.taskInfo[prev];
+          const type = t.type in TASK_BADGE ? t.type : 'other';
+          tctx.fillStyle = taskColor(type);
+          tctx.fillRect(px(start), y, Math.max(px(s) - px(start), 1), h);
+        }
+        prev = tid; start = s;
+      }
+    }
+  }
+  // transition ticks
+  tctx.fillStyle = '#ffffff';
+  for (let s = 0; s < S; s++) {
+    if (r.transition[s]) tctx.fillRect(px(s), 2, 1, 10);
+  }
+  // cursor
+  tctx.strokeStyle = '#ffffff';
+  tctx.beginPath();
+  tctx.moveTo(px(state.step), 0);
+  tctx.lineTo(px(state.step), H);
+  tctx.stroke();
+}
+
+resizeTimeline();
+window.addEventListener('resize', () => { resizeTimeline(); if (manifest) drawTimeline(rec()); });
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(() => { resizeTimeline(); if (manifest) drawTimeline(rec()); }).observe($('timelineBox'));
+}
+
+tl.onmousedown = (e) => {
+  if (!manifest) return;
+  const avail = tl.clientWidth - 58;
+  const frac = (e.clientX - tl.getBoundingClientRect().left - 54) / avail;
+  setStep(Math.round(frac * (rec().steps - 1)));
+  const move = (ev) => {
+    const f = (ev.clientX - tl.getBoundingClientRect().left - 54) / avail;
+    setStep(Math.round(f * (rec().steps - 1)));
+  };
+  const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+};
+
+// ---------- playback loop ----------
+function tick(now) {
+  if (renderer && scene3 && camera) {
+    controls.update();
+    renderer.render(scene3, camera);
+  }
+  if (manifest && state.playing) {
+    const dt = now - state.last;
+    if (dt >= 1000 / stepsPerSec()) {
+      state.last = now;
+      setStep((state.step + 1) % rec().steps);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function togglePlay() {
+  if (!manifest) return;
+  state.playing = !state.playing;
+  state.last = performance.now();
+  playBtn.textContent = state.playing ? '⏸' : '▶';
+  playBtn.classList.toggle('primary', !state.playing);
+}
+
+playBtn.onclick = togglePlay;
+$('btnPrev').onclick = () => { state.playing = false; playBtn.textContent = '▶'; playBtn.classList.add('primary'); setStep(state.step - 10); };
+$('btnNext').onclick = () => { state.playing = false; playBtn.textContent = '▶'; playBtn.classList.add('primary'); setStep(state.step + 10); };
+slider.oninput = () => setStep(parseInt(slider.value, 10));
+pathSelect.onchange = () => { setPath(pathSelect.selectedIndex); };
+window.addEventListener('keydown', (e) => {
+  if (!manifest) return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  else if (e.code === 'ArrowRight') setStep(state.step + 1);
+  else if (e.code === 'ArrowLeft') setStep(state.step - 1);
+});
+
+// ---------- fullscreen ----------
+const fsBtn = $('fullscreenBtn');
+function syncFs() {
+  const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  fsBtn.textContent = on ? '✕' : '⛶';
+  fsBtn.title = on ? 'exit fullscreen' : 'enter fullscreen';
+}
+fsBtn.onclick = () => {
+  const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  if (on) {
+    fsBtn.textContent = '⛶';
+    fsBtn.title = 'enter fullscreen';
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    const req = document.documentElement.requestFullscreen
+      || document.documentElement.webkitRequestFullscreen;
+    if (!req) return;
+    fsBtn.textContent = '✕';
+    fsBtn.title = 'exit fullscreen';
+    req.call(document.documentElement).catch(() => syncFs());
+  }
+};
+document.addEventListener('fullscreenchange', syncFs);
+document.addEventListener('webkitfullscreenchange', syncFs);
+
+// ---------- scene switching / lazy loading ----------
+const cache = new Map();   // folder -> loaded bundle (kept so switching back is instant)
+let activeFolder = null;
+let pendingFolder = null;
+let loadSeq = 0;
+
+const loadOverlay = $('loadOverlay');
+const loadBtn = $('loadBtn');
+const loadNote = $('loadNote');
+
+function setLocked(locked) {
+  $('viewport').classList.toggle('locked', locked);
+  $('app').classList.toggle('locked', locked);
+  loadOverlay.classList.toggle('hidden', !locked);
+  status.classList.add('hidden');
+  if (locked) {
+    loadBtn.disabled = false;
+    loadBtn.textContent = 'Load assets';
+    loadNote.textContent = 'This downloads the 3D scene and the recorded robot paths.';
+  }
+}
+
+function sceneLabel(folder) {
+  const opt = [...$('sceneSelect').options].find(o => o.value === folder);
+  return opt ? opt.textContent : folder;
+}
+
+async function loadBundle(folder) {
+  const b = await fetchData(folder);
+  const built = buildMeshes(b.manifest, b.sceneBuf);
+  const bundle = { ...b, meshes: built };
+  cache.set(folder, bundle);
+  return bundle;
+}
+
+function activate(folder) {
+  const bundle = cache.get(folder);
+  if (!bundle) {
+    pendingFolder = folder;
+    $('loadSceneName').textContent = sceneLabel(folder);
+    setLocked(true);
+    return;
+  }
+  if (activeFolder && activeFolder !== folder) {
+    const prev = cache.get(activeFolder);
+    if (prev) for (const mesh of prev.meshes) scene3.remove(mesh);
+  }
+  activeFolder = folder;
+  manifest = bundle.manifest;
+  posesBuf = bundle.posesBuf;
+  for (const mesh of bundle.meshes) scene3.add(mesh);
+  meshes = bundle.meshes;
+  const cam = bundle.manifest.camera || {};
+  if (cam.position) camera.position.set(...cam.position);
+  if (cam.target) controls.target.set(...cam.target);
+  camera.up.set(...(cam.up || [0, 0, 1]));
+  controls.update();
+  rebuildPathSelect();
+  rebuildLegend();
+  state.pathIdx = 0; state.step = 0; state.playing = false;
+  playBtn.textContent = '▶';
+  playBtn.classList.add('primary');
+  // resize before the first draw — resizing a canvas clears its content
+  resizeTimeline();
+  // default to the final (best) incumbent path
+  setPath(manifest.paths.length - 1, 0);
+  setLocked(false);
+}
+
+loadBtn.onclick = async () => {
+  const folder = pendingFolder;
+  const seq = ++loadSeq;
+  loadBtn.disabled = true;
+  loadBtn.textContent = 'Loading…';
+  loadNote.textContent = 'Downloading and building meshes…';
+  try {
+    await loadBundle(folder);
+    if (seq === loadSeq) activate(folder);
+  } catch (err) {
+    loadBtn.disabled = false;
+    loadBtn.textContent = 'Load assets';
+    loadNote.textContent = `Could not load: ${err.message}`;
+  }
+};
+
+// ---------- boot ----------
+(async () => {
+  ({ renderer, scene: scene3, camera, controls } = createRenderer());
+
+  const def = (params.get('data') || '').replace(/\/+$/, '');
+  let scenes = [];
+  try {
+    scenes = await (await fetch('scenes.json', { cache: 'no-store' })).json();
+  } catch {
+    scenes = [];
+  }
+  if (!scenes.length) {
+    scenes = [{ folder: def || 'box_stacking_two_robots', label: def || 'box_stacking_two_robots' }];
+  }
+
+  const sceneSelect = $('sceneSelect');
+  for (const sc of scenes) {
+    const opt = document.createElement('option');
+    opt.value = sc.folder;
+    opt.textContent = sc.label || sc.folder;
+    sceneSelect.appendChild(opt);
+  }
+  const initial = scenes.some(sc => sc.folder === def) ? def : scenes[0].folder;
+  sceneSelect.value = initial;
+  sceneSelect.onchange = () => activate(sceneSelect.value);
+
+  activate(initial);
+
+  requestAnimationFrame(tick);
+
+  // small debug handle for browser-inspection / tooling
+  window.__viewer = {
+    get manifest() { return manifest; },
+    get meshes() { return meshes; },
+    get loadedScenes() { return [...cache.keys()]; },
+    renderer, scene: scene3, camera, controls,
+    getState: () => ({ ...state }),
+    setPath, setStep,
+    activate,
+  };
+})();
+</script>
+</body>
+</html>
