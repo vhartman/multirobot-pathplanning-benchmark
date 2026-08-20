@@ -9,6 +9,8 @@ from .receding_horizon_wrapper import RecedingHorizonConfig, RecedingHorizonPlan
 from .prioritized_planner import PrioritizedPlanner, PrioritizedPlannerConfig
 from .shortcutting import single_mode_shortcut, robot_mode_shortcut
 
+from .solve import solve, PLANNERS
+
 __all__ = [
     "CompositePRM",
     "CompositePRMConfig",
