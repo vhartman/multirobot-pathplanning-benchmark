@@ -1097,6 +1097,9 @@ class SequenceMixin(BaseModeLogic):
     robots: List[str]
 
     def _make_sequence_from_names(self, names: List[str]) -> List[int]:
+        if len({t.name for t in self.tasks}) != len(self.tasks):
+            raise ValueError("task names must be unique")
+        
         sequence = []
 
         for name in names:
@@ -1123,6 +1126,11 @@ class SequenceMixin(BaseModeLogic):
 
         task_ids = []
         for r in self.robots:
+            if r not in mode_dict:
+                raise ValueError(
+                    f"Robot {r!r} appears in no task; every robot needs at least one "
+                    f"task (e.g. include it in a terminal/home task)."
+                )
             task_ids.append(mode_dict[r])
 
         return task_ids
@@ -1147,6 +1155,12 @@ class SequenceMixin(BaseModeLogic):
 
         mode = []
         for r in self.robots:
+
+            if r not in mode_dict:
+                raise ValueError(
+                    f"Robot {r!r} appears in no task; every robot needs at least one "
+                    f"task (e.g. include it in a terminal/home task)."
+                )
             mode.append(mode_dict[r])
 
         return mode
@@ -1274,6 +1288,9 @@ class DependencyGraphMixin(BaseModeLogic):
     robots: List[str]
 
     def _make_sequence_from_names(self, names: List[str]) -> List[int]:
+        if len({t.name for t in self.tasks}) != len(self.tasks):
+            raise ValueError("task names must be unique")
+            
         sequence = []
 
         for name in names:
@@ -1300,6 +1317,11 @@ class DependencyGraphMixin(BaseModeLogic):
 
         task_ids = []
         for r in self.robots:
+            if r not in mode_dict:
+                raise ValueError(
+                    f"Robot {r!r} appears in no task; every robot needs at least one "
+                    f"task (e.g. include it in a terminal/home task)."
+                )
             task_ids.append(mode_dict[r])
 
         start_mode = Mode(task_ids, self.start_pos)
@@ -1319,6 +1341,11 @@ class DependencyGraphMixin(BaseModeLogic):
 
         mode = []
         for r in self.robots:
+            if r not in mode_dict:
+                raise ValueError(
+                    f"Robot {r!r} appears in no task; every robot needs at least one "
+                    f"task (e.g. include it in a terminal/home task)."
+                )
             mode.append(mode_dict[r])
 
         return mode

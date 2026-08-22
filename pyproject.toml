@@ -7,35 +7,24 @@ name = "multi-robot-multi-goal-path-planning"
 version = "0.1.0"
 description = "A benchmarking framework for multi-robot path planning"
 readme = "readme.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
-    "pytest",
     "scipy",
     "networkx",
     "numba",
     "sortedcontainers",
     "numpy",
     "matplotlib>=3.4.0",
-    "simple-parsing"
+    "simple-parsing",
+    "robotic>=0.2.2,<0.3.0",
 ]
 
 [project.optional-dependencies]
-pinocchio = ["pin>=3.4" , "meshcat"]
-rai = ["robotic>=0.2.2,<0.3.0"]
+pinocchio = ["pin>=3.4", "meshcat", "hppfcl"]
 mujoco = ["mujoco", "mujoco-mjx"]
 viser = ["viser"]
-all = ["pin>=3.4", "meshcat", "robotic>=0.2.2,<0.3.0", "mujoco", "mujoco-mjx"]
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["multi_robot_multi_goal_planning*"]
-
-# Add this section for editable installs
-[tool.setuptools.dynamic]
-version = {attr = "multi_robot_multi_goal_planning.__version__"}
+test = ["pytest"]
+all = ["pin>=3.4", "meshcat", "hppfcl", "mujoco", "mujoco-mjx", "viser"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/multi_robot_multi_goal_planning"]

@@ -409,12 +409,7 @@ class rai_unassigned_pile_cleanup(FreeMixin, rai_env):
         self.collision_tolerance = 0.00
         self.collision_resolution = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register("rai.unassigned_stacking")
 class rai_unassigned_stacking(FreeMixin, rai_env):
@@ -526,12 +521,7 @@ class rai_unassigned_stacking(FreeMixin, rai_env):
         self.collision_tolerance = 0.001
         self.collision_resolution = 0.005
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()
 
 @register("rai.unordered_bottles")
 class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
@@ -644,9 +634,4 @@ class rai_ur10_arm_bottle_unordered_env(FreeMixin, rai_env):
 
         self.collision_tolerance = 0.01
 
-        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {}
-        dim = 6
-        for i, r in enumerate(self.robots):
-            self.safe_pose[r] = np.array(self.C.getJointState()[dim*i:dim*(i+1)])
+        self._set_default_safe_pose()

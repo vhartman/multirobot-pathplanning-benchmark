@@ -1200,13 +1200,8 @@ class four_arm_ur10_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
         self.collision_tolerance = 0.01
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-
-        self.safe_pose = {
-            "ur10_1": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
-            "ur10_2": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
-            "ur10_3": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
-            "ur10_4": np.array([0, -2, 1.0, -1.0, -1.57, 1.0]),
-        }
+        ur10_home = np.array([0, -2, 1.0, -1.0, -1.57, 1.0])
+        self.safe_pose = {r: ur10_home.copy() for r in self.robots}
 
 
 

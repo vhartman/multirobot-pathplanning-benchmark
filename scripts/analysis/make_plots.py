@@ -689,6 +689,12 @@ def main():
     parser.add_argument(
         "--limited_max_time", type=float, default=None, help="Max time for the plot"
     )
+    parser.add_argument(
+        "--exclude_planners",
+        default="",
+        type=str,
+        help="Comma-separated list of planner names to exclude from the plots.",
+    )
     plot_group = parser.add_mutually_exclusive_group()
     plot_group.add_argument(
         "--cost_only",
@@ -700,6 +706,7 @@ def main():
         action="store_true",
         help="Only generate the success plot",
     )
+    
     args = parser.parse_args()
 
     make_cost = not args.success_only
@@ -711,6 +718,10 @@ def main():
     yticks = []
     if len(args.yticks) > 0:
         yticks = list(map(int, args.yticks.split(",")))
+
+    excluded_planners = set()
+    if len(args.exclude_planners) > 0:
+        excluded_planners = {p.strip() for p in args.exclude_planners.split(",") if p.strip()}
 
     foldername = args.foldername
     if foldername[-1] != "/":
@@ -736,6 +747,11 @@ def main():
                 print(f"\n=== Processing {subfolder} ===")
                 all_experiment_data = load_data_from_folder(subfolder)
                 config = load_config_from_folder(subfolder)
+
+                if excluded_planners:
+                    all_experiment_data = {
+                        k: v for k, v in all_experiment_data.items() if k not in excluded_planners
+                    }
 
                 if make_cost:
                     make_cost_plots(
@@ -773,6 +789,11 @@ def main():
     else:
         all_experiment_data = load_data_from_folder(foldername)
         config = load_config_from_folder(foldername)
+
+        if excluded_planners:
+            all_experiment_data = {
+                k: v for k, v in all_experiment_data.items() if k not in excluded_planners
+            }
 
         if make_cost:
             make_cost_plots(

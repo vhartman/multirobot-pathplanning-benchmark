@@ -231,26 +231,53 @@ def get_robot_state(C: ry.Config, robot_prefix: str) -> NDArray:
     return q
 
 
+# def delete_visual_only_frames(C):
+#     C_coll = ry.Config()
+#     C_coll.addConfigurationCopy(C)
+
+#     collidable_pairs = C_coll.getCollidablePairs()
+#     collidable_objects = set()
+#     for pair in collidable_pairs:
+#         collidable_objects.add(pair)
+
+#     # go through all frames, and delete the ones that are only visual
+#     # that is, the frames that do not have a child, and are not
+#     # contact frames
+#     for f in C_coll.getFrames():
+#         if hasattr(f, 'info'):
+#             info = f.info()
+#             if "shape" in info and info["shape"] == "mesh":
+#                 C_coll.delFrame(f.name)
+#         # else:
+#         #     if f.name not in collidable_objects:
+#         #         C_coll.delFrame(f.name)
+
+#     return C_coll
+
+
 def delete_visual_only_frames(C):
     C_coll = ry.Config()
     C_coll.addConfigurationCopy(C)
 
-    collidable_pairs = C_coll.getCollidablePairs()
-    collidable_objects = set()
-    for pair in collidable_pairs:
-        collidable_objects.add(pair)
+    def visual_only(f):
+        info = f.info()
+        return info.get("shape") == "mesh" and not info.get("contact")
 
-    # go through all frames, and delete the ones that are only visual
-    # that is, the frames that do not have a child, and are not
-    # contact frames
+    # delFrame ORPHANS children (parent=None), so a mesh may be removed only if nothing that
+    # survives hangs off it. Keep every non-(visual-only) frame -- collision shapes incl.
+    # collision MESHES, joints, markers -- and all of their ancestors; delete the rest of the
+    # pure-visual mesh subtrees.
+    keep = set()
     for f in C_coll.getFrames():
-        if hasattr(f, 'info') or hasattr(f, 'asDict'):
-            info = f.info() if hasattr(f, 'info') else f.asDict()
-            if "shape" in info and info["shape"] == "mesh":
-                C_coll.delFrame(f.name)
-        # else:
-        #     if f.name not in collidable_objects:
-        #         C_coll.delFrame(f.name)
+        if not visual_only(f):
+            g = f
+            while g is not None and g.name not in keep:
+                keep.add(g.name)
+                g = g.getParent()
+
+    for f in list(C_coll.getFrames()):
+        if visual_only(f) and f.name not in keep:
+            C_coll.delFrame(f.name)
 
     return C_coll
 
@@ -274,7 +301,7 @@ class rai_env(BaseProblem):
     collision_tolerance: float
     collision_resolution: float
 
-    def __init__(self):
+    def __init__(self, delete_visual_only=True):
         super().__init__()
 
         self.robot_idx = {}
@@ -308,11 +335,12 @@ class rai_env(BaseProblem):
 
         self.C_orig = ry.Config()
         self.C_orig.addConfigurationCopy(self.C)
+    
+        if delete_visual_only:
+            C_coll = delete_visual_only_frames(self.C)
 
-        C_coll = delete_visual_only_frames(self.C)
-
-        self.C.clear()
-        self.C.addConfigurationCopy(C_coll)
+            self.C.clear()
+            self.C.addConfigurationCopy(C_coll)
 
         self.C_base = ry.Config()
         self.C_base.addConfigurationCopy(self.C)
@@ -326,6 +354,13 @@ class rai_env(BaseProblem):
             goals=GoalType.MULTI_GOAL,
             home_pose=SafePoseType.HAS_NO_SAFE_HOME_POSE,
         )
+
+    def _set_default_safe_pose(self):
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        q = self.C.getJointState()
+        self.safe_pose = {
+            r: np.array(q[self.robot_idx[r]]) for r in self.robots
+        }
 
     def __deepcopy__(self, memo):
         # Save the C attribute
@@ -802,6 +837,7 @@ class rai_env(BaseProblem):
                     make_appear_at_pose = self.tasks[prev_mode_index].side_effect_data
                     tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setRelativePosition(make_appear_at_pose[:3])
                     tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setRelativeQuaternion(make_appear_at_pose[3:])
+                    tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(1)
 
                 if self.tasks[prev_mode_index].type == "goto":
                     pass
@@ -810,7 +846,10 @@ class rai_env(BaseProblem):
                         self.tasks[prev_mode_index].frames[0],
                         self.tasks[prev_mode_index].frames[1],
                     )
-                    tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
+                    frame = tmp.getFrame(self.tasks[prev_mode_index].frames[1])
+                    info = frame.info()
+                    if frame.getShapeType() != ry.ST.none and info.get("contact"):
+                        tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
 
                 # postcondition
                 if self.tasks[prev_mode_index].side_effect == "remove":

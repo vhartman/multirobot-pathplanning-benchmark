@@ -14,6 +14,8 @@ from .rrt_skills_conservative import (
     RRTSkillsConservativeConfig,
 )
 
+from .solve import solve, PLANNERS
+
 __all__ = [
     "CompositePRM",
     "CompositePRMConfig",
