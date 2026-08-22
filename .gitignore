@@ -5,6 +5,8 @@ node_modules/
 *.prof
 *.lprof
 *.json
+*.jsonl
+*.out
 *.svg
 
 # Ignore logs
