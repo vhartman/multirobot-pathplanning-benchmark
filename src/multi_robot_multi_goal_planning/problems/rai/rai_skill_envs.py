@@ -2,7 +2,7 @@ import robotic as ry
 import numpy as np
 import random
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.core.dependency_graph import DependencyGraph
@@ -43,6 +43,7 @@ from ..skills import (
     DummyStochasticTimedSkill,
     DummyStochasticUntimedSkill,
     VariableDurationTimedSkill,
+    VariableDurationEESkill,
     StochasticEEGraspSkill
 )
 
@@ -2425,7 +2426,7 @@ class rai_stochastic_bimodal_switch_base(rai_env):
                 {"target": r1_goal_down, "arrival_frac": 1.0},
             ],
             branch_dim=1,
-            commit_eps=1e-3,
+            commit_eps=0.05, #1e-3,
             dt=0.05,
             noise_bound=0.3,
             is_deterministic=False,
@@ -2527,6 +2528,7 @@ class rai_reconverging_bimodal_switch_base(rai_env):
         r2_goal[:2] = [-1.0, 0.0]
 
         reconverging_skill = ReconvergingBimodalStochasticSkill(
+            constant_speed=True,
             joints=self.robot_joints["a1"],
             branches=[
                 {"waypoints": [r1_via_up]},
@@ -2534,7 +2536,7 @@ class rai_reconverging_bimodal_switch_base(rai_env):
             ],
             target=r1_target,
             branch_dim=1,
-            commit_eps=1e-3,
+            commit_eps=0.05, #1e-3,
             dt=0.05,
             noise_bound=0.3,
             is_deterministic=False,
@@ -2638,6 +2640,7 @@ class rai_stochastic_square_island(SequenceMixin, rai_env):
         r1_via_down2 = np.array([-d, -d])
 
         bimodal_corridor_skill = ReconvergingBimodalStochasticSkill(
+            constant_speed=True,
             joints=self.robot_joints["a1"],
             branches=[
                 {"waypoints": [r1_via_up1, r1_via_up2]},
@@ -2645,7 +2648,7 @@ class rai_stochastic_square_island(SequenceMixin, rai_env):
             ],
             target=r1_goal,
             branch_dim=1,
-            commit_eps=1e-3,
+            commit_eps=0.05, #1e-3,
             dt=0.05,
             noise_bound=0.2,
             is_deterministic=False,
@@ -2730,6 +2733,7 @@ class rai_dep_stochastic_square_island(DependencyGraphMixin, rai_env):
         r1_via_down2 = np.array([-d, -d])
 
         bimodal_corridor_skill = ReconvergingBimodalStochasticSkill(
+            constant_speed=True,
             joints=self.robot_joints["a1"],
             branches=[
                 {"waypoints": [r1_via_up1, r1_via_up2]},
@@ -2737,7 +2741,7 @@ class rai_dep_stochastic_square_island(DependencyGraphMixin, rai_env):
             ],
             target=r1_goal,
             branch_dim=1,
-            commit_eps=1e-3,
+            commit_eps=0.05, #1e-3,
             dt=0.05,
             noise_bound=0.2,
             is_deterministic=False,
@@ -2817,7 +2821,8 @@ class rai_stochastic_rectangle_island(SequenceMixin, rai_env):
         r1_via_down1 = np.array([1.6, -1.])
         r1_via_down2 = np.array([-1.6, -1.])
 
-        bimodal_corridor_skill = ReconvergingBimodalStochasticUntimedSkill(
+        bimodal_corridor_skill = ReconvergingBimodalStochasticSkill(
+            constant_speed=True,
             joints=self.robot_joints["a1"],
             branches=[
                 {"waypoints": [r1_via_up1, r1_via_up2]},
@@ -2825,22 +2830,22 @@ class rai_stochastic_rectangle_island(SequenceMixin, rai_env):
             ],
             target=r1_goal,
             branch_dim=1,
-            commit_eps=1e-3,
+            commit_eps=0.05, #1e-3,
             dt=0.05,
             noise_bound=0.1,
-            is_deterministic=False, #True,
-            step_size=0.02
+            is_deterministic=True,
+            durations=[8.0, 6.5]
         )
 
         self.tasks = [
             Task(
-                "a1_crossing",
+                "a1_skill",
                 ["a1"],
                 initiation_goal=SingleGoal(np.array([1.6, 0.0])),
                 skill=bimodal_corridor_skill
             ),
             Task(
-                "a2_crossing",
+                "a2_forward",
                 ["a2"],
                 SingleGoal(r2_goal)
             ),
@@ -2855,7 +2860,7 @@ class rai_stochastic_rectangle_island(SequenceMixin, rai_env):
         self.collision_resolution = 0.005
 
         self.sequence = self._make_sequence_from_names(
-            ["a1_crossing", "a2_crossing", "terminal"]
+            ["a1_skill", "a2_forward", "terminal"]
         )
 
         BaseModeLogic.__init__(self)
@@ -2874,6 +2879,8 @@ class rai_dep_stochastic_rectangle_island(DependencyGraphMixin, rai_env):
         self.robots = ["a1", "a2"]
         rai_env.__init__(self)
 
+        # self.C.view(True)
+
         dim = 2
         self.limits = np.array([[-2.] * (2 * dim), [2.] * (2 * dim)])
 
@@ -2891,7 +2898,8 @@ class rai_dep_stochastic_rectangle_island(DependencyGraphMixin, rai_env):
         r1_via_down1 = np.array([1.6, -1.])
         r1_via_down2 = np.array([-1.6, -1.])
 
-        bimodal_corridor_skill = ReconvergingBimodalStochasticUntimedSkill(
+        bimodal_corridor_skill = ReconvergingBimodalStochasticSkill(
+            constant_speed=True,
             joints=self.robot_joints["a1"],
             branches=[
                 {"waypoints": [r1_via_up1, r1_via_up2]},
@@ -2901,22 +2909,32 @@ class rai_dep_stochastic_rectangle_island(DependencyGraphMixin, rai_env):
             branch_dim=1,
             commit_eps=0.05, #1e-3,
             dt=0.05,
-            noise_bound=0.1,
+            noise_bound=0.2,
             is_deterministic=False,
-            step_size=0.02
+            durations=[8.0, 6.5]
         )
 
         self.tasks = [
             Task(
-                "a1_crossing",
+                "a1_skill",
                 ["a1"],
                 initiation_goal=SingleGoal(np.array([1.6, 0.0])),
                 skill=bimodal_corridor_skill
             ),
             Task(
-                "a2_crossing",
+                "a2_forward",
                 ["a2"],
                 SingleGoal(r2_goal)
+            ),
+            Task(
+                "a1_return",
+                ["a1"],
+                SingleGoal(r1_return)
+            ),
+            Task(
+                "a2_return",
+                ["a2"],
+                SingleGoal(r2_return)
             ),
             Task(
                 "terminal",
@@ -2929,8 +2947,10 @@ class rai_dep_stochastic_rectangle_island(DependencyGraphMixin, rai_env):
         self.collision_resolution = 0.005
 
         self.graph = DependencyGraph()
-        self.graph.add_dependency("terminal", "a1_crossing")
-        self.graph.add_dependency("terminal", "a2_crossing")
+        self.graph.add_dependency("a1_return", "a1_skill")
+        self.graph.add_dependency("a2_return", "a2_forward")
+        self.graph.add_dependency("terminal", "a1_return")
+        self.graph.add_dependency("terminal", "a2_return")
 
         BaseModeLogic.__init__(self)
 
@@ -3068,3 +3088,135 @@ class rai_stochastic_grasping_env(SequenceMixin, rai_env):
         for r in self.robots:
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
+
+@register([
+    ("rai.dep_stochastic_stacking_2r_2b", {"num_robots": 2, "num_boxes": 2}),
+    ("rai.dep_stochastic_stacking_2r_4b", {"num_robots": 2, "num_boxes": 4}),
+    ("rai.dep_stochastic_stacking_3r_3b", {"num_robots": 3, "num_boxes": 3}),
+    ("rai.dep_stochastic_stacking_3r_6b", {"num_robots": 3, "num_boxes": 6}),
+    ("rai.dep_stochastic_stacking_4r_4b", {"num_robots": 4, "num_boxes": 4}),
+    ("rai.dep_stochastic_stacking_4r_8b", {"num_robots": 4, "num_boxes": 8}),
+])
+class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_env):
+    def __init__(self, num_robots: int = 2, num_boxes: int = 3,
+                 skill_place: bool = False, noise: float = 0.5, seed: int = 0):
+        random.seed(seed)
+        np.random.seed(seed)
+        self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
+            num_robots, num_boxes, skill_starts=True, round_robin_assignment=True
+        )
+
+        rai_env.__init__(self)
+
+        self.manipulating_env = True
+        self.num_robots, self.num_boxes = num_robots, num_boxes
+
+        grasp_duration_fast = 2.0 - noise
+        grasp_duration_slow = 2.0 + noise
+        skill_pick = True
+
+        home_pose = self.C.getJointState()
+        self.robot_objs = {r: [] for r in self.robots}
+
+        self.tasks = []
+
+        def add_action(robot, q_key, name, kind, frames, as_skill) -> List[str]:
+            if not as_skill:
+                self.tasks.append(Task(name, [robot], SingleGoal(q_key), type=kind, frames=frames))
+                return [name]
+            
+            # Find a standoff pose 0.2m above the object
+            ee_name = robot + "gripper_center"
+            self.C.setJointState(q_key, self.robot_joints[robot])
+            grasp_pose = self.C.getFrame(ee_name).getPose()
+            standoff_pose = grasp_pose.copy()
+            standoff_pose[2] += 0.2  # 0.2m straight up in world frame
+            
+            # Run local IK to find joint angles for the standoff pose
+            c_tmp = ry.Config()
+            c_tmp.addConfigurationCopy(self.C)
+            c_tmp.selectJointsBySubtree(c_tmp.getFrame(robot + "base"))
+            
+            ik = ry.KOMO(c_tmp, phases=1, slicesPerPhase=1, kOrder=0, enableCollisions=False)
+            ik.addObjective([], ry.FS.pose, [ee_name], ry.OT.eq, [1e1], target=standoff_pose)
+            ik.addObjective([], ry.FS.qItself, [], ry.OT.sos, [1e-1], target=q_key)
+            
+            from multi_robot_multi_goal_planning.problems.rai.rai_config import solve_komo_problem
+            ret = solve_komo_problem(ik, 1, c_tmp, False, 1, -1.0)
+            q_standoff = ret[-1] if (ret is not None and len(ret) > 0) else q_key
+            
+            self.tasks.append(Task("pre_" + name, [robot], SingleGoal(q_standoff)))
+            
+            # The skill will descend from q_standoff to grasp_pose over a stochastic duration
+            descent_skill = VariableDurationEESkill(
+                joints=self.robot_joints[robot],
+                ee_name=ee_name,
+                goal_pose=grasp_pose,
+                duration_min=grasp_duration_fast,
+                duration_max=grasp_duration_slow,
+                dt=0.05,
+                distribution="bimodal",
+            )
+            
+            self.tasks.append(Task(name, [robot], initiation_goal=SingleGoal(q_standoff),
+                                   type=kind, frames=frames, skill=descent_skill))
+            self.C.setJointState(home_pose)
+            return ["pre_" + name, name]
+
+        last_task_of_robot: Dict[str, Optional[str]] = {r: None for r in self.robots}
+        chain_edges: List[Tuple[str, str]] = []      # (dependent, dependency)
+        place_tasks_in_order: List[str] = []         # the place ACTION, base first
+        place_chain_heads: List[str] = []            # what the box below must be placed before
+
+        for count, (r, b, qs, g) in enumerate(keyframes):
+            self.robot_objs[r].append(b)
+            ee_name = r + "gripper_center"
+            pick_name, place_name = f"{r}pick_{b}_{count}", f"{r}place_{b}_{count}"
+
+            pick_chain = add_action(r, qs[0], pick_name, "pick", [ee_name, b], skill_pick)
+            place_chain = add_action(r, qs[1], place_name, "place", ["table", b], skill_place)
+            chain = pick_chain + place_chain
+
+            # Consecutive tasks of one box, in order
+            chain_edges += list(zip(chain[1:], chain))
+            # This robot's previous box must be finished before it starts the next one
+            if last_task_of_robot[r] is not None:
+                chain_edges.append((chain[0], last_task_of_robot[r]))
+            last_task_of_robot[r] = place_name
+            place_tasks_in_order.append(place_name)
+            place_chain_heads.append(place_chain[0])
+
+        # Per-robot home, gated ONLY on that robot's own last task, the invariant above
+        home_names = []
+        for r in self.robots:
+            home_name = f"{r}home"
+            self.tasks.append(Task(
+                home_name, [r], SingleGoal(np.array(self.C.getJointState()[self.robot_idx[r]])),
+            ))
+            home_names.append(home_name)
+            if last_task_of_robot[r] is not None:
+                chain_edges.append((home_name, last_task_of_robot[r]))
+
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+
+        self.graph = DependencyGraph()
+        for dependent, dependency in chain_edges:
+            self.graph.add_dependency(dependent, dependency)
+        # Stacking order dependency
+        for lower, upper_head in zip(place_tasks_in_order, place_chain_heads[1:]):
+            self.graph.add_dependency(upper_head, lower)
+        for home_name in home_names:
+            self.graph.add_dependency("terminal", home_name)
+
+        self.collision_tolerance = 0.01
+        self.collision_resolution = 0.01
+
+        BaseModeLogic.__init__(self)
+
+        # Buffer for faster collision checking
+        self.prev_mode = self.start_mode
+
+        self.spec.dependency = DependencyType.UNORDERED
+        self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
+        self.safe_pose = {r: np.array(self.C.getJointState()[self.robot_idx[r]])
+                          for r in self.robots}
