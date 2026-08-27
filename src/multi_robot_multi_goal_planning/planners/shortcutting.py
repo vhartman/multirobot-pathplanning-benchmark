@@ -149,7 +149,7 @@ def robot_mode_shortcut(
     robot_choice = "round_robin",
     interpolation_resolution: float=0.5,
     max_attempts: Optional[int] = None,
-    run_choice: str = "gain"
+    run_choice: str = "tree"
 ):
     """
     Shortcutting the composite path one robot at a time, but allowing shortcutting over the modes as well if the
