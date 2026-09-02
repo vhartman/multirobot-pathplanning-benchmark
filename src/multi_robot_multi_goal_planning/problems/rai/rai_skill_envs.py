@@ -2029,7 +2029,7 @@ class rai_stochastic_switch_base(rai_env):
             joints=self.robot_joints["a1"],
             goal_state=r1_goal,
             dt=0.05,
-            noise_bound=0.3,
+            noise_bound=0.2,
             is_deterministic=False,
             duration=10
         )
@@ -2329,7 +2329,7 @@ class rai_untimed_stochastic_switch_base(rai_env):
             joints=self.robot_joints["a1"],
             goal_state=r1_goal,
             dt=0.05,
-            noise_bound=0.3,
+            noise_bound=0.2,
             is_deterministic=False,
             step_size=0.05
         )
@@ -2428,7 +2428,7 @@ class rai_stochastic_bimodal_switch_base(rai_env):
             branch_dim=1,
             commit_eps=0.05, #1e-3,
             dt=0.05,
-            noise_bound=0.3,
+            noise_bound=0.2,
             is_deterministic=False,
             duration=5.0,
         )
@@ -2538,7 +2538,7 @@ class rai_reconverging_bimodal_switch_base(rai_env):
             branch_dim=1,
             commit_eps=0.05, #1e-3,
             dt=0.05,
-            noise_bound=0.3,
+            noise_bound=0.2,
             is_deterministic=False,
             duration=5.0,
         )
@@ -2832,7 +2832,7 @@ class rai_stochastic_rectangle_island(SequenceMixin, rai_env):
             branch_dim=1,
             commit_eps=0.05, #1e-3,
             dt=0.05,
-            noise_bound=0.1,
+            noise_bound=0.2,
             is_deterministic=True,
             durations=[8.0, 6.5]
         )
@@ -3089,17 +3089,30 @@ class rai_stochastic_grasping_env(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-@register([
-    ("rai.dep_stochastic_stacking_2r_2b", {"num_robots": 2, "num_boxes": 2}),
-    ("rai.dep_stochastic_stacking_2r_4b", {"num_robots": 2, "num_boxes": 4}),
-    ("rai.dep_stochastic_stacking_3r_3b", {"num_robots": 3, "num_boxes": 3}),
-    ("rai.dep_stochastic_stacking_3r_6b", {"num_robots": 3, "num_boxes": 6}),
-    ("rai.dep_stochastic_stacking_4r_4b", {"num_robots": 4, "num_boxes": 4}),
-    ("rai.dep_stochastic_stacking_4r_8b", {"num_robots": 4, "num_boxes": 8}),
-])
+# For noise sweep
+NOISE_LEVELS = (0.0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5)
+
+_STACKING_SHAPES = [
+    ("2r_2b", {"num_robots": 2, "num_boxes": 2}),
+    ("2r_4b", {"num_robots": 2, "num_boxes": 4}),
+    ("2r_8b", {"num_robots": 2, "num_boxes": 8}),
+    ("3r_3b", {"num_robots": 3, "num_boxes": 3}),
+    ("3r_8b", {"num_robots": 3, "num_boxes": 8}),
+    ("4r_4b", {"num_robots": 4, "num_boxes": 4}),
+    ("4r_8b", {"num_robots": 4, "num_boxes": 8}),
+]
+
+
+@register(
+    [(f"rai.dep_stochastic_stacking_{shape}", dict(kwargs))
+     for shape, kwargs in _STACKING_SHAPES]
+    + [(f"rai.dep_stochastic_stacking_{shape}_noise{int(round(level * 100)):03d}",
+        {**kwargs, "noise": level})
+       for shape, kwargs in _STACKING_SHAPES for level in NOISE_LEVELS]
+)
 class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_env):
     def __init__(self, num_robots: int = 2, num_boxes: int = 3,
-                 skill_place: bool = False, noise: float = 0.5, seed: int = 0):
+                 skill_place: bool = False, noise: float = 1.0, seed: int = 0):
         random.seed(seed)
         np.random.seed(seed)
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(

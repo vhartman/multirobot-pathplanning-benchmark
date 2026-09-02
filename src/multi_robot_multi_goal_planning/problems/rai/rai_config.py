@@ -3391,7 +3391,8 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
 
 
 def make_box_stacking_env(
-    num_robots=2, num_boxes=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False, skill_starts: bool = False
+    num_robots=2, num_boxes=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False, skill_starts: bool = False,
+    round_robin_assignment: bool = False,
 ):
     assert num_boxes <= 9, "A maximum of 9 boxes are supported"
     assert num_robots <= 6, "A maximum of 6 robots are supported"
@@ -3716,17 +3717,31 @@ def make_box_stacking_env(
 
         robot_to_use = []
 
-        for box, goal in zip(boxes, goals):
+        for box_index, (box, goal) in enumerate(zip(boxes, goals)):
             c_tmp_2 = ry.Config()
             c_tmp_2.addConfigurationCopy(c_tmp)
             # c_tmp_2.computeCollisions()
 
-            while True:
-                r = random.choice(all_robots)
-                r1 = compute_rearrangment(c_tmp_2, r, box, goal)
+            if round_robin_assignment:
+                n = len(all_robots)
+                r, r1 = None, None
+                for k in range(n):
+                    r = all_robots[(box_index + k) % n]
+                    c_try = ry.Config()
+                    c_try.addConfigurationCopy(c_tmp)
+                    r1 = compute_rearrangment(c_try, r, box, goal)
+                    if r1 is not None:
+                        break
+                if r1 is None:
+                    raise RuntimeError(f"no robot can pick {box} and place it at {goal}")
+            else:
+                # OLD: random branch (retry until it finds robots that can reach box/goal)
+                while True:
+                    r = random.choice(all_robots)
+                    r1 = compute_rearrangment(c_tmp_2, r, box, goal)
 
-                if r1 is not None:
-                    break
+                    if r1 is not None:
+                        break
 
             direct_pick_place_keyframes[r][box] = r1[:2]
             robot_to_use.append(r)
@@ -4403,29 +4418,34 @@ def make_bimanual_grasping_env(obstacle, rotate=True, view: bool = False):
             [-0., 0., 0.15]
         ).setJoint(ry.JT.rigid)
 
-    C.addFrame("obj_marker").setParent(
-        C.getFrame("obj1")
-    ).setShape(
-        ry.ST.marker, [0.2]
-    ).setRelativePosition([0, 0, 0]).setColor(
-        [0, 0, 0.1, 0.1]
-    ).setContact(0).setJoint(ry.JT.rigid)
+    # Hide markers loaded from the robot .g file
+    for r in ["a1_", "a2_"]:
+        if C.getFrame(f"{r}ur_ee_marker"):
+            C.getFrame(f"{r}ur_ee_marker").setShape(ry.ST.marker, [0.0])
 
-    C.addFrame("goal_marker").setParent(
-        C.getFrame("goal1")
-    ).setShape(
-        ry.ST.marker, [0.2]
-    ).setRelativePosition([0, 0, 0]).setColor(
-        [0, 0, 0.1, 0.1]
-    ).setContact(0).setJoint(ry.JT.rigid)
-
-    C.addFrame("ee_marker").setParent(
-        C.getFrame("a1_ur_ee_marker")
-    ).setShape(
-        ry.ST.marker, [0.2]
-    ).setRelativePosition([0, 0, 0]).setColor(
-        [0, 0, 0.1, 0.1]
-    ).setContact(0).setJoint(ry.JT.rigid)
+    # C.addFrame("obj_marker").setParent(
+    #     C.getFrame("obj1")
+    # ).setShape(
+    #     ry.ST.marker, [0.2]
+    # ).setRelativePosition([0, 0, 0]).setColor(
+    #     [0, 0, 0.1, 0.1]
+    # ).setContact(0).setJoint(ry.JT.rigid)
+    # 
+    # C.addFrame("goal_marker").setParent(
+    #     C.getFrame("goal1")
+    # ).setShape(
+    #     ry.ST.marker, [0.2]
+    # ).setRelativePosition([0, 0, 0]).setColor(
+    #     [0, 0, 0.1, 0.1]
+    # ).setContact(0).setJoint(ry.JT.rigid)
+    # 
+    # C.addFrame("ee_marker").setParent(
+    #     C.getFrame("a1_ur_ee_marker")
+    # ).setShape(
+    #     ry.ST.marker, [0.2]
+    # ).setRelativePosition([0, 0, 0]).setColor(
+    #     [0, 0, 0.1, 0.1]
+    # ).setContact(0).setJoint(ry.JT.rigid)
 
 
     # C.addFrame("obs1").setParent(table).setRelativePosition([-0.5, 1, 0.7]).setShape(
