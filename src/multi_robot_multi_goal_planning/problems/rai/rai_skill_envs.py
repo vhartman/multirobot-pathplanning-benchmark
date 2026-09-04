@@ -3097,32 +3097,27 @@ _STACKING_SHAPES = [
     ("2r_4b", {"num_robots": 2, "num_boxes": 4}),
     ("2r_8b", {"num_robots": 2, "num_boxes": 8}),
     ("3r_3b", {"num_robots": 3, "num_boxes": 3}),
+    ("3r_4b", {"num_robots": 3, "num_boxes": 4}),
     ("3r_8b", {"num_robots": 3, "num_boxes": 8}),
     ("4r_4b", {"num_robots": 4, "num_boxes": 4}),
     ("4r_8b", {"num_robots": 4, "num_boxes": 8}),
 ]
 
 
-@register(
-    [(f"rai.dep_stochastic_stacking_{shape}", dict(kwargs))
-     for shape, kwargs in _STACKING_SHAPES]
-    + [(f"rai.dep_stochastic_stacking_{shape}_noise{int(round(level * 100)):03d}",
-        {**kwargs, "noise": level})
-       for shape, kwargs in _STACKING_SHAPES for level in NOISE_LEVELS]
-)
-class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_env):
+class rai_stochastic_stacking_base(rai_env):
     def __init__(self, num_robots: int = 2, num_boxes: int = 3,
-                 skill_place: bool = False, noise: float = 1.0, seed: int = 0):
+                 skill_place: bool = False, noise: float = 1.0, seed: int = 0, num_stacks: int = 1):
         random.seed(seed)
         np.random.seed(seed)
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
-            num_robots, num_boxes, skill_starts=True, round_robin_assignment=True
+            num_robots, num_boxes, skill_starts=True, round_robin_assignment=True, num_stacks=num_stacks
         )
 
         rai_env.__init__(self)
 
         self.manipulating_env = True
         self.num_robots, self.num_boxes = num_robots, num_boxes
+        self.num_stacks = num_stacks
 
         grasp_duration_fast = 2.0 - noise
         grasp_duration_slow = 2.0 + noise
@@ -3176,10 +3171,12 @@ class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_env):
             self.C.setJointState(home_pose)
             return ["pre_" + name, name]
 
-        last_task_of_robot: Dict[str, Optional[str]] = {r: None for r in self.robots}
-        chain_edges: List[Tuple[str, str]] = []      # (dependent, dependency)
-        place_tasks_in_order: List[str] = []         # the place ACTION, base first
-        place_chain_heads: List[str] = []            # what the box below must be placed before
+        self.last_task_of_robot = {r: None for r in self.robots}
+        self.chain_edges = []
+        self.place_tasks_in_order = []
+        self.place_chain_heads = []
+        self.robot_chains = {r: [] for r in self.robots}
+        self.home_names = []
 
         for count, (r, b, qs, g) in enumerate(keyframes):
             self.robot_objs[r].append(b)
@@ -3190,46 +3187,60 @@ class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_env):
             place_chain = add_action(r, qs[1], place_name, "place", ["table", b], skill_place)
             chain = pick_chain + place_chain
 
-            # Consecutive tasks of one box, in order
-            chain_edges += list(zip(chain[1:], chain))
-            # This robot's previous box must be finished before it starts the next one
-            if last_task_of_robot[r] is not None:
-                chain_edges.append((chain[0], last_task_of_robot[r]))
-            last_task_of_robot[r] = place_name
-            place_tasks_in_order.append(place_name)
-            place_chain_heads.append(place_chain[0])
+            self.robot_chains[r].append(chain)
 
-        # Per-robot home, gated ONLY on that robot's own last task, the invariant above
-        home_names = []
+            self.chain_edges += list(zip(chain[1:], chain))
+            if self.last_task_of_robot[r] is not None:
+                self.chain_edges.append((chain[0], self.last_task_of_robot[r]))
+            self.last_task_of_robot[r] = place_name
+            self.place_tasks_in_order.append(place_name)
+            self.place_chain_heads.append(place_chain[0])
+
         for r in self.robots:
             home_name = f"{r}home"
             self.tasks.append(Task(
                 home_name, [r], SingleGoal(np.array(self.C.getJointState()[self.robot_idx[r]])),
             ))
-            home_names.append(home_name)
-            if last_task_of_robot[r] is not None:
-                chain_edges.append((home_name, last_task_of_robot[r]))
+            self.home_names.append(home_name)
+            if self.last_task_of_robot[r] is not None:
+                self.chain_edges.append((home_name, self.last_task_of_robot[r]))
 
         self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
-
-        self.graph = DependencyGraph()
-        for dependent, dependency in chain_edges:
-            self.graph.add_dependency(dependent, dependency)
-        # Stacking order dependency
-        for lower, upper_head in zip(place_tasks_in_order, place_chain_heads[1:]):
-            self.graph.add_dependency(upper_head, lower)
-        for home_name in home_names:
-            self.graph.add_dependency("terminal", home_name)
-
+        
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01
 
-        BaseModeLogic.__init__(self)
-
-        # Buffer for faster collision checking
-        self.prev_mode = self.start_mode
-
-        self.spec.dependency = DependencyType.UNORDERED
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
-        self.safe_pose = {r: np.array(self.C.getJointState()[self.robot_idx[r]])
-                          for r in self.robots}
+        self.safe_pose = {r: np.array(self.C.getJointState()[self.robot_idx[r]]) for r in self.robots}
+@register(
+    [("rai.dep_stochastic_stacking", {})]
+    + [(f"rai.dep_stochastic_stacking_{shape}", dict(kwargs)) for shape, kwargs in _STACKING_SHAPES]
+    + [(f"rai.dep_stochastic_stacking_{shape}_noise{int(round(level * 100)):03d}", {**kwargs, "noise": level}) for shape, kwargs in _STACKING_SHAPES for level in NOISE_LEVELS]
+)
+class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_stochastic_stacking_base):
+    def __init__(self, num_robots: int = 2, num_boxes: int = 3, skill_place: bool = False, noise: float = 1.0, seed: int = 0):
+        rai_stochastic_stacking_base.__init__(self, num_robots, num_boxes, skill_place, noise, seed, num_stacks=1)
+        self.graph = DependencyGraph()
+        for dependent, dependency in self.chain_edges: self.graph.add_dependency(dependent, dependency)
+        for lower, upper_head in zip(self.place_tasks_in_order, self.place_chain_heads[1:]): self.graph.add_dependency(upper_head, lower)
+        for home_name in self.home_names: self.graph.add_dependency("terminal", home_name)
+        BaseModeLogic.__init__(self)
+        self.prev_mode = self.start_mode
+        self.spec.dependency = DependencyType.UNORDERED
+
+@register(
+    [("rai.dep_stochastic_two_stacking", {})]
+    + [(f"rai.dep_stochastic_two_stacking_{shape}", dict(kwargs)) for shape, kwargs in _STACKING_SHAPES]
+    + [(f"rai.dep_stochastic_two_stacking_{shape}_noise{int(round(level * 100)):03d}", {**kwargs, "noise": level}) for shape, kwargs in _STACKING_SHAPES for level in NOISE_LEVELS]
+)
+class rai_dep_stochastic_two_stacking(DependencyGraphMixin, rai_stochastic_stacking_base):
+    def __init__(self, num_robots: int = 2, num_boxes: int = 3, skill_place: bool = False, noise: float = 1.0, seed: int = 0):
+        rai_stochastic_stacking_base.__init__(self, num_robots, num_boxes, skill_place, noise, seed, num_stacks=2)
+        self.graph = DependencyGraph()
+        for dependent, dependency in self.chain_edges: self.graph.add_dependency(dependent, dependency)
+        for lower, upper_head in zip(self.place_tasks_in_order, self.place_chain_heads[2:]): self.graph.add_dependency(upper_head, lower)
+        for home_name in self.home_names: self.graph.add_dependency("terminal", home_name)
+        BaseModeLogic.__init__(self)
+        self.prev_mode = self.start_mode
+        self.spec.dependency = DependencyType.UNORDERED
+

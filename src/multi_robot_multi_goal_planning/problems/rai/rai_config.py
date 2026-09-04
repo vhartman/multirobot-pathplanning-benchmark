@@ -3392,7 +3392,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
 
 def make_box_stacking_env(
     num_robots=2, num_boxes=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False, skill_starts: bool = False,
-    round_robin_assignment: bool = False,
+    round_robin_assignment: bool = False, num_stacks: int = 1,
 ):
     assert num_boxes <= 9, "A maximum of 9 boxes are supported"
     assert num_robots <= 6, "A maximum of 6 robots are supported"
@@ -3568,10 +3568,21 @@ def make_box_stacking_env(
                 np.random.rand(3)
             ).setContact(1).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
 
+            if num_stacks == 1:
+                goal_pos = [get_pos(1, 1)[0], get_pos(1, 1)[1], cnt * size[2] * 1.1 + height]
+            else:
+                # Place goals at +/- 0.3 on X, centered on Y
+                stack_idx = cnt % 2
+                stack_height = (cnt // 2) * size[2] * 1.1 + height
+                if stack_idx == 0:
+                    goal_pos = [-0.3, -0.05, stack_height]
+                else:
+                    goal_pos = [0.3, -0.05, stack_height]
+                    
             C.addFrame("goal" + str(j) + str(k)).setParent(table).setShape(
                 ry.ST.box, [size[0], size[1], size[2], 0.005]
             ).setRelativePosition(
-                [get_pos(1, 1)[0], get_pos(1, 1)[1], cnt * size[2] * 1.1 + height]
+                goal_pos
             ).setColor([0, 0, 0.1, 0.5]).setContact(0).setQuaternion(
                 perturbation_quaternion
             ).setJoint(ry.JT.rigid)
