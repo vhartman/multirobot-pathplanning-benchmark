@@ -1,7 +1,6 @@
 import argparse
 from matplotlib import pyplot as plt
 
-import time
 import json
 import os
 import pathlib
@@ -13,6 +12,7 @@ from typing import List, Dict, Optional, Any
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from compute_confidence_intervals import computeConfidenceInterval
+from make_plots_stochastic_skill import apply_style, save_legend
 
 
 def load_data_from_folder(
@@ -26,14 +26,12 @@ def load_data_from_folder(
 
     all_experiment_data = {}
 
-    # loading_start_time = time.time()
 
     for planner_name in planner_names:
         print(f"Loading data for {planner_name}")
         subfolder_path = folder + planner_name + "/"
 
         timestamps = []
-        # print("Loading timestamps")
         try:
             with open(subfolder_path + "timestamps.txt") as file:
                 for line in file:
@@ -52,7 +50,6 @@ def load_data_from_folder(
             continue
 
         costs = []
-        # print("Loading costs")
         with open(subfolder_path + "costs.txt") as file:
             for line in file:
                 costs_this_run = []
@@ -63,15 +60,7 @@ def load_data_from_folder(
                     costs_this_run.append(float(num))
 
                 costs.append(costs_this_run)
-            # for line in file:
-            #     line = line.strip()
-            #     if not line:
-            #         continue
-            #     # Use map for type conversion
-            #     costs_this_run = list(map(float, line.rstrip(',').split(",")))
-            #     costs.append(costs_this_run)
 
-            #     costs.append(costs_this_run)
 
         runs = [
             int(name)
@@ -82,14 +71,8 @@ def load_data_from_folder(
         runs.sort()
 
         planner_data = []
-        # config["planners"] = {}
-        # config["planners"]["name"] = []
-        # config["planners"]["type"] = []
-        # config["planners"]["options"] = {}
 
-        # config["environment_name"] = []
 
-        # print("Loading paths")
         for i, run in enumerate(runs):
             run_data = {}
 
@@ -100,7 +83,6 @@ def load_data_from_folder(
                 if os.path.isfile(os.path.join(run_subfolder, f)) and f.startswith("path_") and f.endswith(".json")
             ]
 
-            # sort files:
             path_nums = [int(f[5:-5]) for f in onlyfiles]
 
             sorted_files = [x for _, x in sorted(zip(path_nums, onlyfiles))]
@@ -110,7 +92,7 @@ def load_data_from_folder(
                 for j, file in enumerate(sorted_files):
                     if j >= load_paths:
                         break
-                        
+
                     with open(run_subfolder + file) as f:
                         path_data = json.load(f)
                         paths.append(path_data)
@@ -128,8 +110,6 @@ def load_data_from_folder(
 
         all_experiment_data[planner_name] = planner_data
 
-    # loading_end_time = time.time()
-    # print(f"Loading took {loading_end_time - loading_start_time}s")
 
     return all_experiment_data
 
@@ -138,7 +118,6 @@ def load_config_from_folder(filepath: str) -> Dict:
     with open(filepath + "config.json") as f:
         config = json.load(f)
 
-    # TODO: sanity checks
 
     return config
 
@@ -158,9 +137,13 @@ report_colors = {
     "prm_ablation": "#FF6600",
 }
 
-# TODO: move this to config?
 planner_name_to_color = {
     "prioritized": "#FFD61F",
+    "rrt_skills": "#A01CBB",
+    "rrg_skills": "#1F77B4",
+    "rrt_conservative": "#ff7f0e",
+    "rrg_reactive": "#2ca02c",
+
     "prio": "#FFD61F",
     "rrtstar": report_colors["rrt"],
     "rrtstar_global_sampling": report_colors["rrt_ablation"],
@@ -222,54 +205,134 @@ planner_name_to_style = {
     "eitstar_global_sampling": "--",
 }
 
-# TODO (Liam) temporary.. remove later (just to get good colours for PRM plots now)
+skill_benchmark_colors = {
+    "rrtstar_old": "#A01CBB",
+    "birrtstar_old": "black",
+    "pp": "#FFD61F",
+    "prioritized": "#FFD61F",
+    "rrt_skills": "#A01CBB",
+    "rrg_skills": "#1F77B4",
+    "rrt_conservative": "#ff7f0e",
+    "rrg_reactive": "#2ca02c",
+
+    "prm": "#E21616",
+    "prm_incremental_frozen_lane": "#E21616",
+    "prm_incremental_stepwise_lane": "#FF6600",
+    "prm_single_frozen_lane": "#8C0000",
+    "prm_multi_frozen_lane": "#FF9E80",
+    "prm_phase3_outside": "#E21616",
+    "prm_phase3_inside": "#FF6600",
+    "prm_phase1": "#8C0000",
+    "prm_phase2": "#FF9E80",
+    "pp_naive": "#FFD61F",
+    "pp_conservative": "#B8860B",
+    "reactive_shortcut": "#0050C8",
+    "reactive_position_time": "#0050C8",
+    "rrg_reactive_position": "#8C6BB1",
+    "rrg_reactive_nowait": "#B15928",
+    "rrg_reactive_f2": "#6A9E00",
+    "rrg_reactive_f10": "#00857A",
+}
+
+rrt_skills_colors = [
+    "#90E93D",
+    "#1F77B4",
+    "#17BECF",
+    "#8C564B",
+    "#E377C2",
+    "#7F7F7F",
+]
+
+rrt_skills_styles = ["-", "--", ":", "-.", (0, (3, 1, 1, 1)), (0, (5, 1))]
+
+
+def get_planner_config(name, config):
+    return next((p for p in config.get("planners", []) if p.get("name") == name), None)
+
+
+def rrt_skills_index(name, config):
+    names = [
+        p["name"]
+        for p in config.get("planners", [])
+        if p.get("type", "") == "rrt_skills"
+    ]
+    return names.index(name) if name in names else None
+
+
 def get_planner_color(name, config):
-    p_cfg = next((p for p in config.get("planners", []) if p.get("name") == name), None)
+    if name in skill_benchmark_colors:
+        return skill_benchmark_colors[name]
+
+    idx = rrt_skills_index(name, config)
+    if idx is not None:
+        return rrt_skills_colors[idx % len(rrt_skills_colors)]
+
+    p_cfg = get_planner_config(name, config)
     if p_cfg:
         p_type = p_cfg.get("type", "")
-        opts = p_cfg.get("options", {})
         if p_type in ["prioritized", "prio"]:
-            return "#FFD61F"  # Yellow
+            return skill_benchmark_colors["pp"]
         if p_type == "prm":
-            phase = opts.get("skill_phase")
-            if phase == 1:
-                return "black"
-            if phase == 2:
-                return "limegreen"
-            if phase == 3:
-                return "deeppink" if opts.get("skill_batch_strategy", "outside") == "inside" else "dodgerblue"
+            return skill_benchmark_colors["prm"]
 
     if name not in planner_name_to_color:
         planner_name_to_color[name] = np.random.rand(3,)
     return planner_name_to_color[name]
 
 
+def get_ordered_planner_names(planner_names, config):
+    planner_name_set = set(planner_names)
+    ordered_names = [
+        planner["name"]
+        for planner in config.get("planners", [])
+        if planner.get("name") in planner_name_set
+    ]
+    ordered_names.extend(planner_names)
+    return list(dict.fromkeys(ordered_names))
+
+
+def get_planner_style(name, config):
+    idx = rrt_skills_index(name, config)
+    if idx is not None:
+        return rrt_skills_styles[idx % len(rrt_skills_styles)]
+    return planner_name_to_style.get(name, "-")
+
+
+def get_planner_label(name, config):
+    lower_name = name.lower()
+    if "prm" in lower_name:
+        return "PRM*"
+    if lower_name in ("pp", "prioritized", "prio") or lower_name.startswith("pp_"):
+        return "PP"
+    if "conservative" in lower_name:
+        return "Conservative"
+    if "reactive" in lower_name:
+        return "Reactive"
+    if "rrt" in lower_name:
+        return "RRT*"
+    if "rrg" in lower_name:
+        return "RRG"
+    return name
+
+
 def interpolate_costs(new_timesteps, times, costs):
-    # if not times or not costs or len(times) != len(costs) or not new_timesteps:
-    #     return []
     new_timesteps = np.asarray(new_timesteps)
     times = np.asarray(times)
     costs = np.asarray(costs)
 
-    # Verify times are monotonically increasing
     if np.any(np.diff(times) <= 0):
         raise ValueError("times must be monotonically increasing")
 
-    # Find insertion points for all new_timesteps at once
     indices = np.searchsorted(times, new_timesteps, side="right") - 1
 
-    # Create the output array
     result = np.empty_like(new_timesteps, dtype=float)
 
-    # Handle cases before first time
     before_start = indices < 0
     result[before_start] = np.inf
 
-    # Handle cases after or at last time
     after_end = indices >= len(times) - 1
     result[after_end] = costs[-1]
 
-    # Handle cases within the time range
     within_range = ~(before_start | after_end)
     result[within_range] = costs[indices[within_range]]
 
@@ -284,17 +347,16 @@ def make_cost_plots(
     save_as_png: bool = False,
     add_legend: bool = True,
     baseline_cost=None,
-    add_info: bool = False,
     final_max_time: Optional[float] = None,
-    logscale: bool = False,
+    logscale: bool = True,
     yticks: List[int] = [],
-    add_title=False
 ):
     plt.figure("Cost plot")
 
     max_time = 0
-    colors = {}
-    for planner_name, results in all_experiment_data.items():
+    planner_names = get_ordered_planner_names(all_experiment_data.keys(), config)
+    for planner_name in planner_names:
+        results = all_experiment_data[planner_name]
         all_initial_solution_times = []
         all_initial_solution_costs = []
 
@@ -329,14 +391,7 @@ def make_cost_plots(
         lb_initial_solution_cost = sorted_solution_costs[lb_index]
         ub_initial_solution_cost = sorted_solution_costs[ub_index - 1]
 
-        # if planner_name in planner_name_to_color:
-        #     color = planner_name_to_color[planner_name]
-        # else:
-        #     color = np.random.rand(
-        #         3,
-        #     )
         color = get_planner_color(planner_name, config)
-        colors[planner_name] = color
 
         plt.errorbar(
             [median_initial_solution_time],
@@ -357,7 +412,7 @@ def make_cost_plots(
             color=color,
             capsize=5,
             capthick=2,
-            label=planner_name,
+            label=get_planner_label(planner_name, config),
         )
 
     time_discretization = 1e-2
@@ -365,12 +420,12 @@ def make_cost_plots(
         max_time = final_max_time
     interpolated_solution_times = np.arange(0, max_time, time_discretization)
 
-    # plt.figure("Cost plot")
 
     max_non_inf_cost = 0
     min_non_inf_cost = np.inf
 
-    for planner_name, results in all_experiment_data.items():
+    for planner_name in planner_names:
+        results = all_experiment_data[planner_name]
         print(f"Constructing cost curve for {planner_name}")
         if len(results) == 0:
             print(f"Skipping {planner_name} since no solutions are available")
@@ -406,12 +461,9 @@ def make_cost_plots(
         ub_solution_cost = sorted_solution_costs[ub_index - 1, :]
 
         min_solution_cost = np.min(all_solution_costs, axis=0)
-        try:
-            max_solution_cost = np.max(ub_solution_cost[np.isfinite(ub_solution_cost)])
-        except:
-            min_solution_cost = np.min(all_solution_costs, axis=0)
-        if len(max_solution_cost[np.isfinite(max_solution_cost)]) > 0:
-            max_non_inf_cost = max(max_non_inf_cost, max_solution_cost)
+        finite_ub = ub_solution_cost[np.isfinite(ub_solution_cost)]
+        if len(finite_ub) > 0:
+            max_non_inf_cost = max(max_non_inf_cost, np.max(finite_ub))
 
         if len(min_solution_cost[np.isfinite(min_solution_cost)]) > 0:
             min_non_inf_cost = min(
@@ -421,11 +473,8 @@ def make_cost_plots(
 
         ub_solution_cost[~np.isfinite(ub_solution_cost)] = 1e6
 
-        color = colors[planner_name]
-
-        ls = "-"
-        if planner_name in planner_name_to_style:
-            ls = planner_name_to_style[planner_name]
+        color = get_planner_color(planner_name, config)
+        ls = get_planner_style(planner_name, config)
 
         if is_initial_solution_only:
             continue
@@ -437,7 +486,6 @@ def make_cost_plots(
             median_solution_cost[
                 interpolated_solution_times < max_planner_solution_time
             ],
-            # label=planner_name,
             color=color,
             ls=ls,
         )
@@ -448,7 +496,6 @@ def make_cost_plots(
             lb_solution_cost[interpolated_solution_times < max_planner_solution_time],
             ub_solution_cost[interpolated_solution_times < max_planner_solution_time],
             alpha=0.3,
-            # lw=2,
             color=color,
         )
 
@@ -477,25 +524,20 @@ def make_cost_plots(
         if ticks.size > 0:
             plt.yticks(ticks, [int(t) for t in ticks])
 
-    plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
+    if np.isfinite(min_non_inf_cost) and np.isfinite(max_non_inf_cost) and max_non_inf_cost > 0:
+        plt.ylim([0.9 * min_non_inf_cost, 1.1 * max_non_inf_cost])
 
-    if add_title:
-        scenario_name = config["environment"]
-        plt.title(scenario_name)
-
-    if add_legend:
-        if add_info:
-            legend_title = f"Environment: {config['environment']}\nNumber of runs: {config['num_runs']}"
-            existing_handles, _ = plt.gca().get_legend_handles_labels()
-            plt.legend(
-                handles=existing_handles,
-                title=legend_title,
-                title_fontsize="medium",
-                loc="best",
-                alignment="left",
-            )
-        else:
-            plt.legend()
+    if logscale and len(yticks) == 0:
+        ax = plt.gca()
+        lo, hi = ax.get_ylim()
+        if lo > 0 and hi > 0:
+            decades = range(int(np.floor(np.log10(lo))), int(np.ceil(np.log10(hi))) + 1)
+            candidates = [m * 10.0 ** k for k in decades for m in (1, 2, 3, 4, 5, 6, 8)]
+            round_ticks = [v for v in candidates if lo <= v <= hi]
+            if round_ticks:
+                ax.set_yticks(round_ticks)
+            ax.yaxis.set_major_formatter(plt.ScalarFormatter())
+            ax.yaxis.set_minor_formatter(plt.NullFormatter())
 
     if save:
         if foldername is None:
@@ -516,6 +558,10 @@ def make_cost_plots(
             bbox_inches="tight",
         )
 
+        if add_legend:
+            handles, labels = plt.gca().get_legend_handles_labels()
+            save_legend(handles, labels, f"{foldername}plots/legend_deterministic.{format}")
+
 
 def make_success_plot(
     all_experiment_data: Dict[str, Any],
@@ -524,7 +570,6 @@ def make_success_plot(
     foldername: Optional[str] = None,
     save_as_png: bool = False,
     add_legend: bool = True,
-    add_info: bool = False,
     final_max_time: Optional[float] = None,
 ):
     time_discretization = 1e-2
@@ -539,10 +584,20 @@ def make_success_plot(
 
     first_solution_found = 1e8
     len_results = config["num_runs"]
+    planner_names = get_ordered_planner_names(all_experiment_data.keys(), config)
 
-    for planner_name, results in all_experiment_data.items():
+    for planner_name in planner_names:
+        results = all_experiment_data[planner_name]
         if len(results) == 0:
-            print(f"Skipping {planner_name} since no solutions are available")
+            print(f"{planner_name} solved 0/{len_results} runs -- drawn at 0% success")
+            plt.semilogx(
+                interpolated_solution_times,
+                np.zeros_like(interpolated_solution_times),
+                color=get_planner_color(planner_name, config),
+                label=f"{get_planner_label(planner_name, config)} (0/{len_results})",
+                drawstyle="steps-post",
+                ls=get_planner_style(planner_name, config),
+            )
             continue
 
         all_solution_costs = []
@@ -565,49 +620,27 @@ def make_success_plot(
                 first_solution_found = min(first_solution_found, i)
                 break
 
-        # if planner_name in planner_name_to_color:
-        #     color = planner_name_to_color[planner_name]
-        # else:
-        #     color = np.random.rand(
-        #         3,
-        #     )
         color = get_planner_color(planner_name, config)
-
-        ls = "-"
-        if planner_name in planner_name_to_style:
-            ls = planner_name_to_style[planner_name]
+        ls = get_planner_style(planner_name, config)
         plt.semilogx(
             interpolated_solution_times,
             percentage_solution_found,
             color=color,
-            label=planner_name,
+            label=f"{get_planner_label(planner_name, config)} ({len(results)}/{len_results})",
             drawstyle="steps-post",
             ls=ls,
         )
 
-    plt.xlim(
-        [
-            interpolated_solution_times[first_solution_found] * 0.9,
-            interpolated_solution_times[-1],
-        ]
-    )
+    if first_solution_found < len(interpolated_solution_times):
+        plt.xlim(
+            [
+                interpolated_solution_times[first_solution_found] * 0.9,
+                interpolated_solution_times[-1],
+            ]
+        )
 
-    # plt.legend()
-    if add_legend:
-        if add_info:
-            legend_title = f"Environment: {config['environment']}\nNumber of runs: {config['num_runs']}"
-            existing_handles, _ = plt.gca().get_legend_handles_labels()
-            plt.legend(
-                handles=existing_handles,
-                title=legend_title,
-                title_fontsize="medium",
-                loc="best",
-                alignment="left",
-            )
-        else:
-            plt.legend()
     plt.grid(which="both", axis="both", ls="--")
-    plt.ylabel("Success [\%]")
+    plt.ylabel(r"Success [\%]")
     plt.xlabel("Computation Time [s]")
 
     if save:
@@ -628,6 +661,10 @@ def make_success_plot(
             dpi=300,
             bbox_inches="tight",
         )
+
+        if add_legend:
+            handles, labels = plt.gca().get_legend_handles_labels()
+            save_legend(handles, labels, f"{foldername}plots/legend_deterministic.{format}")
 
 
 def main():
@@ -657,12 +694,8 @@ def main():
     parser.add_argument(
         "--legend",
         action="store_true",
-        help="Add the legend to the plot (default: False)",
-    )
-    parser.add_argument(
-        "--info",
-        action="store_true",
-        help="Add general information to the plot legend (default: False)",
+        help="Also save a separate, framed legend_deterministic.<fmt> next to the plots "
+             "(default: False). The plots themselves never carry an in-panel legend.",
     )
     parser.add_argument(
         "--no_display",
@@ -670,9 +703,11 @@ def main():
         help="Display the resulting plots at the end. (default: False)",
     )
     parser.add_argument(
-        "--logscale",
+        "--linear",
         action="store_true",
-        help="Scale the y axis logarithmically. (default: False)",
+        help="Use a linear y axis instead of the default log scale. An anytime curve opens "
+             "5-10x above where it converges, and on a linear axis that drop flattens the part "
+             "that decides the comparison.",
     )
     parser.add_argument(
         "--yticks",
@@ -680,20 +715,9 @@ def main():
         type=str,
         help="Y ticks. (default: Lets matplotlib do it automatically.)",
     )
-    parser.add_argument(
-        "--dont_add_title",
-        action="store_true",
-        help="Add the exp name as title to the plot. (default: True)",
-    )
     parser.add_argument("--baseline_cost", type=float, default=None, help="Baseline")
     parser.add_argument(
         "--limited_max_time", type=float, default=None, help="Max time for the plot"
-    )
-    parser.add_argument(
-        "--exclude_planners",
-        default="",
-        type=str,
-        help="Comma-separated list of planner names to exclude from the plots.",
     )
     plot_group = parser.add_mutually_exclusive_group()
     plot_group.add_argument(
@@ -706,22 +730,16 @@ def main():
         action="store_true",
         help="Only generate the success plot",
     )
-    
     args = parser.parse_args()
 
     make_cost = not args.success_only
     make_success = not args.cost_only
 
-    if args.use_paper_style:
-        plt.style.use("./scripts/analysis/paper_2.mplstyle")
+    apply_style(args.use_paper_style)
 
     yticks = []
     if len(args.yticks) > 0:
         yticks = list(map(int, args.yticks.split(",")))
-
-    excluded_planners = set()
-    if len(args.exclude_planners) > 0:
-        excluded_planners = {p.strip() for p in args.exclude_planners.split(",") if p.strip()}
 
     foldername = args.foldername
     if foldername[-1] != "/":
@@ -730,7 +748,6 @@ def main():
     if args.recursive:
         root = foldername
 
-        # Find all subdirectories that contain a config.json
         subdirs = [
             os.path.join(root, d, "")
             for d in os.listdir(root)
@@ -748,11 +765,6 @@ def main():
                 all_experiment_data = load_data_from_folder(subfolder)
                 config = load_config_from_folder(subfolder)
 
-                if excluded_planners:
-                    all_experiment_data = {
-                        k: v for k, v in all_experiment_data.items() if k not in excluded_planners
-                    }
-
                 if make_cost:
                     make_cost_plots(
                         all_experiment_data,
@@ -762,11 +774,9 @@ def main():
                         save_as_png=args.png,
                         add_legend=args.legend,
                         baseline_cost=args.baseline_cost,
-                        add_info=args.info,
                         final_max_time=args.limited_max_time,
-                        logscale=args.logscale,
+                        logscale=not args.linear,
                         yticks=yticks,
-                        add_title=not args.dont_add_title
                     )
                     plt.close()
 
@@ -778,22 +788,16 @@ def main():
                         subfolder,
                         save_as_png=args.png,
                         add_legend=args.legend,
-                        add_info=args.info,
                         final_max_time=args.limited_max_time,
                     )
                     plt.close()
 
-            except:
-                print("failed plotting.")
+            except Exception as e:
+                print(f"failed plotting {subfolder}: {e}")
 
     else:
         all_experiment_data = load_data_from_folder(foldername)
         config = load_config_from_folder(foldername)
-
-        if excluded_planners:
-            all_experiment_data = {
-                k: v for k, v in all_experiment_data.items() if k not in excluded_planners
-            }
 
         if make_cost:
             make_cost_plots(
@@ -804,11 +808,9 @@ def main():
                 save_as_png=args.png,
                 add_legend=args.legend,
                 baseline_cost=args.baseline_cost,
-                add_info=args.info,
                 final_max_time=args.limited_max_time,
-                logscale=args.logscale,
+                logscale=not args.linear,
                 yticks=yticks,
-                add_title=not args.dont_add_title
             )
         if make_success:
             make_success_plot(
@@ -818,7 +820,6 @@ def main():
                 foldername,
                 save_as_png=args.png,
                 add_legend=args.legend,
-                add_info=args.info,
                 final_max_time=args.limited_max_time,
             )
 

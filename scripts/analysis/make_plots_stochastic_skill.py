@@ -1,0 +1,820 @@
+import argparse
+import subprocess
+import sys
+import json
+import os
+import pathlib
+
+import numpy as np
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.ticker import MaxNLocator
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from make_plots import interpolate_costs
+from compute_confidence_intervals import computeConfidenceInterval
+
+PLANNER_STYLE = {
+    "rrt": ("RRT*", "#A01CBB"),
+    "rrg": ("RRG", "#1F77B4"),
+    "prm": ("PRM*", "#E21616"),
+    "deterministic": ("Deterministic", "#1F77B4"),
+    "conservative": ("Conservative", "#ff7f0e"),
+    "reactive": ("Reactive", "#2ca02c"),
+    "prioritized": ("PP", "#FFD61F"),
+}
+
+
+def style(name: str):
+    n = name.lower()
+    if "reactive" in n:
+        kind = "reactive"
+    elif "conservative" in n or "rrt_stochastic" in n:
+        kind = "conservative"
+    elif "prioritized" in n or n.startswith("pp"):
+        kind = "prioritized"
+    elif "prm" in n:
+        kind = "prm"
+    elif "rrg" in n:
+        kind = "rrg"
+    elif "rrt" in n:
+        kind = "rrt"
+    else:
+        kind = "deterministic"
+    return (kind,) + PLANNER_STYLE[kind]
+
+
+FLAT = (6.6, 2.1)
+
+
+def apply_style(paper: bool = False):
+    if paper:
+        plt.style.use("./scripts/analysis/paper_2.mplstyle")
+        plt.rcParams.update({"savefig.bbox": "tight", "savefig.dpi": 300,
+                             "figure.figsize": FLAT,
+                             "axes.labelsize": 9, "xtick.labelsize": 8.5,
+                             "ytick.labelsize": 8.5, "legend.fontsize": 11,
+                             "figure.autolayout": False})
+        return
+    plt.rcParams.update({
+        "figure.figsize": FLAT,
+        "savefig.dpi": 300,
+        "savefig.bbox": "tight",
+        "font.size": 13,
+        "axes.labelsize": 13,
+        "xtick.labelsize": 12,
+        "ytick.labelsize": 12,
+        "axes.grid": True,
+        "grid.alpha": 0.4,
+        "grid.color": "0.5",
+        "grid.linestyle": "--",
+        "axes.axisbelow": True,
+        "legend.fontsize": 12,
+        "lines.linewidth": 2.0,
+    })
+
+
+def save_legend(handles, labels, out_path, ncol: int | None = None, handler_map=None):
+    if not handles:
+        return
+    fig = plt.figure(figsize=(FLAT[0], 0.6))
+    leg = fig.legend(handles, labels, loc="center", ncol=ncol or len(handles),
+                     frameon=True, fancybox=False, borderpad=0.6,
+                     handlelength=1.6, columnspacing=1.8, handler_map=handler_map)
+    leg.get_frame().set_edgecolor("0.75")
+    leg.get_frame().set_linewidth(0.8)
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+
+
+def save_planner_legend(experiment, out_path):
+    items = _pooled_series(experiment)
+    handles = [Line2D([0], [0], color=color, lw=2.5) for _, color, *_ in items]
+    labels = [distribution_label(label, data, len(costs), n_total)
+             for label, color, costs, n_total, data in items]
+    save_legend(handles, labels, out_path)
+
+
+def save_convergence_legend(experiment, out_path):
+    handles, labels = [], []
+    for _, _, label, color, data in planners_in_order(experiment):
+        if not data.get("curves"):
+            continue
+        handles.append(Line2D([0], [0], color=color, lw=2.5))
+        labels.append(run_label(label, data))
+    save_legend(handles, labels, out_path, ncol=2)
+
+
+def sparse_ticks(ax, nx: int = 4, ny: int | None = 3):
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=nx))
+    if ny is not None:
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=ny))
+
+
+def _read_rows(path: pathlib.Path):
+    rows = []
+    if not path.exists():
+        return rows
+    with open(path) as f:
+        for line in f:
+            line = line.strip().rstrip(",")
+            if not line:
+                continue
+            try:
+                rows.append([float(x) for x in line.split(",")])
+            except ValueError:
+                continue
+    return rows
+
+
+def load_anytime_curves(planner_dir: pathlib.Path, stem: str = ""):
+    curves, batches = [], []
+    for times, costs in zip(_read_rows(planner_dir / f"{stem}timestamps.txt"),
+                            _read_rows(planner_dir / f"{stem}costs.txt")):
+        n = min(len(times), len(costs))
+        t = np.asarray(times[:n], dtype=float)
+        c = np.asarray(costs[:n], dtype=float)
+        finite = np.isfinite(t) & np.isfinite(c)
+        if not finite.any():
+            continue
+        t, c = t[finite], c[finite]
+        if len(t) > 1 and np.all(t == t[0]):
+            batches.append(c)
+        else:
+            curves.append((t, c))
+    return curves, batches
+
+
+def curve_from_history(path: pathlib.Path):
+    if not path.exists():
+        return None
+    with open(path) as f:
+        hist = json.load(f)
+
+    t = float(hist.get("build_time") or 0.0)
+    times, costs = [], []
+    for h in hist.get("history", []):
+        t += h.get("improve_time", 0.0) + h.get("solve_time", 0.0)
+        v = float(h.get("V_start", np.inf))
+        if np.isfinite(v):
+            times.append(t)
+            costs.append(v)
+
+    if not times:
+        return None
+    return np.asarray(times), np.asarray(costs)
+
+
+def load_experiment(folder: pathlib.Path, exec_run: int | None = None):
+    config_path = folder / "config.json"
+    config = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            config = json.load(f)
+    env_name = config.get("environment", folder.name)
+
+    planners = {}
+    for planner_dir in sorted(folder.iterdir()):
+        if not planner_dir.is_dir() or "plots" in planner_dir.name:
+            continue
+
+        per_run = []
+        for run_dir in sorted(planner_dir.iterdir()):
+            exec_file = run_dir / "executions.json"
+            if exec_run is not None and run_dir.name != str(exec_run):
+                continue
+            if run_dir.is_dir() and exec_file.exists():
+                with open(exec_file) as f:
+                    run_execs = json.load(f)
+                if run_execs:
+                    for e in run_execs:
+                        e["_run_dir"] = str(run_dir)
+                    per_run.append(run_execs)
+        executions = [e for run_execs in per_run for e in run_execs]
+
+        curves, batches = load_anytime_curves(planner_dir)
+        realized_curves, _ = load_anytime_curves(planner_dir, stem="realized_")
+
+        phase_a_points, infinite_runs = [], 0
+        build_times, open_loop_success = [], []
+        for hist_path in sorted(planner_dir.glob("*/shortcut_history.json"),
+                                key=lambda q: int(q.parent.name) if q.parent.name.isdigit() else 0):
+            with open(hist_path) as f:
+                history = json.load(f)
+            phase_a_points.append(int(history.get("phase_a_points") or 0))
+            if history.get("build_time") is not None:
+                build_times.append(float(history["build_time"]))
+            if history.get("open_loop_success") is not None:
+                open_loop_success.append(float(history["open_loop_success"]))
+            rounds = history.get("history") or []
+            if rounds and not np.isfinite(float(rounds[-1].get("V_start", np.inf))):
+                infinite_runs += 1
+        n_total = len(executions)
+
+        if not executions and batches:
+            costs = np.concatenate(batches)
+            executions = [{"cost": float(c), "success": True} for c in costs]
+            n_total = max(int(config.get("num_runs", len(costs))), len(costs))
+            per_run = [executions]
+
+        nominal = not executions and bool(curves)
+        if nominal:
+            executions = [{"cost": float(c[-1]), "success": True} for _, c in curves]
+            n_total = len(executions)
+            per_run = [executions]
+
+        if not curves:
+            candidates = sorted(planner_dir.glob("*/shortcut_history.json"))
+            if style(planner_dir.name)[0] == "reactive":
+                candidates.append(folder / "shortcut_history.json")
+            for hist_path in candidates:
+                curve = curve_from_history(hist_path)
+                if curve is not None:
+                    curves.append(curve)
+
+        runs_planned = int(config.get("num_runs", len(per_run)) or len(per_run))
+        runs_solved = len(per_run) - infinite_runs
+        missing = runs_planned - len(per_run)
+        if exec_run is None and missing > 0:
+            per_execs = int(np.median([len(e) for e in per_run])) if per_run else 0
+            per_run = per_run + [[] for _ in range(missing)]
+            n_total += per_execs * missing
+
+        if executions or curves:
+            planners[planner_dir.name] = {
+                "executions": executions, "per_run": per_run, "curves": curves,
+                "realized_curves": realized_curves, "phase_a_points": phase_a_points,
+                "build_times": build_times, "open_loop_success": open_loop_success,
+                "nominal": nominal, "n_total": n_total,
+                "runs_planned": runs_planned, "runs_solved": runs_solved,
+            }
+
+    return {"env": env_name, "planners": planners}
+
+
+def planners_in_order(experiment):
+    order = list(PLANNER_STYLE)
+    items = sorted(((name,) + style(name) + (data,)
+                    for name, data in experiment["planners"].items()),
+                   key=lambda it: (order.index(it[1]), it[0]))
+
+    kinds = [it[1] for it in items]
+    seen = {}
+    out = []
+    for name, kind, label, color, data in items:
+        total = kinds.count(kind)
+        index = seen.get(kind, 0)
+        seen[kind] = index + 1
+        if total > 1:
+            label = name
+            rgb = mcolors.to_rgb(color)
+            f = 0.55 * index / (total - 1)
+            color = tuple(c + (1.0 - c) * f for c in rgb)
+        out.append((name, kind, label, color, data))
+    return out
+
+
+def _successful(executions):
+    costs = [r["cost"] for r in executions
+             if r.get("success") and r.get("cost") is not None and np.isfinite(r["cost"])]
+    return np.sort(np.asarray(costs, dtype=float))
+
+
+def realized(data):
+    runs = data["executions"]
+    return _successful(runs), max(data.get("n_total", 0), len(runs))
+
+
+def realized_per_run(data):
+    per_run = data.get("per_run") or []
+    if not per_run:
+        costs, n_total = realized(data)
+        return [(costs, n_total)] if len(costs) else []
+    widths = [len(e) for e in per_run if e]
+    default = int(np.median(widths)) if widths else 0
+    return [(_successful(execs), len(execs) or default) for execs in per_run]
+
+
+def median_and_band(stacked, band: str = "ci"):
+    stacked = np.asarray(stacked, dtype=float)
+    median = np.median(stacked, axis=0)
+    if len(stacked) < 2:
+        return median, None, None
+    if band == "quantile":
+        lb, ub = np.quantile(stacked, [0.05, 0.95], axis=0)
+        return median, lb, ub
+    lb_index, ub_index, _ = computeConfidenceInterval(len(stacked), 0.95)
+    ordered = np.sort(stacked, axis=0)
+    return median, ordered[lb_index, :], ordered[ub_index - 1, :]
+
+
+def distribution_label(label, data, n_ok, n_total):
+    if data["nominal"]:
+        return f"{label} (not executed)"
+    return f"{label} ({n_ok}/{n_total})"
+
+
+def run_label(label, data):
+    planned = int(data.get("runs_planned") or 0)
+    solved = int(data.get("runs_solved") or 0)
+    if planned > 1:
+        return f"{label} ({solved}/{planned} runs)"
+    return label
+
+
+def plot_cost_convergence(experiment, out_path):
+    series = []
+    for name, kind, label, color, data in planners_in_order(experiment):
+        runs = [(np.asarray(t), np.asarray(c)) for t, c in (data["curves"] or []) if len(t) > 1]
+        if runs:
+            series.append((label, color, runs, data.get("phase_a_points") or [], data))
+
+    if not series:
+        print("No anytime curves found for the convergence plot.")
+        return
+
+    t_max = max(t[-1] for _, _, runs, _, _ in series for t, _ in runs)
+    grid = np.arange(0.0, t_max, 1e-2)
+
+    fig, ax = plt.subplots()
+    for label, color, runs, phase_a_points, data in series:
+        trimmed = [(t[n:], c[n:]) for (t, c), n in
+                   zip(runs, list(phase_a_points) + [0] * len(runs)) if len(t) - n > 1]
+        if not trimmed:
+            continue
+        stacked = np.array([interpolate_costs(grid, t, c) for t, c in trimmed])
+        median = np.median(stacked, axis=0)
+        mask = np.isfinite(median)
+        ax.plot(grid[mask], median[mask], color=color, label=run_label(label, data))
+
+        if len(trimmed) > 1:
+            lb_index, ub_index, _ = computeConfidenceInterval(len(trimmed), 0.95)
+            sorted_costs = np.sort(stacked, axis=0)
+            lb, ub = sorted_costs[lb_index, :], sorted_costs[ub_index - 1, :]
+            band = mask & np.isfinite(lb) & np.isfinite(ub)
+            if band.any():
+                ax.fill_between(grid[band], lb[band], ub[band], color=color, alpha=0.2, lw=0)
+
+    ax.set_yscale("log")
+    lo, hi = ax.get_ylim()
+    decades = range(int(np.floor(np.log10(lo))), int(np.ceil(np.log10(hi))) + 1)
+    candidates = [m * 10.0 ** k for k in decades for m in (1, 2, 3, 4, 5, 6, 8)]
+    ticks = [v for v in candidates if lo <= v <= hi]
+    ax.set_yticks(ticks or [t for t in MaxNLocator(nbins=6).tick_values(lo, hi) if lo <= t <= hi])
+    ax.get_yaxis().set_major_formatter(plt.ScalarFormatter())
+    ax.get_yaxis().set_minor_formatter(plt.NullFormatter())
+    ax.set_xlabel("Planning time [s]")
+    ax.set_ylabel("Cost")
+    sparse_ticks(ax, nx=4, ny=None)
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def plot_cost_ecdf(experiment, out_path):
+    series = []
+    for name, kind, label, color, data in planners_in_order(experiment):
+        runs = realized_per_run(data)
+        if runs:
+            series.append((label, color, runs, data))
+
+    if not series:
+        print("No execution data found for the ECDF plot.")
+        return
+
+    all_costs = np.concatenate([c for _, _, runs, _ in series for c, _ in runs if len(c)])
+    if not len(all_costs):
+        print("No execution data found for the ECDF plot.")
+        return
+    pad = max((all_costs.max() - all_costs.min()) * 0.03, 1e-9)
+    grid = np.linspace(all_costs.min() - pad, all_costs.max() + pad, 1000)
+
+    fig, ax = plt.subplots()
+    for label, color, runs, data in series:
+        stacked = [np.searchsorted(costs, grid, side="right") / max(n_total, 1)
+                   for costs, n_total in runs]
+        _, lb, ub = median_and_band(stacked)
+
+        n_ok = sum(len(c) for c, _ in runs)
+        n_all = sum(n for _, n in runs)
+        pooled = np.concatenate([c for c, _ in runs if len(c)]) if n_ok else np.array([])
+        curve = np.searchsorted(np.sort(pooled), grid, side="right") / max(n_all, 1)
+        ax.step(grid, curve, where="post", color=color, linewidth=2.0,
+                label=distribution_label(label, data, n_ok, n_all))
+        if lb is not None:
+            ax.fill_between(grid, lb, ub, step="post", color=color, alpha=0.22, lw=0)
+
+    ax.set_xlabel("Realized cost")
+    ax.set_ylabel("eCDF")
+    ax.set_ylim(0, 1.03)
+    ax.set_xlim(grid[0], grid[-1])
+    sparse_ticks(ax, nx=4, ny=None)
+    ax.set_yticks([0.0, 0.5, 1.0])
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def _distribution_items(experiment, what: str):
+    items = []
+    for name, kind, label, color, data in planners_in_order(experiment):
+        costs, n_total = realized(data)
+        if len(costs) and n_total:
+            items.append((label, color, costs, n_total, data))
+    if not items:
+        print(f"No execution data found for the {what} plot.")
+    return items
+
+
+def outcome_branches(costs, min_size: int = 3, gap_factor: float = 6.0):
+    s = np.sort(np.asarray(costs, dtype=float))
+    gaps = np.diff(s)
+    if s.size < 2 * min_size or not len(gaps) or not np.any(gaps > 0):
+        return [s]
+
+    i = int(np.argmax(gaps))
+    if min(i + 1, s.size - i - 1) < min_size:
+        return [s]
+
+    material = max(abs(float(s.mean())), 1e-12) * 1e-6
+    if gaps[i] <= material:
+        return [s]
+
+    others = np.delete(gaps, i)
+    others = others[others > 0]
+    if not len(others):
+        return (outcome_branches(s[:i + 1], min_size, gap_factor)
+                + outcome_branches(s[i + 1:], min_size, gap_factor))
+    typical = float(np.median(others))
+    if typical <= 0 or gaps[i] <= gap_factor * typical:
+        return [s]
+    return (outcome_branches(s[:i + 1], min_size, gap_factor)
+            + outcome_branches(s[i + 1:], min_size, gap_factor))
+
+
+def _pooled_series(experiment):
+    out = []
+    for name, kind, label, color, data in planners_in_order(experiment):
+        runs = realized_per_run(data)
+        if not runs:
+            continue
+        costs = np.concatenate([c for c, _ in runs if len(c)]) if any(len(c) for c, _ in runs) \
+            else np.array([])
+        n_total = sum(n for _, n in runs)
+        if len(costs) and n_total:
+            out.append((label, color, np.sort(costs), n_total, data))
+    if not out:
+        print("No execution data found.")
+    return out
+
+
+def plot_cost_strip(experiment, out_path):
+    items = _distribution_items(experiment, "strip")
+    if not items:
+        return
+
+    fig, ax = plt.subplots(figsize=(FLAT[0], 1.5))
+    rng = np.random.default_rng(0)
+    rows = list(reversed(items))
+    for y, (label, color, costs, n_total, data) in enumerate(rows):
+        ax.scatter(costs, y + rng.normal(0, 0.055, costs.size), s=22, color=color,
+                   alpha=0.85, linewidths=0.7, edgecolors="white",
+                   label=distribution_label(label, data, len(costs), n_total))
+        ax.vlines(costs.mean(), y - 0.28, y + 0.28, color=color, lw=2.2)
+
+    ax.set_yticks([])
+    ax.set_ylim(-0.6, len(rows) - 0.4)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel("Realized cost")
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=4))
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def report_branches(experiment):
+    for name, kind, label, color, data in planners_in_order(experiment):
+        runs = realized_per_run(data)
+        if not runs:
+            continue
+        n_ok = sum(len(c) for c, _ in runs)
+        n_all = sum(n for _, n in runs)
+        print(f"  {label}: {n_ok}/{n_all} executed over {len(runs)} planning run(s)")
+        for i, (costs, n_total) in enumerate(runs):
+            if not len(costs):
+                print(f"    run {i}: 0/{n_total}, every execution failed")
+                continue
+            branches = outcome_branches(costs)
+            print(f"    run {i}: {len(costs)}/{n_total}, mean {costs.mean():.4f}, "
+                  f"{len(branches)} outcome branch(es)")
+            for branch in branches:
+                sd = float(branch.std(ddof=1)) if branch.size > 1 else 0.0
+                print(f"        n={branch.size:>3}  w={branch.size / n_total:.3f}  "
+                      f"mean={branch.mean():.4f}  sd={sd:.4f}")
+
+
+def plot_gantt_chart_comparative(experiment, out_path, legend_path=None):
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    import re
+    planners = experiment["planners"]
+    env_name = str(experiment.get("env", "")).lower()
+
+    reactive_name = next((p for p in planners if "reactive" in p.lower()), None)
+    conservative_name = next((p for p in planners if "conservative" in p.lower()), None)
+
+    if not reactive_name or not conservative_name:
+        return
+
+    def get_execs_by_index(planner_data):
+        per_run = planner_data.get("per_run") or [planner_data.get("executions", [])]
+        for run_execs in per_run:
+            valid = {r["index"]: r for r in run_execs if r.get("success") and r.get("timeline")}
+            if valid:
+                return valid
+        return {}
+
+    reac_execs = get_execs_by_index(planners[reactive_name])
+    cons_execs = get_execs_by_index(planners[conservative_name])
+
+    valid_indices = set(cons_execs.keys()).intersection(set(reac_execs.keys()))
+    if not valid_indices:
+        return
+
+    def clean_task_name(name):
+        name = str(name).lower()
+        name = re.sub(r'^(a|r|robot\s*)\d+\s+', '', name)
+
+        if "terminal" in name:
+            return "terminal"
+        if "home" in name:
+            return "home"
+        if "pre" in name and "pick" in name:
+            return "pre pick"
+        if "place" in name:
+            return "place"
+        if "pick" in name:
+            return "pick"
+        if "skill" in name:
+            return "skill"
+        if "visit" in name:
+            return "visit"
+        if "return" in name:
+            return "return"
+        if "forward" in name:
+            return "forward"
+        return re.sub(r'^[a-z]+\d+[_\s]+', '', name).replace("_", " ").strip() or name
+
+
+    def t_of(entry):
+        return entry.get("real_time", entry["time"])
+
+    is_complex_env = any(word in env_name for word in ["stacking", "packing", "picking", "transport"])
+
+    ROW_INCHES, CHROME_INCHES, LABEL_INCHES = 0.25, 1.1, 0.22
+
+    def _sized(n_panels, n_rows_each):
+        axes_h = ROW_INCHES * n_rows_each
+        fig, axes = plt.subplots(
+            n_panels, 1, sharex=True,
+            figsize=(12, CHROME_INCHES + n_panels * (axes_h + LABEL_INCHES)))
+        fig.subplots_adjust(hspace=LABEL_INCHES / axes_h)
+        return fig, axes
+
+    n_robots = len(next(iter(cons_execs.values()))["timeline"][0]["tasks"])
+
+    if is_complex_env:
+        target_idx = list(valid_indices)[0]
+        fig, axes = _sized(2, n_robots)
+        plot_configs = [
+            (axes[0], cons_execs[target_idx], "Conservative", target_idx),
+            (axes[1], reac_execs[target_idx], "Reactive", target_idx),
+        ]
+    else:
+        sorted_indices = sorted(valid_indices, key=lambda idx: reac_execs[idx].get("skill_duration", 0.0))
+        short_idx = sorted_indices[0]
+        long_idx = sorted_indices[-1]
+
+        fig, axes = _sized(4, n_robots)
+        plot_configs = [
+            (axes[0], cons_execs[short_idx], "Conservative", short_idx),
+            (axes[1], reac_execs[short_idx], "Reactive", short_idx),
+            (axes[2], cons_execs[long_idx], "Conservative", long_idx),
+            (axes[3], reac_execs[long_idx], "Reactive", long_idx),
+        ]
+
+    global_max_end = 0
+    for _, run, _, _ in plot_configs:
+        timeline = run["timeline"]
+        if timeline:
+            global_max_end = max(global_max_end, t_of(timeline[-1]))
+
+
+    FIXED_COLORS = {
+        "pick": ("dimgray", "red", ""),
+        "skill": ("dimgray", "red", ""),
+        "wait": ("dimgray", "black", "////"),
+        "terminal": ("#f4f4f4", "#999999", ""),
+    }
+    PALETTE = ["#add8e6", "#90ee90", "#ffb6c1", "#ffd8a8", "#c5b0e5", "#a8e6cf", "#f5cba7"]
+
+    present = []
+    for _, run, _, _ in plot_configs:
+        for entry in run["timeline"]:
+            for raw in (entry.get("task_names") or []):
+                label = clean_task_name(raw)
+                if label not in FIXED_COLORS and label not in present:
+                    present.append(label)
+    TASK_COLORS = dict(FIXED_COLORS)
+    for i, label in enumerate(present):
+        TASK_COLORS[label] = (PALETTE[i % len(PALETTE)], "black", "")
+    TASK_COLORS["default"] = ("#bdbdbd", "black", "")
+
+    drawn_labels = set()
+
+    for ax, run, planner_type, seed_idx in plot_configs:
+        timeline = run["timeline"]
+        if not timeline:
+            continue
+
+        num_robots = len(timeline[0]["tasks"])
+        max_end_step = 0
+
+        by_task = run.get("skill_seconds_by_task") or {}
+        fallback_dur = float(run.get("skill_duration") or 0.0) if not by_task else 0.0
+
+        _epochs = run.get("skill_epochs")
+        _epoch = (float(run["skill_duration"]) / float(_epochs)
+                  if _epochs and run.get("skill_duration") else 0.05)
+        wait_tol = 3.0 * _epoch
+
+        for r in range(num_robots):
+            blocks = []
+
+            runs_r = []
+            for i in range(len(timeline) - 1):
+                seg_start = t_of(timeline[i])
+                seg_end = t_of(timeline[i+1])
+                max_end_step = max(max_end_step, seg_end)
+
+                names = timeline[i].get("task_names")
+                if names and r < len(names):
+                    seg_name = names[r]
+                else:
+                    seg_name = f"T{timeline[i]['tasks'][r]}"
+
+                if runs_r and runs_r[-1][0] == seg_name and abs(runs_r[-1][2] - seg_start) < 1e-9:
+                    runs_r[-1][2] = seg_end
+                else:
+                    runs_r.append([seg_name, seg_start, seg_end])
+
+            for raw_name, start_step, end_step in runs_r:
+                clean_name = clean_task_name(raw_name)
+
+                if clean_name in ["pick", "skill"]:
+                    true_dur = float(by_task.get(raw_name, fallback_dur))
+                    window = end_step - start_step
+                    if true_dur > 1e-3 and window > true_dur + wait_tol:
+                        blocks.append({"start": start_step, "end": start_step + true_dur,
+                                       "name": clean_name})
+                        blocks.append({"start": start_step + true_dur, "end": end_step,
+                                       "name": "wait"})
+                        continue
+                    if true_dur <= 1e-3 and window > 1e-3:
+                        blocks.append({"start": start_step, "end": end_step, "name": "wait"})
+                        continue
+
+                blocks.append({"start": start_step, "end": end_step, "name": clean_name})
+
+            merged = []
+            for b in blocks:
+                if (merged and merged[-1]["name"] == b["name"]
+                        and b["name"] not in ("wait",)
+                        and abs(merged[-1]["end"] - b["start"]) < 1e-9):
+                    merged[-1]["end"] = b["end"]
+                else:
+                    merged.append(dict(b))
+            blocks = merged
+
+            for b in blocks:
+                duration = b["end"] - b["start"]
+                if duration <= 0: continue
+                c_name = b["name"]
+                color, edge, hatch = TASK_COLORS.get(c_name, TASK_COLORS["default"])
+                drawn_labels.add(c_name)
+
+                lw = 1.5 if edge == "red" else 0.8
+                zorder = 3 if edge == "red" else 2
+                ax.barh(r, duration, left=b["start"], height=0.5, color=color, edgecolor=edge,
+                         linewidth=lw, hatch=hatch, zorder=zorder)
+
+        for r in range(num_robots):
+            ax.vlines(max_end_step, r - 0.25, r + 0.25, color='black', linewidth=2)
+
+        ax.set_ylim(num_robots - 0.5, -0.5)
+        ax.set_yticks(range(num_robots))
+        ax.set_yticklabels([f"R{r+1}" for r in range(num_robots)], fontsize=12)
+        ax.text(0.0, 1.04, planner_type, transform=ax.transAxes, ha='left', va='bottom',
+                fontsize=10, fontweight='bold')
+        ax.grid(axis='x', alpha=0.3)
+        if ax != axes[-1]:
+            ax.tick_params(labelbottom=False)
+
+    skill_label = "Pick / Skill" if "pick" in drawn_labels else "Skill"
+    legend_elements = [
+        patches.Patch(facecolor='dimgray', edgecolor='red', linewidth=1.5, label=skill_label),
+        patches.Patch(facecolor='dimgray', edgecolor='black', hatch='////', label='Wait'),
+    ]
+    for label in present:
+        if label not in drawn_labels:
+            continue
+        face, edge, hatch = TASK_COLORS[label]
+        legend_elements.append(
+            patches.Patch(facecolor=face, edgecolor=edge, hatch=hatch,
+                          label=label.replace("_", " ").title()))
+    if "terminal" in drawn_labels:
+        legend_elements.append(
+            patches.Patch(facecolor='#f4f4f4', edgecolor='#999999', label='Terminal'))
+    if legend_path is not None:
+        save_legend(legend_elements, [h.get_label() for h in legend_elements], legend_path,
+                    ncol=len(legend_elements))
+
+    padding = max(2, global_max_end * 0.05)
+    axes[-1].set_xlim(left=0, right=global_max_end + padding)
+    axes[-1].set_xlabel("Elapsed time [s]", fontsize=12)
+
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("folder_paths", nargs='+', help="Experiment folder(s) (e.g. out/TIMESTAMP_env)")
+    parser.add_argument("--out", default=None, help="Output directory for plots")
+    parser.add_argument("--pdf", action="store_true", help="Save as PDF")
+    parser.add_argument("--no_legend", action="store_true", help="Hide legend")
+    parser.add_argument("--paper", action="store_true",
+                        help="Use paper_2.mplstyle (requires a LaTeX install)")
+    parser.add_argument("--exec_run", type=int, default=None,
+                        help="Restrict the ECDF/strip to ONE planning run's executions "
+                             "(e.g. 0). Without it every run is pooled, which mixes nature's "
+                             "spread with the planner's and multiplies the visible modes.")
+    args = parser.parse_args()
+
+    combined_experiment = {"env": None, "planners": {}}
+
+    for path_str in args.folder_paths:
+        folder = pathlib.Path(path_str)
+        if not folder.exists() or not folder.is_dir():
+            print(f"Warning: {folder} is not a valid directory. Skipping.")
+            continue
+
+        experiment = load_experiment(folder, args.exec_run)
+        if combined_experiment["env"] is None:
+            combined_experiment["env"] = experiment["env"]
+
+        if not experiment.get("planners"):
+            print(f"No planner data found in {folder}.")
+        else:
+            combined_experiment["planners"].update(experiment["planners"])
+
+    if not combined_experiment["planners"]:
+        print("No planner data found in any of the provided folders.")
+        return
+
+    if args.out:
+        out_dir = pathlib.Path(args.out)
+    else:
+        out_dir = pathlib.Path(args.folder_paths[0]) / "plots_stochastic"
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ext = "pdf" if args.pdf else "png"
+    legend = not args.no_legend
+    apply_style(args.paper)
+
+    print(f"Generating combined plots for {combined_experiment['env']}...")
+    plot_cost_convergence(combined_experiment, out_dir / f"cost_convergence.{ext}")
+    plot_cost_ecdf(combined_experiment, out_dir / f"cost_ecdf.{ext}")
+    plot_cost_strip(combined_experiment, out_dir / f"cost_strip.{ext}")
+    plot_gantt_chart_comparative(
+        combined_experiment, out_dir / f"gantt_chart_comparative.{ext}",
+        legend_path=(out_dir / f"legend_gantt.{ext}") if legend else None)
+    if legend:
+        save_planner_legend(combined_experiment, out_dir / f"legend_stochastic.{ext}")
+        save_convergence_legend(combined_experiment, out_dir / f"legend_convergence.{ext}")
+    report_branches(combined_experiment)
+
+    env = combined_experiment["env"] or ""
+    if any(tag in env for tag in ("square_island", "rectangle_island", "shared_point")):
+        top_down = pathlib.Path(__file__).with_name("make_plots_stochastic_topdown.py")
+        cmd = [sys.executable, str(top_down), args.folder_paths[0], "--out", str(out_dir)]
+        if args.pdf:
+            cmd.append("--pdf")
+        if args.no_legend:
+            cmd.append("--no_legend")
+        if args.paper:
+            cmd.append("--paper")
+        subprocess.run(cmd, check=False)
+
+    print(f"Saved plots to {out_dir}")
+
+
+if __name__ == "__main__":
+    main()
