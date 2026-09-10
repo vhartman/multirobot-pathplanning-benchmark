@@ -195,9 +195,9 @@ def main():
         config.distance_metric = args.distance_metric
         planner = RRTSkills(env, config)
 
-    # Stochastic planners have their own runner scripts, not a --planner choice here:
+    # Stochastic planners that need per-execution replay have their own runner scripts, not a --planner choice here:
     # - rrt_skills_conservative (scripts/run_conservative_planner.py)
-    # - rrt_skills_reactive (scripts/run_reactive_roadmap.py, run_reactive_policy.py) # TODO
+    # - rrt_skills_reactive (scripts/run_reactive_roadmap.py, run_reactive_planner.py) # TODO
 
     np.random.seed(args.seed + args.run_id)
     random.seed(args.seed + args.run_id)

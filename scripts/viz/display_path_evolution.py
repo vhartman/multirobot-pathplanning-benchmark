@@ -85,7 +85,10 @@ def main():
         f
         for f in os.listdir(args.folder)
         if os.path.isfile(os.path.join(args.folder, f))
+        and f.startswith("path_") and f.endswith(".json")
     ]
+    if not files:
+        raise SystemExit(f"No path_*.json in {args.folder}")
     path_nums = [int(f[5:-5]) for f in files]
     sorted_files = [x for _, x in sorted(zip(path_nums, files))]
     folder_path = re.match(r'(.*?/out/[^/]+)', args.folder).group(1)
