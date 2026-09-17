@@ -400,7 +400,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             i += 1
             # Mode selection
             active_mode = self.random_mode()
-            # print(active_mode)
+            print(active_mode)
             # Optionally add a new transition seed to subtree B
             if (
                 self.config.p_reseed_transition > 0
@@ -422,11 +422,15 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not state_new:
                 continue
 
+            # if active_mode.task_ids == [26, 19, 23, 19]:
+            #     self.env.C.view(True)
+
             if self._check_config_cf(
                 state_new.q, active_mode
             ) and self._check_edge_cf(
                 n_nearest.state.q, state_new.q, active_mode
             ):
+                # print('feasible')
                 n_new = Node(state_new, self.operation)
                 if np.equal(n_new.state.q.state(), q_rand.state()).all():
                     N_near_batch, n_near_costs, node_indices = self.near(
@@ -453,6 +457,9 @@ class BidirectionalRRTstar(BaseRRTstar):
                     self.update_cost(active_mode, n_new)
                 self.connect(active_mode, n_new)
                 self.manage_transition(active_mode, n_new)
+            # else:
+            #     if active_mode.task_ids == [32, 28, 32, 28]:
+            #         self.env.C.view(True)
             
             if self.swap:
                 self.trees[active_mode].swap(self.config.balanced_trees)

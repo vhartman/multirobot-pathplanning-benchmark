@@ -538,6 +538,13 @@ class rai_env(BaseProblem):
             # print(m)
             return False
 
+        # print(col)
+        # colls = self.C.getCollisions()
+        # for c in colls:
+        #     if c[2] < 0:
+        #         print(c)
+        # print()
+
         return True
 
     def is_collision_free_for_robot(

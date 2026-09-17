@@ -1065,14 +1065,19 @@ class BaseRRTstar(BasePlanner):
         failed_attempts = 0
         while True:
             if failed_attempts > 10000:
-                print("Failed to sample transition configuration after 10000 attempts.")
+                print(f"Failed to sample transition configuration after 10000 attempts in mode {mode}.")
+                next_ids = self.mode_validation.get_valid_next_ids(mode)
+                task = self.env.get_active_task(mode, next_ids)
+                print("Task name:", task.name)
+                
+                # self.env.C.view(True)
                 if self.config.with_mode_validation:
                     self.mode_validation.add_invalid_mode(mode)
                     self.mode_validation.propagate_invalid(mode.prev_mode)
                     self.modes = self.mode_validation.remove_invalid_modes(self.modes)
-                else:
-                    self.blacklist_mode.add(mode)
-                    self.modes.remove(mode)
+                # else:
+                #     self.blacklist_mode.add(mode)
+                #     self.modes.remove(mode)
 
                 return
 
