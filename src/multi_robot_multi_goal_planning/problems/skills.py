@@ -46,6 +46,8 @@ class DeterministicBaseSkill(ABC):
     """
     Rollout deterministic untimed skill till convergence
     """
+    env.C.selectJoints(all_joints)
+    q_orig = env.C.getJointState()
     env.C.selectJoints(task.skill.joints) # Restrict to subspace
     q = q_init.copy()
     trajectory = [q]
@@ -60,6 +62,7 @@ class DeterministicBaseSkill(ABC):
             break
         
     env.C.selectJoints(all_joints) # Restore full space
+    env.C.setJointState(q_orig)
     return SkillRolloutResult(
         trajectory=np.array(trajectory),
         times=np.array(times),
@@ -88,6 +91,8 @@ class StochasticBaseSkill(ABC):
     """
     Rollout stochastic untimed skill till convergence or max_steps.
     """
+    env.C.selectJoints(all_joints)
+    q_orig = env.C.getJointState()
     env.C.selectJoints(task.skill.joints)
     q = q_init.copy()
     trajectory = [q]
@@ -102,6 +107,7 @@ class StochasticBaseSkill(ABC):
             break
             
     env.C.selectJoints(all_joints)
+    env.C.setJointState(q_orig)
     return SkillRolloutResult(
         trajectory=np.array(trajectory),
         times=np.array(times),
@@ -126,6 +132,8 @@ class BaseDeterministicTimedSkill(ABC):
     """
     Rollout deterministic timed skill for fixed duration
     """
+    env.C.selectJoints(all_joints)
+    q_orig = env.C.getJointState()
     env.C.selectJoints(task.skill.joints) # Restrict to subspace
     n_steps = max(1, round(self.duration / self.dt))
     q = q_init.copy()
@@ -142,6 +150,7 @@ class BaseDeterministicTimedSkill(ABC):
             break
     
     env.C.selectJoints(all_joints) # Restore full space
+    env.C.setJointState(q_orig)
     return SkillRolloutResult(
         trajectory=np.array(trajectory),
         times=np.array(times),
@@ -170,6 +179,8 @@ class BaseStochasticTimedSkill(ABC):
     """
     Rollout stochastic timed skill for fixed duration
     """
+    env.C.selectJoints(all_joints)
+    q_orig = env.C.getJointState()
     env.C.selectJoints(task.skill.joints) 
     n_steps = max(1, round(self.duration / self.dt))
     q = q_init.copy()
@@ -186,6 +197,7 @@ class BaseStochasticTimedSkill(ABC):
             break
     
     env.C.selectJoints(all_joints) 
+    env.C.setJointState(q_orig)
     return SkillRolloutResult(
         trajectory=np.array(trajectory),
         times=np.array(times),
@@ -835,6 +847,61 @@ class VariableDurationTimedSkill(BaseStochasticTimedSkill):
     self.duration = self.duration_max  # restore default
     return result
 
+class VariableDurationEESkill(BaseStochasticTimedSkill):
+  """
+  Similar to VariableDurationTimedSkill, but interpolates in Euclidean space (using EEPoseGoalReaching)
+  instead of joint space, moving the end effector to a target pose over a random duration
+  """
+  def __init__(self, joints, ee_name, goal_pose, duration_min, duration_max, dt=0.05, distribution="uniform", ik_gain=1.0, max_step=0.1):
+    super().__init__(joints, dt=dt)
+    self.ee_name = ee_name
+    self.goal_pose = np.asarray(goal_pose, dtype=np.float64)
+    self.duration_min = duration_min
+    self.duration_max = duration_max
+    self.duration = duration_max
+    self.distribution = distribution
+    self.is_deterministic = True
+
+    self.servo = EEPoseGoalReaching(joints, self.goal_pose, ee_name, dt=dt, ik_gain=ik_gain, scale_stepsize=True, max_step=max_step)
+
+  def step(self, t, q, env):
+    dt_norm = self.dt / self.duration
+    time_left = 1.0 - t + dt_norm
+    if time_left <= 1e-5:
+      return self.servo.step(q, env)
+
+    env.C.setJointState(q, self.joints)
+    current_pose = env.C.getFrame(self.ee_name).getPose()
+
+    # Interpolate pose
+    interp_pose = current_pose + (self.goal_pose - current_pose) * (dt_norm / time_left)
+    if np.dot(current_pose[3:], self.goal_pose[3:]) < 0:
+      interp_pose[3:] = current_pose[3:] + (-self.goal_pose[3:] - current_pose[3:]) * (dt_norm / time_left)
+
+    interp_pose[3:] = interp_pose[3:] / np.linalg.norm(interp_pose[3:])
+
+    self.servo.goal_pose = interp_pose
+    q_new = self.servo.step(q, env)
+    self.servo.goal_pose = self.goal_pose # restore
+
+    return q_new
+
+  def done(self, t, q, env):
+    return t >= 1.0
+
+  def rollout(self, q_init, task, all_joints, env, t0):
+    if self.distribution == "bimodal":
+      duration_choice = float(np.random.choice([self.duration_min, self.duration_max]))
+      branch = 0 if duration_choice == self.duration_min else 1
+      self.duration = duration_choice
+    else:
+      self.duration = float(np.random.uniform(self.duration_min, self.duration_max))
+      branch = None
+    result = super().rollout(q_init, task, all_joints, env, t0)
+    result.branch_idx = branch
+    self.duration = self.duration_max
+    return result
+
 class DummyStochasticUntimedSkill(StochasticBaseSkill):
   """
   Untimed version of DummyStochasticSkill
@@ -931,7 +998,7 @@ class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
   and "reconverge via a corridor of waypoints" (branches=[{"waypoints": [v1, v2]}, ...])
   """
   def __init__(self, joints, branches, target, dt=0.01, noise_bound=0.2, is_deterministic=False,
-               duration=1.0, branch_dim=0, commit_eps=1e-3, branch_bias=0.5, checkpoint_times=None):
+               duration=1.0, branch_dim=0, commit_eps=1e-3, branch_bias=0.5, checkpoint_times=None, durations=None, constant_speed=False):
     super().__init__(joints, dt=dt)
     self.branches = [
       {"waypoints": [np.array(w, dtype=np.float64) for w in b["waypoints"]]}
@@ -939,12 +1006,14 @@ class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
     ]
     self.target = np.array(target, dtype=np.float64)
     self.duration = duration
+    self.durations = durations
     self.noise_bound = noise_bound
     self.is_deterministic = is_deterministic
     self.branch_dim = branch_dim
     self.commit_eps = commit_eps
     self.branch_bias = branch_bias
     self.branch_idx = 0
+    self.constant_speed = constant_speed
     
     n_checkpoints = len(self.branches[0]["waypoints"]) + 1 # + final target
     self.checkpoint_times = (
@@ -986,6 +1055,18 @@ class ReconvergingBimodalStochasticSkill(BaseStochasticTimedSkill):
     else:
       idx = 0 if v >= 0 else 1
     self.branch_idx = idx
+    if self.durations is not None:
+      self.duration = self.durations[idx]
+
+    if self.constant_speed:
+      checkpoints = [q_init] + self.branches[idx]["waypoints"] + [self.target]
+      dists = [np.linalg.norm(checkpoints[i+1] - checkpoints[i]) for i in range(len(checkpoints)-1)]
+      total_dist = sum(dists)
+      if total_dist > 1e-6:
+          self.checkpoint_times = np.cumsum(dists) / total_dist
+      else:
+          n_checkpoints = len(self.branches[idx]["waypoints"]) + 1
+          self.checkpoint_times = np.linspace(1.0 / n_checkpoints, 1.0, n_checkpoints)
     
     result = super().rollout(q_init, task, all_joints, env, t0)
     result.branch_idx = idx
