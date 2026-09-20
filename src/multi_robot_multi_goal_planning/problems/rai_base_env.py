@@ -1,7 +1,7 @@
 import robotic as ry
 import numpy as np
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 from numpy.typing import NDArray
 
 from .rai.rai_config import get_robot_joints
@@ -260,7 +260,7 @@ def delete_visual_only_frames(C):
     C_coll.addConfigurationCopy(C)
 
     def visual_only(f):
-        info = f.info()
+        info = f.info() if hasattr(f, 'info') else f.asDict()
         return info.get("shape") == "mesh" and not info.get("contact")
 
     # delFrame ORPHANS children (parent=None), so a mesh may be removed only if nothing that
@@ -679,8 +679,9 @@ class rai_env(BaseProblem):
         # print('q1', q1)
         # print('q2', q2)
         if N is None:
-            N = int(config_dist(q1, q2, "max") / resolution) + 1
-            N = max(2, N)
+            # Use enough samples to keep interpolation spacing at or below the collision resolution, with at least one interior sample
+            N = int(np.ceil(config_dist(q1, q2, "max") / resolution)) + 1
+            N = max(3, N)
 
         if N_start > N:
             assert False
@@ -847,7 +848,7 @@ class rai_env(BaseProblem):
                         self.tasks[prev_mode_index].frames[1],
                     )
                     frame = tmp.getFrame(self.tasks[prev_mode_index].frames[1])
-                    info = frame.info()
+                    info = frame.info() if hasattr(frame, 'info') else frame.asDict()
                     if frame.getShapeType() != ry.ST.none and info.get("contact"):
                         tmp.getFrame(self.tasks[prev_mode_index].frames[1]).setContact(-1)
 
