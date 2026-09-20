@@ -2096,7 +2096,7 @@ class rai_dep_stochastic_switch(DependencyGraphMixin, rai_stochastic_switch_base
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# TODO NEW "STOCHASTIC" SKILLS 2D ENVS
+# Stochastic skills 2D envs (simple switch with uncertain duration)
 class rai_shared_point_base(rai_env):
     def __init__(self, distribution="uniform"):
         self.C = rai_config.make_shared_point_env()
@@ -2303,7 +2303,7 @@ class rai_dep_stochastic_switch_pick_place(DependencyGraphMixin, rai_stochastic_
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# Stochastic untimed skills 2D envs (to show conservative stochastic planner's limitations)
+# Stochastic untimed skills 2D envs (not needed anymore)
 class rai_untimed_stochastic_switch_base(rai_env):
     def __init__(self):
         self.C = rai_config.make_stochastic_switch_env()
@@ -3089,9 +3089,6 @@ class rai_stochastic_grasping_env(SequenceMixin, rai_env):
             self.safe_pose[r] = np.array(self.C.getJointState()[self.robot_idx[r]])
 
 
-# For noise sweep
-NOISE_LEVELS = (0.0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5)
-
 _STACKING_SHAPES = [
     ("2r_2b", {"num_robots": 2, "num_boxes": 2}),
     ("2r_4b", {"num_robots": 2, "num_boxes": 4}),
@@ -3226,7 +3223,6 @@ class rai_stochastic_stacking_base(rai_env):
 @register(
     [("rai.dep_stochastic_stacking", {})]
     + [(f"rai.dep_stochastic_stacking_{shape}", dict(kwargs)) for shape, kwargs in _STACKING_SHAPES]
-    + [(f"rai.dep_stochastic_stacking_{shape}_noise{int(round(level * 100)):03d}", {**kwargs, "noise": level}) for shape, kwargs in _STACKING_SHAPES for level in NOISE_LEVELS]
 )
 class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_stochastic_stacking_base):
     def __init__(self, num_robots: int = 2, num_boxes: int = 3, skill_place: bool = False, noise: float = 1.0, seed: int = 0):
@@ -3242,7 +3238,6 @@ class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_stochastic_stacking_
 @register(
     [("rai.dep_stochastic_spread_stacking", {})]
     + [(f"rai.dep_stochastic_spread_stacking_{shape}", dict(kwargs)) for shape, kwargs in _SPREAD_SHAPES]
-    + [(f"rai.dep_stochastic_spread_stacking_{shape}_noise{int(round(level * 100)):03d}", {**kwargs, "noise": level}) for shape, kwargs in _SPREAD_SHAPES for level in NOISE_LEVELS]
 )
 class rai_dep_stochastic_spread_stacking(DependencyGraphMixin, rai_stochastic_stacking_base):
     def __init__(self, num_robots: int = 2, num_boxes: int = 4, skill_place: bool = False,
@@ -3261,7 +3256,6 @@ class rai_dep_stochastic_spread_stacking(DependencyGraphMixin, rai_stochastic_st
 @register(
     [("rai.stochastic_sequence_spread_stacking", {})]
     + [(f"rai.stochastic_sequence_spread_stacking_{shape}", dict(kwargs)) for shape, kwargs in _SPREAD_SHAPES]
-    + [(f"rai.stochastic_sequence_spread_stacking_{shape}_noise{int(round(level * 100)):03d}", {**kwargs, "noise": level}) for shape, kwargs in _SPREAD_SHAPES for level in NOISE_LEVELS]
 )
 class rai_stochastic_sequence_spread_stacking(SequenceMixin, rai_stochastic_stacking_base):
     def __init__(self, num_robots: int = 2, num_boxes: int = 4, skill_place: bool = False,
