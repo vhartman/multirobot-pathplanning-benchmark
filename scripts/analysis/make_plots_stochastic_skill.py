@@ -80,7 +80,7 @@ def save_legend(handles, labels, out_path, ncol: int | None = None, handler_map=
         return
     fig = plt.figure(figsize=(FLAT[0], 0.6))
     leg = fig.legend(handles, labels, loc="center", ncol=ncol or len(handles),
-                     frameon=True, fancybox=False, borderpad=0.6,
+                     frameon=True, fancybox=False, borderpad=0.6, fontsize=14,
                      handlelength=1.6, columnspacing=1.8, handler_map=handler_map)
     leg.get_frame().set_edgecolor("0.75")
     leg.get_frame().set_linewidth(0.8)
@@ -234,7 +234,7 @@ def load_experiment(folder: pathlib.Path, exec_run: int | None = None):
                     curves.append(curve)
 
         runs_planned = int(config.get("num_runs", len(per_run)) or len(per_run))
-        runs_solved = len(per_run) - infinite_runs
+        runs_solved = len(per_run)
         missing = runs_planned - len(per_run)
         if exec_run is None and missing > 0:
             per_execs = int(np.median([len(e) for e in per_run])) if per_run else 0
@@ -298,15 +298,18 @@ def realized_per_run(data):
 
 def median_and_band(stacked, band: str = "ci"):
     stacked = np.asarray(stacked, dtype=float)
-    median = np.median(stacked, axis=0)
+    finite_count = np.sum(np.isfinite(stacked), axis=0)
+    min_runs = max(1, int(np.ceil(len(stacked) / 2)))
+    median = np.nanmedian(stacked, axis=0)
+    median[finite_count < min_runs] = np.nan
     if len(stacked) < 2:
         return median, None, None
-    if band == "quantile":
-        lb, ub = np.quantile(stacked, [0.05, 0.95], axis=0)
-        return median, lb, ub
-    lb_index, ub_index, _ = computeConfidenceInterval(len(stacked), 0.95)
-    ordered = np.sort(stacked, axis=0)
-    return median, ordered[lb_index, :], ordered[ub_index - 1, :]
+    lb = np.full(stacked.shape[1], np.nan)
+    ub = np.full(stacked.shape[1], np.nan)
+    enough = finite_count == len(stacked)
+    lb[enough] = np.nanpercentile(stacked[:, enough], 25, axis=0)
+    ub[enough] = np.nanpercentile(stacked[:, enough], 75, axis=0)
+    return median, lb, ub
 
 
 def distribution_label(label, data, n_ok, n_total):
@@ -337,41 +340,116 @@ def plot_cost_convergence(experiment, out_path):
     t_max = max(t[-1] for _, _, runs, _, _ in series for t, _ in runs)
     grid = np.arange(0.0, t_max, 1e-2)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(FLAT[0] * 2/3, FLAT[1]))
+    min_cost, max_cost = np.inf, -np.inf
+
     for label, color, runs, phase_a_points, data in series:
         trimmed = [(t[n:], c[n:]) for (t, c), n in
                    zip(runs, list(phase_a_points) + [0] * len(runs)) if len(t) - n > 1]
         if not trimmed:
             continue
-        stacked = np.array([interpolate_costs(grid, t, c) for t, c in trimmed])
-        median = np.median(stacked, axis=0)
+
+        stacked = np.array([interpolate_costs(grid, t, c, before_value=np.nan)
+                            for t, c in trimmed])
+        finite_count = np.sum(np.isfinite(stacked), axis=0)
+        min_runs = max(1, int(np.ceil(len(trimmed) / 2)))
+        median = np.nanmedian(stacked, axis=0)
+        median[finite_count < min_runs] = np.nan
+        lb = ub = None
+
         mask = np.isfinite(median)
+        finite_vals = stacked[np.isfinite(stacked)]
+        if len(finite_vals) > 0:
+            min_cost = min(min_cost, float(np.min(finite_vals)))
+            max_cost = max(max_cost, float(np.max(finite_vals)))
+
         ax.plot(grid[mask], median[mask], color=color, label=run_label(label, data))
 
         if len(trimmed) > 1:
-            lb_index, ub_index, _ = computeConfidenceInterval(len(trimmed), 0.95)
-            sorted_costs = np.sort(stacked, axis=0)
-            lb, ub = sorted_costs[lb_index, :], sorted_costs[ub_index - 1, :]
-            band = mask & np.isfinite(lb) & np.isfinite(ub)
+            lb = np.full(stacked.shape[1], np.nan)
+            ub = np.full(stacked.shape[1], np.nan)
+            enough = finite_count == len(trimmed)
+            lb[enough] = np.nanpercentile(stacked[:, enough], 25, axis=0)
+            ub[enough] = np.nanpercentile(stacked[:, enough], 75, axis=0)
+            band = mask & enough & np.isfinite(lb) & np.isfinite(ub)
             if band.any():
                 ax.fill_between(grid[band], lb[band], ub[band], color=color, alpha=0.2, lw=0)
 
     ax.set_yscale("log")
+    if min_cost < np.inf and max_cost > -np.inf:
+        ax.set_ylim(min_cost * 0.9, max_cost * 1.1)
+
     lo, hi = ax.get_ylim()
     decades = range(int(np.floor(np.log10(lo))), int(np.ceil(np.log10(hi))) + 1)
-    candidates = [m * 10.0 ** k for k in decades for m in (1, 2, 3, 4, 5, 6, 8)]
-    ticks = [v for v in candidates if lo <= v <= hi]
-    ax.set_yticks(ticks or [t for t in MaxNLocator(nbins=6).tick_values(lo, hi) if lo <= t <= hi])
+    ticks = [t for t in MaxNLocator(nbins=3).tick_values(lo, hi) if lo <= t <= hi]
+    if not ticks:
+        ticks = [lo, (lo+hi)/2.0, hi]
+    ax.set_yticks(ticks)
     ax.get_yaxis().set_major_formatter(plt.ScalarFormatter())
     ax.get_yaxis().set_minor_formatter(plt.NullFormatter())
-    ax.set_xlabel("Planning time [s]")
-    ax.set_ylabel("Cost")
+    ax.set_xlabel("Planning time [s]", fontsize=18)
+    ax.set_ylabel("Cost", fontsize=18)
+    ax.tick_params(axis='both', which='major', labelsize=16)
     sparse_ticks(ax, nx=4, ny=None)
     fig.savefig(out_path)
     plt.close(fig)
 
 
-def plot_cost_ecdf(experiment, out_path):
+def plot_cost_epdf(experiment, out_path, bins: int | None = None):
+    series = []
+    for name, kind, label, color, data in planners_in_order(experiment):
+        runs = realized_per_run(data)
+        if runs:
+            series.append((label, color, runs, data))
+
+    valid_costs = [c for _, _, runs, _ in series for c, _ in runs if len(c)]
+    if not valid_costs:
+        print("No execution data found for the EPDF plot.")
+        return
+
+    all_costs = np.concatenate(valid_costs)
+    lo, hi = float(all_costs.min()), float(all_costs.max())
+    if hi - lo < 1e-9:
+        lo, hi = lo - 0.5, hi + 0.5
+    if bins is None:
+        bins = 100
+    pad = (hi - lo) * 0.03
+    edges = np.linspace(lo - pad, hi + pad, bins + 1)
+    widths = np.diff(edges)
+
+    fig, ax = plt.subplots(figsize=(FLAT[0] * 2/3, FLAT[1]))
+    max_density = 0.0
+    for label, color, runs, data in series:
+        n_ok = sum(len(c) for c, _ in runs)
+        n_all = sum(n for _, n in runs)
+        pooled = np.concatenate([c for c, _ in runs if len(c)]) if n_ok else np.array([])
+        counts, _ = np.histogram(pooled, bins=edges)
+        density = counts / (max(n_all, 1) * widths)
+        max_density = max(max_density, float(density.max()))
+        ax.stairs(density, edges, fill=True, color=color, alpha=0.25, lw=0)
+        ax.stairs(density, edges, color=color, linewidth=2.0,
+                  label=distribution_label(label, data, n_ok, n_all))
+
+    ax.set_xlabel("Realized cost", fontsize=18)
+    ax.set_ylabel("ePDF", fontsize=18)
+    if max_density > 0:
+        ax.set_ylim(bottom=0, top=max_density * 1.1)
+    ax.set_xlim(edges[0], edges[-1])
+    sparse_ticks(ax, nx=4, ny=3)
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def plot_cost_ecdf(experiment, out_path, generate_epdf: bool = True, bins: int | None = None):
+    if generate_epdf:
+        out_p = pathlib.Path(out_path)
+        if "ecdf" in out_p.name:
+            epdf_path = out_p.with_name(out_p.name.replace("ecdf", "epdf"))
+        else:
+            epdf_path = out_p.parent / f"epdf_{out_p.name}"
+        plot_cost_epdf(experiment, epdf_path, bins=bins)
+
     series = []
     for name, kind, label, color, data in planners_in_order(experiment):
         runs = realized_per_run(data)
@@ -382,14 +460,16 @@ def plot_cost_ecdf(experiment, out_path):
         print("No execution data found for the ECDF plot.")
         return
 
-    all_costs = np.concatenate([c for _, _, runs, _ in series for c, _ in runs if len(c)])
-    if not len(all_costs):
+    valid_costs = [c for _, _, runs, _ in series for c, _ in runs if len(c)]
+    if not valid_costs:
         print("No execution data found for the ECDF plot.")
         return
+
+    all_costs = np.concatenate(valid_costs)
     pad = max((all_costs.max() - all_costs.min()) * 0.03, 1e-9)
     grid = np.linspace(all_costs.min() - pad, all_costs.max() + pad, 1000)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(FLAT[0] * 2/3, FLAT[1]))
     for label, color, runs, data in series:
         stacked = [np.searchsorted(costs, grid, side="right") / max(n_total, 1)
                    for costs, n_total in runs]
@@ -404,12 +484,13 @@ def plot_cost_ecdf(experiment, out_path):
         if lb is not None:
             ax.fill_between(grid, lb, ub, step="post", color=color, alpha=0.22, lw=0)
 
-    ax.set_xlabel("Realized cost")
-    ax.set_ylabel("eCDF")
+    ax.set_xlabel("Realized cost", fontsize=18)
+    ax.set_ylabel("eCDF", fontsize=18)
     ax.set_ylim(0, 1.03)
     ax.set_xlim(grid[0], grid[-1])
     sparse_ticks(ax, nx=4, ny=None)
     ax.set_yticks([0.0, 0.5, 1.0])
+    ax.tick_params(axis='both', which='major', labelsize=16)
     fig.savefig(out_path)
     plt.close(fig)
 
@@ -524,16 +605,33 @@ def plot_gantt_chart_comparative(experiment, out_path, legend_path=None):
     if not reactive_name or not conservative_name:
         return
 
-    def get_execs_by_index(planner_data):
+    def runs_by_index(planner_data):
         per_run = planner_data.get("per_run") or [planner_data.get("executions", [])]
-        for run_execs in per_run:
-            valid = {r["index"]: r for r in run_execs if r.get("success") and r.get("timeline")}
-            if valid:
-                return valid
-        return {}
+        return [{r["index"]: r for r in run_execs
+                 if r.get("success") and r.get("timeline")} for run_execs in per_run]
 
-    reac_execs = get_execs_by_index(planners[reactive_name])
-    cons_execs = get_execs_by_index(planners[conservative_name])
+    reac_runs = runs_by_index(planners[reactive_name])
+    cons_runs = runs_by_index(planners[conservative_name])
+
+    def _median_cost(records):
+        costs = [r["cost"] for r in records if r.get("cost") is not None and np.isfinite(r["cost"])]
+        return float(np.median(costs)) if costs else np.inf
+
+    reac_execs = cons_execs = {}
+    shared_runs = [i for i in range(min(len(reac_runs), len(cons_runs)))
+                   if set(reac_runs[i]) & set(cons_runs[i])]
+    if shared_runs:
+        ranked = sorted(shared_runs, key=lambda i: _median_cost(reac_runs[i].values()))
+        best = ranked[(len(ranked) - 1) // 2]
+        print(f"[GANTT] representative planning run {best}: median reactive cost "
+              f"{_median_cost(reac_runs[best].values()):.3f} ({len(ranked)} shared run(s))")
+        reac_execs, cons_execs = reac_runs[best], cons_runs[best]
+    if not reac_execs:
+        reac_execs = next((r for r in reac_runs if r), {})
+        cons_execs = next((r for r in cons_runs if r), {})
+        if reac_execs and cons_execs:
+            print("[GANTT] no single planning run has a drawable execution for both planners; "
+                  "the two panels are NOT the same skill realization.")
 
     valid_indices = set(cons_execs.keys()).intersection(set(reac_execs.keys()))
     if not valid_indices:
@@ -569,21 +667,37 @@ def plot_gantt_chart_comparative(experiment, out_path, legend_path=None):
 
     is_complex_env = any(word in env_name for word in ["stacking", "packing", "picking", "transport"])
 
-    ROW_INCHES, CHROME_INCHES, LABEL_INCHES = 0.25, 1.1, 0.22
+    ROW_INCHES, CHROME_INCHES = 0.16, 0.8
+    LABEL_INCHES_LARGE = 0.35
+    LABEL_INCHES_SMALL = 0.05
 
-    def _sized(n_panels, n_rows_each):
-        axes_h = ROW_INCHES * n_rows_each
-        fig, axes = plt.subplots(
-            n_panels, 1, sharex=True,
-            figsize=(12, CHROME_INCHES + n_panels * (axes_h + LABEL_INCHES)))
-        fig.subplots_adjust(hspace=LABEL_INCHES / axes_h)
-        return fig, axes
+    def _sized_grouped(n_robots, is_complex):
+        axes_h = ROW_INCHES * n_robots
+        if is_complex:
+            fig = plt.figure(figsize=(9, CHROME_INCHES + 2 * axes_h + LABEL_INCHES_LARGE * 2))
+            gs = fig.add_gridspec(2, 1, hspace=LABEL_INCHES_LARGE / axes_h)
+            axes = [fig.add_subplot(gs[i]) for i in range(2)]
+            for ax in axes[:-1]:
+                ax.tick_params(labelbottom=False)
+            return fig, axes
+        else:
+            fig = plt.figure(figsize=(9, CHROME_INCHES + 4 * axes_h + LABEL_INCHES_LARGE * 2 + LABEL_INCHES_SMALL * 2))
+            gs = fig.add_gridspec(4, 1, height_ratios=[1, 1, 1, 1])
+            axes = [fig.add_subplot(gs[i]) for i in range(4)]
+            fig.subplots_adjust(hspace=0)
+            return None, None # placeholder
 
     n_robots = len(next(iter(cons_execs.values()))["timeline"][0]["tasks"])
+    axes_h = ROW_INCHES * n_robots
 
     if is_complex_env:
-        target_idx = list(valid_indices)[0]
-        fig, axes = _sized(2, n_robots)
+        run_median = _median_cost(reac_execs.values())
+        target_idx = min(sorted(valid_indices),
+                         key=lambda i: abs(reac_execs[i]["cost"] - run_median))
+        fig = plt.figure(figsize=(9, CHROME_INCHES + 2 * axes_h + LABEL_INCHES_LARGE * 2))
+        gs = fig.add_gridspec(2, 1, hspace=LABEL_INCHES_LARGE / axes_h)
+        axes = [fig.add_subplot(gs[i]) for i in range(2)]
+        axes[0].sharex(axes[1])
         plot_configs = [
             (axes[0], cons_execs[target_idx], "Conservative", target_idx),
             (axes[1], reac_execs[target_idx], "Reactive", target_idx),
@@ -593,12 +707,21 @@ def plot_gantt_chart_comparative(experiment, out_path, legend_path=None):
         short_idx = sorted_indices[0]
         long_idx = sorted_indices[-1]
 
-        fig, axes = _sized(4, n_robots)
+        fig = plt.figure(figsize=(9, CHROME_INCHES + 4 * axes_h + LABEL_INCHES_LARGE * 2 + LABEL_INCHES_SMALL * 2))
+        gs1 = fig.add_gridspec(2, 1, top=0.95, bottom=0.55, hspace=LABEL_INCHES_SMALL / axes_h)
+        gs2 = fig.add_gridspec(2, 1, top=0.45, bottom=0.05, hspace=LABEL_INCHES_SMALL / axes_h)
+        axes = [fig.add_subplot(gs1[0]), fig.add_subplot(gs1[1]),
+                fig.add_subplot(gs2[0]), fig.add_subplot(gs2[1])]
+
+        axes[0].sharex(axes[3])
+        axes[1].sharex(axes[3])
+        axes[2].sharex(axes[3])
+
         plot_configs = [
             (axes[0], cons_execs[short_idx], "Conservative", short_idx),
-            (axes[1], reac_execs[short_idx], "Reactive", short_idx),
-            (axes[2], cons_execs[long_idx], "Conservative", long_idx),
-            (axes[3], reac_execs[long_idx], "Reactive", long_idx),
+            (axes[1], cons_execs[long_idx], "", long_idx),
+            (axes[2], reac_execs[short_idx], "Reactive", short_idx),
+            (axes[3], reac_execs[long_idx], "", long_idx),
         ]
 
     global_max_end = 0
@@ -614,7 +737,7 @@ def plot_gantt_chart_comparative(experiment, out_path, legend_path=None):
         "wait": ("dimgray", "black", "////"),
         "terminal": ("#f4f4f4", "#999999", ""),
     }
-    PALETTE = ["#add8e6", "#90ee90", "#ffb6c1", "#ffd8a8", "#c5b0e5", "#a8e6cf", "#f5cba7"]
+    PALETTE = ["#c5b0e5", "#add8e6", "#ffb6c1", "#ffd8a8", "#90ee90", "#a8e6cf", "#f5cba7"]
 
     present = []
     for _, run, _, _ in plot_configs:
@@ -703,17 +826,18 @@ def plot_gantt_chart_comparative(experiment, out_path, legend_path=None):
 
                 lw = 1.5 if edge == "red" else 0.8
                 zorder = 3 if edge == "red" else 2
-                ax.barh(r, duration, left=b["start"], height=0.5, color=color, edgecolor=edge,
-                         linewidth=lw, hatch=hatch, zorder=zorder)
+                alpha = 1.0 if c_name in ["pick", "skill", "wait", "terminal"] else 0.6
+                ax.barh(r, duration, left=b["start"], height=0.4, color=color, edgecolor=edge,
+                         linewidth=lw, hatch=hatch, zorder=zorder, alpha=alpha)
 
         for r in range(num_robots):
             ax.vlines(max_end_step, r - 0.25, r + 0.25, color='black', linewidth=2)
 
         ax.set_ylim(num_robots - 0.5, -0.5)
         ax.set_yticks(range(num_robots))
-        ax.set_yticklabels([f"R{r+1}" for r in range(num_robots)], fontsize=12)
+        ax.set_yticklabels([f"R{r+1}" for r in range(num_robots)], fontsize=16)
         ax.text(0.0, 1.04, planner_type, transform=ax.transAxes, ha='left', va='bottom',
-                fontsize=10, fontweight='bold')
+                fontsize=16, fontweight='bold')
         ax.grid(axis='x', alpha=0.3)
         if ax != axes[-1]:
             ax.tick_params(labelbottom=False)
@@ -729,7 +853,7 @@ def plot_gantt_chart_comparative(experiment, out_path, legend_path=None):
         face, edge, hatch = TASK_COLORS[label]
         legend_elements.append(
             patches.Patch(facecolor=face, edgecolor=edge, hatch=hatch,
-                          label=label.replace("_", " ").title()))
+                          alpha=0.6, label=label.replace("_", " ").title()))
     if "terminal" in drawn_labels:
         legend_elements.append(
             patches.Patch(facecolor='#f4f4f4', edgecolor='#999999', label='Terminal'))
@@ -737,9 +861,10 @@ def plot_gantt_chart_comparative(experiment, out_path, legend_path=None):
         save_legend(legend_elements, [h.get_label() for h in legend_elements], legend_path,
                     ncol=len(legend_elements))
 
-    padding = max(2, global_max_end * 0.05)
+    padding = global_max_end * 0.05
     axes[-1].set_xlim(left=0, right=global_max_end + padding)
-    axes[-1].set_xlabel("Elapsed time [s]", fontsize=12)
+    axes[-1].set_xlabel("Elapsed time [s]", fontsize=16)
+    axes[-1].tick_params(axis='x', labelsize=16)
 
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
@@ -756,6 +881,8 @@ def main():
                         help="Restrict the ECDF/strip to ONE planning run's executions "
                              "(e.g. 0). Without it every run is pooled, which mixes nature's "
                              "spread with the planner's and multiplies the visible modes.")
+    parser.add_argument("--bins", type=int, default=100,
+                        help="Number of bins for the ePDF histogram (default: 100)")
     args = parser.parse_args()
 
     combined_experiment = {"env": None, "planners": {}}
@@ -790,15 +917,15 @@ def main():
     apply_style(args.paper)
 
     print(f"Generating combined plots for {combined_experiment['env']}...")
-    plot_cost_convergence(combined_experiment, out_dir / f"cost_convergence.{ext}")
-    plot_cost_ecdf(combined_experiment, out_dir / f"cost_ecdf.{ext}")
-    plot_cost_strip(combined_experiment, out_dir / f"cost_strip.{ext}")
+    plot_cost_convergence(combined_experiment, out_dir / f"cost.{ext}")
+    plot_cost_ecdf(combined_experiment, out_dir / f"ecdf.{ext}", bins=args.bins)
+    plot_cost_strip(combined_experiment, out_dir / f"strip.{ext}")
     plot_gantt_chart_comparative(
-        combined_experiment, out_dir / f"gantt_chart_comparative.{ext}",
+        combined_experiment, out_dir / f"gantt.{ext}",
         legend_path=(out_dir / f"legend_gantt.{ext}") if legend else None)
     if legend:
         save_planner_legend(combined_experiment, out_dir / f"legend_stochastic.{ext}")
-        save_convergence_legend(combined_experiment, out_dir / f"legend_convergence.{ext}")
+        save_convergence_legend(combined_experiment, out_dir / f"legend_cost.{ext}")
     report_branches(combined_experiment)
 
     env = combined_experiment["env"] or ""

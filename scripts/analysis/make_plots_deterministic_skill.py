@@ -12,7 +12,7 @@ from typing import List, Dict, Optional, Any
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from compute_confidence_intervals import computeConfidenceInterval
-from make_plots_stochastic_skill import apply_style, save_legend
+from make_plots_stochastic_skill import apply_style, save_legend, FLAT
 
 
 def load_data_from_folder(
@@ -351,7 +351,7 @@ def make_cost_plots(
     logscale: bool = True,
     yticks: List[int] = [],
 ):
-    plt.figure("Cost plot")
+    plt.figure("Cost plot", figsize=(FLAT[0] * 2 / 3, FLAT[1]))
 
     max_time = 0
     planner_names = get_ordered_planner_names(all_experiment_data.keys(), config)
@@ -507,11 +507,13 @@ def make_cost_plots(
     plt.grid(which="both", axis="both", ls="--")
 
     if "cost_reduction" in config:
-        plt.ylabel(f"Cost ({config['cost_reduction']})")
+        plt.ylabel(f"Cost ({config['cost_reduction']})", fontsize=18)
     else:
-        plt.ylabel("Cost")
+        plt.ylabel("Cost", fontsize=18)
 
-    plt.xlabel("Computation Time [s]")
+    plt.xlabel("Computation Time [s]", fontsize=18)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
 
     if logscale:
         plt.yscale("log")
@@ -531,11 +533,11 @@ def make_cost_plots(
         ax = plt.gca()
         lo, hi = ax.get_ylim()
         if lo > 0 and hi > 0:
-            decades = range(int(np.floor(np.log10(lo))), int(np.ceil(np.log10(hi))) + 1)
-            candidates = [m * 10.0 ** k for k in decades for m in (1, 2, 3, 4, 5, 6, 8)]
-            round_ticks = [v for v in candidates if lo <= v <= hi]
-            if round_ticks:
-                ax.set_yticks(round_ticks)
+            from matplotlib.ticker import MaxNLocator
+            ticks = [t for t in MaxNLocator(nbins=3).tick_values(lo, hi) if lo <= t <= hi]
+            if not ticks:
+                ticks = [lo, (lo+hi)/2.0, hi]
+            ax.set_yticks(ticks)
             ax.yaxis.set_major_formatter(plt.ScalarFormatter())
             ax.yaxis.set_minor_formatter(plt.NullFormatter())
 

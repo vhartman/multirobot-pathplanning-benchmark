@@ -244,7 +244,7 @@ def get_planner_color(name, config):
     return planner_name_to_color[name]
 
 
-def interpolate_costs(new_timesteps, times, costs):
+def interpolate_costs(new_timesteps, times, costs, before_value=np.inf):
     # if not times or not costs or len(times) != len(costs) or not new_timesteps:
     #     return []
     new_timesteps = np.asarray(new_timesteps)
@@ -263,7 +263,7 @@ def interpolate_costs(new_timesteps, times, costs):
 
     # Handle cases before first time
     before_start = indices < 0
-    result[before_start] = np.inf
+    result[before_start] = before_value
 
     # Handle cases after or at last time
     after_end = indices >= len(times) - 1

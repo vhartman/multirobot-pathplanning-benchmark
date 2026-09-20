@@ -14,7 +14,7 @@ from matplotlib.legend_handler import HandlerBase
 from matplotlib.lines import Line2D
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_plots_stochastic_skill import PLANNER_STYLE, apply_style, save_legend, style
+from make_plots_stochastic_skill import PLANNER_STYLE, FLAT, apply_style, save_legend, style
 
 GEOMETRY = {
     "rectangle_island": (1.2, 0.9, 0.3, 2.0),
@@ -40,9 +40,13 @@ def failed_execution_paths(run_dir: pathlib.Path):
 def load_paths(run_dir: pathlib.Path, include_failed: bool = False):
     skip = set() if include_failed else failed_execution_paths(run_dir)
     paths, dropped = [], 0
-    for f in sorted(glob.glob(os.path.join(run_dir, "path_*.json"))):
+    def get_num(f):
         match = re.search(r"path_(\d+)\.json$", f)
-        if match and int(match.group(1)) in skip:
+        return int(match.group(1)) if match else -1
+
+    for f in sorted(glob.glob(os.path.join(run_dir, "path_*.json")), key=get_num):
+        idx = get_num(f)
+        if idx in skip:
             dropped += 1
             continue
         with open(f) as fin:
@@ -81,15 +85,28 @@ def classify(paths):
     return [sides[0]], sides
 
 
-def segments(skill_flags):
-    out, current = [], [0]
+def segments(skill_flags, qs=None):
+    raw, current = [], [0]
     for i in range(1, len(skill_flags)):
         current.append(i)
         if skill_flags[i] != skill_flags[i - 1]:
-            out.append((skill_flags[i - 1], current))
+            raw.append((skill_flags[i - 1], current))
             current = [i]
     if current:
-        out.append((skill_flags[-1], current))
+        raw.append((skill_flags[-1], current))
+
+    if qs is None:
+        return raw
+
+    out = []
+    for is_skill, seg in raw:
+        if not is_skill and len(seg) <= 2 and qs is not None:
+            disp = np.max(np.abs(qs[seg[-1]] - qs[seg[0]]))
+            if disp < 0.08:
+                if out and out[-1][0]:
+                    out[-1] = (True, out[-1][1] + seg[1:])
+                    continue
+        out.append((is_skill, seg))
     return out
 
 
@@ -116,10 +133,10 @@ def draw_pointy_arrow(ax, px, py, dx, dy, color, size=0.18, alpha=1.0):
     rot = np.array([[c, -s], [s, c]])
     pts = pts @ rot.T + np.array([px, py])
 
-    poly = plt.Polygon(pts, facecolor=color, edgecolor='white', lw=0.5, alpha=alpha, zorder=6)
+    poly = plt.Polygon(pts, facecolor=color, edgecolor='none', lw=0.5, alpha=alpha, zorder=6)
     ax.add_patch(poly)
 
-def _place_arrow_on_leg(ax, leg_x, leg_y, color, alpha):
+def _place_arrow_on_leg(ax, leg_x, leg_y, color, alpha, fraction=0.5):
     if len(leg_x) < 2:
         return
 
@@ -132,7 +149,7 @@ def _place_arrow_on_leg(ax, leg_x, leg_y, color, alpha):
     if total_dist < 0.2:
         return
 
-    target_dist = total_dist / 2.0
+    target_dist = total_dist * fraction
     mid_idx = np.searchsorted(cum_dists, target_dist)
     mid_idx = max(1, min(len(leg_x) - 2, mid_idx))
 
@@ -150,31 +167,31 @@ def _place_arrow_on_leg(ax, leg_x, leg_y, color, alpha):
     if np.hypot(dx, dy) < 1e-4:
         return
 
-    draw_pointy_arrow(ax, leg_x[mid_idx], leg_y[mid_idx], dx, dy, color, size=0.18, alpha=alpha)
+    draw_pointy_arrow(ax, leg_x[mid_idx], leg_y[mid_idx], dx, dy, color, size=0.42, alpha=alpha)
 
 
 def _add_all_arrows(ax, qs, dark_color, light_color, active_skill_color='#606060'):
-    def place(x, y, color, alpha):
-        _place_arrow_on_leg(ax, x, y, color, alpha)
+    def place(x, y, color, alpha, fraction=0.5):
+        _place_arrow_on_leg(ax, x, y, color, alpha, fraction=fraction)
 
     x_in, y_in = qs[:, 2], qs[:, 3]
     f_in = np.argmax(np.hypot(x_in - x_in[0], y_in - y_in[0]))
     if f_in > 5 and np.hypot(x_in[f_in] - x_in[0], y_in[f_in] - y_in[0]) > 0.5:
-        place(x_in[:f_in+1], y_in[:f_in+1], dark_color, 1.0)
-        place(x_in[f_in:], y_in[f_in:], dark_color, 1.0)
+        place(x_in[:f_in+1], y_in[:f_in+1], dark_color, 1.0, fraction=0.5)
+        place(x_in[f_in:], y_in[f_in:], dark_color, 1.0, fraction=0.5)
     else:
-        place(x_in, y_in, dark_color, 1.0)
+        place(x_in, y_in, dark_color, 1.0, fraction=0.5)
 
     x_act, y_act = qs[:, 0], qs[:, 1]
     f_act = np.argmax(np.hypot(x_act - x_act[0], y_act - y_act[0]))
     if f_act > 5 and np.hypot(x_act[f_act] - x_act[0], y_act[f_act] - y_act[0]) > 0.5:
-        place(x_act[:f_act+1], y_act[:f_act+1], active_skill_color, 0.8)
-        place(x_act[f_act:], y_act[f_act:], light_color, 1.0)
+        place(x_act[:f_act+1], y_act[:f_act+1], active_skill_color, 0.8, fraction=0.5)
+        place(x_act[f_act:], y_act[f_act:], light_color, 1.0, fraction=0.5)
     else:
-        place(x_act, y_act, active_skill_color, 0.8)
+        place(x_act, y_act, active_skill_color, 0.8, fraction=0.5)
 
-_START_SIZE = 26
-_GOAL_SIZE = 38
+_START_SIZE = 120
+_GOAL_SIZE = 120
 
 
 def _shades(planner_color):
@@ -194,16 +211,16 @@ def _half_split_marker(ax, x, y, marker, size, left_color, right_color):
         sc.set_clip_path(plt.Rectangle((left_edge, y0), width, y1 - y0, transform=ax.transData))
 
 
-def draw_panel(ax, paths, geometry, planner_color, max_paths=5):
+def draw_panel(ax, paths, geometry, planner_color, max_paths=5, thin=False):
     half_x, half_y, centre_y, arena = geometry
-    ax.set_xlim(-arena - 0.2, arena + 0.2)
-    ax.set_ylim(-arena - 0.2, arena + 0.2)
+    ax.set_xlim(-arena, arena)
+    ax.set_ylim(-arena, arena)
     ax.set_aspect("equal")
     if half_x is not None:
         ax.add_patch(plt.Rectangle((-half_x, -half_y + centre_y), 2 * half_x, 2 * half_y,
-                                   color="gray", alpha=0.3, lw=0))
+                                   color="gray", alpha=0.3, lw=0, zorder=0))
     ax.add_patch(plt.Rectangle((-arena, -arena), 2 * arena, 2 * arena, fill=False,
-                               color="black", lw=1.2))
+                               color="gray", lw=1.2, zorder=0))
     ax.set_xticks([]); ax.set_yticks([])
     ax.grid(False)
     for spine in ax.spines.values():
@@ -215,28 +232,49 @@ def draw_panel(ax, paths, geometry, planner_color, max_paths=5):
         return
 
 
+    import matplotlib.patheffects as pe
+
     light_color, dark_color = _shades(planner_color)
 
+    lw_solid = 1.0 if thin else 3.5
+    lw_dash = 1.2 if thin else 4.0
+    lw_stroke = 2.5 if thin else 6.0
+
     qs, flags = paths[0]
-    for is_skill, seg in segments(flags):
-        ls = "-" if is_skill else "--"
+    for is_skill, seg in segments(flags, qs):
+        ls_active = "-" if is_skill else (0, (2, 1.5))
+        ls_inactive = "-" if is_skill else (0, (1, 1.2))
         alpha = 0.9 if is_skill else 0.8
-        ax.plot(qs[seg, 2], qs[seg, 3], color=dark_color, lw=1.6, ls=ls, alpha=alpha)
+        if is_skill:
+            ax.plot(qs[seg, 2], qs[seg, 3], color=dark_color, lw=lw_solid, ls=ls_active, alpha=alpha, zorder=3)
+        else:
+            ax.plot(qs[seg, 2], qs[seg, 3], color=dark_color, lw=lw_dash, ls=ls_inactive, alpha=alpha, zorder=4,
+                    path_effects=[pe.withStroke(linewidth=lw_stroke, foreground='white')])
+            
+            ax.plot(qs[seg, 0], qs[seg, 1], color=light_color, lw=lw_dash, ls=ls_active, alpha=alpha, zorder=2)
 
-        if not is_skill:
-            ax.plot(qs[seg, 0], qs[seg, 1], color=light_color, lw=1.6, ls=ls, alpha=alpha)
+    def get_marker(x_coord):
+        return "o" if x_coord < 0 else "D"
 
-    ax.scatter(qs[0, 2], qs[0, 3], color=dark_color, marker="o", s=_START_SIZE,
-               edgecolors="black", lw=0.5, zorder=5)
-    ax.scatter(qs[-1, 2], qs[-1, 3], color=dark_color, marker="*", s=_GOAL_SIZE,
-               edgecolors="black", lw=0.5, zorder=5)
-    _half_split_marker(ax, qs[0, 0], qs[0, 1], "o", _START_SIZE, '#606060', light_color)
-    _half_split_marker(ax, qs[-1, 0], qs[-1, 1], "*", _GOAL_SIZE, '#606060', light_color)
+    m_r2_start = get_marker(qs[0, 2])
+    m_r2_goal = get_marker(qs[-1, 2])
+    m_r1_start = get_marker(qs[0, 0])
+    m_r1_goal = get_marker(qs[-1, 0])
+
+    def get_size(m):
+        return 180 if m == "D" else 250
+
+    ax.scatter(qs[0, 2], qs[0, 3], color=dark_color, marker=m_r2_start, s=get_size(m_r2_start),
+               edgecolors="black", lw=0.5, zorder=6)
+    ax.scatter(qs[-1, 2], qs[-1, 3], color=dark_color, marker=m_r2_goal, s=get_size(m_r2_goal),
+               edgecolors="black", lw=0.5, zorder=6)
+    _half_split_marker(ax, qs[0, 0], qs[0, 1], m_r1_start, get_size(m_r1_start), '#606060', light_color)
+    _half_split_marker(ax, qs[-1, 0], qs[-1, 1], m_r1_goal, get_size(m_r1_goal), '#606060', light_color)
 
     for index, (qs_bundle, flags) in enumerate(paths[:max_paths]):
-        for is_skill, seg in segments(flags):
+        for is_skill, seg in segments(flags, qs_bundle):
             if is_skill:
-                ax.plot(qs_bundle[seg, 0], qs_bundle[seg, 1], color='#606060', lw=1.2, ls='-', alpha=0.5)
+                ax.plot(qs_bundle[seg, 0], qs_bundle[seg, 1], color='#606060', lw=2.5, ls='-', alpha=0.4, zorder=1)
 
     _add_all_arrows(ax, paths[0][0], dark_color, light_color)
 
@@ -261,12 +299,6 @@ class _TwoLineIconHandler(HandlerBase):
 
 def _legend_handles(kinds_present):
     handles, labels = [], []
-    handles.append(Line2D([], [], marker="o", color="0.3", linestyle="None", markersize=6,
-                          markeredgecolor="black", markeredgewidth=0.5))
-    labels.append("Start")
-    handles.append(Line2D([], [], marker="*", color="0.3", linestyle="None", markersize=9,
-                          markeredgecolor="black", markeredgewidth=0.5))
-    labels.append("Goal (terminal)")
     for kind in [k for k in PLANNER_STYLE if k in kinds_present]:
         _, label, color = style(kind)
         light, dark = _shades(color)
@@ -288,6 +320,7 @@ def main():
     parser.add_argument("--include_failed", action="store_true",
                         help="also draw executions that did not reach the goal validly; "
                              "they stop mid-air and read as a geometry defect")
+    parser.add_argument("--thin", action="store_true", help="use thinner line widths for top-down trajectories")
     args = parser.parse_args()
 
     folder = pathlib.Path(args.folder)
@@ -318,24 +351,35 @@ def main():
 
     for kind, paths in planners:
         branches, labels = classify(paths)
-        fig, axes = plt.subplots(1, len(branches), figsize=(2.3 * len(branches), 2.45),
-                                 squeeze=False)
-        for col, branch in enumerate(branches):
+        for branch in branches:
             picked = [p for p, lab in zip(paths, labels) if lab == branch]
+            fig, ax = plt.subplots(1, 1, figsize=(2.45, 2.45))
             _, _, p_color = style(kind)
-            draw_panel(axes[0][col], picked, geometry, p_color)
+            draw_panel(ax, picked, geometry, p_color, thin=args.thin)
 
-        out_path = out_dir / f"top_down_view_{kind}.{ext}"
-        fig.savefig(out_path, bbox_inches="tight")
-        plt.close(fig)
-        print(f"Saved {out_path}")
+            suffix = branch.lower().replace(" ", "_")
+            kind_short = {"conservative": "cons", "reactive": "react"}.get(kind, kind)
+            out_path = out_dir / f"topdown_{kind_short}_{suffix}.{ext}"
+            fig.savefig(out_path, bbox_inches="tight")
+            plt.close(fig)
+            print(f"Saved {out_path}")
 
 
     if not args.no_legend:
         kinds_present = {kind for kind, _ in planners}
         legend_handles, legend_labels, handler_map = _legend_handles(kinds_present)
-        save_legend(legend_handles, legend_labels, out_dir / f"legend_topdown.{ext}",
-                   ncol=len(legend_handles), handler_map=handler_map)
+        ncol = len(legend_handles)
+        fig = plt.figure(figsize=(FLAT[0], 0.6))
+        leg = fig.legend(legend_handles, legend_labels, loc="center", ncol=ncol,
+                         frameon=True, fancybox=False, borderpad=0.6, fontsize=14,
+                         handlelength=1.6, columnspacing=1.8,
+                         handler_map=handler_map)
+        leg.get_frame().set_edgecolor("0.75")
+        leg.get_frame().set_linewidth(0.8)
+        legend_path = out_dir / f"legend_topdown.{ext}"
+        fig.savefig(legend_path, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved {legend_path}")
 
 
 if __name__ == "__main__":
