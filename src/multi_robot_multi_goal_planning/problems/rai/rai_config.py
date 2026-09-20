@@ -3392,7 +3392,7 @@ def make_box_rearrangement_env(num_robots=2, num_boxes=9, view: bool = False):
 
 def make_box_stacking_env(
     num_robots=2, num_boxes=9, robot_types = "ur10", view: bool = False, make_and_return_all_keyframes: bool = False, skill_starts: bool = False,
-    round_robin_assignment: bool = False, num_stacks: int = 1,
+    round_robin_assignment: bool = False, num_stacks: int = 1, spread_picks: bool = False, spread_pick_fraction: float = 0.45,
 ):
     assert num_boxes <= 9, "A maximum of 9 boxes are supported"
     assert num_robots <= 6, "A maximum of 6 robots are supported"
@@ -3548,8 +3548,46 @@ def make_box_stacking_env(
         )
         return pos
 
+    if spread_picks:
+        stack_xy = np.array([0.0, -0.05])
+        for cnt in range(num_boxes):
+            r_idx = cnt % num_robots
+            slot = cnt // num_robots
+            n_slots = (num_boxes - 1 - r_idx) // num_robots + 1
+
+            base = np.array(get_position(robot_types[r_idx], r_idx)[:2], dtype=float)
+            to_stack = stack_xy - base
+            anchor = base + spread_pick_fraction * to_stack
+            reach = to_stack / np.linalg.norm(to_stack)
+            perp = np.array([-reach[1], reach[0]])
+            xy = anchor + (slot - (n_slots - 1) / 2.0) * 3 * size[0] * perp
+
+            axis = np.random.randn(3)
+            axis /= np.linalg.norm(axis)
+            perturbation_quaternion = small_angle_quaternion(axis, 0.0)
+
+            name = f"{r_idx}{slot}"
+            C.addFrame("obj" + name).setParent(table).setShape(
+                ry.ST.ssBox, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition([xy[0], xy[1], height]).setMass(0.1).setColor(
+                np.random.rand(3)
+            ).setContact(1).setQuaternion(perturbation_quaternion).setJoint(ry.JT.rigid)
+
+            C.addFrame("goal" + name).setParent(table).setShape(
+                ry.ST.box, [size[0], size[1], size[2], 0.005]
+            ).setRelativePosition(
+                [stack_xy[0], stack_xy[1], cnt * size[2] * 1.1 + height]
+            ).setColor([0, 0, 0.1, 0.5]).setContact(0).setQuaternion(
+                perturbation_quaternion
+            ).setJoint(ry.JT.rigid)
+
+            boxes.append("obj" + name)
+            goals.append("goal" + name)
+
     cnt = 0
     for k in range(d):
+        if spread_picks:
+            break
         for j in range(w):
             if k == 1 and j == 1:
                 continue
@@ -3605,7 +3643,8 @@ def make_box_stacking_env(
         C.view(True)
 
     # figure out what should go where
-    random.shuffle(boxes)
+    if not spread_picks:
+        random.shuffle(boxes)
 
     def compute_rearrangment(c_tmp, robot_prefix, box, goal):
         # set everything but the current box to non-contact
@@ -4429,10 +4468,10 @@ def make_bimanual_grasping_env(obstacle, rotate=True, view: bool = False):
             [-0., 0., 0.15]
         ).setJoint(ry.JT.rigid)
 
-    # Hide markers loaded from the robot .g file
-    for r in ["a1_", "a2_"]:
-        if C.getFrame(f"{r}ur_ee_marker"):
-            C.getFrame(f"{r}ur_ee_marker").setShape(ry.ST.marker, [0.0])
+    # # Hide markers loaded from the robot .g file
+    # for r in ["a1_", "a2_"]:
+    #     if C.getFrame(f"{r}ur_ee_marker"):
+    #         C.getFrame(f"{r}ur_ee_marker").setShape(ry.ST.marker, [0.0])
 
     # C.addFrame("obj_marker").setParent(
     #     C.getFrame("obj1")

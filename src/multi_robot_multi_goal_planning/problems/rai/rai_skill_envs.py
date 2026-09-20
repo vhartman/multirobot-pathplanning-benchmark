@@ -2833,7 +2833,7 @@ class rai_stochastic_rectangle_island(SequenceMixin, rai_env):
             commit_eps=0.05, #1e-3,
             dt=0.05,
             noise_bound=0.2,
-            is_deterministic=True,
+            is_deterministic=False,
             durations=[8.0, 6.5]
         )
 
@@ -3103,14 +3103,25 @@ _STACKING_SHAPES = [
     ("4r_8b", {"num_robots": 4, "num_boxes": 8}),
 ]
 
+_SPREAD_SHAPES = [
+    ("2r_4b", {"num_robots": 2, "num_boxes": 4}),
+    ("3r_4b", {"num_robots": 3, "num_boxes": 4}),
+    ("4r_4b", {"num_robots": 4, "num_boxes": 4}),
+    ("2r_8b", {"num_robots": 2, "num_boxes": 8}),
+    ("3r_8b", {"num_robots": 3, "num_boxes": 8}),
+    ("4r_8b", {"num_robots": 4, "num_boxes": 8}),
+]
 
 class rai_stochastic_stacking_base(rai_env):
     def __init__(self, num_robots: int = 2, num_boxes: int = 3,
-                 skill_place: bool = False, noise: float = 1.0, seed: int = 0, num_stacks: int = 1):
+                 skill_place: bool = False, noise: float = 1.0, seed: int = 0, num_stacks: int = 1,
+                 spread_picks: bool = False, spread_pick_fraction: float = 0.45):
         random.seed(seed)
         np.random.seed(seed)
         self.C, keyframes, self.robots = rai_config.make_box_stacking_env(
-            num_robots, num_boxes, skill_starts=True, round_robin_assignment=True, num_stacks=num_stacks
+            num_robots, num_boxes, skill_starts=True, round_robin_assignment=True,
+            num_stacks=num_stacks, spread_picks=spread_picks,
+            spread_pick_fraction=spread_pick_fraction,
         )
 
         rai_env.__init__(self)
@@ -3229,18 +3240,50 @@ class rai_dep_stochastic_stacking(DependencyGraphMixin, rai_stochastic_stacking_
         self.spec.dependency = DependencyType.UNORDERED
 
 @register(
-    [("rai.dep_stochastic_two_stacking", {})]
-    + [(f"rai.dep_stochastic_two_stacking_{shape}", dict(kwargs)) for shape, kwargs in _STACKING_SHAPES]
-    + [(f"rai.dep_stochastic_two_stacking_{shape}_noise{int(round(level * 100)):03d}", {**kwargs, "noise": level}) for shape, kwargs in _STACKING_SHAPES for level in NOISE_LEVELS]
+    [("rai.dep_stochastic_spread_stacking", {})]
+    + [(f"rai.dep_stochastic_spread_stacking_{shape}", dict(kwargs)) for shape, kwargs in _SPREAD_SHAPES]
+    + [(f"rai.dep_stochastic_spread_stacking_{shape}_noise{int(round(level * 100)):03d}", {**kwargs, "noise": level}) for shape, kwargs in _SPREAD_SHAPES for level in NOISE_LEVELS]
 )
-class rai_dep_stochastic_two_stacking(DependencyGraphMixin, rai_stochastic_stacking_base):
-    def __init__(self, num_robots: int = 2, num_boxes: int = 3, skill_place: bool = False, noise: float = 1.0, seed: int = 0):
-        rai_stochastic_stacking_base.__init__(self, num_robots, num_boxes, skill_place, noise, seed, num_stacks=2)
+class rai_dep_stochastic_spread_stacking(DependencyGraphMixin, rai_stochastic_stacking_base):
+    def __init__(self, num_robots: int = 2, num_boxes: int = 4, skill_place: bool = False,
+                 noise: float = 1.0, seed: int = 0, spread_pick_fraction: float = 0.45):
+        rai_stochastic_stacking_base.__init__(self, num_robots, num_boxes, skill_place, noise, seed,
+                                              num_stacks=1, spread_picks=True,
+                                              spread_pick_fraction=spread_pick_fraction)
         self.graph = DependencyGraph()
         for dependent, dependency in self.chain_edges: self.graph.add_dependency(dependent, dependency)
-        for lower, upper_head in zip(self.place_tasks_in_order, self.place_chain_heads[2:]): self.graph.add_dependency(upper_head, lower)
+        for lower, upper_head in zip(self.place_tasks_in_order, self.place_chain_heads[1:]): self.graph.add_dependency(upper_head, lower)
         for home_name in self.home_names: self.graph.add_dependency("terminal", home_name)
         BaseModeLogic.__init__(self)
         self.prev_mode = self.start_mode
         self.spec.dependency = DependencyType.UNORDERED
 
+@register(
+    [("rai.stochastic_sequence_spread_stacking", {})]
+    + [(f"rai.stochastic_sequence_spread_stacking_{shape}", dict(kwargs)) for shape, kwargs in _SPREAD_SHAPES]
+    + [(f"rai.stochastic_sequence_spread_stacking_{shape}_noise{int(round(level * 100)):03d}", {**kwargs, "noise": level}) for shape, kwargs in _SPREAD_SHAPES for level in NOISE_LEVELS]
+)
+class rai_stochastic_sequence_spread_stacking(SequenceMixin, rai_stochastic_stacking_base):
+    def __init__(self, num_robots: int = 2, num_boxes: int = 4, skill_place: bool = False,
+                 noise: float = 1.0, seed: int = 0, spread_pick_fraction: float = 0.45):
+        rai_stochastic_stacking_base.__init__(self, num_robots, num_boxes, skill_place, noise, seed,
+                                              num_stacks=1, spread_picks=True,
+                                              spread_pick_fraction=spread_pick_fraction)
+
+        sequence_names = []
+        placed = set()
+        for place_name in self.place_tasks_in_order:
+            if place_name in placed:
+                continue
+            for r, chains in self.robot_chains.items():
+                for chain in chains:
+                    if chain[-1] == place_name:
+                        sequence_names.extend(chain)
+                        placed.add(place_name)
+        for home_name in self.home_names:
+            sequence_names.append(home_name)
+        sequence_names.append("terminal")
+        self.sequence = self._make_sequence_from_names(sequence_names)
+
+        BaseModeLogic.__init__(self)
+        self.prev_mode = self.start_mode
