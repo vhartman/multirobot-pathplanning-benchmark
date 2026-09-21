@@ -1,5 +1,5 @@
 import random
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -66,14 +66,48 @@ def compute_reachable_modes(env: BaseProblem, max_iter: int = 500) -> tuple[Mode
     return tuple(reachable)
 
 
-def path_cost(path: List[State], batch_cost_fun, agent_slices=None) -> float:
+def skill_edge_seconds(env: BaseProblem, s_from: State, s_to: State) -> Optional[float]:
     """
-    Computes the path cost via the batch cost function and summing it up.
+    Return the physical duration represented by a skill edge, or ``None`` for transit edges.
+    Explicit skill-step deltas avoid double-counting duplicate boundary states; unnumbered
+    skill waypoints charge one skill timestep when they move.
+    """
+    if not (getattr(s_from, "is_skill_waypoint", False) and getattr(s_to, "is_skill_waypoint", False)):
+        return None
+    if s_from.mode != s_to.mode:
+        return None
+    active_tasks = [env.tasks[t] for t in dict.fromkeys(s_to.mode.task_ids)
+                    if getattr(env.tasks[t], "skill", None) is not None]
+    if not active_tasks:
+        return None
+
+    moved = not np.allclose(s_from.q.state(), s_to.q.state())
+    charges = []
+    for task in active_tasks:
+        dt = task.skill.dt
+        steps_from = s_from.skill_steps.get(task.name)
+        steps_to = s_to.skill_steps.get(task.name)
+        if steps_from is not None and steps_to is not None:
+            delta = steps_to - steps_from
+            charges.append(delta * dt if delta != 0 else (dt if moved else 0.0))
+        else:
+            charges.append(dt if moved else 0.0)
+    return max(charges)
+
+
+def path_cost(path: List[State], batch_cost_fun, agent_slices=None, env: Optional[BaseProblem] = None) -> float:
+    """
+    Sum path costs, replacing skill-edge costs with measured duration for time-based environments.
     """
     if isinstance(path[0], State):
         pts = [start.q.state() for start in path]
         agent_slices = path[0].q._array_slice
-        batch_costs = batch_cost_fun(pts, None, tmp_agent_slice=agent_slices)
+        batch_costs = np.asarray(batch_cost_fun(pts, None, tmp_agent_slice=agent_slices), dtype=float)
+        if env is not None and getattr(env, "cost_model", "geometric") == "time":
+            for i, (a, b) in enumerate(zip(path, path[1:])):
+                seconds = skill_edge_seconds(env, a, b)
+                if seconds is not None:
+                    batch_costs[i] = seconds * env.v_ref
     elif isinstance(path[0], np.ndarray) and agent_slices is not None:
         batch_costs = batch_cost_fun(path, None, tmp_agent_slice=agent_slices)
     else:

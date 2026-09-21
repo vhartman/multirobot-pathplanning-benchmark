@@ -3,7 +3,7 @@ import numpy as np
 import time
 import random
 
-from typing import List
+from typing import List, Optional
 
 from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 
@@ -101,6 +101,7 @@ def robot_mode_shortcut(
     robot_choice = "round_robin",
     interpolation_resolution: float=0.5,
     state_validator=None,
+    deadline: Optional[float] = None,
 ):
     """
     Shortcutting the composite path one robot at a time, but allowing shortcutting over the modes as well if the
@@ -109,7 +110,7 @@ def robot_mode_shortcut(
     Works by randomly sampling indices, then randomly choosing a robot, and then checking if the direct interpolation is
     collision free.
 
-    state_validator: optional Callable[[State], bool] that every state of a proposed shortcut must additionally satisfy 
+    state_validator: optional Callable[[State], bool] that every state of a proposed shortcut must additionally satisfy
     (inflated tube clearance around stochastic skills)
     """
 
@@ -127,12 +128,12 @@ def robot_mode_shortcut(
     counter_working_path = sum(1 for s in working_path if getattr(s, 'is_skill_waypoint', False))
     print(f"[DEBUG SKILLS robot_mode_shortcut] Total Nodes: {len(working_path)} | Skill Nodes: {counter_working_path}")
     
-    costs = [path_cost(working_path, env.batch_config_cost)]
+    costs = [path_cost(working_path, env.batch_config_cost, env=env)]
     times = [0.0]
     start_time = time.time()
 
     attempted_shortcuts = 0
-    max_attempts = 250 * 10
+    max_attempts = max_iter * 10
     iter_count = 0
     rr_robot = 0
 
@@ -153,6 +154,8 @@ def robot_mode_shortcut(
     while True:
         iter_count += 1
         if attempted_shortcuts >= max_iter or iter_count >= max_attempts:
+            break
+        if deadline is not None and iter_count % 32 == 0 and time.time() >= deadline:
             break
 
         start_idx = np.random.randint(0, len(working_path))
@@ -246,8 +249,8 @@ def robot_mode_shortcut(
         #     continue
 
         # TODO (Liam) check my reasoning (max cost can be before and after 10, e.g., dominated by robot A, but robot B could improve cost from 5 -> 3, but with ">=", that improvement would be discarded..)
-        if path_cost(proposed_shortcut, env.batch_config_cost) > path_cost( 
-            current_segment, env.batch_config_cost
+        if path_cost(proposed_shortcut, env.batch_config_cost, env=env) > path_cost(
+            current_segment, env.batch_config_cost, env=env
         ) + 1e-8:
             continue
 
@@ -271,15 +274,15 @@ def robot_mode_shortcut(
 
         current_time = time.time()
         times.append(current_time - start_time)
-        costs.append(path_cost(working_path, env.batch_config_cost))
+        costs.append(path_cost(working_path, env.batch_config_cost, env=env))
 
     assert working_path[-1].mode == path[-1].mode
     assert np.linalg.norm(working_path[-1].q.state() - path[-1].q.state()) < 1e-6
     assert np.linalg.norm(working_path[0].q.state() - path[0].q.state()) < 1e-6
 
-    print("Original cost:", path_cost(path, env.batch_config_cost))
+    print("Original cost:", path_cost(path, env.batch_config_cost, env=env))
     print("Attempted shortcuts", attempted_shortcuts)
-    print("New cost:", path_cost(working_path, env.batch_config_cost))
+    print("New cost:", path_cost(working_path, env.batch_config_cost, env=env))
 
     return working_path, [costs, times]
 

@@ -1644,6 +1644,8 @@ class BaseProblem(ABC):
 
     cost_metric: str = "euclidean"
     cost_reduction: str = "max"
+    cost_model: str = "geometric"
+    v_ref: float = 2.0
 
     def __init__(self):
         self._uniform_sampler = self._make_uniform_sampler()
