@@ -16,7 +16,7 @@ from multi_robot_multi_goal_planning.problems.core.configuration import (
     Configuration,
     batch_config_dist,
 )
-from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
+from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost, skill_edge_seconds
 from multi_robot_multi_goal_planning.planners import shortcutting
 from .baseplanner import BasePlanner
 from .mode_validation import ModeValidation
@@ -42,10 +42,11 @@ class RRTSkillsConfig:
     
     extension_strategy: str = "connect"                 # "linear" | "connect"
     p_goal: float = 0.1
-    is_bidirectional: bool = False
+    opt_p_goal: float = 0.3
     distance_metric: str = "max_euclidean"
     with_noise: bool = False
     build_mode: str = "rrt"                              # "rrt" | "rrg" (roadmap: radius-connect non-skill nodes)
+    roadmap_improve_period: int = 4
 
     # -----------------------------------------------------------------
     # EXTEND NON-SKILL MODES PARAMETERS
@@ -93,7 +94,7 @@ class RRTSkillsConfig:
     rewire_neighbor_strategy: str = "radius"            # "radius" | "k_nearest"
     rewire_radius_max: float = 1.0
     rewire_k_constant: Optional[float] = 10             # float | None uses the sufficient k-nearest RRT* paper constant
-    gamma_rrtstar: float = 0.0
+    p_informed: float = 0.7
 
     # INFORMED SAMPLING
     try_informed_sampling: bool = True
@@ -104,10 +105,11 @@ class RRTSkillsConfig:
     # PATH POST-PROCESSING (SHORTCUTTING)
     try_shortcutting: bool = True
     shortcutting_mode: str = "round_robin"
-    periodic_shortcutting_iters: int = 500
+    shortcut_max_iters: int = 500
     final_shortcutting_iters: int = 1000
+    skill_duration_model: str = "sampled"
     shortcutting_interpolation_resolution: float = 0.1
-    shortcut_period_iters: int = 500
+    shortcut_period_improve: int = 100
     sync_shortcut_to_tree: bool = True    
 
 @dataclass
@@ -205,39 +207,6 @@ class MultiModalTree:
 
 
 # =====================================================================
-# CURRENT TODOS
-# =====================================================================
-"""
-CURRENT TODOS
-# RRT
-# TODO [o] in _sample_mode add different mode sampling strategies like PRM (for now uniform)
-# TODO [ ] in _sample_transition_config add reached_terminal_mode like PRM?
-# TODO [ ] differentiate between goal bias and transition bias?
-# TODO [ ] in _sample_transition_config use a smarter approach than random config sampling for inactive robots
-
-# Improvements
-# TODO [ ] blacklisting
-# TODO [ ] exploit transition nodes already found, just like _sample_goal is doing
-# TODO [ ] informed sampling in skill modes (inactive-DOF-only sampler. otherwise sampler wastes effort computing and validating a FULL-config sample when only inactive part matters..)
-# TODO [ ] detect cost improvement from rewiring without waiting for periodic check (I think that might be what makes planner_rrtstar good..)
-# TODO [ ] tune shortcutting_iters (too frequent -> tree small changes, waste of time / too infrequent -> misses improvements from rewiring)
-# TODO [ ] track best transition nodes (lowest cost) in some transition registry so cheaper terminal candidate can be found via another transition or rewiring
-# TODO [ ] tune hyperparams
-# TODO [ ] shortcuts self.best_path but not a freshly extracted path from self.solution:node after rewiring..
-# TODO [ ] add node pruning on sync sc-path to tree (e.g., snapping to existing node if distance < threshold?)
-# TODO [ ] add node pruning to rrt* in general (e.g., some cost-based branch pruning: once rrt* finds initial path, use c_best as upper bound, and prune node + children if c(stars->x)+h(x->goal) > c_best
-
-# RRT*
-# TODO [ ] (later) rewiring in skill modes (inactive parts)
-# TODO [ ] in _find_best_parent, seeding best_parent = n_near needs edge collision check? 
-# TODO [ ] add bidirectional (BRRT*) in non skill modes (check first if old BIRRT* really is faster)
-
-# GENERAL
-# TODO [ ] p_transition for mode specific goal AND p_goal for terminal goal?
-# TODO [ ] in subtree.get_near() should we limit to k_nearest?
-"""
-
-# =====================================================================
 # Main Planner Class
 # =====================================================================
 class RRTSkills(BasePlanner):
@@ -262,6 +231,9 @@ class RRTSkills(BasePlanner):
 
         # RRG lazy-CC cache: adding edges without CC -> validate during roadmap query
         self._roadmap_validated: set = set()
+        self._roadmap_validated_nodes: set = set()
+        self._tree_edges_validated_nodes: set = set()
+        self._tree_edges_validated: set = set()
 
         self.start_time = 0.0
         self.solution_node: Node = None
@@ -285,6 +257,7 @@ class RRTSkills(BasePlanner):
         is_init = self.solution_node is None
 
         self._active_mode_sampling_type = c.init_mode_sampling_type if is_init else c.mode_sampling_type
+        self._active_p_goal = c.p_goal if is_init else c.opt_p_goal
 
         self._active_connect_target_policy = c.connect_target_policy if c.connect_target_policy is not None else (
             c.init_connect_target_policy if is_init else c.opt_connect_target_policy
@@ -373,6 +346,12 @@ class RRTSkills(BasePlanner):
         processes mode transitions, and applies RRT* rewiring and shortcutting optimizations
         """
         self.start_time = time.time()
+        cap = getattr(ptc, "max_runtime_in_s", None)
+        if cap:
+            ptc.max_runtime_in_s = float(cap)
+            self.deadline = self.start_time + float(cap)
+        else:
+            self.deadline = None
         self._initialize_planner()
 
         iterations = 0
@@ -384,10 +363,6 @@ class RRTSkills(BasePlanner):
 
         while not ptc.should_terminate(iterations, time.time() - self.start_time):
             iterations += 1
-
-            # DEBUG prints
-            if iterations % 500 == 0:
-                self._print_debug(iterations)
                 
             # 1. Sample mode
             mode = self._sample_mode()
@@ -428,37 +403,38 @@ class RRTSkills(BasePlanner):
                 if not optimize:
                     break # Stop after first solution
             
-            # 7. Periodic re-extraction (only in optimize mode, after first solution)
-            if optimize and self.solution_node is not None and iterations % self.config.shortcut_period_iters == 0:
+            # 7. Periodic re-extraction after the first solution in optimize mode
+            if (optimize and self.solution_node is not None
+                    and iterations % self.config.shortcut_period_improve == 0):
                 self._periodic_improve(costs, times)
+
+        def _time_left():
+            return float("inf") if self.deadline is None else self.deadline - time.time()
+        if _time_left() <= 0:
+            print("[RRT BUDGET] out of time; skipping route extraction and the final shortcut")
 
         # Extract the final path (RRG roadmap query OR RRT* tree extraction)
         roadmap_cost = float("inf")
-        if optimize and self.solution_node is not None:
+        if optimize and self.solution_node is not None and _time_left() > 0:
             # RRG: the roadmap Dijkstra path is the solution (not the tree path)
             if self.config.build_mode == "rrg":
-                if self.tree.root is not None and self.terminal_nodes:
-                    roadmap_cost, roadmap_node_path = self._roadmap_query(self.tree.root, list(self.terminal_nodes))
-                    if roadmap_node_path:
-                        roadmap_states = self._states_from_nodes(roadmap_node_path)
-                        if self._record_solution(costs, times, path=roadmap_states):
-                            print(f"[RRG ROADMAP] routed Dijkstra path as solution (cost {self.best_cost:.3f})")
+                roadmap_cost = self._roadmap_improve(costs, times)
             else:
                 best_term = self._get_best_terminal()
                 if best_term is not None:
                     tree_path = self._extract_path(best_term)
-                    tree_cost = path_cost(tree_path, self.env.batch_config_cost)
+                    tree_cost = path_cost(tree_path, self.env.batch_config_cost, env=self.env)
                     self._record_solution(costs, times, path=tree_path, node=best_term, cost=tree_cost)
 
         # Final shortcut
-        if self.config.try_shortcutting and self.best_path is not None:
+        if self.config.try_shortcutting and self.best_path is not None and _time_left() > 0:
             sc_path = self._shortcut(self.best_path, self.config.final_shortcutting_iters)
-            sc_cost = path_cost(sc_path, self.env.batch_config_cost) if sc_path and len(sc_path) > 1 else float("inf")
+            sc_cost = path_cost(sc_path, self.env.batch_config_cost, env=self.env) if sc_path and len(sc_path) > 1 else float("inf")
             shortcut_improved = self._record_solution(costs, times, path=sc_path, cost=sc_cost)
             if shortcut_improved:
                 print(f"[RRT FINAL SHORTCUT] Improved cost to {self.best_cost:.3f}")
 
-                if self.config.sync_shortcut_to_tree:
+                if self.config.sync_shortcut_to_tree and _time_left() > 0:
                     self._sync_shortcut_to_tree(sc_path)
                     best_term = self._get_best_terminal()
                     if best_term is not None:
@@ -490,7 +466,7 @@ class RRTSkills(BasePlanner):
         if path is None or len(path) < 2:
             return False
 
-        new_cost = cost if cost is not None else path_cost(path, self.env.batch_config_cost)
+        new_cost = cost if cost is not None else path_cost(path, self.env.batch_config_cost, env=self.env)
         if new_cost >= self.best_cost - 1e-8:
             return False
 
@@ -501,8 +477,9 @@ class RRTSkills(BasePlanner):
         self.best_cost = new_cost
         self.best_path = list(path)
         self._update_informed_path()
+        elapsed = time.time() - self.start_time
         costs.append(self.best_cost)
-        times.append(time.time() - self.start_time)
+        times.append(elapsed)
         return True
 
     def _periodic_improve(self, costs: List[float], times: List[float]):
@@ -526,7 +503,7 @@ class RRTSkills(BasePlanner):
             return
 
         # 2. Shortcut 
-        sc_path = self._shortcut(self.best_path, self.config.periodic_shortcutting_iters)
+        sc_path = self._shortcut(self.best_path, self.config.shortcut_max_iters)
 
         if self._record_solution(costs, times, path=sc_path):
             self.improvement_count += 1
@@ -537,6 +514,32 @@ class RRTSkills(BasePlanner):
                 best_terminal = self._get_best_terminal()
                 if best_terminal is not None:
                     self._record_solution(costs, times, node=best_terminal)
+
+        # 3. RRG only: let the roadmap re-route
+        if self.config.build_mode == "rrg":
+            self._roadmap_improve_calls = getattr(self, "_roadmap_improve_calls", 0) + 1
+            if self._roadmap_improve_calls % max(1, self.config.roadmap_improve_period) == 0:
+                self._roadmap_improve(costs, times)
+
+    def _roadmap_improve(self, costs: List[float], times: List[float]) -> float:
+        """
+        Query the RRG, shortcut the route, and record it if it improves the current solution
+        """
+        if self.config.build_mode != "rrg":
+            return float("inf")
+        if self.tree.root is None or not self.terminal_nodes:
+            return float("inf")
+
+        roadmap_cost, roadmap_node_path = self._roadmap_query(self.tree.root, list(self.terminal_nodes))
+        if not roadmap_node_path:
+            return roadmap_cost
+
+        states = self._states_from_nodes(roadmap_node_path)
+        if self.config.try_shortcutting and len(states) > 1:
+            states = self._shortcut(states, self.config.shortcut_max_iters)
+        if self._record_solution(costs, times, path=states):
+            print(f"[RRG ROADMAP] routed Dijkstra path as solution (cost {self.best_cost:.3f})")
+        return roadmap_cost
 
     def _print_debug(self, iterations: int):
         """
@@ -670,7 +673,7 @@ class RRTSkills(BasePlanner):
         Samples a random configuration or goal bias / transition
         """
         # Goal/transition bias
-        if random.random() < self.config.p_goal:
+        if random.random() < self._active_p_goal:
             self._dbg_goal_bias_attempt += 1
             q_target = self._sample_transition_config(mode)
             if q_target is not None:
@@ -679,7 +682,8 @@ class RRTSkills(BasePlanner):
         
         # Informed sampling (after first solution, for non-skill AND skill-modes)
         if (self.config.try_informed_sampling
-            and self.informed_path is not None):
+            and self.informed_path is not None
+            and random.random() < self.config.p_informed):
             q_informed = self._sample_informed(mode)
             if q_informed is not None:
                 self._dbg_informed_success += 1
@@ -1044,7 +1048,7 @@ class RRTSkills(BasePlanner):
             end_idx += dim
         return active_indices
 
-    def _get_skill_horizon(self, task: Task, q_subspace: np.ndarray, base_step: int) -> Tuple[int, bool]:
+    def _get_skill_horizon(self, task: Task, q_subspace: np.ndarray, base_step: int, skill_steps: Optional[Dict[str, int]] = None) -> Tuple[int, bool]:
         """
         Returns (n_total_steps, is_bounded) for an active skill.
         - For timed skills, n_total_steps = round(duration / dt)
@@ -1053,8 +1057,48 @@ class RRTSkills(BasePlanner):
         """
         skill = task.skill
         if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
+            if self.config.skill_duration_model == "sampled_per_branch" and skill_steps is not None and isinstance(skill, BaseStochasticTimedSkill):
+                total_key = f"{task.name}_n_total"
+                if total_key in skill_steps:
+                    return skill_steps[total_key], True
+                result = skill.rollout(q_subspace, task, self.env.get_joint_names(), self.env, t0=0.0)
+                sampled = (len(result.trajectory) - 1) * skill.dt
+                n_total = max(1, round(sampled / skill.dt))
+                skill_steps[total_key] = n_total
+                return n_total, True
+
+            sampled = self._sampled_skill_duration(task, q_subspace)
+            if sampled is not None:
+                return max(1, round(sampled / skill.dt)), True
             return max(1, round(skill.duration / skill.dt)), True
         return 0, False
+
+    def _sampled_skill_duration(self, task: Task, q_subspace: np.ndarray):
+        """
+        Return one sampled duration for a stochastic task, or None for other models
+        """
+        if self.config.skill_duration_model != "sampled":
+            return None
+        skill = task.skill
+        if not isinstance(skill, BaseStochasticTimedSkill):
+            return None
+        cache = self.__dict__.setdefault("_sampled_durations", {})
+        if task.name not in cache:
+            result = skill.rollout(q_subspace, task, self.env.get_joint_names(), self.env, t0=0.0)
+            cache[task.name] = (len(result.trajectory) - 1) * skill.dt
+            print(f"[SKILL SAMPLE] {task.name}: observed ONE realization of "
+                  f"{cache[task.name]:.2f}s and committed to it. This planner does not model the "
+                  f"duration distribution.")
+        return cache[task.name]
+
+    def _branch_skill_duration(self, task: Task, n_total: int) -> Optional[float]:
+        """Return the sampled branch duration in seconds, or ``None`` for other models."""
+        if self.config.skill_duration_model != "sampled_per_branch":
+            return None
+        skill = task.skill
+        if not isinstance(skill, BaseStochasticTimedSkill):
+            return None
+        return max(1, n_total) * skill.dt
 
     def _step_active_skill(self, task: Task, q_subspace: np.ndarray, step_idx: int, n_total: int) -> Tuple[np.ndarray, bool]:
         """
@@ -1065,9 +1109,18 @@ class RRTSkills(BasePlanner):
         """
         skill = task.skill
         if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
-            t_norm = min(step_idx / max(1, n_total), 1.0)
-            q_new = skill.step(t_norm, q_subspace, self.env)
-            return q_new, skill.done(t_norm, q_new, self.env)
+            sampled = self._sampled_skill_duration(task, q_subspace)
+            if sampled is None:
+                sampled = self._branch_skill_duration(task, n_total)
+            previous = skill.duration
+            if sampled is not None:
+                skill.duration = sampled
+            try:
+                t_norm = min(step_idx / max(1, n_total), 1.0)
+                q_new = skill.step(t_norm, q_subspace, self.env)
+                return q_new, skill.done(t_norm, q_new, self.env)
+            finally:
+                skill.duration = previous
         # Untimed skill
         q_new = skill.step(q_subspace, self.env)
         return q_new, skill.done(q_new, self.env)
@@ -1109,7 +1162,7 @@ class RRTSkills(BasePlanner):
             q_subspace = q_full[task_indices]
             base_step = n_near.state.skill_steps.get(skill_task.name, 0)
             
-            n_total, is_bounded = self._get_skill_horizon(skill_task, q_subspace, base_step)
+            n_total, is_bounded = self._get_skill_horizon(skill_task, q_subspace, base_step, new_skill_steps)
             if is_bounded and base_step >= n_total:
                 return [] # Skill already finished at this node
 
@@ -1157,12 +1210,13 @@ class RRTSkills(BasePlanner):
         # 1. Precompute per-skill info and cap rollout_steps to not exceed any skill's remaining budget
         rollout_steps = self.config.kinodynamic_steps
         skill_infos = []
+        working_skill_steps = dict(n_near.state.skill_steps)
         
         for task in skill_tasks:
-            base_step = n_near.state.skill_steps.get(task.name, 0)
+            base_step = working_skill_steps.get(task.name, 0)
             indices = self._get_active_subspace_indices([task])
             q_sub = q_curr[indices]
-            n_total, is_bounded = self._get_skill_horizon(task, q_sub, base_step)
+            n_total, is_bounded = self._get_skill_horizon(task, q_sub, base_step, working_skill_steps)
             
             if is_bounded:
                 if n_total - base_step <= 0:
@@ -1223,7 +1277,7 @@ class RRTSkills(BasePlanner):
             return [] 
 
         # Create end node for the subtree
-        end_step_dict = dict(n_near.state.skill_steps)
+        end_step_dict = dict(working_skill_steps)
         for task in skill_tasks:
             end_step_dict[task.name] = end_step_dict.get(task.name, 0) + actual_steps
         state_new = State(self.env.get_start_pos().from_flat(waypoints[-1]), mode, is_skill_waypoint=True, skill_steps=end_step_dict)
@@ -1241,6 +1295,12 @@ class RRTSkills(BasePlanner):
         """ 
         if len(waypoints) < 2:
             return 0.0
+
+        if self.env.cost_model == "time":
+            skill_tasks = self._get_active_skill_tasks(mode)
+            if skill_tasks:
+                n_steps = len(waypoints) - 1
+                return n_steps * max(t.skill.dt for t in skill_tasks) * self.env.v_ref
 
         q_from_flat = self.env.get_start_pos().from_flat
         configs = [q_from_flat(q) for q in waypoints]
@@ -1285,7 +1345,13 @@ class RRTSkills(BasePlanner):
             if edge_cost_override is not None:
                 cost_to_parent = edge_cost_override
             else:
-                cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
+                cost_to_parent = None
+                if self.env.cost_model == "time":
+                    seconds = skill_edge_seconds(self.env, n_near.state, state_new)
+                    if seconds is not None:
+                        cost_to_parent = seconds * self.env.v_ref
+                if cost_to_parent is None:
+                    cost_to_parent = self.env.config_cost(n_near.state.q, state_new.q)
             cost = n_near.cost + cost_to_parent
         else:
             # Non-skill node + RRT* active -> run RRT* choose parent
@@ -1339,6 +1405,11 @@ class RRTSkills(BasePlanner):
             else:
                 kind = "transition"
             self._add_roadmap_edge(n_new, parent, n_new.cost_to_parent, kind=kind)
+            if kind == "geometric":
+                key = (id(n_new), id(parent))
+                self._tree_edges_validated.add(key if key[0] < key[1] else key[::-1])
+                self._tree_edges_validated_nodes.add(n_new)
+                self._tree_edges_validated_nodes.add(parent)
 
         if not is_skill:
             self._roadmap_connect(n_new, mode)
@@ -1400,6 +1471,8 @@ class RRTSkills(BasePlanner):
             return True
         if self.env.is_edge_collision_free(a.state.q, b.state.q, a.state.mode):
             self._roadmap_validated.add(key)
+            self._roadmap_validated_nodes.add(a)
+            self._roadmap_validated_nodes.add(b)
             return True
         return False
 
@@ -1570,6 +1643,9 @@ class RRTSkills(BasePlanner):
 
         # Step 3: Create the seed nodes for the newly reached modes
         for next_mode in valid_next_modes:
+            if any(c.state.mode == next_mode for c in n_new.children):
+                continue
+
             # Check if configuration is actually collision-free in new mode's context
             if not self.env.is_collision_free(n_new.state.q, next_mode):
                 self._dbg_seed_coll_fail += 1
@@ -1597,6 +1673,9 @@ class RRTSkills(BasePlanner):
             for task in current_active_tasks:
                 if task.name in next_task_names:
                     seed_node.state.skill_steps[task.name] = n_new.state.skill_steps.get(task.name, 0)
+                    total_key = f"{task.name}_n_total"
+                    if total_key in n_new.state.skill_steps:
+                        seed_node.state.skill_steps[total_key] = n_new.state.skill_steps[total_key]
                     continuing_skills = True
             
             if continuing_skills:
@@ -1655,8 +1734,12 @@ class RRTSkills(BasePlanner):
 
         # Check if the skill is timed vs. untimed
         if isinstance(skill, (BaseDeterministicTimedSkill, BaseStochasticTimedSkill)):
-            n_steps = max(1, round(skill.duration / skill.dt))
+            n_steps, _ = self._get_skill_horizon(task, q_subspace, 0, dict(node.state.skill_steps))
             base_step = node.state.skill_steps.get(task.name, 0)
+            
+            if base_step >= n_steps:
+                return True
+                
             t_norm = min(base_step / n_steps, 1.0)
             return skill.done(t_norm, q_subspace, self.env)
         return skill.done(q_subspace, self.env)
@@ -1741,31 +1824,36 @@ class RRTSkills(BasePlanner):
                         wp_skill_steps[skill_task_name] = wp_skill_steps.get(skill_task_name, 0) + idx + 1
                     path.append(State(q_wp, n.state.mode, is_skill_waypoint=True, skill_steps=wp_skill_steps))
             else:
-                # Skip duplicate mode transition nodes, but keep the new mode
-                if len(path) > 0 and np.allclose(path[-1].q.state(), n.state.q.state(), atol=1e-6):
-                    path[-1].mode = n.state.mode
-                    continue
                 path.append(State(
                     n.state.q, n.state.mode, n.state.is_skill_waypoint, dict(n.state.skill_steps),
                 ))
         return path
 
-
     def _shortcut(self, path: List[State], shortcutting_iters: int) -> List[State]:
         """
         Post-processes a path with robot_mode_shortcut
         Skill segments are protected
+        Bounded by self.deadline 
         """
         shortcut_path, _ = shortcutting.robot_mode_shortcut(
             self.env, path, shortcutting_iters,
             resolution=self.env.collision_resolution,
             tolerance=self.env.collision_tolerance,
             robot_choice=self.config.shortcutting_mode,
-            interpolation_resolution=self.config.shortcutting_interpolation_resolution
+            interpolation_resolution=self.config.shortcutting_interpolation_resolution,
+            deadline=getattr(self, "deadline", None),
         )
 
         # Remove interpolated points used in shortcutting (collision check)
-        return shortcutting.remove_interpolated_nodes(shortcut_path)
+        shortcut_path = shortcutting.remove_interpolated_nodes(shortcut_path)
+
+        if not self.env.is_path_collision_free(shortcut_path, check_start_and_end=True):
+            print("[SHORTCUT REJECT] the shortcut path contains a state that is not collision "
+                  "free; keeping the pre-shortcut path. See _shortcut for why an edge check "
+                  "alone cannot catch this.")
+            return path
+
+        return shortcut_path
 
     def _sync_shortcut_to_tree(self, shortcut_path: List[State]) -> Optional[Node]:
         """
@@ -1797,7 +1885,13 @@ class RRTSkills(BasePlanner):
                 best_parent, best_cost, best_cost_to_parent = self._find_best_parent(parent_node, state.q, new_mode)
             else:
                 best_parent = parent_node
-                best_cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
+                best_cost_to_parent = None
+                if is_skill_mode and self.env.cost_model == "time":
+                    seconds = skill_edge_seconds(self.env, parent_node.state, state)
+                    if seconds is not None:
+                        best_cost_to_parent = seconds * self.env.v_ref
+                if best_cost_to_parent is None:
+                    best_cost_to_parent = self.env.config_cost(parent_node.state.q, state.q)
                 best_cost = parent_node.cost + best_cost_to_parent
 
             # 2) Create and attach
@@ -2063,6 +2157,8 @@ class RRTSkills(BasePlanner):
             n_near = subtree.nodes[int(near_indices[pos])]
             if n_near is n_new or n_near is n_new.parent or n_near.state.is_skill_waypoint:
                 continue
+            if n_near.parent is not None and n_near.parent.state.mode != n_near.state.mode:
+                continue
             # rewire if edge is collision free
             if self.env.is_edge_collision_free(n_new.state.q, n_near.state.q, mode):
                 # Detach from old parent
@@ -2081,13 +2177,10 @@ class RRTSkills(BasePlanner):
     def _should_rewire(self) -> bool:
         """
         Determines if RRT* should rewire or not:
-        - If RRG: solution is Dijkstra path, rewiring is waste
         - If use_rrt_star = False: never rewire
         - If rewire_after_first_solution = True: only rewire after first solution found
         - Otherwise: always rewire when use_rrt_star = True
         """
-        if self.config.build_mode == "rrg":
-            return False
         if not self.config.use_rrt_star:
             return False
         if self.config.rewire_after_first_solution:
