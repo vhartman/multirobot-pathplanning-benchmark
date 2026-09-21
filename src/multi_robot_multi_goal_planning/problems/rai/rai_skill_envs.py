@@ -3215,8 +3215,8 @@ class rai_stochastic_stacking_base(rai_env):
 
         self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
         
-        self.collision_tolerance = 0.01
-        self.collision_resolution = 0.01
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
 
         self.spec.home_pose = SafePoseType.HAS_SAFE_HOME_POSE
         self.safe_pose = {r: np.array(self.C.getJointState()[self.robot_idx[r]]) for r in self.robots}
