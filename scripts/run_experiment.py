@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import datetime
 import json
 import os
+import time
 from dataclasses import asdict
 
 import numpy as np
@@ -16,7 +17,7 @@ import traceback
 
 import gc
 
-from typing import Dict, Any, Callable, Tuple, List
+from typing import Dict, Any, Callable, Tuple, List, Optional
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
@@ -49,6 +50,19 @@ from multi_robot_multi_goal_planning.planners import (
     RRTSkillsConservativeConfig
 )
 from multi_robot_multi_goal_planning.planners.rrtstar_base import BaseRRTstar
+from multi_robot_multi_goal_planning.planners.rrt_skills_reactive import (
+    ReactiveRoadmap,
+)
+from multi_robot_multi_goal_planning.planners.reactive_policy import ReactiveExecutor
+from multi_robot_multi_goal_planning.problems.util import interpolate_path
+from run_stochastic_experiments import (
+    ReactiveExperimentConfig,
+    build_reactive_configs,
+    draw_execution_base_seed,
+    evaluate_open_loop,
+    evaluate_reactive_policy,
+    _execution_seed,
+)
 
 def validate_config(config: Dict[str, Any]) -> None:
     pass
@@ -91,8 +105,10 @@ def export_planner_data(planner_folder: str, run_id: int, planner_data: Dict):
         os.makedirs(run_folder)
 
     # write path to file
-    paths = planner_data["paths"]
+    paths = list(planner_data["paths"]) + list(planner_data.get("execution_paths") or [])
     for i, path in enumerate(paths):
+        if not path:
+            continue
         # export path
         file_path = f"{run_folder}path_{i}.json"
         with open(file_path, "w") as f:
@@ -111,6 +127,25 @@ def export_planner_data(planner_folder: str, run_id: int, planner_data: Dict):
         np.savetxt(f, costs, delimiter=",", newline=",")
         f.write(b"\n")
 
+    if planner_data.get("realized_costs"):
+        with open(planner_folder + "realized_timestamps.txt", "ab") as f:
+            np.savetxt(f, planner_data["realized_times"], delimiter=",", newline=",")
+            f.write(b"\n")
+        with open(planner_folder + "realized_costs.txt", "ab") as f:
+            np.savetxt(f, planner_data["realized_costs"], delimiter=",", newline=",")
+            f.write(b"\n")
+
+    if "executions" in planner_data:
+        with open(f"{run_folder}executions.json", "w") as f:
+            json.dump(planner_data["executions"], f, indent=2)
+
+    if "shortcut_history" in planner_data:
+        with open(f"{run_folder}shortcut_history.json", "w") as f:
+            json.dump({"build_time": planner_data.get("build_time"),
+                       "planning_failed": planner_data.get("planning_failed", False),
+                       "phase_a_points": planner_data.get("phase_a_points"),
+                       "history": planner_data["shortcut_history"]}, f, indent=2)
+
 
 def export_config(path: str, config: Dict):
     with open(path + "config.json", "w") as f:
@@ -118,7 +153,8 @@ def export_config(path: str, config: Dict):
 
 
 def setup_planner(
-    planner_config, runtime: int, optimize: bool = True
+    planner_config, runtime: int, optimize: bool = True, cost_model: str = "geometric",
+    problem_env: Optional[BaseProblem] = None,
 ) -> Tuple[str, Callable[[BaseProblem], Tuple[Any, Dict]], Any]:
     name = planner_config["name"]
 
@@ -189,16 +225,25 @@ def setup_planner(
                 optimize=optimize,
             )
     elif planner_config["type"] == "prioritized":
-        options = planner_config["options"]
-        config = PrioritizedPlannerConfig()
+        planner_cls, config_cls = PrioritizedPlanner, PrioritizedPlannerConfig
+
+        options = dict(planner_config["options"])
+        n_executions = options.pop("num_executions", 0)
+        config = config_cls()
         for k, v in options.items():
             setattr(config, k, v)
 
         def planner(env):
-            return PrioritizedPlanner(env, config).plan(
+            seed_base = draw_execution_base_seed()
+            path, info = planner_cls(env, config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
+            if n_executions > 0 and path is not None:
+                info["executions"], info["execution_paths"] = evaluate_open_loop(
+                    env, path, n_executions, seed_base)
+            return path, info
+
     elif planner_config["type"] == "short_horizon":
         options = planner_config["options"]
         config = RecedingHorizonConfig()
@@ -211,44 +256,130 @@ def setup_planner(
                 optimize=optimize,
             )
     elif planner_config["type"] == "rrt_skills":
-        options = planner_config["options"]
+        options = dict(planner_config["options"])
+        n_executions = options.pop("num_executions", 0)
         config = RRTSkillsConfig()
         for k, v in options.items():
             setattr(config, k, v)
 
         def planner(env):
+            seed_base = draw_execution_base_seed()
             rrt_config = RRTSkillsConfig()
             for k, v in options.items():
                 setattr(rrt_config, k, v)
 
-            return RRTSkills(env, config=rrt_config).plan(
+            path, info = RRTSkills(env, config=rrt_config).plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
+            if n_executions > 0 and path is not None:
+                nominal = interpolate_path(path, 0.05, kind="euclidean")
+                info["executions"], info["execution_paths"] = evaluate_open_loop(
+                    env, nominal, n_executions, seed_base)
+            return path, info
     elif planner_config["type"] == "rrt_skills_conservative":
-        options = planner_config["options"]
+        options = dict(planner_config["options"])
+        n_executions = options.pop("num_executions", 0)
         config = RRTSkillsConservativeConfig()
         for k, v in options.items():
             setattr(config, k, v)
 
         def planner(env):
+            seed_base = draw_execution_base_seed()
             rrt_config = RRTSkillsConservativeConfig()
             for k, v in options.items():
                 setattr(rrt_config, k, v)
 
-            return RRTSkillsConservative(env, config=rrt_config).plan(
+            planner_obj = RRTSkillsConservative(env, config=rrt_config)
+            path, info = planner_obj.plan(
                 ptc=RuntimeTerminationCondition(runtime),
                 optimize=optimize,
             )
+            if n_executions > 0 and path is not None:
+                nominal = interpolate_path(path, 0.05, kind="euclidean")
+                info["executions"], info["execution_paths"] = evaluate_open_loop(
+                    env, nominal, n_executions, seed_base)
+            return path, info
+
+    elif planner_config["type"] == "reactive":
+        options = dict(planner_config["options"])
+        n_executions = options.pop("num_executions", 100)
+        options.pop("batched", None)  # compatibility with older experiment configs
+        (resolved_roadmap, resolved_mdp, resolved_shortcut,
+         resolved_batched) = build_reactive_configs(
+            options, runtime, cost_model, problem_env)
+        config = ReactiveExperimentConfig(
+            roadmap=asdict(resolved_roadmap),
+            mdp=asdict(resolved_mdp),
+            shortcut=asdict(resolved_shortcut),
+            batched=asdict(resolved_batched),
+            num_executions=n_executions,
+        )
+
+        def planner(env):
+            seed_base = draw_execution_base_seed()
+            roadmap_config, mdp_config, shortcut_config, batched_config = build_reactive_configs(
+                options, runtime, cost_model, env)
+
+            t0 = time.time()
+            deadline = t0 + runtime
+            from multi_robot_multi_goal_planning.planners.reactive_batched import (
+                batched_reactive_plan,
+            )
+            roadmap = ReactiveRoadmap(env, roadmap_config)
+            build_time = time.time() - t0
+            mdp, shortcut_history = batched_reactive_plan(
+                roadmap, mdp_config, shortcut_config, batched_config,
+                deadline=deadline)
+            plan_time = time.time() - t0
+
+            planning_failed = not np.isfinite(mdp.get_start_cost_to_go())
+            if planning_failed:
+                print("[PLANNING FAILURE] V(start) is infinite -- no policy exists for this "
+                      "roadmap, so no executions are run. This run counts against PLANNING "
+                      "success, not against execution success.")
+                executions, execution_paths = [], []
+            else:
+                executions, execution_paths = evaluate_reactive_policy(
+                    env, mdp, n_executions, seed_base)
+
+            times = [float(t) for t in getattr(roadmap, "phase_a_times", [])]
+            costs = [float(c) for c in getattr(roadmap, "phase_a_costs", [])]
+            wall = build_time
+            for h in shortcut_history:
+                wall += h["improve_time"] + h["solve_time"]
+                times.append(wall)
+                costs.append(float(h["V_start"]))
+
+            strictly_increasing = ([0] + [i for i in range(1, len(times)) if times[i] > times[i - 1]]
+                                   if times else [])
+            n_phase_a = sum(1 for i in strictly_increasing if i < len(roadmap.phase_a_times))
+            times = [times[i] for i in strictly_increasing]
+            costs = [costs[i] for i in strictly_increasing]
+
+            best = min((e for e in executions if e["success"]),
+                       key=lambda e: e["cost"], default=None)
+            representative = best["index"] if best else 0
+            np.random.seed(_execution_seed(seed_base, representative))
+            random.seed(_execution_seed(seed_base, representative))
+            path = None if planning_failed else ReactiveExecutor(mdp).run().path
+
+            return path, {
+                "planning_failed": planning_failed,
+                "paths": [path],
+                "times": times or [plan_time],
+                "costs": costs or [float(mdp.get_start_cost_to_go())],
+                "executions": executions,
+                "execution_paths": execution_paths,
+                "shortcut_history": shortcut_history,
+                "build_time": build_time,
+                "phase_a_points": n_phase_a,
+            }
 
     else:
         raise ValueError(f"Planner type {planner_config['type']} not implemented")
 
     return name, planner, config
-
-
-def setup_env(env_config):
-    pass
 
 
 class Tee:
@@ -532,6 +663,9 @@ def main():
     env = get_env_by_name(config["environment"])
     env.cost_reduction = config["cost_reduction"]
     env.cost_metric = config["per_agent_cost"]
+    cost_model = config.get("cost_model", "geometric")
+    env.cost_model = cost_model
+    env.v_ref = config.get("v_ref", 1.0)
 
     if False:
         env.show()
@@ -539,7 +673,8 @@ def main():
     planners = []
     for planner_config in config["planners"]:
         name, planner_fn, resolved_config = setup_planner(
-            planner_config, config["max_planning_time"], config["optimize"]
+            planner_config, config["max_planning_time"], config["optimize"],
+            cost_model=cost_model, problem_env=env,
         )
         planners.append(
             (name, planner_fn)
@@ -550,8 +685,9 @@ def main():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # convention: alsways use "/" as trailing character
+    base_out = os.environ.get("MRMG_OUTPUT_DIR", "./out").rstrip("/")
     experiment_folder = (
-        f"./out/{timestamp}_{config['experiment_name']}_{config['environment']}/"
+        f"{base_out}/{timestamp}_{config['experiment_name']}_{config['environment']}/"
     )
 
     if not os.path.isdir(experiment_folder):
