@@ -1,32 +1,13 @@
-"""
-run_conservative_planner.py
-===========================
-The stochastic counterpart of run_planner.py
-
-Runs the conservative open-loop stochastic planner RRTSkillsConservative on a given environment
-
-Extras over run_planner.py:
-  - No --planner selector: always RRTSkillsConservative
-  - New --num_rollouts: number of fresh noisy skill realizations to simulate after planning
-  - No post-hoc shortcutting in the script (handled internally by the planner's _shortcut)
-"""
 from simple_parsing import ArgumentParser
 import numpy as np
 import random
 import datetime
 import os
-import copy
-from dataclasses import dataclass
-from typing import Optional, List
 
-from run_experiment import export_planner_data
+from run_experiment import export_planner_data, _execution_seed
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 from multi_robot_multi_goal_planning.problems.planning_env import State
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
-from multi_robot_multi_goal_planning.problems.skills import (
-    BaseStochasticTimedSkill,
-    StochasticBaseSkill
-)
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     IterationTerminationCondition,
     RuntimeTerminationCondition,
@@ -35,132 +16,10 @@ from multi_robot_multi_goal_planning.planners import (
     RRTSkillsConservative,
     RRTSkillsConservativeConfig,
 )
+from multi_robot_multi_goal_planning.planners.rrt_skills_conservative import (
+    replay_stochastic_path,
+)
 
-# =====================================================================
-# Open-Loop Stochastic Replay Helpers
-# =====================================================================
-def stochastic_task_indices(env, task) -> np.ndarray:
-    """
-    Computes which indices of the combined state array belong to the robots executing the given task
-    Used as during replay we only want to overwrite the active robot's joints with fresh rollout 
-    """
-    idx = []
-    end = 0
-    for robot in env.robots:
-        dim = env.robot_dims[robot]
-        if robot in task.robots:
-            idx.extend(range(end, end + dim))
-        end += dim
-    return np.array(idx)
-
-def _rollout_fresh(env, task, q_init: np.ndarray) -> np.ndarray:
-    """
-    Executes one fresh noisy realization of task.skill from q_init
-    Replay only checks the realized endpoint against the plan (see replay_stochastic_path),
-    so no branch targeting is needed here - any realization is accepted as-is
-    """
-    skill = task.skill
-    result = skill.rollout(q_init, task, env.get_joint_names(), env, t0=0.0)
-    return result.trajectory
-
-@dataclass
-class ReplayResult:
-    path: List[State]
-    valid: bool = True
-    break_reason: Optional[str] = None
-
-# Max joint-space distance between realized and planned skill endpoints
-_ENDPOINT_TOL = 1e-2
-
-def replay_stochastic_path(env, path: List[State]) -> ReplayResult:
-    """
-    Simulates real-world execution of a conservative open-loop plan under one
-    fresh noisy realization of each stochastic skill
-
-    Two failure modes are detected:
-      - time_exceeded: the realized rollout needed more steps than the budgeted segment
-      - endpoint_mismatch: the active robot landed more than _ENDPOINT_TOL away from
-        where the plan expects it, meaning the rest of the plan is not valid
-
-    The conservative planner already guaranteed collision safety for any intermediate
-    path (it checked all MC rollouts during planning), so a different intermediate
-    trajectory is always safe, only the final configuration matters
-    """
-    stoc_tasks = [
-        t for t in env.tasks
-        if getattr(t, "skill", None) is not None
-        and isinstance(t.skill, (BaseStochasticTimedSkill, StochasticBaseSkill))
-    ]
-    replayed = copy.deepcopy(path)
-
-    if not stoc_tasks:
-        return ReplayResult(path=replayed, valid=True, break_reason=None)
-
-    for task in stoc_tasks:
-        idx = stochastic_task_indices(env, task)
-        seg_indices = [
-            i for i, s in enumerate(replayed)
-            if getattr(s, "is_skill_waypoint", False)
-            and task.name in getattr(s, "skill_steps", {})
-        ]
-        if not seg_indices:
-            continue
-
-        seg_states = [replayed[i] for i in seg_indices]
-        init_state = replayed[seg_indices[0] - 1] if seg_indices[0] > 0 else seg_states[0]
-        q_init = np.asarray(init_state.q.state(), dtype=np.float64)[idx]
-
-        fresh_traj = _rollout_fresh(env, task, q_init)
-
-        fresh_segment = []
-        for s_plan in seg_states:
-            step_idx = s_plan.skill_steps.get(task.name, 0)
-            # If rollout completed earlier than budgeted, hold at the final configuration
-            active_q = fresh_traj[min(step_idx, len(fresh_traj) - 1)]
-            q = np.asarray(s_plan.q.state(), dtype=np.float64).copy()
-            q[idx] = active_q
-            fresh_segment.append(
-                State(
-                    env.get_start_pos().from_flat(q),
-                    s_plan.mode,
-                    is_skill_waypoint=True,
-                    skill_steps=dict(s_plan.skill_steps),
-                )
-            )
-
-        prefix = replayed[:seg_indices[0]]
-        suffix = replayed[seg_indices[-1] + 1:]
-
-        # fresh_traj[0] = q_init, so number of actual steps = len - 1
-        time_exceeded = (len(fresh_traj) - 1) > len(seg_states)
-
-        # Check if the active robot landed at the expected endpoint
-        # The conservative planner already guaranteed safety for any intermediate path
-        # (checked all MC rollouts during planning), so only the final config matters
-        committed_endpoint = np.asarray(seg_states[-1].q.state(), dtype=np.float64)[idx]
-        endpoint_dist = np.linalg.norm(fresh_traj[-1] - committed_endpoint)
-        endpoint_mismatch = endpoint_dist > _ENDPOINT_TOL
-
-        if time_exceeded or endpoint_mismatch:
-            reason = (
-                f"time_exceeded:{task.name}" if time_exceeded
-                else f"endpoint_mismatch:{task.name}:dist={endpoint_dist:.4f}"
-            )
-            print(f"[REPLAY] '{task.name}' open-loop plan failed: {reason}. Halting execution.")
-            return ReplayResult(path=prefix + fresh_segment, valid=False, break_reason=reason)
-
-        replayed = prefix + fresh_segment + suffix if suffix else prefix + fresh_segment
-
-    # Final collision check on the full spliced trajectory
-    if not env.is_valid_plan(replayed):
-        print("[REPLAY] Collision detected in physical execution realization.")
-        return ReplayResult(path=replayed, valid=False, break_reason="collision")
-
-    return ReplayResult(path=replayed, valid=True, break_reason=None)
-
-# =====================================================================
-# Main Runner
-# =====================================================================
 def main():
     parser = ArgumentParser(description="RRTSkillsConservative runner")
 
@@ -170,7 +29,7 @@ def main():
         action="store_true",
         help="Enable optimization if the planner supports it. (default: False)",
     )
-    parser.add_argument("--seed", type=int, default=1, help="Seed")
+    parser.add_argument("--seed", type=int, default=0, help="Seed")
     parser.add_argument("--run_id", type=int, default=0, help="Run id. Used for debugging only.")
     parser.add_argument(
         "--num_iters", type=int, help="Maximum number of iterations for termination."
@@ -281,11 +140,15 @@ def main():
         n_valid = 0
         n_endpoint_mismatch = 0
         n_time_exceeded = 0
+        noisy_valid = []
         for i in range(args.num_rollouts):
+            np.random.seed(_execution_seed(args.seed, i))
+            random.seed(_execution_seed(args.seed, i))
             result = replay_stochastic_path(env, interpolated_path)
             status = "OK" if result.valid else f"FAILED ({result.break_reason})"
             print(f"[ROLLOUTS] rollout {i} -> {status}")
             n_valid += int(result.valid)
+            noisy_valid.append(result.valid)
             if result.break_reason is not None:
                 if result.break_reason.startswith("endpoint_mismatch"):
                     n_endpoint_mismatch += 1
@@ -318,6 +181,23 @@ def main():
 
         planner_folder = experiment_folder + "rrt_stochastic_skills/"
         export_planner_data(planner_folder, 0, info)
+
+        # Export executions for plotting ECDF properly
+        executions = []
+        for path, valid in zip(noisy_paths, noisy_valid):
+            if not valid:
+                executions.append({"cost": None, "success": False})
+            else:
+                c = 0.0
+                for a, b in zip(path, path[1:]):
+                    c += float(env.batch_config_cost(a.q, np.asarray([b.q.state()]))[0])
+                executions.append({"cost": c, "success": True})
+
+        run_dir = os.path.join(planner_folder, "0")
+        os.makedirs(run_dir, exist_ok=True)
+        with open(os.path.join(run_dir, "executions.json"), "w") as f:
+            import json
+            json.dump(executions, f)
 
     if args.viser:
         viser_paths = planner_paths + [interpolated_path] + noisy_paths
