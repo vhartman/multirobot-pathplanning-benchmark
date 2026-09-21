@@ -178,9 +178,7 @@ class Mode:
     def __hash__(self):
         if self._cached_hash is None:
             entry_hash = 0
-            sg_fitered = {
-                k: (v[0], v[1], v[2]) if len(v) > 2 else v for k, v in self.sg.items()
-            }
+            sg_fitered = {k: v[0] for k, v in self.sg.items()}
             sg_hash = hash(frozenset(sg_fitered.items()))
             task_hash = hash(tuple(self.task_ids))
 
