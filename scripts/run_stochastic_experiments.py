@@ -123,37 +123,10 @@ def evaluate_reactive_policy(env, mdp, n_executions: int, base_seed: int) -> Tup
                    "skill_seconds_by_task": {k: float(v)
                                              for k, v in run.skill_seconds_by_task.items()},
                    "skill_epochs": int(run.skill_epochs),
-                   "probe_epochs": int(run.probe_epochs),
-                   "model_reality_mismatch": int(run.model_reality_mismatch),
-                   "both_blocked": int(run.both_blocked),
-                   "repr_drift_max": float(run.repr_drift_max),
-                   "repr_drift_at_mismatch": float(run.repr_drift_at_mismatch),
-                   "clamped_steps": int(getattr(run, "clamped_steps", 0)),
-                   "clamp_excess_max": float(getattr(run, "clamp_excess_max", 0.0)),
-                   "blocked_actions": int(getattr(run, "blocked_actions", 0)),
-                   "fallback_epochs": int(getattr(run, "fallback_epochs", 0)),
                    "planner_cost": float(run.cost) if np.isfinite(run.cost) else None},
         ))
         paths.append(run.path)
 
-    probe = sum(int(r.get("probe_epochs", 0)) for r in records)
-    mism = sum(int(r.get("model_reality_mismatch", 0)) for r in records)
-    both = sum(int(r.get("both_blocked", 0)) for r in records)
-    drift = max([float(r.get("repr_drift_max", 0.0)) for r in records], default=0.0)
-    dmis = max([float(r.get("repr_drift_at_mismatch", 0.0)) for r in records], default=0.0)
-    print(f"[MODEL/REALITY] {probe} skill epochs probed | {mism} where the bin REPRESENTATIVE is "
-          f"free and the REALIZATION is not | {both} where both are blocked | "
-          f"max representative drift {drift:.4f} (at a mismatch: {dmis:.4f})")
-    clamped = sum(int(r.get("clamped_steps", 0)) for r in records)
-    excess = max([float(r.get("clamp_excess_max", 0.0)) for r in records], default=0.0)
-    if clamped:
-        print(f"[VELOCITY CLAMP] {clamped} commanded inactive steps exceeded one decision epoch "
-              f"and were held to it; worst was {excess:.1f}x the limit")
-    blocked = sum(int(r.get("blocked_actions", 0)) for r in records)
-    fallback = sum(int(r.get("fallback_epochs", 0)) for r in records)
-    if blocked:
-        print(f"[REALIZED MOTION] {blocked} skill-epoch actions collided along the motion actually "
-              f"driven and were skipped; {fallback} epochs executed a later policy candidate")
     return records, paths
 
 def build_reactive_configs(options, runtime, cost_model, problem_env=None):
