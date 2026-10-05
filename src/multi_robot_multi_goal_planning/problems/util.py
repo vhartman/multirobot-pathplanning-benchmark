@@ -163,8 +163,4 @@ def interpolate_path(path: List[State], resolution: float = 0.1, kind="max") -> 
     final_q = path[-1].q.from_flat(path[-1].q.state())
     new_path.append(State(final_q, path[-1].mode, final_is_skill, skill_steps=final_skill_steps))
     
-    # TODO DEBUG (remove)
-    counter = sum(1 for s in new_path if getattr(s, 'is_skill_waypoint', False))
-    print(f"[DEBUG INTERPOLATE] There are {counter} skill points in the new_path")
-
     return new_path

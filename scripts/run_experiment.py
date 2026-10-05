@@ -28,7 +28,7 @@ from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
 from multi_robot_multi_goal_planning.planners.termination_conditions import (
     RuntimeTerminationCondition,
 )
-from analysis.make_plots import make_cost_plots
+from scripts.analysis.make_plots import make_cost_plots
 # np.random.seed(100)
 
 from multi_robot_multi_goal_planning.planners import (
@@ -55,7 +55,7 @@ from multi_robot_multi_goal_planning.planners.rrt_skills_reactive import (
 )
 from multi_robot_multi_goal_planning.planners.reactive_policy import ReactiveExecutor
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
-from run_stochastic_experiments import (
+from scripts.run_stochastic_experiments import (
     ReactiveExperimentConfig,
     build_reactive_configs,
     draw_execution_base_seed,
@@ -113,6 +113,12 @@ def export_planner_data(planner_folder: str, run_id: int, planner_data: Dict):
         file_path = f"{run_folder}path_{i}.json"
         with open(file_path, "w") as f:
             json.dump([state.to_dict() for state in path], f)
+        execution_index = i - len(planner_data["paths"])
+        executions = planner_data.get("executions") or []
+        if execution_index >= 0 and execution_index < len(executions):
+            timing_file = f"{run_folder}timing_{i}.json"
+            with open(timing_file, "w") as f:
+                json.dump({"timestamps": executions[execution_index].get("state_timestamps", [])}, f)
 
     # write all costs with their timestamps to file
     with open(planner_folder + "timestamps.txt", "ab") as f:

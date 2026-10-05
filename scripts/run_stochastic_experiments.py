@@ -19,16 +19,13 @@ class ReactiveExperimentConfig:
     batched: Dict[str, Any]
     num_executions: int
 
-
 def draw_execution_base_seed() -> int:
-    """Draw a base seed for the executions of one planner run."""
+    """Draw a base seed for the executions of one planner run"""
     return int(np.random.randint(0, 2 ** 31 - 1))
 
-
 def _execution_seed(base_seed: int, index: int) -> int:
-    """Derive a repeatable seed for one execution index."""
+    """Derive a repeatable seed for one execution index"""
     return int(np.random.SeedSequence([int(base_seed), int(index)]).generate_state(1)[0])
-
 
 def _execution_record(env, path, index, reached_goal, break_reason, extra=None) -> Dict:
     def _entry(cost, real_time, mode, step):
@@ -54,16 +51,19 @@ def _execution_record(env, path, index, reached_goal, break_reason, extra=None) 
                 "task_types": task_types}
 
     timeline = []
+    state_timestamps = []
     if path and len(path) > 1:
         current_cost = 0.0
         current_real = 0.0
         timeline.append(_entry(0.0, 0.0, path[0].mode, 0))
+        state_timestamps.append(0.0)
         v_ref = getattr(env, "v_ref", 1.0)
         for i in range(1, len(path)):
             cost_step = float(env.batch_config_cost([path[i-1]], [path[i]])[0])
             current_cost += cost_step
             edge_seconds = skill_edge_seconds(env, path[i-1], path[i])
             current_real += edge_seconds if edge_seconds is not None else cost_step / v_ref
+            state_timestamps.append(current_real)
             if path[i].mode != path[i-1].mode:
                 timeline.append(_entry(current_cost, current_real, path[i].mode, i))
         timeline.append(_entry(current_cost, current_real, path[-1].mode, len(path)-1))
@@ -79,25 +79,23 @@ def _execution_record(env, path, index, reached_goal, break_reason, extra=None) 
         "cost": float(path_cost(path, env.batch_config_cost, env=env)) if path and len(path) > 1 else None,
         "break_reason": break_reason,
         "timeline": timeline,
+        "state_timestamps": state_timestamps,
     }
     record["success"] = record["reached_goal"] and record["valid"]
     record.update(extra or {})
     return record
 
-
 def _skill_seconds_by_task(env, steps_by_task: Dict[str, int]) -> Dict[str, float]:
-    """Convert realized skill step counts to seconds, preserving each task separately."""
+    """Convert realized skill step counts to seconds, preserving each task separately"""
     dt = {t.name: getattr(getattr(t, "skill", None), "dt", 0.0) for t in env.tasks}
     return {name: n * dt.get(name, 0.0) for name, n in (steps_by_task or {}).items()}
 
-
 def _skill_seconds(env, steps_by_task: Dict[str, int]) -> float:
-    """Longest realized skill duration in SECONDS. The max-reduction of _skill_seconds_by_task."""
+    """Longest realized skill duration in SECONDS. The max-reduction of _skill_seconds_by_task"""
     return max(_skill_seconds_by_task(env, steps_by_task).values(), default=0.0)
 
-
 def evaluate_open_loop(env, path, n_executions: int, base_seed: int) -> Tuple[List[Dict], List]:
-    """Evaluate one open-loop plan over fresh stochastic realizations."""
+    """Evaluate one open-loop plan over fresh stochastic realizations"""
     records, paths = [], []
     for i in range(n_executions):
         np.random.seed(_execution_seed(base_seed, i))
@@ -111,13 +109,8 @@ def evaluate_open_loop(env, path, n_executions: int, base_seed: int) -> Tuple[Li
         paths.append(result.path)
     return records, paths
 
-
 def evaluate_reactive_policy(env, mdp, n_executions: int, base_seed: int) -> Tuple[List[Dict], List]:
-    """
-    Executes the reactive policy closed-loop against n_executions fresh realizations.
-
-    Returns (records, paths); see evaluate_open_loop for why the paths are kept.
-    """
+    """Executes the reactive policy closed-loop against n_executions fresh realizations"""
     executor = ReactiveExecutor(mdp)
     records, paths = [], []
     for i in range(n_executions):
@@ -163,9 +156,8 @@ def evaluate_reactive_policy(env, mdp, n_executions: int, base_seed: int) -> Tup
               f"driven and were skipped; {fallback} epochs executed a later policy candidate")
     return records, paths
 
-
 def build_reactive_configs(options, runtime, cost_model, problem_env=None):
-    """Build the roadmap, MDP, shortcut, and batched reactive configurations."""
+    """Build the roadmap, MDP, shortcut, and batched reactive configurations"""
     from multi_robot_multi_goal_planning.planners.reactive_batched import (
         BatchedConfig,
     )

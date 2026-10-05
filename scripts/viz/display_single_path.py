@@ -70,7 +70,12 @@ def convert_to_path(env, path_data):
                 # except:
                 #     break
 
-        real_path.append(State(q, modes[-1]))
+        real_path.append(State(
+            q,
+            modes[-1],
+            is_skill_waypoint=bool(a.get("is_skill_waypoint", False)),
+            skill_steps=dict(a.get("skill_steps", {})),
+        ))
         prev_mode_ids = a["mode"]
 
         prev_config = q
@@ -155,6 +160,18 @@ def main():
         help="Interpolate the path that is loaded. (default: True)",
     )
     parser.add_argument(
+        "--interpolation_resolution",
+        type=float,
+        default=0.1,
+        help="Maximum configuration distance between rendered states (default: 0.1)",
+    )
+    parser.add_argument(
+        "--playback_speedup",
+        type=float,
+        default=1.0,
+        help="Physical-time playback/export speedup (default: 1)",
+    )
+    parser.add_argument(
         "--shortcut",
         action="store_true",
         help="Shortcut the path. (default: False)",
@@ -195,11 +212,15 @@ def main():
         action="store_true",
         help="Use viser. (default: False)",
     )
-
     args = parser.parse_args()
 
-    folder_path = re.match(r'(.*?/out/[^/]+)', args.path_filename).group(1)
-    potential_config_path = os.path.join(folder_path, 'config.json')
+    path_file = Path(args.path_filename).resolve()
+    folder_path = next(
+        (parent for parent in [path_file.parent, *path_file.parents]
+         if (parent / "config.json").exists()),
+        path_file.parent,
+    )
+    potential_config_path = folder_path / "config.json"
     if Path(potential_config_path).exists():
         config = load_experiment_config(potential_config_path)
         seed = config["seed"] 
@@ -223,6 +244,14 @@ def main():
         env.C = env.C_orig
 
     path = convert_to_path(env, path_data)
+
+    path_number = Path(args.path_filename).stem.split("_")[-1]
+    timing_path = Path(args.path_filename).with_name(f"timing_{path_number}.json")
+    edge_durations = None
+    if timing_path.exists():
+        timestamps = json.loads(timing_path.read_text()).get("timestamps", [])
+        if len(timestamps) == len(path):
+            edge_durations = [0.0] + [b - a for a, b in zip(timestamps, timestamps[1:])]
 
     cost = path_cost(path, env.batch_config_cost)
     print("cost", cost)
@@ -270,9 +299,8 @@ def main():
 
         path = path_w_doubled_modes
 
-    if args.interpolate:
-        path = interpolate_path(path, 0.1) # TODO Resolution: run_planner (live) has 0.05, display_single_path (replay) has 0.1 
-        #path = interpolate_path(path, 0.05) 
+    if args.interpolate and edge_durations is None:
+        path = interpolate_path(path, args.interpolation_resolution)
         
     if args.shortcut:
         plt.figure()
@@ -319,8 +347,12 @@ def main():
             export=args.export,
             pause_time=0.05,
             stop_at_end=True,
-            adapt_to_max_distance=True,
-            stop_at_mode=False
+            adapt_to_max_distance=not args.export,
+            stop_at_mode=False,
+            physical_timing=args.export,
+            playback_speedup=args.playback_speedup,
+            export_fps=30.0,
+            edge_durations=edge_durations,
         )
 
 

@@ -899,6 +899,10 @@ class rai_env(BaseProblem):
         stop_at_end=False,
         adapt_to_max_distance: bool = False,
         stop_at_mode: bool = False,
+        physical_timing: bool = False,
+        playback_speedup: float = 1.0,
+        export_fps: float = 30.0,
+        edge_durations=None,
     ) -> None:
         if export:
             os.makedirs("./z.vid", exist_ok=True)
@@ -906,6 +910,22 @@ class rai_env(BaseProblem):
                 if f.endswith(".png"):
                     os.remove(os.path.join("./z.vid", f))
 
+        durations = [0.0]
+        if physical_timing:
+            if edge_durations is not None:
+                durations = list(edge_durations)
+            else:
+                v_ref = float(getattr(self, "v_ref", 1.0))
+                for previous, current in zip(path[:-1], path[1:]):
+                    duration = config_dist(previous.q, current.q, "max_euclidean") / max(v_ref, 1e-12)
+                    durations.append(max(0.0, duration))
+
+        frame_targets = [0]
+        if export and physical_timing:
+            elapsed = 0.0
+            for duration in durations[1:]:
+                elapsed += duration / max(playback_speedup, 1e-9)
+                frame_targets.append(round(elapsed * export_fps))
         for i in range(len(path)):
             self.set_to_mode(path[i].mode)
             for k in range(len(self.robots)):
@@ -924,10 +944,18 @@ class rai_env(BaseProblem):
             self.C.view(stop)
 
             if export:
-                self.C.view_savePng("./z.vid/")
+                repeats = 1
+                if physical_timing and i + 1 < len(path):
+                    repeats = max(0, frame_targets[i + 1] - frame_targets[i])
+                for _ in range(repeats):
+                    self.C.view_savePng("./z.vid/")
 
             dt = pause_time # Fixed dt
-            if adapt_to_max_distance: # Or adaptive dt
+            if export:
+                dt = 0.0
+            elif physical_timing and i + 1 < len(path):
+                dt = durations[i + 1] / max(playback_speedup, 1e-9)
+            if adapt_to_max_distance and not export: # Or adaptive dt
                 if i < len(path) - 1:
                     v = 5 # Target visual velocity
                     diff = config_dist(path[i].q, path[i + 1].q, "max_euclidean") # Max joint displacement
