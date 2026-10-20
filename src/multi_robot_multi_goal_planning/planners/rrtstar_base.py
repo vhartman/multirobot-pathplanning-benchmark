@@ -1436,8 +1436,12 @@ class BaseRRTstar(BasePlanner):
                     n_new.state.mode == n_near.state.mode
                     or n_new.state.mode == n_near.state.mode.prev_mode
                 ):
+                    # Transition nodes are shared with the successor tree but
+                    # retain their incoming mode. Rewiring two such roots is
+                    # motion before the switch, not after it (e.g. the object
+                    # is still held). The child determines the edge's mode.
                     if self._check_edge_cf(
-                        n_new.state.q, n_near.state.q, mode
+                        n_new.state.q, n_near.state.q, n_near.state.mode
                     ):
                         if n_near.parent is not None:
                             n_near.parent.children.remove(n_near)
