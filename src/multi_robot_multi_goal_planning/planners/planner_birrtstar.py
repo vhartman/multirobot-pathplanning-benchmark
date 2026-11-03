@@ -9,7 +9,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
 )
-from multi_robot_multi_goal_planning.problems.core.configuration import Configuration
+from multi_robot_multi_goal_planning.problems.core.configuration import Configuration, batch_config_dist
 
 from .rrtstar_base import (
     BaseRRTConfig,
@@ -275,9 +275,9 @@ class BidirectionalRRTstar(BaseRRTstar):
 
         q = n_new.state.q
         # RRT not RRT*
-        i = 1
         while True:
-            state_new = self.steer(mode, n_nearest_b, q, dist, i)
+            dist = batch_config_dist(n_nearest_b.state.q, [q], metric="max_euclidean")[0]
+            state_new = self.steer(mode, n_nearest_b, q, dist)
             if (
                 not state_new or np.equal(state_new.q.state(), q.state()).all()
             ):  # Reached
@@ -303,7 +303,6 @@ class BidirectionalRRTstar(BaseRRTstar):
                 )
                 n_new.cost = c_min
                 n_nearest_b = n_new
-                i += 1
             else:
                 return
 
