@@ -142,20 +142,18 @@ class ModeValidation:
 
             return random.choice(possible_next_task_combinations)
 
-        # if we have no possible task combinations
+        invalid_next_modes = self.invalid_next_ids.get(mode, set())
+        possible_next_task_combinations = [
+            ids for ids in possible_next_task_combinations
+            if tuple(ids) not in invalid_next_modes
+        ]
+
         if not possible_next_task_combinations:
-            # and the mode is not terminal -> add the mode to the invalid ones
             if not self.env.is_terminal_mode(mode):
                 self.propagate_invalid(mode)
             return None
 
-        invalid_next_modes = self.invalid_next_ids.get(mode, set())
-
-        while True:
-            next_task = random.choice(possible_next_task_combinations)
-            if tuple(next_task) in invalid_next_modes:
-                continue
-            return next_task
+        return random.choice(possible_next_task_combinations)
 
     def add_invalid_mode(self, mode: Mode) -> None:
         """
@@ -190,16 +188,17 @@ class ModeValidation:
         if not self.apply:
             return
 
-        while True:
+        while mode is not None:
             invalid_next_ids = self.invalid_next_ids.get(mode, set())
             possible_next_task_combinations = self.env.get_valid_next_task_combinations(mode)
-            # if there are more possible task combinations than invalid ones, a feasible
-            # combination still exists — stop propagating.
-            if len(invalid_next_ids) < len(possible_next_task_combinations):
+            if any(
+                tuple(ids) not in invalid_next_ids
+                for ids in possible_next_task_combinations
+            ):
                 break
-            self.add_invalid_mode(mode)
             if mode == self.env.start_mode:
                 break
+            self.add_invalid_mode(mode)
             mode = mode.prev_mode
 
     def remove_invalid_modes(self, modes: List[Mode]) -> List[Mode]:
