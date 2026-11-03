@@ -29,6 +29,32 @@ from .baseplanner import BasePlanner
 from .collision_free_sampler import make_collision_free_sampler
 
 
+@njit(cache=True)
+def max_robot_l1_displacement(direction, slices):
+    """Largest per-robot sum of absolute coordinate displacements."""
+    maximum = 0.0
+    for start, end in slices:
+        total = 0.0
+        for j in range(start, end):
+            total += abs(direction[j])
+        maximum = max(maximum, total)
+    return maximum
+
+
+@njit(cache=True)
+def max_robot_rms_displacement(direction, slices):
+    """Largest per-robot root-mean-square coordinate displacement."""
+    maximum_squared = 0.0
+    for start, end in slices:
+        if end <= start:
+            continue
+        squared = 0.0
+        for j in range(start, end):
+            squared += direction[j] * direction[j]
+        maximum_squared = max(maximum_squared, squared / (end - start))
+    return np.sqrt(maximum_squared)
+
+
 class Operation:
     """Represents an operation instance responsible for managing variables related to path planning and cost optimization."""
 
@@ -515,6 +541,15 @@ class BaseLongHorizon:
 
 @dataclass
 class BaseRRTConfig:
+    """Configuration for RRT* and bidirectional RRT*.
+
+    Steering limits per-robot L2 (legacy), L1, or RMS displacement using one
+    shared interpolation fraction. A positive ``steer_step_size`` overrides
+    the policy with an L2 cap. ``max_connection_radius`` caps connections and
+    neighborhoods; zero falls back to ``stepsize``. The legacy step also uses
+    ``stepsize``, with zero meaning sqrt(total DoF).
+    """
+
     informed_sampling: bool = True
     locally_informed_sampling: bool = True
     informed_batch_size: int = 300
@@ -551,6 +586,11 @@ class BaseRRTConfig:
     p_reseed_transition: float = 0.0
     birrtstar_version: int = 2
     stepsize: float = 0
+    max_connection_radius: float = 0.0  # zero uses stepsize or sqrt(total DoF)
+    steering_policy: str = "legacy"  # "legacy" | "robot_l1" | "robot_rms"
+    steer_l1_step: float = 3.0
+    steer_rms_step: float = 0.5
+    steer_step_size: float = 0.0  # zero uses the selected policy
 
     balanced_trees: bool = False
 
@@ -567,11 +607,22 @@ class BaseRRTstar(BasePlanner):
     ):
         self.env = env
         self.config = config
+        if config.steering_policy not in ("legacy", "robot_l1", "robot_rms"):
+            raise ValueError("steering_policy must be 'legacy', 'robot_l1', or 'robot_rms'")
+        for name in ("stepsize", "steer_step_size", "max_connection_radius"):
+            value = getattr(config, name)
+            if not np.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and nonnegative")
+        for name in ("steer_l1_step", "steer_rms_step"):
+            value = getattr(config, name)
+            if not np.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and positive")
         self.dim = sum(self.env.robot_dims.values())
 
         self.eta = self.config.stepsize
         if self.eta == 0:
             self.eta = np.sqrt(self.dim)
+        self.max_connection_radius = config.max_connection_radius or self.eta
             
         self.operation = Operation()
         self.modes = []
@@ -579,6 +630,11 @@ class BaseRRTstar(BasePlanner):
         self.transition_node_ids = {}
         # pre-warm JIT-compiled helpers so compilation is not charged to plan()
         find_nearest_indices(np.zeros(1, dtype=np.float64), 0.0)
+        if not config.steer_step_size and config.steering_policy != "legacy":
+            start = self.env.get_start_pos()
+            kernel = (max_robot_l1_displacement if config.steering_policy == "robot_l1"
+                      else max_robot_rms_displacement)
+            kernel(np.zeros_like(start.state()), start._array_slice)
         self.start_time = time.time()
         self.costs = []
         self.times = []
@@ -1287,12 +1343,20 @@ class BaseRRTstar(BasePlanner):
             return None
         q_nearest = n_nearest.state.q.state()
         direction = q_rand.q - q_nearest
-        if self.config.distance_metric != "max_euclidean":
-            # most independent of the number of robots and their dimension
-            dist = batch_config_dist(
-                n_nearest.state.q, [q_rand], metric="max_euclidean"
-            )
-        N = float((dist / self.eta))  # to have exactly the step size
+        if self.config.steer_step_size or self.config.steering_policy == "legacy":
+            if self.config.distance_metric != "max_euclidean":
+                dist = batch_config_dist(
+                    n_nearest.state.q, [q_rand], metric="max_euclidean"
+                )
+            N = float(np.asarray(dist).item()) / (self.config.steer_step_size or self.eta)
+        elif self.config.steering_policy == "robot_l1":
+            N = max_robot_l1_displacement(
+                direction, n_nearest.state.q._array_slice
+            ) / self.config.steer_l1_step
+        else:
+            N = max_robot_rms_displacement(
+                direction, n_nearest.state.q._array_slice
+            ) / self.config.steer_rms_step
 
         if N <= 1 or int(N) == i - 1:  # for bidirectional or drrt
             q_new = q_rand.q
@@ -1333,7 +1397,8 @@ class BaseRRTstar(BasePlanner):
             )
         vertices = self.trees[mode].get_number_of_nodes_in_tree()
         r = np.minimum(
-            self.gamma_rrtstar * (np.log(vertices) / vertices) ** (1 / self.d), self.eta
+            self.gamma_rrtstar * (np.log(vertices) / vertices) ** (1 / self.d),
+            self.max_connection_radius,
         )
         indices = find_nearest_indices(set_dists, r)  # indices of batch_subtree
         if np.size(n_nearest_idx) and n_nearest_idx not in indices:

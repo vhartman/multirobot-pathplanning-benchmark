@@ -207,7 +207,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             # if np.max(relevant_dists) > self.step_size:
             #     return
 
-            if dist > self.eta:
+            if dist > self.max_connection_radius:
                 return
 
             if not self._check_edge_cf(
