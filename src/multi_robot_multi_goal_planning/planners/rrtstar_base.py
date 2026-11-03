@@ -523,6 +523,7 @@ class BaseRRTConfig:
     p_goal: float = 0.4
     
     shortcutting: bool = True
+    shortcutting_run_choice: str = "tree"
     
     init_mode_sampling_type: str = "frontier"
     frontier_mode_sampling_probability: float = 0.98
@@ -1533,6 +1534,7 @@ class BaseRRTstar(BasePlanner):
                 self.env,
                 self.operation.path_shortcutting,
                 100,
+                run_choice=self.config.shortcutting_run_choice,
                 resolution=self.env.collision_resolution,
                 tolerance=self.env.collision_tolerance,
             )

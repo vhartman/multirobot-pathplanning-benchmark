@@ -8,7 +8,8 @@ from typing import List, Optional
 
 from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 
-# from multi_robot_multi_goal_planning.problems.configuration import config_dist
+from multi_robot_multi_goal_planning.problems.core.configuration import config_dist
+from .shortcutting_compatible import CompatibleSubsetProposer
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
 
@@ -89,10 +90,9 @@ def constant_task_runs(path: List[State], robot: int, min_span: int = 2):
     """
     The index ranges over which the task of `robot` does not change.
 
-    A robot may only be shortcut between two indices at which its task is the same, and a task
-    occupies one contiguous stretch of the path, so every pair that may be shortcut lies inside
-    one of these runs. Runs too short to hold a pair are dropped. Returns inclusive (first, last)
-    index pairs.
+    Returns maximal contiguous runs as inclusive (first, last) index pairs.
+    A run must span at least min_span edges. Equal task IDs separated by a
+    different task belong to separate runs.
     """
     task_ids = [s.mode.task_ids[robot] for s in path]
 
@@ -107,37 +107,102 @@ def constant_task_runs(path: List[State], robot: int, min_span: int = 2):
     return runs
 
 
-def full_run_gain(env: BaseProblem, path: List[State], robot: int, lo: int, hi: int) -> float:
-    """
-    The cost the shortcutter could still win inside path[lo:hi+1] by straightening `robot`:
-    the cost of the segment minus the cost of the segment with `robot` fully straightened.
-    Can be negative — the composite cost takes a max over the robots, so straightening one of
-    them can raise it. Uses the same interpolation as the shortcut candidates, including the
-    doubled mode switch handling, so a run with zero gain really has nothing left to propose.
-    """
-    q0 = path[lo].q
-    q0_tmp = q0[robot] * 1
-    diff = (path[hi].q[robot] * 1 - q0_tmp) / (hi - lo)
+def _shortcut_candidate(env, path, first, last, robots):
+    """Straighten selected robots while keeping other coordinates and modes.
 
-    straightened = []
-    for k in range(hi - lo + 1):
-        q = path[lo + k].q.state() * 1.0
-        r_cnt = 0
-        for r in range(len(env.robots)):
-            dim = env.robot_dims[env.robots[r]]
-            if r == robot:
-                # we assume that we double the mode switch configurations
-                if k != 0 and lo + k != hi and path[lo + k].mode != path[lo + k - 1].mode:
-                    q_interp = q0_tmp + diff * (k - 1)
+    Endpoints are fixed. Interior mode switches are represented by duplicate
+    configurations; the state after a switch uses the preceding interpolation
+    offset so those duplicates remain coincident.
+    """
+    start, end = path[first].q, path[last].q
+    candidate = []
+    for offset in range(last - first + 1):
+        flat = path[first + offset].q.state().copy()
+        cursor = 0
+        for robot, name in enumerate(env.robots):
+            dimension = env.robot_dims[name]
+            if robot in robots:
+                step = offset
+                if (0 < offset < last - first
+                        and path[first + offset].mode != path[first + offset - 1].mode):
+                    step -= 1
+                if step == 0:
+                    value = start[robot]
+                elif step == last - first:
+                    value = end[robot]
                 else:
-                    q_interp = q0_tmp + diff * k
-                q[r_cnt : r_cnt + dim] = q_interp
-            r_cnt += dim
-        straightened.append(State(q0.from_flat(q), path[lo + k].mode))
+                    value = start[robot] + (end[robot] - start[robot]) * (step / (last - first))
+                flat[cursor:cursor + dimension] = value
+            cursor += dimension
+        candidate.append(State(start.from_flat(flat), path[first + offset].mode))
+    return candidate
 
-    return path_cost(path[lo : hi + 1], env.batch_config_cost) - path_cost(
-        straightened, env.batch_config_cost
-    )
+
+def full_run_gain(env: BaseProblem, path: List[State], robot: int, lo: int, hi: int) -> float:
+    """Composite-cost decrease from straightening one robot over an entire run.
+
+    This evaluates the candidate's cost without collision checking. The result
+    can be negative, even when that robot's individual path becomes shorter.
+    """
+    candidate = _shortcut_candidate(env, path, lo, hi, (robot,))
+    return (path_cost(path[lo:hi + 1], env.batch_config_cost)
+            - path_cost(candidate, env.batch_config_cost))
+
+
+def _check_shortcut(env, candidate, resolution, tolerance, observe_failure, ordered=False):
+    """Check a candidate and optionally locate the first reported failure.
+
+    The failure offset identifies a failing state or the start of a failing
+    edge in the candidate. It is None if the checker cannot identify one.
+    Observation wrappers are removed even when collision checking raises.
+    """
+    failing_q = [None]
+    originals = {}
+    missing = object()
+    if observe_failure:
+        for name in ("is_edge_collision_free", "is_collision_free"):
+            original = getattr(env, name)
+            originals[name] = env.__dict__.get(name, missing)
+            def observe(q, *args, _check=original, **kwargs):
+                free = _check(q, *args, **kwargs)
+                if not free:
+                    failing_q[0] = q
+                return free
+            setattr(env, name, observe)
+    try:
+        options = dict(check_edges_in_order=True, binary_order=False) if ordered else {}
+        free = env.is_path_collision_free(
+            candidate, resolution=resolution, tolerance=tolerance,
+            check_start_and_end=False, **options,
+        )
+    finally:
+        for name, original in originals.items():
+            if original is missing:
+                delattr(env, name)
+            else:
+                setattr(env, name, original)
+    failure = next((k for k, state in enumerate(candidate)
+                    if state.q is failing_q[0]), None) if not free else None
+    return free, failure
+
+
+def _interpolate_compatible_path(env, path, spacing, resolution, tolerance):
+    """Keep mode boundaries intact; retain raw edges if subdivision is invalid."""
+    dense = []
+    for start, end in zip(path, path[1:]):
+        steps = (max(1, int(config_dist(start.q, end.q, "max") / spacing))
+                 if start.mode == end.mode else 1)
+        delta = (end.q.state() - start.q.state()) / steps
+        for k in range(steps):
+            dense.append(State(start.q.from_flat(start.q.state() + delta * k), start.mode))
+    dense.append(State(path[-1].q.from_flat(path[-1].q.state().copy()), path[-1].mode))
+    options = dict(resolution=resolution, tolerance=tolerance,
+                   check_start_and_end=True, check_edges_in_order=True, binary_order=False)
+    if env.is_path_collision_free(dense, **options):
+        return dense
+    if not env.is_path_collision_free(path, **options):
+        raise ValueError("Input path failed collision validation at the configured resolution")
+    return [State(state.q.from_flat(state.q.state().copy()), state.mode) for state in path]
 
 
 def robot_mode_shortcut(
@@ -149,57 +214,64 @@ def robot_mode_shortcut(
     robot_choice = "round_robin",
     interpolation_resolution: float=0.5,
     max_attempts: Optional[int] = None,
-    run_choice: str = "tree"
+    run_choice: str = "tree",
 ):
+    """Reduce path cost by straightening robots within constant-task runs.
+
+    Selected robots are interpolated between two path indices; other robots
+    retain their coordinates. Candidates must reduce env.batch_config_cost
+    and pass collision checking at resolution/tolerance before being applied.
+    Input paths must represent mode switches with duplicate configurations.
+
+    The tree proposes entire single-robot runs, longest first, and splits
+    colliding intervals at observed failure indices. Compatible-subset sampling
+    chooses a subset size, robot subset, compatible run, and endpoint indices
+    uniformly at each level. A compatible run contains no task change for any
+    selected robot; subsets are neither enumerated nor cached.
+
+    run_choice selects the proposal schedule:
+      - tree_compatible: alternate tree and compatible-subset draws, then use
+        subsets alone when the tree is exhausted.
+      - tree_then_compatible: exhaust the tree, then sample compatible subsets.
+      - compatible: sample compatible subsets only.
+      - tree (default): exhaust the tree, then use single-robot gain scheduling.
+      - gain: use single-robot gain scheduling only.
+      - tree_random: exhaust the tree, then use span scheduling.
+      - span: use span scheduling only.
+
+    Gain scheduling ranks runs by potential cost decrease, acceptance evidence,
+    and draw count; overlapping gains are updated after accepted shortcuts.
+    Span scheduling selects robots according to robot_choice (round_robin or
+    random), then maximizes run span divided by one plus its draw count.
+
+    max_iter bounds collision-checked proposals. max_attempts bounds draws,
+    including rejected pairs; its default is max(2500, 5 * max_iter).
+    Subset policies require cost improvement greater than 1e-6; the other
+    policies require a strictly positive improvement.
+    Returns the copied path and [costs, elapsed_times].
     """
-    Shortcutting the composite path one robot at a time, but allowing shortcutting over the modes as well if the
-    robot we are shortcutting is not active.
-
-    Works by sampling indices for one robot, and then checking if the direct interpolation is collision free.
-    The indices are drawn from within one of the ranges over which that robot keeps the same task, since a pair
-    that spans a task change of the robot can not be shortcut anyway (see constant_task_runs). Drawing them from
-    the whole path instead spends the attempt budget on pairs that are then discarded: measured on assembly paths
-    with three and four robots, only 7% of the pairs survived, so the 2500 attempts bought ~125 collision checks
-    instead of the 1000 that were asked for.
-
-    `run_choice` decides where the next pair comes from. "gain" (the default) keeps, per (robot, run), the
-    cost that fully straightening the robot inside the run would still win (see full_run_gain), and picks the
-    pair from the (robot, run) with the highest remaining gain per draw already spent on it — so the budget
-    flows to where slack remains and away from runs that have converged, at the price of recomputing the gains
-    touched by an accepted shortcut. "span" picks the robot round-robin (or at random, see `robot_choice`) and
-    the run by its length. Measured on assembly scenes at a 1000-shortcut budget, "gain" reaches a given cost
-    with roughly half the wall time of "span" and is never worse at matched budgets.
-    "tree" starts with a structural prefix: every maximal constant-task run is proposed
-    broadest-first, and a colliding run is split at the first failing edge the checker reports
-    (dropped only when no edge is reported). The exact cost gate is unchanged, and once the
-    prefix is exhausted the "gain" selector takes over for the remaining budget. Measured on
-    assembly scenes at a 1000-shortcut budget, "tree" matches or beats "gain" in final cost
-    everywhere and spends less wall time on long, detour-heavy paths.
-
-    "tree_random" is the same structural prefix with the plain "span" fallback (round-robin
-    robot, longest-run divisor, uniform pair inside the run) instead of the gain selector.
-    Measured on the assembly scenes the span fallback finishes a few percent above the gain
-    selector at matched budgets; this variant is kept as the smaller-diff option.
-    `max_attempts` bounds the draws, as opposed to `max_iter`, which bounds the shortcuts that are actually
-    checked. It defaults to five times `max_iter`, but at least the 2500 that used to be hardcoded, so
-    callers with a small `max_iter` keep the attempt budget they had.
-    """
+    schedules = {"tree_compatible": "interleaved", "tree_then_compatible": "sequenced",
+                 "compatible": "subset"}
+    if run_choice not in ("tree", "tree_random", "gain", "span", *schedules):
+        raise ValueError(f"Unknown run_choice: {run_choice}")
+    if not path:
+        return [], [[0.0], [0.0]]
+    if interpolation_resolution <= 0 or not np.isfinite(interpolation_resolution):
+        raise ValueError("interpolation_resolution must be finite and positive")
+    scalable = run_choice in schedules
     # Keep the original edge partition. The input edges have already been
     # collision checked, while joining collinear edges changes the collision
     # checker's discretization and can turn a certified path into an invalid one.
-    new_path = interpolate_path(path, interpolation_resolution)
+    new_path = (_interpolate_compatible_path(
+        env, path, interpolation_resolution, resolution, tolerance,
+    ) if scalable else interpolate_path(path, interpolation_resolution))
     
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
 
-    # for p in new_path:
-    #     if not env.is_collision_free(p.q, p.mode):
-    #         print("startpath is in collision")
-
     start_time = time.time()
 
     cnt = 0
-    # for iter in range(max_iter):
     if max_attempts is None:
         max_attempts = max(250 * 10, 5 * max_iter)
     iter = 0
@@ -213,6 +285,9 @@ def robot_mode_shortcut(
     if not any(runs):
         return new_path, [costs, times]
 
+    proposer = (CompatibleSubsetProposer(
+        new_path, runs, np.random.default_rng(np.random.randint(0, 2**32)), schedules[run_choice],
+    ) if scalable else None)
     gains = runs_prop = runs_acc = None
     tree_heap = []
     tree_serial = 0
@@ -250,13 +325,14 @@ def robot_mode_shortcut(
         if cnt >= max_iter or iter >= max_attempts:
             break
 
-        # robots_to_shortcut = [r for r in range(len(env.robots))]
-        # random.shuffle(robots_to_shortcut)
-        # # num_robots = np.random.randint(0, len(robots_to_shortcut))
-        # num_robots = 1
-        # robots_to_shortcut = robots_to_shortcut[:num_robots]
         from_tree = False
-        if run_choice in ("tree", "tree_random") and tree_heap:
+        if proposer is not None:
+            proposal = proposer()
+            if proposal is None:
+                continue
+            i, j, robots_to_shortcut = proposal.first, proposal.last, proposal.robots
+            from_tree = proposal.from_tree
+        elif run_choice in ("tree", "tree_random") and tree_heap:
             # structural prefix: broadest interval first, robot and interval from the frontier
             from_tree = True
             _, _, _, r, i, j = heapq.heappop(tree_heap)
@@ -264,7 +340,7 @@ def robot_mode_shortcut(
             tree_last = (r, i, j)
         else:
             if run_choice == "tree" and gains is None:
-                # prefix exhausted: initialize the landed gain selector for the rest of the budget
+                # Initialize gain scheduling once the tree is exhausted.
                 gains = [
                     [max(0.0, full_run_gain(env, new_path, r, lo, hi)) for lo, hi in runs[r]]
                     for r in range(len(env.robots))
@@ -296,9 +372,7 @@ def robot_mode_shortcut(
                 else:
                     robots_to_shortcut = [np.random.randint(0, len(env.robots))]
 
-                # pick one of the ranges of the robot we shortcut, and draw the pair from it. Longer
-                # ranges get proportionally more draws (the divisor rule; drawing from the whole path
-                # favoured them even more, quadratically).
+                # Prioritize runs by span divided by one plus their draw count.
                 r = robots_to_shortcut[0]
                 if not runs[r]:
                     continue
@@ -326,8 +400,7 @@ def robot_mode_shortcut(
                 sel_r, sel_run = r, run
                 runs_prop[sel_r][sel_run] += 1
 
-        # holds by construction now, since i and j come from a range over which the task of the
-        # robot does not change, but the shortcut is only valid if it does
+        # Selected robots must retain their tasks across the shortcut interval.
         can_shortcut_this = True
         for r in robots_to_shortcut:
             if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
@@ -337,56 +410,15 @@ def robot_mode_shortcut(
         if not can_shortcut_this:
             continue
 
-        # if not env.is_path_collision_free(new_path[i:j], resolution=0.01, tolerance=0.01):
-        #     print("path is not collision free")
-        #     env.show(True)
-
         q0 = new_path[i].q
         q1 = new_path[j].q
 
-        # precopmute all the differences
-        q0_tmp = {}
-        q1_tmp = {}
-        diff_tmp = {}
-        for r in robots_to_shortcut:
-            q0_tmp[r] = q0[r] * 1
-            q1_tmp[r] = q1[r] * 1
-            diff_tmp[r] = (q1_tmp[r] - q0_tmp[r]) / (j - i)
-
-        # constuct pth element for the shortcut
-        path_element = []
-        for k in range(j - i + 1):
-            q = new_path[i + k].q.state() * 1.0
-
-            r_cnt = 0
-            for r in range(len(env.robots)):
-                # print(r, i, j, k)
-                dim = env.robot_dims[env.robots[r]]
-                if r in robots_to_shortcut:
-                    # we assume that we double the mode switch configurations
-                    if k != 0 and i+k != j and new_path[i+k].mode != new_path[i+k-1].mode:
-                        q_interp = q0_tmp[r] + diff_tmp[r] * (k-1)
-                    else:
-                        q_interp = q0_tmp[r] + diff_tmp[r] * k
-                    q[r_cnt : r_cnt + dim] = q_interp
-                # else:
-                #     q[r_cnt : r_cnt + dim] = new_path[i + k].q[r]
-
-                r_cnt += dim
-
-            # print(tmp)
-            # print(q)
-
-            # print(q)
-            path_element.append(
-                State(q0.from_flat(q), new_path[i + k].mode)
-            )
+        path_element = _shortcut_candidate(env, new_path, i, j, robots_to_shortcut)
 
         # check if the shortcut improves cost
-        if path_cost(path_element, env.batch_config_cost) >= path_cost(
-            new_path[i : j + 1], env.batch_config_cost
-        ):
-            # print(f"{cnt} does not improve cost")
+        improvement = (path_cost(new_path[i:j + 1], env.batch_config_cost)
+                       - path_cost(path_element, env.batch_config_cost))
+        if improvement <= (1e-6 if scalable else 0.0):
             continue
 
         assert np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6
@@ -394,54 +426,14 @@ def robot_mode_shortcut(
 
         cnt += 1
 
-        # TODO: is path colision free makes this horrible, since the edges are the interpolated nodes
-        # Therefore, many edges have length 2. Possibly remove interpolated things here before checking?
-        # needs to be fixed.
-        #
-        # "tree" observes the failing edge endpoint during the check (no extra collision
-        # queries) so a colliding interval can split at the FIRST failing edge instead of
-        # being discarded whole.
-        fail_q = [None]
-        if from_tree:
-            original_edge_check = env.is_edge_collision_free
-            original_config_check = env.is_collision_free
-
-            def _edge_observe(q_a, *args, **kwargs):
-                result = original_edge_check(q_a, *args, **kwargs)
-                if not result:
-                    fail_q[0] = q_a
-                return result
-
-            def _config_observe(q, *args, **kwargs):
-                result = original_config_check(q, *args, **kwargs)
-                if not result:
-                    fail_q[0] = q
-                return result
-
-            env.is_edge_collision_free = _edge_observe
-            env.is_collision_free = _config_observe
-        try:
-            free = env.is_path_collision_free(
-                path_element, resolution=resolution, tolerance=tolerance, check_start_and_end=False
-            )
-        finally:
-            if from_tree:
-                env.is_edge_collision_free = original_edge_check
-                env.is_collision_free = original_config_check
-
-        fail_k = None
-        if not free and fail_q[0] is not None:
-            for k in range(j - i + 1):
-                if path_element[k].q is fail_q[0]:
-                    fail_k = i + k
-                    break
+        free, fail_offset = _check_shortcut(
+            env, path_element, resolution, tolerance, from_tree, ordered=scalable,
+        )
+        fail_k = i + fail_offset if fail_offset is not None else None
 
         if free:
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
-
-                # if not np.array_equal(new_path[i+k].mode, path_element[k].mode):
-                # print('fucked up')
 
             if gains is not None and not from_tree:
                 runs_acc[sel_r][sel_run] += 1
@@ -453,6 +445,8 @@ def robot_mode_shortcut(
                             gains[rr][k] = max(
                                 0.0, full_run_gain(env, new_path, rr, lo_k, hi_k)
                             )
+        elif from_tree and proposer is not None:
+            proposer.collision(proposal, fail_k)
         elif from_tree:
             # split the colliding interval at the located failing edge; both sides remain
             # eligible because the observed collision lies between them. Without a located
@@ -463,12 +457,6 @@ def robot_mode_shortcut(
                     if hi - lo >= 2:
                         heapq.heappush(tree_heap, (-(hi - lo), random.random(), tree_serial, tr, lo, hi))
                         tree_serial += 1
-        # else:
-        #     print("in colllision")
-        # env.show(True)
-
-        # print(i, j, len(path_element))
-
         current_time = time.time()
         times.append(current_time - start_time)
         costs.append(path_cost(new_path, env.batch_config_cost))
@@ -488,14 +476,13 @@ def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]
     """
     Preserve a path's certified edge partition.
 
-    This compatibility wrapper intentionally no longer joins collinear edges.
-    A joined edge follows the same geometry, but the finite collision checker
-    samples it at different configurations, so it must be recertified before it
-    can safely replace the original edges.
+    Returns a shallow copy without joining collinear edges. A joined edge
+    follows the same geometry, but changes the finite collision checker's
+    sample locations and therefore requires a separate collision check.
 
     Args:
         path (List[Object]): Sequence of states representing original path.
-        tolerance (float, optional): Retained for API compatibility.
+        tolerance (float, optional): Unused; no nodes are removed.
 
     Returns:
         List[Object]: A shallow copy of the input path.
