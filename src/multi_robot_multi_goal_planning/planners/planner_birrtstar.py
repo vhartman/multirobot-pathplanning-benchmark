@@ -92,7 +92,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                     break
 
     def _add_transition_seed(self, mode: Mode) -> Optional[Node]:
-        """Sample one transition config and add it as a new seed to subtree B. Returns the node, or None on failure or duplicate."""
+        """Sample one transition config and add it as a new seed to the goal-side subtree. Returns the node, or None on failure or duplicate."""
         q = self._sample_transition_config_fn(mode)
         if q is None:
             return None
@@ -105,7 +105,8 @@ class BidirectionalRRTstar(BaseRRTstar):
         node.cost_to_parent = 0.0
         node.cost = np.inf
         self.mark_node_as_transition(mode, node)
-        self.trees[mode].add_node(node, "B")
+        tree = self.trees[mode]
+        tree.add_node(node, "B" if tree.order == 1 else "A")
         self.operation.costs = self.trees[mode].ensure_capacity(
             self.operation.costs, node.id
         )
@@ -224,7 +225,7 @@ class BidirectionalRRTstar(BaseRRTstar):
         cost = self.env.batch_config_cost([n_new.state], [n_nearest_b.state])
         if self.trees[mode].order == -1:
             # switch such that subtree is beginning from start and subtree_b from goal
-            self.trees[mode].swap(self.config.balanced_trees)
+            self.trees[mode].swap()
             self.swap = False
             if not self._check_edge_cf(
                 n_nearest_b.state.q, n_new.state.q, mode
