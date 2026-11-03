@@ -605,7 +605,7 @@ class BaseRRTstar(BasePlanner):
         env: BaseProblem,
         config: BaseRRTConfig = field(default_factory=BaseRRTConfig),
     ):
-        self.env = env
+        super().__init__(env)
         self.config = config
         if config.steering_policy not in ("legacy", "robot_l1", "robot_rms"):
             raise ValueError("steering_policy must be 'legacy', 'robot_l1', or 'robot_rms'")

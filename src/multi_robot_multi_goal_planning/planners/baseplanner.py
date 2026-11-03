@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Set, List, Dict, Any, Tuple
+from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 
 
 from .termination_conditions import (
@@ -44,9 +45,20 @@ class SolverCapabilities:
 
 class BasePlanner(ABC):
     solver_capabilities: SolverCapabilities
+    supported_path_constraints = frozenset()
 
     def __init__(self, env: BaseProblem):
-        pass
+        self.env = env
+        self.constraint_provider = ConstraintProvider(env)
+        self.check_constraint_support()
+
+    def check_constraint_support(self):
+        """Reject unsupported path constraints before starting the planner."""
+        missing = self.constraint_provider.required_types() - self.supported_path_constraints
+        if missing:
+            raise ValueError(
+                f"{type(self).__name__} does not support path constraints: {sorted(missing)}"
+            )
 
     @abstractmethod
     def plan(

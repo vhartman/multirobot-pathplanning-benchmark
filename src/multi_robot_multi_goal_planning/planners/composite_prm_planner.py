@@ -67,7 +67,7 @@ class CompositePRMConfig:
 
 class CompositePRM(BasePlanner):
     def __init__(self, env: BaseProblem, config: CompositePRMConfig | None = None):
-        self.env = env
+        super().__init__(env)
         self.config = config if config is not None else CompositePRMConfig()
         self.mode_validation = ModeValidation(
             self.env,

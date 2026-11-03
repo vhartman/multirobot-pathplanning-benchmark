@@ -2162,7 +2162,7 @@ class PrioritizedPlanner(BasePlanner):
         env: BaseProblem,
         config: PrioritizedPlannerConfig = PrioritizedPlannerConfig(),
     ):
-        self.env = env
+        super().__init__(env)
         self.config = config
 
     def plan(

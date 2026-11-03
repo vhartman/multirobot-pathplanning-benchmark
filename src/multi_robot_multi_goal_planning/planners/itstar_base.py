@@ -2350,7 +2350,7 @@ class BaseITstar(BasePlanner):
         env: BaseProblem,
         config: BaseITConfig = field(default_factory=BaseITConfig),
     ):
-        self.env = env
+        super().__init__(env)
         self.config = config
         self.reached_modes = set()
         self.sorted_reached_modes = None
