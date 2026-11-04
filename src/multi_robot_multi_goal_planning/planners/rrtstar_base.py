@@ -553,6 +553,7 @@ class BaseRRTConfig:
     informed_sampling: bool = True
     locally_informed_sampling: bool = True
     informed_batch_size: int = 300
+    informed_proposal_batch_size: int = 10  # bounds/cost screening batch
     
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
@@ -635,13 +636,14 @@ class BaseRRTstar(BasePlanner):
             kernel = (max_robot_l1_displacement if config.steering_policy == "robot_l1"
                       else max_robot_rms_displacement)
             kernel(np.zeros_like(start.state()), start._array_slice)
+        self.informed = InformedSampling(
+            self.env, "sampling_based", self.config.locally_informed_sampling,
+            proposal_batch_size=config.informed_proposal_batch_size,
+        )
         self.start_time = time.time()
         self.costs = []
         self.times = []
         self.all_paths = []
-        self.informed = InformedSampling(
-            self.env, "sampling_based", self.config.locally_informed_sampling
-        )
         self.long_horizon = BaseLongHorizon(self.config.horizon_length)
         self.mode_validation = ModeValidation(
             self.env,
@@ -1201,12 +1203,7 @@ class BaseRRTstar(BasePlanner):
                         self.operation.path_shortcutting_interpolated,
                         active_mode=mode,
                     )
-                    if q == []:
-                        return
-
-                    if self.env.is_collision_free(q, mode):
-                        return q
-                    continue
+                    return None if isinstance(q, list) and not q else q
 
             q = self.sample_transition_configuration(mode)
 
@@ -1259,19 +1256,13 @@ class BaseRRTstar(BasePlanner):
         if not next_ids and not self.env.is_terminal_mode(mode):
             return
 
-        while True:
-            # informed sampling
-            q = self.informed.generate_samples(
-                self.modes,
-                self.config.informed_batch_size,
-                self.operation.path_shortcutting_interpolated,
-                active_mode=mode,
-            )
-            if q == []:
-                return
-
-            if self.env.is_collision_free(q, mode):
-                return q
+        q = self.informed.generate_samples(
+            self.modes,
+            self.config.informed_batch_size,
+            self.operation.path_shortcutting_interpolated,
+            active_mode=mode,
+        )
+        return None if isinstance(q, list) and not q else q
 
     def get_termination_modes(self) -> List[Mode]:
         """

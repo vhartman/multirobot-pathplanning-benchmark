@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional
 from numpy.typing import NDArray
 
 from multi_robot_multi_goal_planning.problems.planning_env import (
@@ -9,72 +9,55 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
 )
 from multi_robot_multi_goal_planning.problems.core.configuration import Configuration
+from .sampling_bounded_phs import PreparedBoundedPHS, joint_bounds
 
 
-# taken from https://github.com/marleyshan21/Batch-informed-trees/blob/master/python/BIT_Star.py
-# needed adaption to work.
-def sample_unit_ball(dim, n=1) -> np.ndarray:
-    """Samples n points uniformly from the unit ball. This is used to sample points from the Prolate HyperSpheroid (PHS).
+# Bound the work spent looking for an improvable path interval.
+MAX_CONFIGURATION_INTERVAL_ATTEMPTS = 500
+MAX_TRANSITION_INTERVAL_ATTEMPTS = 1000
 
-    Args:
-        dim (int): Dimension of the unit ball.
-        n (int): Number of points to sample. Default is 1.
 
-    Returns:
-        np.ndarray: An array of shape (n, dim) containing the sampled points.
-    """
-    u = np.random.normal(0, 1, (dim, n))
-    norms = np.linalg.norm(u, axis=0, keepdims=True)
-    # Generate radii with correct distribution
-    r = np.random.random(n) ** (1.0 / dim)
-    return (r[None, :] / norms) * u
+def sample_unit_ball(dim, n=1):
+    """Return uniform unit-ball samples as columns, shape (dim, n)."""
+    unit = np.random.normal(size=(dim, n))
+    norms = np.linalg.norm(unit, axis=0)
+    while np.any(norms == 0):
+        zero = norms == 0
+        unit[:, zero] = np.random.normal(size=(dim, int(zero.sum())))
+        norms = np.linalg.norm(unit, axis=0)
+    return unit * (np.random.random(n) ** (1. / dim) / norms)
 
 
 def compute_PHS_matrices(a, b, c):
-    dim = len(a)
-    diff = b - a
-
-    # Calculate the center of the PHS.
-    center = (a + b) / 2
-    # The transverse axis in the world frame.
-    c_min = np.linalg.norm(diff)
-
-    # The first column of the identity matrix.
-    # one_1 = np.eye(a1.shape[0])[:, 0]
-    a1 = diff / c_min
-    e1 = np.zeros(dim)
-    e1[0] = 1.0
-
-    # Optimized rotation matrix calculation
-    U, S, Vt = np.linalg.svd(np.outer(a1, e1))
-    # Sigma = np.diag(S)
-    # lam = np.eye(Sigma.shape[0])
-    lam = np.eye(dim)
-    lam[-1, -1] = np.linalg.det(U) * np.linalg.det(Vt.T)
-    # Calculate the rotation matrix.
-    # cwe = np.matmul(U, np.matmul(lam, Vt))
-    cwe = U @ lam @ Vt
-    # Get the radius of the first axis of the PHS.
-    # r1 = c / 2
-    # Get the radius of the other axes of the PHS.
-    # rn = [np.sqrt(c**2 - c_min**2) / 2] * (dim - 1)
-    # Create a vector of the radii of the PHS.
-    # r = np.diag(np.array([r1] + rn))
-    r = np.diag([c * 0.5] + [np.sqrt(c**2 - c_min**2) * 0.5] * (dim - 1))
-
-    return cwe @ r, center
+    """Return an ellipsoid transform and center, including coincident foci."""
+    phs = PreparedBoundedPHS.from_endpoints(
+        a, b, c, np.full(len(a), -np.inf), np.full(len(a), np.inf))
+    return phs.u * phs.singular, phs.center
 
 
 def sample_phs_with_given_matrices(rot, center, n=1):
-    dim = len(center)
-    x_ball = sample_unit_ball(dim, n)
-    # Transform the point from the unit ball to the PHS.
-    # op = np.matmul(np.matmul(cwe, r), x_ball) + center
-    return rot @ x_ball + center[:, None]
+    return rot @ sample_unit_ball(len(center), n) + center[:, None]
+
+
+# Visualize a two-dimensional PHS sample cloud.
+# import matplotlib.pyplot as plt
+# transform, center = compute_PHS_matrices(np.array([-1., 0.]), np.array([1., 0.]), 3.)
+# points = sample_phs_with_given_matrices(transform, center, n=500)
+# plt.scatter(points[0], points[1])
+# plt.axis("equal")
+# plt.show()
 
 
 class InformedSampling:
-    """Locally and globally informed sampling"""
+    """Locally and globally informed sampling with batched bounds/cost checks.
+
+    The environment's declared metric/reduction determine proposal geometry;
+    candidate costs are evaluated through its batch_config_cost method.
+    L2 sum/max costs use bounded per-robot ellipsoids, otherwise proposals
+    use the environment's uniform sampler. Custom costs without this geometry
+    must disable try_direct_sampling. Collision checking is scalar and stops
+    at the first accepted RRT sample.
+    """
 
     def __init__(
         self,
@@ -82,17 +65,21 @@ class InformedSampling:
         planning_approach: str,
         locally_informed_sampling: bool = False,
         include_lb: bool = False,
+        proposal_batch_size: int = 10,
     ):
+        if (isinstance(proposal_batch_size, bool)
+                or not isinstance(proposal_batch_size, int) or proposal_batch_size < 1):
+            raise ValueError("proposal_batch_size must be a positive integer")
         self.env = env
+        self.proposal_batch_size = proposal_batch_size
+        self.lower, self.upper = joint_bounds(env)
+        metric, reduction = env.cost_metric, env.cost_reduction
+        self.cost_settings = ((metric == "euclidean", reduction == "max")
+                              if metric in ("euclidean", "max") and reduction in ("sum", "max")
+                              else None)
         self.planning_approach = planning_approach
         self.locally_informed_sampling = locally_informed_sampling
         self.include_lb = include_lb
-        self.conf_type = type(self.env.get_start_pos())
-        # Cache for mode-graph reachability used in sampling_based transition generation.
-        # Descendants depend only on the fixed mode graph; ancestors also depend on
-        # reached_modes (which grows), so they are keyed by (mode, len(reached_modes)).
-        self._mode_descendants_cache: dict = {}
-        self._mode_ancestors_cache: dict = {}
 
     def sample_mode(
         self, reached_modes: List[Mode], mode_sampling_type: str = "uniform_reached"
@@ -120,10 +107,8 @@ class InformedSampling:
             end_mode (Mode): The ending mode object
 
         Returns:
-            A list of lists, where each inner list represents a valid path
-            from start_mode to end_mode (inclusive of both).
+            Modes on paths between the endpoints, sorted by mode id.
         """
-        # Store all found paths
         open_paths = [[start_mode]]
 
         in_between_modes = set()
@@ -145,7 +130,6 @@ class InformedSampling:
                     new_path.append(mode)
                     open_paths.append(new_path)
 
-        # return list(in_between_modes)
         return list(sorted(in_between_modes, key=lambda m: m.id))
 
     def lb_cost_from_start(
@@ -224,12 +208,7 @@ class InformedSampling:
         Returns:
             bool: True if the segment's actual cost exceeds lower-bound estimate (indicating potential improvement); otherwise, False.
         """
-        # path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
 
-        # compute the local cost
-        # path_cost_from_start_to_index = np.sum(path_segment_costs[:start_index])
-        # path_cost_from_goal_to_index = np.sum(path_segment_costs[end_index:])
-        # path_cost = np.sum(path_segment_costs)
 
         path_cost_cumsum = np.cumsum(path_segment_costs)
         path_cost = path_cost_cumsum[-1]
@@ -249,7 +228,6 @@ class InformedSampling:
             path_cost - path_cost_from_goal_to_index - path_cost_from_start_to_index
         )
 
-        # print(path_cost_from_index_to_index)
 
         tmp = self.env.batch_config_cost(
             rnd_state.q, np.array([path[start_index].q.state(), path[end_index].q.state()])
@@ -257,9 +235,6 @@ class InformedSampling:
         lb_cost_from_start_index_to_state = tmp[0]
         lb_cost_from_state_to_end_index = tmp[1]
 
-        # lb_cost_from_start_index_to_state = self.env.config_cost(
-        #     rnd_state.q, path[start_index].q
-        # )
         if self.planning_approach == "graph_based" and self.include_lb:
             if path[start_index].mode != rnd_state.mode:
                 start_state = path[start_index]
@@ -272,9 +247,6 @@ class InformedSampling:
                             lb_cost_from_start_index_to_state,
                         )
 
-        # lb_cost_from_state_to_end_index = self.env.config_cost(
-        #     rnd_state.q, path[end_index].q
-        # )
 
         if self.planning_approach == "graph_based" and self.include_lb:
             if path[end_index].mode != rnd_state.mode:
@@ -288,22 +260,6 @@ class InformedSampling:
                             lb_cost_from_state_to_end_index,
                         )
 
-        # print("can_imrpove")
-
-        # print("start", lb_cost_from_start_index_to_state)
-        # print("end", lb_cost_from_state_to_end_index)
-
-        # print('start index', start_index)
-        # print('end_index', end_index)
-
-        # assert(lb_cost_from_start_index_to_state >= 0)
-        # assert(lb_cost_from_state_to_end_index >= 0)
-
-        # print("segment cost", path_cost_from_index_to_index)
-        # print(
-        #     "lb cost",
-        #     lb_cost_from_start_index_to_state + lb_cost_from_state_to_end_index,
-        # )
 
         if (
             path_cost_from_index_to_index
@@ -335,7 +291,6 @@ class InformedSampling:
         """
         path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
 
-        # compute the local cost
         path_cost_from_start_to_index = np.sum(path_segment_costs[:start_index])
         path_cost_from_goal_to_index = np.sum(path_segment_costs[end_index:])
         path_cost = np.sum(path_segment_costs)
@@ -384,22 +339,6 @@ class InformedSampling:
                             lb_cost_from_state_to_end_index,
                         )
 
-        # print("can_imrpove")
-
-        # print("start", lb_cost_from_start_index_to_state)
-        # print("end", lb_cost_from_state_to_end_index)
-
-        # print('start index', start_index)
-        # print('end_index', end_index)
-
-        # assert(lb_cost_from_start_index_to_state >= 0)
-        # assert(lb_cost_from_state_to_end_index >= 0)
-
-        # print("segment cost", path_cost_from_index_to_index)
-        # print(
-        #     "lb cost",
-        #     lb_cost_from_start_index_to_state + lb_cost_from_state_to_end_index,
-        # )
 
         if (
             path_cost_from_index_to_index
@@ -409,552 +348,200 @@ class InformedSampling:
 
         return False
 
+    def _select_interval(self, path, prefix, transitions=False):
+        if not self.locally_informed_sampling:
+            return 0, len(path) - 1
+        if len(path) < 4:
+            return None
+        max_attempts = (MAX_TRANSITION_INTERVAL_ATTEMPTS if transitions
+                        else MAX_CONFIGURATION_INTERVAL_ATTEMPTS)
+        for _ in range(max_attempts):
+            start = random.randrange(len(path))
+            end = random.randrange(len(path))
+            if end - start <= 2:
+                continue
+            if transitions and path[start].mode == path[end].mode:
+                continue
+            if self.env.config_cost(path[start].q, path[end].q) < prefix[end] - prefix[start]:
+                return start, end
+        return None
+
+    def _interval_mode(self, reached_modes, path, start, end, cache):
+        if not self.locally_informed_sampling:
+            return self.sample_mode(reached_modes)
+        key = path[start].mode, path[end].mode
+        if key not in cache:
+            cache[key] = self.get_inbetween_modes(*key)
+        return random.choice(cache[key]) if cache[key] else None
+
+    def _filter_by_bounds_and_cost(self, rows, endpoints, budget):
+        """Reject invalid bounds and costs before constructing collision queries."""
+        rows = np.asarray(rows, dtype=float)
+        valid = (np.all(np.isfinite(rows), axis=1)
+                 & np.all(rows >= self.lower, axis=1)
+                 & np.all(rows <= self.upper, axis=1))
+        rows = rows[valid]
+        if not len(rows):
+            return rows
+        candidates = [self.env.start_pos.from_flat(row) for row in rows]
+        costs = sum(np.asarray(self.env.batch_config_cost(
+            candidates, [self.env.start_pos.from_flat(endpoint)] * len(candidates)))
+                    for endpoint in endpoints)
+        return rows[np.isfinite(costs) & (costs < budget)]
+
+    def _prepare_proposal(self, endpoints, budget, direct):
+        if not direct or self.cost_settings is None:
+            return None
+        if not self.cost_settings[0] or np.any(self.lower == self.upper):
+            return None
+        distances = np.array([np.linalg.norm(endpoints[1, s:e] - endpoints[0, s:e])
+                              for s, e in self.env.start_pos._array_slice])
+        proposals = []
+        for i, (start, end) in enumerate(self.env.start_pos._array_slice):
+            bound = budget if self.cost_settings[1] else budget - (distances.sum() - distances[i])
+            try:
+                proposals.append(PreparedBoundedPHS.from_endpoints(
+                    endpoints[0, start:end], endpoints[1, start:end], bound,
+                    self.lower[start:end], self.upper[start:end]))
+            except ValueError:
+                return []
+        return proposals
+
+    def _draw_candidates(self, proposal, count):
+        if proposal is None:
+            return np.array([self.env.sample_config_uniform_in_limits().state().copy()
+                             for _ in range(count)])
+        if not proposal:
+            return np.empty((0, len(self.lower)))
+        parts = [p.sample(count, max_draws=4 * count)[0] for p in proposal]
+        accepted = min(part.shape[1] for part in parts)
+        return np.concatenate([part[:, :accepted] for part in parts], axis=0).T
+
     def generate_samples(
-        self,
-        reached_modes: List[Mode],
-        batch_size: int,
-        path: List[State],
-        max_attempts_per_sample: int = 200,
-        try_direct_sampling: bool = True,
-        g=None,
-        active_mode: Optional[Mode] = None,
-        seed: Optional[int] = None,
-    ) -> Optional[Union[Configuration, List[Configuration]]]:
-        """
-        Samples configuration from informed set for given mode.
+        self, reached_modes: List[Mode], batch_size: int, path: List[State],
+        max_attempts_per_sample: int = 200, try_direct_sampling: bool = True,
+        g=None, active_mode: Optional[Mode] = None, seed: Optional[int] = None,
+    ):
+        """Return one RRT configuration, or up to batch_size graph states.
 
-        Args:
-            reached_modes (List[Mode]): List of modes that have been reached.
-            batch_size (int): Number of samples to generate in a batch.
-            path (List[State]): Current path used to guide the informed sampling.
-            max_attempts_per_sample (int, optional): Maximum number of attempts per sample.
-            try_direct_sampling (bool, optional): If True, attempts direct sampling from the informed set.
-            g (Optional[Graph]): Graph object used for lower-bound cost calculations.
-            active_mode (Optional[Mode]): Current operational mode.
-            seed (Optional[int]): Random seed for reproducibility.
-
-        Returns:
-            Configuration, List[Configuration]: One or several configurations within the informed set that satisfies the specified limits for the robots.
+        Candidate batches share an interval and mode. Bounds and endpoint costs
+        are screened in arrays; surviving collision queries retain draw order.
         """
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
-        new_samples = []
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-
-        in_between_mode_cache = {}
-
-        num_attempts = 0
-        while len(new_samples) < batch_size:
-            if num_attempts > batch_size:
+        if len(path) < 2 or not reached_modes:
+            return []
+        segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        prefix = np.r_[0., np.cumsum(segment_costs)]
+        mode_cache = {}
+        samples = []
+        for _ in range(batch_size):
+            interval = self._select_interval(path, prefix)
+            if interval is None:
                 break
-
-            num_attempts += 1
-            # print(len(new_samples))
-            # sample mode
-            if self.locally_informed_sampling:
-                path_segment_costs_cumsum = np.cumsum(path_segment_costs)
-
-                for _ in range(500):
-                    start_ind = random.randint(0, len(path) - 1)
-                    end_ind = random.randint(0, len(path) - 1)
-
-                    # if path[start_ind].mode == path[end_ind].mode:
-                    #     continue
-
-                    if end_ind - start_ind > 2:
-                        # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-                        current_cost = path_segment_costs_cumsum[end_ind - 1] - (path_segment_costs_cumsum[start_ind - 1] if start_ind > 0 else 0)
-                        # current_cost = sum(path_segment_costs[start_ind:end_ind])
-                        lb_cost = self.env.config_cost(
-                            path[start_ind].q, path[end_ind].q
-                        )
-
-                        if lb_cost < current_cost:
-                            break
-
-                # we need to sample from the set of all reachable modes here
-                # not only from the modes on the path
-                if (
-                    path[start_ind].mode,
-                    path[end_ind].mode,
-                ) not in in_between_mode_cache:
-                    in_between_modes = self.get_inbetween_modes(
-                        path[start_ind].mode, path[end_ind].mode
-                    )
-                    in_between_mode_cache[
-                        (path[start_ind].mode, path[end_ind].mode)
-                    ] = in_between_modes
-
-                # print(in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)])
-
-                if False: #g is not None:
-                    samples_per_mode = {}
-                    p = []
-                    for mode in in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]:
-                        samples_per_mode[mode] = len(g.nodes[mode])
-                        p.append(1/len(g.nodes[mode]))
-
-                    m = random.choices(
-                        in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)], weights=p
-                    )[0]
-
-                else:
-                    m = random.choice(
-                        in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
-                    )
-
-                # k = random.randint(start_ind, end_ind)
-                # m = path[k].mode
-            else:
-                start_ind = 0
-                end_ind = len(path) - 1
-                m = self.sample_mode(reached_modes=reached_modes)
-            if self.planning_approach == "sampling_based" and active_mode != m:
+            start, end = interval
+            mode = self._interval_mode(reached_modes, path, start, end, mode_cache)
+            if mode is None or (self.planning_approach == "sampling_based" and active_mode != mode):
                 continue
-
-            # print(m)
-
-            current_cost = sum(path_segment_costs[start_ind:end_ind])
-
-            # tmp = 0
-            # for i in range(start_ind, end_ind):
-            #     tmp += self.env.config_cost(path[i].q, path[i+1].q)
-
-            # print(current_cost, tmp)
-
-            # plt.figure()
-            # samples = []
-            # for _ in range(500):
-            #     sample = samplePHS(np.array([-1, 1, 0]), np.array([1, -1, 0]), 3)
-            #     # sample = samplePHS(np.array([[-1], [0]]), np.array([[1], [0]]), 3)
-            #     samples.append(sample[:2])
-            #     print("sample", sample)
-
-            # plt.scatter([a[0] for a in samples], [a[1] for a in samples])
-            # plt.show()
-
-            focal_points = np.array(
-                [path[start_ind].q.state(), path[end_ind].q.state()], dtype=np.float64
-            )
-
-            precomputed_phs_matrices = {}
-            precomputed_robot_cost_bounds = {}
-
-            is_almost_the_same = {}
-
-            obv_inv_attempts = 0
-
-            num_samples_at_a_time = 10
-
-            for k in range(max_attempts_per_sample // num_samples_at_a_time):
-                if not try_direct_sampling or self.env.cost_metric != "euclidean":
-                    # completely random sample configuration from the (valid) domain robot by robot
-                    q = self.env.sample_config_uniform_in_limits()
-                else:
-                    # sample by sampling each agent separately
-                    q = []
-                    for i, r in enumerate(self.env.robots):
-                        lims = self.env.limits[:, self.env.robot_idx[r]]
-                        if lims[0, 0] < lims[1, 0]:
-                            if i not in precomputed_robot_cost_bounds:
-                                if self.env.cost_reduction == "sum":
-                                    precomputed_robot_cost_bounds[i] = (
-                                        current_cost
-                                        - sum(
-                                            [
-                                                np.linalg.norm(
-                                                    path[start_ind].q[j]
-                                                    - path[end_ind].q[j]
-                                                )
-                                                for j in range(len(self.env.robots))
-                                                if j != i
-                                            ]
-                                        )
-                                    )
-                                else:
-                                    precomputed_robot_cost_bounds[i] = current_cost
-
-                            if i not in is_almost_the_same:
-                                is_almost_the_same[i] = (
-                                    np.linalg.norm(
-                                        path[start_ind].q[i] - path[end_ind].q[i]
-                                    )
-                                    < 1e-3
-                                )
-
-                            if is_almost_the_same[i]:
-                                qr = np.random.uniform(
-                                    size=(
-                                        num_samples_at_a_time,
-                                        self.env.robot_dims[r],
-                                    ),
-                                    low=lims[0, :],
-                                    high=lims[1, :],
-                                ).T
-                            else:
-                                # print("cost", current_cost)
-                                # print("robot cst", c_robot_bound)
-                                # print(
-                                #     np.linalg.norm(
-                                #         path[start_ind].q[i] - path[end_ind].q[i]
-                                #     )
-                                # )
-
-                                if i not in precomputed_phs_matrices:
-                                    precomputed_phs_matrices[i] = compute_PHS_matrices(
-                                        path[start_ind].q[i],
-                                        path[end_ind].q[i],
-                                        precomputed_robot_cost_bounds[i],
-                                    )
-
-                                qr = sample_phs_with_given_matrices(
-                                    precomputed_phs_matrices[i][0],
-                                    precomputed_phs_matrices[i][1],
-                                    n=num_samples_at_a_time,
-                                )
-
-                                # plt.figure()
-                                # samples = []
-                                # for _ in range(500):
-                                #     sample = sample_phs_with_given_matrices(
-                                #         *precomputed_phs_matrices[i]
-                                #     )
-                                #     # sample = samplePHS(np.array([[-1], [0]]), np.array([[1], [0]]), 3)
-                                #     samples.append(sample[:2])
-                                #     print("sample", sample)
-
-                                # plt.scatter(
-                                #     [a[0] for a in samples], [a[1] for a in samples]
-                                # )
-                                # plt.show()
-
-                                # qr = samplePHS(path[start_ind].q[i], path[end_ind].q[i], c_robot_bound)
-                                # qr = rejection_sample_from_ellipsoid(
-                                #     path[start_ind].q[i], path[end_ind].q[i], c_robot_bound
-                                # )
-
-                                # if np.linalg.norm(path[start_ind].q[i] - qr) + np.linalg.norm(path[end_ind].q[i] - qr) > c_robot_bound:
-                                #     print("AAAAAAAAA")
-                                #     print(np.linalg.norm(path[start_ind].q[i] - qr) + np.linalg.norm(path[end_ind].q[i] - qr), c_robot_bound)
-
-                                # clipped = np.clip(qr, lims[0, :], lims[1, :])
-                                # if not np.array_equal(clipped, qr):
-                                # if np.any((qr < lims[0, :]) | (qr > lims[1, :])):
-                                #     had_to_be_clipped = True
-                                #     break
-                                # print("AAA")
-
-                        q.append(qr)
-
-                if isinstance(q, list):
-                    qs = []
-                    for i in range(num_samples_at_a_time):
-                        q_config = []
-                        for j in range(len(self.env.robots)):
-                            q_config.append(q[j][:, i])
-
-                        qnp = np.concatenate(q_config)
-                        qs.append(self.env.start_pos.from_flat(qnp))
-                else:
-                    qs = [q]
-
-                found_a_sample = False
-                for q in qs:
-                    if not isinstance(q, Configuration):
-                        # q = conf_type.from_list(q)
-                        qnp = np.concatenate(q)
-                        if np.any(
-                            (qnp < self.env.limits[0, :])
-                            | (qnp > self.env.limits[1, :])
-                        ):
-                            continue
-                        q = self.env.start_pos.from_flat(qnp)
-
-                    if sum(self.env.batch_config_cost(q, focal_points)) > current_cost:
-                        # print(path[start_ind].mode, path[end_ind].mode, m)
-                        # print(
-                        #     current_cost,
-                        #     self.env.config_cost(path[start_ind].q, q)
-                        #     + self.env.config_cost(path[end_ind].q, q),
-                        # )
-                        # if can_improve(State(q, m), path, start_ind, end_ind):
-                        #     assert False
-
-                        obv_inv_attempts += 1
-
+            endpoints = np.array([path[start].q.state(), path[end].q.state()])
+            budget = prefix[end] - prefix[start]
+            proposal = self._prepare_proposal(endpoints, budget, try_direct_sampling)
+            found = False
+            for offset in range(0, max_attempts_per_sample, self.proposal_batch_size):
+                count = min(self.proposal_batch_size, max_attempts_per_sample - offset)
+                rows = self._draw_candidates(proposal, count)
+                for row in self._filter_by_bounds_and_cost(rows, endpoints, budget):
+                    q = self.env.start_pos.from_flat(row.copy())
+                    state = State(q, mode)
+                    if (self.planning_approach == "graph_based" and self.include_lb
+                            and not self.can_improve(state, path, start, end, segment_costs, g)):
                         continue
-
-                    # if can_improve(State(q, m), path, 0, len(path)-1):
-                    # if can_improve(State(q, m), path, start_ind, end_ind):
-                    # if not self.env.is_collision_free(q, m):
-                    #     sample_in_collision += 1
-                    #     continue
-
-                    if self.can_improve(
-                        State(q, m), path, start_ind, end_ind, path_segment_costs, g
-                    ) and self.env.is_collision_free(q, m):
-                        # if self.env.is_collision_free(q, m) and can_improve(State(q, m), path, 0, len(path)-1):
-                        if self.planning_approach == "sampling_based":
-                            return q
-                        new_samples.append(State(q, m))
-                        found_a_sample = True
-                        # break
-
-                if found_a_sample:
+                    if not self.env.is_collision_free(q, mode):
+                        continue
+                    if self.planning_approach == "sampling_based":
+                        return q
+                    samples.append(state)
+                    found = True
+                    if len(samples) == batch_size:
+                        return samples
+                if found:
                     break
-
-            # print("inv attempt", obv_inv_attempts)
-            # print("coll", sample_in_collision)
-
-        # print(len(new_samples) / num_attempts)
-
-        # fig = plt.figure()
-        # ax = fig.add_subplot(projection='3d')
-        # ax.scatter([a.q[0][0] for a in new_samples], [a.q[0][1] for a in new_samples], [a.q[0][2] for a in new_samples])
-        # ax.scatter([a.q[1][0] for a in new_samples], [a.q[1][1] for a in new_samples], [a.q[1][2] for a in new_samples])
+        # Visualize graph samples per robot (first two or three coordinates).
+        # import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots()
+        # for robot in range(len(self.env.robots)):
+        #     points = np.array([state.q[robot] for state in samples])
+        #     ax.scatter(points[:, 0], points[:, 1], label=str(robot))
+        # ax.legend()
         # plt.show()
-
         # fig = plt.figure()
-        # ax = fig.add_subplot()
-        # ax.scatter([a.q[0][0] for a in new_samples], [a.q[0][1] for a in new_samples])
-        # ax.scatter([a.q[1][0] for a in new_samples], [a.q[1][1] for a in new_samples])
+        # ax = fig.add_subplot(projection="3d")
+        # robot = 0
+        # points = np.array([state.q[robot] for state in samples])
+        # ax.scatter(points[:, 0], points[:, 1], points[:, 2])
         # plt.show()
-
-        return new_samples
+        return samples
 
     def generate_transitions(
-        self,
-        reached_modes: List[Mode],
-        batch_size: int,
-        path: List[State],
-        max_attempts_per_sample: int = 100,
-        g=None,
-        active_mode: Optional[Mode] = None,
-        seed: Optional[int] = None,
-    ) -> Optional[Union[Configuration, List[Configuration]]]:
-        """
-        Samples transition configuration from informed set for the given mode.
+        self, reached_modes: List[Mode], batch_size: int, path: List[State],
+        max_attempts_per_sample: int = 100, g=None,
+        active_mode: Optional[Mode] = None, seed: Optional[int] = None,
+    ):
+        """Sample free coordinates in batches with a shared transition goal.
 
-        Args:
-            reached_modes (List[Mode]): List of modes that have been reached.
-            batch_size (int): Number of samples to generate in a batch.
-            path (List[State]): Current path used to guide the informed sampling.
-            max_attempts_per_sample (int, optional): Maximum number of attempts per sample.
-            g (Optional[Graph]): Graph object used for lower-bound cost calculations.
-            active_mode (Optional[Mode]): Current operational mode.
-            seed (Optional[int]): Random seed for reproducibility.
-
-        Returns:
-            Configuration, List[Configuration]: One or several configurations within the informed set that satisfies the specified limits for the robots.
+        Goal coordinates are checked against joint limits after insertion.
         """
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
-        if len(self.env.tasks) == 1:
+        if len(self.env.tasks) == 1 or len(path) < 2 or not reached_modes:
             return []
-
-        new_transitions = []
-        num_attempts = 0
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
-
-        in_between_mode_cache = {}
-
-        # Precompute valid start/end index pools so we never sample a
-        # (start, end, mode) combo that can't contain active_mode.
-        # Uses mode-graph reachability to handle branches correctly.
-        # if False: #self.planning_approach == "sampling_based" and active_mode is not None:
-        #     # Descendants: modes reachable from active_mode (fixed graph → cache forever).
-        #     if active_mode not in self._mode_descendants_cache:
-        #         descendants: set = {active_mode}
-        #         queue = [active_mode]
-        #         while queue:
-        #             m = queue.pop()
-        #             for child in (m.next_modes or []):
-        #                 if child not in descendants:
-        #                     descendants.add(child)
-        #                     queue.append(child)
-        #         self._mode_descendants_cache[active_mode] = descendants
-        #     descendants = self._mode_descendants_cache[active_mode]
-
-        #     # Ancestors: modes from which active_mode is reachable.
-        #     # Keyed by (mode, len(reached_modes)) so it refreshes when new modes arrive.
-        #     ancestors_key = (active_mode, len(reached_modes))
-        #     if ancestors_key not in self._mode_ancestors_cache:
-        #         reverse_edges: dict = {}
-        #         for m in reached_modes:
-        #             for child in (m.next_modes or []):
-        #                 reverse_edges.setdefault(child, []).append(m)
-        #         ancestors: set = {active_mode}
-        #         queue = [active_mode]
-        #         while queue:
-        #             m = queue.pop()
-        #             for parent in reverse_edges.get(m, []):
-        #                 if parent not in ancestors:
-        #                     ancestors.add(parent)
-        #                     queue.append(parent)
-        #         self._mode_ancestors_cache[ancestors_key] = ancestors
-        #     ancestors = self._mode_ancestors_cache[ancestors_key]
-
-        #     valid_start_indices = [i for i, s in enumerate(path) if s.mode in ancestors]
-        #     valid_end_indices = [i for i, s in enumerate(path) if s.mode in descendants]
-
-        #     if not valid_start_indices or not valid_end_indices:
-        #         return new_transitions
-        # else:
-        #     valid_start_indices = list(range(len(path)))
-        #     valid_end_indices = list(range(len(path)))
-
-        # TODO: figure out whats going on and why this is better
-        valid_start_indices = list(range(len(path)))
-        valid_end_indices = list(range(len(path)))
-
-        while len(new_transitions) < batch_size:
-            num_attempts += 1
-
-            if num_attempts > batch_size:
+        prefix = np.r_[0., np.cumsum(self.env.batch_config_cost(path[:-1], path[1:]))]
+        mode_cache = {}
+        transitions = []
+        for _ in range(batch_size):
+            interval = self._select_interval(path, prefix, transitions=True)
+            if interval is None:
                 break
-
-            # sample mode
-            if self.locally_informed_sampling:
-                path_segment_costs_cumsum = np.cumsum(path_segment_costs)
-
-                num_idx_attempts = 0
-                found_potential_indices = True
-                while True:
-                    num_idx_attempts += 1
-
-                    start_ind = random.choice(valid_start_indices)
-                    end_ind = random.choice(valid_end_indices)
-
-                    if num_idx_attempts > 1000:
-                        found_potential_indices = False
-                        break
-
-                    if (
-                        path[end_ind].mode != path[start_ind].mode
-                        and end_ind - start_ind > 2
-                    ):
-                        # if end_ind - start_ind > 2 and end_ind - start_ind < 50:
-                        # current_cost = sum(path_segment_costs[start_ind:end_ind])
-                        current_cost = path_segment_costs_cumsum[end_ind - 1] - (path_segment_costs_cumsum[start_ind - 1] if start_ind > 0 else 0)
-
-                        lb_cost = self.env.config_cost(
-                            path[start_ind].q, path[end_ind].q
-                        )
-
-                        if lb_cost < current_cost:
-                            break
-
-                if not found_potential_indices:
-                    break
-
-                if self.planning_approach == "sampling_based" and active_mode is not None:
-                    mode = active_mode
-                else:
-                    if (
-                        path[start_ind].mode,
-                        path[end_ind].mode,
-                    ) not in in_between_mode_cache:
-                        in_between_modes = self.get_inbetween_modes(
-                            path[start_ind].mode, path[end_ind].mode
-                        )
-                        in_between_mode_cache[
-                            (path[start_ind].mode, path[end_ind].mode)
-                        ] = in_between_modes
-
-                    # k = random.randint(start_ind, end_ind)
-                    # mode = path[k].mode
-                    mode = random.choice(
-                        in_between_mode_cache[(path[start_ind].mode, path[end_ind].mode)]
-                    )
+            start, end = interval
+            if self.planning_approach == "sampling_based" and active_mode is not None:
+                mode = active_mode
             else:
-                start_ind = 0
-                end_ind = len(path) - 1
-                if self.planning_approach == "sampling_based" and active_mode is not None:
-                    mode = active_mode
-                else:
-                    mode = self.sample_mode(reached_modes=reached_modes)
-
-            # print(m)
-
-            # sample transition at the end of this mode
-            possible_next_task_combinations = self.env.get_valid_next_task_combinations(
-                mode
-            )
-            if len(possible_next_task_combinations) > 0:
-                ind = random.randint(0, len(possible_next_task_combinations) - 1)
-                active_task = self.env.get_active_task(
-                    mode, possible_next_task_combinations[ind]
-                )
-            else:
+                mode = self._interval_mode(reached_modes, path, start, end, mode_cache)
+            if mode is None or self.env.is_terminal_mode(mode):
                 continue
-
-            goals_to_sample = active_task.robots
-
-            goal_sample = active_task.goal.sample(mode)
-
-            focal_points = np.array(
-                [path[start_ind].q.state(), path[end_ind].q.state()], dtype=np.float64
-            )
-
-            current_cost = sum(path_segment_costs[start_ind:end_ind])
-
-            for k in range(max_attempts_per_sample):
-                # completely random sample configuration from the (valid) domain robot by robot
-                q = self.env.sample_config_uniform_in_limits()
-                for i in range(len(self.env.robots)):
-                    r = self.env.robots[i]
-                    if r in goals_to_sample:
-                        offset = 0
-                        for _, task_robot in enumerate(active_task.robots):
-                            if task_robot == r:
-                                q[i] = \
-                                    goal_sample[
-                                        offset : offset
-                                        + self.env.robot_dims[task_robot]
-                                    ]
-                                break
-                            offset += self.env.robot_dims[task_robot]
-                    
-                to_q_cost = self.env.batch_config_cost(q, focal_points)
-                if to_q_cost[0] + to_q_cost[1] > current_cost:
-                    continue
-
-                if self.env.is_terminal_mode(mode):
-                    assert False
-                else:
+            combinations = self.env.get_valid_next_task_combinations(mode)
+            if len(combinations) == 0:
+                continue
+            task = self.env.get_active_task(mode, random.choice(combinations))
+            goal = np.asarray(task.goal.sample(mode)).reshape(-1)
+            indices = np.concatenate([self.env.robot_idx[r] for r in task.robots]).astype(int)
+            if (not np.all(np.isfinite(goal)) or np.any(goal < self.lower[indices])
+                    or np.any(goal > self.upper[indices])):
+                continue
+            endpoints = np.array([path[start].q.state(), path[end].q.state()])
+            budget = prefix[end] - prefix[start]
+            found = False
+            for offset in range(0, max_attempts_per_sample, self.proposal_batch_size):
+                count = min(self.proposal_batch_size, max_attempts_per_sample - offset)
+                rows = self._draw_candidates(None, count)
+                rows[:, indices] = goal
+                for row in self._filter_by_bounds_and_cost(rows, endpoints, budget):
+                    q = self.env.start_pos.from_flat(row.copy())
                     next_modes = self.env.get_next_modes(q, mode)
-
-                if not self.env.is_collision_free(q, mode):
-                    continue
-                    
-                improving_modes = []
-                for next_mode in next_modes:
-                    if self.can_transition_improve(
-                        (q, mode, next_mode), path, start_ind, end_ind, g
-                    ):
-                        if self.planning_approach == "sampling_based":
-                            return q
-                        
-                        improving_modes.append(next_mode)
-                        
-                if len(improving_modes) > 0:
-                    new_transitions.append((q, mode, improving_modes))
+                    if not self.env.is_collision_free(q, mode):
+                        continue
+                    improving = [m for m in next_modes if not (
+                        self.planning_approach == "graph_based" and self.include_lb)
+                        or self.can_transition_improve((q, mode, m), path, start, end, g)]
+                    if not improving:
+                        continue
+                    if self.planning_approach == "sampling_based":
+                        return q
+                    transitions.append((q, mode, improving))
+                    found = True
                     break
-
-        # print(len(new_transitions) / num_attempts)
-
-        # fig = plt.figure()
-        # ax = fig.add_subplot(projection='3d')
-        # ax.scatter([a.q[0][0] for a in new_samples], [a.q[0][1] for a in new_samples], [a.q[0][2] for a in new_samples])
-        # ax.scatter([a.q[1][0] for a in new_samples], [a.q[1][1] for a in new_samples], [a.q[1][2] for a in new_samples])
-        # plt.show()
-
-        # fig = plt.figure()
-        # ax = fig.add_subplot()
-        # ax.scatter([a[0][0][0] for a in new_transitions], [a[0][0][1] for a in new_transitions])
-        # ax.scatter([a[0][1][0] for a in new_transitions], [a[0][1][1] for a in new_transitions])
-        # plt.show()
-
-        return new_transitions
+                if found:
+                    break
+        return transitions
