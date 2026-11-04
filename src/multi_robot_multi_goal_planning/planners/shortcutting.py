@@ -246,8 +246,7 @@ def robot_mode_shortcut(
 
     max_iter bounds collision-checked proposals. max_attempts bounds draws,
     including rejected pairs; its default is max(2500, 5 * max_iter).
-    Subset policies require cost improvement greater than 1e-6; the other
-    policies require a strictly positive improvement.
+    All policies require a strictly positive cost improvement.
     Returns the copied path and [costs, elapsed_times].
     """
     schedules = {"tree_compatible": "interleaved", "tree_then_compatible": "sequenced",
@@ -418,7 +417,7 @@ def robot_mode_shortcut(
         # check if the shortcut improves cost
         improvement = (path_cost(new_path[i:j + 1], env.batch_config_cost)
                        - path_cost(path_element, env.batch_config_cost))
-        if improvement <= (1e-6 if scalable else 0.0):
+        if improvement <= 0.0:
             continue
 
         assert np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6
