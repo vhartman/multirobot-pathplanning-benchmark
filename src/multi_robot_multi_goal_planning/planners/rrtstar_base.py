@@ -553,6 +553,8 @@ class BaseRRTConfig:
     informed_sampling: bool = True
     locally_informed_sampling: bool = True
     informed_batch_size: int = 300
+    informed_proposal: str = "independent"  # "independent" | "hit_and_run"
+    informed_walk_steps: int = 1  # chain steps per configuration proposal
     informed_proposal_batch_size: int = 10  # bounds/cost screening batch
     
     distance_metric: str = "max_euclidean"
@@ -638,6 +640,8 @@ class BaseRRTstar(BasePlanner):
             kernel(np.zeros_like(start.state()), start._array_slice)
         self.informed = InformedSampling(
             self.env, "sampling_based", self.config.locally_informed_sampling,
+            proposal=config.informed_proposal,
+            walk_steps=config.informed_walk_steps,
             proposal_batch_size=config.informed_proposal_batch_size,
         )
         self.start_time = time.time()

@@ -9,7 +9,9 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     Mode,
 )
 from multi_robot_multi_goal_planning.problems.core.configuration import Configuration
+from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from .sampling_bounded_phs import PreparedBoundedPHS, joint_bounds
+from .sampling_joint_cost import JointCostSampler, warm_joint_cost_kernel
 
 
 # Bound the work spent looking for an improvable path interval.
@@ -57,6 +59,10 @@ class InformedSampling:
     use the environment's uniform sampler. Custom costs without this geometry
     must disable try_direct_sampling. Collision checking is scalar and stops
     at the first accepted RRT sample.
+
+    Hit-and-run uses the joint cost region for unconstrained configurations,
+    retaining independent proposals in 10% of intervals. Transitions remain
+    independent. Short chains are correlated, not IID uniform samples.
     """
 
     def __init__(
@@ -65,12 +71,23 @@ class InformedSampling:
         planning_approach: str,
         locally_informed_sampling: bool = False,
         include_lb: bool = False,
+        proposal: str = "independent",
+        walk_steps: int = 1,
         proposal_batch_size: int = 10,
     ):
         if (isinstance(proposal_batch_size, bool)
                 or not isinstance(proposal_batch_size, int) or proposal_batch_size < 1):
             raise ValueError("proposal_batch_size must be a positive integer")
+        if proposal not in ("independent", "hit_and_run"):
+            raise ValueError("proposal must be 'independent' or 'hit_and_run'")
+        if isinstance(walk_steps, bool) or not isinstance(walk_steps, int) or walk_steps < 1:
+            raise ValueError("walk_steps must be a positive integer")
         self.env = env
+        self.proposal = proposal
+        self.walk_steps = walk_steps
+        self.constraint_provider = ConstraintProvider(env)
+        if proposal == "hit_and_run":
+            warm_joint_cost_kernel()
         self.proposal_batch_size = proposal_batch_size
         self.lower, self.upper = joint_bounds(env)
         metric, reduction = env.cost_metric, env.cost_reduction
@@ -389,9 +406,16 @@ class InformedSampling:
                     for endpoint in endpoints)
         return rows[np.isfinite(costs) & (costs < budget)]
 
-    def _prepare_proposal(self, endpoints, budget, direct):
+    def _prepare_proposal(self, endpoints, budget, mode, direct):
         if not direct or self.cost_settings is None:
             return None
+        if self.proposal == "hit_and_run" and not self.constraint_provider.for_mode(mode).constraints:
+            if np.random.random() >= 0.1:
+                try:
+                    return JointCostSampler(self.env, endpoints, budget,
+                                            self.cost_settings, self.walk_steps)
+                except ValueError:
+                    pass
         if not self.cost_settings[0] or np.any(self.lower == self.upper):
             return None
         distances = np.array([np.linalg.norm(endpoints[1, s:e] - endpoints[0, s:e])
@@ -411,6 +435,8 @@ class InformedSampling:
         if proposal is None:
             return np.array([self.env.sample_config_uniform_in_limits().state().copy()
                              for _ in range(count)])
+        if isinstance(proposal, JointCostSampler):
+            return proposal.sample(count)
         if not proposal:
             return np.empty((0, len(self.lower)))
         parts = [p.sample(count, max_draws=4 * count)[0] for p in proposal]
@@ -446,7 +472,7 @@ class InformedSampling:
                 continue
             endpoints = np.array([path[start].q.state(), path[end].q.state()])
             budget = prefix[end] - prefix[start]
-            proposal = self._prepare_proposal(endpoints, budget, try_direct_sampling)
+            proposal = self._prepare_proposal(endpoints, budget, mode, try_direct_sampling)
             found = False
             for offset in range(0, max_attempts_per_sample, self.proposal_batch_size):
                 count = min(self.proposal_batch_size, max_attempts_per_sample - offset)
