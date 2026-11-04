@@ -14,6 +14,7 @@ class ModeValidation:
         env: BaseProblem,
         apply: bool,
         with_noise: bool = False,
+        constraint_provider=None,
     ):
         self.env = env
         self.blacklist_modes = set()
@@ -22,6 +23,7 @@ class ModeValidation:
         self.counter = 0
         self.apply = apply
         self.with_noise = with_noise
+        self.constraint_provider = constraint_provider
 
     def get_valid_modes(self, prev_mode: Mode, modes: List[Mode]) -> List[Mode]:
         """
@@ -62,6 +64,15 @@ class ModeValidation:
             ):
                 self.add_invalid_mode(mode)
                 return []
+
+            if self.constraint_provider is not None and (
+                self.constraint_provider.for_mode(mode).constraints
+                or any(self.constraint_provider.for_transition(mode, ids).constraints
+                       for ids in possible_next_task_combinations)
+            ):
+                # Independent robot/home checks cannot certify coupled feasibility.
+                valid_modes.append(mode)
+                continue
 
             is_in_collision = False
             whitelist_robots = set()

@@ -57,6 +57,8 @@ class RRTstar(BaseRRTstar):
         self.set_gamma_rrtstar()
         # Initilaize first Mode
         self.add_new_mode(tree_instance=SingleTree)
+        if not self.modes:
+            return
         active_mode = self.modes[-1]
 
         # Create start node
@@ -135,9 +137,16 @@ class RRTstar(BaseRRTstar):
         optimize: bool = True,
     ) -> Tuple[List[State] | None, Dict[str, Any]]:
         i = 0
+        self._planning_ptc = ptc
+        self._planning_iteration = 1
+        if self.has_path_constraints and not self._collision_free(self.env.get_start_pos(), self.env.get_start_mode()):
+            raise ValueError("Start configuration violates constraints, bounds, or collisions")
         self.initialize_planner()
         while True:
             i += 1
+            self._planning_iteration = i
+            if not self.modes or self._planning_expired():
+                break
             sampled_state = self.sample_state()
             if sampled_state is None:
                 continue

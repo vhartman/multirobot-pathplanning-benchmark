@@ -54,7 +54,9 @@ class BasePlanner(ABC):
 
     def check_constraint_support(self):
         """Reject unsupported path constraints before starting the planner."""
-        missing = self.constraint_provider.required_types() - self.supported_path_constraints
+        required = self.constraint_provider.required_types()
+        self.has_path_constraints = bool(required)
+        missing = required - self.supported_path_constraints
         if missing:
             raise ValueError(
                 f"{type(self).__name__} does not support path constraints: {sorted(missing)}"

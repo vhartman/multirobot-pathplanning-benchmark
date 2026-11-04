@@ -244,6 +244,34 @@ class AutoCollisionFreeSampler(BaseCollisionFreeSampler):
         return result
 
 
+class AffineSampler(BaseCollisionFreeSampler):
+    """Project joint proposals onto equalities, then reject violated inequalities.
+
+    Bounds and goal pins are enforced; unconstrained modes delegate unchanged.
+    This is not uniform sampling of the feasible set or constrained Gibbs.
+    """
+
+    def __init__(self, unconstrained, provider):
+        super().__init__(unconstrained.env, unconstrained.config)
+        self.unconstrained = unconstrained
+        self.provider = provider
+
+    def selected_sampler_name(self, mode=None):
+        if mode is not None and self.provider.for_mode(mode).constraints:
+            return "affine"
+        return self.unconstrained.selected_sampler_name(mode)
+
+    def sample(self, mode, pinned=None, *, constraints=None):
+        active = constraints if constraints is not None else self.provider.for_mode(mode)
+        if not active.constraints:
+            return self.unconstrained.sample(mode, pinned)
+        q = self.env.sample_config_uniform_in_limits()
+        q = active.project(q, self.provider.fixed_robots(pinned))
+        if q is not None and self.env.is_collision_free(q, mode):
+            return q
+        return None
+
+
 def make_collision_free_sampler(
     env: BaseProblem,
     planner_config: Any,

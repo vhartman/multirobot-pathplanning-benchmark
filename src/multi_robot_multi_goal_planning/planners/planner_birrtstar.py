@@ -84,6 +84,8 @@ class BidirectionalRRTstar(BaseRRTstar):
                 self.modes = self.mode_validation.remove_invalid_modes(self.modes)
         
         for new_mode in new_modes:
+            if q is not None and self.has_path_constraints and not self._collision_free(q, new_mode):
+                continue
             if new_mode in self.modes:
                 continue
         
@@ -389,6 +391,8 @@ class BidirectionalRRTstar(BaseRRTstar):
         # Initilaize first Mode
         self.set_gamma_rrtstar()
         self.add_new_mode(tree_instance=BidirectionalTree)
+        if not self.modes:
+            return
         mode = self.modes[-1]
         # Create start node
         start_state = State(self.env.start_pos, mode)
@@ -404,10 +408,17 @@ class BidirectionalRRTstar(BaseRRTstar):
         optimize: bool = True,
     ) -> Tuple[List[State] | None, Dict[str, Any]]:
         i = 0
+        self._planning_ptc = ptc
+        self._planning_iteration = 1
+        if self.has_path_constraints and not self._collision_free(self.env.get_start_pos(), self.env.get_start_mode()):
+            raise ValueError("Start configuration violates constraints, bounds, or collisions")
         self.initialize_planner()
         while True:
             self.swap = True
             i += 1
+            self._planning_iteration = i
+            if not self.modes or self._planning_expired():
+                break
             sampled_state = self.sample_state()
             if sampled_state is None:
                 continue

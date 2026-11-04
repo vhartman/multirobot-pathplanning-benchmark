@@ -216,7 +216,7 @@ class RelativeAffineTaskSpaceInequalityConstraint(Constraint):
 class AffineConfigurationSpaceEqualityConstraint(Constraint):
     def __init__(self, projection_matrix, pose, eps=1e-3):
         self.mat = np.asarray(projection_matrix, dtype=float)
-        self.constraint_pose = np.asarray(pose, dtype=float)
+        self.constraint_pose = np.asarray(pose, dtype=float).reshape(-1, 1)
         self.rhs = self.constraint_pose  # alias
         self.eps = eps
         self.type = "affine_equality"
@@ -224,7 +224,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.constraint_pose)
 
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
-        return all(np.abs(self.F(q.state(), mode, env)) < self.eps)
+        return bool(np.all(np.abs(self.F(q.state(), mode, env)) <= self.eps))
     
     def F(self, q_vec: np.ndarray, mode, env) -> np.ndarray:
         """Residual F(q) = A q - b (zero when satisfied)."""
@@ -243,7 +243,7 @@ class AffineConfigurationSpaceEqualityConstraint(Constraint):
 class AffineConfigurationSpaceInequalityConstraint(Constraint):
     def __init__(self, projection_matrix, pose, eps=1e-9):
         self.mat = np.asarray(projection_matrix, dtype=float)
-        self.constraint_pose = np.asarray(pose, dtype=float)
+        self.constraint_pose = np.asarray(pose, dtype=float).reshape(-1, 1)
         self.rhs = self.constraint_pose  # <-- alias for compatibility
         self.eps = eps
         self.type = "affine_inequality"
@@ -251,7 +251,7 @@ class AffineConfigurationSpaceInequalityConstraint(Constraint):
         assert self.mat.shape[0] == len(self.constraint_pose)
 
     def is_fulfilled(self, q: Configuration, mode, env) -> bool:
-        return all(self.mat @ q.state()[:, None] < self.constraint_pose)
+        return bool(np.all(self.G(q.state(), mode, env) <= self.eps))
     
     def G(self, q_vec: NDArray, mode, env) -> np.ndarray:
         """

@@ -10,7 +10,20 @@ from multi_robot_multi_goal_planning.problems.planning_env import State, BasePro
 
 from multi_robot_multi_goal_planning.problems.core.configuration import config_dist
 from .shortcutting_compatible import CompatibleSubsetProposer
+from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
+
+
+def _path_constraint_provider(env, path):
+    provider = ConstraintProvider(env)
+    required = provider.required_types()
+    if not required:
+        return None
+    if required - {"affine_equality", "affine_inequality"}:
+        raise ValueError("Shortcutting supports only affine path constraints")
+    if not provider.path_satisfied(path):
+        raise ValueError("Input path violates affine constraints or bounds")
+    return provider
 
 
 def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 1000):
@@ -20,6 +33,7 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
 
     Works by randomly sampling indices of the path, and attempting to do a shortcut if it is in the same mode.
     """
+    constraints = _path_constraint_provider(env, path)
     new_path = interpolate_path(path, 0.05)
 
     costs = [path_cost(new_path, env.batch_config_cost)]
@@ -63,6 +77,8 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
             robots_to_shortcut = robots_to_shortcut[:num_robots]
 
         # this is wrong for partial shortcuts atm.
+        if constraints is not None and not constraints.for_mode(mode).edge_satisfied(q0, q1):
+            continue
         if env.is_edge_collision_free(
             q0,
             q1,
@@ -257,6 +273,7 @@ def robot_mode_shortcut(
         return [], [[0.0], [0.0]]
     if interpolation_resolution <= 0 or not np.isfinite(interpolation_resolution):
         raise ValueError("interpolation_resolution must be finite and positive")
+    constraints = _path_constraint_provider(env, path)
     scalable = run_choice in schedules
     # Keep the original edge partition. The input edges have already been
     # collision checked, while joining collinear edges changes the collision
@@ -413,6 +430,8 @@ def robot_mode_shortcut(
         q1 = new_path[j].q
 
         path_element = _shortcut_candidate(env, new_path, i, j, robots_to_shortcut)
+        if constraints is not None and not constraints.path_satisfied(path_element):
+            continue
 
         # check if the shortcut improves cost
         improvement = (path_cost(new_path[i:j + 1], env.batch_config_cost)

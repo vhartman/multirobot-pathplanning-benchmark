@@ -26,7 +26,7 @@ from multi_robot_multi_goal_planning.problems.core.configuration import (
 from .sampling_informed import InformedSampling
 from .mode_validation import ModeValidation
 from .baseplanner import BasePlanner
-from .collision_free_sampler import make_collision_free_sampler
+from .collision_free_sampler import make_collision_free_sampler, AffineSampler
 
 
 @njit(cache=True)
@@ -599,9 +599,9 @@ class BaseRRTConfig:
 
 
 class BaseRRTstar(BasePlanner):
-    """
-    Represents the base class for RRT*-based algorithms, providing core functionalities for motion planning.
-    """
+    """Base class for RRT*-based planners with affine path constraints."""
+
+    supported_path_constraints = frozenset(("affine_equality", "affine_inequality"))
 
     def __init__(
         self,
@@ -653,6 +653,7 @@ class BaseRRTstar(BasePlanner):
             self.env,
             self.config.with_mode_validation,
             with_noise=self.config.with_noise,
+            constraint_provider=self.constraint_provider if self.has_path_constraints else None,
         )
         self.check = set()
         self.blacklist_mode = set()
@@ -662,6 +663,9 @@ class BaseRRTstar(BasePlanner):
             self.config,
             seed_fn=self._get_seed_for_mode,
         )
+        if self.has_path_constraints:
+            self.collision_free_sampler = AffineSampler(
+                self.collision_free_sampler, self.constraint_provider)
         # timing instrumentation
         self._sampling_time: float = 0.0
         self._coll_checking_time: float = 0.0
@@ -691,13 +695,33 @@ class BaseRRTstar(BasePlanner):
     def _edge_collision_free(
         self, q1: "Configuration", q2: "Configuration", mode: "Mode"
     ) -> bool:
+        if self.has_path_constraints and not self.constraint_provider.for_mode(mode).edge_satisfied(q1, q2):
+            return False
         return self.env.is_edge_collision_free(q1, q2, mode)
+
+    def _project_configuration(self, q, mode, pinned=None, constraints=None):
+        if not self.has_path_constraints:
+            return q
+        active = constraints if constraints is not None else self.constraint_provider.for_mode(mode)
+        if not active.constraints:
+            return q
+        return active.project(q, self.constraint_provider.fixed_robots(pinned))
+
+    def _project_transition(self, q, mode, next_ids, task):
+        pinned = {robot: q[self.env.robots.index(robot)].copy() for robot in task.robots}
+        active = self.constraint_provider.for_transition(mode, next_ids)
+        return self._project_configuration(q, mode, pinned, active)
+
+    def _planning_expired(self):
+        ptc = getattr(self, "_planning_ptc", None)
+        return ptc is not None and ptc.should_terminate(
+            getattr(self, "_planning_iteration", 1), time.time() - self.start_time)
 
     def _timed_edge_collision_free(
         self, q1: "Configuration", q2: "Configuration", mode: "Mode"
     ) -> bool:
         t0 = time.perf_counter()
-        result = self.env.is_edge_collision_free(q1, q2, mode)
+        result = self._edge_collision_free(q1, q2, mode)
         dt = time.perf_counter() - t0
         if result:
             self._edge_check_time_success += dt
@@ -709,7 +733,7 @@ class BaseRRTstar(BasePlanner):
         self, q: "Configuration", mode: "Mode"
     ) -> bool:
         t0 = time.perf_counter()
-        result = self.env.is_collision_free(q, mode)
+        result = self._collision_free(q, mode)
         dt = time.perf_counter() - t0
         self._coll_checking_time += dt
         return result
@@ -717,6 +741,8 @@ class BaseRRTstar(BasePlanner):
     def _collision_free(
         self, q: "Configuration", mode: "Mode"
     ) -> bool:
+        if self.has_path_constraints and not self.constraint_provider.for_mode(mode).satisfied(q):
+            return False
         return self.env.is_collision_free(q, mode)
 
         # calling once for compilation
@@ -780,6 +806,8 @@ class BaseRRTstar(BasePlanner):
             self.save_tree_data()
 
         for new_mode in new_modes:
+            if q is not None and self.has_path_constraints and not self._collision_free(q, new_mode):
+                continue
             if new_mode in self.modes:
                 continue
             if new_mode in self.blacklist_mode:
@@ -834,11 +862,15 @@ class BaseRRTstar(BasePlanner):
             self.modes = self.mode_validation.remove_invalid_modes(self.modes)
 
         for next_mode in next_modes:
+            if self.has_path_constraints and not self._collision_free(n.state.q, next_mode):
+                continue
             if next_mode not in self.modes:
                 tree_type = type(self.trees[mode])
                 if tree_type == BidirectionalTree:
                     self.trees[mode].connected = True
                 self.add_new_mode(n.state.q, mode, tree_type)
+            if next_mode not in self.modes:
+                continue
             self.trees[next_mode].add_transition_node_as_start_node(n)
             if self.trees[next_mode].order == 1:
                 index = len(self.trees[next_mode].subtree) - 1
@@ -1089,7 +1121,7 @@ class BaseRRTstar(BasePlanner):
         return self.env.get_start_pos()
 
     def _sample_collision_free(
-        self, mode: Mode, pinned: Dict[str, NDArray] | None = None
+        self, mode: Mode, pinned: Dict[str, NDArray] | None = None, constraints=None
     ) -> Configuration | None:
         # TODO: caching opportunity — every is_collision_free hit inside the per-robot
         # and Gibbs samplers already produces a valid config, not just the final one.
@@ -1099,6 +1131,10 @@ class BaseRRTstar(BasePlanner):
         # Cost: one copy per cache push; benefit: fewer full sampling rounds, especially
         # for high robot counts. Needs care around goal resampling (GoalRegion vs point).
         pinned = pinned or {}
+        if self.has_path_constraints:
+            active = constraints if constraints is not None else self.constraint_provider.for_mode(mode)
+            if active.constraints:
+                return self.collision_free_sampler.sample(mode, pinned, constraints=active)
         if self.config.p_home_bias > 0 and np.random.random() < self.config.p_home_bias:
             task = self._get_active_task_for_sampling(mode)
             active_robots = set(task.robots)
@@ -1127,7 +1163,11 @@ class BaseRRTstar(BasePlanner):
         """
         failed_attempts = 0
         while True:
+            if self._planning_expired():
+                return None
             if failed_attempts > 10000:
+                if self.has_path_constraints:
+                    return None
                 print(f"Failed to sample transition configuration after 10000 attempts in mode {mode}.")
                 next_ids = self.mode_validation.get_valid_next_ids(mode)
                 task = self.env.get_active_task(mode, next_ids)
@@ -1157,6 +1197,8 @@ class BaseRRTstar(BasePlanner):
                 pinned[robot] = goal[end_idx : end_idx + dim]
                 end_idx += dim
 
+            constraints = (self.constraint_provider.for_transition(mode, next_ids)
+                           if self.has_path_constraints else None)
             # Try home pose + pinned once per mode across all calls
             if mode not in self.home_pose_attempted_modes:
                 self.home_pose_attempted_modes.add(mode)
@@ -1164,10 +1206,11 @@ class BaseRRTstar(BasePlanner):
                 q = self.env.sample_config_uniform_in_limits() # this is completely overwritten
                 for i, robot in enumerate(self.env.robots):
                     q[i] = pinned[robot] if robot in pinned else home[i].copy()
-                if self.env.is_collision_free(q, mode):
+                q = self._project_configuration(q, mode, pinned, constraints)
+                if q is not None and self._collision_free(q, mode):
                     return q
 
-            q = self._sample_collision_free(mode, pinned)
+            q = self._sample_collision_free(mode, pinned, constraints)
             if q is not None:
                 # self.env.show(False)
                 return q
@@ -1182,6 +1225,8 @@ class BaseRRTstar(BasePlanner):
     ) -> Configuration | None:
         # goal sampling
         while True:
+            if self._planning_expired():
+                return None
             if tree_order == -1:
                 if mode.prev_mode is None or mode == self.env.start_mode:
                     return self.env.start_pos
@@ -1207,6 +1252,8 @@ class BaseRRTstar(BasePlanner):
                         self.operation.path_shortcutting_interpolated,
                         requested_mode=mode,
                         max_samples=1,
+                        project_transition=self._project_transition if self.has_path_constraints else None,
+                        should_stop=self._planning_expired,
                     )
                     return transitions[0][0] if transitions else None
 
@@ -1267,6 +1314,8 @@ class BaseRRTstar(BasePlanner):
             self.operation.path_shortcutting_interpolated,
             requested_mode=mode,
             max_samples=1,
+            project_candidate=self._project_configuration if self.has_path_constraints else None,
+            should_stop=self._planning_expired,
         )
         return states[0].q if states else None
 
@@ -1771,6 +1820,8 @@ class BaseRRTstar(BasePlanner):
         if self.config.informed_sampling and self.operation.init_sol:
             return self.sample_informed(mode)
 
+        if self.has_path_constraints and self.constraint_provider.for_mode(mode).constraints:
+            return self.collision_free_sampler.sample(mode)
         sampler = self.collision_free_sampler.selected_sampler_name(mode)
         if sampler in ("gibbs", "per_robot"):
             return self.collision_free_sampler.sample(mode)

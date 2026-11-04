@@ -393,6 +393,15 @@ class InformedSampling:
             return requested_mode if requested_mode in modes else None
         return random.choice(modes) if modes else None
 
+    def _project_candidates(self, rows, project):
+        """Project before checking costs; rejected proposals are discarded."""
+        projected = []
+        for row in rows:
+            q = project(self.env.start_pos.from_flat(row.copy()))
+            if q is not None:
+                projected.append(q.state())
+        return np.asarray(projected).reshape((-1, rows.shape[1]))
+
     def _filter_by_bounds_and_cost(self, rows, endpoints, budget):
         """Reject invalid bounds and costs before constructing collision queries."""
         rows = np.asarray(rows, dtype=float)
@@ -449,7 +458,7 @@ class InformedSampling:
         self, reached_modes: List[Mode], batch_size: int, path: List[State],
         max_attempts_per_sample: int = 200, try_direct_sampling: bool = True,
         g=None, requested_mode: Optional[Mode] = None, seed: Optional[int] = None,
-        *, max_samples: Optional[int] = None,
+        *, max_samples: Optional[int] = None, project_candidate=None, should_stop=None,
     ) -> List[State]:
         """Return states from at most batch_size informed intervals.
 
@@ -469,6 +478,8 @@ class InformedSampling:
         mode_cache = {}
         samples = []
         for _ in range(batch_size):
+            if should_stop is not None and should_stop():
+                return samples
             interval = self._select_interval(path, prefix)
             if interval is None:
                 break
@@ -483,7 +494,11 @@ class InformedSampling:
             found = False
             for offset in range(0, max_attempts_per_sample, self.proposal_batch_size):
                 count = min(self.proposal_batch_size, max_attempts_per_sample - offset)
+                if should_stop is not None and should_stop():
+                    return samples
                 rows = self._draw_candidates(proposal, count)
+                if project_candidate is not None:
+                    rows = self._project_candidates(rows, lambda q: project_candidate(q, mode))
                 for row in self._filter_by_bounds_and_cost(rows, endpoints, budget):
                     q = self.env.start_pos.from_flat(row.copy())
                     state = State(q, mode)
@@ -518,7 +533,7 @@ class InformedSampling:
         self, reached_modes: List[Mode], batch_size: int, path: List[State],
         max_attempts_per_sample: int = 100, g=None,
         requested_mode: Optional[Mode] = None, seed: Optional[int] = None,
-        *, max_samples: Optional[int] = None,
+        *, max_samples: Optional[int] = None, project_transition=None, should_stop=None,
     ) -> List[Tuple[Configuration, Mode, List[Mode]]]:
         """Return (configuration, mode, successor modes) transition samples.
 
@@ -536,6 +551,8 @@ class InformedSampling:
         mode_cache = {}
         transitions = []
         for _ in range(batch_size):
+            if should_stop is not None and should_stop():
+                return transitions
             interval = self._select_interval(path, prefix, transitions=True)
             if interval is None:
                 break
@@ -549,7 +566,8 @@ class InformedSampling:
             combinations = self.env.get_valid_next_task_combinations(mode)
             if len(combinations) == 0:
                 continue
-            task = self.env.get_active_task(mode, random.choice(combinations))
+            next_ids = random.choice(combinations)
+            task = self.env.get_active_task(mode, next_ids)
             goal = np.asarray(task.goal.sample(mode)).reshape(-1)
             indices = np.concatenate([self.env.robot_idx[r] for r in task.robots]).astype(int)
             if (not np.all(np.isfinite(goal)) or np.any(goal < self.lower[indices])
@@ -560,8 +578,13 @@ class InformedSampling:
             found = False
             for offset in range(0, max_attempts_per_sample, self.proposal_batch_size):
                 count = min(self.proposal_batch_size, max_attempts_per_sample - offset)
+                if should_stop is not None and should_stop():
+                    return transitions
                 rows = self._draw_candidates(None, count)
                 rows[:, indices] = goal
+                if project_transition is not None:
+                    rows = self._project_candidates(
+                        rows, lambda q: project_transition(q, mode, next_ids, task))
                 for row in self._filter_by_bounds_and_cost(rows, endpoints, budget):
                     q = self.env.start_pos.from_flat(row.copy())
                     next_modes = self.env.get_next_modes(q, mode)
