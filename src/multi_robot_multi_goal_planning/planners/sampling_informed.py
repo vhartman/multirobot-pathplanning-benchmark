@@ -58,7 +58,7 @@ class InformedSampling:
     L2 sum/max costs use bounded per-robot ellipsoids, otherwise proposals
     use the environment's uniform sampler. Custom costs without this geometry
     must disable try_direct_sampling. Collision checking is scalar and stops
-    at the first accepted RRT sample.
+    when the requested number of samples is reached.
 
     Hit-and-run uses the joint cost region for unconstrained configurations,
     retaining independent proposals in 10% of intervals. Transitions remain
@@ -68,7 +68,6 @@ class InformedSampling:
     def __init__(
         self,
         env: BaseProblem,
-        planning_approach: str,
         locally_informed_sampling: bool = False,
         include_lb: bool = False,
         proposal: str = "independent",
@@ -94,7 +93,6 @@ class InformedSampling:
         self.cost_settings = ((metric == "euclidean", reduction == "max")
                               if metric in ("euclidean", "max") and reduction in ("sum", "max")
                               else None)
-        self.planning_approach = planning_approach
         self.locally_informed_sampling = locally_informed_sampling
         self.include_lb = include_lb
 
@@ -252,7 +250,7 @@ class InformedSampling:
         lb_cost_from_start_index_to_state = tmp[0]
         lb_cost_from_state_to_end_index = tmp[1]
 
-        if self.planning_approach == "graph_based" and self.include_lb:
+        if self.include_lb:
             if path[start_index].mode != rnd_state.mode:
                 start_state = path[start_index]
                 lb_cost_from_start_to_state = self.lb_cost_from_start(rnd_state, g)
@@ -265,7 +263,7 @@ class InformedSampling:
                         )
 
 
-        if self.planning_approach == "graph_based" and self.include_lb:
+        if self.include_lb:
             if path[end_index].mode != rnd_state.mode:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state, g)
@@ -327,7 +325,7 @@ class InformedSampling:
         lb_cost_from_start_index_to_state = self.env.config_cost(
             rnd_state_mode_1.q, path[start_index].q
         )
-        if self.planning_approach == "graph_based" and self.include_lb:
+        if self.include_lb:
             if path[start_index].mode != rnd_state_mode_1.mode:
                 start_state = path[start_index]
                 lb_cost_from_start_to_state = self.lb_cost_from_start(
@@ -344,7 +342,7 @@ class InformedSampling:
         lb_cost_from_state_to_end_index = self.env.config_cost(
             rnd_state_mode_2.q, path[end_index].q
         )
-        if self.planning_approach == "graph_based" and self.include_lb:
+        if self.include_lb:
             if path[end_index].mode != rnd_state_mode_2.mode:
                 goal_state = path[end_index]
                 lb_cost_from_goal_to_state = self.lb_cost_from_goal(rnd_state_mode_2, g)
@@ -383,13 +381,17 @@ class InformedSampling:
                 return start, end
         return None
 
-    def _interval_mode(self, reached_modes, path, start, end, cache):
+    def _interval_mode(self, reached_modes, path, start, end, cache, requested_mode=None):
         if not self.locally_informed_sampling:
-            return self.sample_mode(reached_modes)
-        key = path[start].mode, path[end].mode
-        if key not in cache:
-            cache[key] = self.get_inbetween_modes(*key)
-        return random.choice(cache[key]) if cache[key] else None
+            modes = reached_modes
+        else:
+            key = path[start].mode, path[end].mode
+            if key not in cache:
+                cache[key] = self.get_inbetween_modes(*key)
+            modes = cache[key]
+        if requested_mode is not None:
+            return requested_mode if requested_mode in modes else None
+        return random.choice(modes) if modes else None
 
     def _filter_by_bounds_and_cost(self, rows, endpoints, budget):
         """Reject invalid bounds and costs before constructing collision queries."""
@@ -446,17 +448,21 @@ class InformedSampling:
     def generate_samples(
         self, reached_modes: List[Mode], batch_size: int, path: List[State],
         max_attempts_per_sample: int = 200, try_direct_sampling: bool = True,
-        g=None, active_mode: Optional[Mode] = None, seed: Optional[int] = None,
-    ):
-        """Return one RRT configuration, or up to batch_size graph states.
+        g=None, requested_mode: Optional[Mode] = None, seed: Optional[int] = None,
+        *, max_samples: Optional[int] = None,
+    ) -> List[State]:
+        """Return states from at most batch_size informed intervals.
 
-        Candidate batches share an interval and mode. Bounds and endpoint costs
-        are screened in arrays; surviving collision queries retain draw order.
+        max_samples limits returned states (default: batch_size). Use the requested
+        mode directly, skipping incompatible intervals. Without a requested mode,
+        draw one from the interval.
+        Bounds/costs are filtered in batches; collision queries retain draw order.
         """
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
-        if len(path) < 2 or not reached_modes:
+        sample_limit = batch_size if max_samples is None else max_samples
+        if len(path) < 2 or not reached_modes or sample_limit <= 0:
             return []
         segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
         prefix = np.r_[0., np.cumsum(segment_costs)]
@@ -467,8 +473,9 @@ class InformedSampling:
             if interval is None:
                 break
             start, end = interval
-            mode = self._interval_mode(reached_modes, path, start, end, mode_cache)
-            if mode is None or (self.planning_approach == "sampling_based" and active_mode != mode):
+            mode = self._interval_mode(
+                reached_modes, path, start, end, mode_cache, requested_mode)
+            if mode is None:
                 continue
             endpoints = np.array([path[start].q.state(), path[end].q.state()])
             budget = prefix[end] - prefix[start]
@@ -480,16 +487,14 @@ class InformedSampling:
                 for row in self._filter_by_bounds_and_cost(rows, endpoints, budget):
                     q = self.env.start_pos.from_flat(row.copy())
                     state = State(q, mode)
-                    if (self.planning_approach == "graph_based" and self.include_lb
+                    if (self.include_lb
                             and not self.can_improve(state, path, start, end, segment_costs, g)):
                         continue
                     if not self.env.is_collision_free(q, mode):
                         continue
-                    if self.planning_approach == "sampling_based":
-                        return q
                     samples.append(state)
                     found = True
-                    if len(samples) == batch_size:
+                    if len(samples) == sample_limit:
                         return samples
                 if found:
                     break
@@ -512,16 +517,20 @@ class InformedSampling:
     def generate_transitions(
         self, reached_modes: List[Mode], batch_size: int, path: List[State],
         max_attempts_per_sample: int = 100, g=None,
-        active_mode: Optional[Mode] = None, seed: Optional[int] = None,
-    ):
-        """Sample free coordinates in batches with a shared transition goal.
+        requested_mode: Optional[Mode] = None, seed: Optional[int] = None,
+        *, max_samples: Optional[int] = None,
+    ) -> List[Tuple[Configuration, Mode, List[Mode]]]:
+        """Return (configuration, mode, successor modes) transition samples.
 
-        Goal coordinates are checked against joint limits after insertion.
+        Search at most batch_size intervals; return at most max_samples results
+        (default: batch_size). Use the requested mode, or sample an interval mode.
+        Free coordinates share a goal; joint limits are checked after insertion.
         """
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
-        if len(self.env.tasks) == 1 or len(path) < 2 or not reached_modes:
+        sample_limit = batch_size if max_samples is None else max_samples
+        if len(self.env.tasks) == 1 or len(path) < 2 or not reached_modes or sample_limit <= 0:
             return []
         prefix = np.r_[0., np.cumsum(self.env.batch_config_cost(path[:-1], path[1:]))]
         mode_cache = {}
@@ -531,8 +540,8 @@ class InformedSampling:
             if interval is None:
                 break
             start, end = interval
-            if self.planning_approach == "sampling_based" and active_mode is not None:
-                mode = active_mode
+            if requested_mode is not None:
+                mode = requested_mode
             else:
                 mode = self._interval_mode(reached_modes, path, start, end, mode_cache)
             if mode is None or self.env.is_terminal_mode(mode):
@@ -558,14 +567,13 @@ class InformedSampling:
                     next_modes = self.env.get_next_modes(q, mode)
                     if not self.env.is_collision_free(q, mode):
                         continue
-                    improving = [m for m in next_modes if not (
-                        self.planning_approach == "graph_based" and self.include_lb)
-                        or self.can_transition_improve((q, mode, m), path, start, end, g)]
+                    improving = [m for m in next_modes if not self.include_lb
+                                 or self.can_transition_improve((q, mode, m), path, start, end, g)]
                     if not improving:
                         continue
-                    if self.planning_approach == "sampling_based":
-                        return q
                     transitions.append((q, mode, improving))
+                    if len(transitions) == sample_limit:
+                        return transitions
                     found = True
                     break
                 if found:

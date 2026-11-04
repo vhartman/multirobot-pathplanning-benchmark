@@ -2383,8 +2383,7 @@ class BaseITstar(BasePlanner):
         self.valid_next_modes = {}
         self.informed = InformedSampling(
             env,
-            "graph_based",
-            self.config.locally_informed_sampling,
+            locally_informed_sampling=self.config.locally_informed_sampling,
             include_lb=self.config.inlcude_lb_in_informed_sampling,
         )
         self.mode_validation = ModeValidation(

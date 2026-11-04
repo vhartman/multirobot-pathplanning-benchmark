@@ -639,7 +639,7 @@ class BaseRRTstar(BasePlanner):
                       else max_robot_rms_displacement)
             kernel(np.zeros_like(start.state()), start._array_slice)
         self.informed = InformedSampling(
-            self.env, "sampling_based", self.config.locally_informed_sampling,
+            self.env, locally_informed_sampling=self.config.locally_informed_sampling,
             proposal=config.informed_proposal,
             walk_steps=config.informed_walk_steps,
             proposal_batch_size=config.informed_proposal_batch_size,
@@ -1201,13 +1201,14 @@ class BaseRRTstar(BasePlanner):
                 if (
                     not self.env.is_terminal_mode(mode)
                 ):
-                    q = self.informed.generate_transitions(
+                    transitions = self.informed.generate_transitions(
                         self.modes,
                         self.config.informed_batch_size,
                         self.operation.path_shortcutting_interpolated,
-                        active_mode=mode,
+                        requested_mode=mode,
+                        max_samples=1,
                     )
-                    return None if isinstance(q, list) and not q else q
+                    return transitions[0][0] if transitions else None
 
             q = self.sample_transition_configuration(mode)
 
@@ -1260,13 +1261,14 @@ class BaseRRTstar(BasePlanner):
         if not next_ids and not self.env.is_terminal_mode(mode):
             return
 
-        q = self.informed.generate_samples(
+        states = self.informed.generate_samples(
             self.modes,
             self.config.informed_batch_size,
             self.operation.path_shortcutting_interpolated,
-            active_mode=mode,
+            requested_mode=mode,
+            max_samples=1,
         )
-        return None if isinstance(q, list) and not q else q
+        return states[0].q if states else None
 
     def get_termination_modes(self) -> List[Mode]:
         """
@@ -1743,6 +1745,13 @@ class BaseRRTstar(BasePlanner):
 
         # return np.random.choice(self.modes, p = p)
         return random.choices(self.modes, weights=p, k=1)[0]
+
+    def sample_state(self, mode: Mode | None = None) -> State | None:
+        """Select a mode if needed, then sample a configuration in its tree."""
+        if mode is None:
+            mode = self.random_mode()
+        q = self._sample_config_fn(mode)
+        return State(q, mode) if q is not None else None
 
     def sample_configuration(self, mode: Mode) -> Configuration | None:
         """

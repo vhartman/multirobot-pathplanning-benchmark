@@ -30,6 +30,16 @@ class BidirectionalRRTstar(BaseRRTstar):
         super().__init__(env=env, config=config)
         self.swap = True
 
+    def sample_state(self, mode: Mode | None = None) -> State | None:
+        """Reseed the selected mode's reverse tree or sample an extension state."""
+        if mode is None:
+            mode = self.random_mode()
+        if (self.config.p_reseed_transition > 0
+                and np.random.random() < self.config.p_reseed_transition):
+            self._add_transition_seed(mode)
+            return None
+        return super().sample_state(mode)
+
     def update_cost(self, mode: Mode, n: Node, connection: bool = False) -> None:
         stack = [n]
         while stack:
@@ -398,21 +408,10 @@ class BidirectionalRRTstar(BaseRRTstar):
         while True:
             self.swap = True
             i += 1
-            # Mode selection
-            active_mode = self.random_mode()
-            print(active_mode)
-            # Optionally add a new transition seed to subtree B
-            if (
-                self.config.p_reseed_transition > 0
-                and np.random.random() < self.config.p_reseed_transition
-            ):
-                self._add_transition_seed(active_mode)
+            sampled_state = self.sample_state()
+            if sampled_state is None:
                 continue
-                
-            # Bi RRT* core
-            q_rand = self._sample_config_fn(active_mode)
-            if not q_rand:
-                continue
+            active_mode, q_rand = sampled_state.mode, sampled_state.q
 
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand

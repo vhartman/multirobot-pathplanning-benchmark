@@ -138,12 +138,10 @@ class RRTstar(BaseRRTstar):
         self.initialize_planner()
         while True:
             i += 1
-            # Mode selection
-            active_mode = self.random_mode()
-            # RRT* core
-            q_rand = self._sample_config_fn(active_mode)
-            if not q_rand:
+            sampled_state = self.sample_state()
+            if sampled_state is None:
                 continue
+            active_mode, q_rand = sampled_state.mode, sampled_state.q
 
             n_nearest, dist, set_dists, n_nearest_idx = self.nearest(
                 active_mode, q_rand
