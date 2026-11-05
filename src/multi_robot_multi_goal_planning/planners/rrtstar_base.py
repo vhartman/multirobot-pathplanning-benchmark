@@ -138,6 +138,19 @@ class BaseTree(ABC):
     def __init__(self):
         pass
 
+    def find_node(self, state: State) -> Optional[Node]:
+        """Return the cheapest exact match in the same mode, if present."""
+        indices = np.flatnonzero(np.all(
+            self.get_batch_subtree() == state.q.state(), axis=1
+        ))
+        node_ids = self.get_node_ids_subtree()
+        nodes = (self.get_node(node_ids[index]) for index in indices)
+        return min(
+            (node for node in nodes if node.state.mode == state.mode),
+            key=lambda node: node.cost,
+            default=None,
+        )
+
     def _resize_array(
         self, array: NDArray, current_capacity: int, new_capacity: int
     ) -> NDArray:
@@ -873,15 +886,15 @@ class BaseRRTstar(BasePlanner):
                 continue
             self.trees[next_mode].add_transition_node_as_start_node(n)
             if self.trees[next_mode].order == 1:
-                index = len(self.trees[next_mode].subtree) - 1
                 tree = "A"
             else:
-                index = len(self.trees[next_mode].subtree_b) - 1
                 tree = "B"
-            # index = np.where(self.trees[mode].get_node_ids_subtree() == n.id)
+            index = np.flatnonzero(
+                self.trees[next_mode].get_node_ids_subtree(tree) == n.id
+            )[0]
 
             # need to rewire tree of next mode as well
-            if index != 0:
+            if len(self.trees[next_mode].get_node_ids_subtree(tree)) > 1:
                 N_near_batch, n_near_costs, node_indices = self.near(
                     next_mode, n, index, tree=tree
                 )
@@ -1463,27 +1476,21 @@ class BaseRRTstar(BasePlanner):
         n_nearest: Node,
         batch_cost: NDArray,
         n_near_costs: NDArray,
-    ) -> None:
+        cost_bound: Optional[float] = None,
+    ) -> Optional[Tuple[Node, float]]:
+        """Find a parent and edge cost without modifying the tree.
+
+        The edge from n_nearest must already be valid. An optional cost bound
+        restricts the search to strictly improving connections.
         """
-        Sets the optimal parent for a new node by evaluating connection costs among candidate nodes.
-
-        Args:
-            mode (Mode): Current operational mode.
-            node_indices (NDArray): Array of IDs representing candidate neighboring nodes.
-            n_new (Node): New node that needs a parent connection.
-            n_nearest (Node): Nearest candidate node to n_new.
-            batch_cost (NDArray): Costs associated from n_new to all candidate neighboring nodes.
-            n_near_costs (NDArray): Cost values for all candidate neighboring nodes.
-
-        Returns:
-            None: This method does not return any value.
-        """
-
         idx = np.where(node_indices == n_nearest.id)[0][0]
         c_new_tensor = n_near_costs + batch_cost
+        connection = (n_nearest, batch_cost[idx])
         c_min = c_new_tensor[idx]
-        c_min_to_parent = batch_cost[idx]
-        n_min = n_nearest
+        if cost_bound is not None:
+            if c_min >= cost_bound:
+                connection = None
+            c_min = min(c_min, cost_bound)
         valid_mask = c_new_tensor < c_min
         if np.any(valid_mask):
             sorted_indices = np.where(valid_mask)[0][
@@ -1492,18 +1499,24 @@ class BaseRRTstar(BasePlanner):
             for idx in sorted_indices:
                 node = self.trees[mode].subtree.get(node_indices[idx].item())
                 if self._check_edge_cf(node.state.q, n_new.state.q, mode):
-                    c_min = c_new_tensor[idx]
-                    c_min_to_parent = batch_cost[idx]  # Update minimum cost
-                    n_min = node  # Update parent node
-                    break
-        n_new.parent = n_min
-        n_new.cost_to_parent = c_min_to_parent
-        n_min.children.append(n_new)  # Set child
-        self.operation.costs = self.trees[mode].ensure_capacity(
-            self.operation.costs, n_new.id
+                    return node, batch_cost[idx]
+        return connection
+
+    def _set_parent(self, node: Node, parent: Node, edge_cost: float) -> None:
+        """Connect a node and propagate its cost to descendants."""
+        if node.parent is not None:
+            node.parent.children = [
+                child for child in node.parent.children if child.id != node.id
+            ]
+        node.parent = parent
+        node.cost_to_parent = edge_cost
+        parent.children.append(node)
+        self.operation.costs = self.trees[node.state.mode].ensure_capacity(
+            self.operation.costs, node.id
         )
-        n_new.cost = c_min
-        self.trees[mode].add_node(n_new)
+        node.cost = parent.cost + edge_cost
+        if node.children:
+            self.update_cost(node.state.mode, node)
 
     def rewire(
         self,
@@ -1874,75 +1887,57 @@ class BaseRRTstar(BasePlanner):
 
     def tree_extension(self, discretized_path: List[State]) -> None:
         """
-        Extends the tree by adding path states as nodes and updating parent-child relationships.
+        Reinserts a path, reusing exact same-mode nodes and retaining rewiring.
 
         Args:
-            active_mode (Mode): Current mode for tree extension.
             discretized_path (List[State]):Sequence of states forming the discretized path.
 
         Returns:
             None: This method does not return any value.
         """
+        if not discretized_path:
+            return
         mode = discretized_path[0].mode
         parent = self.operation.path_nodes[0]
         for i in range(1, len(discretized_path)):
             state = discretized_path[i]
 
-            node = Node(state, self.operation)
-            # node.parent = parent
-            # self.operation.costs = self.trees[discretized_path[i].mode].ensure_capacity(self.operation.costs, node.id)
-            # node.cost = discretized_costs[i]
-            # node.cost_to_parent = node.cost - node.parent.cost
-            # parent.children.append(node)
+            tree = self.trees[state.mode]
+            existing_node = tree.find_node(state)
+            node = existing_node if existing_node is not None else Node(state, self.operation)
+            if mode != state.mode:
+                self.convert_node_to_transition_node(parent.state.mode, parent)
 
-            if mode == node.state.mode:
-                index = np.where(
-                    self.trees[node.state.mode].get_node_ids_subtree() == parent.id
-                )
-                N_near_batch, n_near_costs, node_indices = self.near(
-                    node.state.mode, node, index
-                )
-                batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
-                self.find_parent(
-                    node.state.mode,
+            index = np.where(tree.get_node_ids_subtree() == parent.id)
+            N_near_batch, n_near_costs, node_indices = self.near(state.mode, node, index)
+            batch_cost = self.env.batch_config_cost(state.q, N_near_batch)
+            if existing_node is None and mode != state.mode:
+                connection = (parent, self.env.config_cost(state.q, parent.state.q))
+            else:
+                connection = self.find_parent(
+                    state.mode,
                     node_indices,
                     node,
                     parent,
                     batch_cost,
                     n_near_costs,
+                    cost_bound=existing_node.cost if existing_node is not None else None,
                 )
-            else:
-                node.parent = parent
-                self.operation.costs = self.trees[
-                    discretized_path[i].mode
-                ].ensure_capacity(self.operation.costs, node.id)
-                node.cost_to_parent = self.env.config_cost(node.state.q, parent.state.q)
-                node.cost = node.parent.cost + node.cost_to_parent
-                parent.children.append(node)
-                self.convert_node_to_transition_node(
-                    node.parent.state.mode, node.parent
-                )
-                index = np.where(
-                    self.trees[node.state.mode].get_node_ids_subtree() == parent.id
-                )
-                N_near_batch, n_near_costs, node_indices = self.near(
-                    node.state.mode, node, index
-                )
-                batch_cost = self.env.batch_config_cost(node.state.q, N_near_batch)
+            if connection is not None:
+                self._set_parent(node, *connection)
 
+            target = "" if tree.order == 1 else "B"
+            if node.id not in (tree.subtree if target == "" else tree.subtree_b):
+                tree.add_node(node, target)
             if self.rewire(
-                node.state.mode, node_indices, node, batch_cost, n_near_costs
+                state.mode, node_indices, node, batch_cost, self.operation.costs[node_indices]
             ):
-                self.update_cost(node.state.mode, node)
-            if self.trees[discretized_path[i].mode].order == 1:
-                self.trees[discretized_path[i].mode].add_node(node)
-            else:
-                self.trees[discretized_path[i].mode].add_node(node, "B")
+                self.update_cost(state.mode, node)
             parent = node
 
             mode = node.state.mode
 
-        self.convert_node_to_transition_node(mode, node)
+        self.convert_node_to_transition_node(mode, parent)
         self.find_lb_transition_node(shortcutting_bool=False)
         # import matplotlib.pyplot as plt
         # fig, axes = plt.subplots(3, 2, figsize=(12, 15))

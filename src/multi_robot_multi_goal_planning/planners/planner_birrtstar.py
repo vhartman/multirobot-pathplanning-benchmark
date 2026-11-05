@@ -452,7 +452,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                     )
 
                 batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
-                self.find_parent(
+                parent, edge_cost = self.find_parent(
                     active_mode,
                     node_indices,
                     n_new,
@@ -460,6 +460,8 @@ class BidirectionalRRTstar(BaseRRTstar):
                     batch_cost,
                     n_near_costs,
                 )
+                self._set_parent(n_new, parent, edge_cost)
+                self.trees[active_mode].add_node(n_new)
 
                 if self.rewire(
                     active_mode, node_indices, n_new, batch_cost, n_near_costs
