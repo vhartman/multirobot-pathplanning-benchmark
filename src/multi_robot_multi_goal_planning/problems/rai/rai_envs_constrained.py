@@ -45,6 +45,64 @@ from ..core.constraints import (
 
 from ..core.registry import register
 
+@register([
+    ('rai.ur5_shared_rail', {'kind':'rail','num_robots':3}),
+    ('rai.ur5_shared_rail_2', {'kind':'rail','num_robots':2}),
+    ('rai.ur5_mobile_corridor', {'kind':'corridor','corridor_width':.24}),
+    ('rai.ur5_mobile_corridor_wide', {'kind':'corridor','corridor_width':.6}),
+    ('rai.ur5_mobile_tapered', {'kind':'corridor','corridor_shape':'tapered'}),
+    ('rai.ur5_shared_rail_fixed_3', {'kind':'rail','num_robots':3,'rail_length':3.6,'compact':True}),
+    ('rai.ur5_shared_rail_fixed_4', {'kind':'rail','num_robots':4,'rail_length':3.6,'compact':True}),
+    ('rai.ur5_shared_rail_fixed_5', {'kind':'rail','num_robots':5,'rail_length':3.6,'compact':True}),
+    ('rai.ur5_shared_rail_linked_4', {'kind':'rail','num_robots':4,'rail_length':3.6,'compact':True,'maximum_spacing':.78}),
+])
+class AffinePickPlace(SequenceMixin, rai_env):
+    """Linear operating envelopes with ordinary collision-checked manipulation."""
+    def __init__(self, kind='rail', num_robots=3, corridor_width=.24, objects_per_robot=4,
+                 rail_length=None, compact=False, corridor_shape='rectangle',maximum_spacing=None):
+        self.C,self.robots,keyframes,self.affine_scene = rai_config.make_affine_pick_place_env(
+            kind,num_robots,corridor_width,objects_per_robot,rail_length,compact,corridor_shape)
+        self.affine_scene['maximum_spacing']=maximum_spacing
+        rai_env.__init__(self)
+        self.manipulating_env=True
+        n=len(self.start_pos.state())
+        G=[];h=[]
+        if kind=='rail':
+            for left,right in zip(self.robots,self.robots[1:]):
+                row=np.zeros(n);row[self.robot_idx[left][0]]=1;row[self.robot_idx[right][0]]=-1
+                G.append(row);h.append(-self.affine_scene['minimum_spacing'])
+                if maximum_spacing is not None:
+                    # A finite inter-carriage cable span, in addition to the
+                    # minimum safety clearance; still a convex linear region.
+                    G.append(-row);h.append(maximum_spacing)
+            self.constraints=[AffineConfigurationSpaceInequalityConstraint(np.asarray(G).reshape(-1,n),np.array(h))]
+        else:
+            angle=self.affine_scene['angle']
+            along=np.array([np.cos(angle),np.sin(angle)])
+            across=np.array([-np.sin(angle),np.cos(angle)])
+            taper=self.affine_scene['taper']
+            for direction,bound in ((along,1.35),(-along,1.35),(across+taper*along,corridor_width/2),(-across+taper*along,corridor_width/2)):
+                row=np.zeros(n);row[:2]=direction;G.append(row);h.append(bound)
+            row=np.zeros((1,n));row[0,2]=1
+            self.constraints=[AffineConfigurationSpaceInequalityConstraint(np.asarray(G).reshape(-1,n),np.array(h)),
+                              AffineConfigurationSpaceEqualityConstraint(row,np.array([angle]))]
+        self.tasks=[]
+        # Alternate robots between transfers, so they repeatedly have to make
+        # room rather than finishing one robot's entire workload at a time.
+        for robot,obj,(pick,place) in sorted(keyframes,key=lambda item:(int(item[1].split('_')[-1]),item[0])):
+            self.tasks.extend([
+                Task(f'pick_{obj}',[robot],SingleGoal(pick),'pick',frames=[robot+'ur_gripper',obj]),
+                Task(f'place_{obj}',[robot],SingleGoal(place),'place',frames=['table',obj])])
+        self.tasks.append(Task('terminal',self.robots,SingleGoal(self.start_pos.state().copy())))
+        self.sequence=self._make_sequence_from_names([task.name for task in self.tasks])
+        self.collision_tolerance=.001
+        self.collision_resolution=.005
+        BaseModeLogic.__init__(self)
+        self._set_default_safe_pose()
+        self.spec.constraints=ConstraintType.CONSTRAINED
+        if kind=='corridor':self.spec.agent_type=AgentType.SINGLE_AGENT
+
+
 @register("rai.constrained_pose")
 class rai_two_dim_env_pose_constraint(SequenceMixin, rai_env):
     def __init__(self):
@@ -1298,3 +1356,133 @@ class rai_assembly_with_insertion(SequenceMixin, rai_env):
         self.manipulating_env = True
 
         home_pose = self.C.getJointState()
+
+
+CARRIER_OPENARM_VARIANTS = dict([
+           ('rai.carrier_openarm_sorting', {'layout':'around'}),
+           ('rai.carrier_openarm_sorting_front', {'layout':'front'}),
+           ('rai.carrier_openarm_clearing_eight', {'layout':'clutter'}),
+           ('rai.carrier_openarm_scattered_eight', {'layout':'scattered', 'num_keyframes':4}),
+           ('rai.carrier_openarm_two_stacks', {'layout':'stacks', 'num_keyframes':4}),
+           ('rai.two_carriers_openarm_sorting', {'layout':'around', 'num_carriers':2}),
+           ('rai.two_carriers_openarm_sorting_front', {'layout':'front', 'num_carriers':2}),
+           ('rai.two_carriers_openarm_clearing_sixteen', {'layout':'clutter', 'num_carriers':2}),
+           ('rai.two_carriers_openarm_scattered_sixteen', {'layout':'scattered', 'num_carriers':2, 'num_keyframes':4}),
+           ('rai.two_carriers_openarm_four_stacks', {'layout':'stacks', 'num_carriers':2, 'num_keyframes':4})])
+
+
+@register(list(CARRIER_OPENARM_VARIANTS.items()))
+class CarrierOpenArmSorting(SequenceMixin, rai_env):
+    """One or two UR10 carriers, each supporting two OpenArms.
+
+    Pick/place GoalSets fix only the working 13-coordinate chain. Affine
+    equalities tie its duplicated carrier joints to the other arm's chain;
+    the idle arm remains free. All goals share one fixed grasp transform.
+    Two carriers face each other across a table with interleaved transfers.
+    This is a kinematic prototype, not a calibrated hardware model.
+
+    OpenArm models are bundled; openarm_dir optionally selects another model directory.
+    """
+    @classmethod
+    def from_goal_snapshot(cls, name, goals):
+        """Restore a registered carrier scene without recomputing its IK sets."""
+        if name not in CARRIER_OPENARM_VARIANTS:
+            raise ValueError(f'Unknown carrier scene: {name}')
+        return cls(**CARRIER_OPENARM_VARIANTS[name], goal_snapshot=goals)
+
+    def __init__(self, openarm_dir=None, layout='around', num_keyframes=8, keyframe_seed=31,
+                 boxes_per_stack=4, scatter_seed=7, goal_snapshot=None,
+                 num_carriers=1, carrier_spacing=1.8):
+        self.num_carriers = num_carriers
+        self.carrier_spacing = carrier_spacing
+        self.C = rai_config.make_carrier_openarm_scene(openarm_dir,
+            num_carriers=num_carriers, carrier_spacing=carrier_spacing)
+        assignments = rai_config.add_carrier_sorting_objects(self.C, layout,
+            boxes_per_stack=boxes_per_stack, scatter_seed=scatter_seed,
+            num_carriers=num_carriers, carrier_spacing=carrier_spacing)
+        self.layout = layout
+        self.num_keyframes = num_keyframes
+        self.keyframe_seed = keyframe_seed
+        # Object and gripper origins coincide, with a fixed 180-degree X
+        # rotation: gripper +Z points down, and yaw cannot vary between picks.
+        self.grasp_transform = np.array([0., 0., 0., 0., 1., 0., 0.])
+        self.robots = [f'a{i+1}' for i in range(2*num_carriers)]
+        home = self.C.getJointState().copy()
+        original_poses = [self.C.getFrame(f'obj{i}').getPose().copy() for i in range(len(assignments))]
+        if goal_snapshot is not None and len(goal_snapshot) != 2*len(assignments)+1:
+            raise ValueError('Saved goal count does not match carrier scene')
+        frames, previous = [], [home.copy()]
+        for i, arm in enumerate(assignments):
+            gripper, obj = f'a{arm+1}_gripper_center', f'obj{i}'
+            destination = 'destination_table'+('' if arm < 2 else '_2')
+            if goal_snapshot is not None:
+                # Restore partial goals without rerunning stochastic IK.
+                pair = []
+                for index, name in ((2*i, f'pick_{i}'), (2*i+1, f'place_{i}')):
+                    record = goal_snapshot[index]
+                    if record['task'] != name or record['type'] != 'GoalSet':
+                        raise ValueError('Saved carrier goal identity mismatch')
+                    candidates = []
+                    for values in record['data']:
+                        values = np.asarray(values, dtype=float)
+                        if values.shape != (13,) or not np.all(np.isfinite(values)):
+                            raise ValueError('Invalid saved active-chain goal')
+                        q = home.copy()
+                        q[13*arm:13*(arm+1)] = values
+                        carrier_start = 26*(arm//2)
+                        q[carrier_start:carrier_start+6] = values[:6]
+                        q[carrier_start+13:carrier_start+19] = values[:6]
+                        candidates.append(q)
+                    if not candidates:
+                        raise ValueError('Empty saved carrier goal set')
+                    pair.append(candidates)
+                frames.append((gripper, obj, *pair))
+                continue
+            pick = rai_config.solve_carrier_sorting_keyframes(
+                self.C, gripper, self.C.getFrame(obj).getPosition(), previous[0],
+                count=num_keyframes, quaternion=self.grasp_transform[3:],
+                seed=keyframe_seed+2*i, other_initials=[home, *previous[1:]])
+            # Use a representative only to build the common held-object scene;
+            # all candidates have this same gripper pose, to numerical precision.
+            self.C.getFrame(obj).unLink()
+            self.C.getFrame(obj).setParent(self.C.getFrame(gripper), True)
+            self.C.getFrame(obj).setRelativePosition(self.grasp_transform[:3])
+            self.C.getFrame(obj).setRelativeQuaternion(self.grasp_transform[3:])
+            target = self.C.getFrame(f'goal{i}').getPosition()+[0,0,.029]
+            place = rai_config.solve_carrier_sorting_keyframes(
+                self.C, gripper, target, pick[0], count=num_keyframes,
+                quaternion=self.grasp_transform[3:], seed=keyframe_seed+2*i+1,
+                other_initials=[home, *pick[1:]])
+            self.C.getFrame(obj).unLink()
+            self.C.getFrame(obj).setParent(self.C.getFrame(destination), True)
+            self.C.getFrame(obj).setPosition(target).setQuaternion([1,0,0,0])
+            frames.append((gripper,obj,pick,place))
+            previous = place
+        for i, pose in enumerate(original_poses):
+            self.C.getFrame(f'obj{i}').unLink()
+            source = 'source_table'+('' if assignments[i] < 2 else '_2')
+            self.C.getFrame(f'obj{i}').setParent(self.C.getFrame(source))
+            self.C.getFrame(f'obj{i}').setPosition(pose[:3]).setQuaternion(pose[3:])
+            self.C.getFrame(f'obj{i}').setJoint(ry.JT.rigid)
+        self.C.setJointState(home)
+        rai_env.__init__(self)
+        self.manipulating_env = True
+        self.constraints = [AffineConfigurationSpaceEqualityConstraint(
+            rai_config.shared_carrier_matrix(num_carriers), np.zeros(6*num_carriers), eps=1e-8)]
+        self.tasks = []
+        for i, (gripper, obj, pick, place) in enumerate(frames):
+            robot = self.robots[assignments[i]]
+            destination = 'destination_table'+('' if assignments[i] < 2 else '_2')
+            indices = np.asarray(self.robot_idx[robot], dtype=int)
+            # Full IK states only witness feasibility during scene generation.
+            # Do not turn the incidental idle-arm pose into a task requirement.
+            pick_goals = [q[indices].copy() for q in pick]
+            place_goals = [q[indices].copy() for q in place]
+            self.tasks.extend((Task(f'pick_{i}',[robot],GoalSet(pick_goals),'pick',frames=[gripper,obj]),
+                               Task(f'place_{i}',[robot],GoalSet(place_goals),'place',frames=[destination,obj])))
+        self.tasks.append(Task('terminal', self.robots, SingleGoal(home)))
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+        self.collision_tolerance = .001
+        self.collision_resolution = .005
+        BaseModeLogic.__init__(self)
+        self.spec.constraints = ConstraintType.CONSTRAINED

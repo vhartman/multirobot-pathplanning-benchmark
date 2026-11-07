@@ -1,0 +1,12 @@
+OpenArm v2 arm and pinch-gripper models
+
+Meshes originate from enactic/openarm_description (Apache License 2.0).
+Upstream revision: 1fba2cbc05001f05b4514120b70130b4ac06f409.
+The accompanying LICENSE.txt contains the upstream license.
+
+The RAI descriptions and mesh copies were taken from the OpenArm conversion in
+vhartman/fixtureless-assembly, revision ddf6fff098f3fc32aecb4b445a72f8ae6158a40f.
+The descriptions adapt joint/frame names for RAI, use primitive collision
+geometry, and fix the pinch-gripper fingers open. They are kinematic planning
+models, not calibrated hardware descriptions. Visual meshes retain their
+relative paths; only files referenced by the left/right arm models are bundled.

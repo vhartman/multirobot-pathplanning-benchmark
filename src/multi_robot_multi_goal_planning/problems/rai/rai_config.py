@@ -5,12 +5,135 @@ import argparse
 from typing import List
 
 import os.path
+from pathlib import Path
 import random
 import json
 
 # make everything predictable
 # np.random.seed(2)
 # random.seed(2)
+
+
+def make_affine_pick_place_env(kind="rail", num_robots=3, corridor_width=.24, objects_per_robot=4,
+                              rail_length=None, compact=False, corridor_shape='rectangle'):
+    """UR5 pick/place: shared floor rail or a marked mobile-base operating lane.
+
+    The lane is an operational restriction, not a wall: the arm may reach over
+    its markings. Coordinates are world XY, so the oblique lane is genuinely
+    coupled. Rail clearance is independent of arm/object collision checking.
+    Deterministic IK does not consume the planner/scene global random stream.
+    """
+    from scipy.optimize import least_squares
+    from scipy.spatial.transform import Rotation
+    if kind not in ("rail", "corridor") or num_robots < 1 or objects_per_robot not in (1,2,3,4):
+        raise ValueError("Expected rail/corridor and positive robot count")
+    if kind == "corridor":
+        num_robots = 1
+    C = ry.Config()
+    C.addFrame('world')
+    angle = .45 if kind == "corridor" else 0.
+    rotation = Rotation.from_euler('z', angle)
+    quat = np.roll(rotation.as_quat(), 1)
+    def point(x, y, z):
+        return rotation.apply([x, y, z])
+    centers = (np.arange(num_robots)-(num_robots-1)/2)*(.64 if compact else .9)
+    length = (num_robots-1)*.9+1.8 if kind == 'rail' else 3.2
+    if rail_length is not None:
+        if kind!='rail':raise ValueError('rail_length requires rail')
+        length=float(rail_length)
+    if corridor_shape not in ('rectangle','tapered'):raise ValueError(corridor_shape)
+    taper=.07 if corridor_shape=='tapered' else 0.
+    C.addFrame('floor').setShape(ry.ST.box, [12,12,.04]).setPosition([0,0,-.02]).setColor([.88,.88,.86]).setContact(1)
+    table = C.addFrame('table').setShape(ry.ST.box,[length+.7,.75,.08]).setPosition(point(0,.85,.42)).setQuaternion(quat).setColor([.60,.48,.33]).setContact(1)
+    for x in (-length/2, length/2):
+        for y in (.57,1.1):
+            C.addFrame(f'bench_leg_{x}_{y}').setShape(ry.ST.box,[.07,.07,.38]).setPosition(point(x,y,.19)).setQuaternion(quat).setColor([.3,.3,.32]).setContact(1)
+    if kind == 'rail':
+        for y in (-.13,.13):
+            C.addFrame(f'rail_{y}').setShape(ry.ST.box,[length,.045,.06]).setPosition([0,y,.03]).setColor([.35,.37,.4]).setContact(0)
+    else:
+        # These markings delimit the permissible base CENTER, not its footprint.
+        for name,extra,thickness,color in [('center',0.,.018,[.95,.68,.05]),('footprint',.28,.025,[.95,.85,.3])]:
+            for sign in (-1,1):
+                y=sign*(corridor_width/2+extra)
+                line_rotation=rotation*Rotation.from_euler('z',np.arctan(-sign*taper))
+                C.addFrame(f'lane_{name}_boundary_{y}').setShape(ry.ST.box,[length*np.sqrt(1+taper*taper),thickness,.004]).setPosition(point(0,y,.003)).setQuaternion(np.roll(line_rotation.as_quat(),1)).setColor(color).setContact(0)
+    model = Path(__file__).parent/'../../assets/models/rai/ur5_vamp/ur5_vamp.g'
+    robots=[]
+    for i, center in enumerate(centers):
+        robot=f'a{i+1}_';robots.append(robot)
+        base=C.addFrame(robot+'carriage','world')
+        if kind=='rail':
+            base.setJoint(ry.JT.transX, limits=[-length/2+.25,length/2-.25]).setJointState([center])
+        else:
+            base.setJoint(ry.JT.transXYPhi,limits=[-2.,2.,-2.,2.,-np.pi,np.pi]).setJointState([*point(-.95,0,0)[:2],angle])
+        C.addFrame(robot+'deck',base.name).setShape(ry.ST.box,[.48,.42,.16]).setRelativePosition([0,0,.1]).setColor([.22,.25,.3]).setContact(1)
+        if kind=='corridor':
+            for x in (-.16,.16):
+                for y in (-.23,.23):
+                    C.addFrame(f'{robot}wheel_{x}_{y}',base.name).setShape(ry.ST.cylinder,[.055,.09]).setRelativePosition([x,y,.09]).setRelativeQuaternion([.70710678,.70710678,0,0]).setColor([.12,.12,.13]).setContact(0)
+        C.addFile(str(model),namePrefix=robot).setParent(base).setRelativePosition([0,0,.19]).setJoint(ry.JT.rigid)
+    home=C.getJointState().copy()
+    keyframes=[]
+    rng=np.random.default_rng(421)
+    # All manipulation goals use a fixed vertical grasp; place therefore has
+    # the same grasp transform and is independent of the preceding IK draw.
+    for i, robot in enumerate(robots):
+        names=get_robot_joints(C,robot)
+        for j in range(objects_per_robot):
+            x0=centers[i]-.42+.14*(j//2)
+            x1=centers[i]+.28+.12*(j//2)
+            if compact:
+                x0=centers[i]-.24+.11*(j//2)
+                x1=centers[i]+.12+.11*(j//2)
+            if kind=='corridor':x0,x1=(-1.05+.14*(j//2),.95+.14*(j//2))
+            y=.55+.10*(j%2)
+            obj=f'obj{i}_{j}';goal=f'goal{i}_{j}'
+            C.addFrame(obj,'table').setShape(ry.ST.box,[.055,.055,.06]).setPosition(point(x0,y,.49)).setQuaternion(quat).setColor([[.85,.3,.2],[.2,.65,.8]][j%2]).setContact(1).setMass(.1).setJoint(ry.JT.rigid)
+            C.addFrame(goal).setShape(ry.ST.box,[.065,.065,.004]).setPosition(point(x1,y,.462)).setQuaternion(quat).setColor([.25,.65,.3,.5]).setContact(0)
+            qs=[]
+            for endpoint,x in enumerate((x0,x1)):
+                C.setJointState(home)
+                base_x=centers[i]+(-.22 if endpoint==0 else .22) if compact else x
+                base_q=[base_x] if kind=='rail' else [*point(base_x,0,0)[:2],angle]
+                C.setJointState(base_q,[robot+'carriage'])
+                arm_names=[n for n in names if n != robot+'carriage']
+                target_pos=point(x,y,.51)
+                target_rot=rotation*Rotation.from_euler('x',np.pi)
+                target=C.addFrame(f'ik_target_{i}_{j}_{len(qs)}').setPosition(target_pos).setQuaternion(np.roll(target_rot.as_quat(),1))
+                arm_indices=[k for k,n in enumerate(C.getJointNames()) if n in arm_names]
+                bounds=C.getJointLimits()[:,arm_indices]
+                def residual(q):
+                    C.setJointState(q,arm_names)
+                    return C.eval(ry.FS.poseDiff,[robot+'ur_gripper_center',target.name])[0]
+                def jacobian(q):
+                    C.setJointState(q,arm_names)
+                    return C.eval(ry.FS.poseDiff,[robot+'ur_gripper_center',target.name])[1][:,arm_indices]
+                solution=None
+                for attempt in range(24):
+                    q0=C.getJointState()[arm_indices] if attempt==0 else rng.uniform(bounds[0],bounds[1])
+                    fit=least_squares(residual,np.clip(q0,bounds[0]+1e-7,bounds[1]-1e-7),jac=jacobian,bounds=bounds,max_nfev=180,gtol=1e-10,ftol=1e-10,xtol=1e-10)
+                    if np.linalg.norm(fit.fun)<1e-5:
+                        C.setJointState(fit.x,arm_names)
+                        C.computeCollisions()
+                        # Other carriages may move during planning. Reject
+                        # self/static/object collisions, not their home poses.
+                        bad=[]
+                        for a,b,distance in C.getCollisions():
+                            if distance>=-.0001 or not (a.startswith(robot) or b.startswith(robot)):continue
+                            other=b if a.startswith(robot) else a
+                            if any(other.startswith(r) for r in robots if r!=robot):continue
+                            bad.append((a,b,distance))
+                        if not bad:
+                            solution=fit.x;break
+                if solution is None:raise RuntimeError(f'IK failed for {kind}/{robot}/{obj}/{x}')
+                C.setJointState(solution,arm_names)
+                qs.append(C.getJointState()[[k for k,n in enumerate(C.getJointNames()) if n.startswith(robot)]].copy())
+                C.delFrame(target.name)
+            keyframes.append((robot,obj,qs))
+    C.setJointState(home)
+    return C,robots,keyframes,dict(kind=kind,length=length,angle=angle,corridor_width=corridor_width,
+        corridor_shape=corridor_shape,taper=taper,compact=compact,minimum_spacing=.60,objects_per_robot=objects_per_robot)
 
 
 def get_robot_joints(C: ry.Config, prefix: str) -> List[str]:
@@ -9043,3 +9166,252 @@ def make_rai_quad_ur5_env():
     # print(r2_pose)
 
     return C, [r1_pose, r2_pose, r3_pose, r4_pose]
+
+
+# Shared-carrier dual OpenArm sorter. Geometry dimensions are in metres.
+# Torso +X faces forward, +Y spans the shoulders, +Z is up at home.
+# Flange +Z enters the middle of the torso's back, not its underside.
+CARRIER_HOME = [-1.1451773138710069, -1.8544746963623269, .5126729758583086,
+                -.22899460588507078, -1.5707963272310999, -1.1451773136886936]
+TORSO_EE_QUATERNION = [np.sqrt(.5), 0., -np.sqrt(.5), 0.]
+TORSO_SIZE = [.18, .28, .30]  # depth, width, height
+CARRIER_BACK_STANDOFF = .08
+# Body origin is at the bottom centre; attachment is at mid-back height.
+TORSO_EE_OFFSET = [TORSO_SIZE[2]/2, 0., CARRIER_BACK_STANDOFF+TORSO_SIZE[0]/2]
+SHOULDER_HALF_SPACING = .16
+SHOULDER_HEIGHT = .25
+
+
+def carrier_openarm_model_paths(openarm_dir=None):
+    package = Path(__file__).resolve().parents[2]
+    carrier = package/'assets/models/rai/ur10/ur10.g'
+    model_dir = openarm_dir if openarm_dir is not None else package/'assets/models/rai/openarm'
+    arms = Path(model_dir).expanduser().resolve()
+    for path in (carrier, arms/'left_openarm.g', arms/'right_openarm.g'):
+        if not path.is_file():
+            raise FileNotFoundError(f'Missing OpenArm carrier model: {path}')
+    return carrier, arms
+
+
+def make_carrier_openarm_scene(openarm_dir=None, *, num_carriers=1, carrier_spacing=1.8):
+    if num_carriers not in (1, 2):
+        raise ValueError('num_carriers must be 1 or 2')
+    if not np.isfinite(carrier_spacing) or carrier_spacing <= 0:
+        raise ValueError('carrier_spacing must be positive and finite')
+    carrier, arms = carrier_openarm_model_paths(openarm_dir)
+    C = ry.Config()
+    C.addFrame('floor').setShape(ry.ST.box, [4+(num_carriers-1)*carrier_spacing,4,.08]).setPosition([(num_carriers-1)*carrier_spacing/2,0,-.06]).setColor([.85,.85,.85]).setContact(1)
+    for index in range(num_carriers):
+        x = index*carrier_spacing
+        rotation = [1,0,0,0] if index == 0 else [0,0,0,1]
+        suffix = '' if index == 0 else f'_{index+1}'
+        C.addFrame('pedestal'+suffix).setShape(ry.ST.ssBox, [.38,.38,.4,.02]).setPosition([x,0,.2]).setColor([.22,.25,.28]).setContact(1)
+        for side_index, side in enumerate(('left', 'right')):
+            prefix = f'a{2*index+side_index+1}_'
+            C.addFile(str(carrier), namePrefix=prefix).setPosition([x,0,.5]).setQuaternion(rotation)
+            carrier_joints = [name for name in C.getJointNames() if name.startswith(prefix+'ur_')]
+            C.setJointState(CARRIER_HOME, carrier_joints)
+            if side_index == 1:
+                for name in C.getFrameNames():
+                    if name.startswith(prefix):
+                        C.getFrame(name).setContact(0)
+                        C.getFrame(name).setAttribute('visual', False)
+            ee = C.getFrame(prefix+'ur_ee_link')
+            body = C.addFrame(prefix+'body', ee.name)
+            body.setRelativePosition(TORSO_EE_OFFSET).setRelativeQuaternion(TORSO_EE_QUATERNION)
+            mount = C.addFrame(prefix+'mount', body.name)
+            mount.setRelativePosition([0, SHOULDER_HALF_SPACING if side == 'left' else -SHOULDER_HALF_SPACING, SHOULDER_HEIGHT])
+            C.addFile(str(arms/f'{side}_openarm.g'), namePrefix=prefix).setParent(mount)
+        body_name = f'a{2*index+1}_body'
+        C.addFrame('torso'+suffix, body_name).setShape(ry.ST.ssBox,TORSO_SIZE+[.025]).setRelativePosition([0,0,TORSO_SIZE[2]/2]).setColor([.25,.28,.32]).setContact(1)
+        C.addFrame('chest_panel'+suffix, body_name).setShape(ry.ST.ssBox,[.012,.20,.19,.005]).setRelativePosition([TORSO_SIZE[0]/2+.006,0,.16]).setColor([.42,.46,.50]).setContact(1)
+        C.addFrame('carrier_adapter'+suffix, body_name).setShape(ry.ST.capsule,[CARRIER_BACK_STANDOFF-.06,.03]).setRelativePosition([-TORSO_SIZE[0]/2-CARRIER_BACK_STANDOFF/2,0,TORSO_SIZE[2]/2]).setRelativeQuaternion([np.sqrt(.5),0,np.sqrt(.5),0]).setColor([.32,.35,.38]).setContact(-3)
+    return C
+
+
+def shared_carrier_matrix(num_carriers=1):
+    if num_carriers not in (1, 2):
+        raise ValueError('num_carriers must be 1 or 2')
+    matrix = np.zeros((6*num_carriers, 26*num_carriers))
+    for index in range(num_carriers):
+        rows = slice(6*index, 6*(index+1))
+        start = 26*index
+        matrix[rows, start:start+6] = np.eye(6)
+        matrix[rows, start+13:start+19] = -np.eye(6)
+    return matrix
+
+
+def add_carrier_sorting_objects(C, layout='around', *, boxes_per_stack=4, scatter_seed=7,
+                                num_carriers=1, carrier_spacing=1.8):
+    """Build the sorting scene and return the arm assignment for each object."""
+    if num_carriers not in (1, 2):
+        raise ValueError('num_carriers must be 1 or 2')
+    # Separate the two copies of the objects laterally, on one shared table.
+    # The carriers themselves face each other, without a separating wall.
+    lane_offset = .36 if num_carriers == 2 else 0.
+    if num_carriers == 2:
+        if layout not in ('around', 'front', 'clutter', 'scattered', 'stacks'):
+            raise ValueError(f'Unknown sorting layout: {layout}')
+        width = (1.5 if layout == 'around' else 1.25)+2*lane_offset
+        C.addFrame('front_table').setShape(ry.ST.ssBox,[.90,width,.08,.01]).setPosition([carrier_spacing/2,0,1.1]).setColor([.65,.61,.54]).setContact(1)
+        for index in range(2):
+            suffix = '' if index == 0 else '_2'
+            sign = 1 if index == 0 else -1
+            rotation = [1,0,0,0] if index == 0 else [0,0,0,1]
+            source_x = .85 if layout == 'around' else (.70 if layout == 'front' else .90)
+            C.addFrame('source_table'+suffix, 'front_table').setPosition([index*carrier_spacing+sign*source_x,0,1.1]).setQuaternion(rotation)
+            if layout == 'around':
+                C.addFrame('destination_table'+suffix).setShape(ry.ST.ssBox,[.65,1.5,.08,.01]).setPosition([index*carrier_spacing-sign*.85,sign*lane_offset,1.1]).setQuaternion(rotation).setColor([.65,.61,.54]).setContact(1)
+            else:
+                target_x = 1.05 if layout == 'front' else .90
+                C.addFrame('destination_table'+suffix, 'front_table').setPosition([index*carrier_spacing+sign*target_x,0,1.1]).setQuaternion(rotation)
+        lane = .42 if layout == 'around' else .26
+    elif layout == 'around':
+        for name, x in (('source_table', .85), ('destination_table', -.85)):
+            C.addFrame(name).setShape(ry.ST.ssBox,[.65,1.5,.08,.01]).setPosition([x,0,1.1]).setColor([.65,.61,.54]).setContact(1)
+        lane = .42
+    elif layout in ('front', 'clutter', 'scattered', 'stacks'):
+        C.addFrame('front_table').setShape(ry.ST.ssBox,[.90,1.25,.08,.01]).setPosition([.90,0,1.1]).setColor([.65,.61,.54]).setContact(1)
+        # Stable named anchors preserve the same manipulation task machinery.
+        C.addFrame('source_table', 'front_table').setRelativePosition([-.20 if layout == 'front' else 0,0,0])
+        C.addFrame('destination_table', 'front_table').setRelativePosition([.15 if layout == 'front' else 0,0,0])
+        lane = .26
+    else:
+        raise ValueError(f'Unknown sorting layout: {layout}')
+    if layout in ('scattered', 'stacks'):
+        if not isinstance(boxes_per_stack, (int, np.integer)) or boxes_per_stack < 1:
+            raise ValueError('boxes_per_stack must be a positive integer')
+        per_arm = boxes_per_stack if layout == 'stacks' else 4
+        rng = np.random.default_rng(scatter_seed)
+        points = []
+        for _ in range(10000):
+            xy = rng.uniform([-.23, -.22], [.23, .22])
+            if all(np.linalg.norm(xy-other) >= .125 for other in points):
+                points.append(xy)
+                if len(points) == 2*per_arm:
+                    break
+        if len(points) != 2*per_arm:
+            raise ValueError('Requested cubes do not fit the central scatter region')
+        # Balance the two arms spatially, then clear front to back. Positions
+        # themselves are rejection-sampled, not a jittered grid or two rows.
+        points.sort(key=lambda xy: xy[1])
+        groups = [sorted(points[per_arm:], key=lambda xy: xy[0]),
+                  sorted(points[:per_arm], key=lambda xy: xy[0])]
+        objects = []
+        for level in range(per_arm):
+            for arm, side in ((0, 1), (1, -1)):
+                color = [.85, .2+.04*level, .15] if arm == 0 else [.15, .4+.04*level, .85]
+                source = [*groups[arm][level], .071]
+                target = ([.02, side*.46, .042+.06*level] if layout == 'stacks'
+                          else [float(np.linspace(-.23, .23, per_arm)[level]), side*.46, .042])
+                objects.append((arm, source, target, color))
+    elif layout == 'clutter':
+        # Eight separated but closely grouped blocks in an irregular centre
+        # cluster. Clear front to back, alternating arms, into two side lanes.
+        objects = []
+        for row, x in enumerate((-.24, -.09, .06, .21)):
+            for arm, side in ((0, 1), (1, -1)):
+                color = [.85, .2+.06*row, .15] if arm == 0 else [.15, .4+.05*row, .85]
+                source = [x + (.012 if arm else -.012), side*(.095+.012*(row % 2)), .071]
+                target = [x, side*.46, .042]
+                objects.append((arm, source, target, color))
+    else:
+        objects = [(i, [0,y,.071], [0,y,.042], color)
+                   for i, (y,color) in enumerate(((lane,[.85,.2,.15]), (-lane,[.15,.4,.85])))]
+    # Interleave carriers rather than finishing one carrier's whole task first.
+    # All robots and objects remain in one collision scene, without partitions.
+    objects = [(2*index+arm,
+                np.asarray(source)+[0,lane_offset,0],
+                np.asarray(target)+[0,0 if layout == 'around' else lane_offset,0], color)
+               for arm, source, target, color in objects for index in range(num_carriers)]
+    for i, (arm, source, target, color) in enumerate(objects):
+        suffix = '' if arm < 2 else '_2'
+        C.addFrame(f'obj{i}', 'source_table'+suffix).setShape(ry.ST.box,[.06,.06,.06]).setRelativePosition(source).setQuaternion([1,0,0,0]).setMass(.05).setColor(color).setContact(1).setJoint(ry.JT.rigid)
+        C.addFrame(f'goal{i}', 'destination_table'+suffix).setShape(ry.ST.box,[.07,.07,.004]).setRelativePosition(target).setColor(color+[.5]).setContact(0)
+        if layout == 'stacks':
+            # Goal markers above the table would otherwise look like floating
+            # shelves between the cubes; keep their task poses, hide the mesh.
+            C.getFrame(f'goal{i}').setAttribute('visual', False)
+    return [arm for arm, _, _, _ in objects]
+
+
+def solve_carrier_sorting_keyframes(C, gripper, target, initial, *, count=8,
+                                   quaternion=(0., 1., 0., 0.), seed=31,
+                                   other_initials=(), attempts=None):
+    """Diverse collision-free whole-body IK solutions for one fixed EE pose.
+
+    The full orientation fixes grasp yaw as well as approach direction. Every
+    candidate therefore induces the same rigid attachment, to IK precision.
+    Only the carrier and active arm determine candidate distinctness; moving
+    the unused arm alone does not count as another useful keyframe.
+    """
+    if not isinstance(count, (int, np.integer)) or count < 1:
+        raise ValueError('Keyframe count must be a positive integer')
+    quaternion = np.asarray(quaternion, dtype=float)
+    quaternion = quaternion / np.linalg.norm(quaternion)
+    # Solve on physical joints (20 per carrier), then lift to the planner's
+    # duplicated chains (26 per carrier). Keep all inter-carrier collisions.
+    physical = ry.Config()
+    physical.addConfigurationCopy(C)
+    names = list(C.getJointNames())
+    num_carriers = len(names)//26
+    if len(names) != 26*num_carriers or num_carriers not in (1, 2):
+        raise ValueError('Unexpected shared-carrier joint layout')
+    duplicates = {}
+    for index in range(num_carriers):
+        first, second = f'a{2*index+1}_', f'a{2*index+2}_'
+        physical.getFrame(second+'mount').unLink()
+        physical.getFrame(second+'mount').setParent(physical.getFrame(first+'body'), True)
+        for name in names:
+            if name.startswith(second+'ur_'):
+                duplicates[name] = first+name[len(second):]
+    physical.selectJoints([n for n in names if n not in duplicates])
+    physical_names = list(physical.getJointNames())
+    reduced_indices = [names.index(n) for n in physical_names]
+    lifted_indices = [physical_names.index(duplicates.get(n, n)) for n in names]
+    initials = [np.asarray(q)[reduced_indices].copy() for q in (initial, *other_initials)]
+    physical.getJointState()
+    physical_lower, physical_upper = physical.getJointLimits()
+    physical_bounded = physical_lower < physical_upper
+    rng = np.random.default_rng(seed)
+    solutions = []
+    active_prefix = gripper.split('_', 1)[0]+'_'
+    active = np.array([i for i, name in enumerate(names) if name.startswith(active_prefix)])
+    for attempt in range(attempts if attempts is not None else max(48, count*24)):
+        proposal = initials[attempt % len(initials)].copy()
+        if attempt >= len(initials):
+            proposal += rng.normal(0, .35 if attempt % 3 else .75, len(proposal))
+        proposal[physical_bounded] = np.clip(proposal[physical_bounded],
+            physical_lower[physical_bounded], physical_upper[physical_bounded])
+        physical.setJointState(proposal)
+        komo = ry.KOMO(physical, phases=1, slicesPerPhase=1, kOrder=1, enableCollisions=True)
+        komo.addControlObjective([], 0, .01)
+        komo.addObjective([], ry.FS.jointLimits, [], ry.OT.ineq, [10])
+        komo.addObjective([], ry.FS.accumulatedCollisions, [], ry.OT.ineq, [100], [0])
+        komo.addObjective([], ry.FS.position, [gripper], ry.OT.eq, [100], target)
+        komo.addObjective([], ry.FS.quaternion, [gripper], ry.OT.eq, [100], quaternion)
+        komo.initWithConstant(proposal)
+        solver = ry.NLP_Solver(komo.nlp(), verbose=0)
+        solver.setOptions(verbose=0, stopTolerance=1e-8)
+        solver.solve()
+        p = komo.getPath()[0].copy()
+        q = p[lifted_indices]
+        C.setJointState(q)
+        C.computeCollisions()
+        lower, upper = C.getJointLimits()
+        bounded = lower < upper
+        collision = any(d < -1e-5 for _, _, d in C.getCollisions())
+        error = np.linalg.norm(C.getFrame(gripper).getPosition()-target)
+        orientation = C.getFrame(gripper).getQuaternion()
+        orientation_error = min(np.linalg.norm(orientation-quaternion),
+                                np.linalg.norm(orientation+quaternion))
+        if (not collision and error < 1e-7 and orientation_error < 1e-7
+                and np.all(q[bounded] >= lower[bounded]-1e-8)
+                and np.all(q[bounded] <= upper[bounded]+1e-8)):
+            if all(np.linalg.norm(q[active]-old[active]) > .25 for old in solutions):
+                solutions.append(q.copy())
+                if len(solutions) == count:
+                    C.setJointState(solutions[0])
+                    return solutions
+    raise RuntimeError(f'Only {len(solutions)}/{count} distinct collision-free fixed-pose '
+                       f'keyframes for {gripper} at {target}')
