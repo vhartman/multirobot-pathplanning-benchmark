@@ -121,9 +121,16 @@ class ConstraintProvider:
         return fixed
 
     def path_satisfied(self, path):
-        return (all(self.for_mode(s.mode).satisfied(s.q) for s in path)
-                and all(self.for_mode(a.mode).edge_satisfied(a.q, b.q)
-                        for a, b in zip(path, path[1:])))
+        """Check vertices once, and outgoing constraints at mode boundaries."""
+        previous = None
+        for state in path:
+            if not self.for_mode(state.mode).satisfied(state.q):
+                return False
+            if (previous is not None and previous.mode is not state.mode
+                    and not self.for_mode(previous.mode).satisfied(state.q)):
+                return False
+            previous = state
+        return True
 
     def for_transition(self, mode, next_task_ids):
         """Combine outgoing and incoming affine constraints at a transition."""

@@ -10,6 +10,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import State, BasePro
 
 from multi_robot_multi_goal_planning.problems.core.configuration import config_dist
 from .shortcutting_compatible import CompatibleSubsetProposer
+from .shortcutting_affine import AffineIndexGroups, CoordinateProposals
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
@@ -123,33 +124,29 @@ def constant_task_runs(path: List[State], robot: int, min_span: int = 2):
     return runs
 
 
-def _shortcut_candidate(env, path, first, last, robots):
-    """Straighten selected robots while keeping other coordinates and modes.
-
-    Endpoints are fixed. Interior mode switches are represented by duplicate
-    configurations; the state after a switch uses the preceding interpolation
-    offset so those duplicates remain coincident.
-    """
+def _shortcut_candidate(env, path, first, last, robots=(), *, indices=None):
+    """Straighten selected coordinates without moving mode-switch duplicates."""
     start, end = path[first].q, path[last].q
+    if indices is None:
+        indices = [idx for r in robots for idx in env.robot_idx[env.robots[r]]]
+    indices = np.asarray(indices, dtype=int)
+    # A mode switch is not a motion step, including at either interval end.
+    progress = np.r_[0, np.cumsum([
+        path[k].mode == path[k - 1].mode for k in range(first + 1, last + 1)
+    ])]
+    selected_start = start.state()[indices]
+    selected_end = end.state()[indices]
+    delta = selected_end - selected_start
     candidate = []
-    for offset in range(last - first + 1):
+    for offset, step in enumerate(progress):
         flat = path[first + offset].q.state().copy()
-        cursor = 0
-        for robot, name in enumerate(env.robots):
-            dimension = env.robot_dims[name]
-            if robot in robots:
-                step = offset
-                if (0 < offset < last - first
-                        and path[first + offset].mode != path[first + offset - 1].mode):
-                    step -= 1
-                if step == 0:
-                    value = start[robot]
-                elif step == last - first:
-                    value = end[robot]
-                else:
-                    value = start[robot] + (end[robot] - start[robot]) * (step / (last - first))
-                flat[cursor:cursor + dimension] = value
-            cursor += dimension
+        if progress[-1]:
+            if step == 0:
+                flat[indices] = selected_start
+            elif step == progress[-1]:
+                flat[indices] = selected_end
+            else:
+                flat[indices] = selected_start + delta * (step / progress[-1])
         candidate.append(State(start.from_flat(flat), path[first + offset].mode))
     return candidate
 
@@ -231,6 +228,9 @@ def robot_mode_shortcut(
     interpolation_resolution: float=0.5,
     max_attempts: Optional[int] = None,
     run_choice: str = "tree",
+    *,
+    deadline: Optional[float] = None,
+    statistics: Optional[dict] = None,
 ):
     """Reduce path cost by straightening robots within constant-task runs.
 
@@ -254,6 +254,21 @@ def robot_mode_shortcut(
       - gain: use single-robot gain scheduling only.
       - tree_random: exhaust the tree, then use span scheduling.
       - span: use span scheduling only.
+      - index_endpoints: random coordinate subset and path endpoints; close
+        the subset over equality supports active within that interval.
+      - index_compatible: random equality-closed coordinate subset and run.
+      - index_tree: alternate full/block tree intervals and coordinate subsets.
+      - index_full: alternate full configurations and coordinate subsets.
+      - mechanism_compatible: sample groups of equality blocks sharing the
+        same owning robots, such as a shared base or a private arm.
+      - mechanism_full: alternate full configurations and mechanism groups.
+      - full / full_compatible: full configurations with endpoints / runs.
+
+    Index/full policies ignore robot_choice. Compatible index policies close
+    groups over all path modes; every touched robot must keep its task. Tree
+    roots are full configurations and equality-connected blocks; failed index
+    tree intervals split at their midpoint. Inequality violations are rejected.
+    No projection is used.
 
     Gain scheduling ranks runs by potential cost decrease, acceptance evidence,
     and draw count; overlapping gains are updated after accepted shortcuts.
@@ -263,11 +278,24 @@ def robot_mode_shortcut(
     max_iter bounds collision-checked proposals. max_attempts bounds draws,
     including rejected pairs; its default is max(2500, 5 * max_iter).
     All policies require a strictly positive cost improvement.
+    deadline is an optional absolute time.monotonic() limit, checked per draw.
+    statistics, if supplied, receives draw/check/acceptance counts.
     Returns the copied path and [costs, elapsed_times].
     """
+    start_time = time.monotonic()
+    index_policies = {"index_compatible": ("compatible", "index_groups"),
+                      "index_tree": ("tree_group", "index_groups"),
+                      "index_full": ("full_group", "index_groups"),
+                      "full_compatible": ("compatible", "full"),
+                      "mechanism_compatible": ("mechanism_group", "index_groups"),
+                      "mechanism_full": ("full_mechanism", "index_groups")}
+    coordinate_policy = run_choice in (*index_policies, "index_endpoints", "full")
+    stats = dict(draws=0, compatible=0, checked=0, accepted=0, constraint=0, cost=0)
+    if statistics is not None:
+        statistics.update(stats)
     schedules = {"tree_compatible": "interleaved", "tree_then_compatible": "sequenced",
                  "compatible": "subset"}
-    if run_choice not in ("tree", "tree_random", "gain", "span", *schedules):
+    if run_choice not in ("tree", "tree_random", "gain", "span", *schedules) and not coordinate_policy:
         raise ValueError(f"Unknown run_choice: {run_choice}")
     if not path:
         return [], [[0.0], [0.0]]
@@ -280,12 +308,10 @@ def robot_mode_shortcut(
     # checker's discretization and can turn a certified path into an invalid one.
     new_path = (_interpolate_compatible_path(
         env, path, interpolation_resolution, resolution, tolerance,
-    ) if scalable else interpolate_path(path, interpolation_resolution))
+    ) if scalable or coordinate_policy else interpolate_path(path, interpolation_resolution))
     
     costs = [path_cost(new_path, env.batch_config_cost)]
     times = [0.0]
-
-    start_time = time.time()
 
     cnt = 0
     if max_attempts is None:
@@ -298,12 +324,16 @@ def robot_mode_shortcut(
     runs = [constant_task_runs(new_path, r) for r in range(len(env.robots))]
     runs_used = [[0] * len(r) for r in runs]
 
-    if not any(runs):
+    if not any(runs) and not coordinate_policy:
         return new_path, [costs, times]
 
     proposer = (CompatibleSubsetProposer(
         new_path, runs, np.random.default_rng(np.random.randint(0, 2**32)), schedules[run_choice],
     ) if scalable else None)
+    coordinate_proposer = (CoordinateProposals(env, new_path, *index_policies[run_choice])
+                           if run_choice in index_policies else None)
+    index_groups = (AffineIndexGroups(env, new_path)
+                    if run_choice == "index_endpoints" else None)
     gains = runs_prop = runs_acc = None
     tree_heap = []
     tree_serial = 0
@@ -338,11 +368,36 @@ def robot_mode_shortcut(
 
     while True:
         iter += 1
-        if cnt >= max_iter or iter >= max_attempts:
+        if (cnt >= max_iter or iter >= max_attempts
+                or (deadline is not None and time.monotonic() >= deadline)):
+            break
+        stats['draws'] += 1
+        active_indices = None
+        if len(new_path) < 3:
             break
 
         from_tree = False
-        if proposer is not None:
+        if coordinate_policy:
+            if coordinate_proposer is not None:
+                proposal = coordinate_proposer()
+                if proposal is None:
+                    continue
+                i, j, active_indices = proposal
+            else:
+                i, j = sorted(np.random.randint(0, len(new_path), size=2))
+                if j - i < 2:
+                    continue
+                dimension = len(new_path[0].q.state())
+                if index_groups is None:
+                    active_indices = list(range(dimension))
+                else:
+                    size = np.random.randint(1, dimension + 1)
+                    selected = np.random.choice(dimension, size=size, replace=False)
+                    active_indices = index_groups.close(i, j, selected)
+            selected = set(active_indices)
+            robots_to_shortcut = [r for r, name in enumerate(env.robots)
+                                 if selected.intersection(env.robot_idx[name])]
+        elif proposer is not None:
             proposal = proposer()
             if proposal is None:
                 continue
@@ -419,37 +474,49 @@ def robot_mode_shortcut(
         # Selected robots must retain their tasks across the shortcut interval.
         can_shortcut_this = True
         for r in robots_to_shortcut:
-            if new_path[i].mode.task_ids[r] != new_path[j].mode.task_ids[r]:
+            if any(s.mode.task_ids[r] != new_path[i].mode.task_ids[r] for s in new_path[i:j + 1]):
                 can_shortcut_this = False
                 break
 
         if not can_shortcut_this:
             continue
 
+        stats['compatible'] += 1
         q0 = new_path[i].q
         q1 = new_path[j].q
 
-        path_element = _shortcut_candidate(env, new_path, i, j, robots_to_shortcut)
-        if constraints is not None and not constraints.path_satisfied(path_element):
-            continue
-
+        path_element = _shortcut_candidate(env, new_path, i, j, robots_to_shortcut,
+                                          indices=active_indices)
         # check if the shortcut improves cost
         improvement = (path_cost(new_path[i:j + 1], env.batch_config_cost)
                        - path_cost(path_element, env.batch_config_cost))
         if improvement <= 0.0:
+            stats['cost'] += 1
+            if coordinate_proposer is not None:
+                coordinate_proposer.feedback('cost')
+            continue
+
+        if constraints is not None and not constraints.path_satisfied(path_element):
+            stats['constraint'] += 1
+            if coordinate_proposer is not None:
+                coordinate_proposer.feedback('constraint')
             continue
 
         assert np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6
         assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
 
         cnt += 1
+        stats["checked"] += 1
 
         free, fail_offset = _check_shortcut(
             env, path_element, resolution, tolerance, from_tree, ordered=scalable,
         )
         fail_k = i + fail_offset if fail_offset is not None else None
 
+        if coordinate_proposer is not None:
+            coordinate_proposer.feedback('accepted' if free else 'collision')
         if free:
+            stats['accepted'] += 1
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
 
@@ -475,9 +542,14 @@ def robot_mode_shortcut(
                     if hi - lo >= 2:
                         heapq.heappush(tree_heap, (-(hi - lo), random.random(), tree_serial, tr, lo, hi))
                         tree_serial += 1
-        current_time = time.time()
+        current_time = time.monotonic()
         times.append(current_time - start_time)
         costs.append(path_cost(new_path, env.batch_config_cost))
+
+    if statistics is not None:
+        statistics.update(stats)
+        if coordinate_proposer is not None:
+            statistics['proposer'] = dict(coordinate_proposer.stats)
 
     assert new_path[-1].mode == path[-1].mode
     assert np.linalg.norm(new_path[-1].q.state() - path[-1].q.state()) < 1e-6
