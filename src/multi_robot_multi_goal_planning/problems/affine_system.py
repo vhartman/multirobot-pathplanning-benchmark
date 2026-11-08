@@ -59,3 +59,39 @@ class AffineSystem:
         z0 = self.Z.T @ (x - self.origin)
         candidate = self.origin + self.Z @ z0
         return candidate if self.satisfied(candidate) else None
+
+    def project_feasible(self, x):
+        """Repair a seed by Euclidean projection onto equalities and inequalities.
+
+        This is not a random sampler. Return None on infeasibility or failure.
+        """
+        from scipy.optimize import linprog, minimize
+
+        x = np.asarray(x, dtype=float).reshape(-1)
+        if not self.consistent or x.shape != (self.dimension,) or not np.all(np.isfinite(x)):
+            return None
+        z0 = self.Z.T @ (x - self.origin)
+        candidate = self.origin + self.Z @ z0
+        if self.satisfied(candidate):
+            return candidate
+        if not len(z0):
+            return None
+        G, h = self.G @ self.Z, self.h - self.G @ self.origin
+        constraints = {"type": "ineq", "fun": lambda z: h - G @ z,
+                       "jac": lambda z: -G}
+
+        def solve(start):
+            return minimize(lambda z: 0.5 * np.dot(z - z0, z - z0), start,
+                            jac=lambda z: z - z0, constraints=constraints,
+                            method="SLSQP", options={"maxiter": 100, "ftol": 1e-11})
+
+        result = solve(z0)
+        if not result.success:
+            feasible = linprog(np.zeros(len(z0)), A_ub=G, b_ub=h,
+                               bounds=[(None, None)] * len(z0), method="highs",
+                               options={"time_limit": 2.0})
+            if not feasible.success:
+                return None
+            result = solve(feasible.x)
+        candidate = self.origin + self.Z @ result.x
+        return candidate if result.success and self.satisfied(candidate) else None

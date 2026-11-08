@@ -594,6 +594,8 @@ class BaseRRTConfig:
     # Warmup: minimum joint attempts before evaluating (avoids premature switching).
     sampler_auto_warmup: int = 20
     affine_sampler: str = "polytope"  # polytope or rejection; uniform proposals only
+    affine_sample_attempts: int = 1000  # retries before resampling the mode/goal
+    repair_affine_transition_seeds: bool = True  # deterministic home-plus-goal only
     
     # probability of using home pose for free robots instead of the normal sampler
     # quick experiment to gauge value of per-robot ellipsoid sampling idea
@@ -627,6 +629,10 @@ class BaseRRTstar(BasePlanner):
     ):
         super().__init__(env)
         self.config = config
+        if (isinstance(config.affine_sample_attempts, bool)
+                or not isinstance(config.affine_sample_attempts, int)
+                or config.affine_sample_attempts < 1):
+            raise ValueError("affine_sample_attempts must be a positive integer")
         if (isinstance(config.edge_check_cache_size, bool)
                 or not isinstance(config.edge_check_cache_size, int)
                 or config.edge_check_cache_size < 0):
@@ -762,6 +768,19 @@ class BaseRRTstar(BasePlanner):
         pinned = {robot: q[self.env.robots.index(robot)].copy() for robot in task.robots}
         active = self.constraint_provider.for_transition(mode, next_ids)
         return self._project_configuration(q, mode, pinned, active)
+
+    def _project_transition_seed(self, q, mode, pinned, constraints):
+        candidate = self._project_configuration(q, mode, pinned, constraints)
+        if (candidate is not None or not self.config.repair_affine_transition_seeds
+                or not pinned or constraints is None or constraints.has_nonlinear):
+            return candidate
+        fixed = self.constraint_provider.fixed_robots(pinned)
+        system = constraints._affine_system(fixed)
+        x = system.project_feasible(q.state())
+        if x is None:
+            return None
+        candidate = q.from_flat(x)
+        return candidate if constraints.satisfied(candidate, fixed) else None
 
     def _planning_expired(self):
         ptc = getattr(self, "_planning_ptc", None)
@@ -1185,7 +1204,13 @@ class BaseRRTstar(BasePlanner):
         if self.has_path_constraints:
             active = constraints if constraints is not None else self.constraint_provider.for_mode(mode)
             if active.constraints:
-                return self.collision_free_sampler.sample(mode, pinned, constraints=active)
+                for _ in range(self.config.affine_sample_attempts):
+                    if self._planning_expired():
+                        return None
+                    q = self.collision_free_sampler.sample(mode, pinned, constraints=active)
+                    if q is not None:
+                        return q
+                return None
         if self.config.p_home_bias > 0 and np.random.random() < self.config.p_home_bias:
             task = self._get_active_task_for_sampling(mode)
             active_robots = set(task.robots)
@@ -1257,7 +1282,7 @@ class BaseRRTstar(BasePlanner):
                 q = self.env.sample_config_uniform_in_limits() # this is completely overwritten
                 for i, robot in enumerate(self.env.robots):
                     q[i] = pinned[robot] if robot in pinned else home[i].copy()
-                q = self._project_configuration(q, mode, pinned, constraints)
+                q = self._project_transition_seed(q, mode, pinned, constraints)
                 if q is not None and self._collision_free(q, mode):
                     return q
 
@@ -1872,7 +1897,7 @@ class BaseRRTstar(BasePlanner):
             return self.sample_informed(mode)
 
         if self.has_path_constraints and self.constraint_provider.for_mode(mode).constraints:
-            return self.collision_free_sampler.sample(mode)
+            return self._sample_collision_free(mode)
         sampler = self.collision_free_sampler.selected_sampler_name(mode)
         if sampler in ("gibbs", "per_robot"):
             return self.collision_free_sampler.sample(mode)
