@@ -12,6 +12,7 @@ from multi_robot_multi_goal_planning.problems.core.configuration import Configur
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from .sampling_bounded_phs import PreparedBoundedPHS, joint_bounds
 from .sampling_joint_cost import JointCostSampler, warm_joint_cost_kernel
+from .sampling_affine_informed import AffineInformedSampler, warm_affine_cost_kernel
 
 
 # Bound the work spent looking for an improvable path interval.
@@ -60,8 +61,9 @@ class InformedSampling:
     must disable try_direct_sampling. Collision checking is scalar and stops
     when the requested number of samples is reached.
 
-    Hit-and-run uses the joint cost region for unconstrained configurations,
-    retaining independent proposals in 10% of intervals. Transitions remain
+    Affine proposals include constraints, bounds and transition goal pins before
+    cost rejection. Hit-and-run can walk inside their joint cost region, retaining
+    polytope proposals in 10% of intervals. Unconstrained transitions remain
     independent. Short chains are correlated, not IID uniform samples.
     """
 
@@ -73,6 +75,7 @@ class InformedSampling:
         proposal: str = "independent",
         walk_steps: int = 1,
         proposal_batch_size: int = 10,
+        affine_sampling: bool = True,
     ):
         if (isinstance(proposal_batch_size, bool)
                 or not isinstance(proposal_batch_size, int) or proposal_batch_size < 1):
@@ -84,9 +87,12 @@ class InformedSampling:
         self.env = env
         self.proposal = proposal
         self.walk_steps = walk_steps
+        self.affine_sampling = affine_sampling
         self.constraint_provider = ConstraintProvider(env)
         if proposal == "hit_and_run":
             warm_joint_cost_kernel()
+            if affine_sampling:
+                warm_affine_cost_kernel()
         self.proposal_batch_size = proposal_batch_size
         self.lower, self.upper = joint_bounds(env)
         metric, reduction = env.cost_metric, env.cost_reduction
@@ -420,6 +426,11 @@ class InformedSampling:
     def _prepare_proposal(self, endpoints, budget, mode, direct):
         if not direct or self.cost_settings is None:
             return None
+        if self.affine_sampling:
+            affine = self._prepare_affine_proposal(
+                endpoints, budget, self.constraint_provider.for_mode(mode))
+            if affine is not None:
+                return affine
         if self.proposal == "hit_and_run" and not self.constraint_provider.for_mode(mode).constraints:
             if np.random.random() >= 0.1:
                 try:
@@ -442,11 +453,23 @@ class InformedSampling:
                 return []
         return proposals
 
+    def _prepare_affine_proposal(self, endpoints, budget, active, fixed=None):
+        if (not self.affine_sampling or self.cost_settings is None
+                or not active.constraints or active.has_nonlinear):
+            return None
+        walk = self.proposal == "hit_and_run" and np.random.random() >= 0.1
+        try:
+            return AffineInformedSampler(self.env, active, fixed or {}, endpoints,
+                                         budget, self.cost_settings, self.walk_steps, walk)
+        except (ValueError, np.linalg.LinAlgError):
+            # Preparation failure is not proof that the region is empty.
+            return None
+
     def _draw_candidates(self, proposal, count):
         if proposal is None:
             return np.array([self.env.sample_config_uniform_in_limits().state().copy()
                              for _ in range(count)])
-        if isinstance(proposal, JointCostSampler):
+        if isinstance(proposal, (JointCostSampler, AffineInformedSampler)):
             return proposal.sample(count)
         if not proposal:
             return np.empty((0, len(self.lower)))
@@ -575,12 +598,17 @@ class InformedSampling:
                 continue
             endpoints = np.array([path[start].q.state(), path[end].q.state()])
             budget = prefix[end] - prefix[start]
+            proposal = None
+            if self.affine_sampling and self.cost_settings is not None:
+                active = self.constraint_provider.for_transition(mode, next_ids)
+                proposal = self._prepare_affine_proposal(
+                    endpoints, budget, active, dict(zip(indices, goal)))
             found = False
             for offset in range(0, max_attempts_per_sample, self.proposal_batch_size):
                 count = min(self.proposal_batch_size, max_attempts_per_sample - offset)
                 if should_stop is not None and should_stop():
                     return transitions
-                rows = self._draw_candidates(None, count)
+                rows = self._draw_candidates(proposal, count)
                 rows[:, indices] = goal
                 if project_transition is not None:
                     rows = self._project_candidates(
