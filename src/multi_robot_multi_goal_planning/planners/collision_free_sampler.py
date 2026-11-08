@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Protocol
 
@@ -20,6 +21,7 @@ class CollisionFreeSamplerConfig:
     sampler: str = "auto"
     sampler_gibbs_sweeps: int = 1
     sampler_auto_warmup: int = 20
+    affine_sampler: str = "polytope"
     p_home_bias: float = 0.0
     max_per_robot_attempts: int = 100
 
@@ -27,6 +29,7 @@ class CollisionFreeSamplerConfig:
     def from_planner_config(cls, config: Any) -> "CollisionFreeSamplerConfig":
         return cls(
             sampler=getattr(config, "sampler", cls.sampler),
+            affine_sampler=getattr(config, "affine_sampler", cls.affine_sampler),
             sampler_gibbs_sweeps=getattr(
                 config, "sampler_gibbs_sweeps", cls.sampler_gibbs_sweeps
             ),
@@ -245,16 +248,22 @@ class AutoCollisionFreeSampler(BaseCollisionFreeSampler):
 
 
 class AffineSampler(BaseCollisionFreeSampler):
-    """Project joint proposals onto equalities, then reject violated inequalities.
+    """Sample affine-feasible proposals, then reject collisions.
 
-    Bounds and goal pins are enforced; unconstrained modes delegate unchanged.
-    This is not uniform sampling of the feasible set or constrained Gibbs.
+    Bounds and pins are included in the polytope. Unconstrained modes delegate
+    unchanged. Unavailable decompositions fall back to equality projection and
+    inequality rejection; that fallback is not volume-uniform.
     """
+
+    cache_size = 32
 
     def __init__(self, unconstrained, provider):
         super().__init__(unconstrained.env, unconstrained.config)
         self.unconstrained = unconstrained
         self.provider = provider
+        if self.config.affine_sampler not in ("polytope", "rejection"):
+            raise ValueError("affine_sampler must be 'polytope' or 'rejection'")
+        self._samplers = OrderedDict()
 
     def selected_sampler_name(self, mode=None):
         if mode is not None and self.provider.for_mode(mode).constraints:
@@ -265,11 +274,40 @@ class AffineSampler(BaseCollisionFreeSampler):
         active = constraints if constraints is not None else self.provider.for_mode(mode)
         if not active.constraints:
             return self.unconstrained.sample(mode, pinned)
+        if active.has_nonlinear:
+            raise NotImplementedError("Only affine sampling is supported")
+        fixed = self.provider.fixed_robots(pinned)
+        if self.config.affine_sampler == "polytope":
+            sampler = self._polytope_sampler(active, fixed)
+            if sampler is not None:
+                x = sampler.draw()
+                if x is None:
+                    return None
+                q = self.env.get_start_pos().from_flat(x)
+                if active.satisfied(q, fixed) and self.env.is_collision_free(q, mode):
+                    return q
+                return None
         q = self.env.sample_config_uniform_in_limits()
-        q = active.project(q, self.provider.fixed_robots(pinned))
+        q = active.project(q, fixed)
         if q is not None and self.env.is_collision_free(q, mode):
             return q
         return None
+
+    def _polytope_sampler(self, active, fixed):
+        from .sampling_affine import AffinePolytopeSampler
+
+        key = (active, tuple(sorted(fixed.items())))
+        if key not in self._samplers:
+            system = active._affine_system(fixed) if fixed else active.affine
+            try:
+                sampler = AffinePolytopeSampler(system)
+            except (ValueError, np.linalg.LinAlgError):
+                sampler = None
+            self._samplers[key] = sampler
+            if len(self._samplers) > self.cache_size:
+                self._samplers.popitem(last=False)
+        self._samplers.move_to_end(key)
+        return self._samplers[key]
 
 
 def make_collision_free_sampler(

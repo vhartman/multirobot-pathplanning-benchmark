@@ -592,6 +592,7 @@ class BaseRRTConfig:
     # joint and gibbs per mode. Switch when gibbs becomes cheaper, switch back if not.
     # Warmup: minimum joint attempts before evaluating (avoids premature switching).
     sampler_auto_warmup: int = 20
+    affine_sampler: str = "polytope"  # polytope or rejection; uniform proposals only
     
     # probability of using home pose for free robots instead of the normal sampler
     # quick experiment to gauge value of per-robot ellipsoid sampling idea
