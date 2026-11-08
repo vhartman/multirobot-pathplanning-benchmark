@@ -11,6 +11,7 @@ from typing import Tuple, Optional, Union, List, Dict, Callable, ClassVar
 from numpy.typing import NDArray
 from numba import njit
 from dataclasses import dataclass, field
+from collections import OrderedDict
 
 from scipy.stats.qmc import Halton
 
@@ -575,6 +576,7 @@ class BaseRRTConfig:
     
     shortcutting: bool = True
     shortcutting_run_choice: str = "tree"
+    edge_check_cache_size: int = 32768  # directed edges; zero disables memoization
     
     init_mode_sampling_type: str = "frontier"
     frontier_mode_sampling_probability: float = 0.98
@@ -623,6 +625,13 @@ class BaseRRTstar(BasePlanner):
     ):
         super().__init__(env)
         self.config = config
+        if (isinstance(config.edge_check_cache_size, bool)
+                or not isinstance(config.edge_check_cache_size, int)
+                or config.edge_check_cache_size < 0):
+            raise ValueError("edge_check_cache_size must be a nonnegative integer")
+        self._edge_check_cache = OrderedDict()
+        self.edge_cache_hits = 0
+        self.edge_cache_misses = 0
         if config.steering_policy not in ("legacy", "robot_l1", "robot_rms"):
             raise ValueError("steering_policy must be 'legacy', 'robot_l1', or 'robot_rms'")
         for name in ("stepsize", "steer_step_size", "max_connection_radius"):
@@ -710,7 +719,33 @@ class BaseRRTstar(BasePlanner):
     ) -> bool:
         if self.has_path_constraints and not self.constraint_provider.for_mode(mode).edge_satisfied(q1, q2):
             return False
-        return self.env.is_edge_collision_free(q1, q2, mode)
+        capacity = self.config.edge_check_cache_size
+        if not capacity:
+            return self.env.is_edge_collision_free(q1, q2, mode)
+        a, b = q1.state(), q2.state()
+        key = (mode, a.dtype.str, a.shape, a.tobytes(),
+               b.dtype.str, b.shape, b.tobytes(),
+               self.env.collision_resolution, self.env.collision_tolerance)
+        if key in self._edge_check_cache:
+            self.edge_cache_hits += 1
+            self._edge_check_cache.move_to_end(key)
+            return self._edge_check_cache[key]
+        self.edge_cache_misses += 1
+        result = self.env.is_edge_collision_free(q1, q2, mode)
+        self._edge_check_cache[key] = result
+        if len(self._edge_check_cache) > capacity:
+            self._edge_check_cache.popitem(last=False)
+        return result
+
+    def clear_edge_check_cache(self):
+        """Invalidate memoized queries after changing geometry or checker settings.
+
+        Modes, geometry and checker behavior must remain fixed between clears.
+        Resolution and tolerance are part of each key. Hits do not update the
+        backend's displayed configuration; callers must use explicit queries.
+        """
+        self._edge_check_cache.clear()
+        self.edge_cache_hits = self.edge_cache_misses = 0
 
     def _project_configuration(self, q, mode, pinned=None, constraints=None):
         if not self.has_path_constraints:
