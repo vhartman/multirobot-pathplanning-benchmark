@@ -44,7 +44,6 @@ class ModeValidation:
         valid_modes = []
         for mode in modes:
             if mode in self.blacklist_modes:
-                self.add_invalid_mode(mode)
                 continue
 
             if mode in self.whitelist_modes:
@@ -112,7 +111,9 @@ class ModeValidation:
                         if not self.env.is_collision_free_for_robot(
                             robot, q, mode, collision_tolerance=None, set_mode=set_mode
                         ):
-                            self.add_invalid_mode(mode)
+                            # Reject this scene, not every grasp/placement with
+                            # the same symbolic successor IDs.
+                            self.blacklist_modes.add(mode)
                             # when one task in mode cannot be reached -> it can never be reached later having this mode sequence (remove mode completely)
                             # print("AAA")
                             # self.env.show()

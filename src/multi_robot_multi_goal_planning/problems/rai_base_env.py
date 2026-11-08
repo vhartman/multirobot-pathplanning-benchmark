@@ -555,98 +555,49 @@ class rai_env(BaseProblem):
         collision_tolerance: float | None = None,
         set_mode: bool = True,
     ) -> bool:
+        """Check selected robots and their attachments against each other and the world.
+
+        Other movable robots (including their attachments) are ignored. This is
+        a necessary-condition check, not a full configuration collision check.
+        """
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
-
-        if isinstance(r, str):
-            r = [r]
-
-        # if q is not None:
-        #     self.set_to_mode(m)
-        #     for robot in r:
-        #         robot_indices = self.robot_idx[robot]
-        #         self.C.setJointState(q[robot_indices], self.robot_joints[robot])
+        selected = {r} if isinstance(r, str) else set(r)
+        if not selected.issubset(self.robots):
+            raise ValueError("Unknown robot in partial collision query")
         if set_mode:
             self.set_to_mode(m)
         self.C.setJointState(q)
-
-        # self.C.view(True)
-
         self.C.computeCollisions()
-
-        binary_collision_free = self.C.getCollisionFree()
-        if binary_collision_free:
+        if self.C.getCollisionFree():
             return True
-        
-        other_robots = [robot for robot in self.robots if robot not in r]
+        if self.C.getCollisionsTotalPenetration() <= collision_tolerance:
+            return True
 
-        col = self.C.getCollisionsTotalPenetration()
-        # print()
-        # print("orig col", col)
-        # print(r)
-        # self.C.view(False)
-        if col > collision_tolerance:
-            # self.C.view(False)
-            colls = self.C.getCollisions()
-            for c in colls:
-                # ignore minor collisions
-                # if c[2] > -collision_tolerance / 10:
-                #     continue
+        robot_by_frame = {joint: robot for robot, joints in self.robot_joints.items() for joint in joints}
 
-                # print(col)
-                # print(c)
-                involves_relevant_robot = False
-                involves_relevant_object = False
-                for robot in r:
-                    task_idx = m.task_ids[self.robots.index(robot)]
-                    task = self.tasks[task_idx]
-                    collision_with_other_robot = any(other_r in c[0] or other_r in c[1] for other_r in other_robots)
-                    if c[2] < 0 and (robot in c[0] or robot in c[1]) and not collision_with_other_robot:
-                        involves_relevant_robot = True
-                    elif task.frames is not None and (c[2] < 0 and (c[0] in task.frames or c[1] in task.frames) and not collision_with_other_robot):
-                        involves_relevant_object = True
+        def get_robot_from_frame(frame_name):
+            uncached_frames = []
+            frame = self.C.getFrame(frame_name)
+            while frame is not None and frame.name not in robot_by_frame:
+                uncached_frames.append(frame.name)
+                frame = frame.getParent()
+            robot = robot_by_frame.get(frame.name) if frame is not None else None
+            for frame_name in uncached_frames:
+                robot_by_frame[frame_name] = robot
+            return robot
 
-                # if involves_relevant_object:
-                #     print("Involves object")
-
-                if involves_relevant_object or involves_relevant_robot:
+        penetration = 0.0
+        for first, second, distance in self.C.getCollisions():
+            if distance >= 0:
+                continue
+            first_robot, second_robot = get_robot_from_frame(first), get_robot_from_frame(second)
+            if ((first_robot in selected or second_robot in selected)
+                    and (first_robot is None or first_robot in selected)
+                    and (second_robot is None or second_robot in selected)):
+                penetration -= distance
+                if penetration > collision_tolerance:
                     return False
-
-                # if not involves_relevant_robot and not involves_relevant_object:
-                #     # print("A")
-                #     # print(c)
-                #     continue
-                # # else:
-                # #     print("B")
-                # #     print(c)
-
-                # if involves_relevant_object:
-                #     print("Involves object")
-
-                # is_collision_with_other_robot = False
-                # for other_robot in self.robots:
-                #     if other_robot in r:
-                #         continue
-                #     if other_robot in c[0] or other_robot in c[1]:
-                #         is_collision_with_other_robot = True
-                #         break
-
-                # if not is_collision_with_other_robot:
-                #     # print(c)
-                #     return False
-
-        # for _ in range(5):
-        #     noise = np.random.rand(len(q)) * 0.001 - 0.001/2
-        #     self.C.setJointState(q + noise)
-        #     col = self.C.getCollisionsTotalPenetration()
-        #     print("perturbed col", col)
-        #     if col > 0:
-        #         self.show(True)
-
-        # print("A")
-        # self.C.setJointState(q)
-        # self.show(True)
-
         return True
 
     # @silence_function
