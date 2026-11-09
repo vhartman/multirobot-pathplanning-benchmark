@@ -185,7 +185,47 @@ class AffinePolytopeSampler:
             )
             self.parts.append((indices, _PolytopeComponent(part)))
 
+        self._scalar_product = all(component.dimension <= 1 for _, component in self.parts)
+        if self._scalar_product:
+            self._origin = np.empty(self.dimension)
+            indices, factors, directions, lower, upper = [], [], [], [], []
+            for coordinates, component in self.parts:
+                self._origin[coordinates] = component.system.origin
+                if component.dimension == 1:
+                    indices.extend(coordinates)
+                    factors.extend([len(lower)] * len(coordinates))
+                    directions.extend(component.system.Z[:, 0])
+                    lower.append(component.lower)
+                    upper.append(component.upper)
+            self._interval_indices = np.asarray(indices, dtype=int)
+            self._interval_factors = np.asarray(factors, dtype=int)
+            self._interval_directions = np.asarray(directions)
+            self._interval_lower = np.asarray(lower)
+            self._interval_upper = np.asarray(upper)
+
+    def _draw_scalar_product(self, count):
+        result = np.broadcast_to(self._origin, (count, self.dimension)).copy()
+        if len(self._interval_lower):
+            # Sample-major order matches successive scalar draws.
+            values = np.random.uniform(self._interval_lower, self._interval_upper,
+                                       size=(count, len(self._interval_lower)))
+            indices = self._interval_indices
+            result[:, indices] = (self._origin[indices]
+                + self._interval_directions * values[:, self._interval_factors])
+        return result
+
+    def draw_many(self, count):
+        """Batch scalar factors, retaining draw order for coupled components."""
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("Sample count must be a nonnegative integer")
+        if self._scalar_product:
+            return self._draw_scalar_product(count)
+        rows = [self.draw() for _ in range(count)]
+        return np.asarray([row for row in rows if row is not None]).reshape((-1, self.dimension))
+
     def draw(self):
+        if self._scalar_product:
+            return self._draw_scalar_product(1)[0]
         result = np.empty(self.dimension)
         for indices, component in self.parts:
             x = component.draw()

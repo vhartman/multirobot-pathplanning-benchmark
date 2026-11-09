@@ -133,8 +133,7 @@ class AffineInformedSampler:
             return np.empty((0, len(self.a)))
         warmup = 0
         if self.z is None:
-            rows = [self.polytope.draw() for _ in range(n)]
-            rows = np.asarray([row for row in rows if row is not None]).reshape((-1, len(self.a)))
+            rows = self.polytope.draw_many(n)
             if not self.use_walk:
                 return rows
             for row in rows:
