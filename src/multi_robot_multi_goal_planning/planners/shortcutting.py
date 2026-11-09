@@ -10,7 +10,7 @@ from multi_robot_multi_goal_planning.problems.planning_env import State, BasePro
 
 from multi_robot_multi_goal_planning.problems.core.configuration import config_dist
 from .shortcutting_compatible import CompatibleSubsetProposer
-from .shortcutting_affine import AffineIndexGroups, CoordinateProposals
+from .shortcutting_affine import AffineIndexGroups, CoordinateProposals, shortcut_atoms
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
 
@@ -147,13 +147,14 @@ def _shortcut_candidate(env, path, first, last, robots=(), *, indices=None):
     return candidate
 
 
-def full_run_gain(env: BaseProblem, path: List[State], robot: int, lo: int, hi: int) -> float:
-    """Composite-cost decrease from straightening one robot over an entire run.
+def full_run_gain(env: BaseProblem, path: List[State], robot: int, lo: int, hi: int,
+                  *, indices=None) -> float:
+    """Composite-cost decrease from straightening a robot or selected coordinates.
 
     This evaluates the candidate's cost without collision checking. The result
     can be negative, even when that robot's individual path becomes shorter.
     """
-    candidate = _shortcut_candidate(env, path, lo, hi, (robot,))
+    candidate = _shortcut_candidate(env, path, lo, hi, (robot,), indices=indices)
     return (path_cost(path[lo:hi + 1], env.batch_config_cost)
             - path_cost(candidate, env.batch_config_cost))
 
@@ -247,6 +248,8 @@ def robot_mode_shortcut(
       - tree_then_compatible: exhaust the tree, then sample compatible subsets.
       - compatible: sample compatible subsets only.
       - tree (default): exhaust the tree, then use single-robot gain scheduling.
+      - atom_tree: the same tree/gain schedule over equality-coupled coordinate
+        groups sharing a robot set, keeping private arm coordinates separate.
       - gain: use single-robot gain scheduling only.
       - tree_random: exhaust the tree, then use span scheduling.
       - span: use span scheduling only.
@@ -279,6 +282,9 @@ def robot_mode_shortcut(
     Returns the copied path and [costs, elapsed_times].
     """
     start_time = time.monotonic()
+    use_atoms = run_choice == 'atom_tree'
+    if use_atoms:
+        run_choice = 'tree'
     index_policies = {"index_compatible": ("compatible", "index_groups"),
                       "index_tree": ("tree_group", "index_groups"),
                       "index_full": ("full_group", "index_groups"),
@@ -317,7 +323,22 @@ def robot_mode_shortcut(
     rr_robot = 0
 
     # the ranges each robot may be shortcut within, and how often we have drawn from each of them
-    runs = [constant_task_runs(new_path, r) for r in range(len(env.robots))]
+    atoms = atom_robots = None
+    if use_atoms:
+        atoms, atom_robots = shortcut_atoms(env, new_path)
+        runs = []
+        for owners in atom_robots:
+            signatures = [tuple(s.mode.task_ids[r] for r in owners) for s in new_path]
+            boundaries = [0] + [i for i in range(1, len(signatures))
+                                if signatures[i] != signatures[i-1]] + [len(signatures)]
+            runs.append([(a, b-1) for a, b in zip(boundaries[:-1], boundaries[1:]) if b-a >= 3])
+    else:
+        runs = [constant_task_runs(new_path, r) for r in range(len(env.robots))]
+
+    def run_gain(unit, first, last):
+        return full_run_gain(env, new_path, unit, first, last,
+                             indices=atoms[unit] if atoms is not None else None)
+
     runs_used = [[0] * len(r) for r in runs]
 
     if not any(runs) and not coordinate_policy:
@@ -338,8 +359,8 @@ def robot_mode_shortcut(
         # remaining gain per (robot, run), and a floor so converged runs keep a small
         # exploration share instead of never being drawn again
         gains = [
-            [max(0.0, full_run_gain(env, new_path, r, lo, hi)) for lo, hi in runs[r]]
-            for r in range(len(env.robots))
+            [max(0.0, run_gain(r, lo, hi)) for lo, hi in runs[r]]
+            for r in range(len(runs))
         ]
         all_gains = [g for per_robot in gains for g in per_robot]
         mean_gain = sum(all_gains) / len(all_gains)
@@ -403,14 +424,15 @@ def robot_mode_shortcut(
             # structural prefix: broadest interval first, robot and interval from the frontier
             from_tree = True
             _, _, _, r, i, j = heapq.heappop(tree_heap)
-            robots_to_shortcut = [r]
+            robots_to_shortcut = list(atom_robots[r]) if atoms is not None else [r]
+            active_indices = atoms[r] if atoms is not None else None
             tree_last = (r, i, j)
         else:
             if run_choice == "tree" and gains is None:
                 # Initialize gain scheduling once the tree is exhausted.
                 gains = [
-                    [max(0.0, full_run_gain(env, new_path, r, lo, hi)) for lo, hi in runs[r]]
-                    for r in range(len(env.robots))
+                    [max(0.0, run_gain(r, lo, hi)) for lo, hi in runs[r]]
+                    for r in range(len(runs))
                 ]
                 all_gains = [g for per_robot in gains for g in per_robot]
                 mean_gain = sum(all_gains) / len(all_gains)
@@ -422,7 +444,7 @@ def robot_mode_shortcut(
                 # spent on it: the gain times the Beta-posterior acceptance estimate. The robot
                 # falls out of the choice, so robot_choice does not apply here.
                 r, run = max(
-                    ((rr, k) for rr in range(len(env.robots)) for k in range(len(runs[rr]))),
+                    ((rr, k) for rr in range(len(runs)) for k in range(len(runs[rr]))),
                     key=lambda arm: (
                         gains[arm[0]][arm[1]]
                         * (1.0 + runs_acc[arm[0]][arm[1]])
@@ -431,7 +453,8 @@ def robot_mode_shortcut(
                     )
                     / (runs_used[arm[0]][arm[1]] + 1),
                 )
-                robots_to_shortcut = [r]
+                robots_to_shortcut = list(atom_robots[r]) if atoms is not None else [r]
+                active_indices = atoms[r] if atoms is not None else None
             else:
                 if robot_choice == "round_robin":
                     robots_to_shortcut = [rr_robot % len(env.robots)]
@@ -520,11 +543,11 @@ def robot_mode_shortcut(
                 runs_acc[sel_r][sel_run] += 1
                 # the composite cost takes a max over the robots, so an accepted shortcut on one
                 # robot changes the remaining gain of EVERY run that overlaps it
-                for rr in range(len(env.robots)):
+                for rr in range(len(runs)):
                     for k, (lo_k, hi_k) in enumerate(runs[rr]):
                         if lo_k < j and i < hi_k:
                             gains[rr][k] = max(
-                                0.0, full_run_gain(env, new_path, rr, lo_k, hi_k)
+                                0.0, run_gain(rr, lo_k, hi_k)
                             )
         elif from_tree and proposer is not None:
             proposer.collision(proposal, fail_k)

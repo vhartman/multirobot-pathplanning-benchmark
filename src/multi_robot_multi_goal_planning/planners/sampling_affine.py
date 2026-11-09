@@ -149,11 +149,11 @@ class AffinePolytopeSampler:
     implicit lower-dimensional faces; this is not an infeasibility certificate.
     """
 
-    def __init__(self, system):
-        self.dimension = system.dimension
-        self.parts = []
+    @staticmethod
+    def factor(system):
+        """Prepare independent component equalities before cost bounds are added."""
+        parts = []
         parent = list(range(system.dimension))
-
         def root(i):
             while parent[i] != i:
                 parent[i] = parent[parent[i]]
@@ -183,7 +183,14 @@ class AffinePolytopeSampler:
                 [(system.A[eq_rows][:, indices], system.b[eq_rows])],
                 [(system.G[ineq_rows][:, indices], system.h[ineq_rows])],
             )
-            self.parts.append((indices, _PolytopeComponent(part)))
+            parts.append((indices, part))
+        return parts
+
+    def __init__(self, system, components=None):
+        self.dimension = system.dimension
+        if components is None:
+            components = self.factor(system)
+        self.parts = [(indices, _PolytopeComponent(part)) for indices, part in components]
 
         self._scalar_product = all(component.dimension <= 1 for _, component in self.parts)
         if self._scalar_product:

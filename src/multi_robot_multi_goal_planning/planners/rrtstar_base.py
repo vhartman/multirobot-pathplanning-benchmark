@@ -572,6 +572,7 @@ class BaseRRTConfig:
     informed_proposal_batch_size: int = 10  # bounds/cost screening batch
     informed_affine_sampling: bool = True  # feasible proposals before cost rejection
     informed_cache_setup: bool = True  # reuse geometry, not walk progress
+    informed_reuse_affine_geometry: bool = False
     
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
@@ -676,6 +677,7 @@ class BaseRRTstar(BasePlanner):
             proposal_batch_size=config.informed_proposal_batch_size,
             affine_sampling=config.informed_affine_sampling,
             cache_setup=config.informed_cache_setup,
+            reuse_affine_geometry=config.informed_reuse_affine_geometry,
         )
         self.start_time = time.time()
         self.costs = []

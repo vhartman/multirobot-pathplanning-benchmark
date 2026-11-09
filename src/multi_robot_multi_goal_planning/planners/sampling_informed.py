@@ -14,7 +14,7 @@ from multi_robot_multi_goal_planning.problems.core.configuration import Configur
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from .sampling_bounded_phs import PreparedBoundedPHS, joint_bounds
 from .sampling_joint_cost import JointCostSampler, warm_joint_cost_kernel
-from .sampling_affine_informed import AffineInformedSampler, warm_affine_cost_kernel
+from .sampling_affine_informed import AffineInformedSampler, AffineInformedSetup, warm_affine_cost_kernel
 
 
 # Bound the work spent looking for an improvable path interval.
@@ -79,6 +79,7 @@ class InformedSampling:
         proposal_batch_size: int = 10,
         affine_sampling: bool = True,
         cache_setup: bool = True,
+        reuse_affine_geometry: bool = False,
     ):
         if (isinstance(proposal_batch_size, bool)
                 or not isinstance(proposal_batch_size, int) or proposal_batch_size < 1):
@@ -93,6 +94,9 @@ class InformedSampling:
         self.affine_sampling = affine_sampling
         self.cache_setup = cache_setup
         self._setup_cache = OrderedDict()
+        self.reuse_affine_geometry = reuse_affine_geometry
+        self._affine_geometry = OrderedDict()
+        self.affine_geometry_stats = dict(hits=0, misses=0)
         self.constraint_provider = ConstraintProvider(env)
         if proposal == "hit_and_run":
             warm_joint_cost_kernel()
@@ -491,12 +495,27 @@ class InformedSampling:
         key = ("affine", active, tuple(fixed.items()), self.walk_steps, walk,
                self._proposal_geometry_key(endpoints, budget))
         try:
-            return self._reuse_setup(key, lambda: AffineInformedSampler(
-                self.env, active, fixed, endpoints, budget, self.cost_settings,
-                self.walk_steps, walk), stateful=True)
+            return self._reuse_setup(key, lambda: self._make_affine_proposal(
+                endpoints, budget, active, fixed, walk), stateful=True)
         except (ValueError, np.linalg.LinAlgError):
             # Preparation failure is not proof that the region is empty.
             return None
+
+    def _make_affine_proposal(self, endpoints, budget, active, fixed, walk):
+        setup = None
+        if self.reuse_affine_geometry:
+            key = (active, tuple(fixed.items()))
+            if key in self._affine_geometry:
+                self.affine_geometry_stats['hits'] += 1
+                self._affine_geometry.move_to_end(key)
+            else:
+                self.affine_geometry_stats['misses'] += 1
+                self._affine_geometry[key] = AffineInformedSetup(active, fixed)
+                if len(self._affine_geometry) > 64:
+                    self._affine_geometry.popitem(last=False)
+            setup = self._affine_geometry[key]
+        return AffineInformedSampler(self.env, active, fixed, endpoints, budget,
+                                     self.cost_settings, self.walk_steps, walk, setup=setup)
 
     def _draw_candidates(self, proposal, count):
         if proposal is None:

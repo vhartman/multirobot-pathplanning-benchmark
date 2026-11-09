@@ -1,5 +1,6 @@
 """Equality projection with rejection against inequalities and bounds."""
 import numpy as np
+from copy import copy
 
 
 class AffineSystem:
@@ -9,6 +10,11 @@ class AffineSystem:
         self.dimension = dimension
         self.A, self.b = self._stack(equalities)
         self.G, self.h = self._stack(inequalities)
+        self._append_bounds(bounds)
+        self._prepare_equalities()
+
+    def _append_bounds(self, bounds):
+        dimension = self.dimension
         if bounds is not None:
             bounds = np.asarray(bounds, dtype=float)
             if bounds.shape != (2, dimension) or np.any(np.isnan(bounds)):
@@ -21,6 +27,9 @@ class AffineSystem:
             hi = bounded & np.isfinite(upper)
             self.G = np.vstack((self.G, -eye[lo], eye[hi]))
             self.h = np.concatenate((self.h, -lower[lo], upper[hi]))
+
+    def _prepare_equalities(self):
+        dimension = self.dimension
         if len(self.A):
             u, s, vt = np.linalg.svd(self.A, full_matrices=True)
             threshold = max(self.A.shape) * np.finfo(float).eps * (s[0] if len(s) else 0)
@@ -33,6 +42,12 @@ class AffineSystem:
             self.origin = np.zeros(dimension)
             self.Z = np.eye(dimension)
         self.consistent = bool(np.all(np.abs(self.A @ self.origin - self.b) <= 1e-8))
+
+    def with_bounds(self, bounds):
+        """Add coordinate bounds without recomputing immutable equality geometry."""
+        result = copy(self)
+        result._append_bounds(bounds)
+        return result
 
     def _stack(self, blocks):
         blocks = list(blocks)

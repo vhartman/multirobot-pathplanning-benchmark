@@ -81,6 +81,14 @@ def affine_cost_walk(z, origin, basis, G, h, a, b, slices, budget,
     return output, z
 
 
+class AffineInformedSetup:
+    """Equality and component geometry independent of endpoints and cost bounds."""
+
+    def __init__(self, active, fixed):
+        self.affine = active._affine_system(fixed) if fixed else active.affine
+        self.components = AffinePolytopeSampler.factor(self.affine)
+
+
 class AffineInformedSampler:
     """Sample a bounded affine proposal, optionally walking in its cost subset.
 
@@ -91,17 +99,25 @@ class AffineInformedSampler:
 
     warmup_sweeps = 10
 
-    def __init__(self, env, active, fixed, endpoints, budget, settings, steps=1, walk=False):
+    def __init__(self, env, active, fixed, endpoints, budget, settings, steps=1, walk=False,
+                 setup=None):
         if isinstance(steps, bool) or not isinstance(steps, int) or steps < 1:
             raise ValueError("Walk steps must be a positive integer")
         self.a, self.b = np.array(endpoints, dtype=float, copy=True)
         self.slices = np.array(env.start_pos._array_slice, dtype=np.int64, order="C", copy=True)
         self.budget, self.settings, self.steps = budget, settings, steps
         bounds = informed_coordinate_bounds(endpoints, budget, self.slices, *settings)
-        affine = active._affine_system(fixed) if fixed else active.affine
-        self.system = AffineSystem(
-            affine.dimension, [(affine.A, affine.b)], [(affine.G, affine.h)], bounds)
-        self.polytope = AffinePolytopeSampler(self.system)
+        if setup is None:
+            affine = active._affine_system(fixed) if fixed else active.affine
+            self.system = AffineSystem(
+                affine.dimension, [(affine.A, affine.b)], [(affine.G, affine.h)], bounds)
+            self.polytope = AffinePolytopeSampler(self.system)
+        else:
+            affine = setup.affine
+            self.system = affine.with_bounds(bounds)
+            components = [(indices, part.with_bounds(bounds[:, indices]))
+                          for indices, part in setup.components]
+            self.polytope = AffinePolytopeSampler(self.system, components)
         self.use_walk = walk and self.system.Z.shape[1] > 0
         self.z = None
         if not self.use_walk:

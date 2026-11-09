@@ -11,6 +11,43 @@ import numpy as np
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 
 
+def shortcut_atoms(env, path):
+    """Group equality-connected coordinates by their owning robot set.
+
+    Shared coordinates move together; each arm's free coordinates remain a
+    separate atom. The union over path modes is conservative. Without cross-
+    robot equalities, atoms are the original robots in their original order.
+    """
+    dimension = len(path[0].q.state())
+    parent = list(range(dimension))
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    provider = ConstraintProvider(env)
+    seen = set()
+    for state in path:
+        if id(state.mode) in seen:
+            continue
+        seen.add(id(state.mode))
+        for constraint in provider.for_mode(state.mode).eq_aff:
+            for row in constraint.mat:
+                support = np.flatnonzero(row)
+                for index in support[1:]:
+                    parent[root(int(index))] = root(int(support[0]))
+    blocks = {}
+    for index in range(dimension):
+        blocks.setdefault(root(index), []).append(index)
+    robot_indices = [set(env.robot_idx[r]) for r in env.robots]
+    atoms = {}
+    for block in blocks.values():
+        owners = tuple(r for r, indices in enumerate(robot_indices) if indices.intersection(block))
+        atoms.setdefault(owners, []).extend(block)
+    owners = sorted(atoms)
+    return [sorted(atoms[key]) for key in owners], owners
+
+
 class AffineIndexGroups:
     """Index immutable mode supports once; close only over the queried interval.
 
