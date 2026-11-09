@@ -1617,7 +1617,7 @@ class BaseRRTstar(BasePlanner):
             for idx in improved_indices:
                 n_near = self.trees[mode].get_node(node_indices[idx].item(), tree)
                 if (
-                    n_near == n_new.parent
+                    n_near is n_new.parent
                     or n_near.cost == np.inf
                     or n_near.id == n_new.id
                 ):
@@ -1634,7 +1634,9 @@ class BaseRRTstar(BasePlanner):
                         n_new.state.q, n_near.state.q, n_near.state.mode
                     ):
                         if n_near.parent is not None:
-                            n_near.parent.children.remove(n_near)
+                            n_near.parent.children = [
+                                child for child in n_near.parent.children if child is not n_near
+                            ]
                         n_near.parent = n_new
                         n_new.children.append(n_near)
 

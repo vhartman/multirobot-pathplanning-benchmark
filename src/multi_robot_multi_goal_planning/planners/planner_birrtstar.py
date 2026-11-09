@@ -188,7 +188,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 return
         
             # print(n.state.mode)
-            n.children.remove(n_parent)
+            n.children = [child for child in n.children if child is not n_parent]
 
     def connect(self, mode: Mode, n_new: Node) -> None:
         """

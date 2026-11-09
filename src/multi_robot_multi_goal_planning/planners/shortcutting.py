@@ -96,10 +96,6 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
         times.append(current_time - start_time)
         costs.append(path_cost(new_path, env.batch_config_cost))
 
-    print("original cost:", path_cost(path, env.batch_config_cost))
-    print("Attempted shortcuts: ", cnt)
-    print("new cost:", path_cost(new_path, env.batch_config_cost))
-
     return new_path, [costs, times]
 
 
@@ -554,10 +550,6 @@ def robot_mode_shortcut(
     assert new_path[-1].mode == path[-1].mode
     assert np.linalg.norm(new_path[-1].q.state() - path[-1].q.state()) < 1e-6
     assert np.linalg.norm(new_path[0].q.state() - path[0].q.state()) < 1e-6
-
-    print("original cost:", path_cost(path, env.batch_config_cost))
-    print("Attempted shortcuts", cnt)
-    print("new cost:", path_cost(new_path, env.batch_config_cost))
 
     return new_path, [costs, times]
 
