@@ -1,5 +1,7 @@
 import numpy as np
 import random
+from collections import OrderedDict
+from copy import deepcopy
 from typing import List, Tuple, Optional
 from numpy.typing import NDArray
 
@@ -76,6 +78,7 @@ class InformedSampling:
         walk_steps: int = 1,
         proposal_batch_size: int = 10,
         affine_sampling: bool = True,
+        cache_setup: bool = True,
     ):
         if (isinstance(proposal_batch_size, bool)
                 or not isinstance(proposal_batch_size, int) or proposal_batch_size < 1):
@@ -88,6 +91,8 @@ class InformedSampling:
         self.proposal = proposal
         self.walk_steps = walk_steps
         self.affine_sampling = affine_sampling
+        self.cache_setup = cache_setup
+        self._setup_cache = OrderedDict()
         self.constraint_provider = ConstraintProvider(env)
         if proposal == "hit_and_run":
             warm_joint_cost_kernel()
@@ -423,6 +428,25 @@ class InformedSampling:
                     for endpoint in endpoints)
         return rows[np.isfinite(costs) & (costs < budget)]
 
+    def _reuse_setup(self, key, create, stateful=False):
+        """Bounded geometry cache; stateful proposals restart from pristine setup."""
+        if not self.cache_setup:
+            return create()
+        if key in self._setup_cache:
+            value = self._setup_cache.pop(key)
+            self._setup_cache[key] = value
+            return deepcopy(value) if stateful else value
+        value = create()
+        self._setup_cache[key] = deepcopy(value) if stateful else value
+        if len(self._setup_cache) > 64:
+            self._setup_cache.popitem(last=False)
+        return value
+
+    def _proposal_geometry_key(self, endpoints, budget):
+        return (endpoints.shape, endpoints.tobytes(), float(budget), self.cost_settings,
+                self.env.start_pos._array_slice.tobytes(),
+                self.lower.tobytes(), self.upper.tobytes())
+
     def _prepare_proposal(self, endpoints, budget, mode, direct):
         if not direct or self.cost_settings is None:
             return None
@@ -440,6 +464,10 @@ class InformedSampling:
                     pass
         if not self.cost_settings[0] or np.any(self.lower == self.upper):
             return None
+        key = ("phs", self._proposal_geometry_key(endpoints, budget))
+        return self._reuse_setup(key, lambda: self._prepare_phs(endpoints, budget))
+
+    def _prepare_phs(self, endpoints, budget):
         distances = np.array([np.linalg.norm(endpoints[1, s:e] - endpoints[0, s:e])
                               for s, e in self.env.start_pos._array_slice])
         proposals = []
@@ -458,9 +486,14 @@ class InformedSampling:
                 or not active.constraints or active.has_nonlinear):
             return None
         walk = self.proposal == "hit_and_run" and np.random.random() >= 0.1
+        fixed = fixed or {}
+        # Constraint sets are immutable; provider.clear() supplies new identities.
+        key = ("affine", active, tuple(fixed.items()), self.walk_steps, walk,
+               self._proposal_geometry_key(endpoints, budget))
         try:
-            return AffineInformedSampler(self.env, active, fixed or {}, endpoints,
-                                         budget, self.cost_settings, self.walk_steps, walk)
+            return self._reuse_setup(key, lambda: AffineInformedSampler(
+                self.env, active, fixed, endpoints, budget, self.cost_settings,
+                self.walk_steps, walk), stateful=True)
         except (ValueError, np.linalg.LinAlgError):
             # Preparation failure is not proof that the region is empty.
             return None
