@@ -610,7 +610,7 @@ class BaseRRTConfig:
     birrtstar_version: int = 2
     stepsize: float = 0
     max_connection_radius: float = 0.0  # zero uses stepsize or sqrt(total DoF)
-    steering_policy: str = "legacy"  # "legacy" | "robot_l1" | "robot_rms"
+    steering_policy: str = "robot_l1"  # "legacy" | "robot_l1" | "robot_rms"
     steer_l1_step: float = 3.0
     steer_rms_step: float = 0.5
     steer_step_size: float = 0.0  # zero uses the selected policy
