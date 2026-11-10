@@ -514,7 +514,7 @@ class BaseTree:
         operation: BaseOperation,
         robot_dims,
         batch_dist_fun,
-        batch_cost_fun,
+        cost,
         update_connectivity,
         remove_forward_queue,
         is_edge_collision_free,
@@ -526,7 +526,7 @@ class BaseTree:
         self.vertices_batch_array = np.empty((100000, robot_dims), dtype=np.float64)
         self.vertices_position = {}
         self.batch_dist_fun = batch_dist_fun
-        self.batch_cost_fun = batch_cost_fun
+        self.cost = cost
         self.update_connectivity = update_connectivity
         self.remove_forward_queue = remove_forward_queue
         self.is_edge_collision_free = is_edge_collision_free
@@ -635,7 +635,7 @@ class BaseTree:
         node_indices = self.get_vertices_node_ids()[indices]
         n_near_costs = self.operation.costs[node_indices]
         N_near_batch = batch_array[indices]
-        batch_cost = self.batch_cost_fun(node.state.q, N_near_batch)
+        batch_cost = self.cost.batch_edge_cost(node.state.q, N_near_batch)
         return batch_cost, n_near_costs, node_indices
 
     def find_parent(
@@ -761,7 +761,7 @@ class BaseGraph(ABC):
         operation: BaseOperation,
         distance_metric: str,
         batch_dist_fun,
-        batch_cost_fun,
+        cost,
         is_edge_collision_free,
         get_next_modes,
         collision_resolution,
@@ -777,7 +777,7 @@ class BaseGraph(ABC):
             self.root, lb_cost_to_go=np.inf, cost=0, lb_cost_to_come=0.0
         )
         self.batch_dist_fun = batch_dist_fun
-        self.batch_cost_fun = batch_cost_fun
+        self.cost = cost
         self.is_edge_collision_free = is_edge_collision_free
         self.get_next_modes = get_next_modes
         self.collision_resolution = collision_resolution
@@ -893,7 +893,7 @@ class BaseGraph(ABC):
                 self.operation,
                 self.dim,
                 batch_dist_fun=self.batch_dist_fun,
-                batch_cost_fun=self.batch_cost_fun,
+                cost=self.cost,
                 update_connectivity=self.update_connectivity,
                 remove_forward_queue=self.remove_forward_queue,
                 is_edge_collision_free=self.is_edge_collision_free,
@@ -1060,7 +1060,7 @@ class BaseGraph(ABC):
                 if n is not None:
                     if parent.id not in n.forward.fam:
                         edge_cost = float(
-                            self.batch_cost_fun([parent.state], [n.state])
+                            self.cost.batch_edge_cost([parent.state], [n.state])
                         )
                         self.update_connectivity(
                             parent, n, edge_cost, parent.cost + edge_cost
@@ -1132,7 +1132,7 @@ class BaseGraph(ABC):
         """
         self.new_path.append(node)
         if is_transition:
-            edge_cost = float(self.batch_cost_fun([parent.state], [node.state]))
+            edge_cost = float(self.cost.batch_edge_cost([parent.state], [node.state]))
             self.update_connectivity(parent, node, edge_cost, parent.cost + edge_cost)
             is_goal = True
 
@@ -1190,7 +1190,7 @@ class BaseGraph(ABC):
                     node.state.mode
                 ].neighbors(node, parent, r)
                 # true_parent = parent
-                # true_edge_cost = float(self.batch_cost_fun([parent.state], [node.state]))
+                # true_edge_cost = float(self.cost.batch_edge_cost([parent.state], [node.state]))
                 true_parent, true_edge_cost = self.tree[node.state.mode].find_parent(
                     node,
                     parent,
@@ -1209,7 +1209,7 @@ class BaseGraph(ABC):
                     node, batch_cost, n_near_costs, node_indices
                 )
             else:
-                edge_cost = float(self.batch_cost_fun([parent.state], [node.state]))
+                edge_cost = float(self.cost.batch_edge_cost([parent.state], [node.state]))
                 self.update_connectivity(
                     parent, node, edge_cost, parent.cost + edge_cost
                 )
@@ -1505,7 +1505,7 @@ class BaseGraph(ABC):
 
         assert node.id not in self.neighbors_node_ids_cache, "2 already calculated"
         self.neighbors_node_ids_cache[node.id] = all_ids
-        self.neighbors_batch_cost_cache[node.id] = self.batch_cost_fun(
+        self.neighbors_batch_cost_cache[node.id] = self.cost.batch_edge_cost(
             node.state.q, arr
         )
         self.blacklist_cache[node.id] = set()
@@ -1582,7 +1582,7 @@ class BaseGraph(ABC):
             new_arr = np.array(
                 [self.nodes[id_].state.q.q for id_ in new_ids], dtype=np.float64
             )
-            new_costs = self.batch_cost_fun(node.state.q, new_arr)
+            new_costs = self.cost.batch_edge_cost(node.state.q, new_arr)
             self.tot_neighbors_id_cache[node_id] = np.concatenate((new_ids, base_ids))
             self.tot_neighbors_batch_cost_cache[node_id] = np.concatenate(
                 (new_costs, base_cost)
@@ -1800,12 +1800,12 @@ class BaseGraph(ABC):
             #         ] == [], (
             #             "new parent and new children not correct")
             # if n0.state.mode.next_modes == []:
-            #     assert n1.lb_cost_to_go >= float(self.batch_cost_fun([n1.state], [n0.state])), (
+            #     assert n1.lb_cost_to_go >= float(self.cost.batch_edge_cost([n1.state], [n0.state])), (
             #     "something is wrong with the lb cost to go"
             # )
             # else:
             #     goal_nodes = np.array([n.state.q.state() for n in self.goal_nodes])
-            #     assert min((self.batch_cost_fun(n1.state.q, goal_nodes))) - n1.lb_cost_to_go <=1e-15 , (
+            #     assert min((self.cost.batch_edge_cost(n1.state.q, goal_nodes))) - n1.lb_cost_to_go <=1e-15 , (
             #         "something is wrong with the lb cost to go"
             #     )
 
@@ -1876,7 +1876,7 @@ class BaseGraph(ABC):
                 continue
 
             # add neighbors to open_queue
-            edge_costs = self.batch_cost_fun(
+            edge_costs = self.cost.batch_lower_bound(
                 node.state.q,
                 self.transition_node_array_cache[mode],
             )
@@ -1986,7 +1986,7 @@ class BaseGraph(ABC):
 
                 reverse_lb_array = reverse_transition_node_lb_cache[mode]
 
-                costs_to_transitions = self.batch_cost_fun(
+                costs_to_transitions = self.cost.batch_lower_bound(
                     n.state.q,
                     self.reverse_transition_node_array_cache[mode],
                 )
@@ -2138,7 +2138,7 @@ class InformedSampling(BaseInformedSampling):
                     id
                 ].lb_cost_to_come
 
-        costs_to_transitions = self.env.batch_config_cost(
+        costs_to_transitions = self.env.cost.batch_lower_bound(
             state.q,
             g.reverse_transition_node_array_cache[state.mode],
         )
@@ -2171,7 +2171,7 @@ class InformedSampling(BaseInformedSampling):
             for i, id in enumerate(ids):
                 g.transition_node_lb_cache[state.mode][i] = g.nodes[id].lb_cost_to_go
 
-        costs_to_transitions = self.env.batch_config_cost(
+        costs_to_transitions = self.env.cost.batch_lower_bound(
             state.q,
             g.transition_node_array_cache[state.mode],
         )
@@ -2454,7 +2454,7 @@ class BaseITstar(BasePlanner):
                 dtype=np.float64,
             )
 
-            if cost is not None and np.linalg.norm(cost - self.env.config_cost(self.g.root.state.q, self.g.goal_nodes[0].state.q)) < 1e-6:
+            if cost is not None and np.linalg.norm(cost - self.env.cost.lower_bound(self.g.root.state.q, self.g.goal_nodes[0].state.q)) < 1e-6:
                 return new_samples, num_attempts
 
         if (
@@ -2495,7 +2495,7 @@ class BaseITstar(BasePlanner):
             q = self.conf_type.from_list(q)
 
             if cost is not None:
-                if sum(self.env.batch_config_cost(q, focal_points)) > cost:
+                if sum(self.env.cost.batch_lower_bound(q, focal_points)) > cost:
                     failed_attempts += 1
                     continue
 
@@ -2685,7 +2685,7 @@ class BaseITstar(BasePlanner):
             q = self.conf_type.from_list(q)
 
             if cost is not None:
-                if sum(self.env.batch_config_cost(q, focal_points)) > cost:
+                if sum(self.env.cost.batch_lower_bound(q, focal_points)) > cost:
                     continue
 
             if self.env.is_collision_free(q, mode):
@@ -3220,7 +3220,7 @@ class BaseITstar(BasePlanner):
                 flag = False
             elif not node.is_transition:
                 flag = (
-                    sum(self.env.batch_config_cost(node.state.q, focal_points[key]))
+                    sum(self.env.cost.batch_lower_bound(node.state.q, focal_points[key]))
                     > inter_costs[key]
                 )
                 if not flag:
@@ -3230,7 +3230,7 @@ class BaseITstar(BasePlanner):
             else:
                 flag = (
                     sum(
-                        self.env.batch_config_cost(
+                        self.env.cost.batch_lower_bound(
                             node.state.q, focal_points_transition[key]
                         )
                     )
@@ -3318,7 +3318,7 @@ class BaseITstar(BasePlanner):
                 or (
                     id not in vertices_to_be_removed
                     and sum(
-                        self.env.batch_config_cost(
+                        self.env.cost.batch_lower_bound(
                             self.g.nodes[id].state.q, focal_points
                         )
                     )
@@ -3361,7 +3361,7 @@ class BaseITstar(BasePlanner):
                 or (
                     id not in vertices_to_be_removed
                     and sum(
-                        self.env.batch_config_cost(
+                        self.env.cost.batch_lower_bound(
                             self.g.nodes[id].state.q, focal_points
                         )
                     )
@@ -3554,7 +3554,7 @@ class BaseITstar(BasePlanner):
             None
         """
         path = [node.state for node in valid_path]
-        new_path_cost = path_cost(path, self.env.batch_config_cost)
+        new_path_cost = path_cost(path, self.env.cost)
         if (
             force_update
             or self.current_best_cost is None
@@ -3625,7 +3625,7 @@ class BaseITstar(BasePlanner):
 
                 shortcut_path = shortcutting.remove_interpolated_nodes(shortcut_path)
                 shortcut_path_cost = path_cost(
-                    shortcut_path, self.env.batch_config_cost
+                    shortcut_path, self.env.cost
                 )
                 # if not self.env.is_path_collision_free(
                 #     shortcut_path):
@@ -3680,7 +3680,7 @@ class BaseITstar(BasePlanner):
                         )
 
                     self.current_best_cost = path_cost(
-                        self.current_best_path, self.env.batch_config_cost
+                        self.current_best_path, self.env.cost
                     )
                     self.update_results_tracking(
                         self.current_best_cost, self.current_best_path

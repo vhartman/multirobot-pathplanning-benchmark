@@ -294,7 +294,7 @@ class RecedingHorizonPlanner(BasePlanner):
         print("Finished planning")
         print()
 
-        costs = [path_cost(complete_plan, self.base_env.batch_config_cost)]
+        costs = [path_cost(complete_plan, self.base_env.cost)]
         times = [time.time() - start_time]
         info = {"costs": costs, "times": times, "paths": [complete_plan]}
         return complete_plan, info

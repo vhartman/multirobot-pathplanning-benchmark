@@ -104,9 +104,9 @@ class InformedSampling:
                 warm_affine_cost_kernel()
         self.proposal_batch_size = proposal_batch_size
         self.lower, self.upper = joint_bounds(env)
-        metric, reduction = env.cost_metric, env.cost_reduction
-        self.cost_settings = ((metric == "euclidean", reduction == "max")
-                              if metric in ("euclidean", "max") and reduction in ("sum", "max")
+        geometry = env.cost.joint_norm_geometry
+        self.cost_settings = ((geometry.metric == "euclidean", geometry.reduction == "max")
+                              if geometry is not None and geometry.sum_weight == 0.01
                               else None)
         self.locally_informed_sampling = locally_informed_sampling
         self.include_lb = include_lb
@@ -180,7 +180,7 @@ class InformedSampling:
                 dtype=np.float64,
             )
 
-        costs_to_transitions = self.env.batch_config_cost(
+        costs_to_transitions = self.env.cost.batch_lower_bound(
             state.q,
             g.reverse_transition_node_array_cache[state.mode],
         )
@@ -207,7 +207,7 @@ class InformedSampling:
                 dtype=np.float64,
             )
 
-        costs_to_transitions = self.env.batch_config_cost(
+        costs_to_transitions = self.env.cost.batch_lower_bound(
             state.q,
             g.transition_node_array_cache[state.mode],
         )
@@ -259,7 +259,7 @@ class InformedSampling:
         )
 
 
-        tmp = self.env.batch_config_cost(
+        tmp = self.env.cost.batch_lower_bound(
             rnd_state.q, np.array([path[start_index].q.state(), path[end_index].q.state()])
         )
         lb_cost_from_start_index_to_state = tmp[0]
@@ -319,7 +319,7 @@ class InformedSampling:
         Returns:
             bool: True if the segment's actual cost exceeds lower-bound estimate (indicating potential improvement); otherwise, False.
         """
-        path_segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        path_segment_costs = self.env.cost.batch_edge_cost(path[:-1], path[1:])
 
         path_cost_from_start_to_index = np.sum(path_segment_costs[:start_index])
         path_cost_from_goal_to_index = np.sum(path_segment_costs[end_index:])
@@ -337,7 +337,7 @@ class InformedSampling:
         rnd_state_mode_1 = State(transition[0], transition[1])
         rnd_state_mode_2 = State(transition[0], transition[2])
 
-        lb_cost_from_start_index_to_state = self.env.config_cost(
+        lb_cost_from_start_index_to_state = self.env.cost.lower_bound(
             rnd_state_mode_1.q, path[start_index].q
         )
         if self.include_lb:
@@ -354,7 +354,7 @@ class InformedSampling:
                             lb_cost_from_start_index_to_state,
                         )
 
-        lb_cost_from_state_to_end_index = self.env.config_cost(
+        lb_cost_from_state_to_end_index = self.env.cost.lower_bound(
             rnd_state_mode_2.q, path[end_index].q
         )
         if self.include_lb:
@@ -392,7 +392,7 @@ class InformedSampling:
                 continue
             if transitions and path[start].mode == path[end].mode:
                 continue
-            if self.env.config_cost(path[start].q, path[end].q) < prefix[end] - prefix[start]:
+            if self.env.cost.lower_bound(path[start].q, path[end].q) < prefix[end] - prefix[start]:
                 return start, end
         return None
 
@@ -427,7 +427,7 @@ class InformedSampling:
         if not len(rows):
             return rows
         candidates = [self.env.start_pos.from_flat(row) for row in rows]
-        costs = sum(np.asarray(self.env.batch_config_cost(
+        costs = sum(np.asarray(self.env.cost.batch_lower_bound(
             candidates, [self.env.start_pos.from_flat(endpoint)] * len(candidates)))
                     for endpoint in endpoints)
         return rows[np.isfinite(costs) & (costs < budget)]
@@ -548,7 +548,7 @@ class InformedSampling:
         sample_limit = batch_size if max_samples is None else max_samples
         if len(path) < 2 or not reached_modes or sample_limit <= 0:
             return []
-        segment_costs = self.env.batch_config_cost(path[:-1], path[1:])
+        segment_costs = self.env.cost.batch_edge_cost(path[:-1], path[1:])
         prefix = np.r_[0., np.cumsum(segment_costs)]
         mode_cache = {}
         samples = []
@@ -622,7 +622,7 @@ class InformedSampling:
         sample_limit = batch_size if max_samples is None else max_samples
         if len(self.env.tasks) == 1 or len(path) < 2 or not reached_modes or sample_limit <= 0:
             return []
-        prefix = np.r_[0., np.cumsum(self.env.batch_config_cost(path[:-1], path[1:]))]
+        prefix = np.r_[0., np.cumsum(self.env.cost.batch_edge_cost(path[:-1], path[1:]))]
         mode_cache = {}
         transitions = []
         for _ in range(batch_size):

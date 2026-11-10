@@ -213,7 +213,7 @@ class CompositePRM(BasePlanner):
 
             if (
                 cost is not None
-                and sum(self.env.batch_config_cost(q, focal_points)) > cost
+                and sum(self.env.cost.batch_lower_bound(q, focal_points)) > cost
             ):
                 continue
 
@@ -309,7 +309,7 @@ class CompositePRM(BasePlanner):
             # could this transition possibly improve the path?
             if (
                 cost is not None
-                and sum(self.env.batch_config_cost(q, focal_points)) > cost
+                and sum(self.env.cost.batch_lower_bound(q, focal_points)) > cost
             ):
                 failed_attemps += 1
                 continue
@@ -447,7 +447,7 @@ class CompositePRM(BasePlanner):
             g.nodes[mode] = [
                 n
                 for n in g.nodes[mode]
-                if sum(self.env.batch_config_cost(n.state.q, focal_points))
+                if sum(self.env.cost.batch_lower_bound(n.state.q, focal_points))
                 <= current_best_cost
             ]
             num_pts_for_removal += original_count - len(g.nodes[mode])
@@ -458,7 +458,7 @@ class CompositePRM(BasePlanner):
             g.transition_nodes[mode] = [
                 n
                 for n in g.transition_nodes[mode]
-                if sum(self.env.batch_config_cost(n.state.q, focal_points))
+                if sum(self.env.cost.batch_lower_bound(n.state.q, focal_points))
                 <= current_best_cost
             ]
             num_pts_for_removal += original_count - len(g.transition_nodes[mode])
@@ -468,7 +468,7 @@ class CompositePRM(BasePlanner):
             g.reverse_transition_nodes[mode] = [
                 n
                 for n in g.reverse_transition_nodes[mode]
-                if sum(self.env.batch_config_cost(n.state.q, focal_points))
+                if sum(self.env.cost.batch_lower_bound(n.state.q, focal_points))
                 <= current_best_cost
             ]
             # num_pts_for_removal += original_count - len(g.reverse_transition_nodes[mode])
@@ -647,7 +647,7 @@ class CompositePRM(BasePlanner):
 
                 # update the lower bound to goal cost estimation of nodes.
                 graph.compute_lower_bound_to_goal(
-                    self.env.batch_config_cost, current_best_cost
+                    self.env.cost.batch_lower_bound, current_best_cost
                 )
 
             samples_in_graph_after = graph.get_num_samples()
@@ -740,7 +740,7 @@ class CompositePRM(BasePlanner):
 
                     if is_valid_path:
                         path = [node.state for node in sparsely_checked_path]
-                        new_path_cost = path_cost(path, self.env.batch_config_cost)
+                        new_path_cost = path_cost(path, self.env.cost)
                         if (
                             current_best_cost is None
                             or new_path_cost < current_best_cost
@@ -788,7 +788,7 @@ class CompositePRM(BasePlanner):
                                 )
 
                                 shortcut_path_cost = path_cost(
-                                    shortcut_path, self.env.batch_config_cost
+                                    shortcut_path, self.env.cost
                                 )
 
                                 if shortcut_path_cost < current_best_cost:
@@ -848,7 +848,7 @@ class CompositePRM(BasePlanner):
                 if (
                     np.linalg.norm(
                         current_best_cost
-                        - self.env.config_cost(q0, graph.goal_nodes[0].state.q)
+                        - self.env.cost.lower_bound(q0, graph.goal_nodes[0].state.q)
                     )
                     < 1e-6
                 ):

@@ -593,7 +593,7 @@ class MultimodalGraph:
             if len(self.transition_node_array_cache[node.state.mode]) == 0:
                 return np.inf
 
-            costs_to_transitions = env.batch_config_cost(
+            costs_to_transitions = env.cost.batch_lower_bound(
                 node.state.q,
                 self.transition_node_array_cache[node.state.mode],
             )
@@ -607,7 +607,7 @@ class MultimodalGraph:
 
         def d(n0, n1):
             # return 1.0
-            cost = env.config_cost(n0.state.q, n1.state.q)
+            cost = env.cost.edge_cost(n0.state.q, n1.state.q)
             return cost
 
         # reached_modes = []
@@ -703,7 +703,7 @@ class MultimodalGraph:
                 continue
 
             # add neighbors to open_queue
-            edge_costs = env.batch_config_cost(n1.state.q, tmp)
+            edge_costs = env.cost.batch_edge_cost(n1.state.q, tmp)
             for n, edge_cost in zip(neighbors, edge_costs):
                 # if n == n0:
                 #     continue

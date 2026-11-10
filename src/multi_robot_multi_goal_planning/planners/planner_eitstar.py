@@ -95,7 +95,7 @@ class Graph(BaseGraph):
         operation,
         distance_metric,
         batch_dist_fun,
-        batch_cost_fun,
+        cost,
         is_edge_collision_free,
         get_next_modes,
         collision_resolution,
@@ -106,7 +106,7 @@ class Graph(BaseGraph):
             operation=operation,
             distance_metric=distance_metric,
             batch_dist_fun=batch_dist_fun,
-            batch_cost_fun=batch_cost_fun,
+            cost=cost,
             is_edge_collision_free=is_edge_collision_free,
             get_next_modes=get_next_modes,
             collision_resolution=collision_resolution,
@@ -365,7 +365,7 @@ class EITstar(BaseITstar):
             batch_dist_fun=lambda a, b, c=None: batch_config_dist(
                 a, b, c or self.config.distance_metric
             ),
-            batch_cost_fun=lambda a, b: self.env.batch_config_cost(a, b),
+            cost=self.env.cost,
             is_edge_collision_free=self.env.is_edge_collision_free,
             get_next_modes=self.env.get_next_modes,
             collision_resolution=self.env.collision_resolution,
@@ -1017,7 +1017,7 @@ class EITstar(BaseITstar):
             if ptc.should_terminate(self.cnt, time.time() - self.start_time):
                 break
 
-            if self.current_best_cost is not None and np.linalg.norm(self.current_best_cost - self.env.config_cost(self.g.root.state.q, self.g.goal_nodes[0].state.q)) < 1e-6:
+            if self.current_best_cost is not None and np.linalg.norm(self.current_best_cost - self.env.cost.lower_bound(self.g.root.state.q, self.g.goal_nodes[0].state.q)) < 1e-6:
                 break
 
         if self.costs != []:

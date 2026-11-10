@@ -1929,10 +1929,10 @@ def shortcut_with_dynamic_obstacles(
         # check if the shortcut improves cost
         if path_cost(
             [q0.state(), q1.state()],
-            env.batch_config_cost,
+            env.cost,
             agent_slices=q0._array_slice,
         ) >= path_cost(
-            new_path.path[i:j], env.batch_config_cost, agent_slices=q0._array_slice
+            new_path.path[i:j], env.cost, agent_slices=q0._array_slice
         ):
             continue
 
@@ -2039,11 +2039,11 @@ def shortcut_with_dynamic_obstacles(
     # assert np.isclose(arr_to_config(path.path[-1]).state(),arr_to_config(new_path.path[-1]).state())[0]
 
     logger.info(
-        f"original cost: {path_cost(path.path, env.batch_config_cost, agent_slices=q0._array_slice)}"
+        f"original cost: {path_cost(path.path, env.cost, agent_slices=q0._array_slice)}"
     )
     logger.info(f"Attempted shortcuts: {attempted_shortcuts}")
     logger.info(
-        f"new cost: {path_cost(new_path.path, env.batch_config_cost, agent_slices=q0._array_slice)}",
+        f"new cost: {path_cost(new_path.path, env.cost, agent_slices=q0._array_slice)}",
     )
 
     info = {}
@@ -2517,7 +2517,7 @@ class PrioritizedPlanner(BasePlanner):
                     path.append(state)
 
                 end_time = time.time()
-                cost = path_cost(path, env.batch_config_cost)
+                cost = path_cost(path, env.cost)
 
                 if len(info["costs"]) == 0 or info["costs"][-1] > cost:
                     info["costs"].append(cost)
@@ -2548,7 +2548,7 @@ class PrioritizedPlanner(BasePlanner):
                         resolution=env.collision_resolution,
                     )
                     path = shortcut_path
-                    cost = path_cost(path, env.batch_config_cost)
+                    cost = path_cost(path, env.cost)
 
                 end_time = time.time()
 

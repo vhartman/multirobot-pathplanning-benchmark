@@ -959,7 +959,7 @@ class BaseRRTstar(BasePlanner):
                 N_near_batch, n_near_costs, node_indices = self.near(
                     next_mode, n, index, tree=tree
                 )
-                batch_cost = self.env.batch_config_cost(n.state.q, N_near_batch)
+                batch_cost = self.env.cost.batch_edge_cost(n.state.q, N_near_batch)
                 if self.rewire(
                     next_mode, node_indices, n, batch_cost, n_near_costs, tree
                 ):
@@ -1979,9 +1979,9 @@ class BaseRRTstar(BasePlanner):
 
             index = np.where(tree.get_node_ids_subtree() == parent.id)
             N_near_batch, n_near_costs, node_indices = self.near(state.mode, node, index)
-            batch_cost = self.env.batch_config_cost(state.q, N_near_batch)
+            batch_cost = self.env.cost.batch_edge_cost(state.q, N_near_batch)
             if existing_node is None and mode != state.mode:
-                connection = (parent, self.env.config_cost(state.q, parent.state.q))
+                connection = (parent, self.env.cost.edge_cost(state.q, parent.state.q))
             else:
                 connection = self.find_parent(
                     state.mode,

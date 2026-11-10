@@ -234,7 +234,7 @@ class BidirectionalRRTstar(BaseRRTstar):
             if not n_nearest_b:
                 return
 
-        cost = self.env.batch_config_cost([n_new.state], [n_nearest_b.state])
+        cost = self.env.cost.batch_edge_cost([n_new.state], [n_nearest_b.state])
         if self.trees[mode].order == -1:
             # switch such that subtree is beginning from start and subtree_b from goal
             self.trees[mode].swap()
@@ -304,7 +304,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                 # Add n_new to tree
                 n_new = Node(state_new, self.operation)
 
-                cost = self.env.batch_config_cost([n_new.state], [n_nearest_b.state])
+                cost = self.env.cost.batch_edge_cost([n_new.state], [n_nearest_b.state])
                 c_min = n_nearest_b.cost + cost
 
                 n_new.parent = n_nearest_b
@@ -451,7 +451,7 @@ class BidirectionalRRTstar(BaseRRTstar):
                         active_mode, n_new, n_nearest_idx
                     )
 
-                batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
+                batch_cost = self.env.cost.batch_edge_cost(n_new.state.q, N_near_batch)
                 parent, edge_cost = self.find_parent(
                     active_mode,
                     node_indices,

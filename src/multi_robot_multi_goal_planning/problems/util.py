@@ -5,6 +5,7 @@ import numpy as np
 
 from .planning_env import BaseProblem, Mode, State
 from .core.configuration import config_dist
+from .core.cost import MotionCost
 
 
 def compute_reachable_modes(env: BaseProblem, max_iter: int = 500) -> tuple[Mode, ...]:
@@ -52,6 +53,10 @@ def path_cost(path: List[State], batch_cost_fun, agent_slices=None) -> float:
     """
     Computes the path cost via the batch cost function and summing it up.
     """
+    if isinstance(batch_cost_fun, MotionCost):
+        return batch_cost_fun.path_cost(path, agent_slices)
+    if len(path) < 2:
+        return 0.0
     if isinstance(path[0], State):
         pts = [start.q.state() for start in path]
         agent_slices = path[0].q._array_slice

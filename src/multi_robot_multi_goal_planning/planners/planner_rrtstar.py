@@ -174,7 +174,7 @@ class RRTstar(BaseRRTstar):
                         active_mode, n_new, n_nearest_idx
                     )
             
-                batch_cost = self.env.batch_config_cost(n_new.state.q, N_near_batch)
+                batch_cost = self.env.cost.batch_edge_cost(n_new.state.q, N_near_batch)
                 parent, edge_cost = self.find_parent(
                     active_mode,
                     node_indices,

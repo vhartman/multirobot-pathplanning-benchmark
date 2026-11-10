@@ -37,7 +37,7 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
     constraints = _path_constraint_provider(env, path)
     new_path = interpolate_path(path, 0.05)
 
-    costs = [path_cost(new_path, env.batch_config_cost)]
+    costs = [path_cost(new_path, env.cost)]
     times = [0.0]
 
     start_time = time.time()
@@ -64,8 +64,8 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
         mode = new_path[i].mode
 
         # check if the shortcut improves cost
-        if path_cost([new_path[i], new_path[j]], env.batch_config_cost) >= path_cost(
-            new_path[i:j], env.batch_config_cost
+        if path_cost([new_path[i], new_path[j]], env.cost) >= path_cost(
+            new_path[i:j], env.cost
         ):
             continue
 
@@ -94,7 +94,7 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
 
         current_time = time.time()
         times.append(current_time - start_time)
-        costs.append(path_cost(new_path, env.batch_config_cost))
+        costs.append(path_cost(new_path, env.cost))
 
     return new_path, [costs, times]
 
@@ -155,8 +155,8 @@ def full_run_gain(env: BaseProblem, path: List[State], robot: int, lo: int, hi: 
     can be negative, even when that robot's individual path becomes shorter.
     """
     candidate = _shortcut_candidate(env, path, lo, hi, (robot,), indices=indices)
-    return (path_cost(path[lo:hi + 1], env.batch_config_cost)
-            - path_cost(candidate, env.batch_config_cost))
+    return (path_cost(path[lo:hi + 1], env.cost)
+            - path_cost(candidate, env.cost))
 
 
 def _check_shortcut(env, candidate, resolution, tolerance, observe_failure, ordered=False):
@@ -312,7 +312,7 @@ def robot_mode_shortcut(
         env, path, interpolation_resolution, resolution, tolerance,
     ) if scalable or coordinate_policy else interpolate_path(path, interpolation_resolution))
     
-    costs = [path_cost(new_path, env.batch_config_cost)]
+    costs = [path_cost(new_path, env.cost)]
     times = [0.0]
 
     cnt = 0
@@ -507,8 +507,8 @@ def robot_mode_shortcut(
         path_element = _shortcut_candidate(env, new_path, i, j, robots_to_shortcut,
                                           indices=active_indices)
         # check if the shortcut improves cost
-        improvement = (path_cost(new_path[i:j + 1], env.batch_config_cost)
-                       - path_cost(path_element, env.batch_config_cost))
+        improvement = (path_cost(new_path[i:j + 1], env.cost)
+                       - path_cost(path_element, env.cost))
         if improvement <= 0.0:
             stats['cost'] += 1
             if coordinate_proposer is not None:
@@ -563,7 +563,7 @@ def robot_mode_shortcut(
                         tree_serial += 1
         current_time = time.monotonic()
         times.append(current_time - start_time)
-        costs.append(path_cost(new_path, env.batch_config_cost))
+        costs.append(path_cost(new_path, env.cost))
 
     if statistics is not None:
         statistics.update(stats)

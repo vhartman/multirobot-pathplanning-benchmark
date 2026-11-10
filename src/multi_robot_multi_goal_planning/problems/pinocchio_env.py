@@ -16,8 +16,6 @@ from .core.configuration import (
     Configuration,
     NpConfiguration,
     config_dist,
-    config_cost,
-    batch_config_cost,
 )
 
 from .planning_env import (
@@ -389,22 +387,7 @@ class PinocchioEnvironment(BaseProblem):
         if blocking:
             input("Press Enter to continue...")
 
-    def config_cost(self, start: Configuration, end: Configuration) -> float:
-        return config_cost(start, end, self.cost_metric, self.cost_reduction)
 
-    def batch_config_cost(
-        self,
-        starts: List[Configuration],
-        ends: List[Configuration],
-        tmp_agent_slice=None,
-    ) -> NDArray:
-        return batch_config_cost(
-            starts,
-            ends,
-            self.cost_metric,
-            self.cost_reduction,
-            tmp_agent_slice=tmp_agent_slice,
-        )
 
     # @profile # run with kernprof -l scripts/run_planner.py [your environment] [your flags]
     def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):

@@ -14,6 +14,7 @@ from .core.configuration import (
     config_dist,
 )
 from .core.dependency_graph import DependencyGraph
+from .core.cost import MotionCost, JointSpaceLength
 from .core.constraints import Constraint
 from .core.goals import (
     Goal,
@@ -1578,8 +1579,40 @@ class BaseProblem(ABC):
     collision_tolerance: float
     collision_resolution: float
 
-    cost_metric: str = "euclidean"
-    cost_reduction: str = "max"
+    @property
+    def cost(self) -> MotionCost:
+        if "_cost" not in self.__dict__:
+            self._cost = JointSpaceLength()
+        return self._cost
+
+    @cost.setter
+    def cost(self, value: MotionCost):
+        if not isinstance(value, MotionCost):
+            raise TypeError("cost must be a MotionCost")
+        self._cost = value
+
+    # Compatibility for experiment configurations using metric/reduction strings.
+    @property
+    def cost_metric(self):
+        return self.cost.metric
+
+    @cost_metric.setter
+    def cost_metric(self, value):
+        if not isinstance(self.cost, JointSpaceLength):
+            raise ValueError("Set env.cost explicitly for a non-joint-space objective")
+        from dataclasses import replace
+        self.cost = replace(self.cost, metric=value)
+
+    @property
+    def cost_reduction(self):
+        return self.cost.reduction
+
+    @cost_reduction.setter
+    def cost_reduction(self, value):
+        if not isinstance(self.cost, JointSpaceLength):
+            raise ValueError("Set env.cost explicitly for a non-joint-space objective")
+        from dataclasses import replace
+        self.cost = replace(self.cost, reduction=value)
 
     def __init__(self):
         self._uniform_sampler = self._make_uniform_sampler()
@@ -1990,17 +2023,16 @@ class BaseProblem(ABC):
 
         return True
 
-    @abstractmethod
     def config_cost(self, start: Configuration, goal: Configuration) -> float:
-        pass
+        return self.cost.edge_cost(start, goal)
 
-    @abstractmethod
     def batch_config_cost(
         self,
         starts: List[State] | Configuration,
         ends: List[State] | NDArray,
+        tmp_agent_slice=None,
     ) -> List[float]:
-        pass
+        return self.cost.batch_edge_cost(starts, ends, tmp_agent_slice=tmp_agent_slice)
 
     def state_cost(self, start: State, end: State) -> float:
         if start.mode != end.mode:

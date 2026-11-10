@@ -51,10 +51,10 @@ def solve(env, planner="birrt", runtime=60.0, optimize=False,
     if path and shortcut:
         res = (shortcut_resolution if shortcut_resolution is not None
                else getattr(env, "collision_resolution", 0.01))   # don't check finer than the planner
-        before = path_cost(path, env.batch_config_cost)
+        before = path_cost(path, env.cost)
         path, sc_info = robot_mode_shortcut(env, path, max_iter=shortcut_iters, resolution=res)
         info["shortcut"] = sc_info
         if verbose:
-            after = path_cost(path, env.batch_config_cost)
+            after = path_cost(path, env.cost)
             print(f"[solve/{planner}] shortcut: {len(path)} states, {before:.3f} -> {after:.3f}")
     return path, info

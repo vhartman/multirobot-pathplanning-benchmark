@@ -77,7 +77,7 @@ class Graph(BaseGraph):
         operation,
         distance_metric,
         batch_dist_fun,
-        batch_cost_fun,
+        cost,
         is_edge_collision_free,
         get_next_modes,
         collision_resolution,
@@ -88,7 +88,7 @@ class Graph(BaseGraph):
             operation=operation,
             distance_metric=distance_metric,
             batch_dist_fun=batch_dist_fun,
-            batch_cost_fun=batch_cost_fun,
+            cost=cost,
             is_edge_collision_free=is_edge_collision_free,
             get_next_modes=get_next_modes,
             collision_resolution=collision_resolution,
@@ -346,7 +346,7 @@ class AITstar(BaseITstar):
             batch_dist_fun=lambda a, b, c=None: batch_config_dist(
                 a, b, c or self.config.distance_metric
             ),
-            batch_cost_fun=lambda a, b: self.env.batch_config_cost(a, b),
+            cost=self.env.cost,
             is_edge_collision_free=self.env.is_edge_collision_free,
             get_next_modes=self.env.get_next_modes,
             collision_resolution=self.env.collision_resolution,
