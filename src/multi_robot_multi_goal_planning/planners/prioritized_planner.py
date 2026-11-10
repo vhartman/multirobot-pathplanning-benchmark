@@ -2163,6 +2163,8 @@ class PrioritizedPlanner(BasePlanner):
         config: PrioritizedPlannerConfig = PrioritizedPlannerConfig(),
     ):
         super().__init__(env)
+        if env.cost.joint_norm_geometry is None:
+            raise ValueError("Prioritized planning currently requires a joint-space objective")
         self.config = config
 
     def plan(

@@ -98,16 +98,16 @@ class InformedSampling:
         self._affine_geometry = OrderedDict()
         self.affine_geometry_stats = dict(hits=0, misses=0)
         self.constraint_provider = ConstraintProvider(env)
-        if proposal == "hit_and_run":
-            warm_joint_cost_kernel()
-            if affine_sampling:
-                warm_affine_cost_kernel()
         self.proposal_batch_size = proposal_batch_size
         self.lower, self.upper = joint_bounds(env)
         geometry = env.cost.joint_norm_geometry
         self.cost_settings = ((geometry.metric == "euclidean", geometry.reduction == "max")
                               if geometry is not None and geometry.sum_weight == 0.01
                               else None)
+        if proposal == "hit_and_run" and self.cost_settings is not None:
+            warm_joint_cost_kernel()
+            if affine_sampling:
+                warm_affine_cost_kernel()
         self.locally_informed_sampling = locally_informed_sampling
         self.include_lb = include_lb
 

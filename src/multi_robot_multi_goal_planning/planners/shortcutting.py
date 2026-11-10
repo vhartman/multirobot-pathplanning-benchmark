@@ -63,9 +63,10 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
         q1 = new_path[j].q
         mode = new_path[i].mode
 
-        # check if the shortcut improves cost
-        if path_cost([new_path[i], new_path[j]], env.cost) >= path_cost(
-            new_path[i:j], env.cost
+        candidate = _shortcut_candidate(env, new_path, i, j, range(len(env.robots)))
+        # Evaluate the representation that will actually be retained.
+        if path_cost(candidate, env.cost) >= path_cost(
+            new_path[i:j + 1], env.cost
         ):
             continue
 
@@ -87,10 +88,7 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
             resolution=env.collision_resolution,
             tolerance=env.collision_tolerance,
         ):
-            for k in range(j - i):
-                for r in robots_to_shortcut:
-                    q = q0[r] + (q1[r] - q0[r]) / (j - i) * k
-                    new_path[i + k].q[r] = q
+            new_path[i:j + 1] = candidate
 
         current_time = time.time()
         times.append(current_time - start_time)

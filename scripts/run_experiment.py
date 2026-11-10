@@ -498,6 +498,9 @@ def main():
     env = get_env_by_name(config["environment"])
     env.cost_reduction = config["cost_reduction"]
     env.cost_metric = config["per_agent_cost"]
+    if "motion_cost" in config:
+        from multi_robot_multi_goal_planning.problems.costs import make_cost
+        env.cost = make_cost(env, config["motion_cost"])
 
     if False:
         env.show()

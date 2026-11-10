@@ -94,6 +94,10 @@ def main():
         default="max",
         help="How the agent specific cost functions are reduced to one single number (default: max)",
     )
+    parser.add_argument("--cost_space", choices=["joint", "workspace"], default="joint")
+    parser.add_argument("--workspace_frames", nargs="+", help="One fixed frame per robot, in robot order")
+    parser.add_argument("--cost_resolution", type=float, default=0.05,
+                        help="Maximum joint-coordinate step for workspace-cost integration")
     parser.add_argument(
         "--save",
         action="store_true",
@@ -138,6 +142,10 @@ def main():
     env = get_env_by_name(args.env)
     env.cost_reduction = args.cost_reduction
     env.cost_metric = args.per_agent_cost_function
+    if args.cost_space == "workspace":
+        from multi_robot_multi_goal_planning.problems.costs import make_cost
+        env.cost = make_cost(env, dict(type="workspace", frames=args.workspace_frames,
+                                      reduction=args.cost_reduction, resolution=args.cost_resolution))
 
     # env.show()
 
