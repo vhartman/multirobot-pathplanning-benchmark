@@ -85,7 +85,21 @@ def _di_min_horizon_njit(p0, v0, p1, v1, u_max, dt, max_bisect):
             T_hi = Tm
         else:
             T_lo = Tm
-    return T_hi
+    # Rounding can leave a feasible interval when endpoint velocities are nonzero.
+    steps = max(1, int(np.ceil(T_hi / dt)))
+    while True:
+        T = steps * dt
+        feasible = True
+        for i in range(n):
+            dp = p1[i] - p0[i]
+            a = 6.0 * dp / (T * T) - (4.0 * v0[i] + 2.0 * v1[i]) / T
+            end = -6.0 * dp / (T * T) + (2.0 * v0[i] + 4.0 * v1[i]) / T
+            if max(abs(a), abs(end)) > u_max + 1e-9:
+                feasible = False
+                break
+        if feasible:
+            return T
+        steps += 1
 
 
 class ProjectedKinodynamicEnvironment(KinodynamicPlanningProblem, AbstractEnvironment):
@@ -215,14 +229,12 @@ class DoubleIntegratorEnvironment(ProjectedKinodynamicEnvironment):
         return a, b, peak
 
     def _min_feasible_horizon(self, p0, v0, p1, v1):
-        """Smallest horizon T for which the minimum-effort connection respects the control
-        bounds. First brackets a feasible T by geometric expansion, then BISECTS within the
-        bracket to the exact boundary (peak control == u_max) instead of accepting the ~1.3x
-        overshoot. Since the cost is trajectory time, this directly lowers it. The min-effort
-        affine control is globally well-behaved (its peak decreases with T), so this is safe;
-        a true time-optimal (bang-bang) profile would be faster still but needs a
-        velocity-limited trapezoidal generator (the accel-limited min-time is non-monotonic
-        in T for excursion targets)."""
+        """Find a control-feasible, grid-aligned affine steering horizon.
+
+        Bracketing and bisection find a candidate; the compiled routine checks the
+        rounded horizon explicitly. Feasible intervals need not be connected, so
+        this search does not guarantee the globally shortest feasible horizon.
+        """
         # 16 bisections reach ~dt/2^16 precision -- far finer than needed (we round the
         # horizon to a whole number of dt steps anyway). The compiled routine replaces the old
         # 40-iteration numpy bisection (the top steering hot path).
@@ -252,14 +264,14 @@ class DoubleIntegratorEnvironment(ProjectedKinodynamicEnvironment):
 
         # already there
         if np.linalg.norm(x1 - x0) < 1e-12:
-            return [x1.copy()]
+            return []
 
         T = self._min_feasible_horizon(p0, v0, p1, v1)
         if T is None:
             return None
 
-        # snap horizon to a whole number of integration steps (>= T keeps it feasible)
-        N = max(1, int(np.ceil(T / dt)))
+        # The horizon search has already checked this integration-grid duration.
+        N = max(1, int(round(T / dt)))
         T = N * dt
         a, b, _ = self._di_coeffs(p0, v0, p1, v1, T)
 
@@ -311,7 +323,7 @@ class DoubleIntegratorEnvironment(ProjectedKinodynamicEnvironment):
         T = self._min_feasible_horizon(x0[pos_idx], x0[vel_idx], x1[pos_idx], x1[vel_idx])
         if T is None:
             return None
-        return max(1, int(np.ceil(T / self.integration_dt))) * self.integration_dt
+        return T
 
     def robot_position(self, q: Configuration, robot_index: int) -> NDArray:
         return np.asarray(q[robot_index])[: self.position_dim_per_robot]
