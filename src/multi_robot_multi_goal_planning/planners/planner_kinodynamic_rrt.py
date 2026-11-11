@@ -534,14 +534,19 @@ class KinodynamicRRT:
         return False
 
     def _handle_mode_events(self, node: _Node) -> None:
-        q = self.env.start_pos.from_flat(node.x)
-        if self.env.done(q, node.mode):
-            self.goal_nodes.append(node)
-        elif self.env.is_transition(q, node.mode):
-            for nm in self.env.get_next_modes(q, node.mode):
-                trans = _Node(node.x, nm, node, [], node.cost, 0.0, node.pos.copy(), is_transition=True)
-                node.children.append(trans)
-                self._add_node(trans)
+        pending = [node]
+        while pending:
+            current = pending.pop()
+            q = self.env.start_pos.from_flat(current.x)
+            if self.env.done(q, current.mode):
+                self.goal_nodes.append(current)
+            elif self.env.is_transition(q, current.mode):
+                for nm in self.env.get_next_modes(q, current.mode):
+                    trans = _Node(current.x, nm, current, [], current.cost, 0.0,
+                                  current.pos.copy(), is_transition=True)
+                    current.children.append(trans)
+                    self._add_node(trans)
+                    pending.append(trans)
 
     # ------------------------------------------------------------------ path build
     def _build_path(self, goal_node: _Node) -> List[State]:
@@ -641,6 +646,15 @@ class KinodynamicRRT:
                 elif span_len - c_min < 1e-6:
                     # already tight: PHS degenerates to the straight segment
                     p = p_i + np.random.rand() * (p_j - p_i)
+                elif c_min < 1e-12:
+                    # Coincident foci with nonzero travel define a ball.
+                    direction = np.random.normal(size=d)
+                    norm = np.linalg.norm(direction)
+                    if norm == 0:
+                        ok = False
+                        break
+                    p = (p_i + p_j) / 2 + direction / norm * (
+                        .5 * span_len * np.random.rand() ** (1.0 / d))
                 else:
                     rot, center = compute_PHS_matrices(p_i, p_j, span_len)
                     p = sample_phs_with_given_matrices(rot, center)[:, 0]
@@ -674,6 +688,11 @@ class KinodynamicRRT:
         start_node = _Node(x_start, start_mode, None, [], 0.0, 0.0, self._robot_positions(x_start))
         self._add_node(start_node)
         self._start_node = start_node
+        self._handle_mode_events(start_node)
+        if self.goal_nodes:
+            path = self._build_path(self._best_goal())
+            self._record(0.0, path)
+            return path, {"costs": self.costs, "times": self.times, "paths": self.all_paths}
 
         best_reported = math.inf
         first_solution_seen = False
@@ -787,7 +806,7 @@ class KinodynamicRRT:
                 exact = self._edge_cost(nb.x, edge)  # exact (curved) edge cost
                 if nb.cost + exact < best_cost:
                     best_parent, best_traj, best_edge, best_cost = nb, edge, exact, nb.cost + exact
-                break  # first collision-free in cost order (like the geometric find_parent)
+                # Later lower bounds may still beat this edge's exact cost.
 
         new_node = _Node(x_new, mode, best_parent, best_traj, best_cost, best_edge, pos_new)
         best_parent.children.append(new_node)
@@ -828,6 +847,7 @@ class KinodynamicRRT:
         (possibly lower) best cost."""
         # deterministic divide-and-conquer first (whole task spans -> big wins fast),
         # then a stall-bounded random-pair polish
+        original_length = _path_pos_length(self.env, path)
         if self.config.loop_shortcut_dnc:
             path, _ = kinodynamic_robot_shortcut_dnc(self.env, path, rounds=2, verbose=False)
         sc_path, _ = kinodynamic_robot_shortcut(
@@ -835,7 +855,7 @@ class KinodynamicRRT:
             stall_iters=self.config.loop_shortcut_stall, verbose=False,
         )
         # only bother re-injecting if the per-robot pass actually straightened something
-        if _path_pos_length(self.env, sc_path) >= _path_pos_length(self.env, path) - 1e-9:
+        if _path_pos_length(self.env, sc_path) >= original_length - 1e-9:
             return best_reported
         goal = self._reinject_path(sc_path)
         if goal is None:
