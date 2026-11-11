@@ -216,6 +216,18 @@ class DoubleIntegratorEnvironment(ProjectedKinodynamicEnvironment):
         self._pv_idx_cache = cached
         return cached
 
+    def propagate(self, x, u, dt=None, num_steps=1):
+        """Integrate a constant acceleration exactly at the requested timestamps."""
+        dt = self.integration_dt if dt is None else dt
+        pi, vi = self._pos_vel_indices()
+        x = np.asarray(x, dtype=float)
+        u = np.asarray(u, dtype=float)
+        t = (np.arange(1, num_steps + 1) * dt)[:, None]
+        states = np.tile(x, (num_steps, 1))
+        states[:, pi] = x[pi] + x[vi] * t + .5 * u * t * t
+        states[:, vi] = x[vi] + u * t
+        return list(states)
+
     def _di_coeffs(self, p0, v0, p1, v1, T):
         """Minimum-effort affine control u(t) = a + b*t that drives each decoupled
         double integrator from (p0, v0) to (p1, v1) in time T. Returns (a, b) and the
