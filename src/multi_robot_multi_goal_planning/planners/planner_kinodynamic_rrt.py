@@ -53,6 +53,8 @@ from functools import lru_cache
 @lru_cache(maxsize=256)
 def _binary_indices(n: int) -> Tuple[int, ...]:
     """Cached midpoint-first traversal order of range(n) (edge lengths repeat)."""
+    if n <= 0:
+        return ()
     return generate_binary_search_indices(n)
 
 
