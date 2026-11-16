@@ -333,7 +333,7 @@ class rai_env(BaseProblem):
 
         self.C_orig = ry.Config()
         self.C_orig.addConfigurationCopy(self.C)
-    
+
         if delete_visual_only:
             C_coll = delete_visual_only_frames(self.C)
 
@@ -361,6 +361,9 @@ class rai_env(BaseProblem):
         }
 
     def __deepcopy__(self, memo):
+        if getattr(self, "_mujoco_collision_checker", None) is not None:
+            raise NotImplementedError("Disable the MuJoCo bridge before copying an environment")
+
         # Save the C attribute
         C = self.C
         C_base = self.C_base
@@ -455,6 +458,24 @@ class rai_env(BaseProblem):
         # self.C.view_close()
         self.C.view(blocking)
 
+    def set_collision_backend(self, backend="rai", *, plain_boxes=False):
+        """Select RAI or the optional MuJoCo collision bridge.
+
+        Tasks and constraints retain their environment implementations.
+        Collision queries use MuJoCo only.
+        Re-select MuJoCo after changing C_base or task actions.
+        plain_boxes explicitly approximates rounded boxes without editing C_base.
+        """
+        if backend == "rai":
+            self._mujoco_collision_checker = None
+        elif backend == "mujoco":
+            from .rai_mujoco import RaiMujocoScene
+            checker = RaiMujocoScene(self, plain_boxes=plain_boxes)
+            self._mujoco_collision_checker = checker
+        else:
+            raise ValueError("Collision backend must be 'rai' or 'mujoco'")
+        return getattr(self, "_mujoco_collision_checker", None)
+
     # Environment functions: collision checking
     # @filter_output(hide_pair_collision)
     # @silence_function
@@ -465,6 +486,10 @@ class rai_env(BaseProblem):
         m: Optional[Mode],
         collision_tolerance: Optional[float] = None,
     ) -> bool:
+        checker = getattr(self, "_mujoco_collision_checker", None)
+        if checker is not None:
+            return checker.valid(q, m, collision_tolerance)
+
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
 
@@ -503,6 +528,10 @@ class rai_env(BaseProblem):
         collision_tolerance: Optional[float] = None,
         set_mode: bool = True,
     ) -> bool:
+        checker = getattr(self, "_mujoco_collision_checker", None)
+        if checker is not None:
+            return checker.valid(q, m, collision_tolerance, set_mode=set_mode)
+
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
 
@@ -552,6 +581,10 @@ class rai_env(BaseProblem):
         Other movable robots (including their attachments) are ignored. This is
         a necessary-condition check, not a full configuration collision check.
         """
+        checker = getattr(self, "_mujoco_collision_checker", None)
+        if checker is not None:
+            return checker.valid(q, m, collision_tolerance, set_mode=set_mode, robots=r)
+
         if collision_tolerance is None:
             collision_tolerance = self.collision_tolerance
         selected = {r} if isinstance(r, str) else set(r)
