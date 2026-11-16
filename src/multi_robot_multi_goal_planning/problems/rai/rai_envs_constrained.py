@@ -1493,3 +1493,49 @@ class CarrierOpenArmSorting(SequenceMixin, rai_env):
         self.collision_resolution = .005
         BaseModeLogic.__init__(self)
         self.spec.constraints = ConstraintType.CONSTRAINED
+
+
+@register([
+    ('rai.ur5_mixed_assembly', {'num_layers': 2}),
+    ('rai.ur5_mixed_assembly_one', {'num_layers': 1}),
+    ('rai.ur5_mixed_assembly_obstacles', {'num_layers': 2, 'obstacles': True}),
+    ('rai.ur5_mixed_assembly_one_obstacles', {'num_layers': 1, 'obstacles': True}),
+])
+class UR5MixedAssembly(SequenceMixin, rai_env):
+    """Individual support placement alternates with rigid bimanual beam transport.
+
+    Single-arm goals constrain only the working arm. Relative gripper pose
+    constraints are active only while carrying a beam, not while approaching it.
+    """
+    def __init__(self, num_layers=2, keyframe_seed=31, obstacles=False):
+        self.C, operations = rai_config.make_ur5_mixed_assembly_env(num_layers, keyframe_seed, obstacles)
+        self.robots = ['a1', 'a2']
+        rai_env.__init__(self)
+        self.manipulating_env = True
+        home = self.C.getJointState().copy()
+        grippers = ['a1_ur_gripper_center', 'a2_ur_gripper_center']
+        self.tasks = []
+        for op in operations:
+            robots = [f'a{arm}' for arm in op['arms']]
+            indices = [i for i, name in enumerate(self.C.getJointNames()) if any(name.startswith(robot+'_') for robot in robots)]
+            constraints = []
+            if len(robots) == 2:
+                self.C.setJointState(op['pick'])
+                pose = relative_pose(*(self.C.getFrame(name).getPose() for name in grippers))
+                constraints.append(RelativeAffineTaskSpaceEqualityConstraint(grippers, np.eye(3, 7), pose, 1e-3))
+                for axis, feature in (('x', ry.FS.vectorXRel), ('y', ry.FS.vectorYRel)):
+                    direction, _ = self.C.eval(feature, grippers)
+                    constraints.append(AffineRelativeFrameOrientationConstraint(grippers, axis, direction.copy(), 1e-3))
+            obj = op['object']
+            self.tasks.extend((
+                Task(f'pick_{obj}', robots, SingleGoal(op['pick'][indices]), 'pick', frames=[grippers[op['arms'][0]-1], obj]),
+                Task(f'place_{obj}', robots, SingleGoal(op['place'][indices]), 'place', frames=['table', obj], constraints=constraints),
+            ))
+        self.C.setJointState(home)
+        self.tasks.append(Task('terminal', self.robots, SingleGoal(home)))
+        self.sequence = self._make_sequence_from_names([task.name for task in self.tasks])
+        self.collision_tolerance = .001
+        self.collision_resolution = .005
+        BaseModeLogic.__init__(self)
+        self.spec.constraints = ConstraintType.CONSTRAINED
+        self.spec.manipulation = ManipulationType.MANIPULATION

@@ -9415,3 +9415,100 @@ def solve_carrier_sorting_keyframes(C, gripper, target, initial, *, count=8,
                     return solutions
     raise RuntimeError(f'Only {len(solutions)}/{count} distinct collision-free fixed-pose '
                        f'keyframes for {gripper} at {target}')
+
+
+def make_ur5_mixed_assembly_env(num_layers=2, seed=31, obstacles=False):
+    """Two table-mounted UR5s assemble supports individually and beams together."""
+    from scipy.optimize import least_squares
+    if num_layers not in (1, 2):
+        raise ValueError('num_layers must be 1 or 2')
+    C = ry.Config()
+    C.addFrame('floor').setShape(ry.ST.box, [4, 4, .04]).setPosition([0, 0, -.02]).setColor([.86, .87, .88]).setContact(1)
+    C.addFrame('table').setShape(ry.ST.box, [1.7, 1.1, .08]).setPosition([0, 0, .66]).setColor([.65, .58, .46]).setContact(1)
+    for x in (-.73, .73):
+        for y in (-.43, .43):
+            C.addFrame(f'leg_{x}_{y}').setShape(ry.ST.box, [.07, .07, .62]).setPosition([x, y, .31]).setColor([.25, .28, .3]).setContact(1)
+    if obstacles:
+        # Fixture rails separate the supply areas from the assembly bay.
+        for side in (-1, 1):
+            C.addFrame(f'fixture_rail_{side}', 'table').setShape(ry.ST.box, [.76, .035, .16]).setPosition([0, side*.16, .78]).setColor([.38, .42, .46]).setContact(1)
+    model = Path(__file__).parent/'../../assets/models/rai/ur5_vamp/ur5_vamp.g'
+    for arm, x in enumerate((-.70, .70), 1):
+        C.addFrame(f'mount_{arm}', 'table').setShape(ry.ST.box, [.18, .18, .06]).setPosition([x, 0, .73]).setColor([.3, .33, .36]).setContact(0)
+        C.addFile(str(model), namePrefix=f'a{arm}_').setPosition([x, 0, .76]).setQuaternion([1, 0, 0, 0] if arm == 1 else [0, 0, 0, 1])
+    home = C.getJointState().copy()
+    # Small clearance avoids ambiguous coplanar support contacts.
+    clearance = .0002
+    operations = []
+    for layer in range(num_layers):
+        support_z = .70 + .04 + clearance + layer*(.08+.06+2*clearance)
+        for arm, x in enumerate((-.23, .23), 1):
+            obj = f'obj_support_{layer}_{arm}'
+            source = [(-.42 if arm == 1 else .42), -.30+.60*layer, .74+clearance]
+            target = [x, 0, support_z]
+            C.addFrame(obj, 'table').setShape(ry.ST.box, [.065, .065, .08]).setPosition(source).setColor([.18, .52, .72]).setContact(1).setJoint(ry.JT.rigid)
+            operations.append(dict(object=obj, arms=[arm], target=target, offsets=[[0, 0, .025]]))
+        obj = f'obj_beam_{layer}'
+        source = [0, -.32 if layer == 0 else .32, .73+clearance]
+        target = [0, 0, support_z+.04+.03+clearance]
+        C.addFrame(obj, 'table').setShape(ry.ST.box, [.68, .10, .06]).setPosition(source).setColor([.88, .48+.12*layer, .16]).setContact(1).setJoint(ry.JT.rigid)
+        # Narrow handles allow the parallel grippers to grasp a wide beam.
+        for arm, x in enumerate((-.30, .30), 1):
+            C.addFrame(f'handle_{layer}_{arm}', obj).setShape(ry.ST.box, [.035, .025, .035]).setRelativePosition([x, 0, .0475]).setColor([.25, .27, .29]).setContact(1)
+        operations.append(dict(object=obj, arms=[1, 2], target=target, offsets=[[-.30, 0, .06], [.30, 0, .06]]))
+    originals = {op['object']: C.getFrame(op['object']).getPose().copy() for op in operations}
+    C.setJointState(home)
+    C.getJointState()
+    lower, upper = C.getJointLimits()
+    rng = np.random.default_rng(seed)
+    targets = [C.addFrame(f'assembly_ik_target_{arm}') for arm in (1, 2)]
+
+    # TODO: Replace this local IK implementation with the shared keyframe solver.
+    def solve(center, op, initial):
+        C.setJointState(initial)
+        names = [name for name in C.getJointNames() if any(name.startswith(f'a{arm}_') for arm in op['arms'])]
+        indices = [i for i, name in enumerate(C.getJointNames()) if name in names]
+        for arm, offset in zip(op['arms'], op['offsets']):
+            targets[arm-1].setPosition(np.asarray(center)+offset).setQuaternion([0, 1, 0, 0])
+        def residual(q):
+            C.setJointState(q, names)
+            return np.concatenate([C.eval(ry.FS.poseDiff, [f'a{arm}_ur_gripper_center', targets[arm-1].name])[0] for arm in op['arms']])
+        def jacobian(q):
+            C.setJointState(q, names)
+            return np.vstack([C.eval(ry.FS.poseDiff, [f'a{arm}_ur_gripper_center', targets[arm-1].name])[1][:, indices] for arm in op['arms']])
+        bounds = (lower[indices], upper[indices])
+        bad = []
+        for attempt in range(40):
+            q0 = initial[indices] if attempt == 0 else rng.uniform(*bounds)
+            fit = least_squares(residual, np.clip(q0, bounds[0]+1e-8, bounds[1]-1e-8), jac=jacobian, bounds=bounds, max_nfev=160, gtol=1e-10, ftol=1e-10, xtol=1e-10)
+            if np.linalg.norm(fit.fun) > 1e-6:
+                continue
+            C.setJointState(fit.x, names)
+            C.computeCollisions()
+            bad = [(a, b, d) for a, b, d in C.getCollisions() if d < -1e-4]
+            if not bad:
+                return C.getJointState().copy()
+        raise RuntimeError(f'No IK for {op["object"]} at {center}; residual {np.linalg.norm(fit.fun)}; collisions {bad}')
+
+    previous = home.copy()
+    for op in operations:
+        obj = C.getFrame(op['object'])
+        pick = solve(obj.getPosition(), op, previous)
+        obj.unLink()
+        obj.setParent(C.getFrame(f'a{op["arms"][0]}_ur_gripper_center'), True).setJoint(ry.JT.rigid)
+        place = solve(op['target'], op, pick)
+        obj.unLink()
+        obj.setParent(C.getFrame('table'), True).setPosition(op['target']).setQuaternion([1, 0, 0, 0]).setJoint(ry.JT.rigid)
+        op['pick'], op['place'] = pick, place
+        previous = place
+    for name, pose in originals.items():
+        C.getFrame(name).setPosition(pose[:3]).setQuaternion(pose[3:]).setJoint(ry.JT.rigid)
+    C.setJointState(home)
+    C.computeCollisions()
+    if any(d < -1e-4 for _, _, d in C.getCollisions()):
+        raise RuntimeError('Assembly home configuration is in collision')
+    for target in targets:
+        C.delFrame(target.name)
+    scene = ry.Config()
+    scene.addConfigurationCopy(C)
+    return scene, operations
