@@ -14,6 +14,7 @@ _OPTIONAL_BACKENDS = {
     "pinocchio": ("pinocchio_env", "Install the project's [pinocchio] extra."),
     "mujoco": ("mujoco_env", "Install the project's [mujoco] extra."),
     "roboballet": ("roboballet_env", "Install [mujoco-scenes] and pass the external release directory as assets."),
+    "cuarms": ("roboballet_env", "Install [mujoco-scenes] and pass the RoboBallet asset directory as assets."),
 }
 _BACKEND_ERRORS: Dict[str, ImportError] = {}
 

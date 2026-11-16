@@ -1,6 +1,7 @@
-"""RoboBallet welding scenes and small Panda packing experiments.
+"""RoboBallet welding scenes and cuArms-inspired Panda packing experiments.
 
-Assets come from the separately supplied RoboBallet release. Prepared JSON
+Shared Panda assets come from the separately supplied RoboBallet release.
+Packing layouts are recreations, not released cuArms instances. Prepared JSON
 instances freeze geometry, goals and assignments. No RL dependencies are needed.
 The objective is geometric joint-space length, not execution time with dwell.
 """
@@ -427,11 +428,11 @@ class SequentialRoboBalletEnvironment(SequenceMixin, _RoboBalletEnvironment):
 
 @register([
     ("roboballet.welding", {"kind": "welding"}),
-    ("roboballet.pack", {"kind": "pack"}),
-    ("roboballet.unpack", {"kind": "unpack"}),
+    ("cuarms.pack", {"kind": "pack"}),
+    ("cuarms.unpack", {"kind": "unpack"}),
     ("roboballet.welding_sequence", {"kind": "welding", "task_order": "random-sequence"}),
-    ("roboballet.pack_sequence", {"kind": "pack", "task_order": "random-sequence"}),
-    ("roboballet.unpack_sequence", {"kind": "unpack", "task_order": "random-sequence"}),
+    ("cuarms.pack_sequence", {"kind": "pack", "task_order": "random-sequence"}),
+    ("cuarms.unpack_sequence", {"kind": "unpack", "task_order": "random-sequence"}),
 ])
 def make_roboballet_environment(assets, instance=None, geometry="source", *,
                                kind=None, task_order="dependency", sequence_seed=0,
