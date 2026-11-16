@@ -701,3 +701,227 @@ class rai_shared_bin_dep(DependencyGraphMixin, rai_env):
         _mark_static(self)
         self.spec.dependency = DependencyType.UNORDERED
         _safe_home_if_unblocking(self)
+
+
+# -------------------------------------------------------------------------------------- container with a lid
+def make_container_env(task="unpack", layers=1, width=None, seed=0, num_arms=2):
+    """UR5s (2, 3 or 4) at a table with a lidded container in the middle. unpack: a1 lifts the lid off by its
+    handle and sets it on the table, then the arms take the objects out (top layer first) to pads on their own side.
+    pack: the objects go from the pads into the container (bottom layer first), then a1 puts the lid on. Two arms
+    face each other across the container; 3 or 4 stand around it (the lid goes to the free sector between a1 and
+    a2, each object to the nearest arm, pads on both sides of each base). The sequence is
+    simulated on a working copy with the benchmark's pick / place semantics (attach to the gripper, then to the
+    table, contact -1) and every leg of the one-arm-at-a-time plan (home -> pick, carry -> place, place -> home) is
+    checked by a single-robot RRT-Connect, so the scene is feasible by construction.
+    Returns C (start state), robots, steps [(robot, object, q_pick, q_place)], scene."""
+    rng = np.random.default_rng(3000 + seed)
+    C = ry.Config()
+    C.addFrame("world")
+    _box(C, "floor", [3.0, 3.0, 0.04], [0, 0, -0.02], [0.80, 0.80, 0.78], contact=0)
+    tx, ty = (1.7, 1.2) if num_arms == 2 else (1.9, 1.9)
+    _box(C, "table", [tx, ty, 0.06], [0, 0, 0.37], [0.60, 0.48, 0.33])
+    for x in (-tx / 2 + 0.07, tx / 2 - 0.07):
+        for y in (-ty / 2 + 0.07, ty / 2 - 0.07):
+            _box(C, f"table_leg_{x:.2f}_{y:.2f}", [0.06, 0.06, 0.34], [x, y, 0.17], DARK, contact=0)
+    # the deep container is wider: reaching the bottom layer takes the gripper's palm below the rim
+    z0, t, w = 0.40, 0.015, (width or (0.25 if layers == 1 else 0.33))
+    hc = 0.075 if layers == 1 else 0.125
+    blue = [0.20, 0.36, 0.58]
+    _box(C, "container_floor", [w + 2 * t, w + 2 * t, 0.01], [0, 0, z0 + 0.005], blue)
+    for sg in (-1, 1):
+        _box(C, f"container_wall_x{sg}", [t, w + 2 * t, hc], [sg * (w / 2 + t / 2), 0, z0 + 0.01 + hc / 2], blue)
+        _box(C, f"container_wall_y{sg}", [w, t, hc], [0, sg * (w / 2 + t / 2), z0 + 0.01 + hc / 2], blue)
+    top = z0 + 0.01 + hc
+    robots = [f"a{i + 1}_" for i in range(num_arms)]
+    if num_arms == 2:
+        bases = {"a1_": np.array([-0.56, 0.0]), "a2_": np.array([0.56, 0.0])}
+        angles = {"a1_": np.pi, "a2_": 0.0}
+    else:  # around the container; the lid's sector lies between a1 and a2
+        offset = -np.pi / 2 if num_arms == 3 else np.pi / 4
+        angles = {r: offset + 2 * np.pi * i / num_arms for i, r in enumerate(robots)}
+        bases = {r: 0.56 * np.array([np.cos(a), np.sin(a)]) for r, a in angles.items()}
+    model = str(ASSETS / "ur5_vamp/ur5_vamp.g")
+    for r, b in bases.items():
+        riser = _box(C, r + "riser", [0.16, 0.16, 0.02], [b[0], b[1], z0 + 0.01], DARK)
+        yaw = (0.0 if b[0] < 0 else np.pi) if num_arms == 2 else angles[r] + np.pi  # base x towards the container
+        C.addFile(model, namePrefix=r).setParent(riser).setRelativePosition([0, 0, 0.01]).setRelativeQuaternion(
+            _qz(yaw)).setJoint(ry.JT.rigid)
+    # lid with a handle; objects of slightly different sizes (identical aligned boxes are a degenerate rai pair).
+    # Movable frames must have "obj" in their name (rai_env.get_scenegraph_info_for_mode), markers must not.
+    lid_size = [w + 2 * t + 0.02, w + 2 * t + 0.02, 0.012]
+    lid_closed = np.array([0.0, 0.0, top + 0.001 + 0.006])
+    if num_arms == 2:
+        lid_rest = np.array([0.0, 0.40, z0 + 0.001 + 0.006])
+    else:
+        a_lid = (angles["a1_"] + angles["a2_"]) / 2
+        lid_rest = np.array([0.50 * np.cos(a_lid), 0.50 * np.sin(a_lid), z0 + 0.001 + 0.006])
+    slots = [(sx, sy, layer) for layer in range(layers) for sx in (-0.06, 0.06) for sy in (-0.06, 0.06)]
+    pads = {}
+    for r, b in bases.items():
+        if num_arms == 2:
+            ang0 = 0.0 if b[0] < 0 else np.pi
+            sign = -1.0 if b[0] < 0 else 1.0  # rotate towards -y
+            pads[r] = [b + 0.32 * np.array([np.cos(ang0 + sign * a), np.sin(ang0 + sign * a)])
+                       for a in np.radians([45, 70, 95, 120])]
+        else:  # both sides of the base, sideways and a little behind
+            to_c = angles[r] + np.pi
+            pads[r] = [b + 0.28 * np.array([np.cos(to_c + a), np.sin(to_c + a)])
+                       for a in np.radians([110, -110, 140, -140])]
+    objects = []  # (name, size, slot centre, pad centre, robot)
+    used = {r: 0 for r in robots}
+    for k, (sx, sy, layer) in enumerate(slots):
+        if num_arms == 2:
+            r = "a1_" if sx < 0 else "a2_"
+        else:  # nearest arm by direction
+            r = max(robots, key=lambda rr: np.cos(np.arctan2(sy, sx) - angles[rr]))
+        size = [0.044 + 0.002 * k, 0.046 + 0.0015 * k, 0.05]
+        zc = z0 + 0.01 + 0.001 + 0.025 + layer * 0.051
+        pad = pads[r][used[r]]
+        used[r] += 1
+        objects.append((f"obj{k}", size, np.array([sx, sy, zc]), np.array([pad[0], pad[1], z0 + 0.001 + 0.025]), r))
+    unpack = task == "unpack"
+    lid_start = lid_closed if unpack else lid_rest
+    lid = C.addFrame("obj_lid", "table").setShape(ry.ST.box, lid_size).setPosition(list(lid_start)).setColor(
+        [0.86, 0.86, 0.88]).setContact(1).setJoint(ry.JT.rigid)
+    C.addFrame("obj_lid_handle", "obj_lid").setShape(ry.ST.box, [0.03, 0.10, 0.045]).setRelativePosition(
+        [0, 0, 0.006 + 0.0225]).setColor([0.22, 0.22, 0.24]).setContact(-1)
+    C.addFrame("lid_rest_pad").setShape(ry.ST.box, [lid_size[0], lid_size[1], 0.002]).setPosition(
+        [lid_rest[0], lid_rest[1], z0 + 0.001]).setColor([0.5, 0.5, 0.5, 0.4]).setContact(0)
+    for i, (name, size, slot, pad, r) in enumerate(objects):
+        colour = PALETTE[i % len(PALETTE)]
+        C.addFrame(name, "table").setShape(ry.ST.box, size).setPosition(list(slot if unpack else pad)).setColor(
+            colour).setContact(1).setJoint(ry.JT.rigid)
+        C.addFrame(f"pad_{i}").setShape(ry.ST.box, [0.07, 0.07, 0.002]).setPosition(
+            [pad[0], pad[1], z0 + 0.001]).setColor(colour + [0.5]).setContact(0)
+    home = C.getJointState().copy()
+    moving = _moving_frames(C, rng)
+    for r in robots:
+        ok, conf = _check_pose(C, r, robots, moving)
+        if not ok or conf:
+            raise RuntimeError(f"container home pose of {r} in collision")
+    # the steps: (robot, frame to attach, frames carried along, start centre, target centre, grasp offset)
+    handle_off = np.array([0.0, 0.0, 0.006 + 0.0225 + 0.010])  # fingers ~1 cm above the lid
+    obj_off = np.array([0.0, 0.0, 0.01])
+    lid_step = ("a1_", "obj_lid", ("obj_lid", "obj_lid_handle"), lid_start, lid_rest if unpack else lid_closed, handle_off)
+    if num_arms == 2:
+        order = sorted(objects, key=lambda o: (-o[2][2] if unpack else o[2][2], o[4], o[0]))
+    else:  # round robin over the arms within a layer
+        rank = {o[0]: sum(1 for p in objects if p[4] == o[4] and p[2][2] == o[2][2] and p[0] < o[0]) for o in objects}
+        order = sorted(objects, key=lambda o: (-o[2][2] if unpack else o[2][2], rank[o[0]], o[4]))
+    obj_steps = [(r, n, (n,), slot if unpack else pad, pad if unpack else slot, obj_off)
+                 for n, size, slot, pad, r in order]
+    plan = [lid_step] + obj_steps if unpack else obj_steps + [lid_step]
+    W = ry.Config()
+    W.addConfigurationCopy(C)
+    down = np.array([0.0, 0.0, -1.0])
+    steps = []
+    for r, frame, carried_frames, start, target, off in plan:
+        names, idx = get_robot_joints(W, r), _robot_indices(W, r)
+        home_r = home[idx].copy()
+        snapshot = ry.Config()
+        snapshot.addConfigurationCopy(W)
+        done = None
+        for psi in (0.0, np.pi / 2):
+            xdir = [np.cos(psi), np.sin(psi), 0.0]
+            strict = lambda carried=None: (lambda ok_c: ok_c[1] if ok_c[0] and not ok_c[1] else None)(
+                _check_pose(W, r, robots, moving, carried))
+            sol = _ik(W, r, r + "ur_gripper_center", start + off, ry.FS.vectorZ, down, rng, strict,
+                      extra=[(ry.FS.vectorX, xdir)])
+            if sol is None or not _reachable_from_home(W, r, robots, moving, sol[0], rng):
+                _LOG.debug(f"{frame} psi {psi:.2f}: " + ("no pick IK" if sol is None else "pick not reachable"))
+                continue
+            q_pick = sol[0]
+            W.setJointState(q_pick, names)
+            W.attach(r + "ur_gripper", frame)
+            W.getFrame(frame).setContact(-1)
+            carried = {f: r for f in carried_frames}
+            sol = _ik(W, r, r + "ur_gripper_center", target + off, ry.FS.vectorZ, down, rng,
+                      lambda: strict(carried), extra=[(ry.FS.vectorX, xdir)])
+            ok = sol is not None and _reachable_from_home(W, r, robots, moving, sol[0], rng, carried=carried)
+            if ok:
+                q_place = sol[0]
+                W.setJointState(q_place, names)
+                W.attach("table", frame)
+                ok = _reachable_from_home(W, r, robots, moving, home_r, rng)
+            if ok:
+                W.setJointState(home)
+                done = (q_pick, q_place)
+                break
+            _LOG.debug(f"{frame} psi {psi:.2f}: " + ("no place IK" if sol is None else "carry or return leg failed"))
+            W.clear()
+            W.addConfigurationCopy(snapshot)
+        if done is None:
+            raise RuntimeError(f"container: no feasible pick / place for {frame} by {r}")
+        q_pick_full, q_place_full = home.copy(), home.copy()
+        q_pick_full[idx], q_place_full[idx] = done
+        steps.append((r, frame, q_pick_full[idx].copy(), q_place_full[idx].copy()))
+    C.setJointState(home)
+    return C, robots, steps, dict(task=task, layers=layers, width=w, wall_height=hc, home_conflicts={},
+                                  num_arms=num_arms)
+
+
+@register([
+    ("rai.unpack_lid_2", {"task": "unpack", "layers": 1}),
+    ("rai.unpack_lid_2_deep", {"task": "unpack", "layers": 2}),
+    ("rai.pack_lid_2", {"task": "pack", "layers": 1}),
+    ("rai.pack_lid_2_deep", {"task": "pack", "layers": 2}),
+    ("rai.unpack_lid_3", {"task": "unpack", "layers": 1, "num_arms": 3}),
+    ("rai.unpack_lid_3_deep", {"task": "unpack", "layers": 2, "num_arms": 3}),
+    ("rai.pack_lid_3", {"task": "pack", "layers": 1, "num_arms": 3}),
+    ("rai.pack_lid_3_deep", {"task": "pack", "layers": 2, "num_arms": 3}),
+    ("rai.unpack_lid_4", {"task": "unpack", "layers": 1, "num_arms": 4}),
+    ("rai.unpack_lid_4_deep", {"task": "unpack", "layers": 2, "num_arms": 4}),
+    ("rai.pack_lid_4", {"task": "pack", "layers": 1, "num_arms": 4}),
+    ("rai.pack_lid_4_deep", {"task": "pack", "layers": 2, "num_arms": 4}),
+])
+class rai_container_lid(SequenceMixin, rai_env):
+    """Lidded container: lid off, objects out (unpack), or objects in, lid on (pack); then all arms home."""
+
+    def __init__(self, task="unpack", layers=1, seed=0, num_arms=2):
+        self.C, self.robots, steps, self.scene = make_container_env(task, layers, seed=seed, num_arms=num_arms)
+        rai_env.__init__(self)
+        self.manipulating_env = True
+        self.tasks = []
+        for r, frame, q_pick, q_place in steps:
+            self.tasks.append(Task(f"pick_{frame}", [r], SingleGoal(q_pick), "pick", frames=[r + "ur_gripper", frame]))
+            self.tasks.append(Task(f"place_{frame}", [r], SingleGoal(q_place), "place", frames=["table", frame]))
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+        self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
+        BaseModeLogic.__init__(self)
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+        self._set_default_safe_pose()
+
+
+@register([
+    ("rai.unpack_lid_2_dep", {"layers": 1}),
+    ("rai.unpack_lid_3_dep", {"layers": 1, "num_arms": 3}),
+    ("rai.unpack_lid_4_dep", {"layers": 1, "num_arms": 4}),
+])
+class rai_container_lid_dep(DependencyGraphMixin, rai_env):
+    """Unpacking with a chain per arm: per-arm object chains, each starting after a1 removes the lid."""
+
+    def __init__(self, layers=1, seed=0, num_arms=2):
+        self.C, self.robots, steps, self.scene = make_container_env("unpack", layers, seed=seed, num_arms=num_arms)
+        rai_env.__init__(self)
+        self.manipulating_env = True
+        self.tasks = []
+        self.graph = DependencyGraph()
+        last = {}
+        for r, frame, q_pick, q_place in steps:
+            self.tasks.append(Task(f"pick_{frame}", [r], SingleGoal(q_pick), "pick", frames=[r + "ur_gripper", frame]))
+            self.tasks.append(Task(f"place_{frame}", [r], SingleGoal(q_place), "place", frames=["table", frame]))
+            self.graph.add_dependency(f"place_{frame}", f"pick_{frame}")
+            if r in last:
+                self.graph.add_dependency(f"pick_{frame}", last[r])
+            elif frame != "obj_lid":
+                self.graph.add_dependency(f"pick_{frame}", "place_obj_lid")
+            last[r] = f"place_{frame}"
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+        for r in self.robots:
+            self.graph.add_dependency("terminal", last[r])
+        BaseModeLogic.__init__(self)
+        self.collision_tolerance = 0.001
+        self.collision_resolution = 0.005
+        self.spec.dependency = DependencyType.UNORDERED
+        self._set_default_safe_pose()
