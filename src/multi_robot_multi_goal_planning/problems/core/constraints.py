@@ -87,6 +87,12 @@ class AffineTaskSpaceEqualityConstraint(Constraint):
 
         return J
 
+    def FJ(self, q_vec, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q_vec)
+        return env.C.eval(robotic.FS.pose, [self.frame_name], self.mat, self.constraint_pose)
+
 # constraint of the form 
 # A * frame_pose <= b
 # can be used to e.g. constrain the end effector to a certain pose
@@ -109,6 +115,18 @@ class AffineTaskSpaceInequalityConstraint(Constraint):
         frame_pose = env.C.getFrame(self.frame_name).getPose()
 
         return all(self.mat @ frame_pose[:, None] <  self.constraint_pose)
+
+    def GJ(self, q_vec, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q_vec)
+        return env.C.eval(robotic.FS.pose, [self.frame_name], self.mat, self.constraint_pose)
+
+    def G(self, q_vec, mode, env):
+        return self.GJ(q_vec, mode, env)[0]
+
+    def dG(self, q_vec, mode, env):
+        return self.GJ(q_vec, mode, env)[1]
 
 
 def relative_pose(a, b):
@@ -175,6 +193,14 @@ class RelativeAffineTaskSpaceEqualityConstraint(Constraint):
         
         return y
 
+    def FJ(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q)
+        [y, J] = env.C.eval(robotic.FS.poseRel, [self.frames[1], self.frames[0]], self.mat, self.desired_relative_pose)
+        return y, J
+
+
 # constraint of the form
 # A * (frame_pose_1 - frame_pose_2) = b
 # TODO: possibly change to A * frame_pose_1 - A_2 * frame_pose_2 = b
@@ -207,6 +233,18 @@ class RelativeAffineTaskSpaceInequalityConstraint(Constraint):
         rel_pose = relative_pose(frame_1_pose, frame_2_pose)
 
         return all(self.mat @ rel_pose[:, None] <= self.desired_relative_pose)
+
+    def GJ(self, q_vec, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q_vec)
+        return env.C.eval(robotic.FS.poseRel, [self.frames[1], self.frames[0]], self.mat, self.desired_relative_pose)
+
+    def G(self, q_vec, mode, env):
+        return self.GJ(q_vec, mode, env)[0]
+
+    def dG(self, q_vec, mode, env):
+        return self.GJ(q_vec, mode, env)[1]
 
 
 # constraint of the form 
@@ -321,6 +359,22 @@ class AffineRelativeFrameOrientationConstraint(Constraint):
         [y, J] = env.C.eval(fs, [self.frame_names[0], self.frame_names[1]], 1, self.desired_orientation_vector)
         return y
 
+    def FJ(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q)
+        if self.vector == "x":
+            fs = robotic.FS.vectorXRel
+        elif self.vector == "y":
+            fs = robotic.FS.vectorYRel
+        elif self.vector == "z":
+            fs = robotic.FS.vectorZRel
+        else:
+            raise ValueError
+        [y, J] = env.C.eval(fs, [self.frame_names[0], self.frame_names[1]], 1, self.desired_orientation_vector)
+        return y, J
+
+
 # This might currently still be a bit overcomplicated?
 class AffineFrameOrientationConstraint(Constraint):
     def __init__(self, frame_name, vector, desired_orientation_vector, epsilon):
@@ -366,7 +420,7 @@ class AffineFrameOrientationConstraint(Constraint):
             fs = robotic.FS.vectorY
         elif self.vector == "z":
             fs = robotic.FS.vectorZ
-        else:
+        elif self.vector != "x":
             raise ValueError
         
         [y, J] = env.C.eval(fs, [self.frame_name], 1, self.desired_orientation_vector)
@@ -383,11 +437,26 @@ class AffineFrameOrientationConstraint(Constraint):
             fs = robotic.FS.vectorY
         elif self.vector == "z":
             fs = robotic.FS.vectorZ
-        else:
+        elif self.vector != "x":
             raise ValueError
         
         [y, J] = env.C.eval(fs, [self.frame_name], 1, self.desired_orientation_vector)
         return y
+
+    def FJ(self, q, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q)
+        fs = robotic.FS.vectorX
+        if self.vector == "y":
+            fs = robotic.FS.vectorY
+        elif self.vector == "z":
+            fs = robotic.FS.vectorZ
+        elif self.vector != "x":
+            raise ValueError
+        [y, J] = env.C.eval(fs, [self.frame_name], 1, self.desired_orientation_vector)
+        return y, J
+
     
 
 

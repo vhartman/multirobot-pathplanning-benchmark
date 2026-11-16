@@ -50,8 +50,6 @@ class ConstraintSet:
         return self._affine
 
     def satisfied(self, q, fixed=None):
-        if self.has_nonlinear:
-            raise NotImplementedError("Only affine feasibility is supported")
         x = q.state()
         if fixed and any(i < 0 or i >= len(x) for i in fixed):
             raise ValueError("Pinned coordinate outside configuration")
@@ -59,22 +57,62 @@ class ConstraintSet:
                 and all(abs(x[i] - value) <= 1e-8 for i, value in (fixed or {}).items())
                 and all(c.is_fulfilled(q, self.mode, self.env) for c in self.constraints))
 
-    def edge_satisfied(self, q1, q2):
-        """Affine feasibility of a straight segment follows from its endpoints."""
-        return self.satisfied(q1) and self.satisfied(q2)
+    def edge_satisfied(self, q1, q2, resolution=None, should_stop=None):
+        """Check the straight segment; nonlinear feasibility is discretized.
 
-    def project(self, q, fixed=None):
-        """Project equalities and pins, rejecting violated inequalities or bounds."""
-        if self.has_nonlinear:
-            raise NotImplementedError("Only affine projection is supported")
+        Affine feasibility follows from the endpoints. Nonlinear checks also
+        include interior samples, with at least a midpoint for short edges.
+        """
+        if should_stop is not None and should_stop():
+            return False
+        if not self.satisfied(q1) or not self.satisfied(q2):
+            return False
+        if not self.has_nonlinear:
+            return True
+        resolution = self.env.collision_resolution if resolution is None else resolution
+        if not np.isfinite(resolution) or resolution <= 0:
+            raise ValueError("Constraint edge resolution must be positive and finite")
+        origin = q1.state()
+        delta = q2.state() - origin
+        steps = max(2, int(np.ceil(np.max(np.abs(delta)) / resolution)))
+        intervals = [(1, steps - 1)]
+        nonlinear = self.eq_nl + self.ineq_nl
+        while intervals:
+            lo, hi = intervals.pop()
+            if lo > hi:
+                continue
+            if should_stop is not None and should_stop():
+                return False
+            mid = (lo + hi) // 2
+            q = q1.from_flat(origin + delta * (mid / steps))
+            if not all(c.is_fulfilled(q, self.mode, self.env) for c in nonlinear):
+                return False
+            intervals.extend(((mid + 1, hi), (lo, mid - 1)))
+        return True
+
+    def project(self, q, fixed=None, *, nonlinear_method="backtracking"):
+        """Find a feasible configuration, preserving bounds and pinned coordinates.
+
+        Affine-only modes project equalities and reject violated inequalities.
+        Nonlinear modes use a local solve; this is not a uniform sampler.
+        """
+        if nonlinear_method not in ("backtracking", "slsqp_bands"):
+            raise ValueError("Unknown nonlinear projection method")
         if self.satisfied(q, fixed):
             return q.from_flat(q.state().copy())
         system = self._affine_system(fixed) if fixed else self.affine
-        x = system.project(q.state())
-        if x is None:
+        if self.has_nonlinear:
+            from .nonlinear_projection import project_backtracking, project_slsqp_bands
+            solver = (project_backtracking if nonlinear_method == "backtracking"
+                      else project_slsqp_bands)
+            candidate = solver(q, self.constraints, mode=self.mode, env=self.env,
+                               affine_system=system)
+        else:
+            x = system.project(q.state())
+            candidate = None if x is None else q.from_flat(x)
+        if candidate is None or not self.satisfied(candidate, fixed):
             return None
-        candidate = q.from_flat(x)
-        return candidate if self.satisfied(candidate, fixed) else None
+        return candidate
 
 
 class ConstraintProvider:
