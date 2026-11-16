@@ -584,3 +584,120 @@ class rai_welding_line_dep(DependencyGraphMixin, rai_env):
         _mark_static(self)
         self.spec.dependency = DependencyType.UNORDERED
         _safe_home_if_unblocking(self)
+
+
+# ------------------------------------------------------------------------------------------------ shared bin
+def make_shared_bin_env(num_arms=3, bin_width=0.26, targets_per_arm=3, wall_height=0.14, radius=0.56, seed=0):
+    rng = np.random.default_rng(2000 + seed)
+    C = ry.Config()
+    C.addFrame("world")
+    _box(C, "floor", [3.0, 3.0, 0.04], [0, 0, -0.02], [0.86, 0.86, 0.84], contact=0)
+    _box(C, "table", [1.9, 1.9, 0.06], [0, 0, 0.37], [0.60, 0.48, 0.33])
+    for x in (-0.85, 0.85):
+        for y in (-0.85, 0.85):
+            _box(C, f"table_leg_{x}_{y}", [0.06, 0.06, 0.34], [x, y, 0.17], DARK, contact=0)
+    w, t, z0 = bin_width, 0.02, 0.40
+    _box(C, "bin_floor", [w + 2 * t, w + 2 * t, 0.01], [0, 0, z0 + 0.005], [0.25, 0.35, 0.55])
+    for s in (-1, 1):
+        _box(C, f"bin_wall_x{s}", [t, w + 2 * t, wall_height], [s * (w / 2 + t / 2), 0, z0 + 0.01 + wall_height / 2],
+             [0.25, 0.35, 0.55])
+        _box(C, f"bin_wall_y{s}", [w, t, wall_height], [0, s * (w / 2 + t / 2), z0 + 0.01 + wall_height / 2],
+             [0.25, 0.35, 0.55])
+    robots = [f"a{i + 1}_" for i in range(num_arms)]
+    model = str(ASSETS / "ur5_vamp/ur5_vamp.g")
+    offset = np.pi / 4 if num_arms == 4 else np.pi / 2
+    angles = [offset + 2 * np.pi * i / num_arms for i in range(num_arms)]
+    for r, a in zip(robots, angles):
+        base = _box(C, r + "riser", [0.16, 0.16, 0.02], [radius * np.cos(a), radius * np.sin(a), z0 + 0.01], DARK)
+        C.addFile(model, namePrefix=r).setParent(base).setRelativePosition([0, 0, 0.01]).setRelativeQuaternion(
+            _qz(a + np.pi)).setJoint(ry.JT.rigid)  # base x towards the bin: the home pose looks at it
+    home = C.getJointState().copy()
+    moving = _moving_frames(C, rng)
+    for r in robots:
+        ok, conf = _check_pose(C, r, robots, moving)
+        if not ok or conf:
+            raise RuntimeError(f"shared bin home pose of {r} in collision")
+    d = 0.22 * w
+    in_bin = [(0, 0), (d, d), (-d, -d), (d, -d), (-d, d)]
+    down = np.array([0, 0, -1.0])
+    keyframes, conflicts, names = {}, {}, {}
+    accept = lambda r: (lambda ok_c: ok_c[1] if ok_c[0] and not ok_c[1] else None)(_check_pose(C, r, robots, moving))
+    for i, (r, a) in enumerate(zip(robots, angles)):
+        b = np.array([radius * np.cos(a), radius * np.sin(a)])
+        keyframes[r], conflicts[r], names[r] = [], [], []
+        for j in range(targets_per_arm):
+            for kind in ("bin", "drop"):
+                if kind == "bin":
+                    tries = [np.array([*in_bin[(i + j + k) % len(in_bin)], z0 + 0.055]) for k in range(len(in_bin))]
+                else:
+                    da = a + np.pi + (1.0 if j % 2 == 0 else -1.0) * 1.9
+                    tries = [np.array([*(b + rad * np.array([np.cos(da), np.sin(da)])), z0 + 0.05])
+                             for rad in (0.34, 0.30, 0.38)]
+                sol = None
+                for p in tries:
+                    sol = _ik(C, r, r + "ur_gripper_center", p, ry.FS.vectorZ, down, rng, lambda: accept(r))
+                    if sol is not None and _reachable_from_home(C, r, robots, moving, sol[0], rng):
+                        break
+                    sol = None
+                if sol is None:
+                    raise RuntimeError(f"shared bin: no {kind} pose for {r} target {j}")
+                q, conf = sol
+                C.setJointState(q, get_robot_joints(C, r))
+                keyframes[r].append(C.getJointState()[_robot_indices(C, r)].copy())
+                C.setJointState(home)
+                conflicts[r].append(sorted(conf))
+                names[r].append(f"{r}{kind}{j}")
+                if kind == "drop":
+                    C.addFrame(f"pad_{r}{j}").setShape(ry.ST.box, [0.07, 0.07, 0.004]).setPosition(
+                        [p[0], p[1], z0 + 0.002]).setColor(PALETTE[i % len(PALETTE)] + [0.7]).setContact(0)
+    C.setJointState(home)
+    return C, robots, keyframes, names, dict(bin_width=w, wall_height=wall_height, home_conflicts=conflicts)
+
+
+@register([
+    ("rai.shared_bin_2", {"num_arms": 2}),
+    ("rai.shared_bin_3", {"num_arms": 3}),
+    ("rai.shared_bin_4", {"num_arms": 4}),
+    ("rai.shared_bin_4_wide", {"num_arms": 4, "bin_width": 0.50}),
+    ("rai.shared_bin_3_deep", {"num_arms": 3, "wall_height": 0.22}),
+])
+class rai_shared_bin(SequenceMixin, rai_env):
+    """Shared narrow bin, round robin: a1 reach in, a1 drop, a2 reach in, a2 drop, ..., then all home."""
+
+    def __init__(self, num_arms=3, bin_width=0.26, targets_per_arm=3, wall_height=0.14, seed=0):
+        self.C, self.robots, keyframes, names, self.scene = make_shared_bin_env(
+            num_arms, bin_width, targets_per_arm, wall_height, seed=seed)
+        rai_env.__init__(self)
+        self.tasks = [Task(n, [r], SingleGoal(q)) for r in self.robots for n, q in zip(names[r], keyframes[r])]
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+        order = [names[r][2 * j + k] for j in range(targets_per_arm) for r in self.robots for k in (0, 1)]
+        self.sequence = self._make_sequence_from_names(order + ["terminal"])
+        BaseModeLogic.__init__(self)
+        self.collision_tolerance = 0.001
+        _mark_static(self)
+        _safe_home_if_unblocking(self)
+
+
+@register([
+    ("rai.shared_bin_3_dep", {"num_arms": 3}),
+    ("rai.shared_bin_4_dep", {"num_arms": 4}),
+])
+class rai_shared_bin_dep(DependencyGraphMixin, rai_env):
+    """Shared narrow bin, a chain per arm (reach in, drop, reach in, ...): the planner decides who goes first."""
+
+    def __init__(self, num_arms=3, bin_width=0.26, targets_per_arm=3, wall_height=0.14, seed=0):
+        self.C, self.robots, keyframes, names, self.scene = make_shared_bin_env(
+            num_arms, bin_width, targets_per_arm, wall_height, seed=seed)
+        rai_env.__init__(self)
+        self.tasks = [Task(n, [r], SingleGoal(q)) for r in self.robots for n, q in zip(names[r], keyframes[r])]
+        self.tasks.append(Task("terminal", self.robots, SingleGoal(self.C.getJointState())))
+        self.graph = DependencyGraph()
+        for r in self.robots:
+            for a, b in zip(names[r][1:], names[r]):
+                self.graph.add_dependency(a, b)
+            self.graph.add_dependency("terminal", names[r][-1])
+        BaseModeLogic.__init__(self)
+        self.collision_tolerance = 0.001
+        _mark_static(self)
+        self.spec.dependency = DependencyType.UNORDERED
+        _safe_home_if_unblocking(self)
