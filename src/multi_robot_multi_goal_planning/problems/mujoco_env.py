@@ -269,6 +269,25 @@ class MujocoEnvironment(BaseProblem):
         self.child_xquat_buf = np.empty(4)
         self.rotated_buf = np.empty(3)
 
+    def get_conversion_metadata(self):
+        """Rigid attachments and contact policy for environment conversion.
+
+        Subclasses with custom attachment/contact rules must export those rules.
+        Exclusions map an attachment parent frame to allowed touching geom IDs.
+        """
+        for method in ("_relevant_contact_pairs", "_contact_distance_threshold",
+                       "_configuration_is_valid"):
+            if getattr(type(self), method) is not getattr(MujocoEnvironment, method):
+                raise NotImplementedError(
+                    "Custom collision policies must override get_conversion_metadata")
+        attachments = {}
+        if self.manipulating_env:
+            for body, (parent, _, position, quaternion) in self.start_mode.sg.items():
+                attachments[self.model.body(body).name] = (
+                    parent, tuple(np.frombuffer(position)), tuple(np.frombuffer(quaternion)))
+        return dict(attachments=attachments, attachment_exclusions={},
+                    tolerance_mode="signed", check_joint_limits=False)
+
     def close(self):
         """Release optional batch state and the interactive viewer."""
         self.close_collision_batch()

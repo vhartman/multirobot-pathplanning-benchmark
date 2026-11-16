@@ -136,7 +136,6 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
                     self._grasp_geom_robot[self.model.geom_bodyid == body] = r
         self._robot_number = {name: i for i, name in enumerate(self.robots)}
         self.tasks = []
-        self.task_actions = {}
         self.graph = DependencyGraph()
         last = {}
         for task in instance.get("tasks", []):
@@ -146,13 +145,12 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
                 if "q_candidates" in task
                 else SingleGoal(np.asarray(task["q"], dtype=float))
             )
-            self.tasks.append(Task(task["name"], [r], goal))
+            kwargs = {}
             if "action" in task:
-                self.task_actions[task["name"]] = (
-                    task["action"],
-                    task["object"],
-                    task["robot"],
-                )
+                parent = (self.model.site(self.tcp[task["robot"]]).name
+                          if task["action"] == "pick" else "world")
+                kwargs = dict(type=task["action"], frames=[parent, f"block_{task['object']}"])
+            self.tasks.append(Task(task["name"], [r], goal, **kwargs))
             self.graph.add_node(task["name"])
             if r in last:
                 self.graph.add_dependency(task["name"], last[r])
@@ -191,11 +189,12 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
             mode.entry_configuration.state(), mode.prev_mode, collision=False
         )
         for task_id in changed:
-            name = self.tasks[task_id].name
-            if name not in self.task_actions:
+            task = self.tasks[task_id]
+            if task.type not in ("pick", "place"):
                 continue
-            action, obj, robot = self.task_actions[name]
-            key = f"block_{obj}"
+            action = task.type
+            robot = self.robots.index(task.robots[0])
+            key = task.frames[1]
             parent, pos, quat = sg[key]
             R = Rotation.from_quat((quat[1], quat[2], quat[3], quat[0])).as_matrix()
             tcp_p = self.data.site_xpos[self.tcp[robot]].copy()
@@ -217,6 +216,20 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
                     tuple(quaternion(tcp_R @ R)),
                 )
         return sg
+
+    def get_conversion_metadata(self):
+        attachments = {}
+        for name, (parent, position, quaternion) in self.start_mode.sg.items():
+            if parent in self.robots:
+                parent = self.model.site(self.tcp[self.robots.index(parent)]).name
+            attachments[name] = (parent, position, quaternion)
+        exclusions = {
+            self.model.site(self.tcp[i]).name:
+                tuple(map(int, np.flatnonzero(self._grasp_geom_robot == i)))
+            for i in range(len(self.robots))
+        }
+        return dict(attachments=attachments, attachment_exclusions=exclusions,
+                    tolerance_mode="penetration", check_joint_limits=True)
 
     def set_to_mode(self, mode):
         self.prev_mode = mode
