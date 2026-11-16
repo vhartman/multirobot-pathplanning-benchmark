@@ -21,10 +21,11 @@ dependencies = [
 
 [project.optional-dependencies]
 pinocchio = ["pin>=3.4", "meshcat", "hppfcl"]
-mujoco = ["mujoco", "mujoco-mjx"]
+mujoco = ["mujoco>=3.3.5"]
+mujoco-scenes = ["mujoco>=3.3.5", "trimesh", "vhacdx", "Pillow"]
 viser = ["viser"]
 test = ["pytest"]
-all = ["pin>=3.4", "meshcat", "hppfcl", "mujoco", "mujoco-mjx", "viser"]
+all = ["pin>=3.4", "meshcat", "hppfcl", "mujoco>=3.3.5", "trimesh", "vhacdx", "Pillow", "viser"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/multi_robot_multi_goal_planning"]

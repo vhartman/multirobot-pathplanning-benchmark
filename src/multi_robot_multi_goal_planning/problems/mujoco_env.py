@@ -38,14 +38,9 @@ from .planning_env import (
 from .core.registry import register
 
 import mujoco
-from mujoco import mjx
 
 import mujoco.viewer
 
-import threading
-from concurrent.futures import ThreadPoolExecutor
-
-import copy
 import os.path
 
 
@@ -67,18 +62,18 @@ def mul_quat(out, q1, q2):
 @jit((float64[:], float64[:], float64[:]), nopython=True, fastmath=True, boundscheck=False)
 def rot_vec_quat(out, vec, quat):
     """Rotate vector by quaternion using efficient formula: out = quat * vec * quat_conj
-    
+
     This uses the efficient formula: v' = v + 2 * cross(q.xyz, cross(q.xyz, v) + q.w * v)
     where q = [w, x, y, z] and v is the 3D vector
     """
     w, x, y, z = quat
     vx, vy, vz = vec
-    
+
     # First cross product: cross(q.xyz, v) + q.w * v
     cx = y * vz - z * vy + w * vx
-    cy = z * vx - x * vz + w * vy  
+    cy = z * vx - x * vz + w * vy
     cz = x * vy - y * vx + w * vz
-    
+
     # Second cross product: cross(q.xyz, first_cross)
     out[0] = vx + 2.0 * (y * cz - z * cy)
     out[1] = vy + 2.0 * (z * cx - x * cz)
@@ -139,7 +134,7 @@ class MujocoEnvironment(BaseProblem):
 
     def __init__(self, xml_path, n_data_pool: int = 1):
         super().__init__()
-        
+
         self.limits = None
 
         self.cost_metric = "euclidean"
@@ -148,19 +143,10 @@ class MujocoEnvironment(BaseProblem):
         self.model = mujoco.MjModel.from_xml_path(xml_path)
         self.data = mujoco.MjData(self.model)
 
-        # mjx_model = mjx.put_model(self.model)
-
-        # mjx_data = mjx.make_data(mjx_model)
-        # qvel = mjx_data.qvel.at[0].set(0)
-        # mjx.mj_forward(mjx_model, mjx_data)
-
         self.manipulating_env = False
 
         self.viewer = None
         self._enter_pressed = False
-
-        # Preallocated pool for parallel collision checking
-        self._data_pool = [mujoco.MjData(self.model) for _ in range(n_data_pool)]
 
         self.robot_idx = {}
         self.robot_dims = {}
@@ -182,12 +168,11 @@ class MujocoEnvironment(BaseProblem):
             offset += self.robot_dims[r]
 
         self._all_robot_idx = np.array(
-            [self._mujoco_joint_adr[r] for r in self.robots]
-        ).flatten()
-
+            [i for r in self.robots for i in self._mujoco_joint_adr[r]], dtype=int
+        )
         self._mujoco_joint_id_mapping = np.array(
-            [self._mujoco_q_adr[r] for r in self.robots]
-        ).flatten()
+            [i for r in self.robots for i in self._mujoco_q_adr[r]], dtype=int
+        )
 
         self.limits = np.zeros((2, len(self._mujoco_joint_id_mapping)))
 
@@ -211,8 +196,6 @@ class MujocoEnvironment(BaseProblem):
             obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, i)
             # obj_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, i)
 
-            pos = self.data.geom_xpos[i]  # runtime info
-            # print(obj_name, pos)
             if obj_name is None:
                 continue
 
@@ -249,11 +232,11 @@ class MujocoEnvironment(BaseProblem):
                     np.round(rel_pos, 3).tobytes(),
                     np.round(rel_quat, 3).tobytes(),
                 )
-    
+
         # self.qpos_body_views = {}
         self.qpos_body_views_pos = {}
         self.qpos_body_views_quat = {}
-    
+
         for body_id in self.body_id_q_adr.keys():
             jadr = self.body_id_q_adr[body_id]
             # self.qpos_body_views[body_id] = self.data.qpos[jadr:jadr+7]
@@ -287,6 +270,8 @@ class MujocoEnvironment(BaseProblem):
         self.rotated_buf = np.empty(3)
 
     def close(self):
+        """Release optional batch state and the interactive viewer."""
+        self.close_collision_batch()
         if self.viewer is not None:
             self.viewer.close()
             self.viewer = None
@@ -360,36 +345,88 @@ class MujocoEnvironment(BaseProblem):
 
 
 
-    def is_collision_free(self, q: Optional[Configuration], mode: Optional[Mode]):
-        # data = mujoco.MjData(self.model)
-        # self.show(blocking=False)
-
-        # if mode:
-        #     self._set_to_scenegraph(mode.sg)
-
-        # self.data.qpos[self._all_robot_idx] = q.state()
-        # mujoco.mj_forward(self.model, self.data)
-
-        # mujoco.mj_kinematics(self.model, self.data)
-
-        if mode:
-            self.data.qpos[self._all_robot_idx] = q.state()
+    def _prepare_collision_state(self, q, mode):
+        """Position robots and free-joint attachments without collision checking."""
+        self.data.qpos[self._all_robot_idx] = q
+        if mode and self.manipulating_env:
             mujoco.mj_kinematics(self.model, self.data)
-
             self._set_to_scenegraph(mode.sg)
+
+    def _update_collision_state(self, q, mode):
+        """Update geometry and contacts; dynamics are not needed for planning."""
+        self._prepare_collision_state(q, mode)
+        if self.model.nflex or self.model.nplugin:
             mujoco.mj_forward(self.model, self.data)
-            # mujoco.mj_collision(self.model, self.data)
         else:
-            self.data.qpos[self._all_robot_idx] = q.state()
-            mujoco.mj_forward(self.model, self.data)
-            # mujoco.mj_collision(self.model, self.data)
+            mujoco.mj_kinematics(self.model, self.data)
+            mujoco.mj_comPos(self.model, self.data)
+            mujoco.mj_collision(self.model, self.data)
 
-        # If any contact distance < 0, collision
-        for i in range(self.data.ncon):
-            if self.data.contact[i].dist < self.collision_tolerance:
+    def _configuration_is_valid(self, q):
+        # Joint-limit policy belongs to the scene; invalid numbers never reach FK.
+        return q.shape == (len(self._all_robot_idx),) and np.isfinite(q).all()
+
+    def _contact_distance_threshold(self, tolerance):
+        return tolerance
+
+    def _relevant_contact_pairs(self, pairs):
+        """Mask of contacts to check, after any scene-specific exclusions."""
+        return np.ones(len(pairs), dtype=bool)
+
+    def _contacts_are_valid(self, tolerance):
+        if not self.data.ncon:
+            return True
+        contacts = self.data.contact
+        penetrating = contacts.dist < self._contact_distance_threshold(tolerance)
+        if not np.any(penetrating):
+            return True
+        return not np.any(self._relevant_contact_pairs(contacts.geom[penetrating]))
+
+    def is_collision_free(self, q: Optional[Configuration] = None, mode: Optional[Mode] = None,
+                          collision_tolerance=None):
+        tolerance = self.collision_tolerance if collision_tolerance is None else collision_tolerance
+        if q is not None:
+            q = np.asarray(q.state() if hasattr(q, 'state') else q, dtype=float)
+            if not self._configuration_is_valid(q):
                 return False
+            self._update_collision_state(q, mode)
+        return self._contacts_are_valid(tolerance)
 
-        return True
+    def configure_collision_batch(self, batch_size=8, workers=1, *, edges=False):
+        """Opt into official MuJoCo batching; requires mujoco.batch.
+
+        Contact retrieval requires one MjData per batch slot. Keep batches small.
+        Reconfigure after modifying the model. State queries remain scalar;
+        edges use batches only when explicitly requested.
+        """
+        from .mujoco_collision_batch import CollisionBatch
+        batch = CollisionBatch(self.model, batch_size, workers)
+        self.close_collision_batch()
+        self._collision_batch = batch
+        self._batch_collision_edges = bool(edges)
+
+    def close_collision_batch(self):
+        self._collision_batch = None
+        self._batch_collision_edges = False
+
+    def batch_is_collision_free(self, qs, mode=None, collision_tolerance=None):
+        """Return a validity mask in proposal order, with a scalar fallback.
+
+        The environment ends at the last query that passes configuration checks,
+        as with a scalar loop. A batch must use one common attachment mode.
+        """
+        rows = np.asarray([q.state() if hasattr(q, 'state') else q for q in qs], dtype=float)
+        if not len(rows):
+            return np.empty(0, dtype=bool)
+        if rows.ndim != 2 or rows.shape[1] != len(self.start_pos.state()):
+            raise ValueError('Expected an (n, configuration dimension) batch')
+        batch = getattr(self, '_collision_batch', None)
+        if batch is None:
+            return np.asarray([self.is_collision_free(q, mode, collision_tolerance) for q in rows])
+        tolerance = self.collision_tolerance if collision_tolerance is None else collision_tolerance
+        if batch.model is not self.model:
+            raise RuntimeError("Model replaced; reconfigure collision batching")
+        return batch.check(self, rows, mode, tolerance)
 
     def is_collision_free_for_robot(
         self,
@@ -426,7 +463,7 @@ class MujocoEnvironment(BaseProblem):
             N = max(2, N)
 
         if N_start > N:
-            assert False
+            return True
 
         if N_max is None:
             N_max = N
@@ -443,6 +480,25 @@ class MujocoEnvironment(BaseProblem):
         q2_state = q2.state()
         dir = (q2_state - q1_state) / (N - 1)
 
+        batch = getattr(self, '_collision_batch', None)
+        if batch is not None and self._batch_collision_edges:
+            indices = [i for i in idx[N_start:N_max]
+                       if include_endpoints or i not in (0, N - 1)]
+            for start in range(0, len(indices), batch.size):
+                rows = q1_state + np.asarray(indices[start:start + batch.size])[:, None] * dir
+                # Speculative checks must not change the scalar early-exit state.
+                if not self._configuration_is_valid(rows[0]):
+                    return False
+                valid = self.batch_is_collision_free(rows, mode, tolerance)
+                failures = np.flatnonzero(~valid)
+                if len(failures):
+                    last = int(failures[0])
+                    while last >= 0 and not self._configuration_is_valid(rows[last]):
+                        last -= 1
+                    self._update_collision_state(rows[last], mode)
+                    return False
+            return True
+
         for i in idx[N_start:N_max]:
             if not include_endpoints and (i == 0 or i == N - 1):
                 continue
@@ -451,7 +507,7 @@ class MujocoEnvironment(BaseProblem):
             q = q1_state + dir * (i)
             q = q1.from_flat(q)
 
-            if not self.is_collision_free(q, mode):
+            if not self.is_collision_free(q, mode, collision_tolerance=tolerance):
                 return False
 
         return True
@@ -636,7 +692,7 @@ class MujocoEnvironment(BaseProblem):
             # self.qpos_body_views_quat[body_id] = self.child_xquat_buf * 1.
             pos_view = self.qpos_body_views_pos[body_id]
             quat_view = self.qpos_body_views_quat[body_id]
-            
+
             # Direct operations on exact-sized views
             # pos_view[:] = parent_xpos + self.rotated_buf
             np.add(parent_xpos, self.rotated_buf, out=pos_view)
@@ -663,217 +719,19 @@ class MujocoEnvironment(BaseProblem):
 
 
 class OptimizedMujocoEnvironment(MujocoEnvironment):
-    """
-    Optimized version with better parallel collision checking
-    """
-
-    def __init__(self, xml_path, n_data_pool: int = 4):
-        super().__init__(xml_path, n_data_pool)
-
-        # Create thread pool executor for reuse
-        self._executor = ThreadPoolExecutor(
-            max_workers=n_data_pool, thread_name_prefix="collision_checker"
-        )
-        self._pool_lock = threading.Lock()
-        self._available_data = list(range(len(self._data_pool)))
-
-    def __deepcopy__(self, memo):
-        executor, pool_lock = self._executor, self._pool_lock
-        self._executor, self._pool_lock = None, None
-        new_env = copy.deepcopy(super(), memo)
-        self._executor, self._pool_lock = executor, pool_lock
-        new_env._executor = ThreadPoolExecutor(
-            max_workers=len(new_env._data_pool), thread_name_prefix="collision_checker"
-        )
-        new_env._pool_lock = threading.Lock()
-        return new_env
-
-    def close(self):
-        if hasattr(self, "_executor"):
-            self._executor.shutdown(wait=True)
-        super().close()
-
-    def _get_data_object(self):
-        """Thread-safe way to get a data object from pool"""
-        with self._pool_lock:
-            if self._available_data:
-                idx = self._available_data.pop()
-                return idx, self._data_pool[idx]
-            return None, None
-
-    def _return_data_object(self, idx):
-        """Thread-safe way to return a data object to pool"""
-        with self._pool_lock:
-            self._available_data.append(idx)
-
-    def _check_collision_batch(self, qs_batch, collision_found):
-        """Check collision for a batch of configurations"""
-        data_idx, data = self._get_data_object()
-        if data is None:
-            return True  # Assume collision if can't get data object
-
-        try:
-            for q in qs_batch:
-                # Early termination if collision already found by another thread
-                if collision_found.is_set():
-                    return False  # Another thread found collision, this batch is irrelevant
-
-                data.qpos[self._all_robot_idx] = q
-                data.qvel[:] = 0
-                # TODO: deal with set to scenegraph
-                assert not self.manipulating_env
-
-                mujoco.mj_forward(self.model, data)
-
-                # Check for collision
-                for c_idx in range(data.ncon):
-                    if data.contact[c_idx].dist < self.collision_tolerance:
-                        collision_found.set()  # Signal other threads to stop
-                        return True  # This batch found collision
-
-            return False  # No collision found in this batch
-        finally:
-            self._return_data_object(data_idx)
-
-    def _batch_is_collision_free_optimized(self, qs: List[np.ndarray]) -> bool:
-        """
-        Optimized batch collision checking with CORRECT batching
-        """
-        if not qs:
-            return True
-
-        n = len(qs)
-
-        # For small batches, sequential is often faster due to overhead
-        if n < 10:
-            return self._sequential_collision_check(qs)
-
-        num_threads = min(len(self._data_pool), n)
-        collision_found = threading.Event()
-
-        # Create batches ensuring ALL indices are covered - THIS IS THE FIX!
-        batches = []
-        for i in range(num_threads):
-            # Calculate start and end indices for this thread
-            start_idx = i * n // num_threads
-            end_idx = (i + 1) * n // num_threads
-
-            # For the last thread, ensure we go to the very end
-            if i == num_threads - 1:
-                end_idx = n
-
-            if start_idx < end_idx:  # Only create batch if there's work to do
-                batch = qs[start_idx:end_idx]
-                batches.append(batch)
-
-        # Submit all batch jobs
-        futures = []
-        for batch in batches:
-            future = self._executor.submit(
-                self._check_collision_batch, batch, collision_found
-            )
-            futures.append(future)
-
-        # Wait for results - any collision means edge is not collision-free
-        collision_detected = False
-
-        for future in futures:
-            try:
-                has_collision = future.result(timeout=10.0)
-                if has_collision:
-                    collision_detected = True
-                    collision_found.set()  # Signal other threads to stop
-                    break
-            except Exception as e:
-                print(f"Error in collision checking: {e}")
-                collision_detected = True  # Assume collision on error
-                break
-
-        # Cancel remaining futures if collision found
-        if collision_detected:
-            for future in futures:
-                future.cancel()
-
-        return not collision_detected
-
-    def _sequential_collision_check(self, qs: List[np.ndarray]) -> bool:
-        """Fallback sequential collision checking"""
-        data = self._data_pool[0]  # Use first data object for sequential
-
-        for q in qs:
-            data.qpos[self._all_robot_idx] = q
-            data.qvel[:] = 0
-            # TODO: deal with set to scenegraph
-            assert not self.manipulating_env
-
-            mujoco.mj_forward(self.model, data)
-
-            for c_idx in range(data.ncon):
-                if data.contact[c_idx].dist < self.collision_tolerance:
-                    return False
-        return True
+    """Compatibility class using the shared scalar/official-batch checker."""
 
     def is_edge_collision_free(
-        self,
-        q1: Configuration,
-        q2: Configuration,
-        mode: Mode,
-        resolution: Optional[float] = None,
-        tolerance: Optional[float] = None,
-        include_endpoints: bool = False,
-        N_start: int = 0,
-        N_max: Optional[int] = None,
-        N: Optional[int] = None,
-        force_parallel: bool = False,
-    ) -> bool:
-        if resolution is None:
-            resolution = self.collision_resolution
-
-        if tolerance is None:
-            tolerance = self.collision_tolerance
-
-        if N is None:
-            N = int(config_dist(q1, q2, "max") / resolution) + 1
-            N = max(2, N)
-
-        if N_start > N:
-            return True
-
-        if N_max is None:
-            N_max = N
-
-        N_max = min(N, N_max)
-
-        # Generate indices using your existing binary search method
-        idx = generate_binary_search_indices(N)
-
-        q1_state = q1.state()
-        q2_state = q2.state()
-        dir = (q2_state - q1_state) / (N - 1)
-
-        # Prepare configurations to check
-        qs = []
-        for i in idx[N_start:N_max]:
-            if not include_endpoints and (i == 0 or i == N - 1):
-                continue
-            q = q1_state + dir * i
-            qs.append(q)
-
-        if not qs:
-            return True
-
-        # Decide whether to use parallel or sequential based on problem size
-        # use_parallel = force_parallel or (len(qs) >= 20 and len(self._data_pool) > 1)
-        use_parallel = False
-
-        if use_parallel:
-            return self._batch_is_collision_free_optimized(qs)
-        else:
-            return self._sequential_collision_check(qs)
+        self, q1, q2, mode, resolution=None, tolerance=None,
+        include_endpoints=False, N_start=0, N_max=None, N=None,
+        force_parallel=False,
+    ):
+        return super().is_edge_collision_free(
+            q1, q2, mode, resolution, tolerance, include_endpoints, N_start, N_max, N)
 
 
 @register("mujoco.swap")
-class simple_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
+class swap_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
     def __init__(self):
         path = os.path.join(
             os.path.dirname(__file__), "../assets/models/mujoco/mj_two_dim.xml"
@@ -1088,7 +946,6 @@ class piano_mujoco_env(SequenceMixin, MujocoEnvironment):
 # @register("mujoco.four_panda")
 # class four_arm_mujoco_env(SequenceMixin, OptimizedMujocoEnvironment):
 #     def __init__(self, agents_can_rotate=True):
-#         path = "/home/valentin/Downloads/roboballet/data/mujoco_world/4_pandas_world_closer.xml"
 
 #         self.robots = [
 #             "panda1",
