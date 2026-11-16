@@ -888,9 +888,12 @@ class rai_rfl_two_only(SequenceMixin, rai_env):
     ("rai.rfl", {}),
     ("rai.rfl_upright", {"orientation_constraint": True}),
     ("rai.rfl_upright_two_obj", {"orientation_constraint": True, "num_objs": 2}),
+    ("rai.rfl_upright_four_obj", {"orientation_constraint": True, "num_objs": 4, "interleave": False}),
 ])
 class rai_rfl(SequenceMixin, rai_env):
-    def __init__(self, orientation_constraint = False, num_objs=4):
+    def __init__(self, orientation_constraint=False, num_objs=4, interleave=True):
+        if num_objs not in (1, 2, 3, 4):
+            raise ValueError("num_objs must be between 1 and 4")
         self.C, [k1, k2, k3, k4] = rai_config.make_four_arms_on_a_gantry()
 
         self.robots = ["a1", "a2", "a3", "a4"]
@@ -1025,7 +1028,9 @@ class rai_rfl(SequenceMixin, rai_env):
             )
         )
 
-        if num_objs == 1:
+        if not interleave:
+            self.sequence = self._make_sequence_from_names([task.name for task in self.tasks])
+        elif num_objs == 1:
             self.sequence = self._make_sequence_from_names(
                 ["r1_pick_0", "r1_place_0", "terminal"]
             )
@@ -1047,6 +1052,8 @@ class rai_rfl(SequenceMixin, rai_env):
 
         BaseModeLogic.__init__(self)
 
+        self.spec.constraints = ConstraintType.CONSTRAINED
+        self.spec.manipulation = ManipulationType.MANIPULATION
         self._set_default_safe_pose()
 
         # for _ in range(1000):
