@@ -531,3 +531,42 @@ class ConfigurationSpacePathConstraint(Constraint):
         
         [y, J] = env.C.eval(robotic.FS.qItself, [], self.mat, point)
         return y
+
+
+class FrameAxisConeConstraint(Constraint):
+    """Keep a frame axis within max_angle radians of a world-space direction."""
+
+    type = "nonlinear_inequality"
+
+    def __init__(self, frame_name, axis, direction, max_angle, eps=1e-8):
+        features = {"x": robotic.FS.vectorX, "y": robotic.FS.vectorY, "z": robotic.FS.vectorZ}
+        direction = np.asarray(direction, dtype=float)
+        length = np.linalg.norm(direction)
+        if (axis not in features or direction.shape != (3,)
+                or not np.isfinite(length) or length == 0
+                or not np.isfinite(max_angle) or not 0 <= max_angle <= np.pi
+                or not np.isfinite(eps) or eps < 0):
+            raise ValueError("Expected an axis, nonzero direction, angle in [0, pi] and nonnegative tolerance")
+        self.frame_name = frame_name
+        self.axis = axis
+        self.feature = features[axis]
+        self.direction = direction / length
+        self.max_angle = float(max_angle)
+        self.eps = float(eps)
+
+    def GJ(self, q_vec, mode, env):
+        if mode is not None:
+            env.set_to_mode(mode)
+        env.C.setJointState(q_vec)
+        axis, jacobian = env.C.eval(self.feature, [self.frame_name])
+        return (np.array([np.cos(self.max_angle) - self.direction @ axis]),
+                -(self.direction @ jacobian)[None, :])
+
+    def G(self, q_vec, mode, env):
+        return self.GJ(q_vec, mode, env)[0]
+
+    def dG(self, q_vec, mode, env):
+        return self.GJ(q_vec, mode, env)[1]
+
+    def is_fulfilled(self, q, mode, env):
+        return bool(np.all(self.G(q.state(), mode, env) <= self.eps))

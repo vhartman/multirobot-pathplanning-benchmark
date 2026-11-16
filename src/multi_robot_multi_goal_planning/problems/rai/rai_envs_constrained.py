@@ -40,6 +40,7 @@ from ..core.constraints import (
     AffineConfigurationSpaceEqualityConstraint,
     AffineFrameOrientationConstraint,
     AffineRelativeFrameOrientationConstraint,
+    FrameAxisConeConstraint,
     relative_pose
 )
 
@@ -1371,6 +1372,12 @@ CARRIER_OPENARM_VARIANTS = dict([
            ('rai.carrier_openarm_clearing_eight', {'layout':'clutter'}),
            ('rai.carrier_openarm_scattered_eight', {'layout':'scattered', 'num_keyframes':4}),
            ('rai.carrier_openarm_two_stacks', {'layout':'stacks', 'num_keyframes':4}),
+           ('rai.carrier_openarm_sorting_front_upright', {'layout':'front', 'carry_constraint':'upright'}),
+           ('rai.carrier_openarm_sorting_front_tilt', {'layout':'front', 'carry_constraint':'tilt'}),
+           ('rai.carrier_openarm_two_stacks_upright', {'layout':'stacks', 'boxes_per_stack':2, 'num_keyframes':4, 'carry_constraint':'upright'}),
+           ('rai.carrier_openarm_two_stacks_tilt', {'layout':'stacks', 'boxes_per_stack':2, 'num_keyframes':4, 'carry_constraint':'tilt'}),
+           ('rai.carrier_openarm_two_stacks_four_high_upright', {'layout':'stacks', 'boxes_per_stack':4, 'num_keyframes':4, 'carry_constraint':'upright'}),
+           ('rai.carrier_openarm_two_stacks_four_high_tilt', {'layout':'stacks', 'boxes_per_stack':4, 'num_keyframes':4, 'carry_constraint':'tilt'}),
            ('rai.two_carriers_openarm_sorting', {'layout':'around', 'num_carriers':2}),
            ('rai.two_carriers_openarm_sorting_front', {'layout':'front', 'num_carriers':2}),
            ('rai.two_carriers_openarm_clearing_sixteen', {'layout':'clutter', 'num_carriers':2}),
@@ -1386,6 +1393,8 @@ class CarrierOpenArmSorting(SequenceMixin, rai_env):
     equalities tie its duplicated carrier joints to the other arm's chain;
     the idle arm remains free. All goals share one fixed grasp transform.
     Two carriers face each other across a table with interleaved transfers.
+    Optional carrying constraints hold an object's vertical axis upright or
+    within a tilt cone. They apply during transfer; the approach stays free.
     This is a kinematic prototype, not a calibrated hardware model.
 
     OpenArm models are bundled; openarm_dir optionally selects another model directory.
@@ -1399,7 +1408,14 @@ class CarrierOpenArmSorting(SequenceMixin, rai_env):
 
     def __init__(self, openarm_dir=None, layout='around', num_keyframes=8, keyframe_seed=31,
                  boxes_per_stack=4, scatter_seed=7, goal_snapshot=None,
-                 num_carriers=1, carrier_spacing=1.8):
+                 num_carriers=1, carrier_spacing=1.8, carry_constraint=None,
+                 max_tilt_degrees=20.):
+        if carry_constraint not in (None, 'upright', 'tilt'):
+            raise ValueError('carry_constraint must be None, upright, or tilt')
+        if not np.isfinite(max_tilt_degrees) or not 0 < max_tilt_degrees < 180:
+            raise ValueError('max_tilt_degrees must lie strictly between 0 and 180')
+        self.carry_constraint = carry_constraint
+        self.max_tilt_degrees = max_tilt_degrees
         self.num_carriers = num_carriers
         self.carrier_spacing = carrier_spacing
         self.C = rai_config.make_carrier_openarm_scene(openarm_dir,
@@ -1485,14 +1501,20 @@ class CarrierOpenArmSorting(SequenceMixin, rai_env):
             # Do not turn the incidental idle-arm pose into a task requirement.
             pick_goals = [q[indices].copy() for q in pick]
             place_goals = [q[indices].copy() for q in place]
+            constraints = []
+            if carry_constraint == 'upright':
+                constraints = [AffineFrameOrientationConstraint(obj, 'z', np.array([0., 0., 1.]), 1e-3)]
+            elif carry_constraint == 'tilt':
+                constraints = [FrameAxisConeConstraint(obj, 'z', [0., 0., 1.], np.deg2rad(max_tilt_degrees))]
             self.tasks.extend((Task(f'pick_{i}',[robot],GoalSet(pick_goals),'pick',frames=[gripper,obj]),
-                               Task(f'place_{i}',[robot],GoalSet(place_goals),'place',frames=[destination,obj])))
+                               Task(f'place_{i}',[robot],GoalSet(place_goals),'place',frames=[destination,obj], constraints=constraints)))
         self.tasks.append(Task('terminal', self.robots, SingleGoal(home)))
         self.sequence = self._make_sequence_from_names([t.name for t in self.tasks])
         self.collision_tolerance = .001
         self.collision_resolution = .005
         BaseModeLogic.__init__(self)
         self.spec.constraints = ConstraintType.CONSTRAINED
+        self.spec.manipulation = ManipulationType.MANIPULATION
 
 
 @register([
