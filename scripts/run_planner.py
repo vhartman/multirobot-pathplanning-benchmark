@@ -1,4 +1,5 @@
 import argparse
+import json
 from simple_parsing import ArgumentParser
 
 from matplotlib import pyplot as plt
@@ -44,11 +45,24 @@ import logging
 # logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+def environment_kwargs(value):
+    """Parse constructor options without adding backend-specific runner flags."""
+    try:
+        options = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError(f"Invalid environment JSON: {exc.msg}") from exc
+    if not isinstance(options, dict):
+        raise argparse.ArgumentTypeError("Environment options must be a JSON object")
+    return options
+
+
 def main():
     # parser = argparse.ArgumentParser(description="Planner runner")
     parser = ArgumentParser(description="Planner runner")
 
     parser.add_argument("env", nargs="?", default="default", help="env to show")
+    parser.add_argument("--env-kwargs", type=environment_kwargs, default={},
+                        help='Environment constructor options as JSON, e.g. {"assets": "/path/to/roboballet", "objects": 4}')
     parser.add_argument(
         "--optimize",
         action="store_true",
@@ -139,7 +153,7 @@ def main():
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    env = get_env_by_name(args.env)
+    env = get_env_by_name(args.env, **args.env_kwargs)
     env.cost_reduction = args.cost_reduction
     env.cost_metric = args.per_agent_cost_function
     if args.cost_space == "workspace":

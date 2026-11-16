@@ -1,9 +1,10 @@
 from typing import Callable, Dict
 from importlib import import_module
+from functools import partial
 import warnings
 from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
 
-EnvFactory = Callable[[], BaseProblem]
+EnvFactory = Callable[..., BaseProblem]
 REGISTRY: Dict[str, EnvFactory] = {}
 
 # Environment prefix -> module and installation hint.
@@ -12,6 +13,7 @@ _OPTIONAL_BACKENDS = {
     "vampmr": ("mr_vamp_env", "Install mr_planner_core and meshcat for the active Python interpreter."),
     "pinocchio": ("pinocchio_env", "Install the project's [pinocchio] extra."),
     "mujoco": ("mujoco_env", "Install the project's [mujoco] extra."),
+    "roboballet": ("roboballet_env", "Install [mujoco-scenes] and pass the external release directory as assets."),
 }
 _BACKEND_ERRORS: Dict[str, ImportError] = {}
 
@@ -45,15 +47,13 @@ def register(names):
     - a list of (name, kwargs) pairs
     """
 
-    def decorator(cls):
-        if isinstance(names, str):
-            REGISTRY[names] = lambda: cls()
-        else:
-            for name, kwargs in names:
-                if name in REGISTRY:
-                    raise ValueError(f"Duplicate env name: {name}")
-                REGISTRY[name] = lambda cls=cls, kwargs=kwargs: cls(**kwargs)
-        return cls
+    def decorator(factory):
+        entries = [(names, {})] if isinstance(names, str) else names
+        for name, defaults in entries:
+            if name in REGISTRY:
+                raise ValueError(f"Duplicate env name: {name}")
+            REGISTRY[name] = partial(factory, **defaults)
+        return factory
 
     return decorator
 
@@ -63,7 +63,8 @@ def get_all_environments():
         _load_optional_backend(prefix, required=False)
     return REGISTRY
 
-def get_env_by_name(name: str) -> BaseProblem:
+def get_env_by_name(name: str, **kwargs) -> BaseProblem:
+    """Construct a named environment; keyword arguments override preset defaults."""
     prefix = name.partition(".")[0]
     if name not in REGISTRY and prefix in _OPTIONAL_BACKENDS:
         _load_optional_backend(prefix, required=True)
@@ -71,7 +72,7 @@ def get_env_by_name(name: str) -> BaseProblem:
         factory = REGISTRY[name]
     except KeyError:
         raise ValueError(f"Unknown environment: {name}") from None
-    return factory()
+    return factory(**kwargs)
 
 
 def list_envs(prefix: str = ""):

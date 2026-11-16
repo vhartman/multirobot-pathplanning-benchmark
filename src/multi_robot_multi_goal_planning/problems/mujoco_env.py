@@ -306,8 +306,9 @@ class MujocoEnvironment(BaseProblem):
         stop_at_mode: bool = False,
     ) -> None:
         for i in range(len(path)):
-            self.show_config(path[i].q, stop)
-            self._set_to_scenegraph(path[i].mode.sg)
+            self._update_collision_state(path[i].q.state(), path[i].mode)
+            at_mode = i > 0 and path[i].mode != path[i - 1].mode
+            self.show(blocking=stop or (stop_at_mode and at_mode))
 
             # if export:
             #     self.C.view_savePng("./z.vid/")
@@ -321,8 +322,8 @@ class MujocoEnvironment(BaseProblem):
 
             time.sleep(dt)
 
-        if stop_at_end:
-            self.show_config(path[-1].q, True)
+        if stop_at_end and path:
+            self.show(blocking=True)
 
     def _key_callback(self, key):
         # Enter key toggles pause
@@ -331,7 +332,7 @@ class MujocoEnvironment(BaseProblem):
 
     def show(self, blocking=True):
         """Open viewer at current state."""
-        if self.viewer is None:
+        if self.viewer is None or not self.viewer.is_running():
             self.viewer = mujoco.viewer.launch_passive(
                 self.model, self.data, key_callback=self._key_callback
             )
@@ -345,7 +346,7 @@ class MujocoEnvironment(BaseProblem):
 
     def show_config(self, q, blocking=True):
         """Display a configuration `q` in the viewer."""
-        if self.viewer is None:
+        if self.viewer is None or not self.viewer.is_running():
             self.viewer = mujoco.viewer.launch_passive(
                 self.model, self.data, key_callback=self._key_callback
             )

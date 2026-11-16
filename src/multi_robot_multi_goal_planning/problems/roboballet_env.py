@@ -13,6 +13,7 @@ from .planning_env import (
     BaseProblem,
     BaseModeLogic,
     DependencyGraphMixin,
+    SequenceMixin,
     Task,
     SingleGoal,
     ProblemSpec,
@@ -25,6 +26,7 @@ from .planning_env import (
     SafePoseType,
 )
 from .core.configuration import NpConfiguration
+from .core.registry import register
 from .core.dependency_graph import DependencyGraph
 from .core.goals import GoalSet
 from .mujoco_env import MujocoEnvironment
@@ -34,7 +36,7 @@ from .roboballet_models import HOME, make_welding_model, make_packing_model, qua
 from .roboballet_instances import load_instance, resolve_assets
 
 
-class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
+class _RoboBalletEnvironment(MujocoEnvironment):
     """Static welding or pick/place tasks with fixed grasp frames.
 
     ``assets`` is the external release directory. Without ``instance``, scene
@@ -44,7 +46,7 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
     the shared checker also supports the existing free-joint environments.
     """
 
-    def __init__(self, assets, instance=None, geometry="source", **scene_options):
+    def __init__(self, assets, instance=None, geometry="source", sequence_seed=0, **scene_options):
         if instance is None:
             from .roboballet_setup import make_instance
             instance = make_instance(assets, geometry=geometry, **scene_options)
@@ -136,8 +138,6 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
                     self._grasp_geom_robot[self.model.geom_bodyid == body] = r
         self._robot_number = {name: i for i, name in enumerate(self.robots)}
         self.tasks = []
-        self.graph = DependencyGraph()
-        last = {}
         for task in instance.get("tasks", []):
             r = self.robots[task["robot"]]
             goal = (
@@ -151,16 +151,11 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
                           if task["action"] == "pick" else "world")
                 kwargs = dict(type=task["action"], frames=[parent, f"block_{task['object']}"])
             self.tasks.append(Task(task["name"], [r], goal, **kwargs))
-            self.graph.add_node(task["name"])
-            if r in last:
-                self.graph.add_dependency(task["name"], last[r])
-            last[r] = task["name"]
+
         self.tasks.append(
             Task("terminal", self.robots, SingleGoal(self.start_pos.state().copy()))
         )
-        self.graph.add_node("terminal")
-        for name in last.values():
-            self.graph.add_dependency("terminal", name)
+        dependency = self._initialize_task_order(sequence_seed)
         self.spec = ProblemSpec(
             agent_type=AgentType.MULTI_AGENT,
             constraints=ConstraintType.UNCONSTRAINED,
@@ -169,7 +164,7 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
                 if self.packing
                 else ManipulationType.STATIC
             ),
-            dependency=DependencyType.UNORDERED,
+            dependency=dependency,
             dynamics=DynamicsType.GEOMETRIC,
             goals=GoalType.MULTI_GOAL,
             home_pose=SafePoseType.HAS_SAFE_HOME_POSE,
@@ -348,28 +343,16 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
             for name in names
         )
 
-    def show_config(self, q):
-        self.set_configuration(q.state())
-        self.show()
+    def show_config(self, q, blocking=True):
+        self.set_configuration(q.state() if hasattr(q, "state") else np.asarray(q),
+                               self.prev_mode)
+        self.show(blocking)
 
     def object_poses(self):
         return {
             name: (self.data.mocap_pos[mid].copy(), self.data.mocap_quat[mid].copy())
             for name, mid in self.object_mocap.items()
         }
-
-    def show(self, blocking=False):
-        import mujoco.viewer
-
-        if self.viewer is None:
-            self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
-        self.viewer.sync()
-        if blocking:
-            import time
-
-            while self.viewer.is_running():
-                self.viewer.sync()
-                time.sleep(1 / 60)
 
     def render(self, filename, q=None, width=1400, height=1000, mode=None):
         from PIL import Image
@@ -393,3 +376,81 @@ class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
         with mujoco.Renderer(self.model, height=height, width=width) as renderer:
             renderer.update_scene(self.data, camera=camera, scene_option=option)
             Image.fromarray(renderer.render()).save(filename)
+
+
+class RoboBalletEnvironment(DependencyGraphMixin, _RoboBalletEnvironment):
+    """Fixed per-robot task orders with freely chosen interleavings."""
+
+    def __init__(self, assets, instance=None, geometry="source", **scene_options):
+        _RoboBalletEnvironment.__init__(self, assets, instance, geometry, **scene_options)
+
+    def _initialize_task_order(self, sequence_seed):
+        self.graph = DependencyGraph()
+        last = {}
+        for task in self.instance.get("tasks", []):
+            self.graph.add_node(task["name"])
+            robot = task["robot"]
+            if robot in last:
+                self.graph.add_dependency(task["name"], last[robot])
+            last[robot] = task["name"]
+        self.graph.add_node("terminal")
+        for name in last.values():
+            self.graph.add_dependency("terminal", name)
+        return DependencyType.UNORDERED
+
+
+class SequentialRoboBalletEnvironment(SequenceMixin, _RoboBalletEnvironment):
+    """Seeded random interleaving, fixed for the entire planning problem.
+
+    Choose uniformly among robots with remaining tasks, taking each robot's
+    next task. This preserves pick/place order; terminal home is always last.
+    The local generator does not consume the planner's random state.
+    """
+
+    def __init__(self, assets, instance=None, geometry="source", sequence_seed=0, **scene_options):
+        _RoboBalletEnvironment.__init__(self, assets, instance, geometry, sequence_seed, **scene_options)
+
+    def _initialize_task_order(self, sequence_seed):
+        rng = np.random.default_rng(sequence_seed)
+        queues = [[i for i, task in enumerate(self.instance.get("tasks", []))
+                   if task["robot"] == robot] for robot in range(len(self.robots))]
+        queues = [queue for queue in queues if queue]
+        self.sequence = []
+        while queues:
+            index = int(rng.integers(len(queues)))
+            self.sequence.append(queues[index].pop(0))
+            if not queues[index]:
+                queues.pop(index)
+        self.sequence.append(len(self.tasks) - 1)
+        return DependencyType.FULLY_ORDERED
+
+
+@register([
+    ("roboballet.welding", {"kind": "welding"}),
+    ("roboballet.pack", {"kind": "pack"}),
+    ("roboballet.unpack", {"kind": "unpack"}),
+    ("roboballet.welding_sequence", {"kind": "welding", "task_order": "random-sequence"}),
+    ("roboballet.pack_sequence", {"kind": "pack", "task_order": "random-sequence"}),
+    ("roboballet.unpack_sequence", {"kind": "unpack", "task_order": "random-sequence"}),
+])
+def make_roboballet_environment(assets, instance=None, geometry="source", *,
+                               kind=None, task_order="dependency", sequence_seed=0,
+                               **scene_options):
+    """Build a named preset or a prepared instance with explicit external assets.
+
+    Welding defaults to eight robots and 40 targets; pack/unpack to four blocks.
+    Scene options override construction defaults. A prepared instance replaces
+    construction options but must match the named preset's kind.
+    """
+    if kind is not None:
+        if instance is None:
+            scene_options["kind"] = kind
+        else:
+            instance = load_instance(instance)
+            if instance["kind"] != kind:
+                raise ValueError(f"Preset {kind!r} does not match instance kind {instance['kind']!r}")
+    if task_order == "dependency":
+        return RoboBalletEnvironment(assets, instance, geometry, **scene_options)
+    if task_order == "random-sequence":
+        return SequentialRoboBalletEnvironment(assets, instance, geometry, sequence_seed, **scene_options)
+    raise ValueError("task_order must be dependency or random-sequence")
