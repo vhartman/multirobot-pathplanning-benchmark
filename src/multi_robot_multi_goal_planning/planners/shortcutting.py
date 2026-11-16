@@ -4,12 +4,13 @@ import random
 
 import numpy as np
 
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from multi_robot_multi_goal_planning.problems.planning_env import State, BaseProblem
 
 from multi_robot_multi_goal_planning.problems.core.configuration import config_dist
 from .shortcutting_compatible import CompatibleSubsetProposer
+from .shortcutting_nonlinear import project_segment, segment_satisfied
 from .shortcutting_affine import AffineIndexGroups, CoordinateProposals, shortcut_atoms
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from multi_robot_multi_goal_planning.problems.util import interpolate_path, path_cost
@@ -20,14 +21,13 @@ def _path_constraint_provider(env, path):
     required = provider.required_types()
     if not required:
         return None
-    if required - {"affine_equality", "affine_inequality"}:
-        raise ValueError("Shortcutting supports only affine path constraints")
     if not provider.path_satisfied(path):
-        raise ValueError("Input path violates affine constraints or bounds")
+        raise ValueError("Input path violates constraints or bounds")
     return provider
 
 
-def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 1000):
+def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 1000,
+                        *, nonlinear_projection="backtracking"):
     """
     Shortcutting the composite path a single mode at a time.
     I.e. we never shortcut over mode transitions, even if it would be possible.
@@ -35,7 +35,13 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
     Works by randomly sampling indices of the path, and attempting to do a shortcut if it is in the same mode.
     """
     constraints = _path_constraint_provider(env, path)
-    new_path = interpolate_path(path, 0.05)
+    nonlinear = constraints is not None and any(
+        constraints.for_mode(state.mode).has_nonlinear for state in path)
+    if nonlinear_projection not in ("backtracking", "slsqp_bands"):
+        raise ValueError("Unknown nonlinear projection method")
+    new_path = (_interpolate_compatible_path(
+        env, path, 0.05, env.collision_resolution, env.collision_tolerance, constraints,
+    ) if nonlinear else interpolate_path(path, 0.05))
 
     costs = [path_cost(new_path, env.cost)]
     times = [0.0]
@@ -56,7 +62,7 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
         if abs(j - i) < 2:
             continue
 
-        if new_path[i].mode != new_path[j].mode:
+        if any(state.mode != new_path[i].mode for state in new_path[i:j + 1]):
             continue
 
         q0 = new_path[i].q
@@ -64,6 +70,13 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
         mode = new_path[i].mode
 
         candidate = _shortcut_candidate(env, new_path, i, j, range(len(env.robots)))
+        interval_nonlinear = nonlinear and constraints.for_mode(mode).has_nonlinear
+        if interval_nonlinear:
+            candidate = project_segment(constraints, candidate, range(len(q0.state())),
+                                        nonlinear_projection)
+            if candidate is None or not segment_satisfied(
+                    constraints, candidate, env.collision_resolution):
+                continue
         # Evaluate the representation that will actually be retained.
         if path_cost(candidate, env.cost) >= path_cost(
             new_path[i:j + 1], env.cost
@@ -77,6 +90,15 @@ def single_mode_shortcut(env: BaseProblem, path: List[State], max_iter: int = 10
             random.shuffle(robots_to_shortcut)
             num_robots = np.random.randint(0, len(robots_to_shortcut))
             robots_to_shortcut = robots_to_shortcut[:num_robots]
+
+        if interval_nonlinear:
+            free, _ = _check_shortcut(env, candidate, env.collision_resolution,
+                                      env.collision_tolerance, False)
+            if free:
+                new_path[i:j + 1] = candidate
+            times.append(time.time() - start_time)
+            costs.append(path_cost(new_path, env.cost))
+            continue
 
         # this is wrong for partial shortcuts atm.
         if constraints is not None and not constraints.for_mode(mode).edge_satisfied(q0, q1):
@@ -194,7 +216,7 @@ def _check_shortcut(env, candidate, resolution, tolerance, observe_failure, orde
     return free, failure
 
 
-def _interpolate_compatible_path(env, path, spacing, resolution, tolerance):
+def _interpolate_compatible_path(env, path, spacing, resolution, tolerance, constraints=None):
     """Keep mode boundaries intact; retain raw edges if subdivision is invalid."""
     dense = []
     for start, end in zip(path, path[1:]):
@@ -206,10 +228,12 @@ def _interpolate_compatible_path(env, path, spacing, resolution, tolerance):
     dense.append(State(path[-1].q.from_flat(path[-1].q.state().copy()), path[-1].mode))
     options = dict(resolution=resolution, tolerance=tolerance,
                    check_start_and_end=True, check_edges_in_order=True, binary_order=False)
-    if env.is_path_collision_free(dense, **options):
+    if ((constraints is None or segment_satisfied(constraints, dense, resolution))
+            and env.is_path_collision_free(dense, **options)):
         return dense
-    if not env.is_path_collision_free(path, **options):
-        raise ValueError("Input path failed collision validation at the configured resolution")
+    if ((constraints is not None and not segment_satisfied(constraints, path, resolution))
+            or not env.is_path_collision_free(path, **options)):
+        raise ValueError("Input path failed constraint or collision validation at the configured resolution")
     return [State(state.q.from_flat(state.q.state().copy()), state.mode) for state in path]
 
 
@@ -226,6 +250,8 @@ def robot_mode_shortcut(
     *,
     deadline: Optional[float] = None,
     statistics: Optional[dict] = None,
+    nonlinear_projection: str = "backtracking",
+    should_stop: Optional[Callable[[], bool]] = None,
 ):
     """Reduce path cost by straightening robots within constant-task runs.
 
@@ -264,8 +290,9 @@ def robot_mode_shortcut(
     Index/full policies ignore robot_choice. Compatible index policies close
     groups over all path modes; every touched robot must keep its task. Tree
     roots are full configurations and equality-connected blocks; failed index
-    tree intervals split at their midpoint. Inequality violations are rejected.
-    No projection is used.
+    tree intervals split at their midpoint. Affine-only intervals reject
+    inequality violations. Nonlinear intervals project selected coordinates,
+    preserve endpoints and mode switches, and recheck polyline cost and edges.
 
     Gain scheduling ranks runs by potential cost decrease, acceptance evidence,
     and draw count; overlapping gains are updated after accepted shortcuts.
@@ -275,11 +302,15 @@ def robot_mode_shortcut(
     max_iter bounds collision-checked proposals. max_attempts bounds draws,
     including rejected pairs; its default is max(2500, 5 * max_iter).
     All policies require a strictly positive cost improvement.
-    deadline is an optional absolute time.monotonic() limit, checked per draw.
+    deadline is an absolute time.monotonic() limit; should_stop can cancel work.
     statistics, if supplied, receives draw/check/acceptance counts.
     Returns the copied path and [costs, elapsed_times].
     """
     start_time = time.monotonic()
+    def stopped():
+        return ((deadline is not None and time.monotonic() >= deadline)
+                or (should_stop is not None and should_stop()))
+
     use_atoms = run_choice == 'atom_tree'
     if use_atoms:
         run_choice = 'tree'
@@ -290,7 +321,8 @@ def robot_mode_shortcut(
                       "mechanism_compatible": ("mechanism_group", "index_groups"),
                       "mechanism_full": ("full_mechanism", "index_groups")}
     coordinate_policy = run_choice in (*index_policies, "index_endpoints", "full")
-    stats = dict(draws=0, compatible=0, checked=0, accepted=0, constraint=0, cost=0)
+    stats = dict(draws=0, compatible=0, checked=0, accepted=0, constraint=0, cost=0,
+                 projection=0, accepted_nonlinear=0)
     if statistics is not None:
         statistics.update(stats)
     schedules = {"tree_compatible": "interleaved", "tree_then_compatible": "sequenced",
@@ -301,14 +333,23 @@ def robot_mode_shortcut(
         return [], [[0.0], [0.0]]
     if interpolation_resolution <= 0 or not np.isfinite(interpolation_resolution):
         raise ValueError("interpolation_resolution must be finite and positive")
+    if nonlinear_projection not in ("backtracking", "slsqp_bands"):
+        raise ValueError("Unknown nonlinear projection method")
     constraints = _path_constraint_provider(env, path)
+    has_nonlinear = constraints is not None and any(
+        constraints.for_mode(state.mode).has_nonlinear for state in path)
     scalable = run_choice in schedules
     # Keep the original edge partition. The input edges have already been
     # collision checked, while joining collinear edges changes the collision
     # checker's discretization and can turn a certified path into an invalid one.
     new_path = (_interpolate_compatible_path(
         env, path, interpolation_resolution, resolution, tolerance,
-    ) if scalable or coordinate_policy else interpolate_path(path, interpolation_resolution))
+        constraints if has_nonlinear else None,
+    ) if scalable or coordinate_policy or has_nonlinear else interpolate_path(path, interpolation_resolution))
+    if has_nonlinear:
+        nonlinear_prefix = np.r_[0, np.cumsum([
+            constraints.for_mode(state.mode).has_nonlinear for state in new_path
+        ])]
     
     costs = [path_cost(new_path, env.cost)]
     times = [0.0]
@@ -384,7 +425,7 @@ def robot_mode_shortcut(
     while True:
         iter += 1
         if (cnt >= max_iter or iter >= max_attempts
-                or (deadline is not None and time.monotonic() >= deadline)):
+                or stopped()):
             break
         stats['draws'] += 1
         active_indices = None
@@ -504,16 +545,35 @@ def robot_mode_shortcut(
 
         path_element = _shortcut_candidate(env, new_path, i, j, robots_to_shortcut,
                                           indices=active_indices)
-        # check if the shortcut improves cost
+        interval_nonlinear = (has_nonlinear
+                              and nonlinear_prefix[j + 1] != nonlinear_prefix[i])
+        if interval_nonlinear:
+            selected = (active_indices if active_indices is not None else
+                        [idx for r in robots_to_shortcut for idx in env.robot_idx[env.robots[r]]])
+            path_element = project_segment(
+                constraints, path_element, selected, nonlinear_projection,
+                should_stop=stopped,
+            )
+            if path_element is None:
+                stats['projection'] += 1
+                if coordinate_proposer is not None:
+                    coordinate_proposer.feedback('constraint')
+                continue
+        # Evaluate the polyline retained after projection.
         improvement = (path_cost(new_path[i:j + 1], env.cost)
                        - path_cost(path_element, env.cost))
-        if improvement <= 0.0:
+        if not np.isfinite(improvement) or improvement <= 0.0:
             stats['cost'] += 1
             if coordinate_proposer is not None:
                 coordinate_proposer.feedback('cost')
             continue
 
-        if constraints is not None and not constraints.path_satisfied(path_element):
+        valid = (segment_satisfied(
+            constraints, path_element, resolution,
+            should_stop=stopped,
+        ) if interval_nonlinear else
+            constraints is None or constraints.path_satisfied(path_element))
+        if not valid:
             stats['constraint'] += 1
             if coordinate_proposer is not None:
                 coordinate_proposer.feedback('constraint')
@@ -522,6 +582,8 @@ def robot_mode_shortcut(
         assert np.linalg.norm(path_element[0].q.state() - q0.state()) < 1e-6
         assert np.linalg.norm(path_element[-1].q.state() - q1.state()) < 1e-6
 
+        if stopped():
+            break
         cnt += 1
         stats["checked"] += 1
 
@@ -534,6 +596,7 @@ def robot_mode_shortcut(
             coordinate_proposer.feedback('accepted' if free else 'collision')
         if free:
             stats['accepted'] += 1
+            stats['accepted_nonlinear'] += int(interval_nonlinear)
             for k in range(j - i + 1):
                 new_path[i + k].q = path_element[k].q
 

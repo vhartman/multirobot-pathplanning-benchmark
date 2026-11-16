@@ -639,8 +639,6 @@ class BaseRRTstar(BasePlanner):
         self.config = config
         self.has_nonlinear_constraints = bool(
             self.constraint_provider.required_types() & {"nonlinear_equality", "nonlinear_inequality"})
-        if self.has_nonlinear_constraints and config.shortcutting:
-            raise ValueError("Nonlinear shortcutting is not supported; set shortcutting=False")
         if config.nl_projection not in ("backtracking", "slsqp_bands"):
             raise ValueError("nl_projection must be 'backtracking' or 'slsqp_bands'")
         if (isinstance(config.nonlinear_sample_attempts, bool)
@@ -1770,6 +1768,10 @@ class BaseRRTstar(BasePlanner):
                 self.operation.path_shortcutting,
                 100,
                 run_choice=self.config.shortcutting_run_choice,
+                nonlinear_projection=self.config.nl_projection,
+                should_stop=self._planning_expired,
+                interpolation_resolution=((self.config.nl_steer_step_size or 0.05)
+                                          if self.has_nonlinear_constraints else 0.5),
                 resolution=self.env.collision_resolution,
                 tolerance=self.env.collision_tolerance,
             )
