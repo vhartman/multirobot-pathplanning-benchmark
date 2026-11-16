@@ -66,8 +66,8 @@ class ModeValidation:
 
             if self.constraint_provider is not None and (
                 self.constraint_provider.for_mode(mode).constraints
-                or any(self.constraint_provider.for_transition(mode, ids).constraints
-                       for ids in possible_next_task_combinations)
+                or any(self.env.tasks[task_id].constraints
+                       for ids in possible_next_task_combinations for task_id in ids)
             ):
                 # Independent robot/home checks cannot certify coupled feasibility.
                 valid_modes.append(mode)

@@ -27,7 +27,7 @@ from multi_robot_multi_goal_planning.problems.core.configuration import (
 from .sampling_informed import InformedSampling
 from .mode_validation import ModeValidation
 from .baseplanner import BasePlanner
-from .collision_free_sampler import make_collision_free_sampler, AffineSampler
+from .collision_free_sampler import make_collision_free_sampler, ConstraintSampler
 
 
 @njit(cache=True)
@@ -616,13 +616,19 @@ class BaseRRTConfig:
     steer_rms_step: float = 0.5
     steer_step_size: float = 0.0  # zero uses the selected policy
 
+    nl_projection: str = "backtracking"  # backtracking or slsqp_bands
+    nl_steer_step_size: float = 0.05  # max per-robot L2 before projection; zero uses steering_policy
+    nonlinear_sample_attempts: int = 1000
+
     balanced_trees: bool = False
 
 
 class BaseRRTstar(BasePlanner):
-    """Base class for RRT*-based planners with affine path constraints."""
+    """RRT* planning with affine constraints and discretized nonlinear feasibility."""
 
-    supported_path_constraints = frozenset(("affine_equality", "affine_inequality"))
+    supported_path_constraints = frozenset((
+        "affine_equality", "affine_inequality", "nonlinear_equality", "nonlinear_inequality",
+    ))
 
     def __init__(
         self,
@@ -631,6 +637,16 @@ class BaseRRTstar(BasePlanner):
     ):
         super().__init__(env)
         self.config = config
+        self.has_nonlinear_constraints = bool(
+            self.constraint_provider.required_types() & {"nonlinear_equality", "nonlinear_inequality"})
+        if self.has_nonlinear_constraints and config.shortcutting:
+            raise ValueError("Nonlinear shortcutting is not supported; set shortcutting=False")
+        if config.nl_projection not in ("backtracking", "slsqp_bands"):
+            raise ValueError("nl_projection must be 'backtracking' or 'slsqp_bands'")
+        if (isinstance(config.nonlinear_sample_attempts, bool)
+                or not isinstance(config.nonlinear_sample_attempts, int)
+                or config.nonlinear_sample_attempts < 1):
+            raise ValueError("nonlinear_sample_attempts must be a positive integer")
         if (isinstance(config.affine_sample_attempts, bool)
                 or not isinstance(config.affine_sample_attempts, int)
                 or config.affine_sample_attempts < 1):
@@ -644,7 +660,7 @@ class BaseRRTstar(BasePlanner):
         self.edge_cache_misses = 0
         if config.steering_policy not in ("legacy", "robot_l1", "robot_rms"):
             raise ValueError("steering_policy must be 'legacy', 'robot_l1', or 'robot_rms'")
-        for name in ("stepsize", "steer_step_size", "max_connection_radius"):
+        for name in ("stepsize", "steer_step_size", "max_connection_radius", "nl_steer_step_size"):
             value = getattr(config, name)
             if not np.isfinite(value) or value < 0:
                 raise ValueError(f"{name} must be finite and nonnegative")
@@ -699,8 +715,8 @@ class BaseRRTstar(BasePlanner):
             seed_fn=self._get_seed_for_mode,
         )
         if self.has_path_constraints:
-            self.collision_free_sampler = AffineSampler(
-                self.collision_free_sampler, self.constraint_provider)
+            self.collision_free_sampler = ConstraintSampler(
+                self.collision_free_sampler, self.constraint_provider, config.nl_projection)
         # timing instrumentation
         self._sampling_time: float = 0.0
         self._coll_checking_time: float = 0.0
@@ -730,7 +746,8 @@ class BaseRRTstar(BasePlanner):
     def _edge_collision_free(
         self, q1: "Configuration", q2: "Configuration", mode: "Mode"
     ) -> bool:
-        if self.has_path_constraints and not self.constraint_provider.for_mode(mode).edge_satisfied(q1, q2):
+        if self.has_path_constraints and not self.constraint_provider.for_mode(mode).edge_satisfied(
+                q1, q2, should_stop=self._planning_expired):
             return False
         capacity = self.config.edge_check_cache_size
         if not capacity:
@@ -766,12 +783,26 @@ class BaseRRTstar(BasePlanner):
         active = constraints if constraints is not None else self.constraint_provider.for_mode(mode)
         if not active.constraints:
             return q
-        return active.project(q, self.constraint_provider.fixed_robots(pinned))
+        return active.project(q, self.constraint_provider.fixed_robots(pinned),
+                              nonlinear_method=self.config.nl_projection)
 
     def _project_transition(self, q, mode, next_ids, task):
         pinned = {robot: q[self.env.robots.index(robot)].copy() for robot in task.robots}
         active = self.constraint_provider.for_transition(mode, next_ids)
-        return self._project_configuration(q, mode, pinned, active)
+        candidate = self._project_configuration(q, mode, pinned, active)
+        if candidate is not None and self._incoming_transition_valid(candidate, mode, next_ids):
+            return candidate
+        return None
+
+    def _incoming_transition_valid(self, q, mode, next_ids):
+        """Evaluate successor constraints and collisions after the attachment switch."""
+        if not self.has_nonlinear_constraints or not next_ids:
+            return True
+        for successor in self.env.get_next_modes(q, mode):
+            if (tuple(successor.task_ids) == tuple(next_ids)
+                    and self._collision_free(q, successor)):
+                return True
+        return False
 
     def _project_transition_seed(self, q, mode, pinned, constraints):
         candidate = self._project_configuration(q, mode, pinned, constraints)
@@ -1208,7 +1239,9 @@ class BaseRRTstar(BasePlanner):
         if self.has_path_constraints:
             active = constraints if constraints is not None else self.constraint_provider.for_mode(mode)
             if active.constraints:
-                for _ in range(self.config.affine_sample_attempts):
+                attempts = (self.config.nonlinear_sample_attempts if active.has_nonlinear
+                            else self.config.affine_sample_attempts)
+                for _ in range(attempts):
                     if self._planning_expired():
                         return None
                     q = self.collision_free_sampler.sample(mode, pinned, constraints=active)
@@ -1287,11 +1320,12 @@ class BaseRRTstar(BasePlanner):
                 for i, robot in enumerate(self.env.robots):
                     q[i] = pinned[robot] if robot in pinned else home[i].copy()
                 q = self._project_transition_seed(q, mode, pinned, constraints)
-                if q is not None and self._collision_free(q, mode):
+                if (q is not None and self._collision_free(q, mode)
+                        and self._incoming_transition_valid(q, mode, next_ids)):
                     return q
 
             q = self._sample_collision_free(mode, pinned, constraints)
-            if q is not None:
+            if q is not None and self._incoming_transition_valid(q, mode, next_ids):
                 # self.env.show(False)
                 return q
 
@@ -1469,12 +1503,15 @@ class BaseRRTstar(BasePlanner):
             return None
         q_nearest = n_nearest.state.q.state()
         direction = q_rand.q - q_nearest
-        if self.config.steer_step_size or self.config.steering_policy == "legacy":
+        active = self.constraint_provider.for_mode(mode) if self.has_path_constraints else None
+        has_nonlinear = active is not None and active.has_nonlinear
+        step_size = (self.config.nl_steer_step_size if has_nonlinear else 0) or self.config.steer_step_size
+        if step_size or self.config.steering_policy == "legacy":
             if self.config.distance_metric != "max_euclidean":
                 dist = batch_config_dist(
                     n_nearest.state.q, [q_rand], metric="max_euclidean"
                 )
-            N = float(np.asarray(dist).item()) / (self.config.steer_step_size or self.eta)
+            N = float(np.asarray(dist).item()) / (step_size or self.eta)
         elif self.config.steering_policy == "robot_l1":
             N = max_robot_l1_displacement(
                 direction, n_nearest.state.q._array_slice
@@ -1489,6 +1526,11 @@ class BaseRRTstar(BasePlanner):
         else:
             q_new = q_nearest + (direction * (i / N))
         state_new = State(self.env.get_start_pos().from_flat(q_new), mode)
+        if has_nonlinear:
+            q_projected = active.project(state_new.q, nonlinear_method=self.config.nl_projection)
+            if q_projected is None or np.array_equal(q_projected.state(), q_nearest):
+                return None
+            state_new = State(q_projected, mode)
         return state_new
 
     def near(

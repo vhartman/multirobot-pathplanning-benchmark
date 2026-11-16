@@ -310,6 +310,36 @@ class AffineSampler(BaseCollisionFreeSampler):
         return self._samplers[key]
 
 
+class ConstraintSampler(AffineSampler):
+    """Dispatch affine sampling or joint proposals with nonlinear projection.
+
+    Nonlinear projection preserves pins and bounds, then rejects collisions.
+    Its output is neither uniform on the manifold nor a Gibbs sample.
+    """
+
+    def __init__(self, unconstrained, provider, nonlinear_method="backtracking"):
+        super().__init__(unconstrained, provider)
+        if nonlinear_method not in ("backtracking", "slsqp_bands"):
+            raise ValueError("Unknown nonlinear projection method")
+        self.nonlinear_method = nonlinear_method
+
+    def selected_sampler_name(self, mode=None):
+        if mode is not None and self.provider.for_mode(mode).has_nonlinear:
+            return "projected"
+        return super().selected_sampler_name(mode)
+
+    def sample(self, mode, pinned=None, *, constraints=None):
+        active = constraints if constraints is not None else self.provider.for_mode(mode)
+        if not active.has_nonlinear:
+            return super().sample(mode, pinned, constraints=active)
+        q = self.env.sample_config_uniform_in_limits()
+        q = active.project(q, self.provider.fixed_robots(pinned),
+                           nonlinear_method=self.nonlinear_method)
+        if q is not None and self.env.is_collision_free(q, mode):
+            return q
+        return None
+
+
 def make_collision_free_sampler(
     env: BaseProblem,
     planner_config: Any,

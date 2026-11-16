@@ -171,19 +171,19 @@ class ConstraintProvider:
         return True
 
     def for_transition(self, mode, next_task_ids):
-        """Combine outgoing and incoming affine constraints at a transition."""
+        """Project in the outgoing scene, including incoming affine constraints.
+
+        Incoming nonlinear constraints must be checked in the successor scene
+        after constructing it from the transition configuration.
+        """
         next_task_ids = () if next_task_ids is None else tuple(next_task_ids)
         if not next_task_ids:
             return self.for_mode(mode)
         key = (id(mode), next_task_ids)
         if key not in self._cache:
             constraints = list(self.for_mode(mode).constraints)
-            constraints.extend(self._task_constraints(next_task_ids))
+            constraints.extend(c for c in self._task_constraints(next_task_ids)
+                               if c.type in ("affine_equality", "affine_inequality"))
             active = ConstraintSet(self.env, mode, constraints)
-            if active.has_nonlinear:
-                raise NotImplementedError(
-                    "Transition dispatch supports only affine constraints; "
-                    "nonlinear constraints require separate incoming/outgoing scene checks"
-                )
             self._cache[key] = active
         return self._cache[key]

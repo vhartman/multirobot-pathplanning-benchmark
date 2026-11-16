@@ -247,7 +247,7 @@ def make_2d_rai_env_no_obs(view: bool = False, agents_can_rotate=True):
         C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
             ry.ST.cylinder, size=[0.1, 0.2, 0.06, 0.15]
         ).setColor([1, 0.5, 0]).setContact(1).setJoint(
-            ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+            ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -np.pi, np.pi])
         ).setJointState([-0.5, -0.5, 0])
     else:
         C.addFrame("a1").setParent(pre_agent_1_frame).setShape(
@@ -273,7 +273,7 @@ def make_2d_rai_env_no_obs(view: bool = False, agents_can_rotate=True):
             size=[0.1, 0.2, 0.06, 0.005],
             # ry.ST.cylinder, size=[4, 0.1, 0.06, 0.075]
         ).setColor([0.5, 0.5, 0]).setContact(1).setJoint(
-            ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -3.14, 3.14])
+            ry.JT.transXYPhi, limits=np.array([-1, 1, -1, 1, -np.pi, np.pi])
         ).setJointState([0.5, 0.5, 0])
     else:
         C.addFrame("a2").setParent(pre_agent_2_frame).setShape(

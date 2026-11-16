@@ -289,6 +289,8 @@ class BidirectionalRRTstar(BaseRRTstar):
         q = n_new.state.q
         # RRT not RRT*
         while True:
+            if self._planning_expired():
+                return None
             dist = batch_config_dist(n_nearest_b.state.q, [q], metric="max_euclidean")[0]
             state_new = self.steer(mode, n_nearest_b, q, dist)
             if (
@@ -296,6 +298,11 @@ class BidirectionalRRTstar(BaseRRTstar):
             ):  # Reached
                 return n_nearest_b
             
+            if self.has_path_constraints and self.constraint_provider.for_mode(mode).has_nonlinear:
+                remaining = batch_config_dist(state_new.q, [q], metric="max_euclidean")[0]
+                if remaining >= dist:
+                    return None
+
             if self._check_config_cf(
                 state_new.q, mode
             ) and self._check_edge_cf(
