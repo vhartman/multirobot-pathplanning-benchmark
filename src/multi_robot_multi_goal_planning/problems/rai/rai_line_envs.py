@@ -925,3 +925,108 @@ class rai_container_lid_dep(DependencyGraphMixin, rai_env):
         self.collision_resolution = 0.005
         self.spec.dependency = DependencyType.UNORDERED
         self._set_default_safe_pose()
+
+
+# --------------------------------------------------------------------------------------------- swap corridor
+def make_swap_corridor_env(robots_per_side=2, num_bays=1, corridor_width=None, corridor_length=1.6,
+                           robot_radius=0.08, shape="disc"):
+    """Two rooms joined by a corridor along x with passing bays on its +y side. Robots in the left room swap with
+    the robots in the right room (slot k <-> mirrored slot k)."""
+    r = robot_radius
+    box = (0.30, 0.14) if shape == "box" else None
+    lane = box[1] if box else 2 * r
+    long_side = box[0] if box else 2 * r
+    cw = lane + 0.06 if corridor_width is None else corridor_width
+    room, Ly = 0.70, 1.10
+    Lx = corridor_length + 2 * room
+    C = ry.Config()
+    C.addFrame("world")
+    _box(C, "floor", [Lx + 0.1, Ly + 0.1, 0.04], [0, 0, -0.02], [0.86, 0.86, 0.84], contact=0)
+    h, zc = 0.08, 0.04
+    wall = [0.30, 0.32, 0.36]
+    for s, (a, b) in (("x+", (Lx / 2, Lx / 2 + 0.05)), ("x-", (-Lx / 2 - 0.05, -Lx / 2))):
+        _box(C, f"border_{s}", [b - a, Ly + 0.1, h], [(a + b) / 2, 0, zc], wall)
+    for s, (a, b) in (("y+", (Ly / 2, Ly / 2 + 0.05)), ("y-", (-Ly / 2 - 0.05, -Ly / 2))):
+        _box(C, f"border_{s}", [Lx, b - a, h], [0, (a + b) / 2, zc], wall)
+    x0, x1 = -corridor_length / 2, corridor_length / 2
+    _box(C, "corridor_low", [corridor_length, Ly / 2 - cw / 2, h], [0, -(Ly / 2 + cw / 2) / 2, zc], wall)
+    bw, bd = long_side + 0.08, long_side + 0.06
+    bays = [x0 + corridor_length * (k + 1) / (num_bays + 1) for k in range(num_bays)]
+    cuts = [x0] + [c for xb in bays for c in (xb - bw / 2, xb + bw / 2)] + [x1]
+    for k in range(0, len(cuts), 2):
+        a, b = cuts[k], cuts[k + 1]
+        _box(C, f"corridor_high_{k // 2}", [b - a, Ly / 2 - cw / 2, h], [(a + b) / 2, (Ly / 2 + cw / 2) / 2, zc], wall)
+    for k, xb in enumerate(bays):
+        y0 = cw / 2 + bd
+        if y0 < Ly / 2:
+            _box(C, f"bay_back_{k}", [bw, Ly / 2 - y0, h], [xb, (Ly / 2 + y0) / 2, zc], wall)
+    n = robots_per_side
+    cols = 1 if n <= 3 else 2
+    rows = int(np.ceil(n / cols))
+    slots = [(-Lx / 2 + 0.20 + 0.26 * c, (rr - (rows - 1) / 2) * 0.28) for rr in range(rows) for c in range(cols)][:n]
+    robots, start, goal = [], [], []
+    for side in (-1, 1):
+        for k, (sx, sy) in enumerate(slots):
+            name = f"a{len(robots) + 1}_"
+            robots.append(name)
+            p = np.array([side * -sx if side == 1 else sx, sy])  # left slots for side -1, mirrored for +1
+            start.append(p)
+            goal.append(np.array([-p[0], sy]))
+    lim = [-Lx / 2 + r, Lx / 2 - r, -Ly / 2 + r, Ly / 2 - r]
+    # Shapes: rai (0.2.9) reports zero penetration for cylinder-cylinder and box-box pairs, and the env only rejects
+    # penetration above its tolerance, so discs are spheres and rectangles horizontal capsules (exact against each
+    # other and against the box walls).
+    for i, (name, p) in enumerate(zip(robots, start)):
+        pre = C.addFrame(name + "pre", "world").setPosition([0, 0, zc])
+        f = C.addFrame(name + "base", pre.name)
+        if box:
+            f.setJoint(ry.JT.transXYPhi, limits=lim + [-np.pi, np.pi]).setJointState([p[0], p[1], 0.0])
+            C.addFrame(name + "body", f.name).setShape(ry.ST.capsule, [box[0] - box[1], box[1] / 2]).setRelativeQuaternion(
+                [0.70710678, 0.0, 0.70710678, 0.0]).setColor(PALETTE[i % len(PALETTE)]).setContact(1)
+        else:
+            f.setShape(ry.ST.sphere, [r]).setColor(PALETTE[i % len(PALETTE)]).setContact(1)
+            f.setJoint(ry.JT.transXY, limits=lim).setJointState(list(p))
+    if box:
+        start = [np.array([*p, 0.0]) for p in start]
+        goal = [np.array([*p, 0.0]) for p in goal]
+    for i, (name, g) in enumerate(zip(robots, goal)):
+        C.addFrame(f"goal_{name}").setShape(ry.ST.cylinder, [0.004, 0.05]).setPosition([g[0], g[1], 0.002]).setColor(
+            PALETTE[i % len(PALETTE)] + [0.6]).setContact(0)
+    return C, robots, start, goal, dict(corridor_width=cw, bays=bays, bay_width=bw, bay_depth=bd, shape=shape)
+
+
+@register([
+    ("rai.swap_corridor_1v1_b1", {"robots_per_side": 1, "num_bays": 1}),
+    ("rai.swap_corridor_2v2_b1", {"robots_per_side": 2, "num_bays": 1}),
+    ("rai.swap_corridor_2v2_b2", {"robots_per_side": 2, "num_bays": 2}),
+    ("rai.swap_corridor_3v3_b2", {"robots_per_side": 3, "num_bays": 2}),
+    ("rai.swap_corridor_3v3_b3", {"robots_per_side": 3, "num_bays": 3}),
+    ("rai.swap_corridor_2v2_wide", {"robots_per_side": 2, "num_bays": 0, "corridor_width": 0.42}),
+    ("rai.swap_corridor_2v2_b2_box", {"robots_per_side": 2, "num_bays": 2, "shape": "box"}),
+    ("rai.swap_corridor_2v2_b2_roundtrip", {"robots_per_side": 2, "num_bays": 2, "roundtrip": True}),
+])
+class rai_swap_corridor(SequenceMixin, rai_env):
+    """One-lane corridor swap. Single goal (all swapped) or, with roundtrip, every robot first visits its mirrored
+    slot (alternating sides), then all return to their start."""
+
+    def __init__(self, robots_per_side=2, num_bays=1, corridor_width=None, corridor_length=1.6, shape="disc",
+                 roundtrip=False):
+        self.C, self.robots, start, goal, self.scene = make_swap_corridor_env(
+            robots_per_side, num_bays, corridor_width, corridor_length, shape=shape)
+        rai_env.__init__(self)
+        if roundtrip:
+            n = robots_per_side
+            order = [self.robots[k + side * n] for k in range(n) for side in (0, 1)]
+            self.tasks = [Task(f"{r}cross", [r], SingleGoal(goal[self.robots.index(r)])) for r in order]
+            self.tasks.append(Task("terminal", self.robots, SingleGoal(np.concatenate(start))))
+            self.sequence = self._make_sequence_from_names([f"{r}cross" for r in order] + ["terminal"])
+        else:
+            self.tasks = [Task("terminal", self.robots, SingleGoal(np.concatenate(goal)))]
+            self.sequence = self._make_sequence_from_names(["terminal"])
+        BaseModeLogic.__init__(self)
+        self.collision_tolerance = 0.001  # 1 mm: with 0.01 the 16 cm discs visibly overlap
+        self.collision_resolution = 0.005
+        _mark_static(self)
+        if not roundtrip:
+            self.spec.goals = GoalType.SINGLE_GOAL
+        self.spec.home_pose = SafePoseType.HAS_NO_SAFE_HOME_POSE  # a start slot is some other robot's goal
