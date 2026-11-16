@@ -37,13 +37,19 @@ from .roboballet_instances import load_instance, resolve_assets
 class RoboBalletEnvironment(DependencyGraphMixin, MujocoEnvironment):
     """Static welding or pick/place tasks with fixed grasp frames.
 
-    ``assets`` is the external release directory; ``instance`` is a prepared
-    JSON path or mapping. Construction never runs IK or changes task assignments.
+    ``assets`` is the external release directory. Without ``instance``, scene
+    options (kind, robots, targets, episode, objects, seed) construct goals via IK.
+    A prepared JSON path or mapping bypasses preparation and preserves its goals.
     Source meshes are the default. Mocap objects use this class's pose hooks;
     the shared checker also supports the existing free-joint environments.
     """
 
-    def __init__(self, assets, instance, geometry="source"):
+    def __init__(self, assets, instance=None, geometry="source", **scene_options):
+        if instance is None:
+            from .roboballet_setup import make_instance
+            instance = make_instance(assets, geometry=geometry, **scene_options)
+        elif scene_options:
+            raise ValueError("Pass either an instance or scene construction options")
         instance = load_instance(instance)
         self.instance = instance
         self.assets = resolve_assets(assets, instance)
