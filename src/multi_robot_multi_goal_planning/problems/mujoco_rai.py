@@ -87,7 +87,7 @@ def _import_model(source, metadata):
             j = model.joint(name).id
             if j in joint_map:
                 raise NotImplementedError("Shared robot joints are not converted")
-            if model.jnt_type[j] not in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE):
+            if model.jnt_type[j] not in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)):
                 raise NotImplementedError("Active ball/free joints are not converted")
             if int(source._all_robot_idx[index]) != int(model.jnt_qposadr[j]):
                 raise ValueError("Robot joint names and configuration indices disagree")
@@ -99,13 +99,13 @@ def _import_model(source, metadata):
     if any(n is None for n in ordered_names):
         raise ValueError("Robot coordinates must partition the configuration")
     for i in range(model.neq):
-        if (model.eq_type[i] != mujoco.mjtEq.mjEQ_JOINT or
+        if (model.eq_type[i] != int(mujoco.mjtEq.mjEQ_JOINT) or
                 int(model.eq_obj1id[i]) in joint_map or int(model.eq_obj2id[i]) in joint_map):
             raise NotImplementedError("Only equality couplings between frozen passive joints are supported")
     for b in range(1, model.nbody):
         name, parent = body_names[b], body_names[int(model.body_parentid[b])]
         joints = list(range(model.body_jntadr[b], model.body_jntadr[b] + model.body_jntnum[b]))
-        floating = any(model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE for j in joints)
+        floating = any(model.jnt_type[j] == int(mujoco.mjtJoint.mjJNT_FREE) for j in joints)
         if floating or model.body_mocapid[b] >= 0:
             if any(j in joint_map for j in joints):
                 raise NotImplementedError("Active floating bodies are not converted")
@@ -122,12 +122,12 @@ def _import_model(source, metadata):
                 raise NotImplementedError(f"Unsupported joint type on {name!r}")
             axis = model.jnt_axis[j]
             alignment = Rotation.align_vectors([axis], [[0., 0., 1.]])[0]
-            pivot = model.jnt_pos[j] if typ == mujoco.mjtJoint.mjJNT_HINGE else np.zeros(3)
+            pivot = model.jnt_pos[j] if typ == int(mujoco.mjtJoint.mjJNT_HINGE) else np.zeros(3)
             reference = float(model.qpos0[model.jnt_qposadr[j]])
             frame_name = joint_map.get(j, f"__mj_fixed_joint_{j}")
             anchor_name = f"__mj_before_joint_{j}"
             frame = C.addFrame(anchor_name, tail)
-            if typ == mujoco.mjtJoint.mjJNT_HINGE:
+            if typ == int(mujoco.mjtJoint.mjJNT_HINGE):
                 frame.setRelativePosition(pivot).setRelativeQuaternion(
                     _quaternion(alignment * Rotation.from_rotvec([0, 0, -reference])))
                 joint_type = ry.JT.hingeZ
@@ -162,7 +162,7 @@ def _import_model(source, metadata):
         rgba = model.geom_rgba[g].copy()
         if model.geom_matid[g] >= 0:
             rgba = model.mat_rgba[model.geom_matid[g]].copy()
-        if kind == mujoco.mjtGeom.mjGEOM_MESH:
+        if kind == int(mujoco.mjtGeom.mjGEOM_MESH):
             mesh = int(model.geom_dataid[g])
             a, n = model.mesh_vertadr[mesh], model.mesh_vertnum[mesh]
             vertices = model.mesh_vert[a:a+n].astype(float)
@@ -172,17 +172,17 @@ def _import_model(source, metadata):
                 a, n = model.mesh_faceadr[mesh], model.mesh_facenum[mesh]
                 frame.setMesh(vertices, model.mesh_face[a:a+n].astype(np.uint32))
             supports[g] = ('mesh', vertices)
-        elif kind == mujoco.mjtGeom.mjGEOM_BOX:
+        elif kind == int(mujoco.mjtGeom.mjGEOM_BOX):
             frame.setShape(ry.ST.box, 2*size)
             supports[g] = ('box', size)
-        elif kind == mujoco.mjtGeom.mjGEOM_SPHERE:
+        elif kind == int(mujoco.mjtGeom.mjGEOM_SPHERE):
             frame.setShape(ry.ST.sphere, [size[0]])
             supports[g] = ('sphere', size)
-        elif kind in (mujoco.mjtGeom.mjGEOM_CAPSULE, mujoco.mjtGeom.mjGEOM_CYLINDER):
-            capsule = kind == mujoco.mjtGeom.mjGEOM_CAPSULE
+        elif kind in (int(mujoco.mjtGeom.mjGEOM_CAPSULE), int(mujoco.mjtGeom.mjGEOM_CYLINDER)):
+            capsule = kind == int(mujoco.mjtGeom.mjGEOM_CAPSULE)
             frame.setShape(ry.ST.capsule if capsule else ry.ST.cylinder, [2*size[1], size[0]])
             supports[g] = ('capsule' if capsule else 'cylinder', size)
-        elif kind == mujoco.mjtGeom.mjGEOM_PLANE:
+        elif kind == int(mujoco.mjtGeom.mjGEOM_PLANE):
             planes.append(g)
             # Display only. Collision uses the infinite plane equation below.
             frame.setShape(ry.ST.box, [2*max(size[0], 3), 2*max(size[1], 3), .001])
