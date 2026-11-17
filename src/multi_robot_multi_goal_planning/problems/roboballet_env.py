@@ -251,9 +251,14 @@ class _RoboBalletEnvironment(MujocoEnvironment):
         for mid, parent, pos, quat in attached:
             r = self.robots.index(parent)
             tcp_R = self.data.site_xmat[self.tcp[r]].reshape(3, 3)
-            R = Rotation.from_quat((quat[1], quat[2], quat[3], quat[0])).as_matrix()
+            parent_q = np.empty(4)
+            mujoco.mju_mat2Quat(parent_q, self.data.site_xmat[self.tcp[r]])
+            relative_q = np.asarray(quat, dtype=float)
+            norm = np.linalg.norm(relative_q)
+            if norm == 0:
+                raise ValueError("Zero attachment quaternion")
             self.data.mocap_pos[mid] = self.data.site_xpos[self.tcp[r]] + tcp_R @ pos
-            self.data.mocap_quat[mid] = quaternion(tcp_R @ R)
+            mujoco.mju_mulQuat(self.data.mocap_quat[mid], parent_q, relative_q / norm)
         if attached:
             mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
