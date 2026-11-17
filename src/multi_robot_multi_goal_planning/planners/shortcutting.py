@@ -342,10 +342,10 @@ def robot_mode_shortcut(
     # Keep the original edge partition. The input edges have already been
     # collision checked, while joining collinear edges changes the collision
     # checker's discretization and can turn a certified path into an invalid one.
-    new_path = (_interpolate_compatible_path(
+    new_path = _interpolate_compatible_path(
         env, path, interpolation_resolution, resolution, tolerance,
         constraints if has_nonlinear else None,
-    ) if scalable or coordinate_policy or has_nonlinear else interpolate_path(path, interpolation_resolution))
+    )
     if has_nonlinear:
         nonlinear_prefix = np.r_[0, np.cumsum([
             constraints.for_mode(state.mode).has_nonlinear for state in new_path
