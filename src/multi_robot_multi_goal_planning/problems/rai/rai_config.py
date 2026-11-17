@@ -8802,13 +8802,15 @@ def coop_tamp_architecture_env(assembly_name, robot_type="ur10", gripper_type="t
             C.addFrame(obj_name).setParent(
                 C.getFrame("table")
             ).setPosition(start_position).setShape(
-                ry.ST.cylinder, size=[r, shrinked_length, 0.005]
+                # rai sizes are [length, radius]; [r, length, 0.005] gave 5 mm rods. Capsules, because rai reports
+                # zero penetration for overlapping cylinders: same radius and total length as intended.
+                ry.ST.capsule, size=[max(shrinked_length - 2 * r, 0.0), r]
             ).setColor([1, 0.3, 0.3, 1]).setContact(0).setQuaternion(start_orientation).setJoint(ry.JT.rigid)
 
             C.addFrame("goal_" + str(i)).setParent(
                 C.getFrame("table")
             ).setPosition(goal_position).setShape(
-                ry.ST.cylinder, size=[r, length, 0.005]
+                ry.ST.cylinder, size=[length, r]
             ).setColor([0.3, 0.3, 0.3, 0.2]).setContact(0).setQuaternion(goal_orientation)
 
             objects.append(obj_name)

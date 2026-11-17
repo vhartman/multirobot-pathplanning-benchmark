@@ -258,6 +258,23 @@ class AbstractEnvironment(BaseProblem):
 
         return True
 
+    def is_collision_free_for_robot(self, r, q, m=None, collision_tolerance=None, set_mode=True):
+        """Selected robots against the obstacles and each other; other robots are ignored (as rai_env)."""
+        selected = [r] if isinstance(r, str) else list(r)
+        if not set(selected).issubset(self.robots):
+            raise ValueError("Unknown robot in partial collision query")
+        if isinstance(q, np.ndarray):
+            q = self.start_pos.from_flat(q)
+        idx = [self.robots.index(x) for x in selected]
+        for k, i in enumerate(idx):
+            for j in idx[k + 1:]:
+                if np.linalg.norm(q[i] - q[j]) < self.agent_radii[i] + self.agent_radii[j]:
+                    return False
+            for o in self.obstacles:
+                if o.collides_with_sphere(q[i], self.agent_radii[i]):
+                    return False
+        return True
+
     def _batch_is_collision_free(self, qs: List[Configuration], mode: List[int]):
         num_agents = qs[0].num_agents()
         for i in range(num_agents):

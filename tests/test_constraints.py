@@ -5,7 +5,7 @@ import copy
 
 from multi_robot_multi_goal_planning.problems.core.configuration import NpConfiguration
 
-from multi_robot_multi_goal_planning.problems.constraints import (
+from multi_robot_multi_goal_planning.problems.core.constraints import (
     AffineConfigurationSpaceEqualityConstraint,
     AffineConfigurationSpaceInequalityConstraint,
     AffineFrameOrientationConstraint,

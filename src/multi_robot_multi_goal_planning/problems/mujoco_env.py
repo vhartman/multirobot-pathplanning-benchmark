@@ -85,7 +85,7 @@ class MujocoEnvironment(BaseProblem):
         # Build parent->children mapping
         parent2children = {}
         for i in range(self.model.nbody):
-            pid = int(self.model.body(i).parentid)
+            pid = int(self.model.body(i).parentid[0])
             parent2children.setdefault(pid, []).append(i)
 
         # Recursively collect all body IDs in subtree
@@ -456,7 +456,50 @@ class MujocoEnvironment(BaseProblem):
         collision_tolerance: Optional[float] = None,
         set_mode: bool = True,
     ) -> bool:
-        raise NotImplementedError
+        """Check the selected robots and the objects they hold against the world and each other.
+
+        Contacts involving any other robot, or an object another robot holds, are ignored. A necessary-condition
+        check (mode validation uses it), with the semantics of rai_env.is_collision_free_for_robot. Objects that no
+        robot holds count as world. The configuration and attachments are set as in is_collision_free.
+        """
+        tolerance = self.collision_tolerance if collision_tolerance is None else collision_tolerance
+        names = [r] if isinstance(r, str) else list(r)
+        if not set(names) <= set(self.robots):
+            raise ValueError("Unknown robot in partial collision query")
+        values = np.asarray(q.state() if hasattr(q, "state") else q, dtype=float)
+        if not self._configuration_is_valid(values):
+            return False
+        self._update_collision_state(values, m)
+        if not self.data.ncon:
+            return True
+        contacts = self.data.contact
+        penetrating = contacts.dist < self._contact_distance_threshold(tolerance)
+        if not np.any(penetrating):
+            return True
+        geoms = contacts.geom[penetrating]
+        geoms = geoms[self._relevant_contact_pairs(geoms)]
+        if not len(geoms):
+            return True
+        body_owner = self._body_owner().copy()
+        if self.manipulating_env and m is not None:
+            for body_id, (_, parent_bid, _, _) in m.sg.items():
+                body_owner[body_id] = body_owner[parent_bid]
+        owner = body_owner[self.model.geom_bodyid[geoms]]
+        selected = np.array([self.robots.index(n) for n in names])
+        is_selected = np.isin(owner, selected)
+        is_other = (owner >= 0) & ~is_selected
+        counted = (is_selected[:, 0] | is_selected[:, 1]) & ~(is_other[:, 0] | is_other[:, 1])
+        return not np.any(counted)
+
+    def _body_owner(self):
+        """Index of the robot whose subtree contains each body, -1 for other bodies (cached)."""
+        owner = getattr(self, "_body_owner_cache", None)
+        if owner is None:
+            owner = np.full(self.model.nbody, -1, dtype=int)
+            for i, robot in enumerate(self.robots):
+                owner[self.get_body_ids(robot)] = i
+            self._body_owner_cache = owner
+        return owner
 
     def is_edge_collision_free(
         self,

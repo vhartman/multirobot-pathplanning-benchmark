@@ -16,7 +16,7 @@ dependencies = [
     "numpy",
     "matplotlib>=3.4.0",
     "simple-parsing",
-    "robotic>=0.2.2,<0.3.0",
+    "robotic==0.2.2",  # 0.2.7 scrambles multi-dof joint limits; 0.2.9 also renames Frame.info() to asDict
 ]
 
 [project.optional-dependencies]

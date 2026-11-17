@@ -1060,7 +1060,7 @@ class BaseGraph(ABC):
                 if n is not None:
                     if parent.id not in n.forward.fam:
                         edge_cost = float(
-                            self.cost.batch_edge_cost([parent.state], [n.state])
+                            self.cost.batch_edge_cost([parent.state], [n.state])[0]
                         )
                         self.update_connectivity(
                             parent, n, edge_cost, parent.cost + edge_cost
@@ -1132,7 +1132,7 @@ class BaseGraph(ABC):
         """
         self.new_path.append(node)
         if is_transition:
-            edge_cost = float(self.cost.batch_edge_cost([parent.state], [node.state]))
+            edge_cost = float(self.cost.batch_edge_cost([parent.state], [node.state])[0])
             self.update_connectivity(parent, node, edge_cost, parent.cost + edge_cost)
             is_goal = True
 
@@ -1209,7 +1209,7 @@ class BaseGraph(ABC):
                     node, batch_cost, n_near_costs, node_indices
                 )
             else:
-                edge_cost = float(self.cost.batch_edge_cost([parent.state], [node.state]))
+                edge_cost = float(self.cost.batch_edge_cost([parent.state], [node.state])[0])
                 self.update_connectivity(
                     parent, node, edge_cost, parent.cost + edge_cost
                 )

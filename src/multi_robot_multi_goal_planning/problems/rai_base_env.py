@@ -211,6 +211,32 @@ def hide_pair_collision(line):
     return "pairCollision.cpp:libccd:" not in line
 
 
+def get_joint_limits(C: ry.Config) -> NDArray:
+    """Lower and upper joint limits, shape (2, n), in C.getJointNames() order.
+
+    Multi-dof joints are read from their frame's own limit list
+    [lo_0, hi_0, lo_1, hi_1, ...]: from robotic 0.2.7 on, C.getJointLimits()
+    returns those joints' limits reshaped row-wise, so for transXY / transXYPhi
+    joints its rows are not lower and upper bounds (0.2.2 is correct;
+    0.2.9 also renames Frame.info() to asDict()).
+    """
+    names = C.getJointNames()  # first: rai builds its joint index lazily
+    limits = np.asarray(C.getJointLimits(), dtype=float).copy()
+    i = 0
+    while i < len(names):
+        frame = names[i].split(":")[0]
+        j = i + 1
+        while j < len(names) and ":" in names[j] and names[j].split(":")[0] == frame:
+            j += 1
+        if j - i > 1:
+            f = C.getFrame(frame)
+            own = (f.info() if hasattr(f, "info") else f.asDict()).get("limits")
+            if own is not None and len(own) >= 2 * (j - i):
+                limits[:, i:j] = np.asarray(own[: 2 * (j - i)], dtype=float).reshape(j - i, 2).T
+        i = j
+    return limits
+
+
 def get_joint_indices(C: ry.Config, prefix: str) -> List[int]:
     all_joints_weird = C.getJointNames()
 
@@ -319,7 +345,7 @@ class rai_env(BaseProblem):
 
         self.manipulating_env = False
 
-        self.limits = self.C.getJointLimits()
+        self.limits = get_joint_limits(self.C)
 
         self.collision_tolerance = 0.01
         self.collision_resolution = 0.01

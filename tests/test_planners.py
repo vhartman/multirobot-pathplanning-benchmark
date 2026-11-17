@@ -32,7 +32,7 @@ from multi_robot_multi_goal_planning.planners.termination_conditions import (
     ],
 )
 def test_planner_on_abstract_env(planner_fn):
-    env = get_env_by_name("abstract_test")
+    env = get_env_by_name("abstract.test")
     ptc = RuntimeTerminationCondition(10)
 
     path, _ = planner_fn(env, ptc)
@@ -55,7 +55,7 @@ def test_planner_on_abstract_env(planner_fn):
     ],
 )
 def test_planner_on_rai_manip_env(planner_fn):
-    env = get_env_by_name("piano")
+    env = get_env_by_name("rai.piano")
     ptc = RuntimeTerminationCondition(10)
 
     path, _ = planner_fn(env, ptc)
@@ -77,7 +77,8 @@ def test_planner_on_rai_manip_env(planner_fn):
     ],
 )
 def test_planner_on_pinocchio_manip_env(planner_fn):
-    env = get_env_by_name("pin_piano")
+    pytest.importorskip("pinocchio")
+    env = get_env_by_name("pinocchio.piano")
     ptc = RuntimeTerminationCondition(10)
 
     path, _ = planner_fn(env, ptc)
@@ -100,7 +101,7 @@ def test_planner_on_pinocchio_manip_env(planner_fn):
     ],
 )
 def test_planner_on_hallway_dependency_env(planner_fn):
-    env = get_env_by_name("other_hallway_dep")
+    env = get_env_by_name("rai.dep_other_hallway")
     ptc = RuntimeTerminationCondition(10)
 
     path, _ = planner_fn(env, ptc)

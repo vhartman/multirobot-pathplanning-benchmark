@@ -1132,8 +1132,6 @@ class rai_hold_glass_upright(SequenceMixin, rai_env):
     ("rai.single_stick_upright", {}),
     ("rai.single_stick_upright_clutter", {"clutter": True}),
     ("rai.single_stick", {"stick_upright": False}),
-    ("rai.single_stick_ineq", {"stick_upright": False, 
-                               "ineq_orientation_constraint": True}),
 ])
 class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
     def __init__(self, stick_upright=True, ineq_orientation_constraint=False, clutter=False):
@@ -1153,7 +1151,7 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
             )
         
         if ineq_orientation_constraint:
-            assert False
+            raise NotImplementedError("inequality orientation constraints are not implemented")
 
         self.tasks = [
             # joint
@@ -1191,8 +1189,6 @@ class rai_keep_single_stick_on_ground(SequenceMixin, rai_env):
     ("rai.dual_stick_upright", {}),
     ("rai.dual_stick", {"stick_upright": False}),
     ("rai.dual_stick_clutter", {"clutter": True}),
-    ("rai.dual_stick_ineq", {"stick_upright": False, 
-                             "ineq_orientation_constraint": True}),
 ])
 class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
     def __init__(self, stick_upright=True, ineq_orientation_constraint=False, clutter=False):
@@ -1219,7 +1215,7 @@ class rai_keep_dual_stick_on_ground(SequenceMixin, rai_env):
             )
 
         if ineq_orientation_constraint:
-            assert False
+            raise NotImplementedError("inequality orientation constraints are not implemented")
 
         self.tasks = [
             # joint

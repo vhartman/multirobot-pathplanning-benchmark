@@ -102,7 +102,7 @@ def test_batch_config_cost_euclidean_manual_comparison(dims):
         )
         manual_dist += single_agent_dist
 
-    assert dist_from_function[0] == manual_dist
+    assert np.isclose(dist_from_function[0], manual_dist)  # summation order differs
 
 
 @pytest.mark.parametrize("dims", [[2, 2], [7, 7], [3, 3, 3], [2, 5], [14]])
@@ -123,7 +123,7 @@ def test_batch_config_cost_max_manual_comparison(dims):
         )
         manual_dist += single_agent_dist
 
-    assert dist_from_function[0] == manual_dist
+    assert np.isclose(dist_from_function[0], manual_dist)  # summation order differs
 
 
 @pytest.mark.parametrize(

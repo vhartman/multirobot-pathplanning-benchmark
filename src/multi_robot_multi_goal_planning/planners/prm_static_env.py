@@ -1,3 +1,7 @@
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple
+
 from .baseplanner import BasePlanner
 from .termination_conditions import (
     PlannerTerminationCondition,
@@ -38,7 +42,7 @@ class Graph:
     self.env = env
 
   def contains_mode(self, mode):
-    if mode is in self.modes:
+    if mode in self.modes:
       return True
 
     return False
