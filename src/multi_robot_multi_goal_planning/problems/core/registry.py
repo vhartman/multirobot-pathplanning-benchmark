@@ -9,6 +9,7 @@ REGISTRY: Dict[str, EnvFactory] = {}
 
 # Environment prefix -> module and installation hint.
 _OPTIONAL_BACKENDS = {
+    "comotion": ("comotion_env", "Install the CoMotion collision package; see the [comotion] extra."),
     "rai": ("rai_registry", "Install the robotic package for RAI environments."),
     "vampmr": ("mr_vamp_env", "Install mr_planner_core and meshcat for the active Python interpreter."),
     "pinocchio": ("pinocchio_env", "Install the project's [pinocchio] extra."),

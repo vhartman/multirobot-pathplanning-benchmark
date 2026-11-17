@@ -20,6 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+comotion = ["comotion-collision>=0.1.0"]
 pinocchio = ["pin>=3.4", "meshcat", "hppfcl"]
 mujoco = ["mujoco>=3.3.5"]
 mujoco-scenes = ["mujoco>=3.3.5", "trimesh", "vhacdx", "Pillow"]

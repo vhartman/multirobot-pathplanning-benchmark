@@ -150,7 +150,7 @@ def compile_geometry(spec, geometry="source", sphere_model=None, preserve_meshes
             if match:
                 capsule_bodies[b] = (match[1], int(match[2]))
     for g in range(model.ngeom):
-        if model.geom_type[g] != mujoco.mjtGeom.mjGEOM_MESH or not (
+        if model.geom_type[g] != int(mujoco.mjtGeom.mjGEOM_MESH) or not (
             model.geom_contype[g] or model.geom_conaffinity[g]
         ):
             continue
