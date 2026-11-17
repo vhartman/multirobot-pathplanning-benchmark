@@ -7,7 +7,7 @@ name = "multi-robot-multi-goal-path-planning"
 version = "0.1.0"
 description = "A benchmarking framework for multi-robot path planning"
 readme = "readme.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "scipy",
     "networkx",
@@ -23,11 +23,11 @@ dependencies = [
 # not on PyPI: a native build (C++17, CMake, Eigen3, FCL, libccd, Boost headers); pip clones submodules
 comotion = ["comotion-collision @ git+https://github.com/vhartman/comotion.git@d492c539e2dcb04fad309d5724dd9e2b831adee2"]
 pinocchio = ["pin>=3.4", "meshcat", "hppfcl"]
-mujoco = ["mujoco>=3.3.5"]
-mujoco-scenes = ["mujoco>=3.3.5", "trimesh", "vhacdx", "Pillow"]
+mujoco = ["mujoco>=4.0.1,<5"]
+mujoco-scenes = ["mujoco>=4.0.1,<5", "trimesh", "vhacdx", "Pillow"]
 viser = ["viser"]
 test = ["pytest"]
-all = ["pin>=3.4", "meshcat", "hppfcl", "mujoco>=3.3.5", "trimesh", "vhacdx", "Pillow", "viser"]
+all = ["pin>=3.4", "meshcat", "hppfcl", "mujoco>=4.0.1,<5", "trimesh", "vhacdx", "Pillow", "viser"]
 
 [tool.hatch.metadata]
 allow-direct-references = true  # the comotion extra is a git reference

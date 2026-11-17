@@ -6,6 +6,8 @@ There are also some utilities for visualizing plans, and plotting convergence an
 The corresponding paper can be found [here](https://arxiv.org/abs/2503.03509), and more videos can be seen on the [paper website](https://vhartmann.com/mrmg-planning/).
 
 # Installation
+Use Python 3.11 or newer. The MuJoCo extras install MuJoCo 4.
+
 Most of the problems we propose here are originally built on top of [rai](https://marctoussaint.github.io/robotic/index.html) ([github](https://github.com/MarcToussaint/robotic)). We would recommend using the virtual environment of your choice to make sure nothing break with rai.
 
 After cloning, and setting up the virtual env, the installation of all the required dependencies can be done with
