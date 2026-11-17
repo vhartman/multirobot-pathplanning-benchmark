@@ -1,7 +1,10 @@
 from typing import Callable, Dict
 from importlib import import_module
-from functools import partial
+from functools import partial, wraps
+import random
 import warnings
+
+import numpy as np
 from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
 
 EnvFactory = Callable[..., BaseProblem]
@@ -42,6 +45,25 @@ def _load_optional_backend(prefix, *, required):
         raise ImportError(f"Cannot load backend {prefix!r}: {error}. {hint}") from error
 
 
+def _deterministic(factory, seed=0):
+    """Build under a fixed seed of the global random streams and restore the caller's states afterwards.
+
+    Builders draw from random / np.random (task assignment, KOMO restarts). Without this, an
+    environment depended on the caller's RNG state, so each run seed planned a different instance.
+    """
+    @wraps(factory)
+    def build(**kwargs):
+        py, npy = random.getstate(), np.random.get_state()
+        random.seed(seed)
+        np.random.seed(seed)
+        try:
+            return factory(**kwargs)
+        finally:
+            random.setstate(py)
+            np.random.set_state(npy)
+    return build
+
+
 def register(names):
     """
     names can be:
@@ -54,7 +76,7 @@ def register(names):
         for name, defaults in entries:
             if name in REGISTRY:
                 raise ValueError(f"Duplicate env name: {name}")
-            REGISTRY[name] = partial(factory, **defaults)
+            REGISTRY[name] = _deterministic(partial(factory, **defaults))
         return factory
 
     return decorator

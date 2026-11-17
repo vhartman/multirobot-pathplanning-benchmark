@@ -105,6 +105,7 @@ def make_packing_model(assets, instance, geometry="source"):
     import xml.etree.ElementTree as ET
 
     root = ET.Element("mujoco")
+    ET.SubElement(root, "option", integrator="implicitfast")  # as the attached panda.xml: no attach conflict
     asset = ET.SubElement(root, "asset")
     ET.SubElement(
         asset,

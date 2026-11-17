@@ -1,0 +1,20 @@
+<mujoco model="adjustable_tool_arm">
+  <default>
+    <default class="visual">
+      <geom group="2" type="mesh" contype="0" conaffinity="0"/>
+    </default>
+    <default class="collision">
+      <geom group="3" type="mesh"/>
+    </default>
+  </default>
+  <asset>
+    <material name="mat0" specular="0.05534" shininess="0.25" rgba="0 0.02192 0.15233 1.0"/>
+    <mesh file="adjustable_tool_arm.obj"/>
+  </asset>
+  <worldbody>
+    <body name="adjustable_tool_arm">
+      <geom material="mat0" mesh="adjustable_tool_arm" class="visual"/>
+      <geom mesh="adjustable_tool_arm" class="collision"/>
+    </body>
+  </worldbody>
+</mujoco>

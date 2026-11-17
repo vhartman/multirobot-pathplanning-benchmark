@@ -1,0 +1,20 @@
+<mujoco model="adjustable_tool_tip">
+  <default>
+    <default class="visual">
+      <geom group="2" type="mesh" contype="0" conaffinity="0"/>
+    </default>
+    <default class="collision">
+      <geom group="3" type="mesh"/>
+    </default>
+  </default>
+  <asset>
+    <material name="mat0" specular="0.14415" shininess="0.25" rgba="1 0.13514 0 1.0"/>
+    <mesh file="adjustable_tool_tip.obj"/>
+  </asset>
+  <worldbody>
+    <body name="adjustable_tool_tip">
+      <geom material="mat0" mesh="adjustable_tool_tip" class="visual"/>
+      <geom mesh="adjustable_tool_tip" class="collision"/>
+    </body>
+  </worldbody>
+</mujoco>

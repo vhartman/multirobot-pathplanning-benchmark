@@ -584,7 +584,7 @@ def make_success_plot(
         else:
             plt.legend()
     plt.grid(which="both", axis="both", ls="--")
-    plt.ylabel("Success [\%]")
+    plt.ylabel(r"Success [\%]")
     plt.xlabel("Computation Time [s]")
 
     if save:

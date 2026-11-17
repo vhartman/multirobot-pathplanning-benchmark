@@ -39,6 +39,9 @@ from multi_robot_multi_goal_planning.planners import (
     RecedingHorizonPlanner,
 )
 
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # sibling helpers, from any cwd
 from run_experiment import export_planner_data
 
 import logging
@@ -137,6 +140,11 @@ def main():
         action="store_true",
         help="Show the paths using viser. (default: False)",
     )
+    parser.add_argument(
+        "--display",
+        action="store_true",
+        help="Replay the paths in the environment's own (blocking) viewer. (default: False)",
+    )
 
     # Add planner-specific configs - this is the ONLY change needed!
     parser.add_arguments(CompositePRMConfig, dest="composite_prm_config", prefix="prm.")
@@ -146,6 +154,7 @@ def main():
     parser.add_arguments(RecedingHorizonConfig, dest="horizon_config", prefix="horizon.")
 
     args = parser.parse_args()
+    sys.stdout.reconfigure(line_buffering=True)  # keep the log if a viewer aborts the process
 
     if args.num_iters is not None and args.max_time is not None:
         raise ValueError("Cannot specify both num_iters and max_time.")
@@ -344,7 +353,7 @@ def main():
             primitives_only = True
         )
 
-    else:
+    elif args.display:
         print("displaying path from planner")
         # display starting configuration to not run it immediately
         env.show(blocking=True)

@@ -1,10 +1,15 @@
 """CoMotion collision checking with our costs, tasks and planners.
 
-Install the native package from a CoMotion checkout containing the Python
-bindings, then install the MRMG extra in the same Python environment::
+Install the MRMG extra; it builds CoMotion's Python bindings from the
+vhartman/comotion branch vh/experimental/mrmg (pinned commit; not on PyPI)::
 
-    python -m pip install /path/to/comotion
     python -m pip install -e '.[comotion]'  # From the MRMG repository.
+
+The build needs a C++17 compiler, CMake, Eigen3, FCL (with libccd and octomap)
+and the Boost headers. Alternatively build a checkout yourself::
+
+    git clone --recurse-submodules -b vh/experimental/mrmg https://github.com/vhartman/comotion.git
+    python -m pip install ./comotion -Cbuild.tool-args=-j8
 
 Load a built-in scene and pass it to a planner like any other environment::
 

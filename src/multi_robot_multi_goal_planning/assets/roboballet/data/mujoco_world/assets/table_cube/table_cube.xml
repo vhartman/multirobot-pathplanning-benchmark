@@ -1,0 +1,27 @@
+<mujoco model="table_cube_vis">
+  <default>
+    <default class="visual">
+      <geom group="2" type="mesh" contype="0" conaffinity="0"/>
+    </default>
+    <default class="collision">
+      <geom group="3" type="mesh"/>
+    </default>
+  </default>
+  <asset>
+    <material name="mat0" specular="0.31333" shininess="1.0" rgba="0.52 0.52 0.52 1.0"/>
+    <material name="mat1" specular="0.5" shininess="1.0" rgba="0.10629 0.10629 0.10629 1.0"/>
+    <material name="mat2" specular="0.0" shininess="0.25" rgba="0.75 0.75 0.75 1.0"/>
+    <mesh name="table_cube_vis_0" file="table_cube_vis_0.obj"/>
+    <mesh name="table_cube_vis_1" file="table_cube_vis_1.obj"/>
+    <mesh name="table_cube_collision" file="table_cube_collision.stl"/>
+  </asset>
+  <worldbody>
+    <body name="table_cube">
+      <body euler="90 0 0">
+        <geom mesh="table_cube_vis_0" material="mat1" class="visual"/>
+        <geom mesh="table_cube_vis_1" material="mat0" class="visual"/>
+      </body>
+      <geom mesh="table_cube_collision" class="collision"/>
+    </body>
+  </worldbody>
+</mujoco>

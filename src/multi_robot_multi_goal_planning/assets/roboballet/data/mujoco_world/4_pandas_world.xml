@@ -1,0 +1,46 @@
+<mujoco>
+  <visual>
+    <global offwidth="1920" offheight="1080" fovy="60" />
+    <scale framelength="0.5" framewidth="0.05" />
+  </visual>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="1 1 1" rgb2=".6 .8 1" width="256" height="256"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <model name="quad_table" file="assets/quad_table/quad_table.xml"/>
+    <model name="table_cube" file="assets/table_cube/table_cube.xml"/>
+    <model name="panda" file="assets/franka_emika_panda/panda_nohand.xml"/>
+  </asset>
+
+  <worldbody>
+    <light pos="1.5 1.5 5.0" diffuse="2 1.9 1.9"/>
+    <light pos="-1.5 -1.5 5.0" diffuse="2 1.9 1.9"/>
+
+    <attach model="quad_table" body="quad_table" prefix="table/"/>
+
+    <body name="workpiece" pos="0 0 0" mocap="true">
+      <attach model="table_cube" body="table_cube" prefix="cube/"/>
+    </body>
+
+    <geom name="floor" pos="0 0 -0.95" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <body name="panda1" pos="0.5515 -0.6285 0.009" euler="0 0 180" mocap="true">
+      <attach model="panda" body="link0" prefix="panda1/"/>
+    </body>
+    <body name="panda2" pos="-0.5515 -0.6285 0.009" euler="0 0 0" mocap="true">
+      <attach model="panda" body="link0" prefix="panda2/"/>
+    </body>
+    <body name="panda3" pos="-0.5515 0.6285 0.009" euler="0 0 0" mocap="true">
+      <attach model="panda" body="link0" prefix="panda3/"/>
+    </body>
+    <body name="panda4" pos="0.5515 0.6285 0.009" euler="0 0 180" mocap="true">
+      <attach model="panda" body="link0" prefix="panda4/"/>
+    </body>
+  </worldbody>
+
+  <keyframe>
+    <key name="home" qpos="0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0"
+      ctrl="0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0 0 -0.7854 0 -2.1817 0 1.3962 0"/>
+  </keyframe>
+</mujoco>

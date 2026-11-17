@@ -1,0 +1,29 @@
+<mujoco model="quad_table">
+  <default>
+    <default class="visual">
+      <geom group="2" type="mesh" contype="0" conaffinity="0"/>
+    </default>
+    <default class="collision">
+      <geom group="3" type="mesh"/>
+    </default>
+  </default>
+  <asset>
+    <material name="mat0" specular="0.14262" shininess="1.0" rgba="0.50133 0.50133 0.50133 1.0"/>
+    <material name="mat3" specular="0.12423" shininess="0.25" rgba="0.37575 0.37575 0.37575 1.0"/>
+    <mesh name="quad_table_0" file="quad_table_0.obj"/>
+    <mesh name="quad_table_3" file="quad_table_3.obj"/>
+  </asset>
+  <worldbody>
+    <body name="quad_table">
+      <body euler="90 0 0">
+        <!-- table top -->
+        <geom mesh="quad_table_0" material="mat3" class="visual"/>
+
+        <!-- table frame -->
+        <geom mesh="quad_table_3" material="mat0" class="visual"/>
+        <geom mesh="quad_table_0" class="collision"/>
+        <geom mesh="quad_table_3" class="collision"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

@@ -14,7 +14,7 @@ from .roboballet_ik import solve_ik, solve_bounded_ik, refine_goal_region
 
 def make_instance(assets, *, kind="welding", robots=None, targets=40,
                   episode=0, objects=4, seed=0, ik_attempts=12,
-                  geometry="source", workpiece_geometry="boxes"):
+                  geometry="source", workpiece_geometry="boxes", drop_uncovered=False):
     """Build a scene description in memory; no files are written.
 
     Welding uses a released target episode and 4 or 8 robots. Pack/unpack uses
@@ -26,6 +26,7 @@ def make_instance(assets, *, kind="welding", robots=None, targets=40,
             assets, robots=8 if robots is None else robots, target_count=targets,
             episode=episode, seed=seed, ik_attempts=ik_attempts,
             geometry=geometry, workpiece_geometry=workpiece_geometry,
+            drop_uncovered=drop_uncovered,
         )
     if kind in ("pack", "unpack"):
         if robots not in (None, 2):
@@ -92,7 +93,7 @@ def prepare_workpiece(assets):
 
 def make_welding_instance(assets, *, robots=8, target_count=40, episode=0,
                           seed=0, ik_attempts=12, geometry="source",
-                          workpiece_geometry="boxes"):
+                          workpiece_geometry="boxes", drop_uncovered=False):
     """Construct welding geometry, assign targets, and solve collision-free IK."""
     assets = Path(assets).expanduser().resolve()
     if robots not in (4, 8) or target_count not in (10, 20, 40):
@@ -256,12 +257,15 @@ def make_welding_instance(assets, *, robots=8, target_count=40, episode=0,
         if not any(banks[r][t] for r in range(len(env.robots)))
     ]
     instance["uncovered_targets"] = uncovered
-    if uncovered:
+    if uncovered and not drop_uncovered:
         raise RuntimeError(
             f"No collision-free IK found for targets {uncovered}; increase IK attempts or inspect geometry"
         )
+    if uncovered:
+        import warnings
+        warnings.warn(f"Dropping welding targets without collision-free IK: {uncovered}")
     current = np.tile(HOME, (len(env.robots), 1))
-    remaining = list(range(len(targets)))
+    remaining = [t for t in range(len(targets)) if t not in uncovered]
     while remaining:
         costs = np.full((len(env.robots), len(remaining)), 1e6)
         choices = {}

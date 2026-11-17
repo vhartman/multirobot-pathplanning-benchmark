@@ -6,6 +6,8 @@ instances freeze geometry, goals and assignments. No RL dependencies are needed.
 The objective is geometric joint-space length, not execution time with dwell.
 """
 
+from pathlib import Path
+
 import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -34,7 +36,7 @@ from .mujoco_env import MujocoEnvironment
 
 
 from .roboballet_models import HOME, make_welding_model, make_packing_model, quaternion
-from .roboballet_instances import load_instance, resolve_assets
+from .roboballet_instances import cached_instance, default_assets, load_instance, resolve_assets
 
 
 class _RoboBalletEnvironment(MujocoEnvironment):
@@ -47,10 +49,13 @@ class _RoboBalletEnvironment(MujocoEnvironment):
     the shared checker also supports the existing free-joint environments.
     """
 
-    def __init__(self, assets, instance=None, geometry="source", sequence_seed=0, **scene_options):
+    def __init__(self, assets=None, instance=None, geometry="source", sequence_seed=0, **scene_options):
+        if assets is None:
+            assets = default_assets()
         if instance is None:
             from .roboballet_setup import make_instance
-            instance = make_instance(assets, geometry=geometry, **scene_options)
+            options = dict(scene_options, geometry=geometry, assets=str(Path(assets).expanduser().resolve()))
+            instance = cached_instance(lambda: make_instance(assets, geometry=geometry, **scene_options), options)
         elif scene_options:
             raise ValueError("Pass either an instance or scene construction options")
         instance = load_instance(instance)
@@ -382,7 +387,7 @@ class _RoboBalletEnvironment(MujocoEnvironment):
 class RoboBalletEnvironment(DependencyGraphMixin, _RoboBalletEnvironment):
     """Fixed per-robot task orders with freely chosen interleavings."""
 
-    def __init__(self, assets, instance=None, geometry="source", **scene_options):
+    def __init__(self, assets=None, instance=None, geometry="source", **scene_options):
         _RoboBalletEnvironment.__init__(self, assets, instance, geometry, **scene_options)
 
     def _initialize_task_order(self, sequence_seed):
@@ -408,7 +413,7 @@ class SequentialRoboBalletEnvironment(SequenceMixin, _RoboBalletEnvironment):
     The local generator does not consume the planner's random state.
     """
 
-    def __init__(self, assets, instance=None, geometry="source", sequence_seed=0, **scene_options):
+    def __init__(self, assets=None, instance=None, geometry="source", sequence_seed=0, **scene_options):
         _RoboBalletEnvironment.__init__(self, assets, instance, geometry, sequence_seed, **scene_options)
 
     def _initialize_task_order(self, sequence_seed):
@@ -426,15 +431,23 @@ class SequentialRoboBalletEnvironment(SequenceMixin, _RoboBalletEnvironment):
         return DependencyType.FULLY_ORDERED
 
 
+# Welding uses RoboBallet's released test targets (paper_test_tasksets, episode 0), generated and IK-verified in
+# its 4-Panda world. RoboBallet's evaluator reuses them for 8 Pandas with workpiece and targets lifted 0.6 m, as
+# here. In that layout target 32 is out of reach (no arm within RoboBallet's 25 mm / 15 deg), so the 8-arm presets
+# drop it (39 welds). Target 14 is reachable only by panda4, at the edge of that region (24.99 mm, 10.8 deg in the
+# frozen instance), so whether a fresh build finds it depends on numerics; the frozen instance has it. The 4-arm
+# presets keep all 40 and fail if any is uncovered.
 @register([
-    ("roboballet.welding", {"kind": "welding"}),
+    ("roboballet.welding", {"kind": "welding", "drop_uncovered": True}),
+    ("roboballet.welding_4", {"kind": "welding", "robots": 4}),
+    ("roboballet.welding_4_sequence", {"kind": "welding", "robots": 4, "task_order": "random-sequence"}),
     ("cuarms.pack", {"kind": "pack"}),
     ("cuarms.unpack", {"kind": "unpack"}),
-    ("roboballet.welding_sequence", {"kind": "welding", "task_order": "random-sequence"}),
+    ("roboballet.welding_sequence", {"kind": "welding", "task_order": "random-sequence", "drop_uncovered": True}),
     ("cuarms.pack_sequence", {"kind": "pack", "task_order": "random-sequence"}),
     ("cuarms.unpack_sequence", {"kind": "unpack", "task_order": "random-sequence"}),
 ])
-def make_roboballet_environment(assets, instance=None, geometry="source", *,
+def make_roboballet_environment(assets=None, instance=None, geometry="source", *,
                                kind=None, task_order="dependency", sequence_seed=0,
                                **scene_options):
     """Build a named preset or a prepared instance with explicit external assets.

@@ -20,13 +20,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-comotion = ["comotion-collision>=0.1.0"]
+# not on PyPI: a native build (C++17, CMake, Eigen3, FCL, libccd, Boost headers); pip clones submodules
+comotion = ["comotion-collision @ git+https://github.com/vhartman/comotion.git@d492c539e2dcb04fad309d5724dd9e2b831adee2"]
 pinocchio = ["pin>=3.4", "meshcat", "hppfcl"]
 mujoco = ["mujoco>=3.3.5"]
 mujoco-scenes = ["mujoco>=3.3.5", "trimesh", "vhacdx", "Pillow"]
 viser = ["viser"]
 test = ["pytest"]
 all = ["pin>=3.4", "meshcat", "hppfcl", "mujoco>=3.3.5", "trimesh", "vhacdx", "Pillow", "viser"]
+
+[tool.hatch.metadata]
+allow-direct-references = true  # the comotion extra is a git reference
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/multi_robot_multi_goal_planning"]

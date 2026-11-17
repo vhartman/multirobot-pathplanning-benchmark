@@ -1,0 +1,4624 @@
+# proto-file: roboballet/environments/data.proto
+# proto-message: PredefinedTasks
+
+world_path: "mujoco_world/4_pandas_world.xml"
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.13528095
+      float_values: 0.2762194
+      float_values: 0.044239152
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.30414924
+      float_values: 0.604051
+      float_values: -0.7366245
+      float_values: 0.8780594
+      float_values: 0.12213762
+      float_values: 0.4627031
+      float_values: 0.36946583
+      float_values: -0.78753084
+      float_values: -0.4932446
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17377049
+      float_values: 0.28171456
+      float_values: 0.27111423
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.38817593
+      float_values: 0.9169207
+      float_values: -0.0926058
+      float_values: 0.8975663
+      float_values: 0.35335368
+      float_values: -0.26365873
+      float_values: -0.20903155
+      float_values: -0.18546581
+      float_values: -0.96016055
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.00481958
+      float_values: -0.24798125
+      float_values: 0.3641038
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.3313497
+      float_values: -0.88775337
+      float_values: 0.319533
+      float_values: -0.9408246
+      float_values: -0.3364065
+      float_values: 0.04098458
+      float_values: 0.07110878
+      float_values: -0.31420472
+      float_values: -0.9466884
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1757924
+      float_values: 0.05819321
+      float_values: 0.35884884
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.55390304
+      float_values: -0.12896982
+      float_values: -0.8225316
+      float_values: -0.29376653
+      float_values: 0.9546643
+      float_values: 0.04813834
+      float_values: 0.7790331
+      float_values: 0.2682962
+      float_values: -0.56667846
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.16033424
+      float_values: 0.14530586
+      float_values: 0.35705164
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.43099144
+      float_values: 0.88818884
+      float_values: 0.15927011
+      float_values: 0.78549135
+      float_values: 0.28240982
+      float_values: 0.55067956
+      float_values: 0.444128
+      float_values: 0.36244348
+      float_values: -0.8193809
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18703884
+      float_values: 0.020393958
+      float_values: 0.34152633
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.41404262
+      float_values: -0.39950973
+      float_values: -0.8179002
+      float_values: -0.5827684
+      float_values: -0.8065888
+      float_values: 0.09897191
+      float_values: -0.6992494
+      float_values: 0.43566778
+      float_values: -0.5667838
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18962
+      float_values: -0.01845544
+      float_values: 0.3564222
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.4051841
+      float_values: 0.7038223
+      float_values: -0.5834895
+      float_values: -0.47080487
+      float_values: 0.38645774
+      float_values: 0.79309094
+      float_values: 0.78368914
+      float_values: 0.5960575
+      float_values: 0.17477646
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1909673
+      float_values: -0.26486805
+      float_values: 0.06091646
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.68982327
+      float_values: -0.60937005
+      float_values: -0.39091176
+      float_values: -0.6669464
+      float_values: 0.32482672
+      float_values: 0.6705745
+      float_values: -0.28164944
+      float_values: 0.72329503
+      float_values: -0.6304902
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13247211
+      float_values: -0.28990197
+      float_values: 0.36604398
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.0047128038
+      float_values: -0.23504266
+      float_values: 0.97197366
+      float_values: -0.29805884
+      float_values: -0.92747414
+      float_values: -0.22572699
+      float_values: 0.95453584
+      float_values: -0.29076913
+      float_values: -0.06568554
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18399924
+      float_values: -0.294518
+      float_values: 0.26774272
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.21658042
+      float_values: 0.94165504
+      float_values: -0.25764075
+      float_values: 0.9462139
+      float_values: -0.13749819
+      float_values: 0.29287118
+      float_values: 0.24035847
+      float_values: -0.30721343
+      float_values: -0.92078644
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1583756
+      float_values: -0.14094119
+      float_values: 0.036550645
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.84534425
+      float_values: 0.32791606
+      float_values: 0.42173943
+      float_values: 0.5083796
+      float_values: 0.25122464
+      float_values: 0.8236725
+      float_values: 0.1641441
+      float_values: 0.91069055
+      float_values: -0.37907714
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.10012238
+      float_values: 0.27153882
+      float_values: 0.35853872
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.36724147
+      float_values: 0.8992219
+      float_values: -0.23776822
+      float_values: 0.91835344
+      float_values: -0.39108825
+      float_values: -0.06063738
+      float_values: -0.14751482
+      float_values: -0.1960867
+      float_values: -0.96942735
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19477107
+      float_values: 0.25056335
+      float_values: 0.21092473
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.40194404
+      float_values: 0.33592987
+      float_values: -0.85181695
+      float_values: -0.7686886
+      float_values: 0.62928236
+      float_values: -0.11454933
+      float_values: 0.4975528
+      float_values: 0.7008244
+      float_values: 0.51116174
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17986828
+      float_values: 0.28607073
+      float_values: 0.19531035
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.4371726
+      float_values: 0.5102574
+      float_values: 0.74061966
+      float_values: 0.05585039
+      float_values: -0.80648863
+      float_values: 0.5886059
+      float_values: 0.89764184
+      float_values: 0.29868624
+      float_values: 0.32407665
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.14606531
+      float_values: -0.29415476
+      float_values: 0.16039953
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.5089291
+      float_values: 0.645788
+      float_values: 0.5691652
+      float_values: 0.758439
+      float_values: 0.023670873
+      float_values: 0.651314
+      float_values: 0.40713814
+      float_values: 0.76314974
+      float_values: -0.5018376
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14971137
+      float_values: 0.035437457
+      float_values: 0.31359014
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.6608009
+      float_values: -0.73858273
+      float_values: 0.13355798
+      float_values: 0.67636895
+      float_values: -0.508838
+      float_values: 0.53254944
+      float_values: -0.32537246
+      float_values: 0.44224364
+      float_values: 0.83579504
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.0012300743
+      float_values: -0.25900772
+      float_values: 0.36264443
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14276381
+      float_values: 0.937727
+      float_values: -0.3166807
+      float_values: 0.43813977
+      float_values: 0.3467765
+      float_values: 0.8293248
+      float_values: 0.8874976
+      float_values: -0.020352835
+      float_values: -0.4603626
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19167447
+      float_values: -0.043948047
+      float_values: 0.34318236
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.24267302
+      float_values: 0.62006396
+      float_values: 0.74607676
+      float_values: -0.1236588
+      float_values: 0.7430203
+      float_values: -0.65774566
+      float_values: -0.9621945
+      float_values: -0.2518761
+      float_values: -0.10363462
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.14908727
+      float_values: -0.24591635
+      float_values: 0.29434735
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.31381613
+      float_values: -0.9389805
+      float_values: 0.14083703
+      float_values: 0.8671352
+      float_values: 0.22300562
+      float_values: -0.4453594
+      float_values: 0.38677636
+      float_values: 0.2618857
+      float_values: 0.8842058
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.15109569
+      float_values: 0.11687304
+      float_values: 0.31098312
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.8443293
+      float_values: 0.43961087
+      float_values: 0.30634993
+      float_values: 0.53524125
+      float_values: 0.71863675
+      float_values: 0.44393468
+      float_values: -0.02499582
+      float_values: 0.5387982
+      float_values: -0.84206396
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.14679536
+      float_values: 0.22021268
+      float_values: 0.34383774
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.73571056
+      float_values: -0.66600454
+      float_values: 0.12315833
+      float_values: -0.67391664
+      float_values: 0.701693
+      float_values: -0.2312213
+      float_values: 0.0675751
+      float_values: -0.2531104
+      float_values: -0.9650745
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.021792645
+      float_values: -0.008406649
+      float_values: 0.06954502
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.44954476
+      float_values: 0.74397737
+      float_values: 0.49437556
+      float_values: 0.7534573
+      float_values: 0.01853771
+      float_values: 0.65723544
+      float_values: 0.4798037
+      float_values: 0.66794765
+      float_values: -0.5688887
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14978428
+      float_values: 0.28123447
+      float_values: 0.35346135
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.43304175
+      float_values: 0.8603946
+      float_values: -0.26869315
+      float_values: 0.83099407
+      float_values: 0.26560363
+      float_values: -0.4887776
+      float_values: -0.34917572
+      float_values: -0.4349435
+      float_values: -0.8300003
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18382594
+      float_values: -0.09766083
+      float_values: 0.34712183
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.2954468
+      float_values: 0.75900763
+      float_values: 0.58018845
+      float_values: 0.5394049
+      float_values: 0.6337668
+      float_values: -0.5544204
+      float_values: -0.7885135
+      float_values: 0.14915477
+      float_values: -0.5966568
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18201193
+      float_values: -0.10369876
+      float_values: 0.336363
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.8641207
+      float_values: -0.019584175
+      float_values: -0.50290346
+      float_values: 0.16260898
+      float_values: 0.95651376
+      float_values: 0.24215636
+      float_values: 0.47629163
+      float_values: -0.29102895
+      float_values: 0.82972795
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.195554
+      float_values: -0.20787238
+      float_values: 0.3539581
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.48678282
+      float_values: 0.075997286
+      float_values: -0.8702108
+      float_values: -0.8642431
+      float_values: 0.1029246
+      float_values: 0.49243316
+      float_values: 0.12698968
+      float_values: 0.9917817
+      float_values: 0.0155782
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1937559
+      float_values: 0.019720418
+      float_values: 0.0356963
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.7416807
+      float_values: 0.6648486
+      float_values: -0.08880362
+      float_values: 0.46297562
+      float_values: 0.41162708
+      float_values: -0.7849947
+      float_values: -0.48534867
+      float_values: -0.62332934
+      float_values: -0.6131046
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1456999
+      float_values: -0.29803494
+      float_values: 0.3434739
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.25596243
+      float_values: -0.9183139
+      float_values: 0.30196488
+      float_values: 0.48836255
+      float_values: 0.14673875
+      float_values: 0.86021495
+      float_values: -0.8342573
+      float_values: 0.36765105
+      float_values: 0.41091052
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18499228
+      float_values: -0.26009932
+      float_values: 0.28493088
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.3486702
+      float_values: -0.8624473
+      float_values: 0.36689737
+      float_values: 0.4950165
+      float_values: -0.1629516
+      float_values: -0.85346675
+      float_values: 0.7958566
+      float_values: 0.47919866
+      float_values: 0.3701093
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19175419
+      float_values: -0.058153026
+      float_values: 0.32738107
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.2687005
+      float_values: -0.8794785
+      float_values: -0.3928328
+      float_values: -0.38176107
+      float_values: 0.27719513
+      float_values: -0.881715
+      float_values: 0.8843407
+      float_values: 0.38688555
+      float_values: -0.2612682
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18866356
+      float_values: -0.24180673
+      float_values: 0.14223367
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.5336739
+      float_values: 0.63216764
+      float_values: 0.561744
+      float_values: 0.37659407
+      float_values: 0.77239513
+      float_values: -0.5114515
+      float_values: -0.7572114
+      float_values: -0.061398845
+      float_values: -0.65027773
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18886882
+      float_values: 0.2851226
+      float_values: 0.32130715
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.40403178
+      float_values: 0.16509674
+      float_values: 0.89972293
+      float_values: -0.7745699
+      float_values: 0.58498496
+      float_values: 0.24048707
+      float_values: -0.48662078
+      float_values: -0.79406273
+      float_values: 0.3642315
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.08844107
+      float_values: -0.03017752
+      float_values: 0.34750986
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.29950392
+      float_values: -0.72733617
+      float_values: -0.6174783
+      float_values: 0.78228456
+      float_values: -0.18329205
+      float_values: 0.59534436
+      float_values: -0.5461943
+      float_values: -0.66135174
+      float_values: 0.51408714
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.16846201
+      float_values: 0.29783317
+      float_values: 0.18319118
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.2944441
+      float_values: 0.80706817
+      float_values: -0.5118043
+      float_values: 0.7060402
+      float_values: -0.5446302
+      float_values: -0.4526424
+      float_values: -0.64405733
+      float_values: -0.22807652
+      float_values: -0.73018575
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.042728513
+      float_values: -0.28751576
+      float_values: 0.31269887
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.28693944
+      float_values: 0.7366807
+      float_values: -0.61234576
+      float_values: -0.014262371
+      float_values: -0.6424405
+      float_values: -0.76620287
+      float_values: -0.9578425
+      float_values: -0.21112032
+      float_values: 0.19484833
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.012683337
+      float_values: 0.26075926
+      float_values: 0.36399427
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.8426018
+      float_values: 0.07990153
+      float_values: -0.53257674
+      float_values: 0.39072078
+      float_values: 0.77128285
+      float_values: -0.50245404
+      float_values: 0.37062046
+      float_values: -0.63145745
+      float_values: -0.68110347
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19027318
+      float_values: 0.25482237
+      float_values: 0.15569016
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.27203426
+      float_values: -0.74613476
+      float_values: -0.6076844
+      float_values: -0.5121152
+      float_values: 0.42239216
+      float_values: -0.74787897
+      float_values: 0.8146996
+      float_values: 0.5146531
+      float_values: -0.26720178
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.010650953
+      float_values: -0.26422524
+      float_values: 0.32463962
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.6149261
+      float_values: 0.748092
+      float_values: -0.24944797
+      float_values: -0.729518
+      float_values: -0.41953892
+      float_values: 0.5401765
+      float_values: 0.29944858
+      float_values: 0.5141454
+      float_values: 0.803732
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.16609097
+      float_values: 0.15989608
+      float_values: 0.37005872
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.112719685
+      float_values: 0.9754363
+      float_values: -0.18925732
+      float_values: 0.95210135
+      float_values: -0.16052003
+      float_values: -0.26026207
+      float_values: -0.28424868
+      float_values: -0.1508555
+      float_values: -0.946808
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14471316
+      float_values: -0.26778919
+      float_values: 0.20722991
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.08820928
+      float_values: -0.9119016
+      float_values: -0.40081745
+      float_values: -0.31974512
+      float_values: -0.4070133
+      float_values: 0.85563034
+      float_values: -0.9433887
+      float_values: 0.052684896
+      float_values: -0.3274784
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13869949
+      float_values: -0.26226664
+      float_values: 0.23361349
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.941757
+      float_values: -0.30959517
+      float_values: -0.13131826
+      float_values: -0.16047837
+      float_values: 0.07056642
+      float_values: 0.98451364
+      float_values: -0.295534
+      float_values: 0.94824636
+      float_values: -0.116139755
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14368549
+      float_values: 0.26964992
+      float_values: 0.13248214
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.7499297
+      float_values: -0.2581637
+      float_values: -0.6090623
+      float_values: 0.6452277
+      float_values: -0.08239646
+      float_values: -0.7595341
+      float_values: 0.14589956
+      float_values: -0.9625811
+      float_values: 0.22836591
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19059788
+      float_values: -0.09337447
+      float_values: 0.34727594
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.55521816
+      float_values: -0.26700905
+      float_values: -0.7876795
+      float_values: 0.16489173
+      float_values: 0.89292824
+      float_values: -0.41891506
+      float_values: 0.8151954
+      float_values: -0.3624711
+      float_values: -0.4517424
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18832786
+      float_values: 0.12367883
+      float_values: 0.35758373
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.28397313
+      float_values: -0.9127018
+      float_values: -0.29382768
+      float_values: 0.8647643
+      float_values: 0.37616253
+      float_values: -0.3326929
+      float_values: 0.41417634
+      float_values: -0.15961583
+      float_values: 0.89609194
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1939547
+      float_values: 0.28470695
+      float_values: 0.19659041
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.5647787
+      float_values: -0.5873839
+      float_values: 0.5796595
+      float_values: 0.057173662
+      float_values: -0.6728729
+      float_values: -0.73754543
+      float_values: 0.8232595
+      float_values: 0.44969118
+      float_values: -0.3464414
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.021042569
+      float_values: 0.013868654
+      float_values: 0.21558993
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.3823468
+      float_values: -0.17688037
+      float_values: -0.9069312
+      float_values: -0.9199267
+      float_values: 0.01940413
+      float_values: -0.3916099
+      float_values: 0.08686632
+      float_values: 0.98404104
+      float_values: -0.15529788
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.16091856
+      float_values: 0.03154726
+      float_values: 0.031207943
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.03729214
+      float_values: 0.87762153
+      float_values: -0.4779014
+      float_values: 0.9851116
+      float_values: 0.04802838
+      float_values: 0.165071
+      float_values: 0.16782269
+      float_values: -0.47694206
+      float_values: -0.86276406
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.122455016
+      float_values: 0.0031000157
+      float_values: 0.026853444
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.44186053
+      float_values: -0.7105927
+      float_values: -0.5475558
+      float_values: -0.80220234
+      float_values: -0.03978176
+      float_values: -0.5957255
+      float_values: 0.40153542
+      float_values: 0.7024781
+      float_values: -0.5876171
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.15011188
+      float_values: -0.028713243
+      float_values: 0.035255432
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.79692847
+      float_values: -0.021912433
+      float_values: 0.6036761
+      float_values: 0.44478452
+      float_values: 0.6549154
+      float_values: 0.610944
+      float_values: -0.40874404
+      float_values: 0.75538445
+      float_values: -0.5121744
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17761883
+      float_values: 0.2113986
+      float_values: 0.038904358
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.10151605
+      float_values: 0.5760306
+      float_values: 0.8111
+      float_values: 0.92819345
+      float_values: 0.23854049
+      float_values: -0.28557903
+      float_values: -0.35798246
+      float_values: 0.78184855
+      float_values: -0.51045215
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.15873976
+      float_values: -0.098924555
+      float_values: 0.03639015
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.11670921
+      float_values: 0.9360626
+      float_values: -0.3319124
+      float_values: 0.6696065
+      float_values: -0.32097873
+      float_values: -0.66977596
+      float_values: -0.733489
+      float_values: -0.14408167
+      float_values: -0.6642547
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.16462131
+      float_values: 0.08531403
+      float_values: 0.32257354
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.037099995
+      float_values: -0.6616946
+      float_values: -0.748855
+      float_values: 0.99930173
+      float_values: 0.021240478
+      float_values: 0.030739432
+      float_values: -0.0044340775
+      float_values: -0.74947256
+      float_values: 0.66202056
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18629062
+      float_values: 0.17251554
+      float_values: 0.3698659
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.29654425
+      float_values: 0.24489407
+      float_values: 0.92308635
+      float_values: -0.9511488
+      float_values: 0.011196193
+      float_values: -0.30852973
+      float_values: -0.08589216
+      float_values: -0.96948516
+      float_values: 0.22961055
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.138244
+      float_values: 0.2497808
+      float_values: 0.14619304
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.110087015
+      float_values: 0.08596293
+      float_values: -0.99019754
+      float_values: 0.9871856
+      float_values: 0.1252504
+      float_values: -0.098878674
+      float_values: 0.11552274
+      float_values: -0.988394
+      float_values: -0.0986498
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.15625778
+      float_values: 0.29157034
+      float_values: 0.2509487
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.111018896
+      float_values: -0.06410666
+      float_values: -0.9917485
+      float_values: 0.13833156
+      float_values: -0.9872062
+      float_values: 0.07929824
+      float_values: -0.9841439
+      float_values: -0.14599372
+      float_values: -0.100730576
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18876866
+      float_values: -0.28697905
+      float_values: 0.152938
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.4842318
+      float_values: 0.26109537
+      float_values: 0.8350741
+      float_values: -0.8316795
+      float_values: -0.43375963
+      float_values: -0.34664354
+      float_values: 0.27171442
+      float_values: -0.8623699
+      float_values: 0.4271879
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.06261384
+      float_values: -0.030836903
+      float_values: 0.3650251
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.11303297
+      float_values: 0.44852176
+      float_values: 0.8865956
+      float_values: -0.863804
+      float_values: 0.48529842
+      float_values: -0.13538142
+      float_values: -0.49098498
+      float_values: -0.7505423
+      float_values: 0.4422896
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17821878
+      float_values: 0.085655734
+      float_values: 0.03735693
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.95526844
+      float_values: 0.28329927
+      float_values: 0.08487494
+      float_values: 0.06447056
+      float_values: -0.47957495
+      float_values: 0.87512934
+      float_values: 0.28862742
+      float_values: -0.8305115
+      float_values: -0.4763873
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19053997
+      float_values: -0.13817747
+      float_values: 0.36394632
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.6939853
+      float_values: -0.6996806
+      float_values: -0.16979827
+      float_values: -0.71922326
+      float_values: -0.68456805
+      float_values: -0.118678264
+      float_values: -0.03320158
+      float_values: 0.20448382
+      float_values: -0.9783067
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18931308
+      float_values: 0.29580322
+      float_values: 0.36051932
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19734432
+      float_values: -0.36762607
+      float_values: -0.90879387
+      float_values: -0.91853356
+      float_values: 0.3932764
+      float_values: 0.04037078
+      float_values: 0.34256583
+      float_values: 0.84272456
+      float_values: -0.41528776
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.070324354
+      float_values: 0.011738111
+      float_values: 0.35593045
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.24907048
+      float_values: -0.9445911
+      float_values: -0.21380249
+      float_values: -0.5618417
+      float_values: 0.32074186
+      float_values: -0.76253426
+      float_values: 0.78885853
+      float_values: -0.06980162
+      float_values: -0.610598
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18500552
+      float_values: 0.17102167
+      float_values: 0.33253825
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.33961654
+      float_values: 0.84529245
+      float_values: -0.4124818
+      float_values: -0.5866175
+      float_values: 0.53316045
+      float_values: 0.60960627
+      float_values: 0.7352146
+      float_values: 0.034936696
+      float_values: 0.6769335
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.001777603
+      float_values: -0.28726852
+      float_values: 0.31936693
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.382072
+      float_values: 0.9179096
+      float_values: -0.10706521
+      float_values: -0.9184608
+      float_values: -0.3899861
+      float_values: -0.06588335
+      float_values: -0.10222891
+      float_values: 0.07316301
+      float_values: 0.99206674
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.10722696
+      float_values: -0.29199523
+      float_values: 0.00857226
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.711774
+      float_values: -0.69440985
+      float_values: 0.10570094
+      float_values: -0.68215114
+      float_values: -0.6474954
+      float_values: 0.33973452
+      float_values: -0.16747414
+      float_values: -0.31391823
+      float_values: -0.93456286
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1860376
+      float_values: -0.081309415
+      float_values: 0.041979164
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.6609747
+      float_values: 0.29386738
+      float_values: -0.69047403
+      float_values: 0.25845993
+      float_values: 0.9529844
+      float_values: 0.15817471
+      float_values: 0.7044934
+      float_values: -0.07391039
+      float_values: -0.7058515
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17641513
+      float_values: 0.08514624
+      float_values: 0.36918363
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.807843
+      float_values: 0.026443252
+      float_values: -0.58880424
+      float_values: 0.30259567
+      float_values: -0.87589395
+      float_values: 0.37582663
+      float_values: -0.50579196
+      float_values: -0.48177853
+      float_values: -0.7155864
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19116133
+      float_values: -0.12224769
+      float_values: 0.02962433
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.09235056
+      float_values: -0.8392361
+      float_values: 0.5358677
+      float_values: -0.9893205
+      float_values: -0.01638796
+      float_values: 0.14483227
+      float_values: -0.112766676
+      float_values: -0.5435203
+      float_values: -0.8317869
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.01790072
+      float_values: -0.018558675
+      float_values: 0.12538871
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.39608052
+      float_values: -0.21808062
+      float_values: -0.8919423
+      float_values: 0.44520256
+      float_values: 0.8951795
+      float_values: -0.02117318
+      float_values: 0.80306596
+      float_values: -0.3887087
+      float_values: 0.45165324
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19711421
+      float_values: -0.2750021
+      float_values: 0.25455895
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.08755103
+      float_values: 0.8499664
+      float_values: 0.5195112
+      float_values: 0.91503453
+      float_values: 0.13752398
+      float_values: -0.37920833
+      float_values: -0.39375958
+      float_values: 0.5085708
+      float_values: -0.76570827
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13994995
+      float_values: -0.14780812
+      float_values: 0.36820835
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.7352018
+      float_values: 0.661914
+      float_values: 0.14611031
+      float_values: 0.5982326
+      float_values: 0.5322399
+      float_values: 0.59903127
+      float_values: 0.31874144
+      float_values: 0.5278168
+      float_values: -0.7872822
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19113934
+      float_values: 0.28637785
+      float_values: 0.13613483
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.6693474
+      float_values: 0.14787605
+      float_values: 0.72808427
+      float_values: 0.41514722
+      float_values: 0.8871655
+      float_values: 0.20147005
+      float_values: -0.61613864
+      float_values: 0.43711564
+      float_values: -0.6552122
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.10053197
+      float_values: 0.2377343
+      float_values: 0.3527247
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.45038065
+      float_values: -0.8822167
+      float_values: 0.13729891
+      float_values: 0.6262403
+      float_values: -0.20253439
+      float_values: 0.75286317
+      float_values: -0.6363807
+      float_values: 0.4250571
+      float_values: 0.6436972
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.11754265
+      float_values: 0.28172213
+      float_values: 0.030517412
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.7370253
+      float_values: 0.10694756
+      float_values: -0.66734993
+      float_values: 0.42667982
+      float_values: 0.83938706
+      float_values: -0.33671007
+      float_values: 0.52415454
+      float_values: -0.5329086
+      float_values: -0.6642819
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19208106
+      float_values: 0.11285997
+      float_values: 0.3234829
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.41041756
+      float_values: 0.7739548
+      float_values: -0.48223585
+      float_values: 0.17717403
+      float_values: 0.45107096
+      float_values: 0.8747253
+      float_values: 0.8945204
+      float_values: -0.44444227
+      float_values: 0.048002746
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.153359
+      float_values: 0.21961409
+      float_values: 0.36149117
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.12330407
+      float_values: -0.95812625
+      float_values: 0.25843805
+      float_values: -0.9176419
+      float_values: -0.20922886
+      float_values: -0.33787084
+      float_values: 0.3777956
+      float_values: -0.19549273
+      float_values: -0.9050155
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14597142
+      float_values: -0.27700537
+      float_values: 0.35861766
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.72565395
+      float_values: -0.6734117
+      float_values: -0.14121978
+      float_values: -0.3448605
+      float_values: 0.5335628
+      float_values: -0.77225775
+      float_values: 0.59539706
+      float_values: -0.51169074
+      float_values: -0.61941504
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13604541
+      float_values: -0.2876325
+      float_values: 0.029841688
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.71189356
+      float_values: 0.579024
+      float_values: 0.39741507
+      float_values: 0.03680479
+      float_values: -0.59586906
+      float_values: 0.8022378
+      float_values: 0.70132226
+      float_values: -0.5564812
+      float_values: -0.44550622
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17932558
+      float_values: 0.011276612
+      float_values: 0.023805773
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.46963522
+      float_values: -0.1320288
+      float_values: -0.8729325
+      float_values: -0.17999326
+      float_values: 0.9823064
+      float_values: -0.051735457
+      float_values: 0.8643178
+      float_values: 0.13282517
+      float_values: -0.48508996
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18142807
+      float_values: -0.061807886
+      float_values: 0.35152078
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13149248
+      float_values: -0.6173508
+      float_values: -0.7756209
+      float_values: -0.9715826
+      float_values: 0.07508367
+      float_values: -0.22447665
+      float_values: 0.1968173
+      float_values: 0.7830967
+      float_values: -0.58993435
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18548553
+      float_values: -0.23515458
+      float_values: 0.030701026
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19068204
+      float_values: -0.33919448
+      float_values: -0.92118806
+      float_values: -0.04866496
+      float_values: 0.94051856
+      float_values: -0.3362388
+      float_values: 0.98044485
+      float_values: -0.019285116
+      float_values: -0.19584689
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.09213903
+      float_values: -0.23687972
+      float_values: 0.36161637
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.90551215
+      float_values: -0.16936098
+      float_values: 0.38905603
+      float_values: -0.078634396
+      float_values: -0.8340323
+      float_values: -0.5460831
+      float_values: 0.41697046
+      float_values: -0.52507806
+      float_values: 0.7419088
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1456326
+      float_values: -0.29245186
+      float_values: 0.26132575
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.4405544
+      float_values: 0.86381483
+      float_values: 0.24440892
+      float_values: -0.14817119
+      float_values: -0.33848694
+      float_values: 0.9292319
+      float_values: 0.8854135
+      float_values: 0.37316287
+      float_values: 0.2771144
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18807016
+      float_values: -0.28561887
+      float_values: 0.24238424
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.02693486
+      float_values: 0.5355419
+      float_values: -0.844079
+      float_values: -0.9735525
+      float_values: 0.20568876
+      float_values: 0.09943672
+      float_values: 0.2268701
+      float_values: 0.8190769
+      float_values: 0.52691835
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17309386
+      float_values: 0.22061735
+      float_values: 0.3566654
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.8969885
+      float_values: 0.44186875
+      float_values: -0.012788916
+      float_values: 0.4080733
+      float_values: -0.8165673
+      float_values: 0.40828174
+      float_values: 0.16996394
+      float_values: -0.37144288
+      float_values: -0.9127664
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.07468049
+      float_values: 0.28765336
+      float_values: 0.37056118
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.3132835
+      float_values: -0.1139902
+      float_values: 0.94279355
+      float_values: -0.06989125
+      float_values: -0.9928452
+      float_values: -0.096817434
+      float_values: 0.9470843
+      float_values: -0.035561718
+      float_values: -0.31900895
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.16561545
+      float_values: 0.2493793
+      float_values: 0.15615748
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.96573067
+      float_values: -0.25822723
+      float_values: -0.026133379
+      float_values: -0.17321424
+      float_values: -0.71621275
+      float_values: 0.67604446
+      float_values: -0.19329014
+      float_values: -0.6483502
+      float_values: -0.73639727
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13313901
+      float_values: -0.28323478
+      float_values: 0.3601428
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.5565642
+      float_values: -0.5826026
+      float_values: 0.59229255
+      float_values: 0.30165797
+      float_values: 0.52254915
+      float_values: 0.7974615
+      float_values: -0.77410513
+      float_values: 0.62250835
+      float_values: -0.11508542
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19129744
+      float_values: -0.007961466
+      float_values: 0.34181473
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.21712472
+      float_values: -0.83483875
+      float_values: 0.5058667
+      float_values: 0.54438204
+      float_values: -0.32659847
+      float_values: -0.7726459
+      float_values: 0.81025
+      float_values: 0.44314528
+      float_values: 0.3835586
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1608027
+      float_values: -0.29030165
+      float_values: 0.102962255
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.34120888
+      float_values: 0.89127564
+      float_values: -0.2986708
+      float_values: 0.77149975
+      float_values: -0.0840184
+      float_values: 0.6306576
+      float_values: 0.53699595
+      float_values: -0.44561043
+      float_values: -0.7162868
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13453816
+      float_values: 0.25712752
+      float_values: 0.05880893
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.410729
+      float_values: 0.8657402
+      float_values: 0.28599942
+      float_values: 0.879501
+      float_values: 0.45889938
+      float_values: -0.12605302
+      float_values: -0.24037412
+      float_values: 0.19976315
+      float_values: -0.9499026
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18823141
+      float_values: 0.17699939
+      float_values: 0.3292949
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.70439833
+      float_values: 0.41782546
+      float_values: 0.5737986
+      float_values: 0.60289586
+      float_values: 0.07445941
+      float_values: -0.7943377
+      float_values: -0.37461925
+      float_values: 0.90547097
+      float_values: -0.19945614
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1856126
+      float_values: -0.05551372
+      float_values: 0.023914468
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.15642849
+      float_values: -0.9000151
+      float_values: 0.40682045
+      float_values: -0.6545419
+      float_values: 0.40292215
+      float_values: 0.63970983
+      float_values: -0.7396655
+      float_values: -0.16621217
+      float_values: -0.65212613
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.0525541
+      float_values: -0.25627387
+      float_values: 0.3279026
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.16533974
+      float_values: 0.9789826
+      float_values: -0.119397394
+      float_values: -0.94985855
+      float_values: 0.19064717
+      float_values: 0.24783544
+      float_values: 0.26538935
+      float_values: 0.07243359
+      float_values: 0.9614166
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18537712
+      float_values: 0.28236637
+      float_values: 0.34295005
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.70768315
+      float_values: -0.4034519
+      float_values: 0.5800096
+      float_values: 0.27816716
+      float_values: -0.5955232
+      float_values: -0.75364125
+      float_values: 0.6494672
+      float_values: 0.69467884
+      float_values: -0.30921465
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.14652659
+      float_values: -0.26821816
+      float_values: 0.15052426
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.7644526
+      float_values: -0.5273828
+      float_values: 0.3707825
+      float_values: -0.5528019
+      float_values: 0.83215606
+      float_values: 0.043890826
+      float_values: -0.33169615
+      float_values: -0.1714168
+      float_values: -0.92768204
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.12775588
+      float_values: -0.28616875
+      float_values: 0.3246902
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.5248172
+      float_values: -0.70990527
+      float_values: -0.46968222
+      float_values: -0.38528025
+      float_values: -0.29391167
+      float_values: 0.87474287
+      float_values: -0.7590296
+      float_values: 0.64003944
+      float_values: -0.11926258
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13953052
+      float_values: -0.26721403
+      float_values: 0.24324118
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.81671715
+      float_values: 0.5003131
+      float_values: 0.2875063
+      float_values: 0.25271028
+      float_values: 0.13780506
+      float_values: -0.9576781
+      float_values: -0.5187587
+      float_values: 0.8548079
+      float_values: -0.013886514
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17546655
+      float_values: 0.081860736
+      float_values: 0.31376895
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.07705739
+      float_values: 0.9953734
+      float_values: 0.057392213
+      float_values: -0.8342849
+      float_values: 0.03285379
+      float_values: 0.5503538
+      float_values: 0.54592204
+      float_values: -0.090290286
+      float_values: 0.8329567
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.14884046
+      float_values: 0.16746092
+      float_values: 0.37139422
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.5955616
+      float_values: 0.5053106
+      float_values: -0.6244738
+      float_values: 0.40123454
+      float_values: -0.86058104
+      float_values: -0.3137054
+      float_values: -0.695929
+      float_values: -0.06372956
+      float_values: -0.71527714
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17370947
+      float_values: 0.2950295
+      float_values: 0.25964037
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.55969334
+      float_values: -0.7169827
+      float_values: -0.41554683
+      float_values: -0.2660742
+      float_values: 0.6303722
+      float_values: -0.72927046
+      float_values: 0.7848235
+      float_values: -0.29760152
+      float_values: -0.5435857
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1843021
+      float_values: -0.009828511
+      float_values: 0.36671516
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.13422254
+      float_values: 0.2658561
+      float_values: -0.95462286
+      float_values: 0.19064677
+      float_values: -0.93841594
+      float_values: -0.28814802
+      float_values: -0.9724393
+      float_values: -0.22067173
+      float_values: 0.07527197
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.07047837
+      float_values: 0.2547494
+      float_values: 0.36754662
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.98549086
+      float_values: 0.16903186
+      float_values: -0.01536119
+      float_values: 0.0961605
+      float_values: -0.63062143
+      float_values: -0.77011025
+      float_values: -0.13986026
+      float_values: 0.75745946
+      float_values: -0.63772583
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19464102
+      float_values: -0.035656527
+      float_values: 0.34969237
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.32624167
+      float_values: -0.9048171
+      float_values: -0.2736282
+      float_values: -0.5782942
+      float_values: 0.037939653
+      float_values: -0.81494564
+      float_values: 0.7477581
+      float_values: 0.4241068
+      float_values: -0.51087296
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.15410177
+      float_values: -0.1888819
+      float_values: 0.3675582
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.052714724
+      float_values: -0.4863288
+      float_values: 0.8721843
+      float_values: 0.110518254
+      float_values: -0.8651921
+      float_values: -0.4891097
+      float_values: 0.99247515
+      float_values: 0.12217557
+      float_values: 0.008139845
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18978402
+      float_values: 0.0386568
+      float_values: 0.3265041
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.5638003
+      float_values: 0.81234556
+      float_values: 0.1490769
+      float_values: -0.81732666
+      float_values: 0.5747328
+      float_values: -0.04073494
+      float_values: -0.11877023
+      float_values: -0.09887815
+      float_values: 0.9879862
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.012966164
+      float_values: 0.2936128
+      float_values: 0.34726334
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.9240877
+      float_values: 0.1919058
+      float_values: 0.3305058
+      float_values: 0.31974763
+      float_values: -0.86190516
+      float_values: -0.3935491
+      float_values: 0.20934029
+      float_values: 0.46935233
+      float_values: -0.8578374
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.15061478
+      float_values: 0.11693903
+      float_values: 0.31505466
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.95757484
+      float_values: -0.059808597
+      float_values: -0.28191015
+      float_values: 0.28591925
+      float_values: 0.074752405
+      float_values: 0.9553336
+      float_values: -0.0360637
+      float_values: -0.995407
+      float_values: 0.08868145
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.16148628
+      float_values: -0.28307673
+      float_values: 0.25019252
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.7459461
+      float_values: -0.41978353
+      float_values: 0.5170553
+      float_values: -0.38180178
+      float_values: 0.36658216
+      float_values: 0.8484368
+      float_values: -0.545703
+      float_values: -0.83030075
+      float_values: 0.11317643
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18296793
+      float_values: 0.28476626
+      float_values: 0.17138825
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.62724406
+      float_values: 0.67574835
+      float_values: 0.38720676
+      float_values: 0.64572614
+      float_values: -0.17326087
+      float_values: -0.7436521
+      float_values: -0.4354339
+      float_values: 0.71648085
+      float_values: -0.5450252
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.07981127
+      float_values: 0.28588286
+      float_values: 0.36753622
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.5366648
+      float_values: -0.13141756
+      float_values: -0.83349884
+      float_values: 0.30329725
+      float_values: -0.8917359
+      float_values: 0.33588374
+      float_values: -0.78740185
+      float_values: -0.4330549
+      float_values: -0.43870467
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18237722
+      float_values: 0.040918436
+      float_values: 0.32390508
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.21238448
+      float_values: -0.4949853
+      float_values: 0.84254515
+      float_values: -0.91602284
+      float_values: 0.19940238
+      float_values: 0.3480529
+      float_values: -0.34028658
+      float_values: -0.84571165
+      float_values: -0.4110679
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.012501634
+      float_values: 0.011995226
+      float_values: 0.25719884
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.3742069
+      float_values: -0.81513804
+      float_values: -0.4421755
+      float_values: 0.6886454
+      float_values: 0.07508096
+      float_values: -0.7212006
+      float_values: 0.621077
+      float_values: -0.5743804
+      float_values: 0.53324527
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14362629
+      float_values: 0.29191813
+      float_values: 0.2436329
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.3644955
+      float_values: -0.8173845
+      float_values: 0.4461229
+      float_values: 0.4536641
+      float_values: -0.26251265
+      float_values: -0.85163134
+      float_values: 0.8132232
+      float_values: 0.51280576
+      float_values: 0.27513334
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18426648
+      float_values: 0.15391119
+      float_values: 0.02227441
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.9565299
+      float_values: 0.108969145
+      float_values: 0.27051115
+      float_values: 0.124303356
+      float_values: -0.9914311
+      float_values: -0.04016276
+      float_values: 0.26381668
+      float_values: 0.07204232
+      float_values: -0.9618787
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.124808334
+      float_values: 0.28153154
+      float_values: 0.356156
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.008627579
+      float_values: -0.86378735
+      float_values: -0.50378263
+      float_values: 0.21650377
+      float_values: 0.4902376
+      float_values: -0.8442708
+      float_values: 0.9762437
+      float_values: -0.116354845
+      float_values: 0.18278366
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18359272
+      float_values: 0.040855385
+      float_values: 0.34776935
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.07270638
+      float_values: 0.041218795
+      float_values: -0.99650127
+      float_values: -0.98096657
+      float_values: 0.17741911
+      float_values: 0.07891162
+      float_values: 0.18005101
+      float_values: 0.98327184
+      float_values: 0.027534757
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18159223
+      float_values: 0.2526308
+      float_values: 0.17751831
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.87743145
+      float_values: 0.332049
+      float_values: -0.34620434
+      float_values: -0.35694742
+      float_values: -0.030211952
+      float_values: -0.9336358
+      float_values: -0.32047236
+      float_values: 0.94277817
+      float_values: 0.09201513
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1891616
+      float_values: -0.2646316
+      float_values: 0.36283872
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.62851316
+      float_values: -0.66925037
+      float_values: -0.3963271
+      float_values: -0.015968356
+      float_values: -0.49833944
+      float_values: 0.86683494
+      float_values: -0.77763504
+      float_values: 0.55114585
+      float_values: 0.30252606
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.13878685
+      float_values: -0.23898643
+      float_values: 0.20995681
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.2927849
+      float_values: 0.7440483
+      float_values: 0.6005573
+      float_values: 0.8527015
+      float_values: 0.48736072
+      float_values: -0.18809496
+      float_values: -0.43263978
+      float_values: 0.45702478
+      float_values: -0.77714294
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19428937
+      float_values: -0.1783025
+      float_values: 0.32491866
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.5273515
+      float_values: 0.53084797
+      float_values: 0.66340095
+      float_values: -0.010841267
+      float_values: 0.7765281
+      float_values: -0.6299893
+      float_values: -0.8495781
+      float_values: -0.33941793
+      float_values: -0.40374818
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14827633
+      float_values: 0.29793015
+      float_values: 0.25856262
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.3968518
+      float_values: -0.43195742
+      float_values: -0.80988973
+      float_values: -0.7393627
+      float_values: 0.37242725
+      float_values: -0.5609284
+      float_values: 0.54392225
+      float_values: 0.82140774
+      float_values: -0.1715748
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17914127
+      float_values: -0.27502915
+      float_values: 0.22579294
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.07511839
+      float_values: 0.15025827
+      float_values: -0.9857889
+      float_values: -0.9687033
+      float_values: 0.22354758
+      float_values: 0.107890554
+      float_values: 0.23658216
+      float_values: 0.9630415
+      float_values: 0.12876315
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.01739913
+      float_values: 0.29247645
+      float_values: 0.32454792
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.4987273
+      float_values: -0.7945456
+      float_values: 0.3463646
+      float_values: 0.6982083
+      float_values: 0.13148807
+      float_values: -0.7037159
+      float_values: 0.5135915
+      float_values: 0.592797
+      float_values: 0.620335
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17892903
+      float_values: -0.29619572
+      float_values: 0.118917935
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.7302114
+      float_values: 0.3279491
+      float_values: -0.5993669
+      float_values: 0.6768206
+      float_values: -0.22741993
+      float_values: 0.7001386
+      float_values: 0.093301855
+      float_values: -0.91691303
+      float_values: -0.38802734
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.04393383
+      float_values: 0.023285218
+      float_values: 0.3386988
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.4730369
+      float_values: 0.87705183
+      float_values: -0.08376287
+      float_values: 0.83206177
+      float_values: 0.41345707
+      float_values: -0.36976546
+      float_values: -0.28967112
+      float_values: -0.24460858
+      float_values: -0.9253417
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18900107
+      float_values: -0.060131136
+      float_values: 0.030510757
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.12852517
+      float_values: 0.24636927
+      float_values: 0.9606162
+      float_values: 0.56456006
+      float_values: -0.8145453
+      float_values: 0.13337141
+      float_values: 0.815324
+      float_values: 0.525184
+      float_values: -0.24377982
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.085309386
+      float_values: -0.25250807
+      float_values: 0.32179847
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.644982
+      float_values: 0.7638612
+      float_values: 0.022678727
+      float_values: -0.76137614
+      float_values: 0.6448654
+      float_values: -0.06674565
+      float_values: -0.065609135
+      float_values: 0.025782699
+      float_values: 0.9975123
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18504599
+      float_values: 0.22883952
+      float_values: 0.3525947
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.8038817
+      float_values: -0.12744826
+      float_values: -0.5809743
+      float_values: 0.55895036
+      float_values: 0.1720621
+      float_values: -0.81115294
+      float_values: 0.20334369
+      float_values: -0.9768068
+      float_values: -0.06708033
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13539706
+      float_values: 0.16251339
+      float_values: 0.0057572694
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.9782539
+      float_values: 0.019383924
+      float_values: 0.20650317
+      float_values: -0.10088668
+      float_values: -0.8254372
+      float_values: 0.55540556
+      float_values: 0.18122134
+      float_values: -0.56416106
+      float_values: -0.80553156
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.04221687
+      float_values: -0.28244904
+      float_values: 0.036580276
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.38201636
+      float_values: 0.813969
+      float_values: -0.43762764
+      float_values: 0.57502437
+      float_values: 0.5800675
+      float_values: 0.5769477
+      float_values: 0.7234711
+      float_values: -0.031243091
+      float_values: -0.6896473
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17237648
+      float_values: 0.17290081
+      float_values: 0.031747892
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.924869
+      float_values: 0.26077226
+      float_values: -0.27679443
+      float_values: 0.18171726
+      float_values: 0.94243604
+      float_values: 0.28070113
+      float_values: 0.3340601
+      float_values: 0.20931345
+      float_values: -0.9190167
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18456924
+      float_values: -0.28880847
+      float_values: 0.0485976
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17860846
+      float_values: 0.0036326519
+      float_values: 0.98391354
+      float_values: -0.07760803
+      float_values: -0.9968256
+      float_values: 0.017768402
+      float_values: 0.98085475
+      float_values: -0.079533175
+      float_values: -0.17775956
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14906463
+      float_values: -0.29618827
+      float_values: 0.15767105
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.8271625
+      float_values: 0.5369482
+      float_values: -0.16579762
+      float_values: 0.39849216
+      float_values: 0.76846623
+      float_values: 0.5006632
+      float_values: 0.3962401
+      float_values: 0.3480608
+      float_values: -0.8496161
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.13287245
+      float_values: 0.27468324
+      float_values: 0.034585476
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.019717753
+      float_values: -0.98184603
+      float_values: -0.18865211
+      float_values: -0.7185982
+      float_values: 0.14510909
+      float_values: -0.6801176
+      float_values: 0.6951459
+      float_values: 0.12215468
+      float_values: -0.708414
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18390745
+      float_values: 0.28548145
+      float_values: 0.08529914
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.7044402
+      float_values: -0.70932114
+      float_values: -0.025051363
+      float_values: -0.36461744
+      float_values: 0.39193937
+      float_values: -0.8446524
+      float_values: 0.6089484
+      float_values: -0.58587295
+      float_values: -0.5347287
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18100332
+      float_values: 0.26158813
+      float_values: 0.16319257
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.8330682
+      float_values: -0.38125348
+      float_values: 0.4008032
+      float_values: -0.5531697
+      float_values: 0.57522905
+      float_values: -0.6025901
+      float_values: -0.0008140819
+      float_values: -0.72371083
+      float_values: -0.6901029
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.00075172656
+      float_values: 0.27553692
+      float_values: 0.034096412
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.25343668
+      float_values: 0.94641316
+      float_values: 0.20017979
+      float_values: 0.93652904
+      float_values: -0.18822914
+      float_values: -0.29577547
+      float_values: -0.24224615
+      float_values: 0.26243454
+      float_values: -0.9340476
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13403317
+      float_values: 0.25755006
+      float_values: 0.18056847
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.26695997
+      float_values: 0.39349237
+      float_values: 0.87971365
+      float_values: 0.16921374
+      float_values: 0.91780037
+      float_values: -0.35917842
+      float_values: -0.94873554
+      float_values: 0.052973375
+      float_values: -0.3116003
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.06945106
+      float_values: -0.28830177
+      float_values: 0.3227375
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.016481683
+      float_values: 0.24559355
+      float_values: 0.9692328
+      float_values: -0.6855449
+      float_values: -0.702866
+      float_values: 0.18975657
+      float_values: 0.72784376
+      float_values: -0.6675801
+      float_values: 0.156781
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19076413
+      float_values: 0.0275412
+      float_values: 0.32279572
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.9814745
+      float_values: 0.029333282
+      float_values: -0.1893338
+      float_values: 0.14525391
+      float_values: -0.5304819
+      float_values: -0.8351588
+      float_values: -0.1249361
+      float_values: -0.8471886
+      float_values: 0.5163937
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17410597
+      float_values: -0.1296
+      float_values: 0.037840698
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.00039644583
+      float_values: -0.22535273
+      float_values: 0.97427714
+      float_values: -0.98635966
+      float_values: -0.16045807
+      float_values: -0.03671299
+      float_values: 0.16460401
+      float_values: -0.96097314
+      float_values: -0.22234246
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14340213
+      float_values: -0.26483637
+      float_values: 0.24566852
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.69714534
+      float_values: 0.70273674
+      float_values: 0.1419488
+      float_values: -0.15219599
+      float_values: -0.04841641
+      float_values: 0.9871637
+      float_values: 0.7005888
+      float_values: -0.70980066
+      float_values: 0.073200434
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18176414
+      float_values: -0.15788653
+      float_values: 0.3279026
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.24996337
+      float_values: 0.65406096
+      float_values: -0.71394855
+      float_values: 0.5194516
+      float_values: -0.7128489
+      float_values: -0.47118628
+      float_values: -0.817122
+      float_values: -0.25308242
+      float_values: -0.51793915
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18880124
+      float_values: -0.19811895
+      float_values: 0.01866511
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.74096936
+      float_values: -0.36570883
+      float_values: -0.5632242
+      float_values: 0.41991118
+      float_values: 0.40219632
+      float_values: -0.8135802
+      float_values: 0.52406013
+      float_values: -0.8393421
+      float_values: -0.14444992
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17957003
+      float_values: 0.075413726
+      float_values: 0.35956487
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.88664246
+      float_values: 0.33347917
+      float_values: 0.32040104
+      float_values: -0.46058372
+      float_values: -0.57450116
+      float_values: -0.6766174
+      float_values: -0.04156703
+      float_values: -0.74748915
+      float_values: 0.6629722
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19151163
+      float_values: 0.2687583
+      float_values: 0.2140595
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.7639547
+      float_values: -0.48960426
+      float_values: 0.4203104
+      float_values: 0.5599049
+      float_values: 0.17919089
+      float_values: -0.8089482
+      float_values: 0.3207487
+      float_values: 0.85333365
+      float_values: 0.41102555
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1907767
+      float_values: 0.27071983
+      float_values: 0.009660831
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19784315
+      float_values: 0.9762528
+      float_values: -0.08825304
+      float_values: 0.5889099
+      float_values: -0.046405487
+      float_values: 0.8068653
+      float_values: 0.78360903
+      float_values: -0.21160586
+      float_values: -0.58410597
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14861865
+      float_values: -0.04479854
+      float_values: 0.37182426
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.5141509
+      float_values: 0.81041396
+      float_values: 0.28085232
+      float_values: 0.84857315
+      float_values: 0.5282775
+      float_values: 0.029094249
+      float_values: -0.12478958
+      float_values: 0.25328258
+      float_values: -0.95930994
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.16852188
+      float_values: -0.23670277
+      float_values: 0.15006934
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.0112565635
+      float_values: -0.24117893
+      float_values: -0.97041535
+      float_values: -0.2500346
+      float_values: 0.93896866
+      float_values: -0.23626375
+      float_values: 0.9681715
+      float_values: 0.24529694
+      float_values: -0.049733516
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17607248
+      float_values: -0.27269253
+      float_values: 0.366442
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.3259584
+      float_values: 0.9095603
+      float_values: 0.25778115
+      float_values: -0.39738196
+      float_values: -0.11559371
+      float_values: 0.9103437
+      float_values: 0.8578104
+      float_values: -0.39917174
+      float_values: 0.32376415
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.18915631
+      float_values: 0.0504494
+      float_values: 0.3311236
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.22403269
+      float_values: -0.36577645
+      float_values: -0.9033366
+      float_values: 0.926511
+      float_values: -0.20757532
+      float_values: 0.31383088
+      float_values: -0.30230233
+      float_values: -0.90725964
+      float_values: 0.29239225
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13829733
+      float_values: 0.2889008
+      float_values: 0.28491652
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.90088284
+      float_values: -0.40062094
+      float_values: -0.16707163
+      float_values: -0.1567634
+      float_values: 0.058632717
+      float_values: -0.98589426
+      float_values: 0.40476573
+      float_values: 0.91436595
+      float_values: -0.009981489
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.13424385
+      float_values: -0.110901274
+      float_values: 0.3273064
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.2739432
+      float_values: 0.16003233
+      float_values: -0.9483379
+      float_values: 0.44908124
+      float_values: 0.850674
+      float_values: 0.2732761
+      float_values: 0.8504594
+      float_values: -0.5007429
+      float_values: 0.16116881
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.05847362
+      float_values: 0.013418067
+      float_values: 0.31600797
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.6363014
+      float_values: 0.6862365
+      float_values: 0.3524202
+      float_values: -0.7190477
+      float_values: 0.36209738
+      float_values: 0.5931744
+      float_values: 0.2794475
+      float_values: -0.63084465
+      float_values: 0.7238399
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.14641294
+      float_values: 0.2836165
+      float_values: 0.2960252
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.6533657
+      float_values: -0.5330906
+      float_values: 0.53751993
+      float_values: -0.20838076
+      float_values: -0.8092395
+      float_values: -0.5492803
+      float_values: 0.7277985
+      float_values: 0.24687208
+      float_values: -0.63981515
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.017267201
+      float_values: -0.020642206
+      float_values: 0.29414994
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.015058973
+      float_values: -0.99981296
+      float_values: 0.012136529
+      float_values: 0.13401854
+      float_values: 0.014046644
+      float_values: 0.99087924
+      float_values: -0.9908644
+      float_values: -0.013295105
+      float_values: 0.134205
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.0881275
+      float_values: -0.28794205
+      float_values: 0.35750604
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.32496476
+      float_values: -0.2943661
+      float_values: 0.8987472
+      float_values: -0.7374931
+      float_values: 0.6737881
+      float_values: -0.0459739
+      float_values: -0.59203196
+      float_values: -0.6777597
+      float_values: -0.43605033
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1912679
+      float_values: -0.2798699
+      float_values: 0.23416331
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.7765163
+      float_values: 0.04491841
+      float_values: -0.628494
+      float_values: -0.55162996
+      float_values: 0.530509
+      float_values: -0.6436339
+      float_values: 0.3045107
+      float_values: 0.84648836
+      float_values: 0.43672723
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.056993738
+      float_values: 0.29305995
+      float_values: 0.36635053
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13073254
+      float_values: 0.43717137
+      float_values: -0.88982594
+      float_values: 0.9888035
+      float_values: -0.12263072
+      float_values: 0.08502577
+      float_values: -0.07194916
+      float_values: -0.89097863
+      float_values: -0.44830838
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.06897578
+      float_values: -0.28473786
+      float_values: 0.37130493
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.7164188
+      float_values: -0.6828524
+      float_values: 0.14302722
+      float_values: -0.318552
+      float_values: -0.5025542
+      float_values: -0.8037188
+      float_values: 0.62070024
+      float_values: 0.5302377
+      float_values: -0.5775632
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19454132
+      float_values: -0.28716576
+      float_values: 0.124016
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.71828467
+      float_values: 0.37519878
+      float_values: 0.5859121
+      float_values: 0.13581342
+      float_values: -0.7503179
+      float_values: 0.64697593
+      float_values: 0.6823649
+      float_values: 0.5442876
+      float_values: 0.48798478
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.13510756
+      float_values: -0.046236217
+      float_values: 0.35891163
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.6807525
+      float_values: -0.7286546
+      float_values: -0.07508964
+      float_values: -0.12301981
+      float_values: 0.21477832
+      float_values: -0.9688841
+      float_values: 0.7221095
+      float_values: -0.6503328
+      float_values: -0.23584984
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1386069
+      float_values: 0.2326905
+      float_values: 0.3509461
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.39602074
+      float_values: 0.85689425
+      float_values: -0.3299997
+      float_values: 0.7653915
+      float_values: 0.50658923
+      float_values: 0.39691707
+      float_values: 0.50729024
+      float_values: -0.09539157
+      float_values: -0.85647947
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18551897
+      float_values: 0.007333222
+      float_values: 0.32341582
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.77694875
+      float_values: 0.3234494
+      float_values: 0.54012144
+      float_values: -0.38755944
+      float_values: 0.4303694
+      float_values: -0.8152177
+      float_values: -0.4961334
+      float_values: -0.8427115
+      float_values: -0.2090191
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13707715
+      float_values: 0.2541784
+      float_values: 0.3693957
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19771658
+      float_values: 0.9548432
+      float_values: -0.2217714
+      float_values: 0.5273652
+      float_values: -0.0870971
+      float_values: -0.8451627
+      float_values: -0.82631356
+      float_values: -0.2840572
+      float_values: -0.48633057
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.12808427
+      float_values: 0.28893736
+      float_values: 0.008301922
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.98860097
+      float_values: -0.105785415
+      float_values: -0.107133225
+      float_values: -0.0030371286
+      float_values: 0.7254357
+      float_values: -0.68828326
+      float_values: 0.1505286
+      float_values: -0.6801121
+      float_values: -0.7174877
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1921454
+      float_values: -0.29119968
+      float_values: 0.3079157
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.78294736
+      float_values: -0.621522
+      float_values: 0.026530236
+      float_values: -0.45520613
+      float_values: -0.60145956
+      float_values: -0.6565316
+      float_values: 0.42400572
+      float_values: 0.50195295
+      float_values: -0.7538318
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18959002
+      float_values: 0.27966547
+      float_values: 0.30773196
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.89321643
+      float_values: -0.2666728
+      float_values: 0.36200836
+      float_values: 0.4485294
+      float_values: 0.58469427
+      float_values: -0.6759837
+      float_values: -0.031397752
+      float_values: 0.76617116
+      float_values: 0.6418691
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.12052536
+      float_values: 0.28173178
+      float_values: 0.3677195
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19882542
+      float_values: 0.9016331
+      float_values: 0.38409144
+      float_values: 0.97655445
+      float_values: -0.21527052
+      float_values: -0.00017916807
+      float_values: 0.08252202
+      float_values: 0.37512183
+      float_values: -0.923295
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19457194
+      float_values: 0.22057715
+      float_values: 0.35238934
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.937462
+      float_values: 0.060284603
+      float_values: 0.34282774
+      float_values: -0.06464729
+      float_values: 0.93760103
+      float_values: -0.34165052
+      float_values: -0.3420319
+      float_values: -0.34244725
+      float_values: -0.875068
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.14873394
+      float_values: -0.24187213
+      float_values: 0.37098667
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.29102227
+      float_values: -0.9564893
+      float_values: 0.020837253
+      float_values: -0.5804911
+      float_values: 0.15922427
+      float_values: -0.7985472
+      float_values: 0.7604841
+      float_values: -0.24449086
+      float_values: -0.6015714
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.09235161
+      float_values: -0.2592146
+      float_values: 0.32673398
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1001375
+      float_values: -0.6154096
+      float_values: -0.7818206
+      float_values: 0.94067967
+      float_values: -0.31457686
+      float_values: 0.12713443
+      float_values: -0.32418242
+      float_values: -0.7227118
+      float_values: 0.61040425
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.17803892
+      float_values: -0.14974855
+      float_values: 0.31620198
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.24487744
+      float_values: 0.012076593
+      float_values: -0.96947885
+      float_values: 0.93060535
+      float_values: 0.28349409
+      float_values: -0.23152709
+      float_values: 0.27204546
+      float_values: -0.95889795
+      float_values: -0.08065985
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18423511
+      float_values: -0.2275279
+      float_values: 0.3742024
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13011594
+      float_values: -0.60157204
+      float_values: 0.7881503
+      float_values: 0.868919
+      float_values: -0.31367424
+      float_values: -0.38286844
+      float_values: 0.4775454
+      float_values: 0.73465604
+      float_values: 0.48190337
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.10921453
+      float_values: 0.0025565391
+      float_values: 0.038427502
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.5613644
+      float_values: -0.14476177
+      float_values: -0.8148092
+      float_values: -0.1879357
+      float_values: 0.98115736
+      float_values: -0.044837076
+      float_values: 0.80594677
+      float_values: 0.1279618
+      float_values: -0.57799274
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.05289097
+      float_values: -0.23781778
+      float_values: 0.318753
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.47147527
+      float_values: -0.2334555
+      float_values: -0.8504173
+      float_values: -0.7061374
+      float_values: -0.47773007
+      float_values: 0.5226317
+      float_values: -0.52828115
+      float_values: 0.8469194
+      float_values: 0.060386244
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.012204995
+      float_values: -0.02662799
+      float_values: 0.042506993
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.6759796
+      float_values: -0.6174666
+      float_values: -0.4022269
+      float_values: -0.5056235
+      float_values: -0.7857007
+      float_values: 0.35639766
+      float_values: -0.5360936
+      float_values: -0.037542168
+      float_values: -0.84332335
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.10232612
+      float_values: -0.29317734
+      float_values: 0.33961082
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1765687
+      float_values: -0.98339224
+      float_values: -0.04198988
+      float_values: -0.9595066
+      float_values: 0.1814789
+      float_values: -0.21543585
+      float_values: 0.21947822
+      float_values: 0.0022503408
+      float_values: -0.9756148
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.13825995
+      float_values: 0.2969735
+      float_values: 0.33016202
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.88844186
+      float_values: -0.04150957
+      float_values: 0.45710835
+      float_values: 0.45600647
+      float_values: 0.19317836
+      float_values: -0.86875784
+      float_values: -0.05224168
+      float_values: 0.9802852
+      float_values: 0.19055638
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18192773
+      float_values: -0.07250429
+      float_values: 0.041577946
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.84815973
+      float_values: -0.31842124
+      float_values: 0.4233592
+      float_values: 0.24776912
+      float_values: -0.4679277
+      float_values: -0.8483243
+      float_values: 0.468226
+      float_values: 0.82440984
+      float_values: -0.31798247
+    }
+  }
+}
+target_sets {
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19189836
+      float_values: 0.011773552
+      float_values: 0.36062306
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.9621567
+      float_values: -0.15463006
+      float_values: 0.22437476
+      float_values: -0.19736359
+      float_values: -0.96318585
+      float_values: 0.18253927
+      float_values: 0.18788853
+      float_values: -0.21991478
+      float_values: -0.9572541
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.028192922
+      float_values: -0.24416572
+      float_values: 0.033812303
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.3550166
+      float_values: 0.8663169
+      float_values: 0.35136622
+      float_values: 0.67472726
+      float_values: 0.4975923
+      float_values: -0.54511005
+      float_values: -0.6470752
+      float_values: 0.04355325
+      float_values: -0.7611812
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.14006719
+      float_values: -0.22271353
+      float_values: 0.32264456
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.8442066
+      float_values: -0.5257932
+      float_values: 0.10419597
+      float_values: 0.18077359
+      float_values: -0.4622805
+      float_values: -0.86811155
+      float_values: 0.50461495
+      float_values: -0.71402955
+      float_values: 0.48530978
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.06321531
+      float_values: 0.029719803
+      float_values: 0.010429401
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.7501852
+      float_values: 0.66111845
+      float_values: 0.0120249605
+      float_values: 0.6320575
+      float_values: -0.7116299
+      float_values: -0.30673468
+      float_values: -0.19423065
+      float_values: 0.23770829
+      float_values: -0.9517191
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.19675493
+      float_values: -0.10932592
+      float_values: 0.35889596
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.810861
+      float_values: 0.15090697
+      float_values: -0.56544805
+      float_values: 0.46881306
+      float_values: -0.74582845
+      float_values: 0.47323802
+      float_values: -0.35031235
+      float_values: -0.6488197
+      float_values: -0.67551035
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18270941
+      float_values: 0.21043542
+      float_values: 0.36172354
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.27815393
+      float_values: 0.0038145075
+      float_values: 0.9605289
+      float_values: 0.5948299
+      float_values: 0.78585726
+      float_values: 0.16913246
+      float_values: -0.7541935
+      float_values: 0.61839616
+      float_values: -0.22085828
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.15360871
+      float_values: -0.21270573
+      float_values: 0.36611366
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.8232406
+      float_values: 0.4296239
+      float_values: 0.3710771
+      float_values: 0.32097736
+      float_values: 0.8914053
+      float_values: -0.3199534
+      float_values: -0.46823972
+      float_values: -0.1442913
+      float_values: -0.8717406
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.15781526
+      float_values: -0.1281315
+      float_values: 0.035338525
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.0048954166
+      float_values: -0.28040788
+      float_values: 0.95986843
+      float_values: -0.9996209
+      float_values: 0.027378779
+      float_values: 0.0029000482
+      float_values: -0.027093222
+      float_values: -0.9594904
+      float_values: -0.28043562
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1838799
+      float_values: -0.26845145
+      float_values: 0.11197099
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.4792327
+      float_values: -0.16566126
+      float_values: 0.8619121
+      float_values: -0.24016187
+      float_values: -0.91979575
+      float_values: -0.3103193
+      float_values: 0.8441909
+      float_values: -0.35571355
+      float_values: 0.40101066
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.19405009
+      float_values: 0.016706333
+      float_values: 0.33368868
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.25797167
+      float_values: 0.16698179
+      float_values: 0.9516132
+      float_values: 0.0017815684
+      float_values: 0.98486745
+      float_values: -0.17329995
+      float_values: -0.9661508
+      float_values: 0.046401843
+      float_values: 0.2537704
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.17764036
+      float_values: -0.2891693
+      float_values: 0.3616446
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.07373265
+      float_values: -0.9972403
+      float_values: 0.008674963
+      float_values: -0.25586888
+      float_values: -0.010509201
+      float_values: 0.96665436
+      float_values: -0.96389556
+      float_values: -0.073493645
+      float_values: -0.25593764
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.15962745
+      float_values: -0.06718153
+      float_values: 0.36877698
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.7789473
+      float_values: -0.24060357
+      float_values: 0.57909507
+      float_values: 0.1771255
+      float_values: -0.801444
+      float_values: -0.57123905
+      float_values: 0.6015544
+      float_values: 0.54753757
+      float_values: -0.5816656
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.1814777
+      float_values: 0.25456506
+      float_values: 0.22736558
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.11339743
+      float_values: 0.7193703
+      float_values: -0.6853082
+      float_values: 0.74738926
+      float_values: -0.39271027
+      float_values: -0.5358992
+      float_values: -0.6546376
+      float_values: -0.57296157
+      float_values: -0.4931173
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.16786698
+      float_values: -0.028191889
+      float_values: 0.31616077
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.5410244
+      float_values: 0.40103132
+      float_values: -0.73923373
+      float_values: -0.45115954
+      float_values: -0.88020086
+      float_values: -0.14731443
+      float_values: -0.70975184
+      float_values: 0.25381166
+      float_values: 0.6571392
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.1786547
+      float_values: 0.29534635
+      float_values: 0.36448258
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.38161567
+      float_values: 0.8644226
+      float_values: -0.327327
+      float_values: -0.63069093
+      float_values: -0.50239646
+      float_values: -0.5914615
+      float_values: -0.67572063
+      float_values: -0.01926879
+      float_values: 0.7369059
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.026840268
+      float_values: 0.013841684
+      float_values: 0.15889794
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.57444894
+      float_values: -0.14623646
+      float_values: -0.8053715
+      float_values: -0.69405776
+      float_values: 0.43457288
+      float_values: -0.5739601
+      float_values: 0.43392652
+      float_values: 0.88868517
+      float_values: 0.1481434
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.15253897
+      float_values: 0.28378913
+      float_values: 0.34281993
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.24640249
+      float_values: 0.95499617
+      float_values: 0.16513069
+      float_values: -0.018327026
+      float_values: 0.16576222
+      float_values: -0.9859954
+      float_values: -0.9689943
+      float_values: -0.24597807
+      float_values: -0.023341984
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.029857315
+      float_values: -0.27183366
+      float_values: 0.36308157
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: 0.3376004
+      float_values: 0.9191627
+      float_values: 0.20289385
+      float_values: -0.09063354
+      float_values: -0.18280505
+      float_values: 0.97896266
+      float_values: 0.936916
+      float_values: -0.34888718
+      float_values: 0.021591911
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.18163806
+      float_values: -0.26014376
+      float_values: 0.3575505
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.8621804
+      float_values: -0.4857312
+      float_values: -0.14391
+      float_values: -0.48871428
+      float_values: 0.8722924
+      float_values: -0.016258478
+      float_values: 0.13342886
+      float_values: 0.05631313
+      float_values: -0.9894572
+    }
+  }
+  targets {
+    position {
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.13495068
+      float_values: -0.12910107
+      float_values: -0.0063042603
+    }
+    rotation {
+      dims: 3
+      dims: 3
+      dtype: "<f4"
+      float_values: -0.9765081
+      float_values: -0.030106956
+      float_values: -0.21336703
+      float_values: -0.05311701
+      float_values: 0.9932679
+      float_values: 0.10294431
+      float_values: 0.20883127
+      float_values: 0.11185937
+      float_values: -0.9715333
+    }
+  }
+}

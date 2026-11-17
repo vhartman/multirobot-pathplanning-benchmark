@@ -1,0 +1,56 @@
+<mujoco model="tool">
+  <compiler angle="radian" meshdir="." autolimits="true"/>
+  <default>
+    <default class="visual">
+      <geom group="2" type="mesh" contype="0" conaffinity="0"/>
+    </default>
+    <default class="collision">
+      <geom group="3" type="mesh"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="1 1 1" rgb2=".6 .8 1" width="256" height="256"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+
+    <material name="tool_mat0" specular="0.05534" shininess="0.25" rgba="0 0.02192 0.15233 1.0"/>
+    <material name="base_mat0" specular="0.01019" shininess="0.25" rgba="0.05222 0.05222 0.05222 1.0"/>
+    <material name="tip_mat0" specular="0.14415" shininess="0.25" rgba="1 0.13514 0 1.0"/>
+    <mesh name="adjustable_tool_arm" file="adjustable_tool_arm/adjustable_tool_arm.obj"/>
+    <mesh name="adjustable_tool_arm_c01" file="adjustable_tool_arm/adjustable_tool_arm_c01.stl"/>
+    <mesh name="adjustable_tool_base" file="adjustable_tool_base/adjustable_tool_base.obj"/>
+    <mesh name="adjustable_tool_base_c01" file="adjustable_tool_base/adjustable_tool_base_c01.stl"/>
+    <mesh name="adjustable_tool_base_c02" file="adjustable_tool_base/adjustable_tool_base_c02.stl"/>
+    <mesh name="adjustable_tool_tip" file="adjustable_tool_tip/adjustable_tool_tip.obj"/>
+    <mesh name="adjustable_tool_tip_c01" file="adjustable_tool_tip/adjustable_tool_tip_c01.stl"/>
+    <mesh name="adjustable_tool_tip_c02" file="adjustable_tool_tip/adjustable_tool_tip_c02.stl"/>
+  </asset>
+  <worldbody>
+    <body name="tool">
+      <body name="tool_arm" pos="0 0 0.035296" euler="0 0.3490658 0">
+        <body euler="1.5707963 0 0">
+          <geom material="tool_mat0" mesh="adjustable_tool_arm" class="visual"/>
+        </body>
+        <geom mesh="adjustable_tool_arm_c01" class="collision"/>
+      </body>
+      <body name="tool_base">
+        <body pos="0 0 0.0095">
+          <body euler="1.5707963 0 0">
+            <geom material="base_mat0" mesh="adjustable_tool_base" class="visual"/>
+          </body>
+          <geom mesh="adjustable_tool_base_c02" class="collision"/>
+        </body>
+        <geom mesh="adjustable_tool_base_c01" class="collision"/>
+      </body>
+      <body name="tool_tip" pos="0.03046 0 0.124359" euler="0 0.69813168888 0">
+        <body euler="1.5707963 0 0">
+          <geom material="tip_mat0" mesh="adjustable_tool_tip" class="visual"/>
+        </body>
+        <geom mesh="adjustable_tool_tip_c01" class="collision"/>
+        <geom mesh="adjustable_tool_tip_c02" class="collision"/>
+      </body>
+      <site name="tool_tip_site" pos="0.04849 0 0.152411" euler="0 0.698132 0"/>
+    </body>
+  </worldbody>
+</mujoco>
