@@ -1,7 +1,37 @@
-"""Static CoMotion scenes with our costs, goals, mode logic and planners.
+"""CoMotion collision checking with our costs, tasks and planners.
 
-The optional native package provides cached FK and SIMD collision queries.
-It does not import their planners, and does not support carried objects.
+Install the native package from a CoMotion checkout containing the Python
+bindings, then install the MRMG extra in the same Python environment::
+
+    python -m pip install /path/to/comotion
+    python -m pip install -e '.[comotion]'  # From the MRMG repository.
+
+Load a built-in scene and pass it to a planner like any other environment::
+
+    from multi_robot_multi_goal_planning.problems import get_env_by_name
+
+    env = get_env_by_name("comotion.panda_cage_4_sequence", visits=3)
+
+The sequence variant fixes the task order. Use ``_independent`` instead of
+``_sequence`` for independent per-robot goal chains. These built-in scenes
+have static obstacles and no carried objects; only collision checking uses
+CoMotion, not its planners.
+
+An existing compatible RAI environment can also be converted once, including
+rigid object attachments. Given an initialized ``rai_env``::
+
+    from multi_robot_multi_goal_planning.problems.comotion_env import to_comotion
+
+    env = to_comotion(rai_env)
+    env.save("scene.json")
+    restored = get_env_by_name("comotion.converted", path="scene.json")
+
+Converted queries use native FK and collision checking without updating RAI.
+The conversion supports spheres, capsules, cylinders and sharp boxes, fixed
+joint-space goals/goal sets, and sequence/dependency-graph tasks. Meshes,
+rounded boxes, path constraints, kinodynamics and custom costs are rejected;
+geometry approximations must be explicit. Collision decisions near a nonzero
+penetration tolerance can differ between RAI and CoMotion.
 """
 import copy
 import json
