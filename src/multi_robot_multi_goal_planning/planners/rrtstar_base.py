@@ -573,6 +573,7 @@ class BaseRRTConfig:
     informed_affine_sampling: bool = True  # feasible proposals before cost rejection
     informed_cache_setup: bool = True  # reuse geometry, not walk progress
     informed_reuse_affine_geometry: bool = False
+    informed_transitions: bool = False  # informed (not uniform) proposals for unconstrained transitions
     
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
@@ -692,6 +693,7 @@ class BaseRRTstar(BasePlanner):
             affine_sampling=config.informed_affine_sampling,
             cache_setup=config.informed_cache_setup,
             reuse_affine_geometry=config.informed_reuse_affine_geometry,
+            informed_transitions=config.informed_transitions,
         )
         self.start_time = time.time()
         self.costs = []

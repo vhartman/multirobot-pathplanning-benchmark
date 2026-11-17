@@ -10,7 +10,9 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     BaseProblem,
     Mode,
 )
-from multi_robot_multi_goal_planning.problems.core.configuration import Configuration
+from multi_robot_multi_goal_planning.problems.core.configuration import (
+    Configuration, NpConfiguration, _batch_config_cost_impl)
+from multi_robot_multi_goal_planning.problems.core.cost import JointSpaceLength
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from .sampling_bounded_phs import PreparedBoundedPHS, joint_bounds
 from .sampling_joint_cost import JointCostSampler, warm_joint_cost_kernel
@@ -80,6 +82,7 @@ class InformedSampling:
         affine_sampling: bool = True,
         cache_setup: bool = True,
         reuse_affine_geometry: bool = False,
+        informed_transitions: bool = False,
     ):
         if (isinstance(proposal_batch_size, bool)
                 or not isinstance(proposal_batch_size, int) or proposal_batch_size < 1):
@@ -94,6 +97,8 @@ class InformedSampling:
         self.affine_sampling = affine_sampling
         self.cache_setup = cache_setup
         self._setup_cache = OrderedDict()
+        self._inbetween_cache = {}  # get_inbetween_modes results, valid for one Mode.graph_version
+        self._inbetween_version = None
         self.reuse_affine_geometry = reuse_affine_geometry
         self._affine_geometry = OrderedDict()
         self.affine_geometry_stats = dict(hits=0, misses=0)
@@ -110,6 +115,10 @@ class InformedSampling:
                 warm_affine_cost_kernel()
         self.locally_informed_sampling = locally_informed_sampling
         self.include_lb = include_lb
+        # Unconstrained transitions: draw from the interval's informed proposal (per-robot PHS, or hit-and-run)
+        # instead of the whole joint space. The proposal covers the cost region, so after the exact cost filter the
+        # samples have the same distribution; far fewer candidates are rejected.
+        self.informed_transitions = informed_transitions
 
     def sample_mode(
         self, reached_modes: List[Mode], mode_sampling_type: str = "uniform_reached"
@@ -161,6 +170,22 @@ class InformedSampling:
                     open_paths.append(new_path)
 
         return list(sorted(in_between_modes, key=lambda m: m.id))
+
+    def _cached_inbetween_modes(self, start_mode: Mode, end_mode: Mode) -> List[Mode]:
+        """get_inbetween_modes(start_mode, end_mode), reused across calls while the mode tree has not grown.
+
+        The result depends only on the next_modes links below start_mode and on the modes' equality, which does not
+        change after a mode is attached; Mode.graph_version counts attachments. Keyed by mode id: equal but distinct
+        modes keep their own entries, exactly as recomputing would. Callers only read the returned list.
+        """
+        if self._inbetween_version != Mode.graph_version:
+            self._inbetween_cache.clear()
+            self._inbetween_version = Mode.graph_version
+        key = (start_mode.id, end_mode.id)
+        result = self._inbetween_cache.get(key)
+        if result is None:
+            result = self._inbetween_cache[key] = self.get_inbetween_modes(start_mode, end_mode)
+        return result
 
     def lb_cost_from_start(
         self, state: State, g, lb_attribute_name="lb_cost_from_start"
@@ -402,7 +427,7 @@ class InformedSampling:
         else:
             key = path[start].mode, path[end].mode
             if key not in cache:
-                cache[key] = self.get_inbetween_modes(*key)
+                cache[key] = self._cached_inbetween_modes(*key)
             modes = cache[key]
         if requested_mode is not None:
             return requested_mode if requested_mode in modes else None
@@ -426,6 +451,15 @@ class InformedSampling:
         rows = rows[valid]
         if not len(rows):
             return rows
+        cost = self.env.cost
+        if (type(cost).batch_lower_bound is JointSpaceLength.batch_lower_bound
+                and isinstance(self.env.start_pos, NpConfiguration)):
+            # JointSpaceLength's own batch bound, on the arrays it would build from Configuration objects (bit-identical).
+            slices = self.env.start_pos._array_slice
+            costs = sum(_batch_config_cost_impl(rows - np.asarray(endpoint, dtype=np.float64), slices,
+                                                cost.metric, cost.reduction, cost.sum_weight)
+                        for endpoint in endpoints)
+            return rows[np.isfinite(costs) & (costs < budget)]
         candidates = [self.env.start_pos.from_flat(row) for row in rows]
         costs = sum(np.asarray(self.env.cost.batch_lower_bound(
             candidates, [self.env.start_pos.from_flat(endpoint)] * len(candidates)))
@@ -655,6 +689,9 @@ class InformedSampling:
                 active = self.constraint_provider.for_transition(mode, next_ids)
                 proposal = self._prepare_affine_proposal(
                     endpoints, budget, active, dict(zip(indices, goal)))
+            if (proposal is None and self.informed_transitions
+                    and not self.constraint_provider.for_transition(mode, next_ids).constraints):
+                proposal = self._prepare_proposal(endpoints, budget, mode, True)
             found = False
             for offset in range(0, max_attempts_per_sample, self.proposal_batch_size):
                 count = min(self.proposal_batch_size, max_attempts_per_sample - offset)

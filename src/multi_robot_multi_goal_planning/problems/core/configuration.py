@@ -273,7 +273,7 @@ class NpConfiguration(Configuration):
 
     def from_flat(self, q: NDArray) -> "NpConfiguration":
         assert q.shape == self.q.shape, "Shape mismatch"
-        return NpConfiguration(q, self._array_slice.copy())
+        return NpConfiguration(q, self._array_slice)  # __init__ copies the slices (np.array)
 
     @classmethod
     def from_numpy(cls, arr: NDArray) -> "NpConfiguration":

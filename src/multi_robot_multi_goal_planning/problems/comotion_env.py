@@ -42,6 +42,7 @@ import copy
 import json
 from pathlib import Path
 
+import functools
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -56,6 +57,17 @@ from .planning_env import (
     ProblemSpec, AgentType, ConstraintType, ManipulationType, DependencyType,
     DynamicsType, GoalType, SafePoseType, generate_binary_search_indices,
 )
+
+
+@functools.lru_cache(maxsize=4096)
+def _edge_fractions(n, start, stop, endpoints):
+    """Interpolation fractions of an edge's samples in binary-search order (read-only array, cached)."""
+    indices = np.asarray(generate_binary_search_indices(n)[start:stop], dtype=np.int64)
+    if not endpoints:
+        indices = indices[(indices != 0) & (indices != n - 1)]
+    fractions = indices / (n - 1)
+    fractions.setflags(write=False)
+    return fractions
 
 
 class CoMotionGeometry(BaseProblem):
@@ -180,6 +192,8 @@ class CoMotionGeometry(BaseProblem):
     def batch_is_collision_free(self, qs, mode=None, collision_tolerance=None):
         if collision_tolerance not in (None, 0):
             raise ValueError('RobotScene supports zero collision tolerance only')
+        if isinstance(qs, np.ndarray) and qs.ndim == 2:  # already a batch: no per-row conversion
+            return self._scene.batch_valid(np.ascontiguousarray(qs, dtype=np.float64))
         return self._scene.batch_valid(np.asarray([self._flat(q) for q in qs]).reshape(-1, len(self.start_pos.state())))
 
     def set_collision_optimizations(self, enabled=True, *, edge_kernel=None):
@@ -201,12 +215,14 @@ class CoMotionGeometry(BaseProblem):
         stop = n if N_max is None else min(n, N_max)
         if n < 2 or not 0 <= N_start <= stop <= n:
             raise ValueError('Invalid edge sample range')
-        indices = [i for i in generate_binary_search_indices(n)[N_start:stop]
-                   if include_endpoints or i not in (0, n - 1)]
-        a, b = self._flat(q1), self._flat(q2)
-        for offset in range(0, len(indices), 16):
-            t = np.asarray(indices[offset:offset + 16]) / (n - 1)
-            if not self.batch_is_collision_free(a + t[:, None] * (b - a), mode, tolerance).all():
+        # The same points, in the same binary order and chunks of 16, as before; only the Python overhead is gone.
+        t = _edge_fractions(n, N_start, stop, bool(include_endpoints))
+        if len(t) and tolerance not in (None, 0):
+            raise ValueError('RobotScene supports zero collision tolerance only')
+        a = self._flat(q1)
+        d = self._flat(q2) - a
+        for offset in range(0, len(t), 16):
+            if not self._scene.batch_valid(a + t[offset:offset + 16, None] * d).all():
                 return False
         return True
 

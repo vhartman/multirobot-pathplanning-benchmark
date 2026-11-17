@@ -386,6 +386,13 @@ class MujocoEnvironment(BaseProblem):
         # Joint-limit policy belongs to the scene; invalid numbers never reach FK.
         return q.shape == (len(self._all_robot_idx),) and np.isfinite(q).all()
 
+    def _configurations_are_valid(self, rows):
+        """_configuration_is_valid for each row of a 2-d array (the same tests, vectorized)."""
+        rows = np.asarray(rows)
+        if rows.ndim != 2 or rows.shape[1] != len(self._all_robot_idx):
+            return np.zeros(len(rows), dtype=bool)
+        return np.isfinite(rows).all(axis=1)
+
     def _contact_distance_threshold(self, tolerance):
         return tolerance
 

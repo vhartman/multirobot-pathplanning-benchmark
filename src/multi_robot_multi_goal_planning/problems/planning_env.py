@@ -130,6 +130,9 @@ class Mode:
     additional_hash_info: Any
 
     id_counter = 0
+    # Incremented whenever a mode is attached to another mode's next_modes, i.e. whenever the mode tree grows.
+    # Lets callers cache results derived from the tree (InformedSampling's in-between modes).
+    graph_version = 0
 
     def __init__(self, task_list, entry_configuration):
         self.task_ids = task_list
@@ -478,6 +481,7 @@ class UnorderedButAssignedMixin(BaseModeLogic):
 
             if not mode_exists:
                 mode.next_modes.append(next_mode)
+                Mode.graph_version += 1
                 next_modes.append(next_mode)
 
         # print(mode)
@@ -982,6 +986,7 @@ class FreeMixin(BaseModeLogic):
 
             if not mode_exists:
                 mode.next_modes.append(next_mode)
+                Mode.graph_version += 1
                 next_modes.append(next_mode)
 
         # print(mode)
@@ -1218,6 +1223,7 @@ class SequenceMixin(BaseModeLogic):
                 return [nm]
 
         mode.next_modes.append(next_mode)
+        Mode.graph_version += 1
 
         return [next_mode]
 
@@ -1413,6 +1419,7 @@ class DependencyGraphMixin(BaseModeLogic):
                                 return [nm]
 
                         mode.next_modes.append(tmp)
+                        Mode.graph_version += 1
                         # print(mode.next_modes)
 
                         return [tmp]

@@ -300,6 +300,13 @@ class _RoboBalletEnvironment(MujocoEnvironment):
             (q >= self.limits[0] - 1e-10) & (q <= self.limits[1] + 1e-10)
         ))
 
+    def _configurations_are_valid(self, rows):
+        """_configuration_is_valid for each row of a 2-d array (the same tests, vectorized)."""
+        rows = np.asarray(rows)
+        if rows.ndim != 2 or rows.shape[1:] != self.limits[0].shape:
+            return np.zeros(len(rows), dtype=bool)
+        return np.all((rows >= self.limits[0] - 1e-10) & (rows <= self.limits[1] + 1e-10), axis=1)
+
     def _prepare_collision_state(self, q, mode):
         """Position mocap attachments using the robots' current TCP poses."""
         self.set_configuration(q, mode, collision=False)
