@@ -3,7 +3,7 @@ from multi_robot_multi_goal_planning.problems import (
     get_all_environments,
 )
 import multi_robot_multi_goal_planning.problems as problems
-from multi_robot_multi_goal_planning.problems.rai_envs import rai_env
+from multi_robot_multi_goal_planning.problems.rai.base import rai_env
 from multi_robot_multi_goal_planning.problems.planning_env import Mode, State
 from multi_robot_multi_goal_planning.problems.configuration import NpConfiguration
 

@@ -143,7 +143,17 @@ There are two main requirements:
   - we need a scene that we are planning in, and
   - we need a description of the task sequence, respectively the dependence between tasks
 
-As example, we suggest checking out `rai_envs.py`, which implements some concrete environments, and some utilities for debugging.
+Backend infrastructure lives in `problems/rai/`, `problems/mujoco/`,
+`problems/comotion/`, `problems/pinocchio/`, and `problems/vampmr/`.
+Each backend's `envs/` subfolder contains concrete scenarios and their setup helpers.
+For example, see `problems/rai/envs/manipulation.py` or `problems/rai/envs/welding.py`.
+
+Converters live with their target backend (`mujoco/from_rai.py`,
+`rai/from_mujoco.py`, `comotion/from_rai.py`). Backend modules do not import concrete
+scenarios; the central registry loads environment families on demand. Registered
+environment names remain stable. Cost definitions live in `problems/costs/`;
+backend-specific FK lives with the backend, for example `rai/forward_kinematics.py`.
+Internal Python module paths follow this layout; no legacy forwarding modules are kept.
 
 #### Using your own robot environment
 

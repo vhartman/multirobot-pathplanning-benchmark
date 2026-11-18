@@ -5,7 +5,7 @@ import numpy as np
 
 from .planning_env import BaseProblem, Mode, State
 from .core.configuration import config_dist
-from .core.cost import MotionCost
+from .costs.base import MotionCost
 
 
 def compute_reachable_modes(env: BaseProblem, max_iter: int = 500) -> tuple[Mode, ...]:

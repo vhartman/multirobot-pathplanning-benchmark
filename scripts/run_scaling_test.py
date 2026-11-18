@@ -20,7 +20,11 @@ from run_experiment import (
     load_experiment_config,
 )
 
-from multi_robot_multi_goal_planning.problems.rai_envs import rai_ur10_arm_box_stack_env, rai_mobile_manip_wall, rai_isolated_arm_box_stack_env
+from multi_robot_multi_goal_planning.problems.rai.envs.manipulation import (
+    rai_ur10_arm_box_stack_env,
+    rai_mobile_manip_wall,
+    rai_isolated_arm_box_stack_env,
+)
 
 
 DEFAULT_PLANNER_CONFIGS = [

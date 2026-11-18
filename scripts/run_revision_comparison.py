@@ -163,10 +163,19 @@ def paper_scene_factory(output, variant):
     for short, actual in [('planning_env', 'planning_env'), ('rai_base_env', 'rai_base_env'),
                           ('goals', 'core.goals'), ('configuration', 'core.configuration'),
                           ('dependency_graph', 'core.dependency_graph')]:
-        sys.modules[namespace + '.' + short] = importlib.import_module(PACKAGE + '.problems.' + actual)
+        if actual == 'rai_base_env':
+            try:
+                runtime = importlib.import_module(PACKAGE + '.problems.rai.base')
+            except ModuleNotFoundError as exc:
+                if exc.name not in (PACKAGE + '.problems.rai', PACKAGE + '.problems.rai.base'):
+                    raise
+                runtime = importlib.import_module(PACKAGE + '.problems.rai_base_env')
+        else:
+            runtime = importlib.import_module(PACKAGE + '.problems.' + actual)
+        sys.modules[namespace + '.' + short] = runtime
     config = importlib.import_module(namespace + '.rai_config')
     # Tagged scene constructors use this old absolute import; current runtime
-    # imports problems.rai.rai_config instead and is not replaced.
+    # imports problems.rai.envs.builders instead and is not replaced.
     sys.modules[PACKAGE + '.problems.rai_config'] = config
     for module in ('rai_envs', 'rai_single_goal_envs', 'rai_unordered_envs', 'rai_free_envs'):
         importlib.import_module(namespace + '.' + module)
@@ -194,7 +203,7 @@ def worker(a):
     env = paper_scene_factory(a.output, a.variant)(a.scene)
     signal.setitimer(signal.ITIMER_REAL, 0)
     env.cost_metric, env.cost_reduction = 'euclidean', 'max'
-    if env.is_collision_free.__module__ != PACKAGE + '.problems.rai_base_env':
+    if env.is_collision_free.__module__ not in (PACKAGE + '.problems.rai_base_env', PACKAGE + '.problems.rai.base'):
         raise RuntimeError('Expected standard RAI collision checking')
     cfg = BaseRRTConfig()
     def plain(value):

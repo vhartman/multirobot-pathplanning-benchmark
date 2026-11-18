@@ -10,7 +10,7 @@ from .rrtstar_base import BaseRRTConfig
 from .itstar_base import BaseITConfig
 from .shortcutting import robot_mode_shortcut
 from .termination_conditions import RuntimeTerminationCondition
-from ..problems.util import path_cost
+from multi_robot_multi_goal_planning.problems.util import path_cost
 
 # name -> (planner class, default-config factory). Adding a planner = one line here.
 PLANNERS = {

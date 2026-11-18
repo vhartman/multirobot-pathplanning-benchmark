@@ -27,7 +27,7 @@ def construct(env_name, env_fun_call):
     if env_name.startswith(("roboballet.", "cuarms.")):
         assets = os.environ.get("MRMG_ROBOBALLET_ASSETS")
         try:
-            from multi_robot_multi_goal_planning.problems.roboballet_instances import default_assets
+            from multi_robot_multi_goal_planning.problems.mujoco.envs.roboballet.instances import default_assets
             found = assets is not None or (default_assets() / "data/mujoco_world").is_dir()
         except ImportError:
             found = assets is not None

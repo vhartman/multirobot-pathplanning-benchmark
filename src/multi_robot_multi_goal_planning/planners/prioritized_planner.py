@@ -31,12 +31,9 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
     generate_binary_search_indices,
 )
 from multi_robot_multi_goal_planning.problems.core.goals import SingleGoal
-from .termination_conditions import (
-    PlannerTerminationCondition,
-    RuntimeTerminationCondition,
-)
+from .termination_conditions import PlannerTerminationCondition, RuntimeTerminationCondition
 from .shortcutting import robot_mode_shortcut
-from multi_robot_multi_goal_planning.problems.rai.rai_envs import rai_env
+from multi_robot_multi_goal_planning.problems.rai.base import rai_env
 from multi_robot_multi_goal_planning.problems.core.configuration import (
     Configuration,
     batch_config_dist,

@@ -50,9 +50,7 @@ def _import_deps():
         interpolate_path,
         path_cost,
     )
-    from multi_robot_multi_goal_planning.problems.rai.rai_config import (
-        get_robot_joints,
-    )
+    from multi_robot_multi_goal_planning.problems.rai.config import get_robot_joints
     from multi_robot_multi_goal_planning.planners import (
         AITstar,
         BaseITConfig,

@@ -12,11 +12,15 @@ from multi_robot_multi_goal_planning.problems.planning_env import (
 )
 from multi_robot_multi_goal_planning.problems.core.configuration import (
     Configuration, NpConfiguration, _batch_config_cost_impl)
-from multi_robot_multi_goal_planning.problems.core.cost import JointSpaceLength
+from multi_robot_multi_goal_planning.problems.costs.joint_space import JointSpaceLength
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from .sampling_bounded_phs import PreparedBoundedPHS, joint_bounds
 from .sampling_joint_cost import JointCostSampler, warm_joint_cost_kernel
-from .sampling_affine_informed import AffineInformedSampler, AffineInformedSetup, warm_affine_cost_kernel
+from .sampling_affine_informed import (
+    AffineInformedSampler,
+    AffineInformedSetup,
+    warm_affine_cost_kernel,
+)
 
 
 # Bound the work spent looking for an improvable path interval.

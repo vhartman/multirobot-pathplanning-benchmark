@@ -21,7 +21,7 @@ os.environ.pop("MRMG_ROBOBALLET_ASSETS", None)  # freeze for the packaged assets
 
 from multi_robot_multi_goal_planning.problems import get_env_by_name  # noqa: E402
 from multi_robot_multi_goal_planning.problems.core.registry import list_envs  # noqa: E402
-from multi_robot_multi_goal_planning.problems.roboballet_instances import PACKAGED_ASSETS  # noqa: E402
+from multi_robot_multi_goal_planning.problems.mujoco.envs.roboballet.instances import PACKAGED_ASSETS
 
 target = PACKAGED_ASSETS / "instances"
 if "--rebuild" in sys.argv:

@@ -12,13 +12,13 @@ REGISTRY: Dict[str, EnvFactory] = {}
 
 # Environment prefix -> module and installation hint.
 _OPTIONAL_BACKENDS = {
-    "comotion": ("comotion_env", "Install the CoMotion collision package; see the [comotion] extra."),
-    "rai": ("rai_registry", "Install the robotic package for RAI environments."),
-    "vampmr": ("mr_vamp_env", "Install mr_planner_core and meshcat for the active Python interpreter."),
-    "pinocchio": ("pinocchio_env", "Install the project's [pinocchio] extra."),
-    "mujoco": ("mujoco_env", "Install the project's [mujoco] extra."),
-    "roboballet": ("roboballet_env", "Install [mujoco-scenes] and pass the external release directory as assets."),
-    "cuarms": ("roboballet_env", "Install [mujoco-scenes] and pass the RoboBallet asset directory as assets."),
+    "comotion": ("comotion.envs", "Install the CoMotion collision package; see the [comotion] extra."),
+    "rai": ("rai.envs", "Install the robotic package for RAI environments."),
+    "vampmr": ("vampmr.envs", "Install mr_planner_core and meshcat for the active Python interpreter."),
+    "pinocchio": ("pinocchio.envs", "Install the project's [pinocchio] extra."),
+    "mujoco": ("mujoco.envs", "Install the project's [mujoco] extra."),
+    "roboballet": ("mujoco.envs.roboballet.welding", "Install [mujoco-scenes] and pass the external release directory as assets."),
+    "cuarms": ("mujoco.envs.cuarms.packing", "Install [mujoco-scenes] and pass the RoboBallet asset directory as assets."),
 }
 _BACKEND_ERRORS: Dict[str, ImportError] = {}
 

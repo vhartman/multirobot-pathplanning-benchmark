@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 ry = pytest.importorskip("robotic")
-from multi_robot_multi_goal_planning.problems.rai_base_env import get_joint_limits
+from multi_robot_multi_goal_planning.problems.rai.base import get_joint_limits
 
 
 def test_multi_dof_joint_limits():

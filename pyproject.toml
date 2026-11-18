@@ -21,7 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # not on PyPI: a native build (C++17, CMake, Eigen3, FCL, libccd, Boost headers); pip clones submodules
-comotion = ["comotion-collision @ git+https://github.com/vhartman/comotion.git@d492c539e2dcb04fad309d5724dd9e2b831adee2"]
+comotion = ["comotion-collision @ git+https://github.com/vhartman/comotion.git@e58b0bdb8cb4bb068691322fe7969ae8b4ac5df3"]
 pinocchio = ["pin>=3.4", "meshcat", "hppfcl"]
 mujoco = ["mujoco>=4.0.1,<5"]
 mujoco-scenes = ["mujoco>=4.0.1,<5", "trimesh", "vhacdx", "Pillow"]

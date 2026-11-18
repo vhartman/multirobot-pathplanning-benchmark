@@ -3,7 +3,7 @@
 Set the objective before constructing a planner:
 
 ```python
-from multi_robot_multi_goal_planning.problems.core.cost import JointSpaceLength
+from multi_robot_multi_goal_planning.problems.costs import JointSpaceLength
 
 env.cost = JointSpaceLength(metric="euclidean", reduction="max", sum_weight=0.01)
 ```
@@ -31,7 +31,7 @@ planning run: tree costs, heuristic caches, and informed budgets depend on it.
 ## Workspace position travel
 
 ```python
-from multi_robot_multi_goal_planning.problems.rai.workspace_cost import workspace_cost
+from multi_robot_multi_goal_planning.problems.costs.workspace import workspace_cost
 
 # Explicit frame names, one per robot in env.robots order.
 env.cost = workspace_cost(env, frame_names, reduction="max", resolution=0.05)

@@ -21,7 +21,7 @@ from typing import Dict, Any, Callable, Tuple, List
 from multi_robot_multi_goal_planning.problems import get_env_by_name
 
 from multi_robot_multi_goal_planning.problems.planning_env import BaseProblem
-from multi_robot_multi_goal_planning.problems.rai_base_env import rai_env
+from multi_robot_multi_goal_planning.problems.rai.base import rai_env
 
 # planners
 from multi_robot_multi_goal_planning.planners.termination_conditions import (

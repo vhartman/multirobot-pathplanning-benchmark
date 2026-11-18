@@ -9,20 +9,12 @@ from enum import Enum
 from typing import List, Dict, Optional, Any, Tuple
 from numpy.typing import NDArray
 
-from .core.configuration import (
-    Configuration,
-    config_dist,
-)
+from .core.configuration import Configuration, config_dist
 from .core.dependency_graph import DependencyGraph
-from .core.cost import MotionCost, JointSpaceLength
+from .costs.base import MotionCost
+from .costs.joint_space import JointSpaceLength
 from .core.constraints import Constraint
-from .core.goals import (
-    Goal,
-    SingleGoal,
-    GoalRegion,
-    GoalSet,
-    ConditionalGoal
-)
+from .core.goals import Goal, SingleGoal, GoalRegion, GoalSet, ConditionalGoal
 
 from functools import cache
 from collections import deque
