@@ -502,6 +502,17 @@ class rai_env(BaseProblem):
             raise ValueError("Collision backend must be 'rai' or 'mujoco'")
         return getattr(self, "_mujoco_collision_checker", None)
 
+    def _collision_free_with_exclusions(self, tolerance):
+        """Check the current configuration, omitting explicit shape pairs."""
+        self.C.computeCollisions()
+        penetration = 0.0
+        for first, second, distance in self.C.getCollisions():
+            if distance < 0 and frozenset((first, second)) not in self.collision_exclusions:
+                penetration -= distance
+                if penetration > tolerance:
+                    return False
+        return True
+
     # Environment functions: collision checking
     # @filter_output(hide_pair_collision)
     # @silence_function
@@ -527,6 +538,9 @@ class rai_env(BaseProblem):
             self.C.setJointState(q.state())
 
         # self.C.view()
+
+        if getattr(self, "collision_exclusions", None):
+            return self._collision_free_with_exclusions(collision_tolerance)
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
@@ -572,6 +586,9 @@ class rai_env(BaseProblem):
         # self.C.view()
 
         # self.C.computeCollisions()
+
+        if getattr(self, "collision_exclusions", None):
+            return self._collision_free_with_exclusions(collision_tolerance)
 
         binary_collision_free = self.C.getCollisionFree()
         if binary_collision_free:
@@ -639,7 +656,10 @@ class rai_env(BaseProblem):
             return robot
 
         penetration = 0.0
+        excluded = getattr(self, "collision_exclusions", ())
         for first, second, distance in self.C.getCollisions():
+            if excluded and frozenset((first, second)) in excluded:
+                continue
             if distance >= 0:
                 continue
             first_robot, second_robot = get_robot_from_frame(first), get_robot_from_frame(second)

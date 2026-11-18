@@ -80,4 +80,11 @@ def export_rai_scene(source):
                                     side_effect=t.side_effect,
                                     side_effect_data=(None if t.side_effect_data is None else np.asarray(t.side_effect_data).tolist()))
                                for t in source.tasks])
+    shape_index = {frame_names[f]: i for i, f in enumerate(shape_frames)}
+    excluded = []
+    for pair in getattr(source, 'collision_exclusions', ()):
+        if len(pair) != 2 or not set(pair).issubset(shape_index):
+            raise ValueError(f'Unknown collision shape in excluded pair: {pair}')
+        excluded.append(sorted(shape_index[n] for n in pair))
+    definition['excluded_pairs'] = sorted(excluded)
     return definition

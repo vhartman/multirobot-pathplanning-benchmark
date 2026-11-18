@@ -288,6 +288,13 @@ class RaiMujocoScene:
             frozenset(pair)
             for pair in np.asarray(C.getCollidablePairs()).reshape(-1, 2)
         }
+        self.excluded_pairs = set()
+        for pair in getattr(env, "collision_exclusions", ()):
+            if len(pair) != 2 or not set(pair).issubset(geoms_by_frame):
+                raise ValueError(f"Unknown collision shape in excluded pair: {pair}")
+            a, b = pair
+            self.excluded_pairs.add(tuple(sorted((self.frame_index[a], self.frame_index[b]))))
+            initial_pairs.discard(frozenset(pair))
         self._initial_pairs = initial_pairs
         mutable_shapes = set()
         for name in geoms_by_frame:
@@ -377,6 +384,8 @@ class RaiMujocoScene:
         n = len(self.frame_names)
         allowed = np.zeros((n, n), dtype=bool)
         for i, j in combinations(np.unique(self.geom_frames), 2):
+            if self.excluded_pairs and (int(i), int(j)) in self.excluded_pairs:
+                continue
             if not contacts[i] or not contacts[j]:
                 continue
             a, b = link(i), link(j)
