@@ -7,7 +7,7 @@ import numpy as np
 from .core.configuration import config_dist, NpConfiguration
 from .core.cost import JointSpaceLength
 from .core.goals import SingleGoal, GoalSet
-from .comotion_scene import SimdPrimitiveScene
+from .comotion_scene import CoMotionScene
 from .core.registry import register
 from .planning_env import BaseProblem, BaseModeLogic, SequenceMixin, DependencyGraphMixin, DynamicsType, generate_binary_search_indices
 
@@ -23,7 +23,7 @@ class ConvertedPrimitiveEnvironment(BaseProblem):
         if any(type(t.goal) not in (SingleGoal, GoalSet) for t in source.tasks):
             raise NotImplementedError('Only fixed goals/goal sets are exported')
         from .rai_comotion import export_rai_scene
-        self.scene = SimdPrimitiveScene(export_rai_scene(source))
+        self.scene = CoMotionScene(export_rai_scene(source))
         for name in ['robots','robot_idx','robot_dims','robot_joints','limits','start_pos','tasks','spec','cost',
                      'collision_resolution','collision_tolerance','manipulating_env','sequence','graph','safe_pose']:
             if hasattr(source, name):
@@ -77,7 +77,7 @@ class ConvertedPrimitiveEnvironment(BaseProblem):
             raise ValueError('Expected one mode-logic specification')
         typ = ConvertedSequenceEnvironment if 'sequence' in data else ConvertedDependencyEnvironment
         env = typ.__new__(typ)
-        env.scene = SimdPrimitiveScene(data['scene'])
+        env.scene = CoMotionScene(data['scene'])
         for name in ('robots', 'robot_dims', 'robot_joints', 'collision_resolution',
                      'collision_tolerance', 'manipulating_env'):
             setattr(env, name, data[name])

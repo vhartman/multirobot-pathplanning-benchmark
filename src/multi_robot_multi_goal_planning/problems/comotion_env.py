@@ -20,7 +20,11 @@ Load a built-in scene and pass it to a planner like any other environment::
 The sequence variant fixes the task order. Use ``_independent`` instead of
 ``_sequence`` for independent per-robot goal chains. These built-in scenes
 have static obstacles and no carried objects; only collision checking uses
-CoMotion, not its planners.
+CoMotion, not its planners. Built-in scenes use the generated Panda kernels;
+``backend="generic"`` runs the identical geometry through the generic primitive
+checker. Both use the common CoMotion scene definition and query API. Unsupported
+geometry or an incompatible generated model raises an error; no approximation
+or backend fallback occurs.
 
 An existing compatible RAI environment can also be converted once, including
 rigid object attachments. Given an initialized ``rai_env``::
@@ -42,38 +46,25 @@ import copy
 import json
 from pathlib import Path
 
-import functools
 import numpy as np
-from scipy.spatial.transform import Rotation
 
 from .core.configuration import NpConfiguration, config_dist
 from .core.cost import JointSpaceLength
-from comotion import resource_directory, load_builtin
+from comotion import resource_directory, load_builtin, import_robot_scene
+from .comotion_scene import CoMotionScene
 from .core.dependency_graph import DependencyGraph
 from .core.goals import SingleGoal
 from .core.registry import register
 from .planning_env import (
     BaseProblem, BaseModeLogic, SequenceMixin, DependencyGraphMixin, Task,
     ProblemSpec, AgentType, ConstraintType, ManipulationType, DependencyType,
-    DynamicsType, GoalType, SafePoseType, generate_binary_search_indices,
+    DynamicsType, GoalType, SafePoseType,
 )
-
-
-@functools.lru_cache(maxsize=4096)
-def _edge_fractions(n, start, stop, endpoints):
-    """Interpolation fractions of an edge's samples in binary-search order (read-only array, cached)."""
-    indices = np.asarray(generate_binary_search_indices(n)[start:stop], dtype=np.int64)
-    if not endpoints:
-        indices = indices[(indices != 0) & (indices != n - 1)]
-    fractions = indices / (n - 1)
-    fractions.setflags(write=False)
-    return fractions
 
 
 class CoMotionGeometry(BaseProblem):
     def _init_scene(self, family, num_robots, task_index, visits, task_style,
                     backend, scene_file):
-        from comotion import RobotScene
         BaseProblem.__init__(self)
         self.scene = (json.loads(Path(scene_file).read_text()) if scene_file else
                       load_builtin(family, num_robots))
@@ -83,31 +74,17 @@ class CoMotionGeometry(BaseProblem):
         if not 0 <= task_index < len(records) or not 1 <= visits <= len(records):
             raise ValueError("Invalid task_index or visits")
         self.task_index, self.visits, self.task_style = task_index, visits, task_style
-        bases = np.repeat(np.eye(4)[None], len(self.scene["robot_bases"]), axis=0)
-        for matrix, base in zip(bases, self.scene["robot_bases"]):
-            matrix[:3, 3] = base["position"]
-            matrix[:3, :3] = Rotation.from_quat(base.get("quaternion_xyzw", [0, 0, 0, 1])).as_matrix()
-        spheres, cylinders = [], []
-        for obstacle in self.scene.get("obstacles", []):
-            if obstacle["type"] == "sphere":
-                spheres.append([*obstacle["center"], obstacle["radius"]])
-            elif obstacle["type"] == "cylinder":
-                cylinders.append([*obstacle["center"], *obstacle["axis"],
-                                  obstacle["radius"], obstacle["half_height"]])
-            else:
-                raise ValueError(f"Unsupported obstacle type: {obstacle['type']}")
         resources = resource_directory() / "panda"
-        self._native_args = (str(resources / "panda_spherized.urdf"),
-                             str(resources / "panda.srdf"), bases,
-                             np.asarray(spheres, dtype=float).reshape(-1, 4),
-                             np.asarray(cylinders, dtype=float).reshape(-1, 8), backend)
-        self._scene = RobotScene(*self._native_args)
+        definition = import_robot_scene(
+            resources / "panda_spherized.urdf", resources / "panda.srdf",
+            self.scene["robot_bases"], self.scene.get("obstacles", []),
+            start_q=np.asarray(records[task_index]["starts"]).ravel())
+        self.robots = [f"a{i+1}" for i in range(len(self.scene["robot_bases"]))]
+        definition["robot_names"] = self.robots
+        implementation = "generated" if backend == "vamp" else backend
+        self._collision_scene = CoMotionScene(definition, implementation=implementation)
         self._collision_optimized = backend == "vamp"
-        if self._collision_optimized:
-            self._scene.set_optimized(True)
-        self._edge_kernel = None  # native default, or an explicit replay/ablation override
-        self.limits = self._scene.limits()
-        self.robots = [f"a{i+1}" for i in range(len(bases))]
+        self.limits = np.asarray(definition["limits"]).T
         self.robot_dims = {r: 7 for r in self.robots}
         self.robot_idx = {r: list(range(7*i, 7*(i+1))) for i, r in enumerate(self.robots)}
         self.start_pos = NpConfiguration.from_list([np.array(q, dtype=float) for q in records[task_index]["starts"]])
@@ -122,7 +99,7 @@ class CoMotionGeometry(BaseProblem):
             goals = np.asarray(records[(task_index + visit) % len(records)]["goals"], dtype=float)
             if goals.shape != (len(self.robots), 7):
                 raise ValueError("Goal dimensions do not match the robot scene")
-            if not self._scene.valid(goals.ravel()):
+            if not self._collision_scene.valid(goals.ravel()):
                 raise ValueError(f"Upstream goal {visit} is invalid under backend {backend}")
             if task_style == "simultaneous":
                 self.tasks.append(Task(f"reach_{visit}", self.robots, SingleGoal(goals.ravel().copy())))
@@ -149,17 +126,13 @@ class CoMotionGeometry(BaseProblem):
             raise ValueError(f"Upstream start is invalid under backend {backend}")
 
     def __deepcopy__(self, memo):
-        from comotion import RobotScene
         result = type(self).__new__(type(self))
         memo[id(self)] = result
         for key, value in self.__dict__.items():
-            if key not in ("_scene", "_uniform_sampler", "C"):
+            if key not in ("_uniform_sampler", "C"):
                 setattr(result, key, copy.deepcopy(value, memo))
-        result._scene = RobotScene(*result._native_args)
-        if result._collision_optimized:
-            result._scene.set_optimized(True)
-        if result._edge_kernel is not None:
-            result._scene.set_edge_kernel(result._edge_kernel)
+        if result.backend == "vamp":
+            result._collision_scene.kernel.set_optimized(result._collision_optimized)
         result._uniform_sampler = result._make_uniform_sampler()
         return result
 
@@ -175,36 +148,35 @@ class CoMotionGeometry(BaseProblem):
         pass
 
     def is_collision_free(self, q, mode=None, collision_tolerance=None):
-        if collision_tolerance not in (None, 0):
-            raise ValueError('RobotScene supports zero collision tolerance only')
-        return self._scene.valid(self._flat(q))
+        if collision_tolerance is None:
+            return self._collision_scene.kernel.state_valid(self._flat(q))
+        return self._collision_scene.kernel.state_valid(
+            self._flat(q), self._collision_scene._initial, (),
+            0. if collision_tolerance is None else collision_tolerance)
 
     def is_collision_free_for_robot(self, r, q, m=None, collision_tolerance=None, set_mode=True):
-        if collision_tolerance not in (None, 0):
-            raise ValueError('RobotScene supports zero collision tolerance only')
         group = [r] if isinstance(r, str) else list(r)
-        # Existing planner contract: isolated feasibility of these robots, not
-        # feasibility against the arbitrary poses of nonparticipating robots.
-        # ModeValidation uses this as a necessary condition for a partial goal.
-        # All accepted states/edges still undergo full robot-robot checks.
-        return self._scene.group_valid(self._flat(q), [self.robots.index(x) for x in group], False)
+        if not group:
+            return True
+        return self._collision_scene.kernel.state_valid(
+            self._flat(q), self._collision_scene._initial,
+            [self.robots.index(name) for name in group],
+            0. if collision_tolerance is None else collision_tolerance)
 
     def batch_is_collision_free(self, qs, mode=None, collision_tolerance=None):
-        if collision_tolerance not in (None, 0):
-            raise ValueError('RobotScene supports zero collision tolerance only')
-        if isinstance(qs, np.ndarray) and qs.ndim == 2:  # already a batch: no per-row conversion
-            return self._scene.batch_valid(np.ascontiguousarray(qs, dtype=np.float64))
-        return self._scene.batch_valid(np.asarray([self._flat(q) for q in qs]).reshape(-1, len(self.start_pos.state())))
+        if not isinstance(qs, np.ndarray):
+            qs = np.asarray([self._flat(q) for q in qs]).reshape(-1, len(self.start_pos.state()))
+        return self._collision_scene.kernel.batch_valid(
+            qs, self._collision_scene._initial, (), True,
+            0. if collision_tolerance is None else collision_tolerance)
 
     def set_collision_optimizations(self, enabled=True, *, edge_kernel=None):
-        """Select cached SIMD queries or the reference collision implementation."""
         if self.backend != "vamp":
             raise ValueError("Cached SIMD validation is available for the VAMP backend only")
-        self._scene.set_optimized(bool(enabled))
-        self._collision_optimized = bool(enabled)
         if edge_kernel is not None:
-            self._scene.set_edge_kernel(edge_kernel)
-            self._edge_kernel = edge_kernel
+            raise ValueError("Explicit-grid edge checks use the common native kernel; legacy motion kernels are available through RobotScene")
+        self._collision_scene.kernel.set_optimized(bool(enabled))
+        self._collision_optimized = bool(enabled)
 
     def is_edge_collision_free(self, q1, q2, mode=None, resolution=None, tolerance=None,
                                include_endpoints=False, N_start=0, N_max=None, N=None):
@@ -215,16 +187,9 @@ class CoMotionGeometry(BaseProblem):
         stop = n if N_max is None else min(n, N_max)
         if n < 2 or not 0 <= N_start <= stop <= n:
             raise ValueError('Invalid edge sample range')
-        # The same points, in the same binary order and chunks of 16, as before; only the Python overhead is gone.
-        t = _edge_fractions(n, N_start, stop, bool(include_endpoints))
-        if len(t) and tolerance not in (None, 0):
-            raise ValueError('RobotScene supports zero collision tolerance only')
-        a = self._flat(q1)
-        d = self._flat(q2) - a
-        for offset in range(0, len(t), 16):
-            if not self._scene.batch_valid(a + t[offset:offset + 16, None] * d).all():
-                return False
-        return True
+        return self._collision_scene.edge_valid(
+            self._flat(q1), self._flat(q2), mode, n, N_start, stop,
+            include_endpoints, tolerance)
 
     def display_path(self, path, **kwargs):
         raise NotImplementedError('No viewer is installed for CoMotion robot scenes')

@@ -5,7 +5,7 @@ pair lists and switch by handle; full and partial queries use the same kernels.
 """
 from collections import OrderedDict
 import numpy as np
-from comotion import PrimitiveScene
+from comotion import Scene
 
 
 class _ActiveQueries:
@@ -23,12 +23,13 @@ class _ActiveQueries:
         return self.scene.kernel.state_valid(np.asarray(q), self.scene._handle, list(group), tolerance)
 
 
-class SimdPrimitiveScene:
-    def __init__(self, definition):
+class CoMotionScene:
+    def __init__(self, definition, *, implementation="generic"):
         if not np.isfinite(definition['tolerance']) or definition['tolerance']<0:
             raise ValueError('Invalid collision tolerance')
         self.edge_packing = "binary"
         self.edge_early_exit = True
+        self.implementation = implementation
         self.definition = definition
         self.frame_names = definition['frame_names']
         self.frame_index = {name: i for i, name in enumerate(self.frame_names)}
@@ -38,7 +39,7 @@ class SimdPrimitiveScene:
         self.movable = definition['movable']
         self.actions = definition['actions']
         self.tolerance = float(definition['tolerance'])
-        self.kernel = PrimitiveScene(definition)
+        self.kernel = Scene(definition, implementation=implementation)
         self._initial = self.kernel.initial()
         self._handle = self._initial
         self._mode = None
@@ -50,7 +51,7 @@ class SimdPrimitiveScene:
 
     def __deepcopy__(self, memo):
         import copy
-        result = type(self)(copy.deepcopy(self.definition, memo))
+        result = type(self)(copy.deepcopy(self.definition, memo), implementation=self.implementation)
         memo[id(self)] = result
         result.edge_packing = self.edge_packing
         result.edge_early_exit = self.edge_early_exit
@@ -89,6 +90,9 @@ class SimdPrimitiveScene:
 
     def set_mode(self, mode):
         if mode is self._mode:
+            return
+        if not self.actions:  # Static multi-goal scenes share one geometry mode.
+            self._mode = mode
             return
         missing, ancestor = [], mode
         while ancestor is not None and id(ancestor) not in self._mode_cache:
@@ -153,3 +157,7 @@ class SimdPrimitiveScene:
             self.last_q = qs[-1].copy()
         self.stats['queries'] += len(qs)
         return self.native.batch_valid(qs, self.tolerance if tolerance is None else tolerance)
+
+
+# Compatibility for clients importing the old adapter name.
+SimdPrimitiveScene = CoMotionScene
