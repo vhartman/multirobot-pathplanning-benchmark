@@ -21,6 +21,13 @@ _JOINTS = {
 
 def export_rai_scene(source):
     import robotic as ry
+    from ..rai.base import rai_env
+
+    if type(source).is_collision_free is not rai_env.is_collision_free:
+        raise NotImplementedError(
+            'Custom RAI collision rules are not exported; explicit pair masks, '
+            'planes and attachment exclusions need native support'
+        )
     C = ry.Config()
     C.addConfigurationCopy(source.C_base)
     names = list(C.getJointNames())
@@ -29,6 +36,20 @@ def export_rai_scene(source):
                        for name in names if name == joint or name.startswith(joint + ':')]
         if [names[int(i)] for i in source.robot_idx[robot]] != coordinates:
             raise NotImplementedError('Configuration and RAI joint orders differ')
+    active_frames = {name.split(':')[0] for name in names}
+
+    def frozen_joint(frame):
+        seen = set()
+        while frame.name not in seen:
+            seen.add(frame.name)
+            if frame.name in active_frames:
+                return False
+            info = frame.info()
+            if not info.get('mimic'):
+                return info.get('joint_active') is False
+            frame = C.getFrame(info['mimic'])
+        return False
+
     C.setJointState(np.zeros(len(names)))
     frames = C.getFrames()
     frame_names = [f.name for f in frames]
@@ -49,8 +70,9 @@ def export_rai_scene(source):
         kind = info.get('joint')
         if f.name in movable and kind not in (None, 'rigid'):
             raise NotImplementedError('Manipulated roots must be rigid objects')
-        if kind not in (None, 'rigid'):
-            if kind not in _JOINTS or info.get('mimic') or info.get('scale', 1.) != 1.:
+        # Inactive joints and their inactive mimics retain their fixed relative pose.
+        if kind not in (None, 'rigid') and not frozen_joint(f):
+            if kind not in _JOINTS or info.get('mimic') or info.get('joint_scale', info.get('scale', 1.)) != 1.:
                 raise NotImplementedError(f'{f.name}: unsupported joint {info}')
             axes = _JOINTS[kind]
             for k, (typ, axis) in enumerate(axes):
@@ -70,8 +92,15 @@ def export_rai_scene(source):
             typ, dims = (1 if shape == 'capsule' else 3), [size[-1], size[-2] / 2, 0.]
         elif shape == 'box' or (shape == 'ssBox' and size[-1] == 0):
             typ, dims = 2, (size[:3] / 2).tolist()
+        elif shape == 'mesh':
+            raise NotImplementedError(
+                f'{f.name}: CoMotion does not support collision meshes; '
+                'define primitive collision shapes in the source scene'
+            )
+        elif shape == 'ssBox':
+            raise NotImplementedError(f'{f.name}: rounded boxes must be converted explicitly first')
         else:
-            raise NotImplementedError(f'{f.name}: unsupported shape {shape}; convert rounded boxes explicitly first')
+            raise NotImplementedError(f'{f.name}: unsupported collision shape {shape}')
         shape_frames.append(index[f.name]); kinds.append(typ); sizes.append(dims)
     if any(j is None for j in joints):
         raise NotImplementedError('Not all active coordinates could be exported')
@@ -101,8 +130,11 @@ def export_rai_scene(source):
 def to_comotion(source):
     """Snapshot a supported geometric RAI problem as an independent CoMotion problem.
 
-    Spheres, capsules, cylinders and sharp boxes retain their geometry. Rounded
-    boxes, meshes, constraints and dynamic models require explicit conversion.
+    Spheres, capsules, cylinders and sharp boxes retain their geometry.
+    Collision meshes are rejected; visual-only meshes are ignored. No automatic
+    approximation or backend fallback is used. Rounded boxes, constraints and
+    dynamic models are not supported. Only the standard RAI collision rules
+    and static collision exclusions are exported.
     Nonzero collision tolerances use the native solver's penetration depths,
     which can differ from RAI near the tolerance boundary.
     """

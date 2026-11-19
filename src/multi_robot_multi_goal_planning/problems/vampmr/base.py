@@ -30,10 +30,7 @@ from ..planning_env import (
 )
 from ..core.goals import SingleGoal, GoalSet, GoalRegion, ConditionalGoal
 
-import sys
-sys.path.append("/usr/local/lib/python3.10/dist-packages")  # TODO: install mr_planner_core into venv
 import mr_planner_core
-sys.path.pop()
 
 from ..core.registry import register
 

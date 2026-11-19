@@ -6261,6 +6261,9 @@ def make_static_fr3_duo_config():
     pre_pick_pose_a1, pre_place_pose_a1 = compute_poses(C, "a1_right", "obj1", "goal1")
     pre_pick_pose_a2, pre_place_pose_a2 = compute_poses(C, "a2_left", "obj2", "goal2")
 
+    # Joint 6 has a positive lower limit on both FR3 arms.
+    C.setJointState([0.5, 0.5], ["a1_right_fr3v2_joint6", "a2_left_fr3v2_joint6"])
+
     return C, [pre_pick_pose_a1, pre_place_pose_a1], [pre_pick_pose_a2, pre_place_pose_a2]
 
 
