@@ -567,19 +567,19 @@ class BaseRRTConfig:
     informed_sampling: bool = True
     locally_informed_sampling: bool = True
     informed_batch_size: int = 300
-    informed_proposal: str = "independent"  # "independent" | "hit_and_run"
+    informed_proposal: str = "hit_and_run"  # "independent" | "hit_and_run"
     informed_walk_steps: int = 1  # chain steps per configuration proposal
     informed_proposal_batch_size: int = 10  # bounds/cost screening batch
     informed_affine_sampling: bool = True  # feasible proposals before cost rejection
     informed_cache_setup: bool = True  # reuse geometry, not walk progress
     informed_reuse_affine_geometry: bool = False
-    informed_transitions: bool = False  # informed (not uniform) proposals for unconstrained transitions
+    informed_transitions: bool = True  # informed (not uniform) proposals for unconstrained transitions
     
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
     
     shortcutting: bool = True
-    shortcutting_run_choice: str = "tree"
+    shortcutting_run_choice: str = "tree_compatible"
     edge_check_cache_size: int = 32768  # directed edges; zero disables memoization
     
     init_mode_sampling_type: str = "frontier"

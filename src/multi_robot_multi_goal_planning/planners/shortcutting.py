@@ -246,7 +246,7 @@ def robot_mode_shortcut(
     robot_choice = "round_robin",
     interpolation_resolution: float=0.5,
     max_attempts: Optional[int] = None,
-    run_choice: str = "tree",
+    run_choice: str = "tree_compatible",
     *,
     deadline: Optional[float] = None,
     statistics: Optional[dict] = None,
@@ -267,11 +267,11 @@ def robot_mode_shortcut(
     selected robot; subsets are neither enumerated nor cached.
 
     run_choice selects the proposal schedule:
-      - tree_compatible: alternate tree and compatible-subset draws, then use
+      - tree_compatible (default): alternate tree and compatible-subset draws, then use
         subsets alone when the tree is exhausted.
       - tree_then_compatible: exhaust the tree, then sample compatible subsets.
       - compatible: sample compatible subsets only.
-      - tree (default): exhaust the tree, then use single-robot gain scheduling.
+      - tree: exhaust the tree, then use single-robot gain scheduling.
       - atom_tree: the same tree/gain schedule over equality-coupled coordinate
         groups sharing a robot set, keeping private arm coordinates separate.
       - gain: use single-robot gain scheduling only.

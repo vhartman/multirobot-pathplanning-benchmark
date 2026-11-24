@@ -58,7 +58,7 @@ def solve(env, planner="birrt", runtime=60.0, optimize=False,
         path, sc_info = robot_mode_shortcut(
             env, path, max_iter=shortcut_iters, resolution=res,
             tolerance=env.collision_tolerance,
-            run_choice=getattr(cfg, "shortcutting_run_choice", "tree"),
+            run_choice=getattr(cfg, "shortcutting_run_choice", "tree_compatible"),
             robot_choice=getattr(cfg, "shortcutting_mode", "round_robin"),
         )
         info["shortcut"] = sc_info

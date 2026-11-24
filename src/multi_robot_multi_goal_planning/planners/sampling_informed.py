@@ -87,6 +87,7 @@ class InformedSampling:
         cache_setup: bool = True,
         reuse_affine_geometry: bool = False,
         informed_transitions: bool = False,
+        mode_aware_intervals: bool = True,
     ):
         if (isinstance(proposal_batch_size, bool)
                 or not isinstance(proposal_batch_size, int) or proposal_batch_size < 1):
@@ -123,6 +124,20 @@ class InformedSampling:
         # instead of the whole joint space. The proposal covers the cost region, so after the exact cost filter the
         # samples have the same distribution; far fewer candidates are rejected.
         self.informed_transitions = informed_transitions
+        # Locally informed configuration samples for a requested mode: draw the interval among those whose
+        # in-between modes contain the mode, instead of drawing blindly and rejecting. Same distribution of the
+        # accepted interval (see _select_interval_for_mode).
+        self.mode_aware_intervals = mode_aware_intervals
+        self._requested_mode = None
+        self._pairs_path = None  # the path the pair tables belong to (kept alive, so `is` is a safe identity test)
+        self._pairs_len = -1
+        self._pairs_version = None
+        self._pairs = {}  # requested mode id -> (starts, ends)
+        self._segments = None  # per path state: index of its mode segment; plus the segment modes
+        self._triu = None
+        self._inbetween_hashes = {}  # (start mode id, end mode id) -> hashes of the in-between modes
+        self._segment_ids = ()  # ids of the path's segment modes, in path order
+        self._contains_cache = {}  # (segment mode ids, requested mode id) -> segment x segment containment table
 
     def sample_mode(
         self, reached_modes: List[Mode], mode_sampling_type: str = "uniform_reached"
@@ -412,6 +427,8 @@ class InformedSampling:
             return 0, len(path) - 1
         if len(path) < 4:
             return None
+        if not transitions and self._requested_mode is not None:
+            return self._select_interval_for_mode(path, prefix, self._requested_mode)
         max_attempts = (MAX_TRANSITION_INTERVAL_ATTEMPTS if transitions
                         else MAX_CONFIGURATION_INTERVAL_ATTEMPTS)
         for _ in range(max_attempts):
@@ -424,6 +441,81 @@ class InformedSampling:
             if self.env.cost.lower_bound(path[start].q, path[end].q) < prefix[end] - prefix[start]:
                 return start, end
         return None
+
+    def _select_interval_for_mode(self, path, prefix, mode):
+        """A configuration interval whose in-between modes contain `mode`.
+
+        _select_interval draws index pairs blindly and generate_samples rejects those whose in-between modes do not
+        contain the requested mode (most of them: on a path with K mode segments about 2 / K pass). Here the pair
+        is drawn uniformly among the pairs that pass, and only the lower-bound test is left to rejection. The
+        accepted interval has the same distribution; the random stream differs.
+        """
+        starts, ends = self._mode_pairs(path, mode)
+        if not len(starts):
+            return None  # no interval contains the mode: generate_samples stops, as after exhausted attempts
+        for _ in range(MAX_CONFIGURATION_INTERVAL_ATTEMPTS):
+            k = random.randrange(len(starts))
+            start, end = int(starts[k]), int(ends[k])
+            if self.env.cost.lower_bound(path[start].q, path[end].q) < prefix[end] - prefix[start]:
+                return start, end
+        return None
+
+    def _mode_pairs(self, path, mode):
+        """Index pairs (start, end), end - start > 2, whose in-between modes contain `mode` (cached per path)."""
+        if (path is not self._pairs_path or len(path) != self._pairs_len
+                or self._pairs_version != Mode.graph_version):
+            if self._pairs_version != Mode.graph_version:
+                self._inbetween_hashes.clear()
+                self._contains_cache.clear()
+            self._pairs_path, self._pairs_len, self._pairs_version = path, len(path), Mode.graph_version
+            self._pairs.clear()
+            seg, seg_modes = np.empty(len(path), dtype=np.int32), []
+            for i, s in enumerate(path):
+                if not seg_modes or s.mode is not seg_modes[-1]:
+                    seg_modes.append(s.mode)
+                seg[i] = len(seg_modes) - 1
+            self._segments = seg, seg_modes
+            self._segment_ids = tuple(m.id for m in seg_modes)
+            self._triu = np.triu_indices(len(path), k=3)  # all pairs with end - start > 2
+        key = mode.id
+        if key not in self._pairs:
+            seg, seg_modes = self._segments
+            contains = self._contains_table(seg_modes, mode)
+            S, E = self._triu
+            mask = contains[seg[S], seg[E]]
+            self._pairs[key] = (S[mask].astype(np.int32), E[mask].astype(np.int32))
+        return self._pairs[key]
+
+    def _contains_table(self, seg_modes, mode):
+        """contains[i, j] for i <= j: is `mode` among the in-between modes of path segments i and j?
+
+        The table depends only on the segment modes, the requested mode and the mode tree, not on the path's
+        states. A new path usually keeps its mode sequence, so the table is kept per (segment mode ids, mode id)
+        while the mode tree does not grow, instead of being rebuilt with K * (K + 1) / 2 lookups for every path.
+        """
+        key = (self._segment_ids, mode.id)
+        contains = self._contains_cache.get(key)
+        if contains is None:
+            if len(self._contains_cache) >= 4096:
+                self._contains_cache.clear()
+            contains = np.zeros((len(seg_modes), len(seg_modes)), dtype=bool)
+            for i in range(len(seg_modes)):
+                for j in range(i, len(seg_modes)):
+                    contains[i, j] = self._inbetween_contains(seg_modes[i], seg_modes[j], mode)
+            self._contains_cache[key] = contains
+        return contains
+
+    def _inbetween_contains(self, start_mode, end_mode, mode):
+        """`mode in get_inbetween_modes(start_mode, end_mode)`, with Mode.__eq__ semantics, via a hash prefilter."""
+        key = start_mode.id, end_mode.id
+        hashes = self._inbetween_hashes.get(key)
+        if hashes is None:
+            hashes = self._inbetween_hashes[key] = frozenset(
+                hash(m) for m in self._cached_inbetween_modes(start_mode, end_mode))
+        if hash(mode) not in hashes:
+            # Mode.__eq__ is id equality or (equal task ids and equal hashes); neither holds without a hash match
+            return any(m.id == mode.id for m in self._cached_inbetween_modes(start_mode, end_mode))
+        return mode in self._cached_inbetween_modes(start_mode, end_mode)
 
     def _interval_mode(self, reached_modes, path, start, end, cache, requested_mode=None):
         if not self.locally_informed_sampling:
@@ -586,6 +678,8 @@ class InformedSampling:
         sample_limit = batch_size if max_samples is None else max_samples
         if len(path) < 2 or not reached_modes or sample_limit <= 0:
             return []
+        self._requested_mode = (requested_mode if self.mode_aware_intervals and self.locally_informed_sampling
+                                else None)
         segment_costs = self.env.cost.batch_edge_cost(path[:-1], path[1:])
         prefix = np.r_[0., np.cumsum(segment_costs)]
         mode_cache = {}
@@ -688,6 +782,18 @@ class InformedSampling:
                 continue
             endpoints = np.array([path[start].q.state(), path[end].q.state()])
             budget = prefix[end] - prefix[start]
+            if (project_transition is None
+                    and type(self.env.cost).batch_lower_bound is JointSpaceLength.batch_lower_bound):
+                # Every candidate has the goal at `indices`. Its lower bound to an endpoint is at least that of
+                # the endpoint with only those coordinates moved to the goal (the bound does not decrease when a
+                # robot moves further). If these two legs already use up the budget, no candidate passes the cost
+                # filter: skip the interval instead of drawing max_attempts_per_sample candidates for nothing.
+                pinned = endpoints.copy()
+                pinned[:, indices] = goal
+                if (self.env.cost.lower_bound(path[start].q, self.env.start_pos.from_flat(pinned[0]))
+                        + self.env.cost.lower_bound(self.env.start_pos.from_flat(pinned[1]), path[end].q)
+                        >= budget):
+                    continue
             proposal = None
             if self.affine_sampling and self.cost_settings is not None:
                 active = self.constraint_provider.for_transition(mode, next_ids)
