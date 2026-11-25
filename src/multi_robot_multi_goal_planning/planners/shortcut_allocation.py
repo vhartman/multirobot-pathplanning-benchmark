@@ -16,13 +16,14 @@ The rule compares cost reduction per second.
     rate the operator achieved the last time it ran first on a changed path (at most halved per measurement). An
     operator that has never run gets a probe of ``shortcut_probe_chunk`` proposals, so that its rate is measured.
   - An operator runs while its expected rate is above the tree's rate, and above ``shortcut_rate_floor`` x cost.
-    The first operator always gets one chunk per tree improvement, as with "fixed". An operator that was skipped
-    ``shortcut_probe_every`` times in a row gets one chunk regardless.
+    No operator is run just because the tree improved the path: with informed samples that pay, the tree does
+    that 100-300 times per run. An operator that was skipped on ``shortcut_probe_every`` tree improvements in a
+    row gets one chunk regardless.
   - Operators that were skipped come back before a tree iteration once the tree's rate has decayed below their
     expected rate (resume()).
 Neither side can be starved: chunks on an unchanged path stop paying, so their rate falls below the floor and the
-tree runs; every path the tree finds gets at least one chunk; and stopped operators resume when the tree goes
-quiet. So right after the first solution only the coarse operator runs, and the fine ones start when the tree
+tree runs; every operator gets a chunk at the latest after ``shortcut_probe_every`` skipped tree improvements;
+and stopped operators resume when the tree goes quiet. So right after the first solution only the coarse operator runs, and the fine ones start when the tree
 slows down.
 
 A shortcut result is reported after every improving chunk and reinserted into the tree once per session.
@@ -146,7 +147,7 @@ class ShortcutAllocator:
                 if self._fresh[k] is not None:
                     self._expected[k] = self._fresh[k]
         for k, op in enumerate(self.ops):
-            forced = changed_path and (k == 0 or self._skipped[k] >= config.shortcut_probe_every)
+            forced = changed_path and self._skipped[k] >= config.shortcut_probe_every
             probe = config.shortcut_probe_chunk if (k > 0 and self._expected[k] is None) else 0
             ran = False
             while not planner._planning_expired():
