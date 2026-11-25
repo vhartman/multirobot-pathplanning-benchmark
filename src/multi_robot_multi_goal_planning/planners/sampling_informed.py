@@ -102,6 +102,7 @@ class InformedSampling:
         self.affine_sampling = affine_sampling
         self.cache_setup = cache_setup
         self._setup_cache = OrderedDict()
+        self._costs_path, self._costs_len, self._costs = None, -1, None  # edge costs of the current path
         self._inbetween_cache = {}  # get_inbetween_modes results, valid for one Mode.graph_version
         self._inbetween_version = None
         self.reuse_affine_geometry = reuse_affine_geometry
@@ -659,6 +660,14 @@ class InformedSampling:
         accepted = min(part.shape[1] for part in parts)
         return np.concatenate([part[:, :accepted] for part in parts], axis=0).T
 
+    def _path_costs(self, path):
+        """(edge costs, prefix sums) of the path, computed once per path object instead of on every call."""
+        if path is not self._costs_path or len(path) != self._costs_len:
+            segment_costs = self.env.cost.batch_edge_cost(path[:-1], path[1:])
+            self._costs_path, self._costs_len = path, len(path)  # keeps the path alive: `is` is a safe test
+            self._costs = (segment_costs, np.r_[0., np.cumsum(segment_costs)])
+        return self._costs
+
     def generate_samples(
         self, reached_modes: List[Mode], batch_size: int, path: List[State],
         max_attempts_per_sample: int = 200, try_direct_sampling: bool = True,
@@ -680,8 +689,7 @@ class InformedSampling:
             return []
         self._requested_mode = (requested_mode if self.mode_aware_intervals and self.locally_informed_sampling
                                 else None)
-        segment_costs = self.env.cost.batch_edge_cost(path[:-1], path[1:])
-        prefix = np.r_[0., np.cumsum(segment_costs)]
+        segment_costs, prefix = self._path_costs(path)
         mode_cache = {}
         samples = []
         for _ in range(batch_size):
@@ -754,7 +762,7 @@ class InformedSampling:
         sample_limit = batch_size if max_samples is None else max_samples
         if len(self.env.tasks) == 1 or len(path) < 2 or not reached_modes or sample_limit <= 0:
             return []
-        prefix = np.r_[0., np.cumsum(self.env.cost.batch_edge_cost(path[:-1], path[1:]))]
+        prefix = self._path_costs(path)[1]
         mode_cache = {}
         transitions = []
         for _ in range(batch_size):
