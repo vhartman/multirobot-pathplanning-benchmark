@@ -638,6 +638,58 @@ def robot_mode_shortcut(
     return new_path, [costs, times]
 
 
+def damped_shortcut_chunk(env: BaseProblem, path: List[State], proposals: int, steps=(1.0, 0.5, 0.25),
+                          resolution=None, tolerance=None):
+    """`proposals` damped single-robot shortcuts on a path with duplicated mode switches.
+
+    A proposal picks a robot, a run in which that robot's task does not change, and two indices in it. The robot's
+    coordinates between them are moved a fraction alpha of the way from the current sub-path to its straight-line
+    version (alpha = 1 is the ordinary shortcut); the first alpha in `steps` that lowers the cost and is collision
+    free is applied. The endpoints and all other robots stay as they are. A straight shortcut is all or nothing;
+    when it collides, a damped one can still move the robot part of the way.
+
+    Candidates are only collision checked: not for problems with constraints.
+    Returns (path, cost reduction, number of accepted proposals).
+    """
+    path = list(path)
+    runs = [constant_task_runs(path, r) for r in range(len(env.robots))]
+    gain, accepted = 0.0, 0
+    for _ in range(proposals):
+        r = random.randrange(len(env.robots))
+        if not runs[r]:
+            continue
+        lo, hi = random.choice(runs[r])
+        i = random.randint(lo, hi - 2)
+        j = random.randint(i + 2, hi)
+        old = path[i:j + 1]
+        straight = _shortcut_candidate(env, path, i, j, (r,))
+        old_cost = path_cost(old, env.cost)
+        if path_cost(straight, env.cost) >= old_cost - 1e-9:
+            continue
+        idx = np.asarray(env.robot_idx[env.robots[r]], dtype=int)
+        old_flat = [s.q.state() for s in old]
+        straight_flat = [s.q.state() for s in straight]
+        for alpha in steps:
+            if alpha >= 1.0:
+                candidate = straight
+            else:
+                candidate = []
+                for k, s in enumerate(old):
+                    flat = old_flat[k].copy()
+                    flat[idx] = (1.0 - alpha) * old_flat[k][idx] + alpha * straight_flat[k][idx]
+                    candidate.append(State(s.q.from_flat(flat), s.mode))
+            new_cost = path_cost(candidate, env.cost)
+            if new_cost >= old_cost - 1e-9:
+                continue
+            if env.is_path_collision_free(candidate, resolution=resolution, tolerance=tolerance,
+                                          check_start_and_end=False):
+                path[i:j + 1] = candidate
+                gain += old_cost - new_cost
+                accepted += 1
+                break
+    return path, gain, accepted
+
+
 def remove_interpolated_nodes(path: List[State], tolerance=1e-15) -> List[State]:
     """
     Preserve a path's certified edge partition.

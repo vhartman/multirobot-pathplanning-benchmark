@@ -4,6 +4,7 @@ import math as math
 import random
 from multi_robot_multi_goal_planning.problems.util import interpolate_path
 from multi_robot_multi_goal_planning.planners.shortcutting import robot_mode_shortcut, remove_interpolated_nodes
+from multi_robot_multi_goal_planning.planners.shortcut_allocation import ShortcutAllocator
 import os
 import pickle
 from abc import ABC, abstractmethod
@@ -580,6 +581,20 @@ class BaseRRTConfig:
     
     shortcutting: bool = True
     shortcutting_run_choice: str = "tree_compatible"
+    # How shortcutting shares the time with the tree search once a solution exists (see shortcut_allocation.py):
+    #   "fixed":    one pass of 100 proposals of shortcutting_run_choice per tree improvement.
+    #   "marginal": several operators in chunks; each runs while its cost reduction per second beats the tree's.
+    shortcut_allocation: str = "marginal"
+    shortcut_policies: str = "tree_compatible,index_tree"  # "marginal": run_choice values, coarse to fine
+    shortcut_damped: bool = True  # "marginal": damped shortcuts as the last operator (unconstrained problems)
+    shortcut_chunk: int = 100  # collision-checked proposals per chunk
+    shortcut_damped_chunk: int = 50  # proposals per chunk of damped shortcuts
+    shortcut_damped_steps: tuple = (1.0, 0.5, 0.25)  # fractions of the way to the straight line, tried in order
+    shortcut_probe_chunk: int = 20  # proposals of the one-off probe of an operator that has never run; 0: none
+    shortcut_probe_every: int = 5  # an operator skipped this often in a row gets one chunk
+    shortcut_rate_floor: float = 1e-3  # per second, relative to the cost: a chunk below this has stopped paying
+    shortcut_tree_horizon: float = 2.0  # seconds of tree time over which the tree's improvements are averaged
+    shortcut_tree_prior: float = 2.0  # the tree's initial rate, as a multiple of the first chunk's rate
     edge_check_cache_size: int = 32768  # directed edges; zero disables memoization
     
     init_mode_sampling_type: str = "frontier"
@@ -654,6 +669,8 @@ class BaseRRTstar(BasePlanner):
                 or not isinstance(config.edge_check_cache_size, int)
                 or config.edge_check_cache_size < 0):
             raise ValueError("edge_check_cache_size must be a nonnegative integer")
+        if config.shortcut_allocation not in ("fixed", "marginal"):
+            raise ValueError("shortcut_allocation must be 'fixed' or 'marginal'")
         self._edge_check_cache = OrderedDict()
         self.edge_cache_hits = 0
         self.edge_cache_misses = 0
@@ -742,6 +759,11 @@ class BaseRRTstar(BasePlanner):
         self._c_free_n_total: int = 0
         self._c_free_n_free: int = 0
         self._c_free_total_volume: float = 0.0
+
+        # shortcutting in chunks, allocated against the tree's progress (None: one pass per tree improvement)
+        self.shortcut_allocator = (ShortcutAllocator(self) if config.shortcutting
+                                   and config.shortcut_allocation == "marginal"
+                                   and not config.apply_long_horizon else None)
 
     def _edge_collision_free(
         self, q1: "Configuration", q2: "Configuration", mode: "Mode"
@@ -1764,6 +1786,9 @@ class BaseRRTstar(BasePlanner):
             and self.config.shortcutting
             and shortcutting_bool
         ):
+            if self.shortcut_allocator is not None:
+                self.shortcut_allocator.tree_improved()
+                return
             # print(f"-- M", mode.task_ids, "Cost: ", self.operation.cost.item())
             shortcut_path_, result = robot_mode_shortcut(
                 self.env,
@@ -1925,6 +1950,8 @@ class BaseRRTstar(BasePlanner):
 
     def sample_state(self, mode: Mode | None = None) -> State | None:
         """Select a mode if needed, then sample a configuration in its tree."""
+        if self.shortcut_allocator is not None and self.operation.init_sol:
+            self.shortcut_allocator.resume()
         if mode is None:
             mode = self.random_mode()
         q = self._sample_config_fn(mode)
