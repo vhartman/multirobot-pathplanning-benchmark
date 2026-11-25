@@ -989,7 +989,8 @@ class BaseRRTstar(BasePlanner):
             self.modes = self.mode_validation.remove_invalid_modes(self.modes)
 
         for next_mode in next_modes:
-            if self.has_path_constraints and not self._collision_free(n.state.q, next_mode):
+            # The configuration is on the path in both modes, so it has to be valid in the following one too.
+            if not self._collision_free(n.state.q, next_mode):
                 continue
             if next_mode not in self.modes:
                 tree_type = type(self.trees[mode])
