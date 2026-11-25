@@ -849,9 +849,9 @@ class InformedSampling:
                         rows, lambda q: project_transition(q, mode, next_ids, task))
                 for row in self._filter_by_bounds_and_cost(rows, endpoints, budget):
                     q = self.env.start_pos.from_flat(row.copy())
-                    next_modes = self.env.get_next_modes(q, mode)
                     if not self.env.is_collision_free(q, mode):
                         continue
+                    next_modes = self.env.get_next_modes(q, mode)
                     improving = [m for m in next_modes if not self.include_lb
                                  or self.can_transition_improve((q, mode, m), path, start, end, g)]
                     if not improving:
