@@ -575,6 +575,11 @@ class BaseRRTConfig:
     informed_cache_setup: bool = True  # reuse geometry, not walk progress
     informed_reuse_affine_geometry: bool = False
     informed_transitions: bool = True  # informed (not uniform) proposals for unconstrained transitions
+    # Share of the informed samples drawn from an interval inside the sample's own mode (transitions: the two
+    # modes at the switch), where the informed set's lower bound is exact up to collisions. The rest is drawn
+    # from intervals over the whole path. Local samples only refine the route the path takes, the others can
+    # find a different one: keep it below 1. 0: the previous behavior.
+    informed_local_share: float = 0.8
     
     distance_metric: str = "max_euclidean"
     p_goal: float = 0.4
@@ -711,6 +716,7 @@ class BaseRRTstar(BasePlanner):
             cache_setup=config.informed_cache_setup,
             reuse_affine_geometry=config.informed_reuse_affine_geometry,
             informed_transitions=config.informed_transitions,
+            local_share=config.informed_local_share,
         )
         self.start_time = time.time()
         self.costs = []

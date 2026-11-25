@@ -15,7 +15,7 @@ from multi_robot_multi_goal_planning.problems.core.configuration import (
 from multi_robot_multi_goal_planning.problems.costs.joint_space import JointSpaceLength
 from multi_robot_multi_goal_planning.problems.constraint_set import ConstraintProvider
 from .sampling_bounded_phs import PreparedBoundedPHS, joint_bounds
-from .sampling_joint_cost import JointCostSampler, warm_joint_cost_kernel
+from .sampling_joint_cost import JointCostSampler, joint_cost, warm_joint_cost_kernel
 from .sampling_affine_informed import (
     AffineInformedSampler,
     AffineInformedSetup,
@@ -26,6 +26,8 @@ from .sampling_affine_informed import (
 # Bound the work spent looking for an improvable path interval.
 MAX_CONFIGURATION_INTERVAL_ATTEMPTS = 500
 MAX_TRANSITION_INTERVAL_ATTEMPTS = 1000
+LOCAL_INTERVAL_ATTEMPTS = 30  # index pairs tried for a local interval with slack
+LOCAL_INTERVAL_MIN_SLACK = 1e-3  # relative to the interval's cost: below this the informed set is degenerate
 
 
 def sample_unit_ball(dim, n=1):
@@ -88,6 +90,7 @@ class InformedSampling:
         reuse_affine_geometry: bool = False,
         informed_transitions: bool = False,
         mode_aware_intervals: bool = True,
+        local_share: float = 0.0,
     ):
         if (isinstance(proposal_batch_size, bool)
                 or not isinstance(proposal_batch_size, int) or proposal_batch_size < 1):
@@ -129,6 +132,14 @@ class InformedSampling:
         # in-between modes contain the mode, instead of drawing blindly and rejecting. Same distribution of the
         # accepted interval (see _select_interval_for_mode).
         self.mode_aware_intervals = mode_aware_intervals
+        # Share of the informed samples whose interval lies inside the sample's own mode (transitions: inside the
+        # two modes at the switch); see _local_interval. 0: every interval is drawn over the whole path.
+        if not 0.0 <= local_share <= 1.0:
+            raise ValueError("local_share must be in [0, 1]")
+        self.local_share = local_share
+        self._transition_mode = None  # the mode a transition sample is requested for
+        self._local_path, self._local_len = None, -1  # the path the mode segments below belong to
+        self._local_first, self._local_modes, self._local_index = None, None, {}
         self._requested_mode = None
         self._pairs_path = None  # the path the segment tables belong to (kept alive, so `is` is a safe identity test)
         self._pairs_len = -1
@@ -428,6 +439,11 @@ class InformedSampling:
             return 0, len(path) - 1
         if len(path) < 4:
             return None
+        mode = self._transition_mode if transitions else self._requested_mode
+        if self.local_share > 0 and mode is not None and random.random() < self.local_share:
+            interval = self._local_interval(path, prefix, mode, transitions)
+            if interval is not None:
+                return interval  # otherwise (mode not on the path, or no slack): the rule below
         if not transitions and self._requested_mode is not None:
             return self._select_interval_for_mode(path, prefix, self._requested_mode)
         max_attempts = (MAX_TRANSITION_INTERVAL_ATTEMPTS if transitions
@@ -441,6 +457,62 @@ class InformedSampling:
                 continue
             if self.env.cost.lower_bound(path[start].q, path[end].q) < prefix[end] - prefix[start]:
                 return start, end
+        return None
+
+    def _local_interval(self, path, prefix, mode, transitions):
+        """An interval inside the sample's own mode, or None.
+
+        The informed set of an interval is defined with the configuration distance as lower bound. Across mode
+        switches that distance ignores the goals the robots have to visit in between, so for an interval that
+        spans several modes the set is close to the whole space, or at least far larger than what can pay: 97-99%
+        of the configuration samples drawn that way cannot shorten the path within their mode, and the other 1-3%
+        produce nearly all of the tree's improvements. Inside one mode the bound is exact up to collisions:
+          - configuration sample for `mode`: both ends in the mode's segment of the path;
+          - transition sample out of `mode`: one end in the mode's segment, the other in its successor's.
+        Intervals whose slack is below LOCAL_INTERVAL_MIN_SLACK of their cost are skipped.
+
+        Local samples refine the route the path already takes. Only intervals over the whole path can find another
+        one, so local_share should stay below 1 (see BaseRRTConfig.informed_local_share).
+        """
+        if path is not self._local_path or len(path) != self._local_len:
+            first, modes = [], []
+            for i, s in enumerate(path):
+                if not modes or s.mode is not modes[-1]:
+                    modes.append(s.mode)
+                    first.append(i)
+            self._local_path, self._local_len = path, len(path)  # keeps the path alive: `is` is a safe test
+            self._local_first, self._local_modes = first + [len(path)], modes
+            self._local_index = {}
+            for k, m in enumerate(modes):
+                self._local_index.setdefault(m.id, k)
+        modes = self._local_modes
+        k = self._local_index.get(mode.id)
+        if k is None:
+            k = next((i for i, m in enumerate(modes) if m == mode), None)
+        if k is None:
+            return None
+        if not transitions:
+            return self._draw_local_interval(path, prefix, k, k)
+        for k2 in (k - 1, k + 1):  # the informed path may run goal-to-start
+            if 0 <= k2 < len(modes) and modes[k2].prev_mode is not None and modes[k2].prev_mode == mode:
+                return self._draw_local_interval(path, prefix, min(k, k2), max(k, k2))
+        return None
+
+    def _draw_local_interval(self, path, prefix, lo, hi):
+        """An index pair (i in segment lo, j in segment hi, j - i > 2) with slack, or None."""
+        first = self._local_first
+        a1, n1 = first[lo], first[lo + 1] - first[lo]
+        a2, n2 = first[hi], first[hi + 1] - first[hi]
+        lower_bound = self.env.cost.lower_bound
+        for _ in range(LOCAL_INTERVAL_ATTEMPTS):
+            i, j = a1 + random.randrange(n1), a2 + random.randrange(n2)
+            if j < i and lo == hi:
+                i, j = j, i
+            if j - i <= 2:
+                continue
+            budget = prefix[j] - prefix[i]
+            if budget - lower_bound(path[i].q, path[j].q) > LOCAL_INTERVAL_MIN_SLACK * budget:
+                return i, j
         return None
 
     def _select_interval_for_mode(self, path, prefix, mode):
@@ -644,6 +716,9 @@ class InformedSampling:
         return proposals
 
     def _prepare_affine_proposal(self, endpoints, budget, active, fixed=None):
+        if (self.local_share > 0 and fixed and self.affine_sampling and self.cost_settings is not None
+                and not active.constraints and not active.has_nonlinear):
+            return self._prepare_pinned_proposal(endpoints, budget, active, fixed)
         if (not self.affine_sampling or self.cost_settings is None
                 or not active.constraints or active.has_nonlinear):
             return None
@@ -659,9 +734,67 @@ class InformedSampling:
             # Preparation failure is not proof that the region is empty.
             return None
 
-    def _make_affine_proposal(self, endpoints, budget, active, fixed, walk):
+    def _prepare_pinned_proposal(self, endpoints, budget, active, fixed):
+        """Proposal for an unconstrained transition: the informed set with the switching robots at their goal.
+
+        A transition sample has the coordinates of the robots that switch task pinned to the goal. Drawing from
+        the informed set of all coordinates and pinning afterwards leaves almost nothing that passes the cost
+        filter once intervals are local (0.35% on rai.cube_four). Here the candidates come from a hit-and-run walk
+        in the set restricted to the pinned coordinates.
+
+        The walk needs a feasible start, and the cheapest configuration of the pinned set is known (_pinned_seed).
+        Without slack against it the set is empty or degenerate: [] is returned, nothing is drawn, and the caller
+        moves on to the next interval. None: no proposal could be built; the caller falls back.
+        """
+        seed = self._pinned_seed(endpoints, fixed)
+        slices = np.array(self.env.start_pos._array_slice, dtype=np.int64, order="C")
+        a, b = np.array(endpoints, dtype=float, copy=True)
+        if budget - joint_cost(seed, a, b, slices, *self.cost_settings) <= LOCAL_INTERVAL_MIN_SLACK * budget:
+            return []
+        try:
+            sampler = self._make_affine_proposal(endpoints, budget, active, fixed, True, reuse=True)
+        except (ValueError, np.linalg.LinAlgError):
+            return None
+        if sampler.use_walk and sampler.z is None:
+            z = sampler.basis.T @ (seed - sampler.origin)
+            if np.all(sampler.G @ z < sampler.h):
+                sampler.z = z
+                sampler.sample(int(np.ceil(sampler.warmup_sweeps * len(z) / sampler.steps)))  # mix; discarded
+        return sampler
+
+    def _pinned_seed(self, endpoints, fixed):
+        """The cheapest configuration between the interval's ends that has the pinned coordinates at the goal.
+
+        The pinned robots are at the goal. Every other robot is on its straight line between the ends, at the
+        fraction of the way that the pinned robots' first leg takes of their whole way (if another robot's line
+        is longer than both legs together: the middle of the fractions that keep both legs below it). Its cost is
+        the larger of the pinned legs and the longest straight line, plus the sum term of straight lines: the
+        minimum over the set, for the max and for the sum reduction.
+        """
+        a, b = np.asarray(endpoints[0], dtype=float), np.asarray(endpoints[1], dtype=float)
+        idx = np.fromiter(fixed, dtype=int); goal = np.fromiter(fixed.values(), dtype=float)
+        first = last = longest = 0.0
+        for s_, e_ in self.env.start_pos._array_slice:
+            mask = (idx >= s_) & (idx < e_)
+            if mask.any():
+                via = a[s_:e_].copy(); via[idx[mask] - s_] = goal[mask]
+                first = max(first, float(np.linalg.norm(via - a[s_:e_])))
+                last = max(last, float(np.linalg.norm(b[s_:e_] - via)))
+            else:
+                longest = max(longest, float(np.linalg.norm(b[s_:e_] - a[s_:e_])))
+        if first + last <= 0.0:
+            fraction = 0.5
+        elif longest <= first + last:
+            fraction = first / (first + last)
+        else:
+            fraction = 0.5 * (first / longest + 1.0 - last / longest)
+        seed = a + fraction * (b - a)
+        seed[idx] = goal
+        return seed
+
+    def _make_affine_proposal(self, endpoints, budget, active, fixed, walk, reuse=None):
         setup = None
-        if self.reuse_affine_geometry:
+        if self.reuse_affine_geometry if reuse is None else reuse:
             key = (active, tuple(fixed.items()))
             if key in self._affine_geometry:
                 self.affine_geometry_stats['hits'] += 1
@@ -790,6 +923,7 @@ class InformedSampling:
         if len(self.env.tasks) == 1 or len(path) < 2 or not reached_modes or sample_limit <= 0:
             return []
         prefix = self._path_costs(path)[1]
+        self._transition_mode = requested_mode
         mode_cache = {}
         transitions = []
         for _ in range(batch_size):
