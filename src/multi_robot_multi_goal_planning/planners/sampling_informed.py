@@ -130,12 +130,12 @@ class InformedSampling:
         # accepted interval (see _select_interval_for_mode).
         self.mode_aware_intervals = mode_aware_intervals
         self._requested_mode = None
-        self._pairs_path = None  # the path the pair tables belong to (kept alive, so `is` is a safe identity test)
+        self._pairs_path = None  # the path the segment tables belong to (kept alive, so `is` is a safe identity test)
         self._pairs_len = -1
         self._pairs_version = None
-        self._pairs = {}  # requested mode id -> (starts, ends)
-        self._segments = None  # per path state: index of its mode segment; plus the segment modes
-        self._triu = None
+        self._segment_first = None  # first path index of each mode segment, plus len(path)
+        self._segment_modes = None  # the mode of each segment
+        self._segment_pairs = {}  # requested mode id -> (segment i, segment j, cumulative number of index pairs)
         self._inbetween_hashes = {}  # (start mode id, end mode id) -> hashes of the in-between modes
         self._segment_ids = ()  # ids of the path's segment modes, in path order
         self._contains_cache = {}  # (segment mode ids, requested mode id) -> segment x segment containment table
@@ -450,42 +450,69 @@ class InformedSampling:
         contain the requested mode (most of them: on a path with K mode segments about 2 / K pass). Here the pair
         is drawn uniformly among the pairs that pass, and only the lower-bound test is left to rejection. The
         accepted interval has the same distribution; the random stream differs.
+
+        The pairs are not enumerated (their number is quadratic in the path length, and shortcut paths have several
+        hundred to about 1000 states). A pair of mode segments is drawn with probability proportional to its number
+        of index pairs, then one index in each segment; pairs with end - start <= 2 are redrawn. That is uniform
+        over the same set, with tables of size (segments)^2.
         """
-        starts, ends = self._mode_pairs(path, mode)
-        if not len(starts):
+        first = self._segment_first_indices(path)
+        I, J, cumulative = self._mode_segment_pairs(mode)
+        if not len(cumulative):
             return None  # no interval contains the mode: generate_samples stops, as after exhausted attempts
-        for _ in range(MAX_CONFIGURATION_INTERVAL_ATTEMPTS):
-            k = random.randrange(len(starts))
-            start, end = int(starts[k]), int(ends[k])
-            if self.env.cost.lower_bound(path[start].q, path[end].q) < prefix[end] - prefix[start]:
+        lower_bound = self.env.cost.lower_bound
+        tests = redraws = 0
+        while tests < MAX_CONFIGURATION_INTERVAL_ATTEMPTS and redraws < 20 * MAX_CONFIGURATION_INTERVAL_ATTEMPTS:
+            k = min(int(np.searchsorted(cumulative, random.random() * cumulative[-1], side="right")),
+                    len(cumulative) - 1)
+            i, j = int(I[k]), int(J[k])
+            if i == j:  # two distinct states of one segment
+                size = int(first[i + 1] - first[i])
+                a = random.randrange(size)
+                b = random.randrange(size - 1)
+                b += b >= a
+                start, end = int(first[i]) + min(a, b), int(first[i]) + max(a, b)
+            else:
+                start = int(first[i]) + random.randrange(int(first[i + 1] - first[i]))
+                end = int(first[j]) + random.randrange(int(first[j + 1] - first[j]))
+            if end - start <= 2:
+                redraws += 1
+                continue
+            tests += 1
+            if lower_bound(path[start].q, path[end].q) < prefix[end] - prefix[start]:
                 return start, end
         return None
 
-    def _mode_pairs(self, path, mode):
-        """Index pairs (start, end), end - start > 2, whose in-between modes contain `mode` (cached per path)."""
+    def _segment_first_indices(self, path):
+        """First path index of each mode segment, plus len(path) (cached per path and mode-tree version)."""
         if (path is not self._pairs_path or len(path) != self._pairs_len
                 or self._pairs_version != Mode.graph_version):
             if self._pairs_version != Mode.graph_version:
                 self._inbetween_hashes.clear()
                 self._contains_cache.clear()
             self._pairs_path, self._pairs_len, self._pairs_version = path, len(path), Mode.graph_version
-            self._pairs.clear()
-            seg, seg_modes = np.empty(len(path), dtype=np.int32), []
+            first, modes = [], []
             for i, s in enumerate(path):
-                if not seg_modes or s.mode is not seg_modes[-1]:
-                    seg_modes.append(s.mode)
-                seg[i] = len(seg_modes) - 1
-            self._segments = seg, seg_modes
-            self._segment_ids = tuple(m.id for m in seg_modes)
-            self._triu = np.triu_indices(len(path), k=3)  # all pairs with end - start > 2
-        key = mode.id
-        if key not in self._pairs:
-            seg, seg_modes = self._segments
-            contains = self._contains_table(seg_modes, mode)
-            S, E = self._triu
-            mask = contains[seg[S], seg[E]]
-            self._pairs[key] = (S[mask].astype(np.int32), E[mask].astype(np.int32))
-        return self._pairs[key]
+                if not modes or s.mode is not modes[-1]:
+                    modes.append(s.mode)
+                    first.append(i)
+            self._segment_first = np.array(first + [len(path)], dtype=np.int64)
+            self._segment_modes = modes
+            self._segment_ids = tuple(m.id for m in modes)
+            self._segment_pairs = {}
+        return self._segment_first
+
+    def _mode_segment_pairs(self, mode):
+        """Segment pairs (i <= j) whose in-between modes contain `mode`, with their cumulative index-pair counts."""
+        table = self._segment_pairs.get(mode.id)
+        if table is None:
+            contains = self._contains_table(self._segment_modes, mode)
+            n = np.diff(self._segment_first)
+            I, J = np.nonzero(contains)
+            weight = np.where(I == J, n[I] * (n[I] - 1) // 2, n[I] * n[J]).astype(np.float64)
+            keep = weight > 0
+            table = self._segment_pairs[mode.id] = (I[keep], J[keep], np.cumsum(weight[keep]))
+        return table
 
     def _contains_table(self, seg_modes, mode):
         """contains[i, j] for i <= j: is `mode` among the in-between modes of path segments i and j?
