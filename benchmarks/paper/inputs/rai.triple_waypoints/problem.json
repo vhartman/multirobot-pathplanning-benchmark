@@ -1,0 +1,3183 @@
+{
+  "robots": [
+    "a0",
+    "a1",
+    "a2"
+  ],
+  "robot_idx": {
+    "a0": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "a1": [
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "a2": [
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ]
+  },
+  "joint_names": [
+    "a0_panda_joint1",
+    "a0_panda_joint2",
+    "a0_panda_joint3",
+    "a0_panda_joint4",
+    "a0_panda_joint5",
+    "a0_panda_joint6",
+    "a0_panda_joint7",
+    "a1_ur_shoulder_pan_joint",
+    "a1_ur_shoulder_lift_joint",
+    "a1_ur_elbow_joint",
+    "a1_ur_wrist_1_joint",
+    "a1_ur_wrist_2_joint",
+    "a1_ur_wrist_3_joint",
+    "a2_kuka_iiwa_joint_1",
+    "a2_kuka_iiwa_joint_2",
+    "a2_kuka_iiwa_joint_3",
+    "a2_kuka_iiwa_joint_4",
+    "a2_kuka_iiwa_joint_5",
+    "a2_kuka_iiwa_joint_6",
+    "a2_kuka_iiwa_joint_7"
+  ],
+  "start": [
+    0.0,
+    -1.0000000000000004,
+    0.0,
+    -1.9999999999999998,
+    0.0,
+    1.9999999999999998,
+    -0.5000000000000004,
+    0.0,
+    -1.9999999999999998,
+    0.9999999999999998,
+    -0.9999999999999998,
+    -1.571,
+    0.0,
+    0.0,
+    -0.4,
+    0.0,
+    -0.9999999999999998,
+    0.0,
+    1.2999999999999998,
+    0.0
+  ],
+  "limits": [
+    [
+      -2.8973,
+      -1.7628,
+      -2.8973,
+      -3.0718,
+      -2.8973,
+      0.5,
+      -2.8973,
+      -3.28319,
+      -3.28319,
+      -2.68319,
+      -3.28319,
+      -3.28319,
+      -3.28319,
+      -2.93215,
+      -1.55949,
+      -2.05949,
+      -2.05949,
+      -2.05949,
+      -2.05949,
+      -3.01942
+    ],
+    [
+      2.8973,
+      1.7628,
+      2.8973,
+      -0.0698,
+      2.8973,
+      3.0,
+      2.8973,
+      3.28319,
+      0.28319,
+      2.68319,
+      3.28319,
+      3.28319,
+      3.28319,
+      2.93215,
+      1.55949,
+      2.05949,
+      2.05949,
+      2.05949,
+      2.05949,
+      3.01942
+    ]
+  ],
+  "sequence": [
+    0,
+    6,
+    12,
+    1,
+    7,
+    13,
+    2,
+    8,
+    14,
+    3,
+    9,
+    15,
+    4,
+    10,
+    16,
+    5,
+    11,
+    17,
+    18
+  ],
+  "collision_resolution": 0.01,
+  "collision_tolerance": 0.01,
+  "manipulating_env": false,
+  "cost": {
+    "metric": "euclidean",
+    "reduction": "max",
+    "sum_weight": 0.01
+  },
+  "spec": {
+    "agent_type": "multi_agent",
+    "constraints": "unconstrained",
+    "manipulation": "static",
+    "dependency": "fully_ordered",
+    "dynamics": "geometric",
+    "goals": "multi_goal",
+    "home_pose": "has_home_pose"
+  },
+  "safe_pose": {
+    "a0": [
+      0.0,
+      -1.0000000000000002,
+      0.0,
+      -1.9999999999999998,
+      0.0,
+      1.9999999999999998,
+      -0.5000000000000004
+    ],
+    "a1": [
+      0.0,
+      -1.9999999999999998,
+      0.9999999999999998,
+      -0.9999999999999998,
+      -1.571,
+      0.0
+    ],
+    "a2": [
+      0.0,
+      -0.4,
+      0.0,
+      -0.9999999999999998,
+      0.0,
+      1.2999999999999998,
+      0.0
+    ]
+  },
+  "collision_exclusions": [],
+  "exact_frames": [
+    {
+      "name": "floor",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        20.0,
+        20.0,
+        0.02,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "table",
+      "pose": [
+        0.0,
+        0.0,
+        0.5,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        2.0,
+        2.0,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "a0_panda_base",
+      "pose": [
+        0.0,
+        -0.5,
+        0.0,
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865476
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link0",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint1_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.333,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint1",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link1",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint2_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        0.7071067811865475,
+        -0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint2",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link2",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint3_origin",
+      "pose": [
+        0.0,
+        -0.316,
+        0.0,
+        0.7071067811865475,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint3",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link3",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint4_origin",
+      "pose": [
+        0.0825,
+        0.0,
+        0.0,
+        0.7071067811865475,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint4",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link4",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint5_origin",
+      "pose": [
+        -0.0825,
+        0.384,
+        0.0,
+        0.7071067811865475,
+        -0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint5",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link5",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint6_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        0.7071067811865475,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint6",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link6",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint7_origin",
+      "pose": [
+        0.088,
+        0.0,
+        0.0,
+        0.7071067811865475,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint7",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link7",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint8_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.107,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_joint8",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_link8",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_hand_joint_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        0.9238797538373538,
+        0.0,
+        0.0,
+        -0.38268289803626016
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_hand_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_hand",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_finger_joint1_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.0584,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_finger_joint2_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.0584,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_finger_joint1",
+      "pose": [
+        0.0,
+        0.05,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_finger_joint2",
+      "pose": [
+        -0.0,
+        -0.05,
+        -0.0,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_leftfinger",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_rightfinger",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.0,
+      "contact": 0
+    },
+    {
+      "name": "a0_panda_coll0",
+      "pose": [
+        -0.04,
+        0.0,
+        0.03,
+        0.7071067811865476,
+        0.0,
+        0.7071067811865475,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.1,
+        0.11
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_panda_coll1",
+      "pose": [
+        0.0,
+        0.0,
+        -0.15,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.2,
+        0.08
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_panda_coll3",
+      "pose": [
+        0.0,
+        0.0,
+        -0.15,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.2,
+        0.08
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_panda_coll5",
+      "pose": [
+        0.0,
+        0.02,
+        -0.2,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.22,
+        0.09
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_panda_coll2",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.12,
+        0.12
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_panda_coll4",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.12,
+        0.08
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_panda_coll6",
+      "pose": [
+        0.0,
+        0.0,
+        -0.04,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.1,
+        0.07
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_panda_coll7",
+      "pose": [
+        0.0,
+        0.0,
+        0.01,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.1,
+        0.07
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_gripper",
+      "pose": [
+        -2.5778815122051783e-17,
+        0.0,
+        0.2105,
+        2.3432602026631496e-17,
+        0.9238795325112867,
+        0.38268343236508984,
+        5.657130561438501e-17
+      ],
+      "shape": "marker",
+      "size": [
+        0.03
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a0_palm",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        0.7071067811865476,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.14,
+        0.07
+      ],
+      "contact": -3
+    },
+    {
+      "name": "a0_finger1",
+      "pose": [
+        0.0,
+        0.008,
+        0.045,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.02,
+        0.016,
+        0.02,
+        0.0
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a0_finger2",
+      "pose": [
+        0.0,
+        -0.008,
+        0.045,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.02,
+        0.016,
+        0.02,
+        0.0
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a1_ur_base",
+      "pose": [
+        -0.4,
+        0.5,
+        0.0,
+        0.7071067811865476,
+        0.0,
+        0.0,
+        -0.7071067811865476
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_base_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_shoulder_pan_joint_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.1273,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_shoulder_pan_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_shoulder_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_shoulder_lift_joint_origin",
+      "pose": [
+        0.0,
+        0.220941,
+        0.0,
+        0.7071067811865475,
+        0.0,
+        0.7071067811865475,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_shoulder_lift_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_upper_arm_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_elbow_joint_origin",
+      "pose": [
+        0.0,
+        -0.1719,
+        0.612,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_elbow_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_forearm_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_1_joint_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.5723,
+        0.7071067811865475,
+        0.0,
+        0.7071067811865475,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_1_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_1_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_2_joint_origin",
+      "pose": [
+        0.0,
+        0.1149,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_2_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_2_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_3_joint_origin",
+      "pose": [
+        0.0,
+        0.0,
+        0.1157,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_3_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_wrist_3_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_ee_fixed_joint_origin",
+      "pose": [
+        0.0,
+        0.0922,
+        0.0,
+        0.7071067811865475,
+        0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_ee_fixed_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_ee_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_coll0",
+      "pose": [
+        0.0,
+        0.0,
+        0.1,
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "shape": "capsule",
+      "size": [
+        0.12,
+        0.09
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a1_ur_coll2",
+      "pose": [
+        0.0,
+        -0.12,
+        0.01,
+        0.7071067811865476,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.17,
+        0.09
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a1_ur_coll3",
+      "pose": [
+        0.0,
+        -0.04,
+        0.3,
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "shape": "capsule",
+      "size": [
+        0.5,
+        0.065
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a1_ur_coll4",
+      "pose": [
+        0.0,
+        0.06,
+        0.0,
+        0.7071067811865476,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.16,
+        0.065
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a1_ur_coll5",
+      "pose": [
+        0.0,
+        0.0,
+        0.3,
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "shape": "capsule",
+      "size": [
+        0.5,
+        0.06
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a1_ur_coll6",
+      "pose": [
+        0.0,
+        0.02,
+        0.0,
+        0.7071067811865476,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.1,
+        0.05
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a1_ur_coll7",
+      "pose": [
+        0.0,
+        0.0,
+        0.04,
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865475
+      ],
+      "shape": "capsule",
+      "size": [
+        0.12,
+        0.05
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a1_ur_coll8",
+      "pose": [
+        0.0,
+        0.02,
+        0.0,
+        0.7071067811865476,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.09,
+        0.05
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a1_ur_robotiq_base",
+      "pose": [
+        0.036,
+        0.0,
+        7.993605777301126e-18,
+        0.7071067811865476,
+        0.0,
+        0.7071067811865475,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_robotiq_arg2f_base_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_finger_joint_origin",
+      "pose": [
+        0.0,
+        -0.0306011,
+        0.054904,
+        6.12323e-17,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_left_inner_knuckle_joint_origin",
+      "pose": [
+        0.0,
+        -0.0127,
+        0.06142,
+        6.12323e-17,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_right_outer_knuckle_joint_origin",
+      "pose": [
+        0.0,
+        0.0306011,
+        0.054904,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_right_inner_knuckle_joint_origin",
+      "pose": [
+        0.0,
+        0.0127,
+        0.06142,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_finger_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_left_inner_knuckle_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_right_outer_knuckle_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_right_inner_knuckle_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_left_inner_finger_joint_origin",
+      "pose": [
+        0.0,
+        0.0376,
+        0.043,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_right_inner_finger_joint_origin",
+      "pose": [
+        0.0,
+        0.0376,
+        0.043,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_left_inner_finger_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_right_inner_finger_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_left_inner_finger_pad_0",
+      "pose": [
+        0.0,
+        -0.0220203,
+        0.03242,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.022,
+        0.00635,
+        0.0375,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_right_inner_finger_pad_0",
+      "pose": [
+        0.0,
+        -0.0220203,
+        0.03242,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.022,
+        0.00635,
+        0.0375,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_gripper",
+      "pose": [
+        0.0,
+        0.0,
+        0.13,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_gripper_center",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.03
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a1_ur_palm",
+      "pose": [
+        0.0,
+        1.5543122344752193e-17,
+        0.07,
+        0.7071067811865476,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.11,
+        0.04
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a1_ur_finger1",
+      "pose": [
+        0.0,
+        -0.009,
+        0.025,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.04,
+        0.02
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a1_ur_finger2",
+      "pose": [
+        0.0,
+        -0.009,
+        0.025,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.04,
+        0.02
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a2_kuka_two_finger_base",
+      "pose": [
+        0.4,
+        0.5,
+        0.0,
+        0.7071067811865476,
+        0.0,
+        0.0,
+        -0.7071067811865476
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_world",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_base",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_base_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_0",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_0_0_coll",
+      "pose": [
+        -0.015,
+        0.0,
+        0.19,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.0,
+        0.0,
+        0.3,
+        0.139
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a2_kuka_>iiwa_joint_1",
+      "pose": [
+        0.0,
+        0.0,
+        0.1575,
+        0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_joint_1",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_1",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_>iiwa_joint_2",
+      "pose": [
+        0.2025,
+        0.0,
+        4.4964e-17,
+        7.305267739392552e-14,
+        -0.7071067811865476,
+        -0.7071067811865476,
+        -7.333017730805348e-14
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_joint_2",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_2",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_>iiwa_joint_3",
+      "pose": [
+        0.0,
+        0.2045,
+        0.0,
+        7.305267739392552e-14,
+        -0.7071067811865476,
+        -0.7071067811865476,
+        -7.333017730805348e-14
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_joint_3",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_3",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_3_0_coll",
+      "pose": [
+        0.0,
+        0.02,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.0,
+        0.0,
+        0.29,
+        0.09
+      ],
+      "contact": -3
+    },
+    {
+      "name": "a2_kuka_>iiwa_joint_4",
+      "pose": [
+        0.2155,
+        0.0,
+        4.78506e-17,
+        -0.7071067811865476,
+        -1.1102196564436907e-16,
+        -5.551118282212265e-17,
+        0.7071067811865476
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_joint_4",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_4",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_4_0_coll",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.0,
+        0.0,
+        0.12,
+        0.08
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a2_kuka_>iiwa_joint_5",
+      "pose": [
+        0.0,
+        0.1845,
+        0.0,
+        7.321917734240229e-14,
+        -0.7071067811865476,
+        -0.7071067811865476,
+        7.294167742827436e-14
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_joint_5",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_5",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_5_0_coll",
+      "pose": [
+        0.0,
+        0.02,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.0,
+        0.0,
+        0.29,
+        0.09
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a2_kuka_>iiwa_joint_6",
+      "pose": [
+        0.2155,
+        0.0,
+        4.78506e-17,
+        -0.7071067811865476,
+        -1.1102196564436907e-16,
+        -5.551118282212265e-17,
+        0.7071067811865476
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_joint_6",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_6",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_6_0_coll",
+      "pose": [
+        -0.02,
+        0.02,
+        -4.44089e-18,
+        -0.5,
+        -0.5,
+        -0.5,
+        0.5
+      ],
+      "shape": "capsule",
+      "size": [
+        0.0,
+        0.0,
+        0.08,
+        0.09
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a2_kuka_>iiwa_joint_7",
+      "pose": [
+        0.0,
+        0.081,
+        0.0,
+        7.321917734240229e-14,
+        -0.7071067811865476,
+        -0.7071067811865476,
+        7.294167742827436e-14
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_joint_7",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_link_7",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        -0.7071067811865476,
+        0.0,
+        -0.7071067811865476,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_>iiwa_joint_ee",
+      "pose": [
+        0.045,
+        0.0,
+        9.99201e-18,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_>tool0_joint",
+      "pose": [
+        0.045,
+        0.0,
+        9.99201e-18,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_iiwa_joint_ee",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_tool0_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_robotiq_base",
+      "pose": [
+        0.036,
+        0.0,
+        7.993605777301126e-18,
+        0.7071067811865476,
+        0.0,
+        0.7071067811865475,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_robotiq_arg2f_base_link",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_finger_joint_origin",
+      "pose": [
+        0.0,
+        -0.0306011,
+        0.054904,
+        6.12323e-17,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_left_inner_knuckle_joint_origin",
+      "pose": [
+        0.0,
+        -0.0127,
+        0.06142,
+        6.12323e-17,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_right_outer_knuckle_joint_origin",
+      "pose": [
+        0.0,
+        0.0306011,
+        0.054904,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_right_inner_knuckle_joint_origin",
+      "pose": [
+        0.0,
+        0.0127,
+        0.06142,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_finger_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_left_inner_knuckle_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_right_outer_knuckle_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_right_inner_knuckle_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_left_inner_finger_joint_origin",
+      "pose": [
+        0.0,
+        0.0376,
+        0.043,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_right_inner_finger_joint_origin",
+      "pose": [
+        0.0,
+        0.0376,
+        0.043,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_left_inner_finger_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_right_inner_finger_joint",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_left_inner_finger_pad_0",
+      "pose": [
+        0.0,
+        -0.0220203,
+        0.03242,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.022,
+        0.00635,
+        0.0375,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_right_inner_finger_pad_0",
+      "pose": [
+        0.0,
+        -0.0220203,
+        0.03242,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.022,
+        0.00635,
+        0.0375,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_gripper",
+      "pose": [
+        0.0,
+        0.0,
+        0.13,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": null,
+      "size": 0.03,
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_gripper_center",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.03
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a2_kuka_palm",
+      "pose": [
+        0.0,
+        1.5543122344752193e-17,
+        0.07,
+        0.7071067811865476,
+        0.7071067811865475,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.11,
+        0.04
+      ],
+      "contact": -1
+    },
+    {
+      "name": "a2_kuka_finger1",
+      "pose": [
+        0.0,
+        -0.009,
+        0.025,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.04,
+        0.02
+      ],
+      "contact": -2
+    },
+    {
+      "name": "a2_kuka_finger2",
+      "pose": [
+        0.0,
+        -0.009,
+        0.025,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "capsule",
+      "size": [
+        0.04,
+        0.02
+      ],
+      "contact": -2
+    },
+    {
+      "name": "way1",
+      "pose": [
+        0.3,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.1
+      ],
+      "contact": 0
+    },
+    {
+      "name": "way2",
+      "pose": [
+        0.3,
+        0.0,
+        1.4,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.1
+      ],
+      "contact": 0
+    },
+    {
+      "name": "way3",
+      "pose": [
+        -0.3,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.1
+      ],
+      "contact": 0
+    },
+    {
+      "name": "way4",
+      "pose": [
+        -0.3,
+        0.0,
+        1.4,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.1
+      ],
+      "contact": 0
+    },
+    {
+      "name": "way5",
+      "pose": [
+        -0.3,
+        0.0,
+        0.6,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.1
+      ],
+      "contact": 0
+    },
+    {
+      "name": "way6",
+      "pose": [
+        0.3,
+        0.0,
+        0.6,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.1
+      ],
+      "contact": 0
+    }
+  ],
+  "geometry_sha256": "93984a429874a44bec16ea55b5223179c9c1aa8de3050c607166680721c0398f",
+  "tasks": [
+    {
+      "name": "",
+      "robots": [
+        "a0"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.1682594577158127,
+        -0.21548975510799234,
+        -0.3423214729712621,
+        -2.010368524283905,
+        -0.09251897676414018,
+        2.2714112913428726,
+        -0.48946762216681905
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a0"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.16677298528838405,
+        -0.20095313577930451,
+        -0.31513509669522216,
+        -1.4306369589669274,
+        -0.06684368544951041,
+        2.5871260296886742,
+        -0.49472428285130016
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a0"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.1822400938681432,
+        -0.21239964339476633,
+        0.33081573704738976,
+        -2.006404450287995,
+        0.08075966961799136,
+        2.265364387008505,
+        -0.4925536468773576
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a0"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.135917389272965,
+        -0.20683322092609754,
+        0.34077884465109387,
+        -1.4422397709603807,
+        0.06457686561554152,
+        2.6070649839966755,
+        -0.5052367743249631
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a0"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.2036625892824954,
+        0.47577308759579734,
+        0.3053865488220773,
+        -2.087720298412518,
+        0.09229953097501516,
+        2.526483548871,
+        -0.5094208083567834
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a0"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.2160500580142192,
+        0.4774176219037793,
+        -0.2917942026700171,
+        -2.078859550499223,
+        -0.1118905994023865,
+        2.509478845440549,
+        -0.5079090429416785
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.6353994008467959,
+        -1.2417213116198031,
+        1.150094177689707,
+        -1.2163971965972413,
+        -1.1617610910916694,
+        -0.0009949830099418046
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.6077088167203242,
+        -1.3574878029216797,
+        0.7614417615607676,
+        -1.4554822722617102,
+        -1.0644007775191633,
+        -0.005092365756052892
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.10335925238636623,
+        -1.6462367163921359,
+        1.5717726096274687,
+        -0.9412591411769636,
+        -1.6207281379484424,
+        -0.005121571289343982
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.10377617379128506,
+        -1.7840445696915612,
+        1.0512402044037528,
+        -1.1586203511814717,
+        -1.6199407644946413,
+        -0.00615927406744205
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.10083624605099507,
+        -1.1525559508228091,
+        1.8742488947358111,
+        -1.1294731282951285,
+        -1.6254950864476587,
+        0.003000460188822174
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.6420210767339836,
+        -0.9066320337946202,
+        1.3648183349875123,
+        -1.3083600718618273,
+        -1.1845406343720293,
+        0.004186674160521144
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.0805431867810157,
+        0.10865088688075378,
+        -0.09833439497435727,
+        -1.4454211380564401,
+        -0.039280711246170635,
+        1.3651522571725252,
+        0.0031481490927827934
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.07798303686489624,
+        -0.13548773839029624,
+        -0.08973448228054749,
+        -1.0076957747123128,
+        -0.03349087372699394,
+        1.1718777884408071,
+        -0.005860877053425814
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.5691152568745524,
+        0.6898771252771388,
+        -0.4706896345112552,
+        -0.9623997552809977,
+        -0.23969720917550713,
+        0.7357193491311544,
+        0.00045742421629862463
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.6235688012277112,
+        0.5786299489630449,
+        -0.5473464256224179,
+        -0.5926119525871806,
+        -0.2676294988020316,
+        0.46555737193385677,
+        0.00216721835554053
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.635294422932741,
+        1.1542502900961942,
+        -0.3833776171428819,
+        -1.0033513907584382,
+        -0.22804597904193472,
+        0.5524442594975826,
+        0.009712618100753887
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.10846886500842084,
+        0.7758478838955337,
+        -0.06616746243822093,
+        -1.5644196675426907,
+        -0.03619260827803767,
+        1.051841117625277,
+        0.003517966836930887
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "terminal",
+      "robots": [
+        "a0",
+        "a1",
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.0,
+        -1.0000000000000002,
+        0.0,
+        -1.9999999999999998,
+        0.0,
+        1.9999999999999998,
+        -0.5000000000000004,
+        0.0,
+        -1.9999999999999998,
+        0.9999999999999998,
+        -0.9999999999999998,
+        -1.571,
+        0.0,
+        0.0,
+        -0.4,
+        0.0,
+        -0.9999999999999998,
+        0.0,
+        1.2999999999999998,
+        0.0
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    }
+  ]
+}

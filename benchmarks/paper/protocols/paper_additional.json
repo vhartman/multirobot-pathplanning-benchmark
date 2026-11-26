@@ -1,0 +1,120 @@
+{
+  "format": "paper-comparison-v1",
+  "seeds": [
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "planner_config": {
+    "informed_sampling": true,
+    "locally_informed_sampling": true,
+    "informed_batch_size": 300,
+    "informed_proposal": "hit_and_run",
+    "informed_walk_steps": 1,
+    "informed_proposal_batch_size": 10,
+    "informed_affine_sampling": true,
+    "informed_cache_setup": true,
+    "informed_reuse_affine_geometry": false,
+    "informed_transitions": true,
+    "informed_local_share": 0.8,
+    "distance_metric": "max_euclidean",
+    "p_goal": 0.4,
+    "shortcutting": true,
+    "shortcutting_run_choice": "tree_compatible",
+    "shortcut_allocation": "marginal",
+    "shortcut_policies": "tree_compatible,index_tree",
+    "shortcut_damped": true,
+    "shortcut_chunk": 100,
+    "shortcut_damped_chunk": 50,
+    "shortcut_damped_steps": [
+      1.0,
+      0.5,
+      0.25
+    ],
+    "shortcut_probe_chunk": 20,
+    "shortcut_probe_every": 5,
+    "shortcut_rate_floor": 0.001,
+    "shortcut_tree_horizon": 2.0,
+    "shortcut_tree_prior": 2.0,
+    "edge_check_cache_size": 32768,
+    "init_mode_sampling_type": "frontier",
+    "frontier_mode_sampling_probability": 0.98,
+    "remove_redundant_nodes": true,
+    "apply_long_horizon": false,
+    "horizon_length": 1,
+    "with_mode_validation": true,
+    "sampler": "auto",
+    "sampler_gibbs_sweeps": 1,
+    "sampler_auto_warmup": 20,
+    "affine_sampler": "polytope",
+    "affine_sample_attempts": 1000,
+    "repair_affine_transition_seeds": true,
+    "p_home_bias": 0.0,
+    "with_noise": false,
+    "with_tree_visualization": false,
+    "transition_nodes": 10,
+    "p_reseed_transition": 0.0,
+    "birrtstar_version": 2,
+    "stepsize": 0,
+    "max_connection_radius": 0.0,
+    "steering_policy": "robot_l1",
+    "steer_l1_step": 3.0,
+    "steer_rms_step": 0.5,
+    "steer_step_size": 0.0,
+    "nl_projection": "backtracking",
+    "nl_steer_step_size": 0.05,
+    "nonlinear_sample_attempts": 1000,
+    "balanced_trees": false
+  },
+  "scenes": [
+    {
+      "scene": "rai.panda_welding_4",
+      "source_seed": 0,
+      "backends": [
+        "rai",
+        "comotion",
+        "mujoco"
+      ],
+      "seconds": 90,
+      "manifest_sha256": "9065bd3a986936f367e923d7498412ae7f073ff89a958baca0bb76db21a77fed"
+    },
+    {
+      "scene": "rai.panda_welding_8",
+      "source_seed": 0,
+      "backends": [
+        "rai",
+        "comotion",
+        "mujoco"
+      ],
+      "seconds": 150,
+      "manifest_sha256": "f5ba7d02c5840e89c2947e97c928d612bdd6abe425564fd6f39fc367ad8523e9",
+      "planner_overrides": {
+        "steer_l1_step": 0.5,
+        "init_mode_sampling_type": "greedy",
+        "p_home_bias": 0.2
+      }
+    },
+    {
+      "scene": "cuarms.pack",
+      "source_seed": 0,
+      "backends": [
+        "rai",
+        "mujoco"
+      ],
+      "seconds": 60,
+      "manifest_sha256": "f64a3f3bb915121cc6c0676d272d02936a95b0414f3464b64ecb39f9ba3e9334"
+    },
+    {
+      "scene": "cuarms.unpack",
+      "source_seed": 0,
+      "backends": [
+        "rai",
+        "mujoco"
+      ],
+      "seconds": 60,
+      "manifest_sha256": "1f292cbc919b38aeccbe96631110787ccec6f071bc519f620a0844f6815885ee"
+    }
+  ]
+}

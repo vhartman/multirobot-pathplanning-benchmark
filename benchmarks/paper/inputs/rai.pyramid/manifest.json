@@ -1,0 +1,134 @@
+{
+  "scene": "rai.pyramid",
+  "source_seed": 2,
+  "archive_path": "20251123_122637_convergence_rai.pyramid/birrt/1/path_9.json",
+  "archive_path_sha256": "54ff9593320ced28735b3dd48d62ecd23a9592ed4c9a158033b269853a9688ba",
+  "files": {
+    "problem.json": "aa28bb1d50a1a60bcdec1c4f46344894328fbf6b72cb6e4734bf308003366690",
+    "scene.g": "47a31d856866a456aca2a758c1aa0ae4e0936eff4f1f86c58a1fcc30a04d3e4e"
+  },
+  "exact_pose_roundtrip_error": 3.1086244689504383e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "534b5175bd82d6c2d6635d4bf3f5e769de3f912bb1f06b0712aab9332aac2c17"
+}

@@ -1,0 +1,559 @@
+{
+  "scene": "rai.spiral_tower",
+  "source_seed": 0,
+  "archive_path": "20251123_235831_convergence_rai.spiral_tower/birrt/1/path_39.json",
+  "archive_path_sha256": "7040d1b34e3d7ad5926e150d01f5dc2447c908876612bc6c8549f0a18d3e8f1c",
+  "files": {
+    "problem.json": "2eee7d9c01d8a143632115e30198c605a519a7631693b720da3aa9e5136f9dcd",
+    "scene.g": "89773b8329eff761ca38a7dfb1a7a5d783068474ab1eb42da0726e3a07f8f4f3"
+  },
+  "exact_pose_roundtrip_error": 2.4424906541753444e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.0015338833230451158
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.0013816232722126311
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 5.812036137430053
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.22309657565235294
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a0_ur_"
+      ],
+      "robots": [
+        "a0_ur_"
+      ],
+      "goal_change_l2": 1.2773291616060047
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a0_ur_"
+      ],
+      "robots": [
+        "a0_ur_"
+      ],
+      "goal_change_l2": 4.5317262327521215
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 4.143518180110273
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 5.2567965712099705
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 1.1474237430193748
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 5.1032234446554785
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.000506267138356476
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.0005497843053504779
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 4.99054544643024
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 4.733212602088961
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.005182056969917078
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.0047504373771556085
+    },
+    {
+      "task": 16,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.006562150157765953
+    },
+    {
+      "task": 17,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.0033537611305549334
+    },
+    {
+      "task": 18,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 5.358398826379796
+    },
+    {
+      "task": 19,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 5.443436566603267
+    },
+    {
+      "task": 20,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 4.639738367890062
+    },
+    {
+      "task": 21,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 4.083197604721933
+    },
+    {
+      "task": 22,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.49825804222758313
+    },
+    {
+      "task": 23,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 3.3605441972075805
+    },
+    {
+      "task": 24,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0034597018771232585
+    },
+    {
+      "task": 25,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0003850682029864219
+    },
+    {
+      "task": 26,
+      "old_robots": [
+        "a0_ur_"
+      ],
+      "robots": [
+        "a0_ur_"
+      ],
+      "goal_change_l2": 0.0038149618987309065
+    },
+    {
+      "task": 27,
+      "old_robots": [
+        "a0_ur_"
+      ],
+      "robots": [
+        "a0_ur_"
+      ],
+      "goal_change_l2": 0.006248660958083489
+    },
+    {
+      "task": 28,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.12670737581362937
+    },
+    {
+      "task": 29,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.03701394715986405
+    }
+  ],
+  "geometry_variant": "historical 5 mm cylinder struts; all other frozen geometry and goals unchanged",
+  "original_manifest_sha256": "cf618a9f5d665e63632b376b6f7ebef64134fa4a1cc1d9a1bf4ae9bae7c3e57d",
+  "historical_tag": "wafr_final_exp",
+  "changes": [
+    {
+      "frame": "start_0",
+      "old_capsule_size": [
+        0.3455708912237063,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37557089122370635,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37557089122370635,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_1",
+      "old_capsule_size": [
+        0.343012701269533,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.373012701269533,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.373012701269533,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_2",
+      "old_capsule_size": [
+        0.343012701269533,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.373012701269533,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.373012701269533,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_3",
+      "old_capsule_size": [
+        0.3430127011998345,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37301270119983454,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37301270119983454,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_4",
+      "old_capsule_size": [
+        0.3455708912237063,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37557089122370635,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37557089122370635,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_5",
+      "old_capsule_size": [
+        0.3430127011998346,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37301270119983465,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37301270119983465,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_6",
+      "old_capsule_size": [
+        0.3430127032072904,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.3730127032072904,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.3730127032072904,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_7",
+      "old_capsule_size": [
+        0.3455708912237063,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37557089122370635,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37557089122370635,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_8",
+      "old_capsule_size": [
+        0.3430127012695331,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.3730127012695331,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.3730127012695331,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_9",
+      "old_capsule_size": [
+        0.3455708912237063,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37557089122370635,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37557089122370635,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_10",
+      "old_capsule_size": [
+        0.3430127032072904,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.3730127032072904,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.3730127032072904,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_11",
+      "old_capsule_size": [
+        0.3430127032072904,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.3730127032072904,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.3730127032072904,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_12",
+      "old_capsule_size": [
+        0.3455708912237063,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37557089122370635,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37557089122370635,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_13",
+      "old_capsule_size": [
+        0.3455708912237063,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37557089122370635,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37557089122370635,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_14",
+      "old_capsule_size": [
+        0.34301270119983474,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.37301270119983476,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.37301270119983476,
+        0.005
+      ]
+    }
+  ],
+  "archived_manifest_sha256": "db2c60c7b045d5a19a969ba4fa890b15d0ff32bb2c739336e2e8846988df5898"
+}

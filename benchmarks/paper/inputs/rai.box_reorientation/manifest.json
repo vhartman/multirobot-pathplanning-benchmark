@@ -1,0 +1,290 @@
+{
+  "scene": "rai.box_reorientation",
+  "source_seed": 2,
+  "archive_path": "20251123_092616_convergence_rai.box_reorientation/birrt/1/path_96.json",
+  "archive_path_sha256": "f017c2f69e57532aae570c2c67742f83f1eb614dfc4d60c7340064a79bc64ee8",
+  "files": {
+    "problem.json": "31d0d22653e58e90595ea893d7b1c78ea251d17bf81aad1d5249a311135310bd",
+    "scene.g": "5a68354933dec2878dacda9f1868ab31db6a65ff73279fc6957e3a707d71d4d9"
+  },
+  "exact_pose_roundtrip_error": 2.6645352591003757e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1_",
+        "a2_"
+      ],
+      "robots": [
+        "a1_",
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1_",
+        "a2_"
+      ],
+      "robots": [
+        "a1_",
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 4.440892098500626e-16
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 8.326672684688674e-17
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a1_",
+        "a2_"
+      ],
+      "robots": [
+        "a1_",
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a1_",
+        "a2_"
+      ],
+      "robots": [
+        "a1_",
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 4.163336342344337e-17
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a1_",
+        "a2_"
+      ],
+      "robots": [
+        "a1_",
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 16,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 17,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 18,
+      "old_robots": [
+        "a1_",
+        "a2_"
+      ],
+      "robots": [
+        "a1_",
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 19,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 20,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 21,
+      "old_robots": [
+        "a1_",
+        "a2_"
+      ],
+      "robots": [
+        "a1_",
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 22,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 23,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 24,
+      "old_robots": [
+        "a1_",
+        "a2_"
+      ],
+      "robots": [
+        "a1_",
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 25,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "faf55cdad459f69c1a5d7aaa0c1514bcf09df52420e86f4ea03607ba22c157bf"
+}

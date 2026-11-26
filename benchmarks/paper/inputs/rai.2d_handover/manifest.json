@@ -1,0 +1,77 @@
+{
+  "scene": "rai.2d_handover",
+  "source_seed": 2,
+  "archive_path": "20251123_001859_convergence_rai.2d_handover/birrt/1/path_171.json",
+  "archive_path_sha256": "847da66cd3e3b760efe19c79d204ee0f777d68325b7b79d53d5119e04e80d2a1",
+  "files": {
+    "problem.json": "47b0ac9994db9ef2014f2229ee24d9998f90e314f99c30c38561299468cd10c3",
+    "scene.g": "9a35e86146a661c3ff3dfb82bb1c54d434ea283fe80f7a70cf9414e33cf9280f"
+  },
+  "exact_pose_roundtrip_error": 0.0,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1",
+        "a2"
+      ],
+      "robots": [
+        "a1",
+        "a2"
+      ],
+      "archived_goal_drift_l2": 0.010954185499295416,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.5629713406602594
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    }
+  ],
+  "renamed_duplicate_visual_frames": [],
+  "archived_manifest_sha256": "4affe7b519a793d93ea34479e2dfd4a907aa5a9470bb4883dafc7495c22e50cf"
+}

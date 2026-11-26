@@ -1,0 +1,13 @@
+{
+  "source_backend": "rai",
+  "provenance": {
+    "scene": "rai.panda_welding_4",
+    "previous_source_sha256": "859fd759c9fd449805e35b27fe6d2ecfc5b4b5e905f35bdf5a6e107ba08f13c8",
+    "goals": "restored unchanged from previous run"
+  },
+  "files": {
+    "problem.json": "483eff6d914a64f36a522de42321393423b5147c8c6a7a5ee0c48fee5ff9a039",
+    "scene.g": "92ee0339de9cd8c399410b335b3a5e60527eae0f3839aa8629379d66e55dc8ee"
+  },
+  "archived_manifest_sha256": "9b4185de375d3a71411ab3cfa0774db98dd2cd9e4791a0e9075d675b8bcd2cc5"
+}

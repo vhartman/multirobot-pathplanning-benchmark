@@ -1,0 +1,254 @@
+{
+  "scene": "rai.welding",
+  "source_seed": 2,
+  "archive_path": "20251123_044004_convergence_rai.welding/birrt/1/path_48.json",
+  "archive_path_sha256": "4086063c2559a46dce860edfcfe48480975d9e8068672ae78670bb6546de779a",
+  "files": {
+    "problem.json": "d462e0f6e9e1a0c98700f5cad05622228d699780eb008d9c394dd03fa558fc8b",
+    "scene.g": "bbca2beeeb6af8af5c4990a5a1e5719df34b179a7b46830ee2298cff56a0dd30"
+  },
+  "exact_pose_roundtrip_error": 2.1094237467877974e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 1.1102230246251565e-16
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a3"
+      ],
+      "robots": [
+        "a3"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 18,
+      "old_robots": [
+        "a4"
+      ],
+      "robots": [
+        "a4"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a3"
+      ],
+      "robots": [
+        "a3"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 19,
+      "old_robots": [
+        "a4"
+      ],
+      "robots": [
+        "a4"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a3"
+      ],
+      "robots": [
+        "a3"
+      ],
+      "goal_change_l2": 5.551115123125783e-17
+    },
+    {
+      "task": 20,
+      "old_robots": [
+        "a4"
+      ],
+      "robots": [
+        "a4"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a3"
+      ],
+      "robots": [
+        "a3"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 21,
+      "old_robots": [
+        "a4"
+      ],
+      "robots": [
+        "a4"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 6.938893903907228e-18
+    },
+    {
+      "task": 16,
+      "old_robots": [
+        "a3"
+      ],
+      "robots": [
+        "a3"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 22,
+      "old_robots": [
+        "a4"
+      ],
+      "robots": [
+        "a4"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 1.3877787807814457e-17
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 17,
+      "old_robots": [
+        "a3"
+      ],
+      "robots": [
+        "a3"
+      ],
+      "goal_change_l2": 3.469446951953614e-18
+    },
+    {
+      "task": 23,
+      "old_robots": [
+        "a4"
+      ],
+      "robots": [
+        "a4"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "db23eaffe94a165701b0ab644d41edb5b1402d650084e6af3864b5b3d9082b21"
+}

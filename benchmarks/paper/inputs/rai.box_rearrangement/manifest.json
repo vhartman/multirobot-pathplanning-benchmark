@@ -1,0 +1,274 @@
+{
+  "scene": "rai.box_rearrangement",
+  "source_seed": 2,
+  "archive_path": "20251123_080029_convergence_rai.box_rearrangement/birrt/1/path_87.json",
+  "archive_path_sha256": "6d881e0daedc8fcbbbb3120ea5e652421ff5c75f19f6580eb3c3d4b0571996a3",
+  "files": {
+    "problem.json": "2501b7bbf5eaa89f9ee19e4a85a041301292073d1e759adee08cdb62396aaa82",
+    "scene.g": "db5ee850c7957e3511609bedb1aae215ac2322f4fd2f773b4b2e1d4e38599224"
+  },
+  "exact_pose_roundtrip_error": 2.6645352591003757e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 1.1102230246251565e-16
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 16,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 17,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 20,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 21,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 22,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 24,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 25,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 18,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 19,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 23,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "cb1db5da90d2bafae5edca370e8612db4b8d50764d0cb1cbb693c07bd70f4b52"
+}

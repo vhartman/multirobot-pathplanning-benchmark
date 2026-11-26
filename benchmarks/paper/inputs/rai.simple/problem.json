@@ -1,0 +1,418 @@
+{
+  "robots": [
+    "a1",
+    "a2"
+  ],
+  "robot_idx": {
+    "a1": [
+      0,
+      1,
+      2
+    ],
+    "a2": [
+      3,
+      4,
+      5
+    ]
+  },
+  "joint_names": [
+    "a1:0",
+    "a1:1",
+    "a1:2",
+    "a2:0",
+    "a2:1",
+    "a2:2"
+  ],
+  "start": [
+    0.0,
+    -0.5,
+    0.0,
+    0.0,
+    0.5,
+    0.0
+  ],
+  "limits": [
+    [
+      -1.0,
+      -1.0,
+      -3.14,
+      -1.0,
+      -1.0,
+      -3.14
+    ],
+    [
+      1.0,
+      1.0,
+      3.14,
+      1.0,
+      1.0,
+      3.14
+    ]
+  ],
+  "sequence": [
+    1,
+    0,
+    2
+  ],
+  "collision_resolution": 0.01,
+  "collision_tolerance": 0.01,
+  "manipulating_env": false,
+  "cost": {
+    "metric": "euclidean",
+    "reduction": "max",
+    "sum_weight": 0.01
+  },
+  "spec": {
+    "agent_type": "multi_agent",
+    "constraints": "unconstrained",
+    "manipulation": "static",
+    "dependency": "fully_ordered",
+    "dynamics": "geometric",
+    "goals": "multi_goal",
+    "home_pose": "has_home_pose"
+  },
+  "safe_pose": {
+    "a1": [
+      0.0,
+      -0.5,
+      0.0
+    ],
+    "a2": [
+      0.0,
+      0.5,
+      0.0
+    ]
+  },
+  "collision_exclusions": [],
+  "exact_frames": [
+    {
+      "name": "table",
+      "pose": [
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        2.0,
+        2.0,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall1",
+      "pose": [
+        0.0,
+        1.1,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        1.999,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall2",
+      "pose": [
+        0.0,
+        -1.1,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        1.999,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall3",
+      "pose": [
+        1.1,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        2.399,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall4",
+      "pose": [
+        -1.1,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        2.399,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "pre_agent_1_frame",
+      "pose": [
+        0.0,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.05
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a1",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "cylinder",
+      "size": [
+        0.1,
+        0.2,
+        0.06,
+        0.15
+      ],
+      "contact": 1
+    },
+    {
+      "name": "pre_agent_2_frame",
+      "pose": [
+        0.0,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.05
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a2",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.1,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "goal1",
+      "pose": [
+        0.5,
+        0.5,
+        0.07,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "goal2",
+      "pose": [
+        -0.5,
+        -0.5,
+        0.07,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "obs1",
+      "pose": [
+        0.75,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.5,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "obs2",
+      "pose": [
+        -0.75,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.5,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "obs3",
+      "pose": [
+        0.1,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.3,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    }
+  ],
+  "geometry_sha256": "1311b12df5384743c6454ae7725f5e2996f02b06a215118c2d151516e2cecd43",
+  "tasks": [
+    {
+      "name": "a1_goal",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.5000000979845988,
+        0.500000323707301,
+        1.983446877851236e-07
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "a2_goal",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.5000001054181614,
+        -0.5000002629399748,
+        -9.393007305001422e-08
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "terminal",
+      "robots": [
+        "a1",
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.5000000979845988,
+        0.500000323707301,
+        1.9834468784694768e-07,
+        1.0980842069513327e-10,
+        0.4999999533052752,
+        0.005555102821350739
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    }
+  ]
+}

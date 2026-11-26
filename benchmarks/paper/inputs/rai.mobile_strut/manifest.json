@@ -1,0 +1,920 @@
+{
+  "scene": "rai.mobile_strut",
+  "source_seed": 0,
+  "archive_path": "20251123_205659_convergence_rai.mobile_strut/birrt/1/path_60.json",
+  "archive_path_sha256": "7abecb1fdca6aa3909bdc67d7a12bf2455fd3e2b105046de37419521753ba64d",
+  "files": {
+    "problem.json": "91e2461596be2dd70cb19b52d24149dde7db852905bd509d35e01d66de3329a5",
+    "scene.g": "be9298ce7d5bb6012966cdce31218855d89ef62b6576234e3d4c099b3baffa9c"
+  },
+  "exact_pose_roundtrip_error": 0.0,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 3.1401849173675503e-16
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 16,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 17,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 18,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 19,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 20,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 21,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 22,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 23,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 24,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 25,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 26,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 27,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 28,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 29,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 30,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 31,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 32,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 33,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 34,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 35,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 36,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 37,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 38,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 39,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 40,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 41,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 42,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 43,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 44,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 45,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 46,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 47,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 48,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 49,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 50,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 51,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 52,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 53,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 54,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 55,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 56,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 57,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 58,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 59,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 60,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 61,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 62,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 63,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 64,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 65,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 66,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 67,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 68,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 69,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 70,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 71,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 72,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 73,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 74,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 75,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 76,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 77,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 78,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 79,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 80,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 81,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 82,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 83,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 84,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 85,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 86,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 87,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 88,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 89,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "geometry_variant": "Original rounded mobile collision bases; remaining frozen geometry and all archived goals unchanged; RAI only",
+  "original_manifest_sha256": "ed5c7b7fb5f7c5dd5894fe801357d87c0f16a36565344c51b7a6aa275ea61ad9",
+  "restored_rounded_bases": [
+    "a0_base_coll",
+    "a1_base_coll"
+  ],
+  "archived_manifest_sha256": "0d599184e4ab4ac4af3b60abdd979281528549529e2d57f15d1b31a1b6c480f4"
+}

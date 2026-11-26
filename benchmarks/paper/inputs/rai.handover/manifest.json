@@ -1,0 +1,46 @@
+{
+  "scene": "rai.handover",
+  "source_seed": 2,
+  "archive_path": "20251123_062157_convergence_rai.handover/birrt/1/path_72.json",
+  "archive_path_sha256": "4b8be52aa3269a077fe529699621f6c273d7ed759baba94ce32bce7aeaa049a3",
+  "files": {
+    "problem.json": "fb391b5e542dd20a60270558c07b9eeeb2925c4998c321bdf8fd0e307ef1c3b6",
+    "scene.g": "74b9bbf95291bac4d713c0daf88c6e38de5dc51269194dcfe6a53e725d892882"
+  },
+  "exact_pose_roundtrip_error": 2.6645352591003757e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1",
+        "a2"
+      ],
+      "robots": [
+        "a1",
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "a19c2acb6e27b9e410cc06e5787f2619cbff05f4917ae579445dc1869f54e135"
+}

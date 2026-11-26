@@ -1,0 +1,64 @@
+{
+  "scene": "rai.three_agents",
+  "source_seed": 2,
+  "archive_path": "20251123_021855_convergence_rai.three_agents/birrt/1/path_90.json",
+  "archive_path_sha256": "d332e5f2c09d0cadcb0be2544ede5daa66235c137e563fcf3d8c387e846bf4f3",
+  "files": {
+    "problem.json": "3945067cb33cda9427846407fcd65ceb584016d39cdd5e46502bae49ed7c7398",
+    "scene.g": "342e658c1fbb2a08c4f9dcf71b7845f183763d2e8b1a4a58a06d53be9e310e76"
+  },
+  "exact_pose_roundtrip_error": 0.0,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 1.2458888507155296e-17
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 1.1102230246251565e-16
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 1.0076318168043693e-16
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a3"
+      ],
+      "robots": [
+        "a3"
+      ],
+      "goal_change_l2": 2.200930410145574e-17
+    }
+  ],
+  "archived_manifest_sha256": "13d8d72d512ed2428f990abcc726b76d1d08eb0455c81fddc8383d9777e73120"
+}

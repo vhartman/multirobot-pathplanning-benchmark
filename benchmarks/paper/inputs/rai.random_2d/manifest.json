@@ -1,0 +1,134 @@
+{
+  "scene": "rai.random_2d",
+  "source_seed": 2,
+  "archive_path": "20251123_005331_convergence_rai.random_2d/birrt/1/path_132.json",
+  "archive_path_sha256": "be24abaa9e5dda03b9a05185bca1834bcfeea5e89c9ffdd34df9d24a492c8108",
+  "files": {
+    "problem.json": "9f86f087a0673523725ca16a6506822879f44eedd07ec3e2382dcc3d9bbcb1b0",
+    "scene.g": "316c2f4bc14286bd4e3b45c1e95aead33f073eb3592b99695744d75c86878793"
+  },
+  "exact_pose_roundtrip_error": 0.0,
+  "goal_replacement_audit": [
+    {
+      "task": 9,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 4.440892098500626e-16
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 0,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "e8b436e9eec38a00033f91d105495349d07aa79c639366e2e85a9190a986e83e"
+}

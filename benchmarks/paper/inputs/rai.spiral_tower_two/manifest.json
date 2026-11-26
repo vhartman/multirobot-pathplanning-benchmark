@@ -1,0 +1,271 @@
+{
+  "scene": "rai.spiral_tower_two",
+  "source_seed": 0,
+  "archive_path": "20251124_014840_convergence_rai.spiral_tower_two/birrt/1/path_57.json",
+  "archive_path_sha256": "29df8c2a9669819876082852333125f0dc4ec010bc33a1a21aa51ba7d1b5475a",
+  "files": {
+    "problem.json": "c8e16cda4fc4e7e06890ba9110cb2eff3c7a9848b5f3304981ee034a47e40a50",
+    "scene.g": "2a225b0f8d4531141b79cb8a1a5a70353d3ae6e7944b2a691155c003103a01e7"
+  },
+  "exact_pose_roundtrip_error": 2.1094237467877974e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0014038064080945888
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0012552391946548563
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 3.89767161719253
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 1.267707318328737
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a0_ur_"
+      ],
+      "robots": [
+        "a0_ur_"
+      ],
+      "goal_change_l2": 4.862576835071213
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a0_ur_"
+      ],
+      "robots": [
+        "a0_ur_"
+      ],
+      "goal_change_l2": 1.0126880975222121
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.0014234349558838906
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.001303127693591514
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 4.369700663618495
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 4.5235658668927785
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.008395255278817243
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.008795221560323741
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.002137469690046422
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.003800514778826815
+    }
+  ],
+  "geometry_variant": "historical 5 mm cylinder struts; all other frozen geometry and goals unchanged",
+  "original_manifest_sha256": "1db44d57b79db397d516c58941dc20f3e3e651ac8d80744381d91d0e552dd4b7",
+  "historical_tag": "wafr_final_exp",
+  "changes": [
+    {
+      "frame": "start_0",
+      "old_capsule_size": [
+        0.1871281300526658,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.2171281300526658,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.2171281300526658,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_1",
+      "old_capsule_size": [
+        0.18712812876789417,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.21712812876789417,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.21712812876789417,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_2",
+      "old_capsule_size": [
+        0.18712812876789411,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.2171281287678941,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.2171281287678941,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_3",
+      "old_capsule_size": [
+        0.2137709766847777,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.2437709766847777,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.2437709766847777,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_4",
+      "old_capsule_size": [
+        0.21377097668477765,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.24377097668477765,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.24377097668477765,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_5",
+      "old_capsule_size": [
+        0.1871281288125012,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.2171281288125012,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.2171281288125012,
+        0.005
+      ]
+    },
+    {
+      "frame": "start_6",
+      "old_capsule_size": [
+        0.18712812881250115,
+        0.015
+      ],
+      "historical_expression_size": [
+        0.015,
+        0.21712812881250115,
+        0.005
+      ],
+      "canonical_cylinder_size": [
+        0.21712812881250115,
+        0.005
+      ]
+    }
+  ],
+  "archived_manifest_sha256": "c3ab9e273c58bc9e32ced89c0ea102b7243ee402a3fe0af679bfd4f5a203cc5d"
+}

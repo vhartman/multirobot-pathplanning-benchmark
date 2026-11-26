@@ -1,0 +1,396 @@
+{
+  "robots": [
+    "a1",
+    "a2"
+  ],
+  "robot_idx": {
+    "a1": [
+      0,
+      1,
+      2
+    ],
+    "a2": [
+      3,
+      4,
+      5
+    ]
+  },
+  "joint_names": [
+    "a1:0",
+    "a1:1",
+    "a1:2",
+    "a2:0",
+    "a2:1",
+    "a2:2"
+  ],
+  "start": [
+    1.5,
+    -0.0,
+    0.0,
+    -1.5,
+    -0.0,
+    0.0
+  ],
+  "limits": [
+    [
+      -2.0,
+      -2.0,
+      -3.14,
+      -2.0,
+      -2.0,
+      -3.14
+    ],
+    [
+      2.0,
+      2.0,
+      3.14,
+      2.0,
+      2.0,
+      3.14
+    ]
+  ],
+  "sequence": [
+    0,
+    1,
+    2
+  ],
+  "collision_resolution": 0.02,
+  "collision_tolerance": 0.01,
+  "manipulating_env": false,
+  "cost": {
+    "metric": "euclidean",
+    "reduction": "max",
+    "sum_weight": 0.01
+  },
+  "spec": {
+    "agent_type": "multi_agent",
+    "constraints": "unconstrained",
+    "manipulation": "static",
+    "dependency": "fully_ordered",
+    "dynamics": "geometric",
+    "goals": "multi_goal",
+    "home_pose": "has_home_pose"
+  },
+  "safe_pose": {
+    "a1": [
+      -1.5,
+      1.0,
+      1.5707963267948966
+    ],
+    "a2": [
+      1.5,
+      1.0,
+      0.0
+    ]
+  },
+  "collision_exclusions": [],
+  "exact_frames": [
+    {
+      "name": "table",
+      "pose": [
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        4.0,
+        4.0,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall1",
+      "pose": [
+        0.0,
+        2.1,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        3.999,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall2",
+      "pose": [
+        0.0,
+        -2.1,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        3.999,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall3",
+      "pose": [
+        2.1,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        4.399,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall4",
+      "pose": [
+        -2.1,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        4.399,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "pre_agent_1_frame",
+      "pose": [
+        0.0,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.05
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a1",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.1,
+        0.5,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "pre_agent_2_frame",
+      "pose": [
+        0.0,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.05
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a2",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "cylinder",
+      "size": [
+        0.06,
+        0.15
+      ],
+      "contact": 1
+    },
+    {
+      "name": "goal1",
+      "pose": [
+        -1.5,
+        1.0,
+        0.07,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.5,
+        0.1,
+        0.06,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "goal2",
+      "pose": [
+        1.5,
+        1.0,
+        0.07,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "obs3",
+      "pose": [
+        0.0,
+        -0.5,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        1.4,
+        1.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "obs4",
+      "pose": [
+        0.0,
+        1.2,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        1.4,
+        1.5,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    }
+  ],
+  "geometry_sha256": "b799e2f873826be86aeb5b839c39bfe7472e15482fe126ea0c3ce3aab508a883",
+  "tasks": [
+    {
+      "name": "a1_goal_1",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -1.5,
+        1.0,
+        1.5707963267948966
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "a2_goal_1",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        1.5,
+        1.0,
+        0.0
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "terminal",
+      "robots": [
+        "a1",
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        1.5,
+        -0.0,
+        0.0,
+        -1.5,
+        -0.0,
+        0.0
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    }
+  ]
+}

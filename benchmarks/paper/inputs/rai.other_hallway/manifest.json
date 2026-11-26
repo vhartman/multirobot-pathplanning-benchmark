@@ -1,0 +1,34 @@
+{
+  "scene": "rai.other_hallway",
+  "source_seed": 2,
+  "archive_path": "20251123_013605_convergence_rai.other_hallway/birrt/1/path_213.json",
+  "archive_path_sha256": "63409c7eeb85fa61f9202e819937d3950e426328f7c71d698f0d2caae1133453",
+  "files": {
+    "problem.json": "7ab8e3a31d073706fc7bb60d47d361bb9f9a49eb8a561f8a553c62a01214d3d0",
+    "scene.g": "b799e2f873826be86aeb5b839c39bfe7472e15482fe126ea0c3ce3aab508a883"
+  },
+  "exact_pose_roundtrip_error": 0.0,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "76fd655ab131de4e34821148d0fc6e973cf919d15d24a8367435ecae9d8e8283"
+}

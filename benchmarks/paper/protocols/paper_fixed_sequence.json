@@ -1,0 +1,455 @@
+{
+  "format": "paper-comparison-v1",
+  "seeds": [
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "planner_config": {
+    "informed_sampling": true,
+    "locally_informed_sampling": true,
+    "informed_batch_size": 300,
+    "informed_proposal": "hit_and_run",
+    "informed_walk_steps": 1,
+    "informed_proposal_batch_size": 10,
+    "informed_affine_sampling": true,
+    "informed_cache_setup": true,
+    "informed_reuse_affine_geometry": false,
+    "informed_transitions": true,
+    "informed_local_share": 0.8,
+    "distance_metric": "max_euclidean",
+    "p_goal": 0.4,
+    "shortcutting": true,
+    "shortcutting_run_choice": "tree_compatible",
+    "shortcut_allocation": "marginal",
+    "shortcut_policies": "tree_compatible,index_tree",
+    "shortcut_damped": true,
+    "shortcut_chunk": 100,
+    "shortcut_damped_chunk": 50,
+    "shortcut_damped_steps": [
+      1.0,
+      0.5,
+      0.25
+    ],
+    "shortcut_probe_chunk": 20,
+    "shortcut_probe_every": 5,
+    "shortcut_rate_floor": 0.001,
+    "shortcut_tree_horizon": 2.0,
+    "shortcut_tree_prior": 2.0,
+    "edge_check_cache_size": 32768,
+    "init_mode_sampling_type": "frontier",
+    "frontier_mode_sampling_probability": 0.98,
+    "remove_redundant_nodes": true,
+    "apply_long_horizon": false,
+    "horizon_length": 1,
+    "with_mode_validation": true,
+    "sampler": "auto",
+    "sampler_gibbs_sweeps": 1,
+    "sampler_auto_warmup": 20,
+    "affine_sampler": "polytope",
+    "affine_sample_attempts": 1000,
+    "repair_affine_transition_seeds": true,
+    "p_home_bias": 0.0,
+    "with_noise": false,
+    "with_tree_visualization": false,
+    "transition_nodes": 10,
+    "p_reseed_transition": 0.0,
+    "birrtstar_version": 2,
+    "stepsize": 0,
+    "max_connection_radius": 0.0,
+    "steering_policy": "robot_l1",
+    "steer_l1_step": 3.0,
+    "steer_rms_step": 0.5,
+    "steer_step_size": 0.0,
+    "nl_projection": "backtracking",
+    "nl_steer_step_size": 0.05,
+    "nonlinear_sample_attempts": 1000,
+    "balanced_trees": false
+  },
+  "scenes": [
+    {
+      "scene": "rai.simple",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "35638a4de2928b20c446f4b1c9739e2e01971f0d91780bf893dbcc8c86c91071",
+      "seconds": 30,
+      "published": {
+        "dof": 6.0,
+        "tasks": 3.0,
+        "budget": 100.0,
+        "first_s": 0.17,
+        "initial_cost": 11.94,
+        "final_cost": 2.27
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.2d_handover",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "9abbca42fe11b49100c9436c63b1da1d71299946a0a0573e16e6b7647bcf71e5",
+      "seconds": 90,
+      "published": {
+        "dof": 6.0,
+        "tasks": 6.0,
+        "budget": 500.0,
+        "first_s": 4.13,
+        "initial_cost": 56.97,
+        "final_cost": 17.9
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.random_2d",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "bedee02acce88ad7918c8859bf8ef099ae9b1354fe6d685489b315753800e443",
+      "seconds": 90,
+      "published": {
+        "dof": 9.0,
+        "tasks": 13.0,
+        "budget": 500.0,
+        "first_s": 7.95,
+        "initial_cost": 124.49,
+        "final_cost": 26.09
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.other_hallway",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "26f20a36bf5b67d0958376033f7f770f4458c149f17bfc37c3b8426e14053c30",
+      "seconds": 90,
+      "published": {
+        "dof": 6.0,
+        "tasks": 3.0,
+        "budget": 500.0,
+        "first_s": 0.37,
+        "initial_cost": 35.66,
+        "final_cost": 9.76
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.three_agents",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "4dc738ad6244c4ac5f99f03e5c4b994805cc7f485af2328639ee27e0d279f6cd",
+      "seconds": 90,
+      "published": {
+        "dof": 9.0,
+        "tasks": 6.0,
+        "budget": 500.0,
+        "first_s": 1.7,
+        "initial_cost": 38.79,
+        "final_cost": 6.35
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.triple_waypoints",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "b1d22fee728cd58eb24fc765b6cb988b3e50852acf434cb9a934a59cab7689f6",
+      "seconds": 150,
+      "published": {
+        "dof": 20.0,
+        "tasks": 19.0,
+        "budget": 1000.0,
+        "first_s": 1.0,
+        "initial_cost": 170.02,
+        "final_cost": 17.34
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.welding",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "c10741c575561f1fc70d345876ecd633d63bdfdfbfeca6416a0fc1bd8d59c6b7",
+      "seconds": 150,
+      "published": {
+        "dof": 24.0,
+        "tasks": 25.0,
+        "budget": 1000.0,
+        "first_s": 1.93,
+        "initial_cost": 265.84,
+        "final_cost": 14.49
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.handover",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "3ca7d59ad2d8521bd4dc310a1e4f035496471abf37e12f470659b874ec84618c",
+      "seconds": 30,
+      "published": {
+        "dof": 12.0,
+        "tasks": 4.0,
+        "budget": 100.0,
+        "first_s": 0.8,
+        "initial_cost": 52.3,
+        "final_cost": 12.12
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.eggcartons",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "5ae8cddb5b3b35e7e0e317e70bbf8be69e913455b81472f2de5308fcf858ac85",
+      "seconds": 90,
+      "published": {
+        "dof": 12.0,
+        "tasks": 19.0,
+        "budget": 500.0,
+        "first_s": 0.8,
+        "initial_cost": 164.81,
+        "final_cost": 44.46
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.bottles",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "fd827840f7ba3c2cdcb19fdc81e8a03e1a35ec1b65d974fd0515da047310ee20",
+      "seconds": 90,
+      "published": {
+        "dof": 12.0,
+        "tasks": 9.0,
+        "budget": 500.0,
+        "first_s": 16.0,
+        "initial_cost": 86.14,
+        "final_cost": 15.16
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.box_rearrangement",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "cc18f080649acf85da3dc9e6dfe36be63e2c7fa737049de96c2f6378e2ea7e96",
+      "seconds": 150,
+      "published": {
+        "dof": 12.0,
+        "tasks": 27.0,
+        "budget": 1000.0,
+        "first_s": 3.39,
+        "initial_cost": 223.8,
+        "final_cost": 28.27
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.box_reorientation",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "8ecf09f9bdc6c84fc2c956f0fae9a4a40b919e4dfece9adb3d780b65787ceef8",
+      "seconds": 90,
+      "published": {
+        "dof": 12.0,
+        "tasks": 27.0,
+        "budget": 500.0,
+        "first_s": 3.76,
+        "initial_cost": 221.58,
+        "final_cost": 55.74
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.pyramid",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "526dfc6085740064e4463a4ca20ec24b1a9db478671498028deb59016e6e8a73",
+      "seconds": 90,
+      "published": {
+        "dof": 24.0,
+        "tasks": 13.0,
+        "budget": 500.0,
+        "first_s": 3.23,
+        "initial_cost": 142.32,
+        "final_cost": 18.09
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.box_stacking",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "bb9cdcf455716151bdc0a904e4605070801c6c397fe826be016fd4bed8028d6f",
+      "seconds": 150,
+      "published": {
+        "dof": 24.0,
+        "tasks": 17.0,
+        "budget": 1000.0,
+        "first_s": 7.03,
+        "initial_cost": 204.13,
+        "final_cost": 17.9
+      },
+      "geometry": "sharp-box comparison geometry"
+    },
+    {
+      "scene": "rai.mobile_wall_four",
+      "source_seed": 2,
+      "backends": [
+        "rai"
+      ],
+      "manifest_sha256": "aabb13e8fbb129d2f4e06bb5860b3094cac23bc1a1ccedc73dc80bb96faa89db",
+      "seconds": 150,
+      "published": {
+        "dof": 24.0,
+        "tasks": 17.0,
+        "budget": 1000.0,
+        "first_s": 11.61,
+        "initial_cost": 248.29,
+        "final_cost": 46.73
+      },
+      "geometry": "original rounded mobile bases"
+    },
+    {
+      "scene": "rai.mobile_strut",
+      "source_seed": 0,
+      "backends": [
+        "rai"
+      ],
+      "manifest_sha256": "fd7b5869ccda7bb7820749d370d5b6405ecde56b024d0a5497c5358843d5b502",
+      "seconds": 150,
+      "published": {
+        "dof": 14.0,
+        "tasks": 91.0,
+        "budget": 1000.0,
+        "first_s": 13.67,
+        "initial_cost": 918.65,
+        "final_cost": 326.51
+      },
+      "geometry": "original rounded mobile bases"
+    },
+    {
+      "scene": "rai.three_robot_truss",
+      "source_seed": 7,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "6b58b696148baf30dc152eb45364b3203f59e63df45b0857846e4f5751282563",
+      "seconds": 150,
+      "published": {
+        "dof": 18.0,
+        "tasks": 29.0,
+        "budget": 1000.0,
+        "first_s": 3.92,
+        "initial_cost": 283.28,
+        "final_cost": 69.99
+      },
+      "geometry": "historical 5 mm cylindrical struts"
+    },
+    {
+      "scene": "rai.spiral_tower",
+      "source_seed": 0,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "7985713d176ec0829941eb50457a8e41a5542a6ca72e852471c5b540d8bb9355",
+      "seconds": 150,
+      "published": {
+        "dof": 24.0,
+        "tasks": 31.0,
+        "budget": 1000.0,
+        "first_s": 26.37,
+        "initial_cost": 410.49,
+        "final_cost": 100.44
+      },
+      "geometry": "historical 5 mm cylindrical struts"
+    },
+    {
+      "scene": "rai.spiral_tower_two",
+      "source_seed": 0,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "b4e2109146f3b3965aa966464954d5dbb67284a68bb324138f56d16ac00c678c",
+      "seconds": 90,
+      "published": {
+        "dof": 12.0,
+        "tasks": 15.0,
+        "budget": 500.0,
+        "first_s": 1.37,
+        "initial_cost": 124.45,
+        "final_cost": 44.21
+      },
+      "geometry": "historical 5 mm cylindrical struts"
+    },
+    {
+      "scene": "rai.cube_four",
+      "source_seed": 2,
+      "backends": [
+        "rai",
+        "comotion"
+      ],
+      "manifest_sha256": "4b4c91ca7bf38c0ad2ad3a67590f69ee8c037ee51094c200a7b9c1144fe5942b",
+      "seconds": 150,
+      "published": {
+        "dof": 24.0,
+        "tasks": 49.0,
+        "budget": 1000.0,
+        "first_s": 41.87,
+        "initial_cost": 623.01,
+        "final_cost": 135.3
+      },
+      "geometry": "historical 5 mm cylindrical struts"
+    }
+  ],
+  "reference_selection": "BiRRT run 1: first incumbent goals, final incumbent reference path; not best seed",
+  "reference_note": "Published results use the original hardware, budgets and seed population. Frozen inputs reproduce selected archived task assignments and goals; this is not a claim of identical collision geometry or hardware.",
+  "published_source": "arXiv:2503.03509, Table 2; archived BiRRT run 1 goals",
+  "backend_note": "The original four-arm spiral CoMotion run required the joint-limit roundoff guard; record the installed CoMotion binary and validate paths at the configured resolution."
+}

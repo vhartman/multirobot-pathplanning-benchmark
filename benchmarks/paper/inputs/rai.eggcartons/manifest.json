@@ -1,0 +1,194 @@
+{
+  "scene": "rai.eggcartons",
+  "source_seed": 2,
+  "archive_path": "20251123_063211_convergence_rai.eggcartons/birrt/1/path_87.json",
+  "archive_path_sha256": "8a3674b8896f9e7275d5c93007906413a6a9ca516d49f373533aa07138ee02ec",
+  "files": {
+    "problem.json": "c2ab1f50c6399a3e007e1647cd5c3c9499ac38974f2c3096b693c46b58ec74bc",
+    "scene.g": "1d572797ad7bdd638b9f3b2c5194c518370e07ecf6c2ae7a905dabaead7f87c8"
+  },
+  "exact_pose_roundtrip_error": 1.5543122344752192e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 1.1102230246251565e-16
+    },
+    {
+      "task": 16,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 17,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "8cb94eeb6b900824d4cbd7dd1962b6c2933521fcfdfb2c1dd7ca058bfaf7a56a"
+}

@@ -1,0 +1,94 @@
+{
+  "scene": "rai.bottles",
+  "source_seed": 2,
+  "archive_path": "20251123_071511_convergence_rai.bottles/birrt/1/path_27.json",
+  "archive_path_sha256": "d21597fd9e5084192263a4a8972bc3381b2627ef0229a8884ccd104195fce83f",
+  "files": {
+    "problem.json": "a5c7edac1dbf21c9b373e65dc4775bc368972a8e74250976076a06fb8be897ad",
+    "scene.g": "1a421100dbfc456739cb851cc992bd5d042a4fce402b579cdec350a509385e15"
+  },
+  "exact_pose_roundtrip_error": 2.7755575615628914e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 2.220446049250313e-16
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "goal_change_l2": 0.0
+    }
+  ],
+  "archived_manifest_sha256": "4e6bb16f50cf97443c2df530e2a749903ea40d0810e9bb10d097c428430765a1"
+}

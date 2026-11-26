@@ -1,0 +1,13 @@
+table: { X: [0, 0, 1], shape: box, size: [4, 4, 0.06, 0], contact: 1 },
+wall1(table): { Q: [0, 2.1, 0.07], joint: rigid, shape: box, size: [3.999, 0.2, 0.06, 0], contact: 1 },
+wall2(table): { Q: [0, -2.1, 0.07], joint: rigid, shape: box, size: [3.999, 0.2, 0.06, 0], contact: 1 },
+wall3(table): { Q: [2.1, 0, 0.07], joint: rigid, shape: box, size: [0.2, 4.399, 0.06, 0], contact: 1 },
+wall4(table): { Q: [-2.1, 0, 0.07], joint: rigid, shape: box, size: [0.2, 4.399, 0.06, 0], contact: 1 },
+pre_agent_1_frame(table): { Q: [0, 0, 0.07], joint: rigid, shape: marker, size: [0.05], color: [1, 0.5, 0] },
+a1(pre_agent_1_frame): { joint: transXYPhi, limits: [-2, 2, -2, 2, -3.14, 3.14], shape: box, size: [0.1, 0.5, 0.06, 0], contact: 1 },
+pre_agent_2_frame(table): { Q: [0, 0, 0.07], joint: rigid, shape: marker, size: [0.05], color: [1, 0.5, 0] },
+a2(pre_agent_2_frame): { joint: transXYPhi, limits: [-2, 2, -2, 2, -3.14, 3.14], shape: cylinder, size: [0.06, 0.15], color: [0.5, 0.5, 0], contact: 1 },
+goal1(table): { Q: [-1.5, 1, 0.07], shape: box, size: [0.5, 0.1, 0.06, 0] },
+goal2(table): { Q: [1.5, 1, 0.07], shape: box, size: [0.2, 0.2, 0.06, 0] },
+obs3(table): { Q: [0, -0.5, 0.07], joint: rigid, shape: box, size: [1.4, 1.2, 0.06, 0], contact: 1 },
+obs4(table): { Q: [0, 1.2, 0.07], joint: rigid, shape: box, size: [1.4, 1.5, 0.06, 0], contact: 1 }

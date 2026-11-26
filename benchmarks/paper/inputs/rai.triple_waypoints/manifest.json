@@ -1,0 +1,231 @@
+{
+  "scene": "rai.triple_waypoints",
+  "source_seed": 2,
+  "archive_path": "20251123_030512_convergence_rai.triple_waypoints/birrt/1/path_84.json",
+  "archive_path_sha256": "f5f15f7a073c1c4628e7b67b8f660ec044d6c6d53c37493ac5016fc1d1ed5eca",
+  "files": {
+    "problem.json": "2101cf508c284ced02f92582b404f7ce14bd411c46ff77420729950d5eb03af0",
+    "scene.g": "93984a429874a44bec16ea55b5223179c9c1aa8de3050c607166680721c0398f"
+  },
+  "exact_pose_roundtrip_error": 4.6629367034256575e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 2.3852447794681098e-18,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "archived_goal_drift_l2": 2.7755575615628914e-17,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "archived_goal_drift_l2": 1.1725835715503663e-16,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 16,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a0"
+      ],
+      "robots": [
+        "a0"
+      ],
+      "archived_goal_drift_l2": 2.7755575615628914e-17,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a1"
+      ],
+      "robots": [
+        "a1"
+      ],
+      "archived_goal_drift_l2": 1.1143151226922295e-16,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 17,
+      "old_robots": [
+        "a2"
+      ],
+      "robots": [
+        "a2"
+      ],
+      "archived_goal_drift_l2": 1.844546244749648e-17,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    }
+  ],
+  "renamed_duplicate_visual_frames": [],
+  "archived_manifest_sha256": "324cefe789bc9ec25531356befd1b0b7751ec193c7c64a487f4fcc5e4a3d97d8"
+}

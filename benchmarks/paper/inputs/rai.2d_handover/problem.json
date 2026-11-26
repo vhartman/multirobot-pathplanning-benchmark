@@ -1,0 +1,586 @@
+{
+  "robots": [
+    "a1",
+    "a2"
+  ],
+  "robot_idx": {
+    "a1": [
+      0,
+      1,
+      2
+    ],
+    "a2": [
+      3,
+      4,
+      5
+    ]
+  },
+  "joint_names": [
+    "a1:0",
+    "a1:1",
+    "a1:2",
+    "a2:0",
+    "a2:1",
+    "a2:2"
+  ],
+  "start": [
+    -0.5,
+    0.8,
+    0.0,
+    0.0,
+    -0.5,
+    0.0
+  ],
+  "limits": [
+    [
+      -2.0,
+      -2.0,
+      -3.14,
+      -2.0,
+      -2.0,
+      -3.14
+    ],
+    [
+      2.0,
+      2.0,
+      3.14,
+      2.0,
+      2.0,
+      3.14
+    ]
+  ],
+  "sequence": [
+    0,
+    1,
+    3,
+    4,
+    2,
+    5
+  ],
+  "collision_resolution": 0.01,
+  "collision_tolerance": 0.01,
+  "manipulating_env": true,
+  "cost": {
+    "metric": "euclidean",
+    "reduction": "max",
+    "sum_weight": 0.01
+  },
+  "spec": {
+    "agent_type": "multi_agent",
+    "constraints": "unconstrained",
+    "manipulation": "manipulation",
+    "dependency": "fully_ordered",
+    "dynamics": "geometric",
+    "goals": "multi_goal",
+    "home_pose": "has_home_pose"
+  },
+  "safe_pose": {
+    "a1": [
+      -0.5,
+      0.8,
+      0.0
+    ],
+    "a2": [
+      0.0,
+      -0.5,
+      0.0
+    ]
+  },
+  "collision_exclusions": [],
+  "exact_frames": [
+    {
+      "name": "table",
+      "pose": [
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        4.0,
+        4.0,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall1",
+      "pose": [
+        0.0,
+        2.1,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        3.999,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall2",
+      "pose": [
+        0.0,
+        -2.1,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        3.999,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall3",
+      "pose": [
+        2.1,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        4.399,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "wall4",
+      "pose": [
+        -2.1,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        4.399,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "pre_agent_1_frame",
+      "pose": [
+        0.0,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.05
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a1",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "cylinder",
+      "size": [
+        0.04,
+        0.15
+      ],
+      "contact": 1
+    },
+    {
+      "name": "a1_dir",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.04,
+        0.15,
+        0.05,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "pre_agent_2_frame",
+      "pose": [
+        0.0,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "marker",
+      "size": [
+        0.05
+      ],
+      "contact": 0
+    },
+    {
+      "name": "a2",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "cylinder",
+      "size": [
+        0.04,
+        0.2
+      ],
+      "contact": 1
+    },
+    {
+      "name": "a2_dir",
+      "pose": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.04,
+        0.2,
+        0.05,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "obj1",
+      "pose": [
+        0.0,
+        0.4,
+        0.07,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.4,
+        0.4,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "obj2",
+      "pose": [
+        0.5,
+        -1.5,
+        0.07,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.3,
+        0.4,
+        0.06,
+        0.0
+      ],
+      "contact": 1
+    },
+    {
+      "name": "goal1",
+      "pose": [
+        0.8,
+        0.4,
+        0.07,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.4,
+        0.4,
+        0.06,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "goal2",
+      "pose": [
+        0.8,
+        1.2,
+        0.07,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.3,
+        0.4,
+        0.06,
+        0.0
+      ],
+      "contact": 0
+    },
+    {
+      "name": "obs1",
+      "pose": [
+        0.0,
+        0.0,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        2.3,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": -2
+    },
+    {
+      "name": "obs2",
+      "pose": [
+        0.4,
+        1.05,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        1.8,
+        0.06,
+        0.0
+      ],
+      "contact": -2
+    },
+    {
+      "name": "obs3",
+      "pose": [
+        -0.4,
+        -0.6,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.2,
+        0.9,
+        0.06,
+        0.0
+      ],
+      "contact": -2
+    },
+    {
+      "name": "obs4",
+      "pose": [
+        0.8,
+        0.8,
+        0.07000000000000006,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": "box",
+      "size": [
+        0.6,
+        0.2,
+        0.06,
+        0.0
+      ],
+      "contact": -2
+    }
+  ],
+  "geometry_sha256": "9a35e86146a661c3ff3dfb82bb1c54d434ea283fe80f7a70cf9414e33cf9280f",
+  "tasks": [
+    {
+      "name": "a1_pick_obj1",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.0026964668519769766,
+        0.7496501374680611,
+        1.2393175259003668
+      ],
+      "type": "pick",
+      "frames": [
+        "a1",
+        "obj1"
+      ],
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "handover",
+      "robots": [
+        "a1",
+        "a2"
+      ],
+      "goal_type": "GoalSet",
+      "goal": [
+        [
+          0.4621992438638042,
+          -0.6796087113168212,
+          1.5769437298423608,
+          0.9508715795954762,
+          -0.870526483169609,
+          0.5366121167567636
+        ]
+      ],
+      "type": "hanover",
+      "frames": [
+        "a2",
+        "obj1"
+      ],
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "a2_place",
+      "robots": [
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        1.194937582887046,
+        0.407724211460104,
+        0.19893423089366155
+      ],
+      "type": "place",
+      "frames": [
+        "table",
+        "obj1"
+      ],
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "a1_pick_obj2",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.5025449836064181,
+        -1.1540281043881317,
+        1.3478564821451813
+      ],
+      "type": "pick",
+      "frames": [
+        "a1",
+        "obj2"
+      ],
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "a1_place_obj2",
+      "robots": [
+        "a1"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        0.8023904055333492,
+        1.5457336754330062,
+        1.3481677300549173
+      ],
+      "type": "place",
+      "frames": [
+        "table",
+        "obj2"
+      ],
+      "side_effect": null,
+      "side_effect_data": null
+    },
+    {
+      "name": "terminal",
+      "robots": [
+        "a1",
+        "a2"
+      ],
+      "goal_type": "SingleGoal",
+      "goal": [
+        -0.5000018916494499,
+        0.7999698379982283,
+        -1.480494361532675,
+        -0.00012373455513340918,
+        -0.5000045516626692,
+        -0.18868400355173787
+      ],
+      "type": null,
+      "frames": null,
+      "side_effect": null,
+      "side_effect_data": null
+    }
+  ]
+}

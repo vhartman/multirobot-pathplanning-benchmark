@@ -1,0 +1,174 @@
+{
+  "scene": "rai.box_stacking",
+  "source_seed": 2,
+  "archive_path": "20251123_131724_convergence_rai.box_stacking/birrt/1/path_60.json",
+  "archive_path_sha256": "55bf05e025a0ed80f6ccd22c7b5d1b0b838a6d85ec34111c666c311e2b199429",
+  "files": {
+    "problem.json": "abce05cc08063c81c64555319c1dc6a3a8ac11e235053e526445b7f1c4c1cc0b",
+    "scene.g": "cdaba072919b6089e8faa249f2eda2e50eab6887fd05802e17dbac80c7b889de"
+  },
+  "exact_pose_roundtrip_error": 3.1086244689504383e-15,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.05981046153377573
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.07641109232560689
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.06889879839402253
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.07604350657065909
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.05266235576588579
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1_ur_"
+      ],
+      "robots": [
+        "a1_ur_"
+      ],
+      "goal_change_l2": 0.06007667783164781
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.06212048245996967
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a2_ur_"
+      ],
+      "robots": [
+        "a2_ur_"
+      ],
+      "goal_change_l2": 0.06902748548084824
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a4_ur_"
+      ],
+      "robots": [
+        "a4_ur_"
+      ],
+      "goal_change_l2": 0.057219475908871026
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a4_ur_"
+      ],
+      "robots": [
+        "a4_ur_"
+      ],
+      "goal_change_l2": 0.06287064300184299
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a4_ur_"
+      ],
+      "robots": [
+        "a4_ur_"
+      ],
+      "goal_change_l2": 0.052619996028535045
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a4_ur_"
+      ],
+      "robots": [
+        "a4_ur_"
+      ],
+      "goal_change_l2": 0.06439144250464668
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.06454958754310983
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a3_ur_"
+      ],
+      "robots": [
+        "a3_ur_"
+      ],
+      "goal_change_l2": 0.06947191062757502
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a4_ur_"
+      ],
+      "robots": [
+        "a4_ur_"
+      ],
+      "goal_change_l2": 0.07085967758483797
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a4_ur_"
+      ],
+      "robots": [
+        "a4_ur_"
+      ],
+      "goal_change_l2": 0.06461149188880976
+    }
+  ],
+  "archived_manifest_sha256": "0afe8a47f7b5c8440b4e82308839dd5b1c9bed5aa676064c9f70b046527a6095"
+}

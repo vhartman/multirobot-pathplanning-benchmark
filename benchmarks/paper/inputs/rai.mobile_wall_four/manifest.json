@@ -1,0 +1,232 @@
+{
+  "scene": "rai.mobile_wall_four",
+  "source_seed": 2,
+  "archive_path": "20251123_170103_convergence_rai.mobile_wall_four/birrt/1/path_102.json",
+  "archive_path_sha256": "a42c9747ea7113b17d8d774a346921a2ed933f41c6068568cf41636438a2bfb5",
+  "files": {
+    "problem.json": "6e8d690cc9d124f634419e8b081f631d430a7a8cf1acdb8524f610eb50890698",
+    "scene.g": "63070ab3d4905d5298f7921251ad1c4436b280b3d404d4625a0645c41648b127"
+  },
+  "exact_pose_roundtrip_error": 0.0,
+  "goal_replacement_audit": [
+    {
+      "task": 0,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 1,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 2,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 3,
+      "old_robots": [
+        "a0_"
+      ],
+      "robots": [
+        "a0_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 4,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 5,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 6,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 7,
+      "old_robots": [
+        "a1_"
+      ],
+      "robots": [
+        "a1_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 8,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 9,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 10,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 11,
+      "old_robots": [
+        "a2_"
+      ],
+      "robots": [
+        "a2_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 12,
+      "old_robots": [
+        "a3_"
+      ],
+      "robots": [
+        "a3_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 13,
+      "old_robots": [
+        "a3_"
+      ],
+      "robots": [
+        "a3_"
+      ],
+      "archived_goal_drift_l2": 5.551115123125783e-17,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 14,
+      "old_robots": [
+        "a3_"
+      ],
+      "robots": [
+        "a3_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    },
+    {
+      "task": 15,
+      "old_robots": [
+        "a3_"
+      ],
+      "robots": [
+        "a3_"
+      ],
+      "archived_goal_drift_l2": 0.0,
+      "goal_source": "first archived incumbent",
+      "goal_change_l2": 0.0
+    }
+  ],
+  "renamed_duplicate_visual_frames": [
+    {
+      "old": "a0_gripper",
+      "new": "a0_gripper__visual_19"
+    },
+    {
+      "old": "a1_gripper",
+      "new": "a1_gripper__visual_41"
+    },
+    {
+      "old": "a2_gripper",
+      "new": "a2_gripper__visual_63"
+    },
+    {
+      "old": "a3_gripper",
+      "new": "a3_gripper__visual_85"
+    }
+  ],
+  "geometry_variant": "Original rounded mobile collision bases; remaining frozen geometry and all archived goals unchanged; RAI only",
+  "original_manifest_sha256": "da2b605fe990f4d377cdebba7c5ab61a9e94b5167c8af167eb5926f9a8defcab",
+  "restored_rounded_bases": [
+    "a0_base_coll",
+    "a1_base_coll",
+    "a2_base_coll",
+    "a3_base_coll"
+  ],
+  "archived_manifest_sha256": "ece229342ba7ba6f984f028265a4c429371717e40dca8db031dc3e8f45fcc559"
+}
